@@ -533,6 +533,7 @@ export default function App() {
                   <Panel defaultSize={50} minSize={30} className="flex flex-col h-full">
                     <Preview
                       blocks={editorBlocks}
+                      latexContent={latexContent}
                       title={editorTitle}
                       author={editorAuthor}
                       phase={editorPhase}

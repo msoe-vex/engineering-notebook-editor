@@ -28,6 +28,7 @@ import { GripVertical, Trash2, PlusCircle, Type, ImageIcon, Table as TableIcon, 
 interface BlockEditorProps {
   blocks: Block[];
   onChange: (blocks: Block[]) => void;
+  onImageUpload?: (path: string, base64: string) => void;
 }
 
 interface SortableItemProps {
@@ -35,9 +36,10 @@ interface SortableItemProps {
   block: Block;
   onUpdate: (id: string, content: any) => void;
   onDelete: (id: string) => void;
+  onImageUpload?: (path: string, base64: string) => void;
 }
 
-function SortableBlock({ id, block, onUpdate, onDelete }: SortableItemProps) {
+function SortableBlock({ id, block, onUpdate, onDelete, onImageUpload }: SortableItemProps) {
   const {
     attributes,
     listeners,
@@ -59,7 +61,7 @@ function SortableBlock({ id, block, onUpdate, onDelete }: SortableItemProps) {
       case "text":
         return <TextBlock content={block.content} onChange={(c) => onUpdate(block.id, c)} />;
       case "image":
-        return <ImageBlock content={block.content} onChange={(c) => onUpdate(block.id, c)} />;
+        return <ImageBlock content={block.content} onChange={(val) => onUpdate(block.id, val)} onImageUpload={onImageUpload} />;
       case "table":
         return <TableBlock content={block.content} onChange={(c) => onUpdate(block.id, c)} />;
       case "code":
@@ -91,7 +93,7 @@ function SortableBlock({ id, block, onUpdate, onDelete }: SortableItemProps) {
   );
 }
 
-export default function BlockEditor({ blocks, onChange }: BlockEditorProps) {
+export default function BlockEditor({ blocks, onChange, onImageUpload }: BlockEditorProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -113,11 +115,11 @@ export default function BlockEditor({ blocks, onChange }: BlockEditorProps) {
     }
   };
 
-  const updateBlock = (id: string, content: any) => {
+  const handleUpdateBlock = (id: string, content: any) => {
     onChange(blocks.map((b) => (b.id === id ? { ...b, content } : b)));
   };
 
-  const deleteBlock = (id: string) => {
+  const handleDeleteBlock = (id: string) => {
     onChange(blocks.filter((b) => b.id !== id));
   };
 
@@ -135,7 +137,14 @@ export default function BlockEditor({ blocks, onChange }: BlockEditorProps) {
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
           {blocks.map((block) => (
-            <SortableBlock key={block.id} id={block.id} block={block} onUpdate={updateBlock} onDelete={deleteBlock} />
+            <SortableBlock 
+              key={block.id} 
+              id={block.id} 
+              block={block} 
+              onUpdate={handleUpdateBlock} 
+              onDelete={handleDeleteBlock}
+              onImageUpload={onImageUpload}
+            />
           ))}
         </SortableContext>
       </DndContext>

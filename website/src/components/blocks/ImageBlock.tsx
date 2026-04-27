@@ -9,7 +9,11 @@ interface ImageContent {
   initials: string;
 }
 
-export default function ImageBlock({ content, onChange }: { content: ImageContent, onChange: (content: ImageContent) => void }) {
+export default function ImageBlock({ content, onChange, onImageUpload }: { 
+  content: ImageContent, 
+  onChange: (content: ImageContent) => void,
+  onImageUpload?: (path: string, base64: string) => void
+}) {
   const [localSrc, setLocalSrc] = useState(content.src);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -20,7 +24,15 @@ export default function ImageBlock({ content, onChange }: { content: ImageConten
     reader.onload = (ev) => {
       const base64 = ev.target?.result as string;
       setLocalSrc(base64);
-      onChange({ ...content, src: file.name }); // Store filename in LaTeX, but we might need base64 for preview
+      
+      // Notify parent to save the actual file bytes
+      if (onImageUpload) {
+        // Strip data:image/png;base64, prefix
+        const rawBase64 = base64.split(',')[1];
+        onImageUpload(`notebook/resources/${file.name}`, rawBase64);
+      }
+      
+      onChange({ ...content, src: file.name }); 
     };
     reader.readAsDataURL(file);
   };

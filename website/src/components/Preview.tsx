@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import { GitHubFile } from "@/lib/github";
 import { Block } from "./App";
 import "katex/dist/katex.min.css";
+import Prism from "prismjs";
+import "prismjs/components/prism-latex";
+import "prismjs/themes/prism-tomorrow.css";
 
 interface LocalFile extends Partial<GitHubFile> {
   name: string;
@@ -10,6 +13,7 @@ interface LocalFile extends Partial<GitHubFile> {
 
 interface PreviewProps {
   blocks: Block[];
+  latexContent: string;
   title?: string;
   author?: string;
   phase?: string;
@@ -17,37 +21,44 @@ interface PreviewProps {
   files?: (GitHubFile | LocalFile)[];
 }
 
-export default function Preview({ blocks, title = "", author = "", phase = "", styContent = "", files = [] }: PreviewProps) {
-  const [viewMode, setViewMode] = useState<"latex" | "rendered">("rendered");
-  const containerRef = useRef<HTMLDivElement>(null);
+export default function Preview({ blocks, latexContent, title = "", author = "", phase = "", styContent = "", files = [] }: PreviewProps) {
+  const [viewMode, setViewMode] = useState<"live" | "raw">("live");
+  const rawCodeRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-     // Load LaTeXML CSS
-     const link = document.createElement('link');
-     link.rel = 'stylesheet';
-     link.href = '/notebook/LaTeXML.css';
-     document.head.appendChild(link);
+     // Load LaTeXML CSS only if not already present
+     const existingLink1 = document.querySelector('link[href*="LaTeXML.css"]');
+     const existingLink2 = document.querySelector('link[href*="ltx-article.css"]');
+     
+     const link1 = document.createElement('link');
+     if (!existingLink1) {
+       link1.rel = 'stylesheet';
+       link1.href = '/notebook/LaTeXML.css';
+       document.head.appendChild(link1);
+     }
      
      const link2 = document.createElement('link');
-     link2.rel = 'stylesheet';
-     link2.href = '/notebook/ltx-article.css';
-     document.head.appendChild(link2);
+     if (!existingLink2) {
+       link2.rel = 'stylesheet';
+       link2.href = '/notebook/ltx-article.css';
+       document.head.appendChild(link2);
+     }
 
      return () => {
-        document.head.removeChild(link);
-        document.head.removeChild(link2);
+        if (!existingLink1 && link1.parentNode === document.head) document.head.removeChild(link1);
+        if (!existingLink2 && link2.parentNode === document.head) document.head.removeChild(link2);
      };
   }, []);
 
   const getPhaseColor = (p: string) => {
     const colorMap: Record<string, string> = {
-        "Define Problem": "#FFB3B3",
-        "Generate Concepts": "#FFD9B3",
-        "Develop Solution": "#FFFFB3",
-        "Construct and Test": "#B3FFB3",
-        "Evaluate Solution": "#B3D9FF"
+        "Define Problem": "#fecaca", // red-200
+        "Generate Concepts": "#fed7aa", // orange-200
+        "Develop Solution": "#fef08a", // yellow-200
+        "Construct and Test": "#bbf7d0", // green-200
+        "Evaluate Solution": "#bfdbfe"  // blue-200
     };
-    return colorMap[p] || "#E0E0E0";
+    return colorMap[p] || "#f4f4f5";
   };
 
   const renderBlocksToHtml = () => {
@@ -55,85 +66,91 @@ export default function Preview({ blocks, title = "", author = "", phase = "", s
     const phaseColor = getPhaseColor(phase);
 
     let html = `
-      <div class="ltx_page_main">
-        <div class="ltx_header">
-            <div class="flex justify-between text-[10px] text-gray-400 border-b pb-1 mb-4 uppercase tracking-tighter">
+      <div class="ltx_page_content p-12 bg-white text-black min-h-full" style="font-family: 'Times New Roman', serif;">
+        <div class="flex justify-between items-end border-b-2 border-black pb-2 mb-8 uppercase tracking-widest text-[9px] font-bold">
+            <div class="flex flex-col">
                 <span>VEX Engineering Notebook</span>
                 <span>Team 1234A</span>
+            </div>
+            <div class="flex flex-col text-right">
+                <span>Entry: ${title || "Draft"}</span>
+                <span>Page: ${Math.floor(Math.random() * 100)}</span>
             </div>
         </div>
 
         <article class="ltx_document">
           <div class="ltx_section">
-            <h1 class="ltx_title ltx_title_section text-3xl font-bold mb-4 border-b-2 border-black pb-2">${title || "Untitled Entry"}</h1>
+            <h1 class="ltx_title ltx_title_section text-4xl font-serif font-black mb-6 uppercase tracking-tight">${title || "Untitled Entry"}</h1>
             
-            <div class="border-2 border-black mb-8 overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]" style="background-color: ${phaseColor};">
-               <div class="grid grid-cols-2 divide-x-2 divide-black border-b-2 border-black">
-                  <div class="p-2 flex flex-col">
-                    <span class="text-[8px] font-bold uppercase opacity-50">Project Title</span>
-                    <span class="font-bold">${title}</span>
+            <div class="border-[3px] border-black mb-10 overflow-hidden shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]" style="background-color: ${phaseColor};">
+               <div class="grid grid-cols-2 divide-x-[3px] divide-black border-b-[3px] border-black">
+                  <div class="p-3 flex flex-col">
+                    <span class="text-[9px] font-black uppercase opacity-60 mb-1">Project / Component</span>
+                    <span class="font-serif font-bold text-lg leading-tight">${title}</span>
                   </div>
-                  <div class="p-2 flex flex-col">
-                    <span class="text-[8px] font-bold uppercase opacity-50">Date</span>
-                    <span class="font-bold">${dateStr}</span>
+                  <div class="p-3 flex flex-col">
+                    <span class="text-[9px] font-black uppercase opacity-60 mb-1">Submission Date</span>
+                    <span class="font-serif font-bold text-lg">${dateStr}</span>
                   </div>
                </div>
-               <div class="grid grid-cols-2 divide-x-2 divide-black">
-                  <div class="p-2 flex flex-col">
-                    <span class="text-[8px] font-bold uppercase opacity-50">Author</span>
-                    <span class="font-bold">${author}</span>
+               <div class="grid grid-cols-2 divide-x-[3px] divide-black">
+                  <div class="p-3 flex flex-col">
+                    <span class="text-[9px] font-black uppercase opacity-60 mb-1">Lead Author / Engineer</span>
+                    <span class="font-serif font-bold text-lg">${author}</span>
                   </div>
-                  <div class="p-2 flex flex-col">
-                    <span class="text-[8px] font-bold uppercase opacity-50">Phase</span>
-                    <span class="font-bold">${phase}</span>
+                  <div class="p-3 flex flex-col">
+                    <span class="text-[9px] font-black uppercase opacity-60 mb-1">Design Process Phase</span>
+                    <span class="font-serif font-bold text-lg">${phase}</span>
                   </div>
                </div>
             </div>
 
-            <div class="ltx_para">
+            <div class="ltx_para space-y-6">
     `;
 
     blocks.forEach(block => {
       switch (block.type) {
         case "text":
-          // Check for Section/Subsection markers
           let content = block.content;
-          content = content.replace(/<h1>(.*?)<\/h1>/g, '<h2 class="ltx_title ltx_title_subsection text-xl font-bold mt-6 mb-2">$1</h2>');
-          content = content.replace(/<h2>(.*?)<\/h2>/g, '<h3 class="ltx_title ltx_title_subsubsection text-lg font-bold mt-4 mb-2">$1</h3>');
-          content = content.replace(/<p>(.*?)<\/p>/g, '<p class="ltx_p mb-4 text-justify">$1</p>');
+          content = content.replace(/<h1>(.*?)<\/h1>/g, '<h2 class="ltx_title ltx_title_subsection text-2xl font-serif font-bold mt-10 mb-4 border-b border-gray-300 pb-2">$1</h2>');
+          content = content.replace(/<h2>(.*?)<\/h2>/g, '<h3 class="ltx_title ltx_title_subsubsection text-xl font-serif font-bold mt-8 mb-3 italic">$1</h3>');
+          content = content.replace(/<p>(.*?)<\/p>/g, '<p class="ltx_p text-lg leading-relaxed text-justify mb-4">$1</p>');
+          content = content.replace(/<ul>/g, '<ul class="list-disc pl-8 my-4 space-y-2">');
+          content = content.replace(/<ol>/g, '<ol class="list-decimal pl-8 my-4 space-y-2">');
           html += content;
           break;
         case "image":
           const imgBase64 = files.find(f => f.name === block.content.src) as LocalFile;
-          const src = imgBase64 ? `data:image/png;base64,${imgBase64.content}` : `/notebook/resources/${block.content.src}`;
+          const src = imgBase64?.content ? `data:image/png;base64,${imgBase64.content}` : `/notebook/resources/${block.content.src}`;
           html += `
-            <figure class="ltx_figure border-2 border-black p-4 my-6 bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center">
-              <img src="${src}" class="max-w-full h-auto ltx_graphics" />
-              <figcaption class="ltx_caption mt-4 font-bold italic text-sm">
-                <span class="ltx_tag">Figure: </span>${block.content.caption} 
-                <span class="float-right text-[10px] uppercase opacity-40 non-italic ml-4">${block.content.initials || author}</span>
+            <figure class="ltx_figure border-[3px] border-black p-6 my-10 bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center">
+              <img src="${src}" class="max-w-full h-auto ltx_graphics border border-gray-100" />
+              <figcaption class="ltx_caption w-full mt-6 pt-4 border-t-2 border-black/10 font-serif italic text-sm flex justify-between items-center">
+                <span><span class="ltx_tag font-black not-italic uppercase tracking-widest text-[10px] mr-2">Fig.</span>${block.content.caption}</span>
+                <span class="text-[10px] bg-black text-white px-2 py-0.5 rounded uppercase font-black non-italic tracking-tighter">${block.content.initials || author}</span>
               </figcaption>
             </figure>
           `;
           break;
         case "table":
           let tableHtml = `
-            <div class="ltx_table border-2 border-black my-8 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-              <table class="w-full divide-y-2 divide-black">
-                <tbody class="divide-y divide-gray-200">
+            <div class="ltx_table border-[3px] border-black my-12 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden bg-white">
+              <table class="w-full border-collapse">
+                <tbody class="divide-y-2 divide-black">
           `;
-          block.content.rows.forEach((row: string[]) => {
-            tableHtml += `<tr class="divide-x divide-gray-200">`;
+          block.content.rows.forEach((row: string[], idx: number) => {
+            const isHeader = idx === 0;
+            tableHtml += `<tr class="divide-x-2 divide-black ${isHeader ? 'bg-black text-white' : ''}">`;
             row.forEach(cell => {
-              tableHtml += `<td class="p-2 text-sm">${cell}</td>`;
+              tableHtml += `<td class="p-3 text-sm font-serif ${isHeader ? 'font-bold uppercase tracking-widest' : 'text-gray-900'}">${cell}</td>`;
             });
             tableHtml += `</tr>`;
           });
           tableHtml += `
                 </tbody>
               </table>
-              <div class="bg-black text-white p-2 text-xs font-bold uppercase italic ltx_caption text-center">
-                Table: ${block.content.caption || "Table Data"}
+              <div class="bg-gray-100 border-t-2 border-black p-3 text-[10px] font-black uppercase italic ltx_caption text-center tracking-widest">
+                Data Representation: ${block.content.caption || "Experimental Results"}
               </div>
             </div>
           `;
@@ -141,7 +158,7 @@ export default function Preview({ blocks, title = "", author = "", phase = "", s
           break;
         case "code":
           html += `
-            <div class="ltx_listing ltx_lstlisting border-l-4 border-blue-500 bg-gray-50 my-6 p-4 font-mono text-xs overflow-x-auto">
+            <div class="ltx_listing ltx_lstlisting border-l-[6px] border-black bg-gray-50 my-10 p-6 font-mono text-xs overflow-x-auto shadow-inner">
               <pre class="whitespace-pre"><code>${block.content.code.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code></pre>
             </div>
           `;
@@ -150,6 +167,16 @@ export default function Preview({ blocks, title = "", author = "", phase = "", s
     });
 
     html += `
+            </div>
+            
+            <div class="mt-20 pt-10 border-t-4 border-black border-double flex justify-between items-center opacity-40">
+                <div class="flex flex-col gap-1">
+                    <span class="text-[10px] font-black uppercase">Witness Sign-off</span>
+                    <div class="w-48 border-b border-black h-8"></div>
+                </div>
+                <div class="text-[10px] font-black uppercase tracking-widest">
+                    Build Journal - Team 1234A
+                </div>
             </div>
           </div>
         </article>
@@ -160,52 +187,63 @@ export default function Preview({ blocks, title = "", author = "", phase = "", s
   };
 
   useEffect(() => {
-    if (viewMode === "rendered" && containerRef.current) {
-       containerRef.current.innerHTML = renderBlocksToHtml();
+    if (viewMode === "raw" && rawCodeRef.current) {
+       Prism.highlightElement(rawCodeRef.current);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blocks, title, author, phase, viewMode]);
+  }, [viewMode, latexContent]);
 
   return (
-    <div className="flex flex-col gap-4 p-4 h-full border-l dark:border-zinc-800 bg-gray-50 dark:bg-zinc-950">
-      <div className="flex justify-between items-center border-b dark:border-zinc-800 pb-4">
-        <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
-            Preview
+    <div className="flex flex-col h-full border-l dark:border-zinc-800 bg-gray-50 dark:bg-zinc-950">
+      <div className="flex justify-between items-center p-4 border-b dark:border-zinc-800 bg-white dark:bg-zinc-900">
+        <h2 className="text-sm font-black uppercase tracking-widest dark:text-white flex items-center gap-2">
+            Output Preview
         </h2>
-        <div className="flex bg-gray-200 dark:bg-zinc-800 rounded p-1">
+        <div className="flex bg-gray-100 dark:bg-zinc-800 rounded-lg p-1 shadow-inner">
           <button
-            className={`px-3 py-1 text-sm rounded ${
-              viewMode === "rendered" ? "bg-white dark:bg-zinc-600 shadow" : "hover:bg-gray-300 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-300"
+            className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-tighter rounded-md transition-all ${
+              viewMode === "live" ? "bg-white dark:bg-zinc-700 shadow-md transform scale-105" : "hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-500"
             }`}
-            onClick={() => setViewMode("rendered")}
+            onClick={() => setViewMode("live")}
           >
-            Live HTML Preview
+            Live Preview
           </button>
           <button
-            className={`px-3 py-1 text-sm rounded ${
-              viewMode === "latex" ? "bg-white dark:bg-zinc-600 shadow" : "hover:bg-gray-300 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-300"
+            className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-tighter rounded-md transition-all ${
+              viewMode === "raw" ? "bg-white dark:bg-zinc-700 shadow-md transform scale-105" : "hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-500"
             }`}
-            onClick={() => setViewMode("latex")}
+            onClick={() => setViewMode("raw")}
           >
-            LaTeX Output
+            Raw LaTeX
           </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto border dark:border-zinc-800 p-4 bg-gray-100 dark:bg-zinc-950 rounded flex justify-center h-full">
-        {viewMode === "latex" ? (
-          <div className="w-full bg-white dark:bg-zinc-900 border dark:border-zinc-800 p-8 rounded shadow-lg max-w-3xl mx-auto font-mono text-xs whitespace-pre-wrap dark:text-gray-300">
-             {`\\newentry{${title}}{...}{${author}}{${phase}}\n\n` + blocks.map(b => b.type).join('\n')}
-             <p className="mt-8 pt-8 border-t italic text-gray-400">Total LaTeX content is shown in the left editor panel under 'Raw LaTeX' mode.</p>
+      <div className="flex-1 overflow-y-auto p-4 flex justify-center bg-zinc-200 dark:bg-zinc-950">
+        {viewMode === "raw" ? (
+          <div className="w-full max-w-4xl h-fit bg-[#1d1d1d] border-4 border-black rounded-none shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] font-mono text-[13px] leading-relaxed relative flex flex-col">
+             <div className="bg-black/40 px-4 py-2 flex justify-between items-center border-b border-white/5">
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Source_LaTeX</span>
+                <div className="flex gap-1.5">
+                   <div className="w-2.5 h-2.5 rounded-full bg-red-500/20 border border-red-500/40"></div>
+                   <div className="w-2.5 h-2.5 rounded-full bg-amber-500/20 border border-amber-500/40"></div>
+                   <div className="w-2.5 h-2.5 rounded-full bg-green-500/20 border border-green-500/40"></div>
+                </div>
+             </div>
+             <div className="p-8 overflow-x-auto">
+                <pre className="whitespace-pre-wrap !bg-transparent !m-0 !p-0"><code ref={rawCodeRef} className="language-latex !bg-transparent !p-0">{latexContent}</code></pre>
+             </div>
           </div>
         ) : (
-          <div ref={containerRef} className="w-full flex justify-center bg-gray-100 dark:bg-zinc-950 overflow-x-auto py-8">
-             <div className="bg-white text-black p-8 shadow-lg max-w-3xl mx-auto border relative" style={{ minHeight: "1056px", width: "816px", fontFamily: "'Times New Roman', serif" }}>
-             </div>
+          <div className="w-full flex justify-center py-4">
+             <div 
+               className="bg-white shadow-[20px_20px_0px_0px_rgba(0,0,0,0.1)] border border-gray-300" 
+               style={{ width: "816px", minHeight: "1056px" }}
+               dangerouslySetInnerHTML={{ __html: renderBlocksToHtml() }}
+             />
           </div>
         )}
       </div>
     </div>
   );
 }
-
