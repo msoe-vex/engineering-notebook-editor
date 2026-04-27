@@ -61,6 +61,7 @@ export default function App() {
   const loadLocalDirectory = async (handle: any, currentPath = ""): Promise<LocalFile[]> => {
     let files: LocalFile[] = [];
     for await (const entry of handle.values()) {
+      if (entry.name === ".git" || entry.name === "node_modules" || entry.name === "website" || entry.name === ".next") continue;
       const path = currentPath ? `${currentPath}/${entry.name}` : entry.name;
       if (entry.kind === "file") {
          files.push({
