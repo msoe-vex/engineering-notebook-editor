@@ -1,0 +1,31 @@
+# -*- mode: Perl -*-
+package LaTeXML::Package::Pool;
+use strict;
+use warnings;
+use LaTeXML::Package;
+
+RequirePackage('xcolor');
+RequirePackage('graphicx');
+RequirePackage('booktabs');
+RequirePackage('tabularx');
+RequirePackage('listings');
+
+DefMacroI('\teamname', '{}', '');
+DefMacroI('\teamnumber', '{}', '');
+DefMacroI('\notebooknumber', '{}', '');
+DefMacroI('\startdate', '{}', '');
+DefMacroI('\projectenddate', '{}', '');
+DefMacroI('\organization', '{}', '');
+DefMacroI('\teammembers', '{}', '');
+
+DefMacro('\maketeamtitle', '\section*{VEX Engineering Notebook}');
+DefMacro('\phaselegend', '\section*{Phase Legend}');
+
+DefMacro('\newentry{}{}{}{}', '\section*{#1} \textbf{Date:} #2 \textbf{Author:} #3 \textbf{Phase:} #4 \par');
+
+DefMacro('\image{}{}{}', '\begin{figure}[h]\centering \includegraphics{#1} \caption{#2 (Initials: #3)}\end{figure}');
+
+# Use DefMacro so the table environment parameters get fully expanded by LaTeX before hitting the stomach
+DefMacro('\customtable{}{}{}', '\begin{table}[h]\centering\caption{#3}\begin{tabular}{#1}#2\end{tabular}\end{table}');
+
+1;
