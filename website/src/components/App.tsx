@@ -524,6 +524,10 @@ export default function App() {
                       onSaved={handleEntrySaved}
                       onDeleted={handleEntryDeleted}
                       onContentChange={(latex) => setLatexContent(latex)}
+                      onBlocksChange={(blocks) => setEditorBlocks(blocks)}
+                      onTitleChange={(title) => setEditorTitle(title)}
+                      onAuthorChange={(author) => setEditorAuthor(author)}
+                      onPhaseChange={(phase) => setEditorPhase(phase)}
                       onImageUpload={handleImageUploaded}
                     />
                   </Panel>

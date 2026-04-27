@@ -23,6 +23,10 @@ interface EditorProps {
   onSaved: (path: string, content: string) => void;
   onDeleted: (path: string) => void;
   onContentChange?: (latex: string) => void;
+  onBlocksChange?: (blocks: Block[]) => void;
+  onTitleChange?: (title: string) => void;
+  onAuthorChange?: (author: string) => void;
+  onPhaseChange?: (phase: string) => void;
   onImageUpload?: (path: string, base64: string) => void;
 }
 
@@ -38,7 +42,11 @@ export default function Editor({
   onSaved, 
   onDeleted, 
   onContentChange,
-  onImageUpload
+  onBlocksChange,
+  onImageUpload,
+  onTitleChange,
+  onAuthorChange,
+  onPhaseChange
 }: EditorProps) {
   const [title, setTitle] = useState(initialTitle);
   const [author, setAuthor] = useState(initialAuthor);
@@ -46,12 +54,14 @@ export default function Editor({
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Only reset local state when we switch to a different file
   useEffect(() => {
     setTitle(initialTitle);
     setAuthor(initialAuthor);
     setPhase(initialPhase);
     setBlocks(initialBlocks);
-  }, [initialTitle, initialAuthor, initialPhase, initialBlocks]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filename]);
 
   const generateLatex = (bks: Block[], t: string, a: string, p: string) => {
     let latex = `% METADATA: ${JSON.stringify({ blocks: bks })}\n`;
@@ -91,7 +101,12 @@ export default function Editor({
     if (onContentChange) {
       onContentChange(generateLatex(blocks, title, author, phase));
     }
-  }, [blocks, title, author, phase, onContentChange]);
+    if (onBlocksChange) onBlocksChange(blocks);
+    if (onTitleChange) onTitleChange(title);
+    if (onAuthorChange) onAuthorChange(author);
+    if (onPhaseChange) onPhaseChange(phase);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blocks, title, author, phase]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -184,39 +199,39 @@ export default function Editor({
 
         <div className="space-y-12">
            <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-1">Notebook Entry Title</label>
+              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-zinc-500 ml-1">Notebook Entry Title</label>
               <input 
                 type="text" 
                 value={title} 
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="ENTRY TITLE..."
-                className="w-full text-5xl font-serif font-black border-none outline-none bg-transparent placeholder:text-gray-200 dark:placeholder:text-zinc-900 leading-tight"
+                className="w-full text-5xl font-serif font-black border-none outline-none bg-transparent placeholder:text-gray-200 dark:placeholder:text-zinc-800 leading-tight dark:text-white"
               />
            </div>
            
            <div className="grid grid-cols-2 gap-8 border-y-2 border-dashed border-gray-100 dark:border-zinc-900 py-8">
               <div className="space-y-2">
-                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-1">Lead Author</label>
+                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-zinc-500 ml-1">Lead Author</label>
                  <input 
                     type="text" 
                     value={author} 
                     onChange={(e) => setAuthor(e.target.value)}
-                    className="w-full font-serif font-bold text-xl outline-none bg-transparent dark:text-white"
+                    className="w-full font-serif font-bold text-xl outline-none bg-transparent dark:text-zinc-100"
                     placeholder="Engineering Lead..."
                  />
               </div>
               <div className="space-y-2">
-                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-1">Process Phase</label>
+                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-zinc-500 ml-1">Process Phase</label>
                  <select 
                     value={phase} 
                     onChange={(e) => setPhase(e.target.value)}
-                    className="w-full font-serif font-bold text-xl outline-none bg-transparent appearance-none cursor-pointer dark:text-white"
+                    className="w-full font-serif font-bold text-xl outline-none bg-transparent appearance-none cursor-pointer dark:text-zinc-100 pr-8"
                  >
-                    <option value="Define Problem">Define Problem</option>
-                    <option value="Generate Concepts">Generate Concepts</option>
-                    <option value="Develop Solution">Develop Solution</option>
-                    <option value="Construct and Test">Construct and Test</option>
-                    <option value="Evaluate Solution">Evaluate Solution</option>
+                    <option value="Define Problem" className="dark:bg-zinc-900 dark:text-white">Define Problem</option>
+                    <option value="Generate Concepts" className="dark:bg-zinc-900 dark:text-white">Generate Concepts</option>
+                    <option value="Develop Solution" className="dark:bg-zinc-900 dark:text-white">Develop Solution</option>
+                    <option value="Construct and Test" className="dark:bg-zinc-900 dark:text-white">Construct and Test</option>
+                    <option value="Evaluate Solution" className="dark:bg-zinc-900 dark:text-white">Evaluate Solution</option>
                  </select>
               </div>
            </div>
