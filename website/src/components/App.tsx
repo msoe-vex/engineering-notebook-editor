@@ -10,6 +10,17 @@ import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 interface LocalFile extends Partial<GitHubFile> {
   name: string;
   content: string;
+  childrenLoaded?: boolean;
+}
+
+export interface Block {
+  id: string;
+  type: "text" | "image" | "table" | "code";
+  content: any;
+}
+
+export interface FileMetadata {
+  blocks: Block[];
 }
 
 export default function App() {
@@ -22,12 +33,14 @@ export default function App() {
   const [selectedEntry, setSelectedEntry] = useState<string | null>(null);
 
   // State for editor
-  const [editorContent, setEditorContent] = useState("");
+  const [editorBlocks, setEditorBlocks] = useState<Block[]>([]);
+  const [editorMetadataMissing, setEditorMetadataMissing] = useState(false);
   const [editorTitle, setEditorTitle] = useState("");
   const [editorAuthor, setEditorAuthor] = useState("");
   const [editorPhase, setEditorPhase] = useState("");
   const [latexContent, setLatexContent] = useState("");
   const [styContent, setStyContent] = useState("");
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
 
   const [isLoading, setIsLoading] = useState(false);
 
@@ -36,62 +49,123 @@ export default function App() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let currentHandle: any = rootHandle;
     for (let i = 0; i < parts.length - 1; i++) {
-       currentHandle = await currentHandle.getDirectoryHandle(parts[i]);
+      currentHandle = await currentHandle.getDirectoryHandle(parts[i]);
     }
     const fileHandle = await currentHandle.getFileHandle(parts[parts.length - 1]);
     const file = await fileHandle.getFile();
 
     // Check if it's an image
     if (file.type.startsWith('image/')) {
-       return new Promise((resolve, reject) => {
-         const reader = new FileReader();
-         reader.onload = () => {
-           const b64 = (reader.result as string).split(',')[1];
-           resolve(b64);
-         };
-         reader.onerror = reject;
-         reader.readAsDataURL(file);
-       });
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const b64 = (reader.result as string).split(',')[1];
+          resolve(b64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
     }
 
     return await file.text();
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const loadLocalDirectory = async (handle: any, currentPath = ""): Promise<LocalFile[]> => {
+  const loadLocalDirectory = async (handle: any, currentPath = "", recursive = false): Promise<LocalFile[]> => {
     let files: LocalFile[] = [];
     for await (const entry of handle.values()) {
       if (entry.name === ".git" || entry.name === "node_modules" || entry.name === "website" || entry.name === ".next") continue;
       const path = currentPath ? `${currentPath}/${entry.name}` : entry.name;
       if (entry.kind === "file") {
-         files.push({
-           name: entry.name,
-           path: path,
-           type: "file",
-           content: "" // We will load content on demand
-         });
+        files.push({
+          name: entry.name,
+          path: path,
+          type: "file",
+          content: "" // We will load content on demand
+        });
       } else if (entry.kind === "directory") {
-         files.push({
-           name: entry.name,
-           path: path,
-           type: "dir",
-           content: ""
-         });
-         const subFiles = await loadLocalDirectory(entry, path);
-         files = files.concat(subFiles);
+        files.push({
+          name: entry.name,
+          path: path,
+          type: "dir",
+          content: "",
+          childrenLoaded: recursive
+        });
+        if (recursive) {
+          const subFiles = await loadLocalDirectory(entry, path, true);
+          files = files.concat(subFiles);
+        }
       }
     }
     return files;
   };
 
+  const handleTogglePath = async (path: string, isExpanded: boolean) => {
+    if (!isExpanded) {
+      setExpandedPaths(prev => {
+        const next = new Set(prev);
+        next.delete(path);
+        return next;
+      });
+      return;
+    }
+
+    setExpandedPaths(prev => new Set(prev).add(path));
+
+    // If it's a directory and hasn't been loaded, load it
+    const node = entries.find(e => e.path === path);
+    if (node && node.type === "dir" && !(node as LocalFile).childrenLoaded) {
+      if (isLocalMode && dirHandle) {
+        // Find the sub-handle
+        const parts = path.split('/');
+        let current: any = dirHandle;
+        for (const part of parts) {
+          current = await current.getDirectoryHandle(part);
+        }
+        const subFiles = await loadLocalDirectory(current, path, false);
+        setEntries(prev => {
+          const next = [...prev];
+          const idx = next.findIndex(e => e.path === path);
+          if (idx >= 0) {
+            (next[idx] as LocalFile).childrenLoaded = true;
+          }
+          // Add subfiles if they don't exist
+          subFiles.forEach(sf => {
+            if (!next.find(e => e.path === sf.path)) {
+              next.push(sf);
+            }
+          });
+          return next;
+        });
+      } else if (!isLocalMode && config) {
+        const subFiles = await fetchDirectoryTree(config, path, false);
+        setEntries(prev => {
+          const next = [...prev];
+          const idx = next.findIndex(e => e.path === path);
+          if (idx >= 0) {
+            (next[idx] as any).childrenLoaded = true;
+          }
+          subFiles.forEach(sf => {
+            if (!next.find(e => e.path === sf.path)) {
+              next.push(sf);
+            }
+          });
+          return next;
+        });
+      }
+    }
+  };
+
   const loadEntries = useCallback(async () => {
     if (isLocalMode && !dirHandle) return;
+    setIsLoading(true);
     if (isLocalMode && dirHandle) {
       try {
-        const localTree = await loadLocalDirectory(dirHandle);
+        const localTree = await loadLocalDirectory(dirHandle, "", false);
         setEntries(localTree);
 
         // Find sty file locally
+        // We might need to recursively search for sty if it's nested, but for now expect it near root
         const styFile = localTree.find(f => f.name === 'vex_notebook.sty');
         if (styFile && styFile.path) {
           const content = await getLocalFileContent(dirHandle, styFile.path);
@@ -100,41 +174,48 @@ export default function App() {
       } catch (error) {
         console.error("Failed to load local directory", error);
         alert("Failed to load local directory.");
+      } finally {
+        setIsLoading(false);
       }
       return;
     }
 
-    if (!config) return;
+    if (!config) {
+      setIsLoading(false);
+      return;
+    }
     try {
-      const fetchedTree = await fetchDirectoryTree(config);
+      const fetchedTree = await fetchDirectoryTree(config, "notebook", false);
       setEntries(fetchedTree);
     } catch (error) {
       console.error("Failed to load tree", error);
       alert("Failed to load tree. Check your configuration.");
+    } finally {
+      setIsLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config, isLocalMode, dirHandle]);
 
   useEffect(() => {
     if (!isLocalMode && config) {
       const init = async () => {
-         try {
-           const fetchedTree = await fetchDirectoryTree(config);
-           setEntries(fetchedTree);
+        try {
+          const fetchedTree = await fetchDirectoryTree(config);
+          setEntries(fetchedTree);
 
-           // Look for vex_notebook.sty and fetch its content
-           const styFile = fetchedTree.find((f: GitHubFile) => f.name === 'vex_notebook.sty');
-           if (styFile && styFile.path) {
-             const content = await fetchFileContent(config, styFile.path);
-             setStyContent(content);
-           }
-         } catch (error) {
-           console.error("Failed to load tree or sty", error);
-         }
+          // Look for vex_notebook.sty and fetch its content
+          const styFile = fetchedTree.find((f: GitHubFile) => f.name === 'vex_notebook.sty');
+          if (styFile && styFile.path) {
+            const content = await fetchFileContent(config, styFile.path);
+            setStyContent(content);
+          }
+        } catch (error) {
+          console.error("Failed to load tree or sty", error);
+        }
       };
       init();
     } else if (isLocalMode && dirHandle) {
-       setTimeout(() => loadEntries(), 0);
+      setTimeout(() => loadEntries(), 0);
     } else if (isLocalMode && !dirHandle) {
       // Clear entries when swapping to memory local mode
       setTimeout(() => {
@@ -143,7 +224,7 @@ export default function App() {
         setEditorTitle("");
         setEditorAuthor("");
         setEditorPhase("");
-        setEditorContent("");
+        setEditorBlocks([]);
         setLatexContent("");
       }, 0);
     }
@@ -157,18 +238,17 @@ export default function App() {
     try {
       let content = "";
       if (isLocalMode && dirHandle && file.path) {
-         try {
-           content = await getLocalFileContent(dirHandle, file.path);
-           // Also update the state content cache
-           setEntries(prev => prev.map(e => e.path === file.path ? { ...e, content } : e));
-         } catch (e: unknown) {
-            setEditorContent("This file can't be opened directly in the editor.");
-            setEditorTitle(file.name || "Untitled");
-            setLatexContent("This file can't be opened directly in the editor.");
-            setSelectedEntry(file.path || file.name);
-            setIsLoading(false);
-            return;
-         }
+        try {
+          content = await getLocalFileContent(dirHandle, file.path);
+          // Also update the state content cache
+          setEntries(prev => prev.map(e => e.path === file.path ? { ...e, content } : e));
+        } catch (e: unknown) {
+          setEditorTitle(file.name || "Untitled");
+          setLatexContent("This file can't be opened directly in the editor.");
+          setSelectedEntry(file.path || file.name);
+          setIsLoading(false);
+          return;
+        }
       } else if (isLocalMode) {
         content = (file as LocalFile).content || "";
       } else if (config && file.path) {
@@ -177,9 +257,10 @@ export default function App() {
         } catch (e: unknown) {
           const err = e as Error;
           if (err.message?.includes("URI malformed") || err.message?.includes("UTF-8") || err.message?.includes("decode")) {
-            setEditorContent("This file can't be opened directly in the editor as it is not UTF-8 encoded plain text.");
             setEditorTitle(file.name || "Untitled");
             setLatexContent("This file can't be opened directly in the editor as it is not UTF-8 encoded plain text.");
+            setEditorBlocks([]);
+            setEditorMetadataMissing(true);
             setSelectedEntry(file.path || file.name);
             setIsLoading(false);
             return;
@@ -191,39 +272,42 @@ export default function App() {
       // We only attempt to parse .tex files
       if (file.name && file.name.endsWith(".tex")) {
         // Basic parsing of latex string back to form fields
-        // Matches \newentry{Title}{Date}{Author}{Phase}
         const entryMatch = content.match(/\\newentry{(.*?)}{(.*?)}{(.*?)}{(.*?)}/);
 
         if (entryMatch) {
-           setEditorTitle(entryMatch[1] || "");
-           setEditorAuthor(entryMatch[3] || "");
-           setEditorPhase(entryMatch[4] || "");
+          setEditorTitle(entryMatch[1] || "");
+          setEditorAuthor(entryMatch[3] || "");
+          setEditorPhase(entryMatch[4] || "");
         } else {
-           // Fallback for older \chapter template style
-           const titleMatch = content.match(/\\chapter{(.*?)}/);
-           const authorMatch = content.match(/\\textbf{Author:}\s*(.*?)\s*\\\\/);
-           const phaseMatch = content.match(/\\textbf{Phase:}\s*(.*?)\n/);
-
-           setEditorTitle(titleMatch ? titleMatch[1] : "");
-           setEditorAuthor(authorMatch ? authorMatch[1] : "");
-           setEditorPhase(phaseMatch ? phaseMatch[1] : "");
+          setEditorTitle("");
+          setEditorAuthor("");
+          setEditorPhase("");
         }
 
-        // Content is everything after the entry macro or phase macro:
-        let contentStart = 0;
-        if (entryMatch) {
-           contentStart = content.indexOf(entryMatch[0]) + entryMatch[0].length;
+        // METADATA PARSING
+        const metadataMatch = content.match(/% METADATA: (.*)/);
+        if (metadataMatch) {
+          try {
+            const meta: FileMetadata = JSON.parse(metadataMatch[1]);
+            setEditorBlocks(meta.blocks);
+            setEditorMetadataMissing(false);
+          } catch (e) {
+            console.error("Failed to parse metadata", e);
+            setEditorBlocks([]);
+            setEditorMetadataMissing(true);
+          }
         } else {
-           const phaseMatch = content.match(/\\textbf{Phase:}\s*(.*?)\n/);
-           contentStart = phaseMatch ? content.indexOf(phaseMatch[0]) + phaseMatch[0].length : 0;
+          setEditorBlocks([]);
+          setEditorMetadataMissing(true);
         }
-        setEditorContent(content.substring(contentStart).trim());
 
         setLatexContent(content);
         setSelectedEntry(file.path || file.name);
       } else {
-        // Just show raw content for non-tex files or let them download it
-        setEditorContent(content);
+        // Just show raw content for non-tex files as one large block or something?
+        // Actually, user said raw latex shouldn't be editable.
+        setEditorBlocks([]);
+        setEditorMetadataMissing(true);
         setEditorTitle(file.name || "Untitled");
         setLatexContent(content);
         setSelectedEntry(file.path || file.name);
@@ -239,45 +323,45 @@ export default function App() {
   const writeLocalFile = async (path: string, content: string | Uint8Array) => {
     if (!dirHandle) return;
     try {
-       const parts = path.split('/');
-       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-       let currentHandle: any = dirHandle;
-       // Create missing directories
-       for (let i = 0; i < parts.length - 1; i++) {
-          currentHandle = await currentHandle.getDirectoryHandle(parts[i], { create: true });
-       }
-       const fileHandle = await currentHandle.getFileHandle(parts[parts.length - 1], { create: true });
-       const writable = await fileHandle.createWritable();
-       await writable.write(content);
-       await writable.close();
+      const parts = path.split('/');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let currentHandle: any = dirHandle;
+      // Create missing directories
+      for (let i = 0; i < parts.length - 1; i++) {
+        currentHandle = await currentHandle.getDirectoryHandle(parts[i], { create: true });
+      }
+      const fileHandle = await currentHandle.getFileHandle(parts[parts.length - 1], { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(content);
+      await writable.close();
 
-       // Reload directory to update tree
-       loadEntries();
+      // Reload directory to update tree
+      loadEntries();
     } catch (e) {
-       console.error("Failed to write local file", e);
+      console.error("Failed to write local file", e);
     }
   };
 
   const deleteLocalFile = async (path: string) => {
     if (!dirHandle) return;
     try {
-       const parts = path.split('/');
-       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-       let currentHandle: any = dirHandle;
-       for (let i = 0; i < parts.length - 1; i++) {
-          currentHandle = await currentHandle.getDirectoryHandle(parts[i]);
-       }
-       await currentHandle.removeEntry(parts[parts.length - 1]);
+      const parts = path.split('/');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let currentHandle: any = dirHandle;
+      for (let i = 0; i < parts.length - 1; i++) {
+        currentHandle = await currentHandle.getDirectoryHandle(parts[i]);
+      }
+      await currentHandle.removeEntry(parts[parts.length - 1]);
 
-       loadEntries();
+      loadEntries();
     } catch (e) {
-       console.error("Failed to delete local file", e);
+      console.error("Failed to delete local file", e);
     }
   };
 
   const handleEntrySaved = (path: string, content: string) => {
     if (isLocalMode && dirHandle) {
-       writeLocalFile(path, content);
+      writeLocalFile(path, content);
     } else if (isLocalMode) {
       setEntries(prev => {
         const existingIdx = prev.findIndex(e => e.path === path);
@@ -295,14 +379,14 @@ export default function App() {
 
   const handleImageUploaded = (path: string, content: string) => {
     if (isLocalMode && dirHandle) {
-       // Convert base64 back to Uint8Array
-       const binaryString = window.atob(content);
-       const len = binaryString.length;
-       const bytes = new Uint8Array(len);
-       for (let i = 0; i < len; i++) {
-           bytes[i] = binaryString.charCodeAt(i);
-       }
-       writeLocalFile(path, bytes);
+      // Convert base64 back to Uint8Array
+      const binaryString = window.atob(content);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      writeLocalFile(path, bytes);
     } else if (isLocalMode) {
       setEntries(prev => {
         const existingIdx = prev.findIndex(e => e.path === path);
@@ -320,8 +404,8 @@ export default function App() {
 
   const handleEntryDeleted = (path: string) => {
     if (isLocalMode && dirHandle) {
-       deleteLocalFile(path);
-       handleNewEntry();
+      deleteLocalFile(path);
+      handleNewEntry();
     } else if (isLocalMode) {
       setEntries(prev => prev.filter(e => e.path !== path));
       handleNewEntry();
@@ -336,7 +420,7 @@ export default function App() {
     setEditorTitle("");
     setEditorAuthor("");
     setEditorPhase("");
-    setEditorContent("");
+    setEditorBlocks([]);
     setLatexContent("");
   };
 
@@ -378,7 +462,9 @@ export default function App() {
               <FileTree
                 files={entries}
                 selectedPath={selectedEntry}
+                expandedPaths={expandedPaths}
                 onSelect={handleSelectEntry}
+                onToggle={handleTogglePath}
               />
             )}
           </div>
@@ -432,11 +518,12 @@ export default function App() {
                       initialTitle={editorTitle}
                       initialAuthor={editorAuthor}
                       initialPhase={editorPhase}
-                      initialContent={editorContent}
+                      initialBlocks={editorBlocks}
+                      metadataMissing={editorMetadataMissing}
                       filename={selectedEntry}
                       onSaved={handleEntrySaved}
                       onDeleted={handleEntryDeleted}
-                      onContentChange={(content) => setLatexContent(content)}
+                      onContentChange={(latex) => setLatexContent(latex)}
                       onImageUpload={handleImageUploaded}
                     />
                   </Panel>
@@ -444,7 +531,14 @@ export default function App() {
                   <PanelResizeHandle className="w-1 bg-gray-200 dark:bg-zinc-800 hover:bg-blue-400 transition-colors cursor-col-resize" />
 
                   <Panel defaultSize={50} minSize={30} className="flex flex-col h-full">
-                    <Preview latexContent={latexContent} styContent={styContent} files={entries} />
+                    <Preview
+                      blocks={editorBlocks}
+                      title={editorTitle}
+                      author={editorAuthor}
+                      phase={editorPhase}
+                      styContent={styContent}
+                      files={entries}
+                    />
                   </Panel>
                 </>
               )}

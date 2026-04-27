@@ -9,7 +9,9 @@ interface LocalFile extends Partial<GitHubFile> {
 interface FileTreeProps {
   files: (GitHubFile | LocalFile)[];
   selectedPath: string | null;
+  expandedPaths: Set<string>;
   onSelect: (file: GitHubFile | LocalFile) => void;
+  onToggle: (path: string, isExpanded: boolean) => void;
 }
 
 interface TreeNode {
@@ -20,14 +22,10 @@ interface TreeNode {
   originalFile?: GitHubFile | LocalFile;
 }
 
-export default function FileTree({ files, selectedPath, onSelect }: FileTreeProps) {
-  const [expandedDirs, setExpandedDirs] = useState<Record<string, boolean>>({});
-
+export default function FileTree({ files, selectedPath, expandedPaths, onSelect, onToggle }: FileTreeProps) {
   const toggleDir = (path: string) => {
-    setExpandedDirs(prev => ({
-      ...prev,
-      [path]: !prev[path]
-    }));
+    const isCurrentlyExpanded = expandedPaths.has(path);
+    onToggle(path, !isCurrentlyExpanded);
   };
 
   // Build tree structure
@@ -60,13 +58,13 @@ export default function FileTree({ files, selectedPath, onSelect }: FileTreeProp
   const renderTree = (node: TreeNode, depth: number = 0): React.ReactNode => {
     // Skip rendering the root node itself
     if (depth === 0) {
-      return node.children?.map(child => renderTree(child, depth + 1));
+      return node.children?.sort((a,b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'dir' ? -1 : 1)).map(child => renderTree(child, depth + 1));
     }
 
     const isSelected = selectedPath === node.path;
 
     if (node.type === "dir") {
-      const isExpanded = expandedDirs[node.path] !== false; // Default to expanded
+      const isExpanded = expandedPaths.has(node.path);
       return (
         <div key={node.path} className="ml-2">
           <button
@@ -77,13 +75,14 @@ export default function FileTree({ files, selectedPath, onSelect }: FileTreeProp
           </button>
           {isExpanded && (
             <div className="ml-2 border-l border-gray-200 dark:border-zinc-700 pl-1">
-              {node.children?.map(child => renderTree(child, depth + 1))}
+              {node.children?.sort((a,b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'dir' ? -1 : 1)).map(child => renderTree(child, depth + 1))}
             </div>
           )}
         </div>
       );
     }
 
+    // Only show .tex files usually, but let's keep it general
     return (
       <button
         key={node.path}

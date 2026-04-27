@@ -1,40 +1,32 @@
 import { useState, useEffect } from "react";
 import { GitHubConfig, saveFile, deleteFile } from "@/lib/github";
-import { useEditor, EditorContent } from '@tiptap/react';
-import { StarterKit } from '@tiptap/starter-kit';
-import { Image } from '@tiptap/extension-image';
-import { Table } from '@tiptap/extension-table';
-import { TableRow } from '@tiptap/extension-table-row';
-import { TableHeader } from '@tiptap/extension-table-header';
-import { TableCell } from '@tiptap/extension-table-cell';
-import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
-import { common, createLowlight } from 'lowlight';
+import BlockEditor from "./BlockEditor";
 import EditorTextarea from 'react-simple-code-editor';
 import Prism from 'prismjs';
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore Types missing for prism components
 import 'prismjs/components/prism-latex';
-
-const lowlight = createLowlight(common);
+import { Block, FileMetadata } from "./App";
+import { AlertCircle, Download, FileText, Trash2 } from "lucide-react";
 
 interface EditorProps {
   config: GitHubConfig | null;
   isLocalMode: boolean;
-  initialContent?: string;
+  initialBlocks?: Block[];
+  metadataMissing?: boolean;
   initialTitle?: string;
   initialAuthor?: string;
   initialPhase?: string;
   filename?: string;
   onSaved: (filename: string, content: string) => void;
   onDeleted?: (filename: string) => void;
-  onContentChange: (content: string) => void;
+  onContentChange: (latex: string) => void;
   onImageUpload?: (path: string, base64: string) => void;
 }
 
 export default function Editor({
   config,
   isLocalMode,
-  initialContent = "",
+  initialBlocks = [],
+  metadataMissing = false,
   initialTitle = "",
   initialAuthor = "",
   initialPhase = "",
@@ -47,212 +39,70 @@ export default function Editor({
   const [title, setTitle] = useState(initialTitle);
   const [author, setAuthor] = useState(initialAuthor);
   const [phase, setPhase] = useState(initialPhase);
-  const [content, setContent] = useState(initialContent);
+  const [blocks, setBlocks] = useState<Block[]>(initialBlocks);
   const [isSaving, setIsSaving] = useState(false);
   const [currentFilename, setCurrentFilename] = useState(filename);
-  const [isRawMode, setIsRawMode] = useState(!!filename);
+  const [isRawMode, setIsRawMode] = useState(metadataMissing);
 
-  const generateLatex = (t: string, a: string, p: string, c: string, tiptapState?: string) => {
-    const dateStr = new Date().toLocaleDateString("en-US", { year: 'numeric', month: 'long', day: 'numeric' });
-    let latex = `\\newentry{${t}}{${dateStr}}{${a}}{${p}}
-
-${c}
-`;
-    if (tiptapState) {
-       latex += `\n% TIPTAP_STATE: ${tiptapState}\n`;
-    }
-    return latex;
-  };
-
-  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setTitle(e.target.value);
-    onContentChange(generateLatex(e.target.value, author, phase, content, getTiptapState()));
-  };
-
-  const handleAuthorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setAuthor(e.target.value);
-    onContentChange(generateLatex(title, e.target.value, phase, content, getTiptapState()));
-  };
-
-  const handlePhaseChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setPhase(e.target.value);
-    onContentChange(generateLatex(title, author, e.target.value, content, getTiptapState()));
-  };
-
-  const latexToHtml = (latex: string) => {
-    // Basic conversion to show in WYSIWYG
-    let html = latex
-      .replace(/\\textbf{(.*?)}/g, "<strong>$1</strong>")
-      .replace(/\\image{(.*?)}{(.*?)}{(.*?)}/g, '<img src="$1" alt="$2" title="$3" />')
-      .replace(/\\begin\{lstlisting\}(\[.*?\])?([\s\S]*?)\\end\{lstlisting\}/g, "<pre><code>$2</code></pre>")
-      // Crude table parsing (just strips tags for now to prevent breaking, real parser would be complex)
-      .replace(/\\customtable\{[^}]*\}\{([\s\S]*?)\}\{([\s\S]*?)\}/g, "<div>[Table: $2]</div>\n<pre>$1</pre>");
-
-    // Split by lines and wrap in paragraphs
-    html = html.split('\n\n').map(p => `<p>${p}</p>`).join('');
-    return html;
-  };
-
-  const htmlToLatex = (html: string) => {
-    // Basic conversion from WYSIWYG HTML to LaTeX
-    // This is a naive implementation, a robust one would traverse the DOM
-    const latex = html
-      .replace(/<strong>(.*?)<\/strong>/g, "\\textbf{$1}")
-      .replace(/<b>(.*?)<\/b>/g, "\\textbf{$1}")
-      .replace(/<em>(.*?)<\/em>/g, "\\textit{$1}")
-      .replace(/<i>(.*?)<\/i>/g, "\\textit{$1}")
-      .replace(/<img src="(.*?)" alt="(.*?)" title="(.*?)"[^>]*>/g, "\\image{$1}{$2}{$3}")
-      .replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/g, "\\begin{lstlisting}[language=C++, caption={Code Snippet}]\n$1\n\\end{lstlisting}")
-      .replace(/<p>(.*?)<\/p>/g, "$1\n\n")
-      .replace(/<br\s*\/?>/g, "\n");
-
-    return latex.trim();
-  };
-
-  const editor = useEditor({
-    immediatelyRender: false,
-    extensions: [
-      StarterKit.configure({
-        heading: {
-          levels: [1, 2, 3],
-        }
-      }),
-      Image,
-      Table.configure({
-        resizable: true,
-      }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      CodeBlockLowlight.configure({
-        lowlight,
-      }),
-    ],
-    content: latexToHtml(initialContent),
-    onUpdate: ({ editor }) => {
-      const html = editor.getHTML();
-      const latex = htmlToLatex(html);
-      setContent(latex);
-      onContentChange(generateLatex(title, author, phase, latex));
-    },
-  });
-
-  // Re-sync editor if initialContent changes drastically (e.g., loaded new file)
   useEffect(() => {
-    if (editor && initialContent !== content) {
-      // Check if initialContent contains TipTap state json
-      const stateMatch = initialContent.match(/% TIPTAP_STATE: (.*)/);
-      let contentWithoutState = initialContent;
-      let loadedState = false;
+    setTitle(initialTitle);
+    setAuthor(initialAuthor);
+    setPhase(initialPhase);
+    setBlocks(initialBlocks);
+    setCurrentFilename(filename);
+    setIsRawMode(metadataMissing);
+  }, [initialTitle, initialAuthor, initialPhase, initialBlocks, metadataMissing, filename]);
 
-      if (stateMatch) {
-         try {
-            const stateObj = JSON.parse(stateMatch[1]);
-            contentWithoutState = initialContent.replace(/\n% TIPTAP_STATE: .*/, '');
-            if (!isRawMode) {
-               editor.commands.setContent(stateObj);
-            }
-            loadedState = true;
-         } catch (e) {
-            console.error("Failed to parse tiptap state", e);
-         }
+  const blocksToLatex = (bbs: Block[]) => {
+    return bbs.map(b => {
+      switch (b.type) {
+        case "text":
+          // Clean HTML from TipTap back to LaTeX
+          return b.content
+            .replace(/<p>(.*?)<\/p>/g, "$1\n\n")
+            .replace(/<strong>(.*?)<\/strong>/g, "\\textbf{$1}")
+            .replace(/<em>(.*?)<\/em>/g, "\\textit{$1}")
+            .replace(/<br\s*\/?>/g, "\n")
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .trim();
+        case "image":
+          return `\\image{${b.content.src}}{${b.content.caption || "Image"}}{${b.content.initials || author || "Initials"}}`;
+        case "table":
+          const cols = "|c".repeat(b.content.cols) + "|";
+          const tableRows = b.content.rows.map((r: string[]) => r.join(" & ")).join(" \\\\ \\hline \n");
+          return `\\customtable{${cols}}{
+  ${tableRows}
+}{${b.content.caption || "Table Caption"}}`;
+        case "code":
+          return `\\begin{lstlisting}[language=${b.content.lang || "cpp"}]
+${b.content.code}
+\\end{lstlisting}`;
+        default:
+          return "";
       }
+    }).join("\n\n");
+  };
 
-      if (!loadedState && !isRawMode) {
-         editor.commands.setContent(latexToHtml(contentWithoutState));
-      }
+  const generateFullLatex = (t: string, a: string, p: string, bbs: Block[]) => {
+    const dateStr = new Date().toLocaleDateString("en-US", { year: 'numeric', month: 'long', day: 'numeric' });
+    const contentLatex = blocksToLatex(bbs);
+    const metadata: FileMetadata = { blocks: bbs };
+    
+    return `\\newentry{${t}}{${dateStr}}{${a}}{${p}}
 
-      // Using a timeout to defer state update to avoid cascading render lint error
-      setTimeout(() => setContent(contentWithoutState), 0);
+${contentLatex}
 
-      // Update raw mode toggle default when a new file loads
-      setTimeout(() => setIsRawMode(!!filename && !loadedState), 0); // Open in visual if state exists
+% METADATA: ${JSON.stringify(metadata)}
+`;
+  };
+
+  useEffect(() => {
+    if (title || author || phase || blocks.length > 0) {
+        onContentChange(generateFullLatex(title, author, phase, blocks));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialContent, editor, filename]);
-
-  const getTiptapState = () => {
-    if (editor && !isRawMode) {
-       return JSON.stringify(editor.getJSON());
-    }
-    return undefined;
-  };
-
-  const updateContentAndNotify = (newContent: string) => {
-    setContent(newContent);
-    onContentChange(generateLatex(title, author, phase, newContent, getTiptapState()));
-    if (editor) {
-      editor.commands.setContent(latexToHtml(newContent));
-    }
-  };
-
-  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const text = e.clipboardData.getData("text");
-    if (text.includes("\t") && text.includes("\n")) {
-      e.preventDefault();
-      const rows = text.split("\n").filter((r) => r.trim());
-      const cells = rows.map((r) => r.split("\t"));
-      if (cells.length > 0) {
-        const cols = cells[0].length;
-        const latexTable = `\\customtable{${"|c".repeat(cols)}|}{
-${cells.map((c) => "  " + c.join(" & ")).join(" \\\\ \\hline \n")}
-}{Table Caption}`;
-
-        const target = e.target as HTMLTextAreaElement;
-        const start = target.selectionStart;
-        const end = target.selectionEnd;
-        const newContent =
-          content.substring(0, start) +
-          latexTable +
-          content.substring(end, content.length);
-
-        updateContentAndNotify(newContent);
-
-        setTimeout(() => {
-          target.selectionStart = target.selectionEnd = start + latexTable.length;
-        }, 0);
-      }
-    }
-  };
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      if (!ev.target?.result) return;
-      const base64String = (ev.target.result as string).split(",")[1];
-      const imgFilename = file.name.replace(/\\s+/g, "-");
-
-      if (!isLocalMode && config) {
-        try {
-          await saveFile(
-            config,
-            `${config.resourcesDir}/${imgFilename}`,
-            atob(base64String), // We decode base64 because our saveFile function re-encodes it
-            `Upload image ${imgFilename}`
-          );
-
-          const latexImage = `\\image{${imgFilename}}{Image Caption}{${author || "Initials"}}`;
-          updateContentAndNotify(content + "\n" + latexImage + "\n");
-          alert("Image uploaded successfully!");
-        } catch (error) {
-          console.error("Failed to upload image", error);
-          alert("Failed to upload image");
-        }
-      } else {
-         // Local mode fallback - store base64 so it can be previewed
-         if (onImageUpload) {
-           onImageUpload(`notebook/resources/${imgFilename}`, base64String);
-         }
-         const latexImage = `\\image{${imgFilename}}{Image Caption}{${author || "Initials"}}`;
-         updateContentAndNotify(content + "\n" + latexImage + "\n");
-         alert(`Image stored in local memory for preview. Don't forget to manually place it in your resources folder later!`);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
+  }, [title, author, phase, blocks]);
 
   const handleSave = async () => {
     if (!title) {
@@ -265,7 +115,7 @@ ${cells.map((c) => "  " + c.join(" & ")).join(" \\\\ \\hline \n")}
     const fileToSave = currentFilename || `${dateStr}-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.tex`;
 
     try {
-      const latexString = generateLatex(title, author, phase, content);
+      const latexString = generateFullLatex(title, author, phase, blocks);
       if (isLocalMode && config) {
          const savePath = currentFilename || `${config.entriesDir}/${fileToSave}`;
          setCurrentFilename(savePath);
@@ -295,7 +145,7 @@ ${cells.map((c) => "  " + c.join(" & ")).join(" \\\\ \\hline \n")}
   };
 
   const handleDownload = () => {
-     const latexString = generateLatex(title, author, phase, content);
+     const latexString = generateFullLatex(title, author, phase, blocks);
      const dateStr = new Date().toISOString().split("T")[0];
      const fileToSave = currentFilename || `${dateStr}-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.tex`;
 
@@ -334,155 +184,124 @@ ${cells.map((c) => "  " + c.join(" & ")).join(" \\\\ \\hline \n")}
   };
 
   return (
-    <div className="flex flex-col gap-4 p-4 h-full overflow-y-auto dark:bg-zinc-950">
-      <h2 className="text-xl font-bold dark:text-white">Editor</h2>
-
-      <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium dark:text-gray-200">Title</label>
-        <input
-          type="text"
-          className="border dark:border-zinc-700 p-2 rounded dark:bg-zinc-900 dark:text-white"
-          value={title}
-          onChange={handleTitleChange}
-        />
-      </div>
-
-      <div className="flex gap-4">
-        <div className="flex flex-col gap-2 flex-1">
-          <label className="text-sm font-medium dark:text-gray-200">Author</label>
-          <input
-            type="text"
-            className="border dark:border-zinc-700 p-2 rounded dark:bg-zinc-900 dark:text-white"
-            value={author}
-            onChange={handleAuthorChange}
-          />
-        </div>
-        <div className="flex flex-col gap-2 flex-1">
-          <label className="text-sm font-medium dark:text-gray-200">Phase</label>
-          <select
-            className="border dark:border-zinc-700 p-2 rounded dark:bg-zinc-900 dark:text-white"
-            value={phase}
-            onChange={handlePhaseChange}
-          >
-            <option value="">Select Phase...</option>
-            <option value="Define Problem">Define Problem</option>
-            <option value="Generate Concepts">Generate Concepts</option>
-            <option value="Develop Solution">Develop Solution</option>
-            <option value="Construct and Test">Construct and Test</option>
-            <option value="Evaluate Solution">Evaluate Solution</option>
-          </select>
+    <div className="flex flex-col gap-4 p-6 h-full overflow-y-auto dark:bg-zinc-950">
+      <div className="flex justify-between items-center bg-white dark:bg-zinc-950 sticky top-0 z-10 pb-4 border-b dark:border-zinc-800">
+        <h2 className="text-2xl font-black dark:text-white flex items-center gap-2">
+            <FileText className="text-blue-500" />
+            Editor
+        </h2>
+        <div className="flex bg-gray-100 dark:bg-zinc-900 rounded-lg p-1 text-xs">
+            <button
+                className={`px-4 py-1.5 rounded-md transition ${!isRawMode ? 'bg-white dark:bg-zinc-700 shadow-sm text-blue-600 dark:text-blue-400 font-bold' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                onClick={() => setIsRawMode(false)}
+            >
+                Visual Blocks
+            </button>
+            <button
+                className={`px-4 py-1.5 rounded-md transition ${isRawMode ? 'bg-white dark:bg-zinc-700 shadow-sm text-blue-600 dark:text-blue-400 font-bold' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                onClick={() => setIsRawMode(true)}
+            >
+                Raw LaTeX (Read Only)
+            </button>
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 flex-1 min-h-[400px] border dark:border-zinc-700 rounded overflow-hidden flex flex-col">
-        <div className="flex justify-between items-center bg-gray-50 dark:bg-zinc-800 border-b dark:border-zinc-700 p-2">
-          <div className="flex items-center gap-4">
-             <label className="text-sm font-medium dark:text-gray-200">Content</label>
-             <div className="flex bg-gray-200 dark:bg-zinc-700 rounded text-xs p-1">
-                <button
-                  className={`px-2 py-1 rounded ${!isRawMode ? 'bg-white dark:bg-zinc-600 shadow' : 'hover:bg-gray-300 dark:hover:bg-zinc-500'}`}
-                  onClick={() => setIsRawMode(false)}
-                >
-                  Visual
-                </button>
-                <button
-                  className={`px-2 py-1 rounded ${isRawMode ? 'bg-white dark:bg-zinc-600 shadow' : 'hover:bg-gray-300 dark:hover:bg-zinc-500'}`}
-                  onClick={() => setIsRawMode(true)}
-                >
-                  Raw LaTeX
-                </button>
-             </div>
+      {metadataMissing && !isRawMode && (
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 p-4 rounded-lg flex items-start gap-3">
+              <AlertCircle className="text-amber-500 shrink-0" />
+              <div>
+                  <p className="text-sm font-bold text-amber-800 dark:text-amber-400">Metadata Missing</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-500">This file doesn't have block-based metadata. Use the <strong>Raw LaTeX</strong> view to see existing content, or start adding blocks here to create new structure.</p>
+              </div>
           </div>
-          {!isRawMode && (
-            <div className="flex items-center gap-2">
-              <select
-                className="text-xs bg-gray-200 dark:bg-zinc-700 dark:text-gray-200 px-2 py-1 rounded outline-none border-r border-gray-300 pr-4"
-                onChange={(e) => {
-                  const level = parseInt(e.target.value);
-                  type Level = 1 | 2 | 3;
-                  if (level === 0) editor?.chain().focus().setParagraph().run();
-                  else editor?.chain().focus().toggleHeading({ level: level as Level }).run();
-                }}
-                value={editor?.isActive('heading') ? editor.getAttributes('heading').level : 0}
-              >
-                <option value={0}>Normal Text</option>
-                <option value={1}>Section</option>
-                <option value={2}>Subsection</option>
-                <option value={3}>Sub-subsection</option>
-              </select>
-              <button
-                className={`text-xs px-2 py-1 rounded cursor-pointer ${editor?.isActive('bold') ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 dark:bg-zinc-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-zinc-600'}`}
-                onClick={() => editor?.chain().focus().toggleBold().run()}
-              >
-                Bold
-              </button>
-              <button
-                className={`text-xs px-2 py-1 rounded cursor-pointer ${editor?.isActive('italic') ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 dark:bg-zinc-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-zinc-600'}`}
-                onClick={() => editor?.chain().focus().toggleItalic().run()}
-              >
-                Italic
-              </button>
-              <button
-                className={`text-xs px-2 py-1 rounded cursor-pointer ${editor?.isActive('codeBlock') ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 dark:bg-zinc-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-zinc-600'}`}
-                onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
-              >
-                Code
-              </button>
-              <label className="text-xs bg-gray-200 dark:bg-zinc-700 dark:text-gray-200 px-2 py-1 rounded cursor-pointer hover:bg-gray-300 dark:hover:bg-zinc-600">
-                Upload Image
-                <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
-              </label>
-              <button
-                className="text-xs bg-gray-200 dark:bg-zinc-700 dark:text-gray-200 px-2 py-1 rounded cursor-pointer hover:bg-gray-300 dark:hover:bg-zinc-600"
-                onClick={() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
-              >
-                Table
-              </button>
+      )}
+
+      <div className="flex flex-col gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="flex flex-col gap-2">
+                <label className="text-xs uppercase font-bold text-gray-500 dark:text-gray-400 tracking-wider">Entry Title</label>
+                <input
+                    type="text"
+                    className="bg-transparent border-b-2 border-gray-200 dark:border-zinc-800 focus:border-blue-500 outline-none p-2 text-lg font-bold dark:text-white transition-colors"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="e.g. Design of Claw Mechanism"
+                />
             </div>
-          )}
+            <div className="flex flex-col gap-2">
+                <label className="text-xs uppercase font-bold text-gray-500 dark:text-gray-400 tracking-wider">Author</label>
+                <input
+                    type="text"
+                    className="bg-transparent border-b-2 border-gray-200 dark:border-zinc-800 focus:border-blue-500 outline-none p-2 dark:text-white transition-colors"
+                    value={author}
+                    onChange={(e) => setAuthor(e.target.value)}
+                    placeholder="Student Name"
+                />
+            </div>
+            <div className="flex flex-col gap-2">
+                <label className="text-xs uppercase font-bold text-gray-500 dark:text-gray-400 tracking-wider">Design Phase</label>
+                <select
+                    className="bg-transparent border-b-2 border-gray-200 dark:border-zinc-800 focus:border-blue-500 outline-none p-2 dark:text-white transition-colors appearance-none"
+                    value={phase}
+                    onChange={(e) => setPhase(e.target.value)}
+                >
+                    <option value="">Select Phase...</option>
+                    <option value="Define Problem">Define Problem</option>
+                    <option value="Generate Concepts">Generate Concepts</option>
+                    <option value="Develop Solution">Develop Solution</option>
+                    <option value="Construct and Test">Construct and Test</option>
+                    <option value="Evaluate Solution">Evaluate Solution</option>
+                </select>
+            </div>
         </div>
-        {isRawMode ? (
-          <div className="flex-1 overflow-y-auto bg-white dark:bg-zinc-900 p-4">
-            <EditorTextarea
-              value={content}
-              onValueChange={(code) => updateContentAndNotify(code)}
-              highlight={code => Prism.highlight(code, Prism.languages.latex, 'latex')}
-              padding={10}
-              className="font-mono text-sm dark:text-gray-200 outline-none w-full min-h-full"
-              textareaClassName="outline-none"
-            />
-          </div>
-        ) : (
-          <div className="flex-1 overflow-y-auto p-4 prose dark:prose-invert max-w-none prose-sm outline-none cursor-text dark:bg-zinc-900 bg-white" onClick={() => editor?.commands.focus()}>
-            <EditorContent editor={editor} />
-          </div>
-        )}
+
+        <div className="min-h-[500px]">
+            {isRawMode ? (
+                <div className="border dark:border-zinc-800 rounded-xl overflow-hidden bg-white dark:bg-zinc-900 grayscale">
+                    <div className="bg-gray-50 dark:bg-zinc-800 px-4 py-2 border-b dark:border-zinc-800 text-[10px] text-gray-400 flex justify-between">
+                        <span>READ ONLY PREVIEW</span>
+                        <span>{filename || 'New Entry'}</span>
+                    </div>
+                    <EditorTextarea
+                        value={generateFullLatex(title, author, phase, blocks)}
+                        onValueChange={() => {}}
+                        highlight={code => Prism.highlight(code, Prism.languages.latex, 'latex')}
+                        padding={20}
+                        className="font-mono text-xs dark:text-gray-400 pointer-events-none opacity-60"
+                        readOnly
+                    />
+                </div>
+            ) : (
+                <BlockEditor blocks={blocks} onChange={setBlocks} />
+            )}
+        </div>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-4 sticky bottom-0 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md py-4 border-t dark:border-zinc-800 mt-auto">
         <button
           onClick={handleSave}
           disabled={isSaving}
-          className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition disabled:opacity-50 flex-1"
+          className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all disabled:opacity-50 flex-1"
         >
-          {isSaving ? "Saving..." : isLocalMode ? "Save Locally" : "Save to GitHub"}
+          {isSaving ? "Saving..." : isLocalMode ? "Commit Locally" : "Push to GitHub"}
         </button>
         <button
           onClick={handleDownload}
-          className="bg-gray-600 text-white p-2 rounded hover:bg-gray-700 transition"
+          className="bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 px-4 py-3 rounded-xl hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all flex items-center gap-2"
         >
-          Download .tex
+          <Download size={18} /> .tex
         </button>
         {currentFilename && (
           <button
             onClick={handleDelete}
             disabled={isSaving}
-            className="bg-red-600 text-white p-2 rounded hover:bg-red-700 transition disabled:opacity-50"
+            className="text-red-500 bg-red-50 dark:bg-red-900/10 px-4 py-3 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/20 transition-all"
           >
-            Delete
+            <Trash2 size={18} />
           </button>
         )}
       </div>
     </div>
   );
 }
+

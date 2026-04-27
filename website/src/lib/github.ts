@@ -64,7 +64,7 @@ export const fetchEntries = async (config: GitHubConfig): Promise<GitHubFile[]> 
   }
 };
 
-export const fetchDirectoryTree = async (config: GitHubConfig, path: string = "notebook"): Promise<GitHubFile[]> => {
+export const fetchDirectoryTree = async (config: GitHubConfig, path: string = "notebook", recursive: boolean = false): Promise<GitHubFile[]> => {
   const octokit = getOctokit(config.token);
   const tree: GitHubFile[] = [];
   try {
@@ -76,8 +76,8 @@ export const fetchDirectoryTree = async (config: GitHubConfig, path: string = "n
 
     if (Array.isArray(response.data)) {
       for (const item of response.data) {
-        if (item.type === "dir") {
-          const subTree = await fetchDirectoryTree(config, item.path);
+        if (item.type === "dir" && recursive) {
+          const subTree = await fetchDirectoryTree(config, item.path, true);
           tree.push(item as GitHubFile, ...subTree);
         } else {
           tree.push(item as GitHubFile);
