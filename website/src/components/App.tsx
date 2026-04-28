@@ -13,14 +13,8 @@ interface LocalFile extends Partial<GitHubFile> {
   childrenLoaded?: boolean;
 }
 
-export interface Block {
-  id: string;
-  type: "text" | "image" | "table" | "code";
-  content: any;
-}
-
 export interface FileMetadata {
-  blocks: Block[];
+  content: string;
 }
 
 export default function App() {
@@ -33,7 +27,7 @@ export default function App() {
   const [selectedEntry, setSelectedEntry] = useState<string | null>(null);
 
   // State for editor
-  const [editorBlocks, setEditorBlocks] = useState<Block[]>([]);
+  const [editorContent, setEditorContent] = useState<string>("");
   const [editorMetadataMissing, setEditorMetadataMissing] = useState(false);
   const [editorTitle, setEditorTitle] = useState("");
   const [editorAuthor, setEditorAuthor] = useState("");
@@ -224,7 +218,7 @@ export default function App() {
         setEditorTitle("");
         setEditorAuthor("");
         setEditorPhase("");
-        setEditorBlocks([]);
+        setEditorContent("");
         setLatexContent("");
       }, 0);
     }
@@ -259,7 +253,7 @@ export default function App() {
           if (err.message?.includes("URI malformed") || err.message?.includes("UTF-8") || err.message?.includes("decode")) {
             setEditorTitle(file.name || "Untitled");
             setLatexContent("This file can't be opened directly in the editor as it is not UTF-8 encoded plain text.");
-            setEditorBlocks([]);
+            setEditorContent("");
             setEditorMetadataMissing(true);
             setSelectedEntry(file.path || file.name);
             setIsLoading(false);
@@ -289,15 +283,15 @@ export default function App() {
         if (metadataMatch) {
           try {
             const meta: FileMetadata = JSON.parse(metadataMatch[1]);
-            setEditorBlocks(meta.blocks);
+            setEditorContent(meta.content || "");
             setEditorMetadataMissing(false);
           } catch (e) {
             console.error("Failed to parse metadata", e);
-            setEditorBlocks([]);
+            setEditorContent("");
             setEditorMetadataMissing(true);
           }
         } else {
-          setEditorBlocks([]);
+          setEditorContent("");
           setEditorMetadataMissing(true);
         }
 
@@ -306,7 +300,7 @@ export default function App() {
       } else {
         // Just show raw content for non-tex files as one large block or something?
         // Actually, user said raw latex shouldn't be editable.
-        setEditorBlocks([]);
+        setEditorContent("");
         setEditorMetadataMissing(true);
         setEditorTitle(file.name || "Untitled");
         setLatexContent(content);
@@ -420,7 +414,7 @@ export default function App() {
     setEditorTitle("");
     setEditorAuthor("");
     setEditorPhase("");
-    setEditorBlocks([]);
+    setEditorContent("");
     setLatexContent("");
   };
 
@@ -518,13 +512,12 @@ export default function App() {
                       initialTitle={editorTitle}
                       initialAuthor={editorAuthor}
                       initialPhase={editorPhase}
-                      initialBlocks={editorBlocks}
+                      initialContent={editorContent}
                       metadataMissing={editorMetadataMissing}
                       filename={selectedEntry}
                       onSaved={handleEntrySaved}
                       onDeleted={handleEntryDeleted}
                       onContentChange={(latex) => setLatexContent(latex)}
-                      onBlocksChange={(blocks) => setEditorBlocks(blocks)}
                       onTitleChange={(title) => setEditorTitle(title)}
                       onAuthorChange={(author) => setEditorAuthor(author)}
                       onPhaseChange={(phase) => setEditorPhase(phase)}

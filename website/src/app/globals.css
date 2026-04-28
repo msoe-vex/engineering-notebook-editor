@@ -28,55 +28,111 @@ body {
 @import "highlight.js/styles/github-dark.css";
 @import "prismjs/themes/prism-okaidia.css";
 
-/* TipTap Editor Styles */
+/* TipTap Editor Styles & Premium Typography */
 .ProseMirror {
-  min-height: 100%;
+  outline: none !important;
+  min-height: 600px;
+  line-height: 1.8;
 }
+
 .ProseMirror p {
-  margin-bottom: 1em;
+  margin-bottom: 1.5rem;
+  color: #334155;
 }
-.ProseMirror p.is-editor-empty:first-child::before {
-  color: #adb5bd;
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  pointer-events: none;
+
+.dark .ProseMirror p {
+  color: #cbd5e1;
 }
+
+.ProseMirror h1 {
+  font-size: 2.25rem;
+  font-weight: 900;
+  margin-top: 3rem;
+  margin-bottom: 1.5rem;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+
+.ProseMirror h2 {
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  letter-spacing: -0.025em;
+}
+
+.ProseMirror ul, .ProseMirror ol {
+  margin-left: 1.5rem;
+  margin-bottom: 1.5rem;
+  list-style-position: outside;
+}
+
+.ProseMirror ul {
+  list-style-type: disc;
+}
+
+.ProseMirror ol {
+  list-style-type: decimal;
+}
+
+.ProseMirror li {
+  margin-bottom: 0.5rem;
+}
+
 .ProseMirror table {
   border-collapse: collapse;
   table-layout: fixed;
   width: 100%;
-  margin: 0;
+  margin: 2rem 0;
   overflow: hidden;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
 }
+
+.dark .ProseMirror table {
+  border-color: #1e293b;
+}
+
 .ProseMirror table td,
 .ProseMirror table th {
   min-width: 1em;
-  border: 1px solid #ced4da;
-  padding: 3px 5px;
+  border: 1px solid #e2e8f0;
+  padding: 12px 16px;
   vertical-align: top;
   box-sizing: border-box;
   position: relative;
 }
+
+.dark .ProseMirror table td,
+.dark .ProseMirror table th {
+  border-color: #1e293b;
+}
+
 .ProseMirror table th {
   font-weight: bold;
   text-align: left;
-  background-color: #f1f3f5;
+  background-color: #f8fafc;
 }
+
+.dark .ProseMirror table th {
+  background-color: #0f172a;
+}
+
 .ProseMirror pre {
-  background: #0d0d0d;
-  color: #fff;
-  font-family: 'JetBrainsMono', monospace;
-  padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
+  background: #0f172a;
+  color: #f8fafc;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  padding: 1.5rem;
+  border-radius: 12px;
+  margin: 2rem 0;
+  border: 1px solid #1e293b;
 }
-.ProseMirror pre code {
-  color: inherit;
-  padding: 0;
-  background: none;
-  font-size: 0.8rem;
-}
+
 .ProseMirror img {
   max-width: 100%;
   height: auto;
+  border-radius: 12px;
+  margin: 2.5rem auto;
+  display: block;
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
 }
