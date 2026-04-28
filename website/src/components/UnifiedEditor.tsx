@@ -154,7 +154,8 @@ function CodeBlockNodeView({ node, updateAttributes }: any) {
 
       {/* Code content */}
       <pre className="p-5 bg-zinc-950 text-sm leading-relaxed overflow-x-auto">
-        <NodeViewContent as="code" className="font-mono" />
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        <NodeViewContent as={"code" as any} className="font-mono" />
       </pre>
     </NodeViewWrapper>
   );
@@ -189,12 +190,16 @@ export default function UnifiedEditor({
       const stem    = filename.split("/").pop()?.replace(".tex", "") || "image";
       const newPath = `resources/${stem}_${Date.now()}.${ext}`;
 
-      // Insert using data URL for display; filePath for LaTeX reference
-      editor?.chain().focus().setImage({
-        src:      dataUrl,
-        alt:      "",
-        title:    author ?? "",
-        filePath: newPath,
+      // insertContent bypasses the typed setImage command so we can store
+      // our custom filePath attribute alongside the display src.
+      editor?.chain().focus().insertContent({
+        type: "image",
+        attrs: {
+          src:      dataUrl,
+          alt:      "",
+          title:    author ?? "",
+          filePath: newPath,
+        },
       }).run();
 
       // Save binary to disk (if handler provided)
