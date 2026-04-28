@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useTheme } from "next-themes";
 import {
   GitHubConfig, fetchDirectoryTree, fetchFileContent, GitHubFile,
   saveFile, deleteFile as githubDeleteFile,
@@ -254,19 +255,18 @@ export default function App() {
   // Notifications
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  const [isDarkMode, setIsDarkMode] = useState(true);
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [mobileTab, setMobileTab] = useState<"editor" | "preview">("editor");
+  const [showPreview, setShowPreview] = useState(true);
   const isMobile = useIsMobile();
+  
+  useEffect(() => setMounted(true), []);
+  const isDarkMode = resolvedTheme === "dark";
 
-  // Sync dark mode class
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, [isDarkMode]);
+  // Theme effect handled by next-themes via layout.tsx
+
 
   // Auto-close sidebar on mobile initial load
   useEffect(() => {
@@ -593,6 +593,7 @@ export default function App() {
         title: file.name, author: "", phase: "",
         metadataMissing: true,
         imageSrc: "",
+        createdAt: file.timestamp || new Date().toISOString(),
         isLegacyRaw: true,
       });
       setLatexContent(rawLatex);
@@ -637,6 +638,7 @@ export default function App() {
         title: file.name, author: "", phase: "",
         metadataMissing: false,
         imageSrc,
+        createdAt: file.timestamp || new Date().toISOString(),
         isLegacyRaw: false,
       });
       setMobileTab("editor");
@@ -893,8 +895,6 @@ export default function App() {
         onSave={(cfg) => { setConfig(cfg); setWorkspaceMode("github"); }}
         onWorkOffline={() => setWorkspaceMode("memory")}
         onOpenLocalFolder={(handle) => { setDirHandle(handle); setWorkspaceMode("local"); }}
-        isDarkMode={isDarkMode}
-        setIsDarkMode={setIsDarkMode}
       />
     );
   }
@@ -931,7 +931,7 @@ export default function App() {
           <BookOpen size={14} className="text-white" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-nb-secondary dark:text-nb-on-surface truncate">Engineering Notebook</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-nb-on-surface truncate">Engineering Notebook</p>
           <div className="flex items-center gap-1.5 mt-0.5">
             <WorkspaceIcon size={10} className="text-nb-tertiary" />
             <span className="text-[9px] font-mono text-nb-on-surface-variant truncate">{workspaceLabel}</span>
@@ -981,7 +981,7 @@ export default function App() {
              <button
                onClick={handleCommitAll}
                disabled={isCommitting || (upserted.length === 0 && deleted.length === 0)}
-               className="w-full bg-nb-secondary hover:bg-nb-secondary/90 text-white text-[9px] font-black uppercase tracking-[0.2em] py-3 rounded-lg transition-all active:scale-[0.98] shadow-lg shadow-nb-secondary/10 disabled:opacity-30"
+               className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[9px] font-black uppercase tracking-[0.2em] py-3 rounded-lg transition-all active:scale-[0.98] shadow-lg shadow-nb-tertiary/20 disabled:opacity-30"
              >
                {isCommitting ? "Syncing..." : "Commit Changes"}
              </button>
@@ -1032,12 +1032,23 @@ export default function App() {
           </span>
         )}
 
-        <button 
-          onClick={() => setIsDarkMode(!isDarkMode)}
-          className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors"
-        >
-          {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
+        <div className="flex items-center gap-2">
+          {openFile?.viewMode === "entry" && !isMobile && (
+            <button 
+              onClick={() => setShowPreview(!showPreview)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${showPreview ? 'bg-nb-tertiary text-white' : 'bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary'}`}
+            >
+              <Check size={14} className={showPreview ? 'visible' : 'invisible'} />
+              Split View
+            </button>
+          )}
+          <button 
+            onClick={() => setTheme(isDarkMode ? "light" : "dark")}
+            className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors"
+          >
+            {!mounted ? <div className="w-4 h-4" /> : isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+        </div>
       </div>
 
       {/* Content */}
@@ -1053,7 +1064,6 @@ export default function App() {
           <ImagePreview
             filename={openFile.name}
             src={openFile.imageSrc}
-            onRename={(newName) => handleRenameResource({ name: openFile.name, path: openFile.path }, newName)}
             onDelete={() => handleDeleteResource({ name: openFile.name, path: openFile.path })}
           />
         ) : openFile.viewMode === "raw-latex" ? (
@@ -1113,7 +1123,7 @@ export default function App() {
           </div>
         ) : (
           <PanelGroup direction="horizontal" className="h-full">
-            <Panel defaultSize={50} minSize={30} className="flex flex-col h-full border-r border-nb-outline-variant">
+            <Panel defaultSize={showPreview ? 50 : 100} minSize={30} className={`flex flex-col h-full ${showPreview ? 'border-r border-nb-outline-variant' : ''}`}>
               <Editor
                 key={openFile.path}
                 config={appConfig}
@@ -1136,10 +1146,14 @@ export default function App() {
                 onSwitchToRawLatex={handleSwitchToRawLatex}
               />
             </Panel>
-            <PanelResizeHandle className="w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors" />
-            <Panel defaultSize={50} minSize={30} className="flex flex-col h-full bg-nb-surface-low">
-              <Preview latexContent={latexContent} />
-            </Panel>
+            {showPreview && (
+              <>
+                <PanelResizeHandle className="w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors" />
+                <Panel defaultSize={50} minSize={30} className="flex flex-col h-full bg-nb-surface-low">
+                  <Preview latexContent={latexContent} />
+                </Panel>
+              </>
+            )}
           </PanelGroup>
         )}
       </div>
@@ -1147,7 +1161,7 @@ export default function App() {
   );
 
   return (
-    <div className={`flex h-screen bg-nb-bg overflow-hidden font-sans ${isDarkMode ? 'dark' : ''}`}>
+    <div className="flex h-screen bg-nb-bg overflow-hidden font-sans">
       {isMobile ? (
         <div className="flex w-full h-full relative">
           <div className={`fixed inset-0 z-[150] transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>

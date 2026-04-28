@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import {
-  useEditor, EditorContent, BubbleMenu,
+  useEditor, EditorContent,
   NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer,
 } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -199,7 +199,7 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor }: any) {
 
         {/* Table Content */}
         <div className="p-1 bg-nb-surface-low overflow-x-auto">
-          <NodeViewContent as="table" className="border-collapse w-full" />
+          <NodeViewContent as="div" className="border-collapse w-full" />
         </div>
 
         {/* Caption area */}
@@ -277,7 +277,7 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode }: any) {
         {/* Content */}
         <div className="bg-nb-bg">
           <pre className="p-6 text-sm leading-relaxed overflow-x-auto border-none rounded-none m-0">
-            <NodeViewContent as="code" className="font-mono" />
+            <NodeViewContent as="div" className="font-mono" />
           </pre>
         </div>
 
@@ -512,7 +512,7 @@ export default function UnifiedEditor({
         )}
 
         {/* ── Main Editor Area ───────────────────────────────────────── */}
-        <div className="bg-nb-surface rounded-xl border border-nb-outline-variant shadow-nb-sm min-h-[600px] p-4 md:p-6 relative">
+        <div className="bg-nb-surface min-h-[600px] relative">
           <EditorContent editor={editor} className="max-w-none" />
         </div>
       </div>

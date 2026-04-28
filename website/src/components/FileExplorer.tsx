@@ -24,8 +24,8 @@ interface FileExplorerProps {
   onSelectResource: (file: ExplorerFile) => void;
   onNewEntry: () => void;
   onUploadResource: () => void;
-  onRenameEntry: (file: ExplorerFile, newName: string) => Promise<void>;
   onDeleteEntry: (file: ExplorerFile) => void;
+  onDeleteResource: (file: ExplorerFile) => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -60,7 +60,7 @@ function FileRow({ file, isSelected, isPending, isDeleted, icon, onSelect, onDel
         group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer select-none
         ${isSelected 
           ? 'bg-nb-tertiary text-white shadow-lg shadow-nb-tertiary/20' 
-          : 'hover:bg-nb-surface-mid dark:hover:bg-zinc-800 text-nb-on-surface'
+          : 'hover:bg-nb-surface-mid text-nb-on-surface'
         }
         ${isDeleted ? 'opacity-30 grayscale' : ''}
       `}
@@ -70,7 +70,7 @@ function FileRow({ file, isSelected, isPending, isDeleted, icon, onSelect, onDel
       </div>
 
       <div className="flex flex-col flex-1 min-w-0">
-        <span className={`truncate font-bold tracking-tight leading-tight ${isSelected ? 'text-white' : 'text-nb-on-surface dark:text-white/90'}`}>
+        <span className={`truncate font-bold tracking-tight leading-tight ${isSelected ? 'text-white' : 'text-nb-on-surface'}`}>
           {file.title || "New Entry"}
         </span>
         <span className={`text-[9px] font-mono truncate mt-0.5 ${isSelected ? 'text-white/70' : 'opacity-40'}`}>
@@ -92,7 +92,7 @@ function FileRow({ file, isSelected, isPending, isDeleted, icon, onSelect, onDel
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className={`p-1 rounded-md transition-colors ${isSelected ? 'hover:bg-white/20 text-white' : 'hover:bg-nb-primary/10 dark:hover:bg-nb-primary/20 text-nb-on-surface-variant/70 dark:text-white/40 hover:text-nb-primary'}`}
+            className={`p-1 rounded-md transition-colors ${isSelected ? 'hover:bg-white/20 text-white' : 'hover:bg-nb-primary/10 text-nb-on-surface-variant/70 hover:text-nb-primary'}`}
             title="Delete"
           >
             <Trash2 size={11} />
@@ -213,8 +213,6 @@ export default function FileExplorer({
   onSelectResource,
   onNewEntry,
   onUploadResource,
-  onRenameEntry,
-  onRenameResource,
   onDeleteEntry,
   onDeleteResource,
 }: FileExplorerProps) {
@@ -248,7 +246,6 @@ export default function FileExplorer({
             isDeleted={deletedPaths.has(f.path)}
             icon={<FileText size={13} />}
             onSelect={() => onSelectEntry(f)}
-            onRename={(newName) => onRenameEntry(f, newName)}
             onDelete={() => setDeleteTarget({ file: f, type: "entry" })}
           />
         ))}

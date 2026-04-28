@@ -7,35 +7,21 @@ interface ImagePreviewProps {
   filename: string;
   /** base64 data URL or object URL */
   src: string;
-  onRename: (newName: string) => Promise<void>;
   onDelete: () => void;
 }
 
-export default function ImagePreview({ filename, src, onRename, onDelete }: ImagePreviewProps) {
+export default function ImagePreview({ filename, src, onDelete }: ImagePreviewProps) {
   const [dimensions, setDimensions] = useState<{ w: number; h: number } | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [draftName, setDraftName] = useState(filename);
-  const [renaming, setRenaming] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
-    setDraftName(filename);
-    setEditing(false);
     setDimensions(null);
   }, [filename]);
 
   const handleImageLoad = () => {
     const img = imgRef.current;
     if (img) setDimensions({ w: img.naturalWidth, h: img.naturalHeight });
-  };
-
-  const commitRename = async () => {
-    const trimmed = draftName.trim();
-    if (!trimmed || trimmed === filename) { setEditing(false); return; }
-    setRenaming(true);
-    try { await onRename(trimmed); }
-    finally { setRenaming(false); setEditing(false); }
   };
 
   return (
@@ -46,60 +32,20 @@ export default function ImagePreview({ filename, src, onRename, onDelete }: Imag
           <ImageIcon size={16} className="text-nb-tertiary" />
         </div>
         <div className="flex-1 min-w-0">
-          {editing ? (
-            <div className="flex items-center gap-2">
-              <input
-                autoFocus
-                value={draftName}
-                onChange={(e) => setDraftName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") commitRename();
-                  if (e.key === "Escape") { setEditing(false); setDraftName(filename); }
-                }}
-                className="flex-1 text-[11px] font-mono bg-nb-surface-low border border-nb-outline-variant rounded-lg px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-nb-tertiary text-nb-on-surface"
-                disabled={renaming}
-              />
-              <div className="flex gap-1">
-                <button
-                  onClick={commitRename}
-                  disabled={renaming}
-                  className="p-1.5 rounded-lg hover:bg-nb-tertiary/10 text-nb-tertiary transition-colors"
-                >
-                  <Check size={14} />
-                </button>
-                <button 
-                   onClick={() => { setEditing(false); setDraftName(filename); }}
-                   className="p-1.5 rounded-lg hover:bg-nb-surface-mid text-nb-on-surface-variant transition-colors"
-                 >
-                   <X size={14} />
-                 </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant/50 leading-none mb-1">Resource Image</span>
-                <span className="text-[11px] font-mono text-nb-on-surface truncate tracking-tight">{filename}</span>
-            </div>
-          )}
-        </div>
-        {!editing && (
-          <div className="flex gap-2 shrink-0">
-            <button
-              onClick={() => setEditing(true)}
-              className="p-2 rounded-lg hover:bg-nb-surface-mid text-nb-on-surface-variant hover:text-nb-on-surface transition-all"
-              title="Rename image"
-            >
-              <Pencil size={14} />
-            </button>
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="p-2 rounded-lg hover:bg-nb-primary/10 text-nb-on-surface-variant hover:text-nb-primary transition-all"
-              title="Delete image"
-            >
-              <Trash2 size={14} />
-            </button>
+          <div className="flex flex-col">
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant/50 leading-none mb-1">Resource Image</span>
+              <span className="text-[11px] font-mono text-nb-on-surface truncate tracking-tight">{filename}</span>
           </div>
-        )}
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="p-2 rounded-lg hover:bg-nb-primary/10 text-nb-on-surface-variant hover:text-nb-primary transition-all"
+            title="Delete image"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
       </div>
 
       {/* Image Display Area */}
@@ -132,7 +78,7 @@ export default function ImagePreview({ filename, src, onRename, onDelete }: Imag
               <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0">
                 <Trash2 size={20} className="text-nb-primary" />
               </div>
-              <h3 className="font-black text-sm uppercase tracking-widest text-nb-secondary">Delete Resource?</h3>
+              <h3 className="font-black text-sm uppercase tracking-widest text-nb-on-surface">Delete Resource?</h3>
             </div>
             
             <div className="space-y-4 mb-8">

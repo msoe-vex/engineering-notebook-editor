@@ -1,23 +1,25 @@
 "use client";
 
 import { GitHubConfig } from "@/lib/github";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { BookOpen, Moon, Sun } from "lucide-react";
+import { useTheme } from "next-themes";
 
 export default function Settings({
   onSave,
   onWorkOffline,
   onOpenLocalFolder,
-  isDarkMode,
-  setIsDarkMode,
 }: {
   onSave: (config: GitHubConfig) => void;
   onWorkOffline: () => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onOpenLocalFolder: (handle: any) => void;
-  isDarkMode: boolean;
-  setIsDarkMode: (v: boolean) => void;
 }) {
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  
+  const isDarkMode = resolvedTheme === "dark";
   const [token, setToken] = useState("");
   const [owner, setOwner] = useState("");
   const [repo, setRepo]   = useState("");
@@ -45,10 +47,10 @@ export default function Settings({
       <div className="flex flex-col gap-6 w-full max-w-md border border-nb-outline-variant p-8 rounded-xl shadow-nb-lg bg-nb-surface relative">
         {/* Theme Toggle */}
         <button 
-          onClick={() => setIsDarkMode(!isDarkMode)}
+          onClick={() => setTheme(isDarkMode ? "light" : "dark")}
           className="absolute top-6 right-6 p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-all"
         >
-          {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+          {!mounted ? <div className="w-[18px] h-[18px]" /> : isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
         </button>
 
         {/* Logo */}
@@ -57,7 +59,7 @@ export default function Settings({
             <BookOpen size={24} className="text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-black tracking-tight text-nb-secondary dark:text-nb-on-surface">Engineering Notebook</h1>
+            <h1 className="text-xl font-black tracking-tight text-nb-on-surface">Engineering Notebook</h1>
             <p className="text-xs text-nb-on-surface-variant">Choose a workspace to get started</p>
           </div>
         </div>

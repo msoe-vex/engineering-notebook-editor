@@ -257,45 +257,45 @@ export default function Editor({
   };
 
   return (
-    <div className="flex flex-col h-full bg-nb-surface dark:bg-nb-dark-bg">
+    <div className="flex flex-col h-full bg-nb-surface">
       {/* ── Editor Header ────────────────────────────────────────── */}
-      <div className="px-6 py-4 border-b border-nb-surface-mid dark:border-nb-dark-outline-variant bg-nb-surface-lowest dark:bg-nb-dark-surface shrink-0">
+      <div className="px-6 py-4 border-b border-nb-outline-variant bg-nb-surface-low shrink-0">
         <div className="flex flex-col gap-5">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
-               <input
-                 type="text"
-                 value={title}
-                 onChange={(e) => { setTitle(e.target.value); onTitleChange?.(e.target.value); }}
-                 placeholder="Project Title"
-                 className="w-full text-2xl font-black tracking-tighter bg-transparent text-nb-secondary dark:text-nb-dark-on-surface outline-none placeholder:text-nb-outline-variant dark:placeholder:text-nb-dark-outline"
-               />
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => { setTitle(e.target.value); onTitleChange?.(e.target.value); }}
+                  placeholder="Project Title"
+                  className="w-full text-2xl font-black tracking-tighter bg-transparent text-nb-on-surface outline-none placeholder:text-nb-outline-variant"
+                />
                <div className="flex items-center gap-3 mt-1">
                  <div className="flex items-center gap-1.5 group">
                    <User size={10} className="text-nb-on-surface-variant/40 group-focus-within:text-nb-tertiary transition-colors" />
-                   <input
-                     type="text"
-                     value={author}
-                     onChange={(e) => { setAuthor(e.target.value); onAuthorChange?.(e.target.value); }}
-                     placeholder="Lead Engineer"
-                     className="text-[11px] font-bold text-nb-on-surface-variant dark:text-nb-dark-on-variant bg-transparent outline-none border-b border-transparent focus:border-nb-tertiary transition-all w-32 placeholder:font-normal"
-                   />
-                 </div>
-                 <div className="w-px h-3 bg-nb-outline-variant/30 dark:bg-nb-dark-outline/30" />
+                    <input
+                      type="text"
+                      value={author}
+                      onChange={(e) => { setAuthor(e.target.value); onAuthorChange?.(e.target.value); }}
+                      placeholder="Lead Engineer"
+                      className="text-[11px] font-bold text-nb-on-surface-variant bg-transparent outline-none border-b border-transparent focus:border-nb-tertiary transition-all w-32 placeholder:font-normal"
+                    />
+                  </div>
+                  <div className="w-px h-3 bg-nb-outline-variant/30" />
                  <div className="flex items-center gap-1.5">
                    <Target size={10} className="text-nb-on-surface-variant/40" />
-                   <select
-                     value={phase}
-                     onChange={(e) => { setPhase(e.target.value); onPhaseChange?.(e.target.value); }}
-                     className="text-[10px] font-black uppercase tracking-wider text-nb-on-surface-variant dark:text-nb-dark-on-variant bg-transparent outline-none cursor-pointer hover:text-nb-tertiary transition-colors"
-                   >
-                     <option value="" className="bg-nb-surface dark:bg-nb-dark-surface text-nb-on-surface dark:text-nb-dark-on-surface">Phase...</option>
-                    {PHASES.map(p => (
-                       <option key={p} value={p} className="bg-nb-surface dark:bg-nb-dark-surface text-nb-on-surface dark:text-nb-dark-on-surface">
-                         {p}
-                       </option>
-                     ))}
-                   </select>
+                    <select
+                      value={phase}
+                      onChange={(e) => { setPhase(e.target.value); onPhaseChange?.(e.target.value); }}
+                      className="text-[10px] font-black uppercase tracking-wider text-nb-on-surface-variant bg-transparent outline-none cursor-pointer hover:text-nb-tertiary transition-colors"
+                    >
+                      <option value="" className="bg-nb-surface text-nb-on-surface">Phase...</option>
+                      {PHASES.map(p => (
+                        <option key={p} value={p} className="bg-nb-surface text-nb-on-surface">
+                          {p}
+                        </option>
+                      ))}
+                    </select>
                  </div>
                </div>
             </div>
@@ -320,18 +320,16 @@ export default function Editor({
       </div>
 
       {/* ── TipTap Workspace ─────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto bg-nb-surface-low dark:bg-nb-dark-bg p-6 lg:p-10">
-        <div className="max-w-4xl mx-auto">
-          <UnifiedEditor
-            key={filename}
-            filename={filename}
-            content={content}
-            onChange={setContent}
-            onImageUpload={onImageUpload}
-            onSwitchToRawLatex={onSwitchToRawLatex}
-            author={author}
-          />
-        </div>
+      <div className="flex-1 overflow-y-auto bg-nb-surface">
+        <UnifiedEditor
+          key={filename}
+          filename={filename}
+          content={content}
+          onChange={setContent}
+          onImageUpload={onImageUpload}
+          onSwitchToRawLatex={onSwitchToRawLatex}
+          author={author}
+        />
       </div>
 
       {/* ── Delete confirmation ───────────────────────────────────── */}
