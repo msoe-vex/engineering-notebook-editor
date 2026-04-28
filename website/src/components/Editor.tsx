@@ -78,10 +78,15 @@ const convertNodeToLatex = (node: any): string => {
     }
 
     case "image": {
-      const src     = node.attrs?.src     ?? "";
-      const caption = node.attrs?.alt     ?? "Figure";
-      const initials= node.attrs?.title   ?? "";
-      return `\\image{${src}}{${caption}}{${initials}}\n\n`;
+      // Prefer the disk file path; fall back if only a data-URL is available
+      const filePath = node.attrs?.filePath;
+      const src      = node.attrs?.src ?? "";
+      const imgSrc   = filePath
+        ? filePath
+        : src.startsWith("data:") ? "resources/embedded_image.png" : src;
+      const caption  = node.attrs?.alt   ?? "Figure";
+      const initials = node.attrs?.title ?? "";
+      return `\\image{${imgSrc}}{${caption}}{${initials}}\n\n`;
     }
 
     case "table": {
@@ -327,8 +332,10 @@ export default function Editor({
             <div className="pt-4 min-h-[600px]">
               <UnifiedEditor
                 key={filename}
+                filename={filename}
                 content={content}
                 onChange={setContent}
+                onImageUpload={onImageUpload}
                 author={author}
               />
             </div>

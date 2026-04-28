@@ -22,7 +22,7 @@ export default function App() {
   const [isLocalMode, setIsLocalMode] = useState(false);
   const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [entriesDirName, setEntriesDirName] = useState("notebook/entries");
-  const [resourcesDirName, setResourcesDirName] = useState("notebook/resources");
+  const [resourcesDirName, setResourcesDirName] = useState("resources");
   const [entries, setEntries] = useState<(GitHubFile | LocalFile)[]>([]);
   const [selectedEntry, setSelectedEntry] = useState<string | null>(null);
 
