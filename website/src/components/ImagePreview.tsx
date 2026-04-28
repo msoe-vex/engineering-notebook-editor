@@ -33,7 +33,7 @@ export default function ImagePreview({ filename, src, onDelete }: ImagePreviewPr
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex flex-col">
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant/50 leading-none mb-1">Resource Image</span>
+              <span className="text-xs font-semibold text-nb-on-surface-variant/80 leading-none mb-1">Resource Image</span>
               <span className="text-[11px] font-mono text-nb-on-surface truncate tracking-tight">{filename}</span>
           </div>
         </div>
@@ -78,7 +78,7 @@ export default function ImagePreview({ filename, src, onDelete }: ImagePreviewPr
               <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0">
                 <Trash2 size={20} className="text-nb-primary" />
               </div>
-              <h3 className="font-black text-sm uppercase tracking-widest text-nb-on-surface">Delete Resource?</h3>
+              <h3 className="font-semibold text-sm uppercase tracking-widest text-nb-on-surface">Delete Resource?</h3>
             </div>
             
             <div className="space-y-4 mb-8">
@@ -93,13 +93,13 @@ export default function ImagePreview({ filename, src, onDelete }: ImagePreviewPr
             <div className="flex gap-3">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 px-4 py-2.5 rounded-xl border border-nb-outline-variant text-xs font-black uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-surface-mid transition-colors"
+                className="flex-1 px-4 py-2.5 rounded-xl border border-nb-outline-variant text-xs font-semibold uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-surface-mid transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={() => { setShowDeleteConfirm(false); onDelete(); }}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-nb-primary text-white text-xs font-black uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20 active:scale-[0.98]"
+                className="flex-1 px-4 py-2.5 rounded-xl bg-nb-primary text-white text-xs font-semibold uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20 active:scale-[0.98]"
               >
                 Delete
               </button>

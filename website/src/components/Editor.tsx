@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import UnifiedEditor from "./UnifiedEditor";
 import { saveAs } from "file-saver";
-import { Save, Trash2, Download, AlertCircle, Loader2, User, Target } from "lucide-react";
+import { Save, Trash2, Download, AlertCircle, Loader2, User, Target, X, FileCode } from "lucide-react";
 
 const PHASES = [
   "Define Problem",
@@ -16,11 +16,11 @@ const PHASES = [
 const escapeLaTeX = (text: string) =>
   text
     .replace(/\\/g, "\\textbackslash{}")
-    .replace(/&/g,  "\\&")
-    .replace(/%/g,  "\\%")
+    .replace(/&/g, "\\&")
+    .replace(/%/g, "\\%")
     .replace(/\$/g, "\\$")
-    .replace(/#/g,  "\\#")
-    .replace(/_/g,  "\\_")
+    .replace(/#/g, "\\#")
+    .replace(/_/g, "\\_")
     .replace(/\{/g, "\\{")
     .replace(/\}/g, "\\}");
 
@@ -36,9 +36,9 @@ const convertNodeToLatex = (node: any): string => {
     case "text": {
       let t = escapeLaTeX(node.text ?? "");
       for (const mark of (node.marks ?? [])) {
-        if (mark.type === "bold")   t = `\\textbf{${t}}`;
+        if (mark.type === "bold") t = `\\textbf{${t}}`;
         if (mark.type === "italic") t = `\\textit{${t}}`;
-        if (mark.type === "code")   t = `\\texttt{${t}}`;
+        if (mark.type === "code") t = `\\texttt{${t}}`;
       }
       return t;
     }
@@ -77,18 +77,18 @@ const convertNodeToLatex = (node: any): string => {
     case "codeBlock": {
       const lang = node.attrs?.language;
       const code = (node.content || []).map((n: any) => n.text ?? "").join("");
-      const opt  = lang && lang !== "plaintext" ? `[language=${lang}]` : "";
+      const opt = lang && lang !== "plaintext" ? `[language=${lang}]` : "";
       return `\\begin{lstlisting}${opt}\n${code}\n\\end{lstlisting}\n\n`;
     }
 
     case "image": {
       // Prefer the disk file path; fall back if only a data-URL is available
       const filePath = node.attrs?.filePath;
-      const src      = node.attrs?.src ?? "";
-      const imgSrc   = filePath
+      const src = node.attrs?.src ?? "";
+      const imgSrc = filePath
         ? filePath
         : src.startsWith("data:") ? "resources/embedded_image.png" : src;
-      const caption  = node.attrs?.alt   ?? "Figure";
+      const caption = node.attrs?.alt ?? "Figure";
       const initials = node.attrs?.title ?? "";
       return `\\image{${imgSrc}}{${caption}}{${initials}}\n\n`;
     }
@@ -97,8 +97,8 @@ const convertNodeToLatex = (node: any): string => {
       const rows = node.content ?? [];
       if (!rows.length) return "";
       const colCount = (rows[0]?.content ?? []).length;
-      const colSpec  = "|l".repeat(colCount) + "|";
-      const caption  = node.attrs?.caption ?? "Design Data";
+      const colSpec = "|l".repeat(colCount) + "|";
+      const caption = node.attrs?.caption ?? "Design Data";
 
       const body = rows.map((row: any) => {
         const cells = (row.content ?? []).map((cell: any) =>
@@ -165,24 +165,24 @@ interface EditorProps {
   onAuthorChange?: (author: string) => void;
   onPhaseChange?: (phase: string) => void;
   onImageUpload?: (path: string, base64: string) => void;
-  /** Called after save with the raw TipTap JSON string so App can rebuild metadata.json */
   onMetadataRebuild?: (entryPath: string, tiptapJson: string, info?: { title: string; author: string; phase: string; createdAt?: string }) => void;
   /** Called when user confirms switching to raw LaTeX mode */
   onSwitchToRawLatex?: () => void;
+  onClose?: () => void;
 }
 
-export default function Editor({ 
-  config, 
-  filename, 
-  isLocalMode, 
-  initialTitle = "", 
-  initialAuthor = "", 
-  initialPhase = "", 
+export default function Editor({
+  config,
+  filename,
+  isLocalMode,
+  initialTitle = "",
+  initialAuthor = "",
+  initialPhase = "",
   initialContent = "",
   initialCreatedAt = "",
   metadataMissing = false,
-  onSaved, 
-  onDeleted, 
+  onSaved,
+  onDeleted,
   onContentChange,
   onImageUpload,
   onTitleChange,
@@ -190,6 +190,7 @@ export default function Editor({
   onPhaseChange,
   onMetadataRebuild,
   onSwitchToRawLatex,
+  onClose,
 }: EditorProps) {
   const [title, setTitle] = useState(initialTitle);
   const [author, setAuthor] = useState(initialAuthor);
@@ -205,19 +206,31 @@ export default function Editor({
     setAuthor(initialAuthor);
     setPhase(initialPhase);
     setContent(initialContent);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filename]);
 
   const generateLatex = (cnt: string, t: string, a: string, p: string) => {
-    const metadata = JSON.stringify({ 
+    let dateObj = initialCreatedAt ? new Date(initialCreatedAt) : new Date();
+
+    // Fallback for mangled timestamps (e.g. 2026-04-28T17-36-32)
+    if (isNaN(dateObj.getTime()) && initialCreatedAt) {
+      const repaired = initialCreatedAt.replace(/(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})/, "$1T$2:$3:$4");
+      dateObj = new Date(repaired);
+    }
+
+    // Final fallback to now if still invalid
+    if (isNaN(dateObj.getTime())) {
+      dateObj = new Date();
+    }
+
+    const metadata = JSON.stringify({
       content: cnt,
       title: t,
       author: a,
       phase: p,
-      createdAt: initialCreatedAt || new Date().toISOString()
+      createdAt: initialCreatedAt || dateObj.toISOString()
     });
     let latex = `% METADATA: ${metadata}\n`;
-    const dateObj = (initialCreatedAt ? new Date(initialCreatedAt) : new Date());
     const dateStr = dateObj.toISOString().split('T')[0];
     latex += `\\newentry{${t}}{${dateStr}}{${a}}{${p}}\n\n`;
     latex += convertJsonToLatex(cnt);
@@ -229,10 +242,10 @@ export default function Editor({
   // them would cause an infinite loop.
   useEffect(() => {
     if (onContentChange) onContentChange(generateLatex(content, title, author, phase));
-    if (onTitleChange)   onTitleChange(title);
-    if (onAuthorChange)  onAuthorChange(author);
-    if (onPhaseChange)   onPhaseChange(phase);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (onTitleChange) onTitleChange(title);
+    if (onAuthorChange) onAuthorChange(author);
+    if (onPhaseChange) onPhaseChange(phase);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, title, author, phase]);
 
 
@@ -244,121 +257,149 @@ export default function Editor({
     if (onMetadataRebuild) {
       onMetadataRebuild(filename, content, { title, author, phase, createdAt: initialCreatedAt });
     }
-    
+
     // Execute the parent's save handler
     await onSaved(filename, latex);
     setIsSaving(false);
   };
 
   const handleDownload = () => {
-     const latex = generateLatex(content, title, author, phase);
-     const blob = new Blob([latex], { type: "text/plain;charset=utf-8" });
-     saveAs(blob, filename);
+    const latex = generateLatex(content, title, author, phase);
+    const blob = new Blob([latex], { type: "text/plain;charset=utf-8" });
+    saveAs(blob, filename);
   };
 
   return (
     <div className="flex flex-col h-full bg-nb-surface">
       {/* ── Editor Header ────────────────────────────────────────── */}
-      <div className="px-6 py-4 border-b border-nb-outline-variant bg-nb-surface-low shrink-0">
-        <div className="flex flex-col gap-5">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1 min-w-0">
+      <div className="px-6 py-5 border-b border-nb-outline-variant bg-nb-surface-low shrink-0">
+        <div className="max-w-4xl mx-auto flex flex-col items-center gap-4">
+          
+          {/* Row 1: Metadata (Center Aligned) */}
+          <div className="w-full flex flex-col items-center text-center">
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => { setTitle(e.target.value); onTitleChange?.(e.target.value); }}
+              placeholder="Entry Title..."
+              className="w-full text-2xl font-bold bg-transparent text-nb-on-surface outline-none placeholder:text-nb-outline-variant text-center mb-4"
+            />
+            
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+              <div className="flex items-center gap-2 group">
+                <User size={14} className="text-nb-tertiary" />
                 <input
                   type="text"
-                  value={title}
-                  onChange={(e) => { setTitle(e.target.value); onTitleChange?.(e.target.value); }}
-                  placeholder="Project Title"
-                  className="w-full text-2xl font-black tracking-tighter bg-transparent text-nb-on-surface outline-none placeholder:text-nb-outline-variant"
+                  value={author}
+                  onChange={(e) => { setAuthor(e.target.value); onAuthorChange?.(e.target.value); }}
+                  placeholder="Author"
+                  className="text-xs font-semibold text-nb-on-surface-variant bg-transparent outline-none border-b border-nb-outline-variant/30 focus:border-nb-tertiary transition-all w-32 text-center"
                 />
-               <div className="flex items-center gap-3 mt-1">
-                 <div className="flex items-center gap-1.5 group">
-                   <User size={10} className="text-nb-on-surface-variant/40 group-focus-within:text-nb-tertiary transition-colors" />
-                    <input
-                      type="text"
-                      value={author}
-                      onChange={(e) => { setAuthor(e.target.value); onAuthorChange?.(e.target.value); }}
-                      placeholder="Lead Engineer"
-                      className="text-[11px] font-bold text-nb-on-surface-variant bg-transparent outline-none border-b border-transparent focus:border-nb-tertiary transition-all w-32 placeholder:font-normal"
-                    />
-                  </div>
-                  <div className="w-px h-3 bg-nb-outline-variant/30" />
-                 <div className="flex items-center gap-1.5">
-                   <Target size={10} className="text-nb-on-surface-variant/40" />
-                    <select
-                      value={phase}
-                      onChange={(e) => { setPhase(e.target.value); onPhaseChange?.(e.target.value); }}
-                      className="text-[10px] font-black uppercase tracking-wider text-nb-on-surface-variant bg-transparent outline-none cursor-pointer hover:text-nb-tertiary transition-colors"
-                    >
-                      <option value="" className="bg-nb-surface text-nb-on-surface">Phase...</option>
-                      {PHASES.map(p => (
-                        <option key={p} value={p} className="bg-nb-surface text-nb-on-surface">
-                          {p}
-                        </option>
-                      ))}
-                    </select>
-                 </div>
-               </div>
+              </div>
+              
+              <div className="hidden md:block w-px h-4 bg-nb-outline-variant/30" />
+              
+              <div className="flex items-center gap-2 group">
+                <Target size={14} className="text-nb-tertiary" />
+                <select
+                  value={phase}
+                  onChange={(e) => { setPhase(e.target.value); onPhaseChange?.(e.target.value); }}
+                  className="text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant bg-transparent outline-none cursor-pointer hover:text-nb-tertiary transition-colors"
+                >
+                  <option value="" className="bg-nb-surface text-nb-on-surface">Select Phase</option>
+                  {PHASES.map(p => (
+                    <option key={p} value={p} className="bg-nb-surface text-nb-on-surface">
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div className="flex gap-2 shrink-0">
-              <button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="flex items-center gap-2 bg-nb-tertiary hover:bg-nb-tertiary-dim disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-md shadow-nb-tertiary/20 active:scale-[0.98]"
-              >
-                {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                <span className="hidden sm:inline">{isSaving ? "Saving" : "Save"}</span>
-              </button>
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                className="p-2.5 rounded-xl border border-nb-outline-variant dark:border-nb-dark-outline text-nb-on-surface-variant hover:text-nb-primary transition-colors"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
+          </div>
+
+          {/* Row 2: Action Buttons (Center Aligned) */}
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="flex items-center gap-1.5 bg-nb-primary text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md shadow-nb-primary/20 hover:bg-nb-primary-dim transition-all active:scale-[0.98] disabled:opacity-50"
+            >
+              {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              <span>Save Entry</span>
+            </button>
+
+            <button
+              onClick={onClose}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-nb-outline-variant text-xs font-bold text-nb-on-surface-variant hover:bg-nb-surface-mid transition-all active:scale-[0.98]"
+            >
+              <X size={14} />
+              <span>Close</span>
+            </button>
+            
+            <div className="hidden sm:block w-px h-4 bg-nb-outline-variant/30 mx-1" />
+
+            <button
+              onClick={onSwitchToRawLatex}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold text-nb-on-surface-variant/80 hover:text-nb-on-surface hover:bg-nb-surface-mid transition-all"
+            >
+              <FileCode size={14} />
+              <span>Raw LaTeX</span>
+            </button>
+
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold text-nb-on-surface-variant/40 hover:text-nb-primary hover:bg-nb-primary/5 transition-all"
+            >
+              <Trash2 size={14} />
+              <span>Delete</span>
+            </button>
           </div>
         </div>
       </div>
 
       {/* ── TipTap Workspace ─────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto bg-nb-surface">
-        <UnifiedEditor
-          key={filename}
-          filename={filename}
-          content={content}
-          onChange={setContent}
-          onImageUpload={onImageUpload}
-          onSwitchToRawLatex={onSwitchToRawLatex}
-          author={author}
-        />
+      <div className="flex-1 overflow-y-auto bg-nb-surface scrollbar-hide">
+        <div className="max-w-4xl mx-auto px-12 py-16 min-h-full">
+          <UnifiedEditor
+            key={filename}
+            filename={filename}
+            content={content}
+            onChange={setContent}
+            onImageUpload={onImageUpload}
+            onSwitchToRawLatex={onSwitchToRawLatex}
+            author={author}
+          />
+        </div>
       </div>
 
       {/* ── Delete confirmation ───────────────────────────────────── */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-nb-secondary/60 backdrop-blur-md px-4" onClick={() => setShowDeleteConfirm(false)}>
           <div
-            className="bg-nb-surface-lowest dark:bg-nb-dark-surface rounded-2xl p-7 shadow-nb-lg max-w-sm w-full border border-nb-outline-variant dark:border-nb-dark-outline animate-in zoom-in-95 duration-200"
+            className="bg-nb-surface rounded-2xl p-7 shadow-nb-lg max-w-sm w-full border border-nb-outline-variant animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0">
                 <Trash2 size={20} className="text-nb-primary" />
               </div>
-              <h3 className="font-black text-sm uppercase tracking-widest text-nb-secondary dark:text-nb-dark-on-surface">Delete Entry?</h3>
+              <h3 className="font-bold text-sm uppercase tracking-widest text-nb-secondary">Delete Entry?</h3>
             </div>
-            <p className="text-sm text-nb-on-surface-variant dark:text-nb-dark-on-variant leading-relaxed mb-8">
-              Are you sure you want to delete this notebook entry? This cannot be undone once committed to GitHub.
+            
+            <p className="text-sm text-nb-on-surface-variant leading-relaxed mb-8">
+              This will permanently remove the entry from your notebook. This action cannot be undone once committed.
             </p>
 
             <div className="flex gap-3">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 px-4 py-2.5 rounded-xl border border-nb-outline-variant dark:border-nb-dark-outline text-xs font-black uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-surface-low dark:hover:bg-nb-dark-surface-low transition-colors"
+                className="flex-1 px-4 py-2.5 rounded-xl border border-nb-outline-variant text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-surface-low transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={() => { setShowDeleteConfirm(false); onDeleted(filename); }}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-nb-primary text-white text-xs font-black uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20 active:scale-[0.98]"
+                className="flex-1 px-4 py-2.5 rounded-xl bg-nb-primary text-white text-xs font-bold uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20"
               >
                 Delete
               </button>

@@ -129,6 +129,15 @@ body {
   margin-bottom: 1.25rem;
 }
 
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: var(--color-nb-on-surface-variant);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  opacity: 0.4;
+}
+
 .ProseMirror h1 {
   font-family: var(--font-sans);
   font-size: 1.875rem;

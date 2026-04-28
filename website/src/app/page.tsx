@@ -17,7 +17,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen p-4 sm:p-8 bg-zinc-50 dark:bg-black">
+    <div className="h-screen overflow-hidden">
       <App />
     </div>
   );

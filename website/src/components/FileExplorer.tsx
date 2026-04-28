@@ -120,13 +120,13 @@ function Pane({ id, title, actionLabel, actionIcon, onAction, children, empty, h
   return (
     <div id={id} className="flex flex-col min-h-0 flex-1">
       <div className="flex items-center justify-between px-4 py-3 border-b border-nb-surface-mid dark:border-nb-dark-outline-variant shrink-0 bg-nb-surface-low/50 dark:bg-nb-dark-surface-low/30">
-        <span className="text-[10px] font-black uppercase tracking-[0.25em] text-nb-secondary/60 dark:text-white/50">
+        <span className="text-sm font-semibold text-nb-on-surface">
           {title}
         </span>
         <button
           onClick={onAction}
           title={actionLabel}
-          className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-nb-tertiary hover:text-nb-tertiary-dim transition-colors"
+          className="flex items-center gap-1.5 text-xs font-semibold text-nb-tertiary hover:text-nb-tertiary-dim transition-colors"
         >
           {actionIcon}
           {actionLabel}
@@ -160,7 +160,7 @@ function DeleteDialog({ filename, onConfirm, onCancel }: DeleteDialogProps) {
           <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0">
             <Trash2 size={20} className="text-nb-primary" />
           </div>
-          <h3 className="font-black text-sm uppercase tracking-widest text-nb-secondary dark:text-white">Confirm Delete</h3>
+          <h3 className="font-bold text-sm uppercase tracking-widest text-nb-secondary dark:text-white">Confirm Delete</h3>
         </div>
         
         <div className="space-y-4 mb-8">
@@ -181,13 +181,13 @@ function DeleteDialog({ filename, onConfirm, onCancel }: DeleteDialogProps) {
         <div className="flex gap-3">
           <button
             onClick={onCancel}
-            className="flex-1 px-4 py-2.5 rounded-xl border border-nb-outline-variant dark:border-nb-dark-outline text-xs font-black uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-surface-low dark:hover:bg-nb-dark-surface-low transition-colors"
+            className="flex-1 px-4 py-2.5 rounded-xl border border-nb-outline-variant dark:border-nb-dark-outline text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-surface-low dark:hover:bg-nb-dark-surface-low transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
-            className="flex-1 px-4 py-2.5 rounded-xl bg-nb-primary text-white text-xs font-black uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20 active:scale-[0.98]"
+            className="flex-1 px-4 py-2.5 rounded-xl bg-nb-primary text-white text-xs font-bold uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20 active:scale-[0.98]"
           >
             Delete
           </button>

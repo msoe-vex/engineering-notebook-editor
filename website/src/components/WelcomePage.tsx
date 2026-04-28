@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, FolderOpen, GitBranch, HardDrive, Plus, Wifi } from "lucide-react";
+import { BookOpen, FolderOpen, GitBranch, HardDrive, Plus, ArrowLeftRight } from "lucide-react";
 
 interface WorkspaceInfo {
   mode: "github" | "local" | "memory";
@@ -17,7 +17,7 @@ interface WelcomePageProps {
 export default function WelcomePage({ workspace, onNewEntry, onDisconnect, onOpenSidebar }: WelcomePageProps) {
   const ModeIcon =
     workspace.mode === "github" ? GitBranch :
-    workspace.mode === "local"  ? HardDrive : Wifi;
+    workspace.mode === "local"  ? HardDrive : ArrowLeftRight;
 
   return (
     <div className="flex flex-col h-full items-center justify-center bg-nb-bg p-8">
@@ -27,7 +27,7 @@ export default function WelcomePage({ workspace, onNewEntry, onDisconnect, onOpe
           <BookOpen size={40} className="text-white" />
         </div>
         <div className="text-center">
-          <h1 className="text-4xl font-black tracking-tighter text-nb-on-surface">
+          <h1 className="text-4xl font-bold text-nb-on-surface">
             Engineering Notebook
           </h1>
           <div className="flex items-center gap-2 justify-center mt-3 text-sm text-nb-on-surface-variant">
@@ -48,7 +48,7 @@ export default function WelcomePage({ workspace, onNewEntry, onDisconnect, onOpe
             <Plus size={24} />
           </div>
           <div>
-            <div className="font-black text-xs uppercase tracking-[0.2em]">New Entry</div>
+            <div className="font-bold text-xs uppercase tracking-widest">New Entry</div>
             <div className="text-white/70 text-sm font-normal mt-0.5">Start a new notebook entry</div>
           </div>
         </button>
@@ -62,7 +62,7 @@ export default function WelcomePage({ workspace, onNewEntry, onDisconnect, onOpe
             <FolderOpen size={24} className="text-nb-tertiary" />
           </div>
           <div>
-            <div className="font-black text-xs uppercase tracking-[0.2em] text-nb-on-surface">Open Entry</div>
+            <div className="font-bold text-xs uppercase tracking-widest text-nb-on-surface">Open Entry</div>
             <div className="text-nb-on-surface-variant text-sm font-normal mt-0.5">Select from the sidebar</div>
           </div>
         </button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTheme } from "next-themes";
 import {
   GitHubConfig, fetchDirectoryTree, fetchFileContent, GitHubFile,
@@ -23,7 +23,8 @@ import FileExplorer, { ExplorerFile } from "./FileExplorer";
 import RawLatexEditor from "./RawLatexEditor";
 import ImagePreview from "./ImagePreview";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { GitBranch, HardDrive, Wifi, GitCommitVertical, Loader2, Menu, Sun, Moon, X, BookOpen, Check, AlertTriangle } from "lucide-react";
+import { GitBranch, HardDrive, ArrowLeftRight, GitCommitVertical, Loader2, Menu, Sun, Moon, X, BookOpen, Check, AlertTriangle } from "lucide-react";
+import { ImperativePanelHandle } from "react-resizable-panels";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -171,7 +172,9 @@ const generateLatex = (content: string, title: string, author: string, phase: st
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const isoTimestamp = () =>
+const isoTimestamp = () => new Date().toISOString();
+
+const getFilenameTimestamp = () =>
   new Date().toISOString().replace(/:/g, "-").replace(/\..+/, "");
 
 const isImage = (name: string) =>
@@ -245,6 +248,7 @@ export default function App() {
   // In-memory content cache: path -> content string (for GitHub mode, content loaded on open)
   const [contentCache, setContentCache] = useState<Map<string, string>>(new Map());
 
+
   // Pending changes (GitHub mode) — summary driven from IndexedDB
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
   const [isCommitting, setIsCommitting] = useState(false);
@@ -259,8 +263,25 @@ export default function App() {
   const [mounted, setMounted] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [mobileTab, setMobileTab] = useState<"editor" | "preview">("editor");
-  const [showPreview, setShowPreview] = useState(true);
+  const [desktopViewMode, setDesktopViewMode] = useState<"editor" | "split" | "preview">("editor");
+
+  const editorPanelRef = useRef<ImperativePanelHandle>(null);
+  const previewPanelRef = useRef<ImperativePanelHandle>(null);
+
+  useEffect(() => {
+    if (editorPanelRef.current && previewPanelRef.current) {
+      if (desktopViewMode === "editor") {
+        editorPanelRef.current.resize(100);
+      } else if (desktopViewMode === "preview") {
+        previewPanelRef.current.resize(100);
+      } else {
+        editorPanelRef.current.resize(50);
+      }
+    }
+  }, [desktopViewMode]);
   const isMobile = useIsMobile();
+  
+  const showPreview = desktopViewMode === "split" || desktopViewMode === "preview";
   
   useEffect(() => setMounted(true), []);
   const isDarkMode = resolvedTheme === "dark";
@@ -447,7 +468,8 @@ export default function App() {
   // ── New Entry ────────────────────────────────────────────────────────────────
 
   const handleNewEntry = useCallback(async () => {
-    const ts = isoTimestamp();
+    const createdAt = isoTimestamp();
+    const ts = getFilenameTimestamp();
     let filename = `${ts}_entry.tex`;
     let path = `${ENTRIES_DIR}/${filename}`;
     
@@ -477,7 +499,7 @@ export default function App() {
         ...prev,
         entries: {
           ...prev.entries,
-          [path]: { title: "New Entry", author: "", phase: "", createdAt: ts }
+          [path]: { title: "New Entry", author: "", phase: "", createdAt: createdAt }
         }
       }));
       cacheContent(path, scaffold);
@@ -492,7 +514,7 @@ export default function App() {
       title: "", author: "", phase: "",
       metadataMissing: false,
       imageSrc: "",
-      createdAt: ts,
+      createdAt: createdAt,
       isLegacyRaw: false,
     });
     setLatexContent(scaffold);
@@ -526,7 +548,7 @@ export default function App() {
   const handleSelectEntry = useCallback(async (file: ExplorerFile) => {
     console.log("Selecting entry:", file.path);
     setIsLoading(true);
-    setIsSidebarOpen(false); // Hide sidebar on selection
+    if (isMobile) setIsSidebarOpen(false); // Only auto-hide on mobile
     setMobileTab("editor"); // Ensure we show the editor
     try {
       let rawLatex = "";
@@ -734,7 +756,7 @@ export default function App() {
         const dataUrl = reader.result as string;
         const base64 = dataUrl.split(",")[1];
         const ext = file.name.split(".").pop() || "png";
-        const ts = isoTimestamp();
+        const ts = getFilenameTimestamp();
         const imgPath = `${RESOURCES_DIR}/${ts}.${ext}`;
         await handleImageUploaded(imgPath, base64);
       };
@@ -910,9 +932,9 @@ export default function App() {
     workspaceMode === "github" ? `${config?.owner}/${config?.repo}` :
     workspaceMode === "local"  ? (dirHandle?.name ?? "Local Folder") : "Memory";
 
-  const WorkspaceIcon =
+  const ModeIcon =
     workspaceMode === "github" ? GitBranch :
-    workspaceMode === "local"  ? HardDrive : Wifi;
+    workspaceMode === "local"  ? HardDrive : ArrowLeftRight;
 
   // ── Pending path sets for FileExplorer ────────────────────────────────────────
 
@@ -926,25 +948,30 @@ export default function App() {
   const sidebarContent = (
     <div className="flex flex-col h-full overflow-hidden bg-nb-surface-low">
       {/* Sidebar header */}
-      <div className="flex items-center gap-3 px-4 py-4 border-b border-nb-outline-variant shrink-0 bg-nb-surface">
+      <div className="flex items-center gap-3 px-4 h-14 border-b border-nb-outline-variant shrink-0 bg-nb-surface">
         <div className="w-6 h-6 rounded-md bg-nb-primary flex items-center justify-center shadow-sm shadow-nb-primary/20">
           <BookOpen size={14} className="text-white" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-nb-on-surface truncate">Engineering Notebook</p>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <WorkspaceIcon size={10} className="text-nb-tertiary" />
-            <span className="text-[9px] font-mono text-nb-on-surface-variant truncate">{workspaceLabel}</span>
-          </div>
+          <p className="text-sm font-semibold text-nb-on-surface truncate">Notebook</p>
         </div>
-        {isMobile && (
+        <div className="flex items-center gap-1">
           <button 
-            onClick={() => setIsSidebarOpen(false)}
-            className="p-2 rounded-lg hover:bg-nb-surface-mid text-nb-on-surface-variant transition-colors"
+            onClick={handleDisconnect}
+            title="Switch Workspace"
+            className="p-1.5 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors"
           >
-            <X size={18} />
+            <ModeIcon size={16} />
           </button>
-        )}
+          {isMobile && (
+            <button 
+              onClick={() => setIsSidebarOpen(false)}
+              className="p-1.5 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant transition-colors"
+            >
+              <X size={18} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Explorer */}
@@ -970,18 +997,18 @@ export default function App() {
           <div className="mb-4">
              <div className="grid grid-cols-2 gap-2 mb-3">
                <div className="bg-nb-surface-low rounded-lg p-2.5 border border-nb-outline-variant/30">
-                 <span className="block text-[8px] font-black text-nb-on-surface-variant/50 uppercase tracking-widest mb-1">Staged</span>
-                 <span className="text-xs font-black text-nb-on-surface leading-none">{upserted.length}</span>
+                 <span className="block text-[8px] font-bold text-nb-on-surface-variant/80 uppercase tracking-widest mb-1">Staged</span>
+                 <span className="text-xs font-bold text-nb-on-surface leading-none">{upserted.length}</span>
                </div>
                <div className="bg-nb-surface-low rounded-lg p-2.5 border border-nb-outline-variant/30">
-                  <span className="block text-[8px] font-black text-nb-on-surface-variant/50 uppercase tracking-widest mb-1">Removed</span>
-                  <span className="text-xs font-black text-nb-on-surface leading-none">{deleted.length}</span>
+                  <span className="block text-[8px] font-bold text-nb-on-surface-variant/80 uppercase tracking-widest mb-1">Removed</span>
+                  <span className="text-xs font-bold text-nb-on-surface leading-none">{deleted.length}</span>
                </div>
              </div>
              <button
                onClick={handleCommitAll}
                disabled={isCommitting || (upserted.length === 0 && deleted.length === 0)}
-               className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[9px] font-black uppercase tracking-[0.2em] py-3 rounded-lg transition-all active:scale-[0.98] shadow-lg shadow-nb-tertiary/20 disabled:opacity-30"
+               className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[9px] font-bold uppercase tracking-widest py-3 rounded-lg transition-all active:scale-[0.98] shadow-lg shadow-nb-tertiary/20 disabled:opacity-30"
              >
                {isCommitting ? "Syncing..." : "Commit Changes"}
              </button>
@@ -992,9 +1019,7 @@ export default function App() {
              <div className={`w-1.5 h-1.5 rounded-full ${isLoading ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`} />
              <span className="text-[9px] font-bold uppercase tracking-widest text-nb-on-surface-variant">{isLoading ? 'Syncing' : 'Connected'}</span>
           </div>
-          <button onClick={handleDisconnect} className="text-[9px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary transition-colors">
-            Exit
-          </button>
+          <span className="text-[9px] font-mono text-nb-on-surface-variant/40 truncate max-w-[120px]">{workspaceLabel}</span>
         </div>
       </div>
     </div>
@@ -1003,7 +1028,7 @@ export default function App() {
   const mainContent = (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-nb-surface border-b border-nb-outline-variant shrink-0">
+      <div className="flex items-center justify-between px-4 h-14 bg-nb-surface border-b border-nb-outline-variant shrink-0">
         <button 
           onClick={() => setIsSidebarOpen(true)}
           className={`p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors ${isSidebarOpen && !isMobile ? 'invisible' : 'visible'}`}
@@ -1015,32 +1040,45 @@ export default function App() {
           <div className="flex bg-nb-surface-low rounded-lg p-0.5 border border-nb-outline-variant/30">
             <button 
               onClick={() => setMobileTab("editor")}
-              className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${mobileTab === 'editor' ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60'}`}
+              className={`px-3 py-1 rounded-md text-[9px] font-bold uppercase tracking-widest transition-all ${mobileTab === 'editor' ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60'}`}
             >
               Editor
             </button>
             <button 
               onClick={() => setMobileTab("preview")}
-              className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${mobileTab === 'preview' ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60'}`}
+              className={`px-3 py-1 rounded-md text-[9px] font-bold uppercase tracking-widest transition-all ${mobileTab === 'preview' ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60'}`}
             >
               Preview
             </button>
           </div>
         ) : (
-          <span className="text-[10px] font-black uppercase tracking-widest text-nb-secondary dark:text-nb-on-surface truncate max-w-[200px]">
-            {openFile ? openFile.name : 'Engineering Notebook'}
+          <span className="text-sm font-semibold text-nb-on-surface truncate max-w-[200px]">
+            {openFile?.viewMode === "entry" ? "" : (openFile ? openFile.name : 'Engineering Notebook')}
           </span>
         )}
 
         <div className="flex items-center gap-2">
           {openFile?.viewMode === "entry" && !isMobile && (
-            <button 
-              onClick={() => setShowPreview(!showPreview)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${showPreview ? 'bg-nb-tertiary text-white' : 'bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary'}`}
-            >
-              <Check size={14} className={showPreview ? 'visible' : 'invisible'} />
-              Split View
-            </button>
+            <div className="flex bg-nb-surface-low rounded-lg p-0.5 border border-nb-outline-variant/30 mr-2 shadow-sm">
+              <button 
+                onClick={() => setDesktopViewMode("editor")}
+                className={`px-3 py-1.5 rounded-md text-[9px] font-bold uppercase tracking-widest transition-all ${desktopViewMode === "editor" ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60 hover:text-nb-primary'}`}
+              >
+                Editor
+              </button>
+              <button 
+                onClick={() => setDesktopViewMode("split")}
+                className={`px-3 py-1.5 rounded-md text-[9px] font-bold uppercase tracking-widest transition-all ${desktopViewMode === "split" ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60 hover:text-nb-primary'}`}
+              >
+                Split
+              </button>
+              <button 
+                onClick={() => setDesktopViewMode("preview")}
+                className={`px-3 py-1.5 rounded-md text-[9px] font-bold uppercase tracking-widest transition-all ${desktopViewMode === "preview" ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60 hover:text-nb-primary'}`}
+              >
+                LaTeX
+              </button>
+            </div>
           )}
           <button 
             onClick={() => setTheme(isDarkMode ? "light" : "dark")}
@@ -1079,7 +1117,7 @@ export default function App() {
             <div className="p-4 border-t border-nb-outline-variant bg-nb-surface shrink-0">
               <button
                 onClick={handleRawSave}
-                className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[10px] font-black uppercase tracking-[0.25em] py-3 rounded-xl transition-all shadow-lg shadow-nb-tertiary/20"
+                className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[10px] font-bold uppercase tracking-widest py-3 rounded-xl transition-all shadow-lg shadow-nb-tertiary/20"
               >
                 Save Raw Changes
               </button>
@@ -1122,8 +1160,16 @@ export default function App() {
              </div>
           </div>
         ) : (
-          <PanelGroup direction="horizontal" className="h-full">
-            <Panel defaultSize={showPreview ? 50 : 100} minSize={30} className={`flex flex-col h-full ${showPreview ? 'border-r border-nb-outline-variant' : ''}`}>
+          <PanelGroup direction="horizontal" className="h-full" id="editor-preview-group">
+            <Panel 
+              id="editor-panel" 
+              order={1}
+              ref={editorPanelRef}
+              collapsible={true}
+              minSize={0}
+              defaultSize={desktopViewMode === "editor" ? 100 : (desktopViewMode === "preview" ? 0 : 50)}
+              className={`flex flex-col h-full transition-all duration-300 ease-out ${desktopViewMode === "preview" ? "opacity-0 pointer-events-none" : "opacity-100"}`}
+            >
               <Editor
                 key={openFile.path}
                 config={appConfig}
@@ -1144,16 +1190,25 @@ export default function App() {
                 onImageUpload={handleImageUploaded}
                 onMetadataRebuild={handleMetadataRebuild}
                 onSwitchToRawLatex={handleSwitchToRawLatex}
+                onClose={() => setOpenFile(null)}
               />
             </Panel>
-            {showPreview && (
-              <>
-                <PanelResizeHandle className="w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors" />
-                <Panel defaultSize={50} minSize={30} className="flex flex-col h-full bg-nb-surface-low">
-                  <Preview latexContent={latexContent} />
-                </Panel>
-              </>
+            
+            {desktopViewMode === "split" && (
+              <PanelResizeHandle id="editor-preview-resizer" className="w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors" />
             )}
+            
+            <Panel 
+              id="preview-panel" 
+              order={2}
+              ref={previewPanelRef}
+              collapsible={true}
+              minSize={0}
+              defaultSize={desktopViewMode === "preview" ? 100 : (desktopViewMode === "editor" ? 0 : 50)}
+              className={`flex flex-col h-full bg-nb-surface-low transition-all duration-300 ease-out ${desktopViewMode === "editor" ? "opacity-0 pointer-events-none" : "opacity-100"}`}
+            >
+              <Preview latexContent={latexContent} />
+            </Panel>
           </PanelGroup>
         )}
       </div>
@@ -1178,16 +1233,16 @@ export default function App() {
           </div>
         </div>
       ) : (
-        <PanelGroup direction="horizontal" className="w-full h-full">
+        <PanelGroup direction="horizontal" className="w-full h-full" id="main-layout-group">
           {isSidebarOpen && (
             <>
-              <Panel defaultSize={20} minSize={15} maxSize={35} className="flex flex-col">
+              <Panel id="sidebar-panel" defaultSize={20} minSize={15} maxSize={35} className="flex flex-col">
                 {sidebarContent}
               </Panel>
-              <PanelResizeHandle className="w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors" />
+              <PanelResizeHandle id="sidebar-resizer" className="w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors" />
             </>
           )}
-          <Panel defaultSize={isSidebarOpen ? 80 : 100} className="flex flex-col">
+          <Panel id="main-panel" defaultSize={isSidebarOpen ? 80 : 100} className="flex flex-col">
             {mainContent}
           </Panel>
         </PanelGroup>

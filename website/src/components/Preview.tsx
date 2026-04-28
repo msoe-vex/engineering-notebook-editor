@@ -20,9 +20,9 @@ export default function Preview({ latexContent }: PreviewProps) {
     <div className="flex flex-col h-full bg-nb-bg transition-colors duration-300">
       <div className="flex items-center px-6 py-4 border-b border-nb-outline-variant bg-nb-surface shrink-0">
         <div className="flex items-center gap-2">
-           <span className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant">Generated Output</span>
+           <span className="text-xs font-semibold text-nb-on-surface-variant">Generated Output</span>
            <div className="px-1.5 py-0.5 rounded bg-nb-tertiary/10 border border-nb-tertiary/20">
-              <span className="text-[9px] font-black uppercase tracking-widest text-nb-tertiary">LaTeX SRC</span>
+              <span className="text-[9px] font-bold uppercase tracking-widest text-nb-tertiary">LaTeX SRC</span>
            </div>
         </div>
       </div>

@@ -12,6 +12,7 @@ import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight";
+import Placeholder from "@tiptap/extension-placeholder";
 import { common, createLowlight } from "lowlight";
 import {
   Bold, Italic, List, ListOrdered, Code,
@@ -28,25 +29,24 @@ export const LANGUAGES = [
   "typescript", "java", "bash", "sql", "rust", "go", "csharp",
 ];
 
-const ToolbarButton = ({ 
-  onClick, 
-  active, 
-  children, 
-  title 
-}: { 
-  onClick: () => void; 
-  active?: boolean; 
-  children: React.ReactNode; 
-  title?: string 
+const ToolbarButton = ({
+  onClick,
+  active,
+  children,
+  title
+}: {
+  onClick: () => void;
+  active?: boolean;
+  children: React.ReactNode;
+  title?: string
 }) => (
   <button
     onClick={onClick}
     title={title}
-    className={`p-1.5 rounded transition-all flex items-center justify-center ${
-      active 
-        ? "bg-nb-primary/10 text-nb-primary shadow-sm" 
-        : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-secondary"
-    }`}
+    className={`p-1.5 rounded transition-all flex items-center justify-center ${active
+      ? "bg-nb-primary/10 text-nb-primary shadow-sm"
+      : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-secondary"
+      }`}
   >
     {children}
   </button>
@@ -60,10 +60,10 @@ const ImageWithCaption = TiptapImage.extend({
   addAttributes() {
     return {
       ...this.parent?.(),
-      alt:      { default: "" },
-      title:    { default: "" }, // author initials
+      alt: { default: "" },
+      title: { default: "" }, // author initials
       filePath: { default: null }, // disk path for LaTeX
-      caption:  { default: "" }, // unify with table/code
+      caption: { default: "" }, // unify with table/code
     };
   },
   addNodeView() {
@@ -76,21 +76,21 @@ function ImageNodeView({ node, updateAttributes, deleteNode }: any) {
     <NodeViewWrapper className="my-10 group relative">
       <div className="rounded-2xl border border-nb-outline-variant/40 overflow-hidden bg-nb-surface shadow-nb-sm group-hover:shadow-nb-md transition-shadow">
         {/* Header bar */}
-        <div 
+        <div
           contentEditable={false}
           className="flex items-center gap-2 px-3 py-2 bg-nb-tertiary text-white border-b border-nb-outline-variant/20"
         >
           <div className="w-5 h-5 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
             <ImageIcon size={10} />
           </div>
-          <span className="text-[9px] font-black uppercase tracking-[0.2em] opacity-80">Image Resource</span>
-          
+          <span className="text-xs font-semibold">Image Resource</span>
+
           <div className="flex items-center gap-3 ml-auto mr-2">
             {node.attrs.filePath && (
               <span className="text-[9px] font-mono opacity-60 hidden sm:inline">{node.attrs.filePath.split('/').pop()}</span>
             )}
             <div className="flex items-center gap-2">
-              <span className="text-[9px] font-black uppercase tracking-widest opacity-60">By</span>
+              <span className="text-[9px] font-bold uppercase tracking-widest opacity-60">By</span>
               <input
                 type="text"
                 value={node.attrs.title ?? ""}
@@ -101,11 +101,11 @@ function ImageNodeView({ node, updateAttributes, deleteNode }: any) {
             </div>
           </div>
 
-          <button 
+          <button
             onClick={() => deleteNode()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500 transition-colors text-[9px] font-black uppercase tracking-widest"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500 transition-colors text-[9px] font-bold uppercase tracking-widest"
           >
-            <Trash2 size={12}/>
+            <Trash2 size={12} />
             <span>Remove</span>
           </button>
         </div>
@@ -121,7 +121,7 @@ function ImageNodeView({ node, updateAttributes, deleteNode }: any) {
         </div>
 
         {/* Caption area */}
-        <div 
+        <div
           contentEditable={false}
           className="px-5 py-4 bg-nb-surface-mid/30 border-t border-nb-outline-variant/30 flex items-center gap-3"
         >
@@ -129,14 +129,14 @@ function ImageNodeView({ node, updateAttributes, deleteNode }: any) {
             <ImageIcon size={14} className="text-nb-tertiary" />
           </div>
           <div className="flex-1">
-             <label className="block text-[8px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant mb-1">Figure Caption</label>
-             <input
-               type="text"
-               value={node.attrs.alt ?? ""}
-               onChange={(e) => updateAttributes({ alt: e.target.value })}
-               placeholder="Descriptive figure caption…"
-               className="w-full text-xs font-medium bg-transparent outline-none placeholder:text-nb-on-surface-variant/40 text-nb-on-surface"
-             />
+            <label className="block text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1">Figure Caption</label>
+            <input
+              type="text"
+              value={node.attrs.alt ?? ""}
+              onChange={(e) => updateAttributes({ alt: e.target.value })}
+              placeholder="Descriptive figure caption…"
+              className="w-full text-xs font-medium bg-transparent outline-none placeholder:text-nb-on-surface-variant/40 text-nb-on-surface"
+            />
           </div>
         </div>
       </div>
@@ -165,34 +165,34 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor }: any) {
     <NodeViewWrapper className="my-10 group relative">
       <div className="rounded-2xl border border-nb-outline-variant/40 overflow-hidden bg-nb-surface shadow-nb-sm group-hover:shadow-nb-md transition-shadow">
         {/* Integrated Header Controls */}
-        <div 
+        <div
           contentEditable={false}
           className="flex flex-wrap items-center gap-2 px-3 py-2 bg-nb-secondary text-white border-b border-nb-outline-variant/20"
         >
           <div className="w-5 h-5 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
             <TableIcon size={10} />
           </div>
-          <span className="text-[9px] font-black uppercase tracking-[0.2em] opacity-80 mr-2">Table Block</span>
-          
+          <span className="text-xs font-semibold mr-2">Table Block</span>
+
           <div className="flex items-center gap-0.5 bg-white/10 rounded-lg p-0.5 mr-2">
-            <button onClick={() => editor.chain().focus().addRowBefore().run()} className="p-1.5 hover:bg-white/20 rounded-md transition-colors" title="Add Row Above"><ChevronUp size={14}/></button>
-            <button onClick={() => editor.chain().focus().addRowAfter().run()} className="p-1.5 hover:bg-white/20 rounded-md transition-colors" title="Add Row Below"><ChevronDown size={14}/></button>
+            <button onClick={() => editor.chain().focus().addRowBefore().run()} className="p-1.5 hover:bg-white/20 rounded-md transition-colors" title="Add Row Above"><ChevronUp size={14} /></button>
+            <button onClick={() => editor.chain().focus().addRowAfter().run()} className="p-1.5 hover:bg-white/20 rounded-md transition-colors" title="Add Row Below"><ChevronDown size={14} /></button>
             <div className="w-px h-3 bg-white/20 mx-0.5" />
-            <button onClick={() => editor.chain().focus().deleteRow().run()} className="p-1.5 hover:bg-red-500/40 rounded-md transition-colors" title="Delete Row"><Trash2 size={13}/></button>
+            <button onClick={() => editor.chain().focus().deleteRow().run()} className="p-1.5 hover:bg-red-500/40 rounded-md transition-colors" title="Delete Row"><Trash2 size={13} /></button>
           </div>
 
           <div className="flex items-center gap-0.5 bg-white/10 rounded-lg p-0.5">
-            <button onClick={() => editor.chain().focus().addColumnBefore().run()} className="p-1.5 hover:bg-white/20 rounded-md transition-colors" title="Add Column Left"><ChevronLeft size={14}/></button>
-            <button onClick={() => editor.chain().focus().addColumnAfter().run()} className="p-1.5 hover:bg-white/20 rounded-md transition-colors" title="Add Column Right"><ChevronRight size={14}/></button>
+            <button onClick={() => editor.chain().focus().addColumnBefore().run()} className="p-1.5 hover:bg-white/20 rounded-md transition-colors" title="Add Column Left"><ChevronLeft size={14} /></button>
+            <button onClick={() => editor.chain().focus().addColumnAfter().run()} className="p-1.5 hover:bg-white/20 rounded-md transition-colors" title="Add Column Right"><ChevronRight size={14} /></button>
             <div className="w-px h-3 bg-white/20 mx-0.5" />
-            <button onClick={() => editor.chain().focus().deleteColumn().run()} className="p-1.5 hover:bg-red-500/40 rounded-md transition-colors" title="Delete Column"><Trash2 size={13}/></button>
+            <button onClick={() => editor.chain().focus().deleteColumn().run()} className="p-1.5 hover:bg-red-500/40 rounded-md transition-colors" title="Delete Column"><Trash2 size={13} /></button>
           </div>
 
-          <button 
+          <button
             onClick={() => deleteNode()}
-            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500 transition-colors text-[9px] font-black uppercase tracking-widest"
+            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500 transition-colors text-[9px] font-bold uppercase tracking-widest"
           >
-            <Trash2 size={12}/>
+            <Trash2 size={12} />
             <span>Remove</span>
           </button>
         </div>
@@ -203,7 +203,7 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor }: any) {
         </div>
 
         {/* Caption area */}
-        <div 
+        <div
           contentEditable={false}
           className="px-5 py-4 bg-nb-surface-mid/30 border-t border-nb-outline-variant/30 flex items-center gap-3"
         >
@@ -211,14 +211,14 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor }: any) {
             <TableIcon size={14} className="text-nb-secondary" />
           </div>
           <div className="flex-1">
-             <label className="block text-[8px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant mb-1">Table Caption</label>
-             <input
-               type="text"
-               value={node.attrs.caption ?? ""}
-               onChange={(e) => updateAttributes({ caption: e.target.value })}
-               placeholder="Description of the table content…"
-               className="w-full text-xs font-medium bg-transparent outline-none placeholder:text-nb-on-surface-variant/40 text-nb-on-surface"
-             />
+            <label className="block text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1">Table Caption</label>
+            <input
+              type="text"
+              value={node.attrs.caption ?? ""}
+              onChange={(e) => updateAttributes({ caption: e.target.value })}
+              placeholder="Description of the table content…"
+              className="w-full text-xs font-medium bg-transparent outline-none placeholder:text-nb-on-surface-variant/40 text-nb-on-surface"
+            />
           </div>
         </div>
       </div>
@@ -235,7 +235,7 @@ const CustomCodeBlock = CodeBlockLowlight.extend({
     return {
       ...this.parent?.(),
       language: { default: "plaintext" },
-      caption:  { default: "" },
+      caption: { default: "" },
     };
   },
   addNodeView() {
@@ -248,28 +248,28 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode }: any) {
     <NodeViewWrapper className="my-10 group relative">
       <div className="rounded-2xl border border-nb-outline-variant/40 overflow-hidden bg-nb-surface shadow-nb-sm group-hover:shadow-nb-md transition-shadow">
         {/* Header bar */}
-        <div 
+        <div
           contentEditable={false}
           className="flex items-center gap-2 px-3 py-2 bg-zinc-800 text-white border-b border-white/5"
         >
           <div className="w-5 h-5 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
             <Code2 size={10} className="text-nb-primary" />
           </div>
-          <span className="text-[9px] font-black uppercase tracking-[0.2em] opacity-80">Code Snippet</span>
-          
+          <span className="text-xs font-semibold">Code Snippet</span>
+
           <select
             value={node.attrs.language ?? "plaintext"}
             onChange={(e) => updateAttributes({ language: e.target.value })}
-            className="ml-auto text-[9px] font-black uppercase tracking-widest bg-white/10 text-white border border-white/20 rounded px-2 py-1 outline-none cursor-pointer hover:bg-white/20 transition-colors mr-2"
+            className="ml-auto text-[9px] font-bold uppercase tracking-widest bg-white/10 text-white border border-white/20 rounded px-2 py-1 outline-none cursor-pointer hover:bg-white/20 transition-colors mr-2"
           >
             {LANGUAGES.map((l) => <option key={l} value={l} className="bg-zinc-900">{l}</option>)}
           </select>
 
-          <button 
+          <button
             onClick={() => deleteNode()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500 transition-colors text-[9px] font-black uppercase tracking-widest"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500 transition-colors text-[9px] font-bold uppercase tracking-widest"
           >
-            <Trash2 size={12}/>
+            <Trash2 size={12} />
             <span>Remove</span>
           </button>
         </div>
@@ -282,7 +282,7 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode }: any) {
         </div>
 
         {/* Caption area */}
-        <div 
+        <div
           contentEditable={false}
           className="px-5 py-4 bg-nb-surface-mid/30 border-t border-nb-outline-variant/30 flex items-center gap-3"
         >
@@ -290,14 +290,14 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode }: any) {
             <Code2 size={14} className="text-nb-primary" />
           </div>
           <div className="flex-1">
-             <label className="block text-[8px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant mb-1">Snippet Caption</label>
-             <input
-               type="text"
-               value={node.attrs.caption ?? ""}
-               onChange={(e) => updateAttributes({ caption: e.target.value })}
-               placeholder="What does this code do?…"
-               className="w-full text-xs font-medium bg-transparent outline-none placeholder:text-nb-on-surface-variant/40 text-nb-on-surface"
-             />
+            <label className="block text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1">Snippet Caption</label>
+            <input
+              type="text"
+              value={node.attrs.caption ?? ""}
+              onChange={(e) => updateAttributes({ caption: e.target.value })}
+              placeholder="What does this code do?…"
+              className="w-full text-xs font-medium bg-transparent outline-none placeholder:text-nb-on-surface-variant/40 text-nb-on-surface"
+            />
           </div>
         </div>
       </div>
@@ -330,18 +330,18 @@ export default function UnifiedEditor({
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result as string;
-      const base64  = dataUrl.split(",")[1];
-      const ext     = file.name.split(".").pop() || "png";
+      const base64 = dataUrl.split(",")[1];
+      const ext = file.name.split(".").pop() || "png";
       // ISO-8601 timestamp filename (colons → hyphens for filesystem safety)
-      const ts      = new Date().toISOString().replace(/:/g, "-").replace(/\..+/, "");
+      const ts = new Date().toISOString().replace(/:/g, "-").replace(/\..+/, "");
       const newPath = `notebook/resources/${ts}.${ext}`;
 
       editor?.chain().focus().insertContent({
         type: "image",
         attrs: {
-          src:      dataUrl,
-          alt:      "",
-          title:    author ?? "",
+          src: dataUrl,
+          alt: "",
+          title: author ?? "",
           filePath: newPath,
         },
       }).run();
@@ -363,6 +363,9 @@ export default function UnifiedEditor({
       TableHeader,
       TableCell,
       CustomCodeBlock.configure({ lowlight }),
+      Placeholder.configure({
+        placeholder: "Start writing...",
+      }),
     ],
     content: parseContent(content),
     onUpdate: ({ editor }) => {
@@ -446,7 +449,7 @@ export default function UnifiedEditor({
         >
           <Heading2 size={16} />
         </ToolbarButton>
-        
+
         <div className="w-px h-6 bg-nb-outline-variant/30 mx-1" />
 
         <ToolbarButton
@@ -463,6 +466,9 @@ export default function UnifiedEditor({
         >
           <ListOrdered size={16} />
         </ToolbarButton>
+
+        <div className="w-px h-6 bg-nb-outline-variant/30 mx-1" />
+
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleCodeBlock().run()}
           active={editor.isActive("codeBlock")}
@@ -470,8 +476,6 @@ export default function UnifiedEditor({
         >
           <Code size={16} />
         </ToolbarButton>
-        
-        <div className="w-px h-6 bg-nb-outline-variant/30 mx-1" />
 
         <ToolbarButton
           onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
@@ -492,15 +496,6 @@ export default function UnifiedEditor({
             }}
           />
         </label>
-
-        <button
-          onClick={() => setShowRawConfirm(true)}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-nb-primary hover:bg-nb-primary/5 border border-transparent hover:border-nb-primary/20 transition-all ml-auto sm:ml-0"
-          title="Switch to Raw LaTeX"
-        >
-          <FileCode size={14} />
-          <span className="hidden sm:inline">Switch to Raw</span>
-        </button>
       </div>
 
       <div className="relative group/editor">
@@ -528,9 +523,9 @@ export default function UnifiedEditor({
               <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0">
                 <FileCode size={20} className="text-nb-primary" />
               </div>
-              <h3 className="font-black text-sm uppercase tracking-widest text-nb-secondary">Switch to Raw Mode?</h3>
+              <h3 className="font-bold text-sm uppercase tracking-widest text-nb-secondary">Switch to Raw Mode?</h3>
             </div>
-            
+
             <div className="space-y-4 mb-8">
               <p className="text-sm text-nb-on-surface-variant leading-relaxed">
                 This will strip all rich metadata and lock this file into a raw text editor.
@@ -546,13 +541,13 @@ export default function UnifiedEditor({
             <div className="flex gap-3">
               <button
                 onClick={() => setShowRawConfirm(false)}
-                className="flex-1 px-4 py-2.5 rounded-xl border border-nb-outline-variant text-xs font-black uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-surface-low transition-colors"
+                className="flex-1 px-4 py-2.5 rounded-xl border border-nb-outline-variant text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-surface-low transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={() => { setShowRawConfirm(false); onSwitchToRawLatex?.(); }}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-nb-primary text-white text-xs font-black uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20 active:scale-[0.98]"
+                className="flex-1 px-4 py-2.5 rounded-xl bg-nb-primary text-white text-xs font-bold uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20 active:scale-[0.98]"
               >
                 Confirm Switch
               </button>
