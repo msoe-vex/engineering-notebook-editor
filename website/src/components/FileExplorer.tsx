@@ -10,6 +10,8 @@ import {
 export interface ExplorerFile {
   name: string;
   path: string;
+  title?: string;
+  timestamp?: string;
 }
 
 interface FileExplorerProps {
@@ -23,9 +25,7 @@ interface FileExplorerProps {
   onNewEntry: () => void;
   onUploadResource: () => void;
   onRenameEntry: (file: ExplorerFile, newName: string) => Promise<void>;
-  onRenameResource: (file: ExplorerFile, newName: string) => Promise<void>;
   onDeleteEntry: (file: ExplorerFile) => void;
-  onDeleteResource: (file: ExplorerFile) => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -49,91 +49,50 @@ interface FileRowProps {
   isDeleted: boolean;
   icon: React.ReactNode;
   onSelect: () => void;
-  onRename: (newName: string) => Promise<void>;
   onDelete: () => void;
 }
 
-function FileRow({ file, isSelected, isPending, isDeleted, icon, onSelect, onRename, onDelete }: FileRowProps) {
-  const [editing, setEditing] = useState(false);
-  const [draftName, setDraftName] = useState(file.name);
-  const [renaming, setRenaming] = useState(false);
-
-  const startEdit = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setDraftName(file.name);
-    setEditing(true);
-  };
-
-  const commitRename = async () => {
-    const trimmed = draftName.trim();
-    if (!trimmed || trimmed === file.name) { setEditing(false); return; }
-    setRenaming(true);
-    try {
-      await onRename(trimmed);
-    } finally {
-      setRenaming(false);
-      setEditing(false);
-    }
-  };
-
-  const cancelEdit = () => { setEditing(false); setDraftName(file.name); };
-
+function FileRow({ file, isSelected, isPending, isDeleted, icon, onSelect, onDelete }: FileRowProps) {
   return (
     <div
-      className={`group flex items-center gap-2.5 py-2 px-2.5 rounded-lg text-xs cursor-pointer transition-all
-        ${isDeleted ? "opacity-30 line-through" : ""}
-        ${isSelected
-          ? "bg-nb-surface-mid dark:bg-nb-dark-surface-high text-nb-secondary dark:text-nb-dark-on-surface ring-1 ring-nb-outline-variant/30 dark:ring-nb-dark-outline/30"
-          : "text-nb-on-surface-variant dark:text-nb-dark-on-variant hover:bg-nb-surface-low dark:hover:bg-nb-dark-surface-low"
-        }`}
       onClick={isDeleted ? undefined : onSelect}
+      className={`
+        group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer select-none
+        ${isSelected 
+          ? 'bg-nb-tertiary text-white shadow-lg shadow-nb-tertiary/20' 
+          : 'hover:bg-nb-surface-mid dark:hover:bg-zinc-800 text-nb-on-surface'
+        }
+        ${isDeleted ? 'opacity-30 grayscale' : ''}
+      `}
     >
-      {/* Icon */}
-      <span className={`shrink-0 ${isSelected ? "text-nb-primary" : "text-nb-outline dark:text-nb-dark-on-variant"}`}>{icon}</span>
+      <div className={`shrink-0 ${isSelected ? 'text-white' : 'text-nb-tertiary'}`}>
+        {icon}
+      </div>
 
-      {/* Name / rename input */}
-      {editing ? (
-        <div className="flex items-center gap-1.5 flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
-          <input
-            autoFocus
-            value={draftName}
-            onChange={(e) => setDraftName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commitRename();
-              if (e.key === "Escape") cancelEdit();
-            }}
-            className="flex-1 min-w-0 text-[11px] font-mono bg-nb-surface-lowest dark:bg-nb-dark-surface-low border border-nb-tertiary/50 rounded-md px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-nb-tertiary text-nb-on-surface dark:text-white"
-            disabled={renaming}
-          />
-          <button onClick={commitRename} disabled={renaming} className="text-nb-tertiary hover:text-nb-tertiary-dim shrink-0">
-            <Check size={14} />
-          </button>
-          <button onClick={cancelEdit} className="text-nb-outline hover:text-nb-on-surface shrink-0">
-            <X size={14} />
-          </button>
-        </div>
-      ) : (
-        <span className="flex-1 min-w-0 truncate font-mono tracking-tight text-nb-on-surface dark:text-nb-dark-on-surface">{file.name}</span>
-      )}
+      <div className="flex flex-col flex-1 min-w-0">
+        <span className={`truncate font-bold tracking-tight leading-tight ${isSelected ? 'text-white' : 'text-nb-on-surface dark:text-white/90'}`}>
+          {file.title || "New Entry"}
+        </span>
+        <span className={`text-[9px] font-mono truncate mt-0.5 ${isSelected ? 'text-white/70' : 'opacity-40'}`}>
+           {(() => {
+             const d = new Date(file.timestamp || Date.now());
+             const valid = !isNaN(d.getTime());
+             return (valid ? d : new Date()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+           })()}
+        </span>
+      </div>
 
       {/* Pending dot */}
-      {isPending && !isDeleted && !editing && (
-        <span className="w-1.5 h-1.5 rounded-full bg-nb-tertiary shrink-0 animate-pulse shadow-sm shadow-nb-tertiary/50" title="Staged change" />
+      {isPending && !isDeleted && (
+        <span className={`w-1.5 h-1.5 rounded-full shrink-0 animate-pulse shadow-sm ${isSelected ? 'bg-white' : 'bg-nb-tertiary shadow-nb-tertiary/50'}`} title="Staged change" />
       )}
 
-      {/* Action buttons — visible on hover */}
-      {!editing && !isDeleted && (
+      {/* Delete button — visible on hover */}
+      {!isDeleted && (
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           <button
-            onClick={startEdit}
-            className="p-1 rounded-md hover:bg-nb-surface-mid dark:hover:bg-nb-dark-surface-highest text-nb-on-surface-variant/70 dark:text-white/40 hover:text-nb-tertiary dark:hover:text-nb-tertiary transition-colors"
-            title="Rename"
-          >
-            <Pencil size={12} />
-          </button>
-          <button
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="p-1 rounded-md hover:bg-nb-primary/10 dark:hover:bg-nb-primary/20 text-nb-on-surface-variant/70 dark:text-white/40 hover:text-nb-primary transition-colors"
+            className={`p-1 rounded-md transition-colors ${isSelected ? 'hover:bg-white/20 text-white' : 'hover:bg-nb-primary/10 dark:hover:bg-nb-primary/20 text-nb-on-surface-variant/70 dark:text-white/40 hover:text-nb-primary'}`}
             title="Delete"
           >
             <Trash2 size={11} />
@@ -295,33 +254,7 @@ export default function FileExplorer({
         ))}
       </Pane>
 
-      {/* Divider */}
-      <div className="h-px bg-gray-200 dark:bg-zinc-800 shrink-0" />
-
-      {/* Resources pane */}
-      <Pane
-        id="explorer-resources-pane"
-        title="Resources"
-        actionLabel="Upload"
-        actionIcon={<Upload size={11} />}
-        onAction={onUploadResource}
-        empty="No images yet."
-        hasItems={resources.length > 0}
-      >
-        {resources.map((f) => (
-          <FileRow
-            key={f.path}
-            file={f}
-            isSelected={activePath === f.path}
-            isPending={pendingPaths.has(f.path)}
-            isDeleted={deletedPaths.has(f.path)}
-            icon={<ImageIcon size={13} />}
-            onSelect={() => onSelectResource(f)}
-            onRename={(newName) => onRenameResource(f, newName)}
-            onDelete={() => setDeleteTarget({ file: f, type: "resource" })}
-          />
-        ))}
-      </Pane>
+      {/* Resources pane hidden to simplify UI */}
 
       {/* Delete dialog */}
       {deleteTarget && (

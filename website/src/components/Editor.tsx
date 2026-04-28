@@ -156,6 +156,7 @@ interface EditorProps {
   initialAuthor?: string;
   initialPhase?: string;
   initialContent: string;
+  initialCreatedAt?: string;
   metadataMissing?: boolean;
   onSaved: (path: string, latexContent: string) => void;
   onDeleted: (path: string) => void;
@@ -165,7 +166,7 @@ interface EditorProps {
   onPhaseChange?: (phase: string) => void;
   onImageUpload?: (path: string, base64: string) => void;
   /** Called after save with the raw TipTap JSON string so App can rebuild metadata.json */
-  onMetadataRebuild?: (entryPath: string, tiptapJson: string) => void;
+  onMetadataRebuild?: (entryPath: string, tiptapJson: string, info?: { title: string; author: string; phase: string; createdAt?: string }) => void;
   /** Called when user confirms switching to raw LaTeX mode */
   onSwitchToRawLatex?: () => void;
 }
@@ -178,6 +179,7 @@ export default function Editor({
   initialAuthor = "", 
   initialPhase = "", 
   initialContent = "",
+  initialCreatedAt = "",
   metadataMissing = false,
   onSaved, 
   onDeleted, 
@@ -207,9 +209,17 @@ export default function Editor({
   }, [filename]);
 
   const generateLatex = (cnt: string, t: string, a: string, p: string) => {
-    const metadata = JSON.stringify({ content: cnt });
+    const metadata = JSON.stringify({ 
+      content: cnt,
+      title: t,
+      author: a,
+      phase: p,
+      createdAt: initialCreatedAt || new Date().toISOString()
+    });
     let latex = `% METADATA: ${metadata}\n`;
-    latex += `\\newentry{${t}}{${new Date().toLocaleDateString()}}{${a}}{${p}}\n\n`;
+    const dateObj = (initialCreatedAt ? new Date(initialCreatedAt) : new Date());
+    const dateStr = dateObj.toISOString().split('T')[0];
+    latex += `\\newentry{${t}}{${dateStr}}{${a}}{${p}}\n\n`;
     latex += convertJsonToLatex(cnt);
     return latex;
   };
@@ -231,39 +241,13 @@ export default function Editor({
     const latex = generateLatex(content, title, author, phase);
 
     // Notify parent so it can rebuild metadata.json from TipTap JSON
-    if (onMetadataRebuild && content) {
-      onMetadataRebuild(filename, content);
+    if (onMetadataRebuild) {
+      onMetadataRebuild(filename, content, { title, author, phase, createdAt: initialCreatedAt });
     }
     
-    if (isLocalMode) {
-       onSaved(filename, latex);
-       setIsSaving(false);
-       return;
-    }
-
-    try {
-      const response = await fetch("/api/github/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...config,
-          path: filename,
-          content: latex,
-          message: `Update ${filename}`,
-        }),
-      });
-
-      if (response.ok) {
-        onSaved(filename, latex);
-      } else {
-        alert("Failed to save to GitHub");
-      }
-    } catch (error) {
-      console.error("Save error:", error);
-      alert("Error saving file");
-    } finally {
-      setIsSaving(false);
-    }
+    // Execute the parent's save handler
+    await onSaved(filename, latex);
+    setIsSaving(false);
   };
 
   const handleDownload = () => {
@@ -305,7 +289,8 @@ export default function Editor({
                      onChange={(e) => { setPhase(e.target.value); onPhaseChange?.(e.target.value); }}
                      className="text-[10px] font-black uppercase tracking-wider text-nb-on-surface-variant dark:text-nb-dark-on-variant bg-transparent outline-none cursor-pointer hover:text-nb-tertiary transition-colors"
                    >
-                     {PHASES.map(p => (
+                     <option value="" className="bg-nb-surface dark:bg-nb-dark-surface text-nb-on-surface dark:text-nb-dark-on-surface">Phase...</option>
+                    {PHASES.map(p => (
                        <option key={p} value={p} className="bg-nb-surface dark:bg-nb-dark-surface text-nb-on-surface dark:text-nb-dark-on-surface">
                          {p}
                        </option>

@@ -16,12 +16,20 @@
  * This is more robust than scanning generated LaTeX.
  */
 
+export interface EntryInfo {
+  title: string;
+  author: string;
+  phase: string;
+  createdAt: string;
+}
+
 export interface NotebookMetadata {
   version: number;
   resourceRefs: Record<string, string[]>; // resourcePath -> entryPaths[]
+  entries: Record<string, EntryInfo>;      // entryPath -> info
 }
 
-export const EMPTY_METADATA: NotebookMetadata = { version: 1, resourceRefs: {} };
+export const EMPTY_METADATA: NotebookMetadata = { version: 1, resourceRefs: {}, entries: {} };
 
 // ─── TipTap JSON helpers ──────────────────────────────────────────────────────
 
@@ -112,15 +120,17 @@ export function extractImagePathsFromLatex(latexContent: string): string[] {
 export function rebuildEntryRefs(
   metadata: NotebookMetadata,
   entryPath: string,
-  tiptapDocOrContent: TipTapDoc | string
+  tiptapDocOrContent: TipTapDoc | string,
+  info?: Partial<EntryInfo>
 ): NotebookMetadata {
-  let doc: TipTapDoc;
+  let doc: TipTapDoc = null;
   if (typeof tiptapDocOrContent === "string") {
-    try { doc = JSON.parse(tiptapDocOrContent); } catch { return metadata; }
+    try { doc = JSON.parse(tiptapDocOrContent); } catch { doc = null; }
   } else {
     doc = tiptapDocOrContent;
   }
-  const usedPaths = extractImagePaths(doc);
+  
+  const usedPaths = doc ? extractImagePaths(doc) : [];
 
   // Remove this entry from all existing refs
   const newRefs: Record<string, string[]> = {};
@@ -134,8 +144,21 @@ export function rebuildEntryRefs(
     newRefs[p] = [...(newRefs[p] ?? []), entryPath];
   }
 
-  return { ...metadata, resourceRefs: newRefs };
+  // Update entry info
+  const newEntries = { ...metadata.entries };
+  if (info) {
+    const existing = newEntries[entryPath] ?? { title: "", author: "", phase: "", createdAt: "" };
+    newEntries[entryPath] = {
+      ...existing,
+      ...info,
+      // Only set createdAt if it doesn't exist yet (first save) or if explicitly provided
+      createdAt: info.createdAt || existing.createdAt || new Date().toISOString(),
+    };
+  }
+
+  return { ...metadata, resourceRefs: newRefs, entries: newEntries };
 }
+
 
 /**
  * Returns a list of { entryPath, updatedLatex } for every entry that
@@ -235,4 +258,43 @@ export function renameResourceInMetadata(
     delete newRefs[oldPath];
   }
   return { ...metadata, resourceRefs: newRefs };
+}
+
+/** Remove an entry from the metadata index. */
+export function removeEntryFromMetadata(
+  metadata: NotebookMetadata,
+  entryPath: string
+): NotebookMetadata {
+  const newEntries = { ...metadata.entries };
+  delete newEntries[entryPath];
+
+  // Also remove from all resourceRefs
+  const newRefs: Record<string, string[]> = {};
+  for (const [res, entries] of Object.entries(metadata.resourceRefs)) {
+    const filtered = entries.filter(e => e !== entryPath);
+    if (filtered.length > 0) newRefs[res] = filtered;
+  }
+
+  return { ...metadata, entries: newEntries, resourceRefs: newRefs };
+}
+
+/** Rename an entry in the metadata index. */
+export function renameEntryInMetadata(
+  metadata: NotebookMetadata,
+  oldPath: string,
+  newPath: string
+): NotebookMetadata {
+  const newEntries = { ...metadata.entries };
+  if (newEntries[oldPath]) {
+    newEntries[newPath] = newEntries[oldPath];
+    delete newEntries[oldPath];
+  }
+
+  // Also update resourceRefs
+  const newRefs: Record<string, string[]> = {};
+  for (const [res, entries] of Object.entries(metadata.resourceRefs)) {
+    newRefs[res] = entries.map(e => e === oldPath ? newPath : e);
+  }
+
+  return { ...metadata, entries: newEntries, resourceRefs: newRefs };
 }
