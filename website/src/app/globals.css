@@ -164,38 +164,46 @@ body {
 
 /* Prism & Highlight.js Base */
 code[class*="language-"],
-pre[class*="language-"] {
+pre[class*="language-"],
+.hljs {
   color: var(--color-nb-on-surface) !important;
   text-shadow: none !important;
 }
 
-.token.comment, .token.prolog, .token.doctype, .token.pi { color: #64748b; }
-.token.punctuation { color: #94a3b8; }
-.token.property, .token.tag, .token.boolean, .token.number, .token.constant, .token.symbol, .token.deleted { color: #d9282f; }
-.token.selector, .token.attr-name, .token.string, .token.char, .token.builtin, .token.inserted { color: #059669; }
-.token.operator, .token.entity, .token.url, .language-css .token.string, .style .token.string { color: #0076bc; }
-.token.atrule, .token.attr-value, .token.keyword { color: #7c3aed; }
-.token.function, .token.class-name { color: #0076bc; }
-.token.regex, .token.important, .token.variable { color: #ea580c; }
+/* Prism Style */
+/* Syntax Highlighting - Light Mode */
+.token.comment, .hljs-comment { color: #6a737d; font-style: italic; }
+.token.keyword, .hljs-keyword, .hljs-selector-tag { color: #d73a49; font-weight: 600; }
+.token.string, .hljs-string, .hljs-symbol { color: #032f62; }
+.token.function, .hljs-title, .hljs-section, .hljs-function { color: #6f42c1; }
+.token.number, .hljs-number, .hljs-literal, .hljs-type { color: #005cc5; }
+.token.operator, .token.entity, .token.url { color: #d73a49; }
+.token.variable, .hljs-variable, .hljs-template-variable { color: #e36209; }
+.token.attr-name, .hljs-attr, .hljs-attribute { color: #6f42c1; }
+.token.class-name, .hljs-class-name { color: #22863a; font-weight: 600; }
 
-.dark .token.comment { color: #94a3b8; }
-.dark .token.property, .dark .token.tag { color: #f87171; }
-.dark .token.selector, .dark .token.attr-name, .dark .token.string { color: #34d399; }
-.dark .token.operator, .dark .token.entity, .dark .token.url { color: #60a5fa; }
-.dark .token.atrule, .dark .token.attr-value, .dark .token.keyword { color: #a78bfa; }
-.dark .token.function { color: #60a5fa; }
+/* Syntax Highlighting - Dark Mode */
+.dark .token.comment, .dark .hljs-comment { color: #8b949e; font-style: italic; }
+.dark .token.keyword, .dark .hljs-keyword { color: #ff7b72; font-weight: 600; }
+.dark .token.string, .dark .hljs-string { color: #a5d6ff; }
+.dark .token.function, .dark .hljs-function, .dark .hljs-title { color: #d2a8ff; }
+.dark .token.number, .dark .hljs-number, .dark .hljs-literal, .dark .hljs-type { color: #79c0ff; }
+.dark .token.operator { color: #ff7b72; }
+.dark .token.variable, .dark .hljs-variable { color: #ffa657; }
+.dark .token.attr-name, .dark .hljs-attr { color: #d2a8ff; }
+.dark .token.class-name, .dark .hljs-class-name { color: #7ee787; font-weight: 600; }
 
 /* TipTap Code Block */
 .ProseMirror pre {
   background: var(--color-nb-surface-low);
-  border: 1px border-nb-outline-variant;
-  border-radius: 0.75rem;
-  padding: 1.5rem;
+  border: 1px solid var(--color-nb-outline-variant);
+  border-radius: var(--nb-radius);
+  padding: 1rem;
+  color: var(--color-nb-on-surface);
 }
 
 .dark .ProseMirror pre {
-  background: var(--color-nb-dark-surface-low);
-  border-color: var(--color-nb-dark-outline);
+  color: #e2e8f0;
 }
 
 .ProseMirror ul,
@@ -214,60 +222,41 @@ pre[class*="language-"] {
   border-collapse: collapse;
   table-layout: fixed;
   width: 100%;
-  margin: 2rem 0;
+  margin: 1.5rem 0;
   overflow: hidden;
   border: 1.5px solid var(--color-nb-outline-variant);
-  border-radius: 6px;
+  border-radius: var(--nb-radius-sm);
   font-size: 13px;
-}
-
-.dark .ProseMirror table {
-  border-color: var(--color-nb-dark-outline);
 }
 
 .ProseMirror table td,
 .ProseMirror table th {
   min-width: 1em;
   border: 1px solid var(--color-nb-outline-variant);
-  padding: 10px 14px;
+  padding: 8px 12px;
   vertical-align: top;
   box-sizing: border-box;
   position: relative;
 }
 
-.dark .ProseMirror table td,
-.dark .ProseMirror table th {
-  border-color: var(--color-nb-dark-outline);
-}
-
 .ProseMirror table th {
   font-weight: 700;
   text-align: left;
-  background-color: var(--color-nb-surface-low);
+  background-color: var(--color-nb-surface-mid);
   color: var(--color-nb-on-surface);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
 
-.dark .ProseMirror table th {
-  background-color: var(--color-nb-dark-surface-high);
-  color: var(--color-nb-dark-on-surface);
-}
-
 .ProseMirror img {
   max-width: 100%;
   height: auto;
-  border-radius: 8px;
-  margin: 2rem auto;
+  border-radius: var(--nb-radius);
+  margin: 1.5rem auto;
   display: block;
-  box-shadow: 0 8px 24px -4px rgb(0 0 0 / 0.12);
+  box-shadow: var(--nb-shadow);
   border: 1px solid var(--color-nb-outline-variant);
-}
-
-.dark .ProseMirror img {
-  border-color: var(--color-nb-dark-outline);
-  box-shadow: 0 8px 24px -4px rgb(0 0 0 / 0.4);
 }
 
 /* ═══════════════════════════════════════════════════════════════

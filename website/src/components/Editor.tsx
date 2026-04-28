@@ -98,6 +98,7 @@ const convertNodeToLatex = (node: any): string => {
       if (!rows.length) return "";
       const colCount = (rows[0]?.content ?? []).length;
       const colSpec  = "|l".repeat(colCount) + "|";
+      const caption  = node.attrs?.caption ?? "Design Data";
 
       const body = rows.map((row: any) => {
         const cells = (row.content ?? []).map((cell: any) =>
@@ -106,7 +107,7 @@ const convertNodeToLatex = (node: any): string => {
         return cells.join(" & ") + " \\\\ \\hline";
       }).join("\n");
 
-      return `\\begin{figure}[h]\n\\centering\n\\begin{tabular}{${colSpec}}\n\\hline\n${body}\n\\end{tabular}\n\\caption{Design Data}\n\\end{figure}\n\n`;
+      return `\\begin{figure}[h]\n\\centering\n\\begin{tabular}{${colSpec}}\n\\hline\n${body}\n\\end{tabular}\n\\caption{${caption}}\n\\end{figure}\n\n`;
     }
 
     // tableRow / tableCell / tableHeader — just recurse

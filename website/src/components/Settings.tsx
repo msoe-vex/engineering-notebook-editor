@@ -2,17 +2,21 @@
 
 import { GitHubConfig } from "@/lib/github";
 import { useState } from "react";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Moon, Sun } from "lucide-react";
 
 export default function Settings({
   onSave,
   onWorkOffline,
   onOpenLocalFolder,
+  isDarkMode,
+  setIsDarkMode,
 }: {
   onSave: (config: GitHubConfig) => void;
   onWorkOffline: () => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onOpenLocalFolder: (handle: any) => void;
+  isDarkMode: boolean;
+  setIsDarkMode: (v: boolean) => void;
 }) {
   const [token, setToken] = useState("");
   const [owner, setOwner] = useState("");
@@ -37,24 +41,32 @@ export default function Settings({
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-nb-surface dark:bg-nb-dark-bg p-6">
-      <div className="flex flex-col gap-6 w-full max-w-md border border-nb-outline-variant dark:border-nb-dark-outline p-8 rounded-2xl shadow-nb-lg bg-nb-surface-lowest dark:bg-nb-dark-surface">
+    <div className="min-h-screen flex items-center justify-center bg-nb-bg p-6">
+      <div className="flex flex-col gap-6 w-full max-w-md border border-nb-outline-variant p-8 rounded-xl shadow-nb-lg bg-nb-surface relative">
+        {/* Theme Toggle */}
+        <button 
+          onClick={() => setIsDarkMode(!isDarkMode)}
+          className="absolute top-6 right-6 p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-all"
+        >
+          {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+
         {/* Logo */}
         <div className="flex items-center gap-4 mb-2">
           <div className="w-12 h-12 rounded-xl bg-nb-primary flex items-center justify-center shadow-lg shadow-nb-primary/20">
             <BookOpen size={24} className="text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-black tracking-tight text-nb-secondary dark:text-nb-dark-on-surface">Engineering Notebook</h1>
-            <p className="text-xs text-nb-on-surface-variant dark:text-nb-dark-on-variant">Choose a workspace to get started</p>
+            <h1 className="text-xl font-black tracking-tight text-nb-secondary dark:text-nb-on-surface">Engineering Notebook</h1>
+            <p className="text-xs text-nb-on-surface-variant">Choose a workspace to get started</p>
           </div>
         </div>
 
-        <hr className="border-nb-surface-mid dark:border-nb-dark-outline-variant" />
+        <hr className="border-nb-outline-variant" />
 
         {/* Open local folder */}
         <div>
-          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant dark:text-nb-dark-on-variant mb-4">Local Workspace</h2>
+          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant mb-4">Local Workspace</h2>
           <button
             onClick={handleOpenFolder}
             className="w-full bg-nb-secondary hover:bg-slate-700 text-white py-3.5 px-4 rounded-xl font-bold text-sm transition-all active:scale-[0.98] shadow-nb-sm flex items-center justify-center gap-2"
@@ -64,40 +76,40 @@ export default function Settings({
         </div>
 
         <div className="relative flex items-center py-2">
-          <div className="flex-1 h-px bg-nb-surface-mid dark:bg-nb-dark-outline-variant" />
-          <span className="px-3 text-[10px] text-nb-on-surface-variant dark:text-nb-dark-on-variant font-bold uppercase tracking-widest">or</span>
-          <div className="flex-1 h-px bg-nb-surface-mid dark:bg-nb-dark-outline-variant" />
+          <div className="flex-1 h-px bg-nb-outline-variant" />
+          <span className="px-3 text-[10px] text-nb-on-surface-variant font-bold uppercase tracking-widest">or</span>
+          <div className="flex-1 h-px bg-nb-outline-variant" />
         </div>
 
         {/* GitHub */}
         <div>
-          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant dark:text-nb-dark-on-variant mb-4">GitHub Repository</h2>
+          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant mb-4">GitHub Repository</h2>
           <div className="flex flex-col gap-3">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-nb-on-surface-variant dark:text-nb-dark-on-variant ml-1">Owner</label>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-nb-on-surface-variant ml-1">Owner</label>
               <input
                 type="text"
-                className="w-full border border-nb-outline-variant dark:border-nb-dark-outline p-2.5 rounded-xl bg-nb-surface-low dark:bg-nb-dark-surface-low text-nb-on-surface dark:text-nb-dark-on-surface text-sm outline-none focus:ring-2 focus:ring-nb-tertiary/40 transition-all"
+                className="w-full border border-nb-outline-variant p-2.5 rounded-xl bg-nb-surface-low text-nb-on-surface text-sm outline-none focus:ring-2 focus:ring-nb-tertiary/40 transition-all"
                 value={owner}
                 onChange={(e) => setOwner(e.target.value)}
                 placeholder="username / org"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-nb-on-surface-variant dark:text-nb-dark-on-variant ml-1">Repository</label>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-nb-on-surface-variant ml-1">Repository</label>
               <input
                 type="text"
-                className="w-full border border-nb-outline-variant dark:border-nb-dark-outline p-2.5 rounded-xl bg-nb-surface-low dark:bg-nb-dark-surface-low text-nb-on-surface dark:text-nb-dark-on-surface text-sm outline-none focus:ring-2 focus:ring-nb-tertiary/40 transition-all"
+                className="w-full border border-nb-outline-variant p-2.5 rounded-xl bg-nb-surface-low text-nb-on-surface text-sm outline-none focus:ring-2 focus:ring-nb-tertiary/40 transition-all"
                 value={repo}
                 onChange={(e) => setRepo(e.target.value)}
                 placeholder="notebook-repo"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-nb-on-surface-variant dark:text-nb-dark-on-variant ml-1">Token</label>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-nb-on-surface-variant ml-1">Token</label>
               <input
                 type="password"
-                className="w-full border border-nb-outline-variant dark:border-nb-dark-outline p-2.5 rounded-xl bg-nb-surface-low dark:bg-nb-dark-surface-low text-nb-on-surface dark:text-nb-dark-on-surface text-sm outline-none focus:ring-2 focus:ring-nb-tertiary/40 transition-all"
+                className="w-full border border-nb-outline-variant p-2.5 rounded-xl bg-nb-surface-low text-nb-on-surface text-sm outline-none focus:ring-2 focus:ring-nb-tertiary/40 transition-all"
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
                 placeholder="ghp_..."
@@ -113,15 +125,15 @@ export default function Settings({
         </div>
 
         <div className="relative flex items-center py-2">
-          <div className="flex-1 h-px bg-nb-surface-mid dark:bg-nb-dark-outline-variant" />
-          <span className="px-3 text-[10px] text-nb-on-surface-variant dark:text-nb-dark-on-variant font-bold uppercase tracking-widest">or</span>
-          <div className="flex-1 h-px bg-nb-surface-mid dark:bg-nb-dark-outline-variant" />
+          <div className="flex-1 h-px bg-nb-outline-variant" />
+          <span className="px-3 text-[10px] text-nb-on-surface-variant font-bold uppercase tracking-widest">or</span>
+          <div className="flex-1 h-px bg-nb-outline-variant" />
         </div>
 
         {/* Offline */}
         <button
           onClick={onWorkOffline}
-          className="w-full bg-nb-surface-mid dark:bg-nb-dark-surface-high hover:bg-nb-surface-high dark:hover:bg-nb-dark-outline text-nb-on-surface-variant dark:text-nb-dark-on-surface py-3 px-4 rounded-xl font-bold text-sm transition-all active:scale-[0.98]"
+          className="w-full bg-nb-surface-mid hover:bg-nb-surface-high text-nb-on-surface-variant py-3 px-4 rounded-xl font-bold text-sm transition-all active:scale-[0.98]"
         >
           Work Offline (Memory Only)
         </button>

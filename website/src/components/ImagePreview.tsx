@@ -103,35 +103,21 @@ export default function ImagePreview({ filename, src, onRename, onDelete }: Imag
       </div>
 
       {/* Image Display Area */}
-      <div className="flex-1 flex items-center justify-center p-12 overflow-auto bg-nb-surface-low relative transition-colors">
-        <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
+      <div className="flex-1 flex items-center justify-center p-4 overflow-auto bg-nb-surface-low relative transition-colors">
         
-        <div className="flex flex-col items-center gap-8 max-w-full relative z-10">
-          <div className="relative group">
-            <img
-              ref={imgRef}
-              src={src}
-              alt={filename}
-              onLoad={handleImageLoad}
-              className="max-w-full max-h-[65vh] rounded-2xl shadow-2xl border border-nb-outline-variant/30 object-contain transition-transform duration-500 group-hover:scale-[1.01]"
-            />
+        <div className="relative group max-w-full max-h-full flex items-center justify-center">
+          <img
+            ref={imgRef}
+            src={src}
+            alt={filename}
+            onLoad={handleImageLoad}
+            className="max-w-full max-h-[85vh] rounded-lg shadow-nb-lg border border-nb-outline-variant/30 object-contain transition-transform duration-500"
+          />
             {dimensions && (
                <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-nb-surface/90 backdrop-blur-md px-3 py-1 rounded-full border border-nb-outline-variant/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                   <span className="text-[9px] font-mono font-bold tracking-widest text-nb-on-surface-variant">{dimensions.w} × {dimensions.h} PX</span>
                </div>
             )}
-          </div>
-
-          <div className="flex flex-col items-center gap-2">
-            <div className="flex items-center gap-3 px-4 py-2 bg-nb-surface rounded-xl border border-nb-outline-variant/20">
-               <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-nb-tertiary" />
-                  <span className="text-[9px] font-black uppercase tracking-widest text-nb-on-surface dark:text-nb-dark-on-surface">Dimensions Verified</span>
-               </div>
-               <div className="w-px h-3 bg-nb-outline-variant/30" />
-               <span className="text-[10px] font-mono text-nb-on-surface-variant">{filename.split(".").pop()?.toUpperCase()} RESOURCE</span>
-            </div>
-          </div>
         </div>
       </div>
 

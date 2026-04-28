@@ -15,7 +15,7 @@ export interface ExplorerFile {
 interface FileExplorerProps {
   entries: ExplorerFile[];
   resources: ExplorerFile[];
-  selectedPath: string | null;
+  activePath: string | null;
   pendingPaths: Set<string>;   // paths with staged (unsaved) changes — shown with dot badge
   deletedPaths: Set<string>;   // paths staged for deletion — shown with strikethrough
   onSelectEntry: (file: ExplorerFile) => void;
@@ -102,7 +102,7 @@ function FileRow({ file, isSelected, isPending, isDeleted, icon, onSelect, onRen
               if (e.key === "Enter") commitRename();
               if (e.key === "Escape") cancelEdit();
             }}
-            className="flex-1 min-w-0 text-[11px] font-mono bg-nb-surface-lowest dark:bg-nb-dark-surface-low border border-nb-tertiary/50 rounded-md px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-nb-tertiary"
+            className="flex-1 min-w-0 text-[11px] font-mono bg-nb-surface-lowest dark:bg-nb-dark-surface-low border border-nb-tertiary/50 rounded-md px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-nb-tertiary text-nb-on-surface dark:text-white"
             disabled={renaming}
           />
           <button onClick={commitRename} disabled={renaming} className="text-nb-tertiary hover:text-nb-tertiary-dim shrink-0">
@@ -113,7 +113,7 @@ function FileRow({ file, isSelected, isPending, isDeleted, icon, onSelect, onRen
           </button>
         </div>
       ) : (
-        <span className="flex-1 min-w-0 truncate font-mono tracking-tight">{file.name}</span>
+        <span className="flex-1 min-w-0 truncate font-mono tracking-tight text-nb-on-surface dark:text-nb-dark-on-surface">{file.name}</span>
       )}
 
       {/* Pending dot */}
@@ -126,14 +126,14 @@ function FileRow({ file, isSelected, isPending, isDeleted, icon, onSelect, onRen
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           <button
             onClick={startEdit}
-            className="p-1 rounded-md hover:bg-nb-surface-mid dark:hover:bg-nb-dark-surface-highest text-nb-outline hover:text-nb-tertiary transition-colors"
+            className="p-1 rounded-md hover:bg-nb-surface-mid dark:hover:bg-nb-dark-surface-highest text-nb-on-surface-variant/70 dark:text-white/40 hover:text-nb-tertiary dark:hover:text-nb-tertiary transition-colors"
             title="Rename"
           >
             <Pencil size={12} />
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="p-1 rounded-md hover:bg-nb-primary/10 dark:hover:bg-nb-primary/20 text-nb-outline hover:text-nb-primary transition-colors"
+            className="p-1 rounded-md hover:bg-nb-primary/10 dark:hover:bg-nb-primary/20 text-nb-on-surface-variant/70 dark:text-white/40 hover:text-nb-primary transition-colors"
             title="Delete"
           >
             <Trash2 size={11} />
@@ -161,7 +161,7 @@ function Pane({ id, title, actionLabel, actionIcon, onAction, children, empty, h
   return (
     <div id={id} className="flex flex-col min-h-0 flex-1">
       <div className="flex items-center justify-between px-4 py-3 border-b border-nb-surface-mid dark:border-nb-dark-outline-variant shrink-0 bg-nb-surface-low/50 dark:bg-nb-dark-surface-low/30">
-        <span className="text-[10px] font-black uppercase tracking-[0.25em] text-nb-secondary/50 dark:text-nb-dark-on-variant">
+        <span className="text-[10px] font-black uppercase tracking-[0.25em] text-nb-secondary/60 dark:text-white/50">
           {title}
         </span>
         <button
@@ -201,7 +201,7 @@ function DeleteDialog({ filename, onConfirm, onCancel }: DeleteDialogProps) {
           <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0">
             <Trash2 size={20} className="text-nb-primary" />
           </div>
-          <h3 className="font-black text-sm uppercase tracking-widest text-nb-secondary dark:text-nb-dark-on-surface">Confirm Delete</h3>
+          <h3 className="font-black text-sm uppercase tracking-widest text-nb-secondary dark:text-white">Confirm Delete</h3>
         </div>
         
         <div className="space-y-4 mb-8">
@@ -247,7 +247,7 @@ import { AlertTriangle } from "lucide-react";
 export default function FileExplorer({
   entries,
   resources,
-  selectedPath,
+  activePath,
   pendingPaths,
   deletedPaths,
   onSelectEntry,
@@ -284,7 +284,7 @@ export default function FileExplorer({
           <FileRow
             key={f.path}
             file={f}
-            isSelected={selectedPath === f.path}
+            isSelected={activePath === f.path}
             isPending={pendingPaths.has(f.path)}
             isDeleted={deletedPaths.has(f.path)}
             icon={<FileText size={13} />}
@@ -312,7 +312,7 @@ export default function FileExplorer({
           <FileRow
             key={f.path}
             file={f}
-            isSelected={selectedPath === f.path}
+            isSelected={activePath === f.path}
             isPending={pendingPaths.has(f.path)}
             isDeleted={deletedPaths.has(f.path)}
             icon={<ImageIcon size={13} />}

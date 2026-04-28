@@ -22,7 +22,7 @@ import FileExplorer, { ExplorerFile } from "./FileExplorer";
 import RawLatexEditor from "./RawLatexEditor";
 import ImagePreview from "./ImagePreview";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { GitBranch, HardDrive, Wifi, GitCommitVertical, Loader2 } from "lucide-react";
+import { GitBranch, HardDrive, Wifi, GitCommitVertical, Loader2, Menu, Sun, Moon, X, BookOpen, Check, AlertTriangle } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -173,23 +173,29 @@ const isImage = (name: string) =>
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getLocalFileContent = async (rootHandle: any, path: string): Promise<{ text?: string; base64?: string; isImage: boolean }> => {
-  const parts = path.split('/');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let currentHandle: any = rootHandle;
-  for (let i = 0; i < parts.length - 1; i++) {
-    currentHandle = await currentHandle.getDirectoryHandle(parts[i]);
+  try {
+    const parts = path.split('/');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let currentHandle: any = rootHandle;
+    for (let i = 0; i < parts.length - 1; i++) {
+      currentHandle = await currentHandle.getDirectoryHandle(parts[i]);
+    }
+    const fileHandle = await currentHandle.getFileHandle(parts[parts.length - 1]);
+    const file = await fileHandle.getFile();
+    if (file.type.startsWith('image/')) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve({ base64: reader.result as string, isImage: true });
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+    const text = await file.text();
+    return { text, isImage: false };
+  } catch (e) {
+    console.error(`Local read failed for ${path}`, e);
+    throw e;
   }
-  const fileHandle = await currentHandle.getFileHandle(parts[parts.length - 1]);
-  const file = await fileHandle.getFile();
-  if (file.type.startsWith('image/')) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve({ base64: reader.result as string, isImage: true });
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
-  return { text: await file.text(), isImage: false };
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -405,8 +411,17 @@ export default function App() {
 
   const handleNewEntry = useCallback(async () => {
     const ts = isoTimestamp();
-    const filename = `${ts}_entry.tex`;
-    const path = `${ENTRIES_DIR}/${filename}`;
+    let filename = `${ts}_entry.tex`;
+    let path = `${ENTRIES_DIR}/${filename}`;
+    
+    // Handle duplicates
+    let counter = 1;
+    while (entries.some(e => e.path === path)) {
+      filename = `${ts}_${counter}_entry.tex`;
+      path = `${ENTRIES_DIR}/${filename}`;
+      counter++;
+    }
+
     const scaffold = `% METADATA: {"content":""}\n\\newentry{}{${new Date().toLocaleDateString()}}{}{}\n`;
 
     if (workspaceMode === "local" && dirHandle) {
@@ -435,10 +450,36 @@ export default function App() {
     setLatexContent(scaffold);
   }, [workspaceMode, dirHandle, loadLocalExplorer, stage]);
 
+  const hydrateJson = useCallback((json: any) => {
+    if (!json || typeof json !== 'object') return json;
+    if (json.type === 'image' && json.attrs?.filePath) {
+      const cached = contentCache.get(json.attrs.filePath);
+      if (cached) return { ...json, attrs: { ...json.attrs, src: cached } };
+    }
+    if (json.content) {
+      return { ...json, content: json.content.map(hydrateJson) };
+    }
+    return json;
+  }, [contentCache]);
+
+  const dehydrateJson = useCallback((json: any) => {
+    if (!json || typeof json !== 'object') return json;
+    if (json.type === 'image' && json.attrs?.filePath) {
+      return { ...json, attrs: { ...json.attrs, src: "" } };
+    }
+    if (json.content) {
+      return { ...json, content: json.content.map(dehydrateJson) };
+    }
+    return json;
+  }, []);
+
   // ── Select entry ─────────────────────────────────────────────────────────────
 
   const handleSelectEntry = useCallback(async (file: ExplorerFile) => {
+    console.log("Selecting entry:", file.path);
     setIsLoading(true);
+    setIsSidebarOpen(false); // Hide sidebar on selection
+    setMobileTab("editor"); // Ensure we show the editor
     try {
       let rawLatex = "";
 
@@ -466,11 +507,19 @@ export default function App() {
         try {
           const meta: FileMetadata = JSON.parse(metaMatch[1]);
           const entryMatch = rawLatex.match(/\\newentry{(.*?)}{(.*?)}{(.*?)}{(.*?)}/);
+          
+          // Hydrate image sources before opening
+          let tiptapStr = meta.content || "";
+          try {
+            const parsed = JSON.parse(tiptapStr);
+            tiptapStr = JSON.stringify(hydrateJson(parsed));
+          } catch { /* not json */ }
+
           setOpenFile({
             path: file.path, name: file.name,
             viewMode: "entry",
             rawLatex,
-            tiptapContent: meta.content || "",
+            tiptapContent: tiptapStr,
             title: entryMatch?.[1] ?? "",
             author: entryMatch?.[3] ?? "",
             phase: entryMatch?.[4] ?? "",
@@ -481,7 +530,9 @@ export default function App() {
           setLatexContent(rawLatex);
           setMobileTab("editor");
           return;
-        } catch { /* fall through to raw */ }
+        } catch (e) { 
+           console.error("JSON parse failed for entry metadata", e);
+        }
       }
 
       // No valid metadata — open raw
@@ -509,6 +560,7 @@ export default function App() {
 
   const handleSelectResource = useCallback(async (file: ExplorerFile) => {
     setIsLoading(true);
+    setIsSidebarOpen(false); // Hide sidebar on selection
     try {
       let imageSrc = "";
 
@@ -574,7 +626,14 @@ export default function App() {
   // ── Metadata rebuild (called after entry save) ───────────────────────────────
 
   const handleMetadataRebuild = useCallback(async (entryPath: string, tiptapJson: string) => {
-    const updated = rebuildEntryRefs(notebookMetadata, entryPath, tiptapJson);
+    // Dehydrate images before storing in metadata
+    let cleanJson = tiptapJson;
+    try {
+      const parsed = JSON.parse(tiptapJson);
+      cleanJson = JSON.stringify(dehydrateJson(parsed));
+    } catch { /* ... */ }
+
+    const updated = rebuildEntryRefs(notebookMetadata, entryPath, cleanJson);
     setNotebookMetadata(updated);
     const metaStr = JSON.stringify(updated, null, 2);
     if (workspaceMode === "local" && dirHandle) {
@@ -829,7 +888,7 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
-  }, [config, isCommitting, refreshPending, loadGitHubExplorer]);
+  }, [config, isCommitting, refreshPending, loadGitHubExplorer, notify]);
 
   // ── Disconnect ────────────────────────────────────────────────────────────────
 
@@ -853,6 +912,8 @@ export default function App() {
         onSave={(cfg) => { setConfig(cfg); setWorkspaceMode("github"); }}
         onWorkOffline={() => setWorkspaceMode("memory")}
         onOpenLocalFolder={(handle) => { setDirHandle(handle); setWorkspaceMode("local"); }}
+        isDarkMode={isDarkMode}
+        setIsDarkMode={setIsDarkMode}
       />
     );
   }
@@ -861,8 +922,6 @@ export default function App() {
 
   const upserted = pendingChanges.filter(p => p.operation === "upsert");
   const deleted  = pendingChanges.filter(p => p.operation === "delete");
-  // Changes that were already in GitHub (not new) are hard to distinguish without a full tree diff;
-  // for simplicity we call all upserts "changed" for the badge (could refine with "added" logic later)
 
   // ── Workspace label ───────────────────────────────────────────────────────────
 
@@ -883,333 +942,274 @@ export default function App() {
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
+  const sidebarContent = (
+    <div className="flex flex-col h-full overflow-hidden bg-nb-surface-low">
+      {/* Sidebar header */}
+      <div className="flex items-center gap-3 px-4 py-4 border-b border-nb-outline-variant shrink-0 bg-nb-surface">
+        <div className="w-6 h-6 rounded-md bg-nb-primary flex items-center justify-center shadow-sm shadow-nb-primary/20">
+          <BookOpen size={14} className="text-white" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-nb-secondary dark:text-nb-on-surface truncate">Engineering Notebook</p>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <WorkspaceIcon size={10} className="text-nb-tertiary" />
+            <span className="text-[9px] font-mono text-nb-on-surface-variant truncate">{workspaceLabel}</span>
+          </div>
+        </div>
+        {isMobile && (
+          <button 
+            onClick={() => setIsSidebarOpen(false)}
+            className="p-2 rounded-lg hover:bg-nb-surface-mid text-nb-on-surface-variant transition-colors"
+          >
+            <X size={18} />
+          </button>
+        )}
+      </div>
+
+      {/* Explorer */}
+      <div className="flex-1 overflow-y-auto">
+        <FileExplorer
+          entries={entries}
+          resources={resources}
+          onSelectEntry={handleSelectEntry}
+          onSelectResource={handleSelectResource}
+          activePath={openFile?.path ?? null}
+          pendingPaths={pendingPathSet}
+          deletedPaths={deletedPathSet}
+          onNewEntry={handleNewEntry}
+          onUploadResource={handleUploadResource}
+          onRenameEntry={handleRenameEntry}
+          onRenameResource={handleRenameResource}
+          onDeleteEntry={handleDeleteEntry}
+          onDeleteResource={handleDeleteResource}
+        />
+      </div>
+
+      {/* Footer */}
+      <div className="p-4 bg-nb-surface border-t border-nb-outline-variant">
+        {workspaceMode === "github" && (pendingChanges.length > 0 || isCommitting) && (
+          <div className="mb-4">
+             <div className="grid grid-cols-2 gap-2 mb-3">
+               <div className="bg-nb-surface-low rounded-lg p-2.5 border border-nb-outline-variant/30">
+                 <span className="block text-[8px] font-black text-nb-on-surface-variant/50 uppercase tracking-widest mb-1">Staged</span>
+                 <span className="text-xs font-black text-nb-on-surface leading-none">{upserted.length}</span>
+               </div>
+               <div className="bg-nb-surface-low rounded-lg p-2.5 border border-nb-outline-variant/30">
+                  <span className="block text-[8px] font-black text-nb-on-surface-variant/50 uppercase tracking-widest mb-1">Removed</span>
+                  <span className="text-xs font-black text-nb-on-surface leading-none">{deleted.length}</span>
+               </div>
+             </div>
+             <button
+               onClick={handleCommitAll}
+               disabled={isCommitting || (upserted.length === 0 && deleted.length === 0)}
+               className="w-full bg-nb-secondary hover:bg-nb-secondary/90 text-white text-[9px] font-black uppercase tracking-[0.2em] py-3 rounded-lg transition-all active:scale-[0.98] shadow-lg shadow-nb-secondary/10 disabled:opacity-30"
+             >
+               {isCommitting ? "Syncing..." : "Commit Changes"}
+             </button>
+          </div>
+        )}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+             <div className={`w-1.5 h-1.5 rounded-full ${isLoading ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`} />
+             <span className="text-[9px] font-bold uppercase tracking-widest text-nb-on-surface-variant">{isLoading ? 'Syncing' : 'Connected'}</span>
+          </div>
+          <button onClick={handleDisconnect} className="text-[9px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary transition-colors">
+            Exit
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const mainContent = (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-2.5 bg-nb-surface border-b border-nb-outline-variant shrink-0">
+        <button 
+          onClick={() => setIsSidebarOpen(true)}
+          className={`p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors ${isSidebarOpen && !isMobile ? 'invisible' : 'visible'}`}
+        >
+          <Menu size={18} />
+        </button>
+
+        {openFile?.viewMode === "entry" && isMobile ? (
+          <div className="flex bg-nb-surface-low rounded-lg p-0.5 border border-nb-outline-variant/30">
+            <button 
+              onClick={() => setMobileTab("editor")}
+              className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${mobileTab === 'editor' ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60'}`}
+            >
+              Editor
+            </button>
+            <button 
+              onClick={() => setMobileTab("preview")}
+              className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${mobileTab === 'preview' ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60'}`}
+            >
+              Preview
+            </button>
+          </div>
+        ) : (
+          <span className="text-[10px] font-black uppercase tracking-widest text-nb-secondary dark:text-nb-on-surface truncate max-w-[200px]">
+            {openFile ? openFile.name : 'Engineering Notebook'}
+          </span>
+        )}
+
+        <button 
+          onClick={() => setIsDarkMode(!isDarkMode)}
+          className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors"
+        >
+          {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-hidden relative bg-nb-bg">
+        {openFile === null ? (
+          <WelcomePage
+            workspace={{ mode: workspaceMode, label: workspaceLabel }}
+            onNewEntry={handleNewEntry}
+            onDisconnect={handleDisconnect}
+            onOpenSidebar={() => setIsSidebarOpen(true)}
+          />
+        ) : openFile.viewMode === "image" ? (
+          <ImagePreview
+            filename={openFile.name}
+            src={openFile.imageSrc}
+            onRename={(newName) => handleRenameResource({ name: openFile.name, path: openFile.path }, newName)}
+            onDelete={() => handleDeleteResource({ name: openFile.name, path: openFile.path })}
+          />
+        ) : openFile.viewMode === "raw-latex" ? (
+          <div className="flex flex-col h-full">
+            <div className="flex-1 overflow-hidden">
+              <RawLatexEditor
+                filename={openFile.name}
+                content={openFile.rawLatex}
+                onChange={(v) => setOpenFile(prev => prev ? { ...prev, rawLatex: v } : null)}
+                isLegacyFallback={openFile.isLegacyRaw}
+              />
+            </div>
+            <div className="p-4 border-t border-nb-outline-variant bg-nb-surface shrink-0">
+              <button
+                onClick={handleRawSave}
+                className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[10px] font-black uppercase tracking-[0.25em] py-3 rounded-xl transition-all shadow-lg shadow-nb-tertiary/20"
+              >
+                Save Raw Changes
+              </button>
+            </div>
+          </div>
+        ) : isMobile ? (
+          <div className="h-full relative overflow-hidden bg-nb-surface-low">
+             {/* Editor Tab */}
+             <div 
+               className={`absolute inset-0 transition-transform duration-300 ease-out ${mobileTab === 'editor' ? 'translate-x-0' : '-translate-x-full'}`}
+               aria-hidden={mobileTab !== 'editor'}
+             >
+                <Editor
+                  key={openFile.path}
+                  config={appConfig}
+                  isLocalMode={workspaceMode !== "github"}
+                  initialTitle={openFile.title}
+                  initialAuthor={openFile.author}
+                  initialPhase={openFile.phase}
+                  initialContent={openFile.tiptapContent}
+                  metadataMissing={openFile.metadataMissing}
+                  filename={openFile.path}
+                  onSaved={handleEntrySaved}
+                  onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
+                  onContentChange={(latex) => setLatexContent(latex)}
+                  onTitleChange={(title) => setOpenFile(prev => prev ? { ...prev, title } : null)}
+                  onAuthorChange={(author) => setOpenFile(prev => prev ? { ...prev, author } : null)}
+                  onPhaseChange={(phase) => setOpenFile(prev => prev ? { ...prev, phase } : null)}
+                  onImageUpload={handleImageUploaded}
+                  onMetadataRebuild={handleMetadataRebuild}
+                  onSwitchToRawLatex={handleSwitchToRawLatex}
+                />
+             </div>
+             {/* Preview Tab */}
+             <div 
+               className={`absolute inset-0 transition-transform duration-300 ease-out bg-nb-bg ${mobileTab === 'preview' ? 'translate-x-0' : 'translate-x-full'}`}
+               aria-hidden={mobileTab !== 'preview'}
+             >
+                <Preview latexContent={latexContent} />
+             </div>
+          </div>
+        ) : (
+          <PanelGroup direction="horizontal" className="h-full">
+            <Panel defaultSize={50} minSize={30} className="flex flex-col h-full border-r border-nb-outline-variant">
+              <Editor
+                key={openFile.path}
+                config={appConfig}
+                isLocalMode={workspaceMode !== "github"}
+                initialTitle={openFile.title}
+                initialAuthor={openFile.author}
+                initialPhase={openFile.phase}
+                initialContent={openFile.tiptapContent}
+                metadataMissing={openFile.metadataMissing}
+                filename={openFile.path}
+                onSaved={handleEntrySaved}
+                onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
+                onContentChange={(latex) => setLatexContent(latex)}
+                onTitleChange={(title) => setOpenFile(prev => prev ? { ...prev, title } : null)}
+                onAuthorChange={(author) => setOpenFile(prev => prev ? { ...prev, author } : null)}
+                onPhaseChange={(phase) => setOpenFile(prev => prev ? { ...prev, phase } : null)}
+                onImageUpload={handleImageUploaded}
+                onMetadataRebuild={handleMetadataRebuild}
+                onSwitchToRawLatex={handleSwitchToRawLatex}
+              />
+            </Panel>
+            <PanelResizeHandle className="w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors" />
+            <Panel defaultSize={50} minSize={30} className="flex flex-col h-full bg-nb-surface-low">
+              <Preview latexContent={latexContent} />
+            </Panel>
+          </PanelGroup>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className={`flex h-screen bg-nb-bg overflow-hidden font-sans ${isDarkMode ? 'dark' : ''}`}>
-      <PanelGroup direction="horizontal">
-        {/* ── Sidebar ── */}
-        {(isSidebarOpen || !isMobile) && (
-          <Panel 
-            defaultSize={isMobile ? 100 : 20} 
-            minSize={isMobile ? 100 : 15} 
-            maxSize={isMobile ? 100 : 35} 
-            className={`flex flex-col border-r border-nb-outline-variant bg-nb-surface-low overflow-hidden transition-all duration-300 ${isMobile ? 'fixed inset-0 z-[150]' : 'relative'}`}
-          >
-            {/* Sidebar header */}
-            <div className="flex items-center gap-3 px-4 py-4 border-b border-nb-outline-variant shrink-0 bg-nb-surface">
-              <div className="w-6 h-6 rounded-md bg-nb-primary flex items-center justify-center shadow-sm shadow-nb-primary/20">
-                <BookOpen size={14} className="text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-[0.15em] text-nb-secondary dark:text-nb-on-surface truncate">Engineering Notebook</p>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <WorkspaceIcon size={10} className="text-nb-tertiary" />
-                  <span className="text-[9px] font-mono text-nb-on-surface-variant truncate">{workspaceLabel}</span>
-                </div>
-              </div>
-                <div className="w-8" /> {/* Spacer instead of theme toggle */}
-                {isMobile && (
-                  <button 
-                    onClick={() => setIsSidebarOpen(false)}
-                    className="p-1.5 rounded-lg hover:bg-nb-surface-mid text-nb-on-surface-variant"
-                  >
-                    <X size={14} />
-                  </button>
-                )}
+      {isMobile ? (
+        <div className="flex w-full h-full relative">
+          <div className={`fixed inset-0 z-[150] transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+            <div 
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={() => setIsSidebarOpen(false)}
+            />
+            <div className={`absolute top-0 bottom-0 left-0 w-[85%] max-w-[300px] bg-nb-surface-low border-r border-nb-outline-variant flex flex-col shadow-2xl transition-transform duration-300 ease-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+              {sidebarContent}
             </div>
-
-            {/* Explorer */}
-            <div className="flex-1 overflow-hidden">
-              {isLoading ? (
-                <div className="flex flex-col items-center justify-center h-full text-nb-on-surface-variant/40 gap-3">
-                  <Loader2 size={24} className="animate-spin text-nb-tertiary" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Synchronizing</span>
-                </div>
-              ) : (
-                <FileExplorer
-                  entries={entries}
-                  resources={resources}
-                  selectedPath={openFile?.path ?? null}
-                  pendingPaths={pendingPathSet}
-                  deletedPaths={deletedPathSet}
-                  onSelectEntry={handleSelectEntry}
-                  onSelectResource={handleSelectResource}
-                  onNewEntry={handleNewEntry}
-                  onUploadResource={handleUploadResource}
-                  onRenameEntry={handleRenameEntry}
-                  onRenameResource={handleRenameResource}
-                  onDeleteEntry={handleDeleteEntry}
-                  onDeleteResource={handleDeleteResource}
-                />
-              )}
-            </div>
-
-            {/* Commit bar / footer */}
-            <div className="shrink-0 border-t border-nb-outline-variant bg-nb-surface">
-              {workspaceMode === "github" && pendingChanges.length > 0 && (
-                <div className="p-4 border-b border-nb-outline-variant bg-nb-surface-low/30">
-                  <div className="flex items-center justify-between mb-3">
-                     <div className="flex items-center gap-1.5">
-                       <div className="w-2 h-2 rounded-full bg-nb-tertiary animate-pulse" />
-                       <span className="text-[10px] font-black uppercase tracking-widest text-nb-secondary dark:text-nb-on-surface">Staged Changes</span>
-                     </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 mb-4">
-                    <div className="p-2 bg-nb-surface-mid dark:bg-nb-surface-high rounded-lg text-center">
-                      <p className="text-[10px] font-black text-nb-secondary dark:text-nb-on-surface leading-none">{upserted.length}</p>
-                      <p className="text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant dark:text-nb-dark-on-variant mt-1">Edited</p>
-                    </div>
-                    <div className="p-2 bg-nb-surface-mid dark:bg-nb-dark-surface-high rounded-lg text-center">
-                      <p className="text-[10px] font-black text-nb-primary leading-none">{deleted.length}</p>
-                      <p className="text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant mt-1">Deleted</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleCommitAll}
-                    disabled={isCommitting}
-                    className="w-full flex items-center justify-center gap-2.5 bg-nb-primary hover:bg-nb-primary-dim disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-[0.2em] py-3 rounded-xl transition-all shadow-md shadow-nb-primary/20 active:scale-[0.98]"
-                  >
-                    {isCommitting ? <Loader2 size={12} className="animate-spin" /> : <GitCommitVertical size={13} />}
-                    {isCommitting ? "Pushing to Origin" : "Commit to GitHub"}
-                  </button>
-                </div>
-              )}
-              <div className="px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                   <div className={`w-2 h-2 rounded-full ${isLoading ? 'bg-amber-500' : 'bg-green-500'}`} />
-                   <span className="text-[9px] font-bold uppercase tracking-widest text-nb-on-surface-variant dark:text-nb-dark-on-variant">{isLoading ? 'Syncing' : 'Ready'}</span>
-                </div>
-                <button onClick={handleDisconnect} className="text-[9px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant hover:text-nb-primary transition-colors">
-                  Exit
-                </button>
-              </div>
-            </div>
-          </Panel>
-        )}
-
-        {!isMobile && (
-          <PanelResizeHandle className="w-1.5 bg-nb-surface-mid dark:bg-nb-outline-variant hover:bg-nb-tertiary/40 transition-colors cursor-col-resize relative">
-             <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-nb-outline-variant/30" />
-          </PanelResizeHandle>
-        )}
-
-        {/* ── Main panel ── */}
-        <Panel defaultSize={isMobile ? 100 : 80} className="bg-nb-bg">
-          {isLoading && !openFile ? (
-            <div className="flex flex-col items-center justify-center h-full text-nb-on-surface-variant/40 gap-4">
-              <Loader2 size={40} className="animate-spin text-nb-tertiary" />
-              <span className="text-xs font-black uppercase tracking-[0.4em]">Initial Load</span>
-            </div>
-          ) : openFile === null ? (
-            <div className="flex flex-col h-full overflow-hidden">
-              {/* Top Bar for Welcome Page */}
-              <div className="flex items-center justify-between px-4 py-3 bg-nb-surface border-b border-nb-outline-variant shrink-0">
-                <button 
-                  onClick={() => setIsSidebarOpen(true)}
-                  className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant"
-                >
-                  <Menu size={18} />
-                </button>
-                <span className="text-[10px] font-black uppercase tracking-widest text-nb-secondary dark:text-nb-on-surface">
-                  Notebook
-                </span>
-                <button 
-                  onClick={() => setIsDarkMode(!isDarkMode)}
-                  className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors"
-                >
-                  {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
-                </button>
-              </div>
-              <WelcomePage
-                workspace={{ mode: workspaceMode, label: workspaceLabel }}
-                onNewEntry={handleNewEntry}
-                onDisconnect={handleDisconnect}
-                onOpenSidebar={() => setIsSidebarOpen(true)}
-              />
-            </div>
-          ) : openFile.viewMode === "image" ? (
-            <div className="flex flex-col h-full overflow-hidden">
-              {/* Top Bar for Image Preview */}
-              <div className="flex items-center justify-between px-4 py-3 bg-nb-surface border-b border-nb-outline-variant shrink-0">
-                <button 
-                  onClick={() => setIsSidebarOpen(true)}
-                  className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant"
-                >
-                  <Menu size={18} />
-                </button>
-                <span className="text-[10px] font-black uppercase tracking-widest text-nb-secondary dark:text-nb-dark-on-surface truncate max-w-[200px]">
-                  {openFile.name}
-                </span>
-                <button 
-                  onClick={() => setIsDarkMode(!isDarkMode)}
-                  className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors"
-                >
-                  {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
-                </button>
-              </div>
-              <ImagePreview
-                filename={openFile.name}
-                src={openFile.imageSrc}
-                onRename={(newName) => handleRenameResource({ name: openFile.name, path: openFile.path }, newName)}
-                onDelete={() => handleDeleteResource({ name: openFile.name, path: openFile.path })}
-              />
-            </div>
-          ) : openFile.viewMode === "raw-latex" ? (
-            <div className="flex flex-col h-full overflow-hidden">
-              {/* Top Bar for Raw Latex Editor */}
-              <div className="flex items-center justify-between px-4 py-3 bg-nb-surface border-b border-nb-outline-variant shrink-0">
-                <button 
-                  onClick={() => setIsSidebarOpen(true)}
-                  className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant"
-                >
-                  <Menu size={18} />
-                </button>
-                <span className="text-[10px] font-black uppercase tracking-widest text-nb-secondary dark:text-nb-dark-on-surface truncate max-w-[200px]">
-                  {openFile.name} (RAW)
-                </span>
-                <button 
-                  onClick={() => setIsDarkMode(!isDarkMode)}
-                  className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors"
-                >
-                  {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
-                </button>
-              </div>
-              <div className="flex-1 overflow-hidden flex flex-col bg-nb-bg">
-                <RawLatexEditor
-                  filename={openFile.name}
-                  content={openFile.rawLatex}
-                  onChange={(v) => setOpenFile(prev => prev ? { ...prev, rawLatex: v } : null)}
-                  isLegacyFallback={openFile.isLegacyRaw}
-                />
-                <div className="p-4 border-t border-nb-outline-variant bg-nb-surface shrink-0">
-                  <button
-                    onClick={handleRawSave}
-                    className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[10px] font-black uppercase tracking-[0.25em] py-3 rounded-xl transition-all active:scale-[0.98] shadow-lg shadow-nb-tertiary/20"
-                  >
-                    Save Raw Changes
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col h-full overflow-hidden">
-              {/* Top Bar with Sidebar access and Mobile Tab Switcher */}
-              <div className="flex items-center justify-between px-4 py-2 bg-nb-surface border-b border-nb-outline-variant shrink-0">
-                <button 
-                  onClick={() => setIsSidebarOpen(true)}
-                  className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant"
-                >
-                  <Menu size={18} />
-                </button>
-
-                {isMobile ? (
-                  <div className="flex bg-nb-surface-low rounded-lg p-0.5 border border-nb-outline-variant/30">
-                    <button 
-                      onClick={() => setMobileTab("editor")}
-                      className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${mobileTab === 'editor' ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60'}`}
-                    >
-                      Editor
-                    </button>
-                    <button 
-                      onClick={() => setMobileTab("preview")}
-                      className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${mobileTab === 'preview' ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60'}`}
-                    >
-                      Preview
-                    </button>
-                  </div>
-                ) : (
-                  <span className="text-[10px] font-black uppercase tracking-widest text-nb-secondary dark:text-nb-on-surface truncate max-w-[200px]">
-                    {openFile?.name}
-                  </span>
-                )}
-                
-                <button 
-                  onClick={() => setIsDarkMode(!isDarkMode)}
-                  className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors"
-                >
-                  {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
-                </button>
-              </div>
-
-              {isMobile ? (
-                <div className="flex-1 overflow-hidden bg-nb-bg">
-                  {mobileTab === "editor" ? (
-                    <Editor
-                      config={appConfig}
-                      isLocalMode={workspaceMode !== "github"}
-                      initialTitle={openFile.title}
-                      initialAuthor={openFile.author}
-                      initialPhase={openFile.phase}
-                      initialContent={openFile.tiptapContent}
-                      metadataMissing={openFile.metadataMissing}
-                      filename={openFile.path}
-                      onSaved={handleEntrySaved}
-                      onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
-                      onContentChange={(latex) => setLatexContent(latex)}
-                      onTitleChange={(title) => setOpenFile(prev => prev ? { ...prev, title } : null)}
-                      onAuthorChange={(author) => setOpenFile(prev => prev ? { ...prev, author } : null)}
-                      onPhaseChange={(phase) => setOpenFile(prev => prev ? { ...prev, phase } : null)}
-                      onImageUpload={handleImageUploaded}
-                      onMetadataRebuild={handleMetadataRebuild}
-                      onSwitchToRawLatex={handleSwitchToRawLatex}
-                    />
-                  ) : (
-                    <Preview latexContent={latexContent} />
-                  )}
-                </div>
-              ) : (
-                <PanelGroup direction="horizontal">
-                  <Panel defaultSize={50} minSize={30} className="flex flex-col h-full bg-nb-surface dark:bg-nb-dark-bg">
-                    <Editor
-                      config={appConfig}
-                      isLocalMode={workspaceMode !== "github"}
-                      initialTitle={openFile.title}
-                      initialAuthor={openFile.author}
-                      initialPhase={openFile.phase}
-                      initialContent={openFile.tiptapContent}
-                      metadataMissing={openFile.metadataMissing}
-                      filename={openFile.path}
-                      onSaved={handleEntrySaved}
-                      onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
-                      onContentChange={(latex) => setLatexContent(latex)}
-                      onTitleChange={(title) => setOpenFile(prev => prev ? { ...prev, title } : null)}
-                      onAuthorChange={(author) => setOpenFile(prev => prev ? { ...prev, author } : null)}
-                      onPhaseChange={(phase) => setOpenFile(prev => prev ? { ...prev, phase } : null)}
-                      onImageUpload={handleImageUploaded}
-                      onMetadataRebuild={handleMetadataRebuild}
-                      onSwitchToRawLatex={handleSwitchToRawLatex}
-                    />
-                  </Panel>
-                  <PanelResizeHandle className="w-1.5 bg-nb-surface-mid dark:bg-nb-dark-outline-variant hover:bg-nb-tertiary/40 transition-colors cursor-col-resize relative">
-                    <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-nb-outline-variant/30 dark:bg-nb-dark-outline/20" />
-                  </PanelResizeHandle>
-                  <Panel defaultSize={50} minSize={30} className="flex flex-col h-full bg-nb-surface-low dark:bg-nb-dark-bg">
-                    <Preview latexContent={latexContent} />
-                  </Panel>
-                </PanelGroup>
-              )}
-            </div>
+          </div>
+          <div className="flex-1 w-full h-full">
+            {mainContent}
+          </div>
+        </div>
+      ) : (
+        <PanelGroup direction="horizontal" className="w-full h-full">
+          {isSidebarOpen && (
+            <>
+              <Panel defaultSize={20} minSize={15} maxSize={35} className="flex flex-col">
+                {sidebarContent}
+              </Panel>
+              <PanelResizeHandle className="w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors" />
+            </>
           )}
-        </Panel>
-      </PanelGroup>
+          <Panel defaultSize={isSidebarOpen ? 80 : 100} className="flex flex-col">
+            {mainContent}
+          </Panel>
+        </PanelGroup>
+      )}
 
-      {/* ── Custom Notification Toast ── */}
+      {/* Notifications */}
       {notification && (
         <div className="fixed bottom-6 right-6 z-[200] animate-in slide-in-from-right-10 duration-300">
            <div className={`px-5 py-4 rounded-2xl shadow-nb-lg border flex items-center gap-4 ${
-             notification.type === 'error' 
-               ? 'bg-nb-primary/5 border-nb-primary/30 text-nb-primary' 
-               : 'bg-nb-tertiary/5 border-nb-tertiary/30 text-nb-tertiary'
-           } backdrop-blur-xl`}>
-             <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-               notification.type === 'error' ? 'bg-nb-primary/10' : 'bg-nb-tertiary/10'
-             }`}>
-               {notification.type === 'error' ? <AlertTriangle size={16} /> : <Check size={16} />}
+             notification.type === 'error' ? 'bg-nb-primary/5 border-nb-primary/30 text-nb-primary' : 'bg-nb-tertiary/5 border-nb-tertiary/30 text-nb-tertiary'
+           } backdrop-blur-xl bg-white/80 dark:bg-nb-dark-surface/80`}>
+             <div className="flex-1">
+               <p className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">{notification.type === 'error' ? 'Error' : 'Success'}</p>
+               <p className="text-xs font-medium">{notification.message}</p>
              </div>
-             <div>
-               <p className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">{notification.type === 'error' ? 'System Error' : 'Success'}</p>
-               <p className="text-xs font-medium text-nb-on-surface dark:text-nb-dark-on-surface">{notification.message}</p>
-             </div>
-             <button onClick={() => setNotification(null)} className="ml-2 hover:opacity-60 transition-opacity">
+             <button onClick={() => setNotification(null)} className="p-1 hover:bg-black/5 rounded transition-colors">
                <X size={14} />
              </button>
            </div>
@@ -1218,5 +1218,3 @@ export default function App() {
     </div>
   );
 }
-
-import { Check, X, AlertTriangle, BookOpen, Sun, Moon, Menu } from "lucide-react";
