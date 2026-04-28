@@ -80,20 +80,20 @@ function FileRow({ file, isSelected, isPending, isDeleted, icon, onSelect, onRen
 
   return (
     <div
-      className={`group flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm cursor-pointer transition-all
-        ${isDeleted ? "opacity-40 line-through" : ""}
+      className={`group flex items-center gap-2.5 py-2 px-2.5 rounded-lg text-xs cursor-pointer transition-all
+        ${isDeleted ? "opacity-30 line-through" : ""}
         ${isSelected
-          ? "bg-blue-100 dark:bg-blue-900/40 text-blue-900 dark:text-blue-100"
-          : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800"
+          ? "bg-nb-surface-mid dark:bg-nb-dark-surface-high text-nb-secondary dark:text-nb-dark-on-surface ring-1 ring-nb-outline-variant/30 dark:ring-nb-dark-outline/30"
+          : "text-nb-on-surface-variant dark:text-nb-dark-on-variant hover:bg-nb-surface-low dark:hover:bg-nb-dark-surface-low"
         }`}
       onClick={isDeleted ? undefined : onSelect}
     >
       {/* Icon */}
-      <span className="shrink-0 text-gray-400 dark:text-zinc-500">{icon}</span>
+      <span className={`shrink-0 ${isSelected ? "text-nb-primary" : "text-nb-outline dark:text-nb-dark-on-variant"}`}>{icon}</span>
 
       {/* Name / rename input */}
       {editing ? (
-        <div className="flex items-center gap-1 flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1.5 flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
           <input
             autoFocus
             value={draftName}
@@ -102,38 +102,38 @@ function FileRow({ file, isSelected, isPending, isDeleted, icon, onSelect, onRen
               if (e.key === "Enter") commitRename();
               if (e.key === "Escape") cancelEdit();
             }}
-            className="flex-1 min-w-0 text-xs font-mono bg-white dark:bg-zinc-800 border border-blue-400 rounded px-1 py-0.5 outline-none"
+            className="flex-1 min-w-0 text-[11px] font-mono bg-nb-surface-lowest dark:bg-nb-dark-surface-low border border-nb-tertiary/50 rounded-md px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-nb-tertiary"
             disabled={renaming}
           />
-          <button onClick={commitRename} disabled={renaming} className="text-green-500 hover:text-green-600 shrink-0">
-            <Check size={13} />
+          <button onClick={commitRename} disabled={renaming} className="text-nb-tertiary hover:text-nb-tertiary-dim shrink-0">
+            <Check size={14} />
           </button>
-          <button onClick={cancelEdit} className="text-gray-400 hover:text-gray-600 shrink-0">
-            <X size={13} />
+          <button onClick={cancelEdit} className="text-nb-outline hover:text-nb-on-surface shrink-0">
+            <X size={14} />
           </button>
         </div>
       ) : (
-        <span className="flex-1 min-w-0 truncate text-xs font-mono">{file.name}</span>
+        <span className="flex-1 min-w-0 truncate font-mono tracking-tight">{file.name}</span>
       )}
 
       {/* Pending dot */}
       {isPending && !isDeleted && !editing && (
-        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" title="Staged change" />
+        <span className="w-1.5 h-1.5 rounded-full bg-nb-tertiary shrink-0 animate-pulse shadow-sm shadow-nb-tertiary/50" title="Staged change" />
       )}
 
       {/* Action buttons — visible on hover */}
       {!editing && !isDeleted && (
-        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           <button
             onClick={startEdit}
-            className="p-1 rounded hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+            className="p-1 rounded-md hover:bg-nb-surface-mid dark:hover:bg-nb-dark-surface-highest text-nb-outline hover:text-nb-tertiary transition-colors"
             title="Rename"
           >
-            <Pencil size={11} />
+            <Pencil size={12} />
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-500 transition-colors"
+            className="p-1 rounded-md hover:bg-nb-primary/10 dark:hover:bg-nb-primary/20 text-nb-outline hover:text-nb-primary transition-colors"
             title="Delete"
           >
             <Trash2 size={11} />
@@ -160,22 +160,22 @@ interface PaneProps {
 function Pane({ id, title, actionLabel, actionIcon, onAction, children, empty, hasItems }: PaneProps) {
   return (
     <div id={id} className="flex flex-col min-h-0 flex-1">
-      <div className="flex items-center justify-between px-3 py-2 border-b dark:border-zinc-800 shrink-0">
-        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-zinc-500">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-nb-surface-mid dark:border-nb-dark-outline-variant shrink-0 bg-nb-surface-low/50 dark:bg-nb-dark-surface-low/30">
+        <span className="text-[10px] font-black uppercase tracking-[0.25em] text-nb-secondary/50 dark:text-nb-dark-on-variant">
           {title}
         </span>
         <button
           onClick={onAction}
           title={actionLabel}
-          className="flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+          className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-nb-tertiary hover:text-nb-tertiary-dim transition-colors"
         >
           {actionIcon}
           {actionLabel}
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto p-2 min-h-0">
+      <div className="flex-1 overflow-y-auto p-2.5 min-h-0 bg-nb-surface-lowest dark:bg-nb-dark-bg">
         {hasItems ? children : (
-          <p className="text-[11px] text-gray-400 dark:text-zinc-600 px-2 py-3 italic">{empty}</p>
+          <p className="text-[11px] text-nb-on-surface-variant/60 dark:text-nb-dark-on-variant/40 px-3 py-5 italic font-medium tracking-tight">{empty}</p>
         )}
       </div>
     </div>
@@ -192,29 +192,43 @@ interface DeleteDialogProps {
 
 function DeleteDialog({ filename, onConfirm, onCancel }: DeleteDialogProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onCancel}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-nb-secondary/60 backdrop-blur-md px-4" onClick={onCancel}>
       <div
-        className="bg-white dark:bg-zinc-900 rounded-2xl p-6 shadow-2xl max-w-sm w-full mx-4 border dark:border-zinc-800"
+        className="bg-nb-surface-lowest dark:bg-nb-dark-surface rounded-2xl p-7 shadow-nb-lg max-w-sm w-full border border-nb-outline-variant dark:border-nb-dark-outline animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="font-black text-sm uppercase tracking-widest dark:text-white mb-2">Confirm Delete</h3>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-          Are you sure you want to delete:
-        </p>
-        <p className="text-sm font-mono text-red-600 dark:text-red-400 mb-5 break-all">{filename}</p>
-        <p className="text-xs text-amber-600 dark:text-amber-400 mb-5">
-          If this is an image, all references to it in entries will be removed.
-        </p>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0">
+            <Trash2 size={20} className="text-nb-primary" />
+          </div>
+          <h3 className="font-black text-sm uppercase tracking-widest text-nb-secondary dark:text-nb-dark-on-surface">Confirm Delete</h3>
+        </div>
+        
+        <div className="space-y-4 mb-8">
+          <p className="text-sm text-nb-on-surface-variant dark:text-nb-dark-on-variant leading-relaxed">
+            Are you sure you want to delete the following file? This action is staged until you commit.
+          </p>
+          <div className="p-3 bg-nb-surface-low dark:bg-nb-dark-surface-low border border-nb-outline-variant dark:border-nb-dark-outline rounded-xl">
+            <p className="text-xs font-mono text-nb-primary break-all font-bold">{filename}</p>
+          </div>
+          <div className="flex items-start gap-2.5 p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-200/50 dark:border-amber-800/30 rounded-xl">
+            <AlertTriangle size={14} className="text-amber-600 dark:text-amber-500 mt-0.5 shrink-0" />
+            <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-normal font-medium">
+              If this is a resource, all references in your entries will be automatically updated.
+            </p>
+          </div>
+        </div>
+
         <div className="flex gap-3">
           <button
             onClick={onCancel}
-            className="flex-1 px-4 py-2 rounded-xl border dark:border-zinc-700 text-sm dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
+            className="flex-1 px-4 py-2.5 rounded-xl border border-nb-outline-variant dark:border-nb-dark-outline text-xs font-black uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-surface-low dark:hover:bg-nb-dark-surface-low transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
-            className="flex-1 px-4 py-2 rounded-xl bg-red-500 text-white text-sm font-bold hover:bg-red-600 transition-colors"
+            className="flex-1 px-4 py-2.5 rounded-xl bg-nb-primary text-white text-xs font-black uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20 active:scale-[0.98]"
           >
             Delete
           </button>
@@ -223,6 +237,10 @@ function DeleteDialog({ filename, onConfirm, onCancel }: DeleteDialogProps) {
     </div>
   );
 }
+
+// ── Icons for pane ────────────────────────────────────────────────────────────
+
+import { AlertTriangle } from "lucide-react";
 
 // ─── Main component ───────────────────────────────────────────────────────────
 

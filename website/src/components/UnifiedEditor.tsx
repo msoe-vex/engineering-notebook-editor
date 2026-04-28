@@ -18,7 +18,7 @@ import {
   Heading1, Heading2, Image as ImageIcon,
   Table as TableIcon, Undo, Redo, Trash2,
   ChevronUp, ChevronDown, ChevronLeft, ChevronRight,
-  Pencil, AlertTriangle,
+  Pencil, AlertTriangle, FileCode, Check
 } from "lucide-react";
 
 const lowlight = createLowlight(common);
@@ -27,6 +27,30 @@ export const LANGUAGES = [
   "plaintext", "cpp", "c", "python", "javascript",
   "typescript", "java", "bash", "sql", "rust", "go", "csharp",
 ];
+
+const ToolbarButton = ({ 
+  onClick, 
+  active, 
+  children, 
+  title 
+}: { 
+  onClick: () => void; 
+  active?: boolean; 
+  children: React.ReactNode; 
+  title?: string 
+}) => (
+  <button
+    onClick={onClick}
+    title={title}
+    className={`p-2 rounded-lg transition-all flex items-center justify-center ${
+      active 
+        ? "bg-nb-tertiary text-white shadow-sm shadow-nb-tertiary/20" 
+        : "text-nb-on-surface-variant hover:bg-nb-surface-mid dark:hover:bg-nb-dark-surface-high hover:text-nb-secondary dark:hover:text-nb-dark-on-surface"
+    }`}
+  >
+    {children}
+  </button>
+);
 
 /* ─────────────────────────────────────────────────────────────────
    Image Node View  — caption/initials are editable inline
@@ -266,90 +290,160 @@ export default function UnifiedEditor({
   if (!editor) return null;
 
   return (
-    <div className="w-full space-y-4">
-      {/* ── Main Toolbar ─────────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-1 p-2.5 bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl sticky top-4 z-20 shadow-md backdrop-blur-md">
-        <Btn onClick={() => editor.chain().focus().toggleBold().run()}        active={editor.isActive("bold")}   title="Bold">   <Bold size={16} /></Btn>
-        <Btn onClick={() => editor.chain().focus().toggleItalic().run()}      active={editor.isActive("italic")} title="Italic"> <Italic size={16} /></Btn>
-        <Sep />
-        <Btn onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} active={editor.isActive("heading", { level: 1 })} title="Section">    <Heading1 size={16} /></Btn>
-        <Btn onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} active={editor.isActive("heading", { level: 2 })} title="Subsection"> <Heading2 size={16} /></Btn>
-        <Sep />
-        <Btn onClick={() => editor.chain().focus().toggleBulletList().run()}  active={editor.isActive("bulletList")}  title="Bullet list">  <List size={16} /></Btn>
-        <Btn onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive("orderedList")} title="Ordered list"> <ListOrdered size={16} /></Btn>
-        <Sep />
-        <Btn onClick={() => editor.chain().focus().toggleCodeBlock({ language: "cpp" }).run()} active={editor.isActive("codeBlock")} title="Code block"> <Code size={16} /></Btn>
-        <Btn onClick={insertImage}                                                                                                    title="Upload image"><ImageIcon size={16} /></Btn>
-        <Btn onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}                      title="Insert table"><TableIcon size={16} /></Btn>
+    <div className="flex flex-col gap-4">
+      {/* ── TipTap Toolbar ────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-1.5 p-2 border border-nb-outline-variant dark:border-nb-dark-outline rounded-xl bg-nb-surface-lowest dark:bg-nb-dark-surface-high/50 sticky top-0 z-30 shadow-nb-sm">
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleBold().run()}
+          active={editor.isActive("bold")}
+          title="Bold"
+        >
+          <Bold size={16} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleItalic().run()}
+          active={editor.isActive("italic")}
+          title="Italic"
+        >
+          <Italic size={16} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+          active={editor.isActive("heading", { level: 1 })}
+          title="Heading 1"
+        >
+          <Heading1 size={16} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+          active={editor.isActive("heading", { level: 2 })}
+          title="Heading 2"
+        >
+          <Heading2 size={16} />
+        </ToolbarButton>
+        
+        <div className="w-px h-6 bg-nb-outline-variant/30 dark:bg-nb-dark-outline/30 mx-1" />
+
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
+          active={editor.isActive("bulletList")}
+          title="Bullet List"
+        >
+          <List size={16} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          active={editor.isActive("orderedList")}
+          title="Ordered List"
+        >
+          <ListOrdered size={16} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+          active={editor.isActive("codeBlock")}
+          title="Code Block"
+        >
+          <Code size={16} />
+        </ToolbarButton>
+        
+        <div className="w-px h-6 bg-nb-outline-variant/30 dark:bg-nb-dark-outline/30 mx-1" />
+
+        <ToolbarButton
+          onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+          title="Insert Table"
+        >
+          <TableIcon size={16} />
+        </ToolbarButton>
+
+        <label className="p-2 rounded-lg cursor-pointer text-nb-on-surface-variant hover:bg-nb-surface-mid dark:hover:bg-nb-dark-surface-high transition-all" title="Upload Image">
+          <ImageIcon size={16} />
+          <input
+            type="file"
+            className="hidden"
+            accept="image/*"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleImageFile(file);
+            }}
+          />
+        </label>
+
         <div className="flex-1" />
-        <Btn onClick={() => editor.chain().focus().undo().run()} title="Undo"><Undo size={16} /></Btn>
-        <Btn onClick={() => editor.chain().focus().redo().run()} title="Redo"><Redo size={16} /></Btn>
-        {onSwitchToRawLatex && (
-          <>
-            <Sep />
-            <Btn onClick={() => setShowRawConfirm(true)} title="Switch to raw LaTeX editor" danger>
-              <AlertTriangle size={14} />
-              <span className="text-[10px] font-bold">Raw</span>
-            </Btn>
-          </>
-        )}
+
+        <button
+          onClick={() => setShowRawConfirm(true)}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-nb-primary hover:bg-nb-primary/5 border border-transparent hover:border-nb-primary/20 transition-all"
+          title="Switch to Raw LaTeX"
+        >
+          <FileCode size={14} />
+          Switch to Raw
+        </button>
       </div>
 
       {/* ── Table Controls (contextual) ──────────────────────────── */}
       {isInTable && (
-        <div className="flex flex-wrap items-center gap-1.5 p-2 bg-blue-600 rounded-xl">
-          <span className="text-[10px] font-black uppercase tracking-wider text-blue-200 ml-2 mr-1">Table</span>
-          <Sep light />
-          <Btn sm light onClick={() => editor.chain().focus().addRowBefore().run()}    title="Add row above">  <ChevronUp    size={14} /></Btn>
-          <Btn sm light onClick={() => editor.chain().focus().addRowAfter().run()}     title="Add row below">  <ChevronDown  size={14} /></Btn>
-          <Btn sm light danger onClick={() => editor.chain().focus().deleteRow().run()} title="Delete row">    <Trash2       size={14} /><span className="text-[10px] ml-1">Row</span></Btn>
-          <Sep light />
-          <Btn sm light onClick={() => editor.chain().focus().addColumnBefore().run()} title="Add col left">   <ChevronLeft  size={14} /></Btn>
-          <Btn sm light onClick={() => editor.chain().focus().addColumnAfter().run()}  title="Add col right">  <ChevronRight size={14} /></Btn>
-          <Btn sm light danger onClick={() => editor.chain().focus().deleteColumn().run()} title="Delete col"> <Trash2       size={14} /><span className="text-[10px] ml-1">Col</span></Btn>
-          <Sep light />
-          <Btn sm light danger onClick={() => editor.chain().focus().deleteTable().run()} title="Delete table"><Trash2       size={14} /><span className="text-[10px] ml-1">Delete Table</span></Btn>
+        <div className="flex flex-wrap items-center gap-1.5 p-2 bg-nb-tertiary rounded-xl shadow-nb-sm animate-in slide-in-from-top-2 duration-200">
+          <span className="text-[10px] font-black uppercase tracking-wider text-white/70 ml-2 mr-1">Table Editor</span>
+          <div className="w-px h-4 bg-white/20 mx-1" />
+          <ToolbarButton onClick={() => editor.chain().focus().addRowBefore().run()} title="Add row above"><ChevronUp size={14} className="text-white"/></ToolbarButton>
+          <ToolbarButton onClick={() => editor.chain().focus().addRowAfter().run()} title="Add row below"><ChevronDown size={14} className="text-white"/></ToolbarButton>
+          <ToolbarButton onClick={() => editor.chain().focus().deleteRow().run()} title="Delete row"><Trash2 size={14} className="text-white/60 hover:text-white"/></ToolbarButton>
+          <div className="w-px h-4 bg-white/20 mx-1" />
+          <ToolbarButton onClick={() => editor.chain().focus().addColumnBefore().run()} title="Add col left"><ChevronLeft size={14} className="text-white"/></ToolbarButton>
+          <ToolbarButton onClick={() => editor.chain().focus().addColumnAfter().run()} title="Add col right"><ChevronRight size={14} className="text-white"/></ToolbarButton>
+          <ToolbarButton onClick={() => editor.chain().focus().deleteColumn().run()} title="Delete col"><Trash2 size={14} className="text-white/60 hover:text-white"/></ToolbarButton>
+          <div className="w-px h-4 bg-white/20 mx-1" />
+          <ToolbarButton onClick={() => editor.chain().focus().deleteTable().run()} title="Delete table"><Trash2 size={14} className="text-white/60 hover:text-white"/></ToolbarButton>
         </div>
       )}
 
-      {/* ── Editor Workspace ─────────────────────────────────────── */}
-      <div
-        className="p-12 bg-white dark:bg-zinc-950 rounded-[2rem] border-2 border-gray-100 dark:border-zinc-900 cursor-text shadow-xl shadow-black/5 hover:border-blue-500/10 transition-all duration-500"
-        onClick={() => editor.chain().focus().run()}
-      >
-        <EditorContent editor={editor} />
+      {/* ── Main Editor Area ───────────────────────────────────────── */}
+      <div className="bg-nb-surface-lowest dark:bg-nb-dark-surface rounded-2xl border border-nb-outline-variant dark:border-nb-dark-outline shadow-nb-sm min-h-[600px] p-8 md:p-12 relative">
+        {/* Author indicator in corner */}
+        <div className="absolute top-6 right-8 text-[9px] font-mono font-black uppercase tracking-[0.3em] text-nb-outline-variant pointer-events-none">
+          Draft by: {author || "Unknown"}
+        </div>
+        <EditorContent editor={editor} className="max-w-none" />
       </div>
 
-      {/* ── Switch to Raw LaTeX confirmation ─────────────────────── */}
+      {/* ── Raw LaTeX Confirm Dialog ────────────────────────────────── */}
       {showRawConfirm && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setShowRawConfirm(false)}
-        >
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-nb-secondary/60 backdrop-blur-md px-4" onClick={() => setShowRawConfirm(false)}>
           <div
-            className="bg-white dark:bg-zinc-900 rounded-2xl p-6 shadow-2xl max-w-sm w-full mx-4 border dark:border-zinc-700"
+            className="bg-nb-surface-lowest dark:bg-nb-dark-surface rounded-2xl p-7 shadow-nb-lg max-w-sm w-full border border-nb-outline-variant dark:border-nb-dark-outline animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-3 mb-3">
-              <AlertTriangle size={18} className="text-amber-500" />
-              <h3 className="font-black text-sm uppercase tracking-widest dark:text-white">Switch to Raw LaTeX?</h3>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0">
+                <FileCode size={20} className="text-nb-primary" />
+              </div>
+              <h3 className="font-black text-sm uppercase tracking-widest text-nb-secondary dark:text-nb-dark-on-surface">Switch to Raw Mode?</h3>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-5 leading-relaxed">
-              This will remove the <code className="text-xs bg-gray-100 dark:bg-zinc-800 px-1 rounded">METADATA</code> tag from the file.
-              The rich editor will <strong>not</strong> be available for this session.
-            </p>
+            
+            <div className="space-y-4 mb-8">
+              <p className="text-sm text-nb-on-surface-variant dark:text-nb-dark-on-variant leading-relaxed">
+                This will strip all rich metadata and lock this file into a raw text editor.
+              </p>
+              <div className="flex items-start gap-2.5 p-3 bg-nb-primary/5 border border-nb-primary/20 rounded-xl">
+                <AlertTriangle size={14} className="text-nb-primary mt-0.5 shrink-0" />
+                <p className="text-[11px] text-nb-primary leading-normal font-bold">
+                  Warning: You cannot go back to rich editing once you switch.
+                </p>
+              </div>
+            </div>
+
             <div className="flex gap-3">
               <button
                 onClick={() => setShowRawConfirm(false)}
-                className="flex-1 px-4 py-2 rounded-xl border dark:border-zinc-700 text-sm dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
+                className="flex-1 px-4 py-2.5 rounded-xl border border-nb-outline-variant dark:border-nb-dark-outline text-xs font-black uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-surface-low dark:hover:bg-nb-dark-surface-low transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={() => { setShowRawConfirm(false); onSwitchToRawLatex?.(); }}
-                className="flex-1 px-4 py-2 rounded-xl bg-amber-500 text-white text-sm font-bold hover:bg-amber-600 transition-colors"
+                className="flex-1 px-4 py-2.5 rounded-xl bg-nb-primary text-white text-xs font-black uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20 active:scale-[0.98]"
               >
-                Switch
+                Confirm Switch
               </button>
             </div>
           </div>
@@ -360,32 +454,6 @@ export default function UnifiedEditor({
 }
 
 /* ── Shared UI Components ────────────────────────────────────── */
-
-function Btn({ children, onClick, active, title, sm, danger, light }: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  active?: boolean;
-  title?: string;
-  sm?: boolean;
-  danger?: boolean;
-  light?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      className={`flex items-center gap-1 rounded-xl transition-all
-        ${sm ? "px-3 py-1.5 text-[11px]" : "p-3"}
-        ${danger  ? "text-red-400 hover:bg-red-500/20"
-        : active  ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
-        : light   ? "text-white/80 hover:bg-white/10 hover:text-white"
-                  : "text-gray-500 dark:text-zinc-500 hover:bg-gray-100 dark:hover:bg-zinc-900 hover:text-black dark:hover:text-white"}`}
-    >
-      {children}
-    </button>
-  );
-}
 
 function Sep({ light }: { light?: boolean }) {
   return <div className={`w-px h-6 self-center mx-2 shrink-0 ${light ? "bg-white/20" : "bg-gray-100 dark:bg-zinc-800"}`} />;

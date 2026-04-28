@@ -39,34 +39,39 @@ export default function RawLatexEditor({
   };
 
   return (
-    <div className="flex flex-col h-full bg-zinc-950">
+    <div className="flex flex-col h-full bg-nb-dark-bg">
       {/* Header */}
-      <div className="flex items-center px-5 py-3 border-b border-white/5 bg-black/40 shrink-0 gap-3">
-        <div className="flex gap-1.5">
-          <div className="w-2.5 h-2.5 rounded-full bg-red-500/30 border border-red-500/50" />
-          <div className="w-2.5 h-2.5 rounded-full bg-amber-500/30 border border-amber-500/50" />
-          <div className="w-2.5 h-2.5 rounded-full bg-green-500/30 border border-green-500/50" />
+      <div className="flex items-center px-6 py-4 border-b border-nb-dark-outline-variant bg-nb-dark-surface shrink-0 gap-4">
+        <div className="flex gap-1.5 shrink-0">
+          <div className="w-2.5 h-2.5 rounded-full bg-nb-primary/40 border border-nb-primary/60" />
+          <div className="w-2.5 h-2.5 rounded-full bg-nb-tertiary/40 border border-nb-tertiary/60" />
+          <div className="w-2.5 h-2.5 rounded-full bg-nb-outline/20 border border-nb-outline/40" />
         </div>
-        <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">
-          Raw LaTeX
-        </span>
-        <span className="text-[10px] font-mono text-zinc-600 truncate ml-auto max-w-[200px]">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-dark-on-variant">
+            Technical Source
+          </span>
+          <div className="px-1.5 py-0.5 rounded bg-nb-primary/10 border border-nb-primary/20">
+            <span className="text-[9px] font-black uppercase tracking-widest text-nb-primary">LaTeX</span>
+          </div>
+        </div>
+        <span className="text-[10px] font-mono text-nb-dark-on-variant truncate ml-auto max-w-[300px] opacity-40">
           {filename}
         </span>
       </div>
 
       {/* Warning banner */}
-      <div className="flex items-start gap-3 px-5 py-3 bg-amber-900/20 border-b border-amber-700/30 shrink-0">
-        <AlertTriangle size={15} className="text-amber-500 shrink-0 mt-0.5" />
-        <p className="text-xs text-amber-400 leading-relaxed">
+      <div className="flex items-start gap-3 px-6 py-3 bg-amber-900/10 border-b border-amber-800/20 shrink-0">
+        <AlertTriangle size={14} className="text-amber-500 shrink-0 mt-0.5" />
+        <p className="text-[11px] font-medium text-amber-500/80 leading-relaxed uppercase tracking-wider">
           {isLegacyFallback
-            ? "This file has no structured metadata. You are editing raw LaTeX — changes made here cannot be migrated to the rich editor."
-            : "You have switched to raw LaTeX mode. The METADATA tag has been removed. The rich editor is not available for this session."}
+            ? "Legacy Entry: No metadata detected. Changes are permanent and manual."
+            : "Raw Access: Metadata stripped. Rich editor disabled for this file."}
         </p>
       </div>
 
       {/* Editor area — textarea overlaid on Prism highlight div */}
-      <div className="flex-1 relative overflow-hidden">
+      <div className="flex-1 relative overflow-hidden bg-nb-dark-bg/50">
         {/* Highlight layer (behind textarea) */}
         <pre
           aria-hidden="true"

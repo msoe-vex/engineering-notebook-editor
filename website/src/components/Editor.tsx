@@ -3,11 +3,28 @@
 import React, { useState, useEffect } from "react";
 import UnifiedEditor from "./UnifiedEditor";
 import { saveAs } from "file-saver";
-import { Save, Trash2, Download, AlertCircle } from "lucide-react";
+import { Save, Trash2, Download, AlertCircle, Loader2 } from "lucide-react";
 
-/* ─────────────────────────────────────────────────────────────────
-   JSON → LaTeX converter (ProseMirror document tree traversal)
-   ───────────────────────────────────────────────────────────────── */
+const PHASES = [
+  "Define Problem",
+  "Generate Concepts",
+  "Develop Solution",
+  "Construct and Test",
+  "Evaluate Solution",
+];
+
+const PhasePill = ({ phase, active, onClick }: { phase: string; active: boolean; onClick: () => void }) => (
+  <button
+    onClick={onClick}
+    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all
+      ${active 
+        ? "bg-nb-tertiary text-white shadow-md shadow-nb-tertiary/20" 
+        : "bg-nb-surface-low dark:bg-nb-dark-surface-high text-nb-on-surface-variant dark:text-nb-dark-on-variant hover:bg-nb-surface-mid dark:hover:bg-nb-dark-outline"
+      }`}
+  >
+    {phase}
+  </button>
+);
 
 const escapeLaTeX = (text: string) =>
   text
@@ -189,6 +206,7 @@ export default function Editor({
   const [phase, setPhase] = useState(initialPhase);
   const [content, setContent] = useState(initialContent);
   const [isSaving, setIsSaving] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Reset local state only when the file changes, not on every parent re-render.
   // Reading the initial* props inside is fine — we just don't want them as triggers.
@@ -267,92 +285,111 @@ export default function Editor({
   };
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-zinc-950 overflow-y-auto">
-      <div className="flex justify-between items-center p-6 border-b dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur sticky top-0 z-40">
-        <div className="flex flex-col">
-          <h1 className="text-xl font-black uppercase tracking-tighter dark:text-white">Engineering Editor</h1>
-          <span className="text-[10px] font-mono text-gray-400 truncate max-w-[300px]">{filename}</span>
-        </div>
-        
-        <div className="flex gap-3">
-          <button onClick={handleDownload} className="p-2.5 text-gray-400 hover:text-black dark:hover:text-white transition-all bg-gray-50 dark:bg-zinc-800 rounded-xl" title="Download .tex">
-            <Download size={20} />
-          </button>
-          
-          <button onClick={() => onDeleted(filename)} className="p-2.5 text-gray-400 hover:text-red-500 transition-all bg-gray-50 dark:bg-zinc-800 rounded-xl" title="Delete Entry">
-            <Trash2 size={20} />
-          </button>
+    <div className="flex flex-col h-full bg-nb-surface dark:bg-nb-dark-bg">
+      {/* ── Editor Header ────────────────────────────────────────── */}
+      <div className="px-6 py-4 border-b border-nb-surface-mid dark:border-nb-dark-outline-variant bg-nb-surface-lowest dark:bg-nb-dark-surface shrink-0">
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1 min-w-0">
+               <label className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant/50 dark:text-nb-dark-on-variant mb-1.5 block">Entry Title</label>
+               <input
+                 type="text"
+                 value={title}
+                 onChange={(e) => { setTitle(e.target.value); onTitleChange?.(e.target.value); }}
+                 placeholder="Untitled Entry"
+                 className="w-full text-2xl font-black tracking-tighter bg-transparent text-nb-secondary dark:text-nb-dark-on-surface outline-none placeholder:text-nb-outline-variant dark:placeholder:text-nb-dark-outline"
+               />
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="flex items-center gap-2 bg-nb-tertiary hover:bg-nb-tertiary-dim disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-md shadow-nb-tertiary/20 active:scale-[0.98]"
+              >
+                {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                {isSaving ? "Saving" : "Save"}
+              </button>
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="p-2.5 rounded-xl border border-nb-outline-variant dark:border-nb-dark-outline text-nb-on-surface-variant hover:text-nb-primary transition-colors"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          </div>
 
-          <button onClick={handleSave} disabled={isSaving} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-sm font-black uppercase tracking-widest shadow-xl shadow-blue-500/20 transition-all active:scale-95 disabled:opacity-50">
-            <Save size={18} />
-            {isSaving ? "Saving..." : "Commit Changes"}
-          </button>
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+               <span className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant/50">By</span>
+               <input
+                 type="text"
+                 value={author}
+                 onChange={(e) => { setAuthor(e.target.value); onAuthorChange?.(e.target.value); }}
+                 placeholder="Author"
+                 className="text-[11px] font-bold text-nb-on-surface-variant dark:text-nb-dark-on-variant bg-transparent outline-none border-b border-nb-outline-variant/30 dark:border-nb-dark-outline/30 focus:border-nb-tertiary transition-colors w-24"
+               />
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant/50">Phase</span>
+              <div className="flex gap-1.5">
+                {PHASES.map((p) => (
+                  <PhasePill key={p} phase={p} active={phase === p} onClick={() => { setPhase(p); onPhaseChange?.(p); }} />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── TipTap Workspace ─────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto bg-nb-surface-low dark:bg-nb-dark-bg p-6 lg:p-10">
+        <div className="max-w-4xl mx-auto">
+          <UnifiedEditor
+            key={filename}
+            filename={filename}
+            content={content}
+            onChange={setContent}
+            onImageUpload={onImageUpload}
+            onSwitchToRawLatex={onSwitchToRawLatex}
+            author={author}
+          />
         </div>
       </div>
 
-      <div className="max-w-4xl w-full mx-auto p-10 pb-32">
-        {metadataMissing && (
-           <div className="mb-10 bg-amber-50 dark:bg-amber-900/10 border-2 border-amber-200 dark:border-amber-800/50 p-6 rounded-2xl flex items-start gap-4">
-              <AlertCircle className="text-amber-500 shrink-0 mt-1" size={24} />
-              <div className="space-y-1">
-                  <p className="text-sm font-black uppercase tracking-widest text-amber-800 dark:text-amber-400">Legacy File Detected</p>
-                  <p className="text-sm text-amber-700/80 dark:text-amber-500/80 leading-relaxed">This file has manual LaTeX content. You can overwrite it by starting to type below, or view the source on the right.</p>
+      {/* ── Delete confirmation ───────────────────────────────────── */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-nb-secondary/60 backdrop-blur-md px-4" onClick={() => setShowDeleteConfirm(false)}>
+          <div
+            className="bg-nb-surface-lowest dark:bg-nb-dark-surface rounded-2xl p-7 shadow-nb-lg max-w-sm w-full border border-nb-outline-variant dark:border-nb-dark-outline animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0">
+                <Trash2 size={20} className="text-nb-primary" />
               </div>
-           </div>
-        )}
+              <h3 className="font-black text-sm uppercase tracking-widest text-nb-secondary dark:text-nb-dark-on-surface">Delete Entry?</h3>
+            </div>
+            <p className="text-sm text-nb-on-surface-variant dark:text-nb-dark-on-variant leading-relaxed mb-8">
+              Are you sure you want to delete this notebook entry? This cannot be undone once committed to GitHub.
+            </p>
 
-        <div className="space-y-12">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-zinc-500 ml-1">Notebook Entry Title</label>
-              <input 
-                type="text" 
-                value={title} 
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="ENTRY TITLE..."
-                className="w-full text-5xl font-serif font-black border-none outline-none bg-transparent placeholder:text-gray-200 dark:placeholder:text-zinc-800 leading-tight dark:text-white"
-              />
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-nb-outline-variant dark:border-nb-dark-outline text-xs font-black uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-surface-low dark:hover:bg-nb-dark-surface-low transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setShowDeleteConfirm(false); onDeleted(filename); }}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-nb-primary text-white text-xs font-black uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20 active:scale-[0.98]"
+              >
+                Delete
+              </button>
             </div>
-            
-            <div className="grid grid-cols-2 gap-8 border-y-2 border-dashed border-gray-100 dark:border-zinc-900 py-8">
-              <div className="space-y-2">
-                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-zinc-500 ml-1">Lead Author</label>
-                 <input 
-                    type="text" 
-                    value={author} 
-                    onChange={(e) => setAuthor(e.target.value)}
-                    className="w-full font-serif font-bold text-xl outline-none bg-transparent dark:text-zinc-100"
-                    placeholder="Engineering Lead..."
-                 />
-              </div>
-              <div className="space-y-2">
-                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-zinc-500 ml-1">Process Phase</label>
-                 <select 
-                    value={phase} 
-                    onChange={(e) => setPhase(e.target.value)}
-                    className="w-full font-serif font-bold text-xl outline-none bg-transparent appearance-none cursor-pointer dark:text-zinc-100 pr-8"
-                 >
-                    <option value="Define Problem">Define Problem</option>
-                    <option value="Generate Concepts">Generate Concepts</option>
-                    <option value="Develop Solution">Develop Solution</option>
-                    <option value="Construct and Test">Construct and Test</option>
-                    <option value="Evaluate Solution">Evaluate Solution</option>
-                 </select>
-              </div>
-            </div>
-
-            <div className="pt-4 min-h-[600px]">
-              <UnifiedEditor
-                key={filename}
-                filename={filename}
-                content={content}
-                onChange={setContent}
-                onImageUpload={onImageUpload}
-                onSwitchToRawLatex={onSwitchToRawLatex}
-                author={author}
-              />
-            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

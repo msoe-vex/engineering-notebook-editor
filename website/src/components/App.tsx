@@ -229,6 +229,13 @@ export default function App() {
   // Current open file
   const [openFile, setOpenFile] = useState<OpenFileState | null>(null);
 
+  // Notifications
+  const [notification, setNotification] = useState<{ message: string; type: "error" | "success" } | null>(null);
+  const notify = (message: string, type: "error" | "success" = "success") => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
   // metadata.json contents
   const [notebookMetadata, setNotebookMetadata] = useState<NotebookMetadata>(EMPTY_METADATA);
 
@@ -459,7 +466,7 @@ export default function App() {
       setLatexContent(rawLatex);
     } catch (e) {
       console.error("Failed to open entry", e);
-      alert("Failed to open file.");
+      notify("Failed to open file. Connection error or invalid permissions.", "error");
     } finally {
       setIsLoading(false);
     }
@@ -782,11 +789,12 @@ export default function App() {
       await clearAllPending();
       await refreshPending();
       await loadGitHubExplorer();
+      notify("Successfully committed all changes to GitHub.", "success");
     } catch (e) {
       console.error("Commit failed", e);
-      alert("Commit failed. Check console for details.");
+      notify("Commit failed. Check console for details.", "error");
     } finally {
-      setIsCommitting(false);
+      setIsLoading(false);
     }
   }, [config, isCommitting, refreshPending, loadGitHubExplorer]);
 
@@ -843,21 +851,30 @@ export default function App() {
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] max-h-screen bg-white dark:bg-zinc-950 rounded-lg shadow overflow-hidden border dark:border-zinc-800">
+    <div className="flex h-screen bg-nb-surface dark:bg-nb-dark-bg overflow-hidden font-sans">
       <PanelGroup direction="horizontal">
         {/* ── Sidebar ── */}
-        <Panel defaultSize={20} minSize={15} maxSize={35} className="flex flex-col border-r dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900 overflow-hidden">
+        <Panel defaultSize={20} minSize={15} maxSize={35} className="flex flex-col border-r border-nb-surface-mid dark:border-nb-dark-outline-variant bg-nb-surface-low dark:bg-nb-dark-surface overflow-hidden">
           {/* Sidebar header */}
-          <div className="flex items-center gap-2 px-3 py-3 border-b dark:border-zinc-800 shrink-0">
-            <WorkspaceIcon size={13} className="text-gray-400 shrink-0" />
-            <span className="text-[10px] font-mono text-gray-500 dark:text-gray-400 truncate flex-1">{workspaceLabel}</span>
+          <div className="flex items-center gap-3 px-4 py-4 border-b border-nb-surface-mid dark:border-nb-dark-outline-variant shrink-0 bg-nb-surface-lowest dark:bg-nb-dark-surface-high/50">
+            <div className="w-6 h-6 rounded-md bg-nb-primary flex items-center justify-center shadow-sm shadow-nb-primary/20">
+              <BookOpen size={14} className="text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.15em] text-nb-secondary dark:text-nb-dark-on-surface truncate">Engineering Notebook</p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <WorkspaceIcon size={10} className="text-nb-tertiary" />
+                <span className="text-[9px] font-mono text-nb-on-surface-variant dark:text-nb-dark-on-variant truncate">{workspaceLabel}</span>
+              </div>
+            </div>
           </div>
 
           {/* Explorer */}
           <div className="flex-1 overflow-hidden">
             {isLoading ? (
-              <div className="flex items-center justify-center h-full text-sm text-gray-400 gap-2">
-                <Loader2 size={14} className="animate-spin" /> Loading…
+              <div className="flex flex-col items-center justify-center h-full text-nb-on-surface-variant/40 gap-3">
+                <Loader2 size={24} className="animate-spin text-nb-tertiary" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Synchronizing</span>
               </div>
             ) : (
               <FileExplorer
@@ -879,42 +896,57 @@ export default function App() {
           </div>
 
           {/* Commit bar / footer */}
-          <div className="shrink-0 border-t dark:border-zinc-800">
+          <div className="shrink-0 border-t border-nb-surface-mid dark:border-nb-dark-outline-variant bg-nb-surface-lowest dark:bg-nb-dark-surface">
             {workspaceMode === "github" && pendingChanges.length > 0 && (
-              <div className="p-3 bg-amber-50 dark:bg-amber-900/10 border-b dark:border-amber-800/30">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-[10px] text-amber-700 dark:text-amber-400 font-mono">
-                    {upserted.length > 0 && <span>{upserted.length} changed</span>}
-                    {upserted.length > 0 && deleted.length > 0 && <span> · </span>}
-                    {deleted.length > 0 && <span>{deleted.length} deleted</span>}
+              <div className="p-4 border-b border-nb-surface-mid dark:border-nb-dark-outline-variant bg-nb-surface-low/30 dark:bg-nb-dark-surface-low/20">
+                <div className="flex items-center justify-between mb-3">
+                   <div className="flex items-center gap-1.5">
+                     <div className="w-2 h-2 rounded-full bg-nb-tertiary animate-pulse" />
+                     <span className="text-[10px] font-black uppercase tracking-widest text-nb-secondary dark:text-nb-dark-on-surface">Staged Changes</span>
+                   </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  <div className="p-2 bg-nb-surface-mid dark:bg-nb-dark-surface-high rounded-lg text-center">
+                    <p className="text-[10px] font-black text-nb-secondary dark:text-nb-dark-on-surface leading-none">{upserted.length}</p>
+                    <p className="text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant dark:text-nb-dark-on-variant mt-1">Edited</p>
+                  </div>
+                  <div className="p-2 bg-nb-surface-mid dark:bg-nb-dark-surface-high rounded-lg text-center">
+                    <p className="text-[10px] font-black text-nb-primary leading-none">{deleted.length}</p>
+                    <p className="text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant dark:text-nb-dark-on-variant mt-1">Deleted</p>
                   </div>
                 </div>
                 <button
                   onClick={handleCommitAll}
                   disabled={isCommitting}
-                  className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-[11px] font-black uppercase tracking-widest py-2 rounded-lg transition-colors"
+                  className="w-full flex items-center justify-center gap-2.5 bg-nb-primary hover:bg-nb-primary-dim disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-[0.2em] py-3 rounded-xl transition-all shadow-md shadow-nb-primary/20 active:scale-[0.98]"
                 >
-                  {isCommitting ? <Loader2 size={12} className="animate-spin" /> : <GitCommitVertical size={12} />}
-                  {isCommitting ? "Committing…" : "Commit All"}
+                  {isCommitting ? <Loader2 size={12} className="animate-spin" /> : <GitCommitVertical size={13} />}
+                  {isCommitting ? "Pushing to Origin" : "Commit to GitHub"}
                 </button>
               </div>
             )}
-            <div className="px-3 py-2 flex items-center justify-between">
-              <span className="text-[10px] text-gray-400" />
-              <button onClick={handleDisconnect} className="text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 underline underline-offset-2 transition-colors">
-                Disconnect
+            <div className="px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                 <div className={`w-2 h-2 rounded-full ${isLoading ? 'bg-amber-500' : 'bg-green-500'}`} />
+                 <span className="text-[9px] font-bold uppercase tracking-widest text-nb-on-surface-variant dark:text-nb-dark-on-variant">{isLoading ? 'Syncing' : 'Ready'}</span>
+              </div>
+              <button onClick={handleDisconnect} className="text-[9px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant hover:text-nb-primary transition-colors">
+                Exit
               </button>
             </div>
           </div>
         </Panel>
 
-        <PanelResizeHandle className="w-1 bg-gray-200 dark:bg-zinc-800 hover:bg-blue-400 transition-colors cursor-col-resize" />
+        <PanelResizeHandle className="w-1.5 bg-nb-surface-mid dark:bg-nb-dark-outline-variant hover:bg-nb-tertiary/40 transition-colors cursor-col-resize relative">
+           <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-nb-outline-variant/30 dark:bg-nb-dark-outline/20" />
+        </PanelResizeHandle>
 
         {/* ── Main panel ── */}
-        <Panel defaultSize={80}>
-          {isLoading ? (
-            <div className="flex items-center justify-center h-full text-gray-400 gap-2">
-              <Loader2 size={18} className="animate-spin" /> Loading…
+        <Panel defaultSize={80} className="bg-nb-surface dark:bg-nb-dark-bg">
+          {isLoading && !openFile ? (
+            <div className="flex flex-col items-center justify-center h-full text-nb-on-surface-variant/40 gap-4">
+              <Loader2 size={40} className="animate-spin text-nb-tertiary" />
+              <span className="text-xs font-black uppercase tracking-[0.4em]">Initial Load</span>
             </div>
           ) : openFile === null ? (
             <WelcomePage
@@ -930,25 +962,25 @@ export default function App() {
               onDelete={() => handleDeleteResource({ name: openFile.name, path: openFile.path })}
             />
           ) : openFile.viewMode === "raw-latex" ? (
-            <div className="flex flex-col h-full">
+            <div className="flex flex-col h-full bg-nb-dark-bg">
               <RawLatexEditor
                 filename={openFile.name}
                 content={openFile.rawLatex}
                 onChange={(v) => setOpenFile(prev => prev ? { ...prev, rawLatex: v } : null)}
                 isLegacyFallback={openFile.isLegacyRaw}
               />
-              <div className="p-3 border-t dark:border-zinc-800 bg-zinc-900 shrink-0">
+              <div className="p-4 border-t border-nb-dark-outline-variant bg-nb-dark-surface shrink-0">
                 <button
                   onClick={handleRawSave}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase tracking-widest py-2 rounded-lg transition-colors"
+                  className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[10px] font-black uppercase tracking-[0.25em] py-3 rounded-xl transition-all active:scale-[0.98] shadow-lg shadow-nb-tertiary/20"
                 >
-                  Save
+                  Save Raw Changes
                 </button>
               </div>
             </div>
           ) : (
             <PanelGroup direction="horizontal">
-              <Panel defaultSize={50} minSize={30} className="flex flex-col h-full">
+              <Panel defaultSize={50} minSize={30} className="flex flex-col h-full bg-nb-surface dark:bg-nb-dark-bg">
                 <Editor
                   config={appConfig}
                   isLocalMode={workspaceMode !== "github"}
@@ -969,14 +1001,42 @@ export default function App() {
                   onSwitchToRawLatex={handleSwitchToRawLatex}
                 />
               </Panel>
-              <PanelResizeHandle className="w-1 bg-gray-200 dark:bg-zinc-800 hover:bg-blue-400 transition-colors cursor-col-resize" />
-              <Panel defaultSize={50} minSize={30} className="flex flex-col h-full">
+              <PanelResizeHandle className="w-1.5 bg-nb-surface-mid dark:bg-nb-dark-outline-variant hover:bg-nb-tertiary/40 transition-colors cursor-col-resize relative">
+                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-nb-outline-variant/30 dark:bg-nb-dark-outline/20" />
+              </PanelResizeHandle>
+              <Panel defaultSize={50} minSize={30} className="flex flex-col h-full bg-nb-surface-low dark:bg-nb-dark-bg">
                 <Preview latexContent={latexContent} />
               </Panel>
             </PanelGroup>
           )}
         </Panel>
       </PanelGroup>
+
+      {/* ── Custom Notification Toast ── */}
+      {notification && (
+        <div className="fixed bottom-6 right-6 z-[200] animate-in slide-in-from-right-10 duration-300">
+           <div className={`px-5 py-4 rounded-2xl shadow-nb-lg border flex items-center gap-4 ${
+             notification.type === 'error' 
+               ? 'bg-nb-primary/5 border-nb-primary/30 text-nb-primary' 
+               : 'bg-nb-tertiary/5 border-nb-tertiary/30 text-nb-tertiary'
+           } backdrop-blur-xl`}>
+             <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+               notification.type === 'error' ? 'bg-nb-primary/10' : 'bg-nb-tertiary/10'
+             }`}>
+               {notification.type === 'error' ? <AlertTriangle size={16} /> : <Check size={16} />}
+             </div>
+             <div>
+               <p className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">{notification.type === 'error' ? 'System Error' : 'Success'}</p>
+               <p className="text-xs font-medium text-nb-on-surface dark:text-nb-dark-on-surface">{notification.message}</p>
+             </div>
+             <button onClick={() => setNotification(null)} className="ml-2 hover:opacity-60 transition-opacity">
+               <X size={14} />
+             </button>
+           </div>
+        </div>
+      )}
     </div>
   );
 }
+
+import { Check, X, AlertTriangle, BookOpen } from "lucide-react";
