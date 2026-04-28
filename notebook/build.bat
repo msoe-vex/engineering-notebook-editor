@@ -1,4 +1,5 @@
 @echo off
-echo "Building LaTeXML..."
-latexmlc --path=. main.tex --dest=../website/public/notebook/index.html
-echo "Build complete. Preview in website/public/notebook/index.html"
+echo Building PDF...
+latexmk -pdf -interaction=nonstopmode main.tex
+echo.
+echo Done. Output: main.pdf
