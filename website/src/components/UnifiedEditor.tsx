@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import {
   useEditor, EditorContent,
   NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer,
@@ -18,7 +18,7 @@ import {
   Heading1, Heading2, Image as ImageIcon,
   Table as TableIcon, Undo, Redo, Trash2,
   ChevronUp, ChevronDown, ChevronLeft, ChevronRight,
-  Pencil,
+  Pencil, AlertTriangle,
 } from "lucide-react";
 
 const lowlight = createLowlight(common);
@@ -169,12 +169,13 @@ interface UnifiedEditorProps {
   content: string;
   onChange: (content: string) => void;
   onImageUpload?: (path: string, base64: string) => void;
+  onSwitchToRawLatex?: () => void;
   author?: string;
   filename: string;
 }
 
 export default function UnifiedEditor({
-  content, onChange, onImageUpload, author, filename,
+  content, onChange, onImageUpload, onSwitchToRawLatex, author, filename,
 }: UnifiedEditorProps) {
   const parseContent = (raw: string) => {
     if (!raw) return "";
@@ -184,14 +185,13 @@ export default function UnifiedEditor({
   const handleImageFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = () => {
-      const dataUrl = reader.result as string; // data:image/png;base64,...
+      const dataUrl = reader.result as string;
       const base64  = dataUrl.split(",")[1];
       const ext     = file.name.split(".").pop() || "png";
-      const stem    = filename.split("/").pop()?.replace(".tex", "") || "image";
-      const newPath = `resources/${stem}_${Date.now()}.${ext}`;
+      // ISO-8601 timestamp filename (colons → hyphens for filesystem safety)
+      const ts      = new Date().toISOString().replace(/:/g, "-").replace(/\..+/, "");
+      const newPath = `notebook/resources/${ts}.${ext}`;
 
-      // insertContent bypasses the typed setImage command so we can store
-      // our custom filePath attribute alongside the display src.
       editor?.chain().focus().insertContent({
         type: "image",
         attrs: {
@@ -202,7 +202,6 @@ export default function UnifiedEditor({
         },
       }).run();
 
-      // Save binary to disk (if handler provided)
       if (onImageUpload) onImageUpload(newPath, base64);
     };
     reader.readAsDataURL(file);
@@ -249,6 +248,8 @@ export default function UnifiedEditor({
     },
   });
 
+  const [showRawConfirm, setShowRawConfirm] = useState(false);
+
   const isInTable = editor?.isActive("tableCell") || editor?.isActive("tableHeader") || false;
 
   const insertImage = () => {
@@ -283,6 +284,15 @@ export default function UnifiedEditor({
         <div className="flex-1" />
         <Btn onClick={() => editor.chain().focus().undo().run()} title="Undo"><Undo size={16} /></Btn>
         <Btn onClick={() => editor.chain().focus().redo().run()} title="Redo"><Redo size={16} /></Btn>
+        {onSwitchToRawLatex && (
+          <>
+            <Sep />
+            <Btn onClick={() => setShowRawConfirm(true)} title="Switch to raw LaTeX editor" danger>
+              <AlertTriangle size={14} />
+              <span className="text-[10px] font-bold">Raw</span>
+            </Btn>
+          </>
+        )}
       </div>
 
       {/* ── Table Controls (contextual) ──────────────────────────── */}
@@ -309,6 +319,42 @@ export default function UnifiedEditor({
       >
         <EditorContent editor={editor} />
       </div>
+
+      {/* ── Switch to Raw LaTeX confirmation ─────────────────────── */}
+      {showRawConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setShowRawConfirm(false)}
+        >
+          <div
+            className="bg-white dark:bg-zinc-900 rounded-2xl p-6 shadow-2xl max-w-sm w-full mx-4 border dark:border-zinc-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <AlertTriangle size={18} className="text-amber-500" />
+              <h3 className="font-black text-sm uppercase tracking-widest dark:text-white">Switch to Raw LaTeX?</h3>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-5 leading-relaxed">
+              This will remove the <code className="text-xs bg-gray-100 dark:bg-zinc-800 px-1 rounded">METADATA</code> tag from the file.
+              The rich editor will <strong>not</strong> be available for this session.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowRawConfirm(false)}
+                className="flex-1 px-4 py-2 rounded-xl border dark:border-zinc-700 text-sm dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setShowRawConfirm(false); onSwitchToRawLatex?.(); }}
+                className="flex-1 px-4 py-2 rounded-xl bg-amber-500 text-white text-sm font-bold hover:bg-amber-600 transition-colors"
+              >
+                Switch
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -152,13 +152,17 @@ interface EditorProps {
   initialPhase?: string;
   initialContent: string;
   metadataMissing?: boolean;
-  onSaved: (path: string, content: string) => void;
+  onSaved: (path: string, latexContent: string) => void;
   onDeleted: (path: string) => void;
   onContentChange?: (latex: string) => void;
   onTitleChange?: (title: string) => void;
   onAuthorChange?: (author: string) => void;
   onPhaseChange?: (phase: string) => void;
   onImageUpload?: (path: string, base64: string) => void;
+  /** Called after save with the raw TipTap JSON string so App can rebuild metadata.json */
+  onMetadataRebuild?: (entryPath: string, tiptapJson: string) => void;
+  /** Called when user confirms switching to raw LaTeX mode */
+  onSwitchToRawLatex?: () => void;
 }
 
 export default function Editor({ 
@@ -176,7 +180,9 @@ export default function Editor({
   onImageUpload,
   onTitleChange,
   onAuthorChange,
-  onPhaseChange
+  onPhaseChange,
+  onMetadataRebuild,
+  onSwitchToRawLatex,
 }: EditorProps) {
   const [title, setTitle] = useState(initialTitle);
   const [author, setAuthor] = useState(initialAuthor);
@@ -217,6 +223,11 @@ export default function Editor({
   const handleSave = async () => {
     setIsSaving(true);
     const latex = generateLatex(content, title, author, phase);
+
+    // Notify parent so it can rebuild metadata.json from TipTap JSON
+    if (onMetadataRebuild && content) {
+      onMetadataRebuild(filename, content);
+    }
     
     if (isLocalMode) {
        onSaved(filename, latex);
@@ -336,6 +347,7 @@ export default function Editor({
                 content={content}
                 onChange={setContent}
                 onImageUpload={onImageUpload}
+                onSwitchToRawLatex={onSwitchToRawLatex}
                 author={author}
               />
             </div>
