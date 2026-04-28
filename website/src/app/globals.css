@@ -35,10 +35,10 @@
   --color-nb-dark-surface-low:     #1f2124;
   --color-nb-dark-surface-mid:     #262a2e;
   --color-nb-dark-surface-high:    #2e3338;
-  --color-nb-dark-on-surface:      #e2e4e8;
-  --color-nb-dark-on-variant:      #9ea3aa;
-  --color-nb-dark-outline:         #444950;
-  --color-nb-dark-outline-variant: #2e3338;
+  --color-nb-dark-on-surface:      #f1f5f9;
+  --color-nb-dark-on-variant:      #94a3b8;
+  --color-nb-dark-outline:         #334155;
+  --color-nb-dark-outline-variant: #1e293b;
 
   /* ── Typography ─────────────────────────────────────────────── */
   --font-sans:  var(--font-work-sans), "Work Sans", system-ui, sans-serif;
@@ -102,13 +102,13 @@ body {
   outline: none !important;
   min-height: 600px;
   font-family: var(--font-sans);
-  font-size: 15px;
-  line-height: 1.75;
+  font-size: 16px;
+  line-height: 1.8;
   color: var(--color-nb-on-surface);
 }
 
 .dark .ProseMirror {
-  color: var(--color-nb-dark-on-surface);
+  color: #f1f5f9;
 }
 
 .ProseMirror p {

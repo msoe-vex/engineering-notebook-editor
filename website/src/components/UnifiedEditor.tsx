@@ -42,10 +42,10 @@ const ToolbarButton = ({
   <button
     onClick={onClick}
     title={title}
-    className={`p-2 rounded-lg transition-all flex items-center justify-center ${
+    className={`p-1.5 rounded transition-all flex items-center justify-center ${
       active 
-        ? "bg-nb-tertiary text-white shadow-sm shadow-nb-tertiary/20" 
-        : "text-nb-on-surface-variant hover:bg-nb-surface-mid dark:hover:bg-nb-dark-surface-high hover:text-nb-secondary dark:hover:text-nb-dark-on-surface"
+        ? "bg-zinc-200 text-zinc-900" 
+        : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
     }`}
   >
     {children}
@@ -368,15 +368,13 @@ export default function UnifiedEditor({
           />
         </label>
 
-        <div className="flex-1" />
-
         <button
           onClick={() => setShowRawConfirm(true)}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-nb-primary hover:bg-nb-primary/5 border border-transparent hover:border-nb-primary/20 transition-all"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-nb-primary hover:bg-nb-primary/5 border border-transparent hover:border-nb-primary/20 transition-all ml-auto sm:ml-0"
           title="Switch to Raw LaTeX"
         >
           <FileCode size={14} />
-          Switch to Raw
+          <span className="hidden sm:inline">Switch to Raw</span>
         </button>
       </div>
 
@@ -398,11 +396,7 @@ export default function UnifiedEditor({
       )}
 
       {/* ── Main Editor Area ───────────────────────────────────────── */}
-      <div className="bg-nb-surface-lowest dark:bg-nb-dark-surface rounded-2xl border border-nb-outline-variant dark:border-nb-dark-outline shadow-nb-sm min-h-[600px] p-8 md:p-12 relative">
-        {/* Author indicator in corner */}
-        <div className="absolute top-6 right-8 text-[9px] font-mono font-black uppercase tracking-[0.3em] text-nb-outline-variant pointer-events-none">
-          Draft by: {author || "Unknown"}
-        </div>
+      <div className="bg-nb-surface-lowest dark:bg-nb-dark-bg/60 rounded-2xl border border-nb-outline-variant dark:border-nb-dark-outline shadow-nb-sm min-h-[600px] p-8 md:p-12 relative">
         <EditorContent editor={editor} className="max-w-none" />
       </div>
 

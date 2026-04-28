@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import UnifiedEditor from "./UnifiedEditor";
 import { saveAs } from "file-saver";
-import { Save, Trash2, Download, AlertCircle, Loader2 } from "lucide-react";
+import { Save, Trash2, Download, AlertCircle, Loader2, User, Target } from "lucide-react";
 
 const PHASES = [
   "Define Problem",
@@ -12,19 +12,6 @@ const PHASES = [
   "Construct and Test",
   "Evaluate Solution",
 ];
-
-const PhasePill = ({ phase, active, onClick }: { phase: string; active: boolean; onClick: () => void }) => (
-  <button
-    onClick={onClick}
-    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all
-      ${active 
-        ? "bg-nb-tertiary text-white shadow-md shadow-nb-tertiary/20" 
-        : "bg-nb-surface-low dark:bg-nb-dark-surface-high text-nb-on-surface-variant dark:text-nb-dark-on-variant hover:bg-nb-surface-mid dark:hover:bg-nb-dark-outline"
-      }`}
-  >
-    {phase}
-  </button>
-);
 
 const escapeLaTeX = (text: string) =>
   text
@@ -288,17 +275,43 @@ export default function Editor({
     <div className="flex flex-col h-full bg-nb-surface dark:bg-nb-dark-bg">
       {/* ── Editor Header ────────────────────────────────────────── */}
       <div className="px-6 py-4 border-b border-nb-surface-mid dark:border-nb-dark-outline-variant bg-nb-surface-lowest dark:bg-nb-dark-surface shrink-0">
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col gap-5">
+          <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
-               <label className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant/50 dark:text-nb-dark-on-variant mb-1.5 block">Entry Title</label>
                <input
                  type="text"
                  value={title}
                  onChange={(e) => { setTitle(e.target.value); onTitleChange?.(e.target.value); }}
-                 placeholder="Untitled Entry"
+                 placeholder="Project Title"
                  className="w-full text-2xl font-black tracking-tighter bg-transparent text-nb-secondary dark:text-nb-dark-on-surface outline-none placeholder:text-nb-outline-variant dark:placeholder:text-nb-dark-outline"
                />
+               <div className="flex items-center gap-3 mt-1">
+                 <div className="flex items-center gap-1.5 group">
+                   <User size={10} className="text-nb-on-surface-variant/40 group-focus-within:text-nb-tertiary transition-colors" />
+                   <input
+                     type="text"
+                     value={author}
+                     onChange={(e) => { setAuthor(e.target.value); onAuthorChange?.(e.target.value); }}
+                     placeholder="Lead Engineer"
+                     className="text-[11px] font-bold text-nb-on-surface-variant dark:text-nb-dark-on-variant bg-transparent outline-none border-b border-transparent focus:border-nb-tertiary transition-all w-32 placeholder:font-normal"
+                   />
+                 </div>
+                 <div className="w-px h-3 bg-nb-outline-variant/30 dark:bg-nb-dark-outline/30" />
+                 <div className="flex items-center gap-1.5">
+                   <Target size={10} className="text-nb-on-surface-variant/40" />
+                   <select
+                     value={phase}
+                     onChange={(e) => { setPhase(e.target.value); onPhaseChange?.(e.target.value); }}
+                     className="text-[10px] font-black uppercase tracking-wider text-nb-on-surface-variant dark:text-nb-dark-on-variant bg-transparent outline-none cursor-pointer hover:text-nb-tertiary transition-colors"
+                   >
+                     {PHASES.map(p => (
+                       <option key={p} value={p} className="bg-nb-surface dark:bg-nb-dark-surface text-nb-on-surface dark:text-nb-dark-on-surface">
+                         {p}
+                       </option>
+                     ))}
+                   </select>
+                 </div>
+               </div>
             </div>
             <div className="flex gap-2 shrink-0">
               <button
@@ -307,7 +320,7 @@ export default function Editor({
                 className="flex items-center gap-2 bg-nb-tertiary hover:bg-nb-tertiary-dim disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-md shadow-nb-tertiary/20 active:scale-[0.98]"
               >
                 {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                {isSaving ? "Saving" : "Save"}
+                <span className="hidden sm:inline">{isSaving ? "Saving" : "Save"}</span>
               </button>
               <button
                 onClick={() => setShowDeleteConfirm(true)}
@@ -315,27 +328,6 @@ export default function Editor({
               >
                 <Trash2 size={16} />
               </button>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-               <span className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant/50">By</span>
-               <input
-                 type="text"
-                 value={author}
-                 onChange={(e) => { setAuthor(e.target.value); onAuthorChange?.(e.target.value); }}
-                 placeholder="Author"
-                 className="text-[11px] font-bold text-nb-on-surface-variant dark:text-nb-dark-on-variant bg-transparent outline-none border-b border-nb-outline-variant/30 dark:border-nb-dark-outline/30 focus:border-nb-tertiary transition-colors w-24"
-               />
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant/50">Phase</span>
-              <div className="flex gap-1.5">
-                {PHASES.map((p) => (
-                  <PhasePill key={p} phase={p} active={phase === p} onClick={() => { setPhase(p); onPhaseChange?.(p); }} />
-                ))}
-              </div>
             </div>
           </div>
         </div>

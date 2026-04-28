@@ -29,6 +29,17 @@ import { GitBranch, HardDrive, Wifi, GitCommitVertical, Loader2 } from "lucide-r
 type WorkspaceMode = "github" | "local" | "memory";
 type ViewMode = "welcome" | "entry" | "raw-latex" | "image" | "none";
 
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 1024);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+  return isMobile;
+};
+
 export interface FileMetadata {
   content: string;
 }
@@ -230,7 +241,26 @@ export default function App() {
   const [openFile, setOpenFile] = useState<OpenFileState | null>(null);
 
   // Notifications
-  const [notification, setNotification] = useState<{ message: string; type: "error" | "success" } | null>(null);
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [isDarkMode, setIsDarkMode] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const isMobile = useIsMobile();
+
+  // Sync dark mode class
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, [isDarkMode]);
+
+  // Auto-close sidebar on mobile initial load
+  useEffect(() => {
+    if (isMobile) setIsSidebarOpen(false);
+    else setIsSidebarOpen(true);
+  }, [isMobile]);
+
   const notify = (message: string, type: "error" | "success" = "success") => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 4000);
@@ -851,98 +881,124 @@ export default function App() {
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-screen bg-nb-surface dark:bg-nb-dark-bg overflow-hidden font-sans">
+    <div className={`flex h-screen bg-nb-surface dark:bg-nb-dark-bg overflow-hidden font-sans ${isDarkMode ? 'dark' : ''}`}>
       <PanelGroup direction="horizontal">
         {/* ── Sidebar ── */}
-        <Panel defaultSize={20} minSize={15} maxSize={35} className="flex flex-col border-r border-nb-surface-mid dark:border-nb-dark-outline-variant bg-nb-surface-low dark:bg-nb-dark-surface overflow-hidden">
-          {/* Sidebar header */}
-          <div className="flex items-center gap-3 px-4 py-4 border-b border-nb-surface-mid dark:border-nb-dark-outline-variant shrink-0 bg-nb-surface-lowest dark:bg-nb-dark-surface-high/50">
-            <div className="w-6 h-6 rounded-md bg-nb-primary flex items-center justify-center shadow-sm shadow-nb-primary/20">
-              <BookOpen size={14} className="text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.15em] text-nb-secondary dark:text-nb-dark-on-surface truncate">Engineering Notebook</p>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <WorkspaceIcon size={10} className="text-nb-tertiary" />
-                <span className="text-[9px] font-mono text-nb-on-surface-variant dark:text-nb-dark-on-variant truncate">{workspaceLabel}</span>
+        {(isSidebarOpen || !isMobile) && (
+          <Panel 
+            defaultSize={isMobile ? 100 : 20} 
+            minSize={isMobile ? 100 : 15} 
+            maxSize={isMobile ? 100 : 35} 
+            className={`flex flex-col border-r border-nb-surface-mid dark:border-nb-dark-outline-variant bg-nb-surface-low dark:bg-nb-dark-surface overflow-hidden transition-all duration-300 ${isMobile ? 'fixed inset-0 z-[150]' : 'relative'}`}
+          >
+            {/* Sidebar header */}
+            <div className="flex items-center gap-3 px-4 py-4 border-b border-nb-surface-mid dark:border-nb-dark-outline-variant shrink-0 bg-nb-surface-lowest dark:bg-nb-dark-surface-high/50">
+              <div className="w-6 h-6 rounded-md bg-nb-primary flex items-center justify-center shadow-sm shadow-nb-primary/20">
+                <BookOpen size={14} className="text-white" />
               </div>
-            </div>
-          </div>
-
-          {/* Explorer */}
-          <div className="flex-1 overflow-hidden">
-            {isLoading ? (
-              <div className="flex flex-col items-center justify-center h-full text-nb-on-surface-variant/40 gap-3">
-                <Loader2 size={24} className="animate-spin text-nb-tertiary" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Synchronizing</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.15em] text-nb-secondary dark:text-nb-dark-on-surface truncate">Engineering Notebook</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <WorkspaceIcon size={10} className="text-nb-tertiary" />
+                  <span className="text-[9px] font-mono text-nb-on-surface-variant dark:text-nb-dark-on-variant truncate">{workspaceLabel}</span>
+                </div>
               </div>
-            ) : (
-              <FileExplorer
-                entries={entries}
-                resources={resources}
-                selectedPath={openFile?.path ?? null}
-                pendingPaths={pendingPathSet}
-                deletedPaths={deletedPathSet}
-                onSelectEntry={handleSelectEntry}
-                onSelectResource={handleSelectResource}
-                onNewEntry={handleNewEntry}
-                onUploadResource={handleUploadResource}
-                onRenameEntry={handleRenameEntry}
-                onRenameResource={handleRenameResource}
-                onDeleteEntry={handleDeleteEntry}
-                onDeleteResource={handleDeleteResource}
-              />
-            )}
-          </div>
-
-          {/* Commit bar / footer */}
-          <div className="shrink-0 border-t border-nb-surface-mid dark:border-nb-dark-outline-variant bg-nb-surface-lowest dark:bg-nb-dark-surface">
-            {workspaceMode === "github" && pendingChanges.length > 0 && (
-              <div className="p-4 border-b border-nb-surface-mid dark:border-nb-dark-outline-variant bg-nb-surface-low/30 dark:bg-nb-dark-surface-low/20">
-                <div className="flex items-center justify-between mb-3">
-                   <div className="flex items-center gap-1.5">
-                     <div className="w-2 h-2 rounded-full bg-nb-tertiary animate-pulse" />
-                     <span className="text-[10px] font-black uppercase tracking-widest text-nb-secondary dark:text-nb-dark-on-surface">Staged Changes</span>
-                   </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2 mb-4">
-                  <div className="p-2 bg-nb-surface-mid dark:bg-nb-dark-surface-high rounded-lg text-center">
-                    <p className="text-[10px] font-black text-nb-secondary dark:text-nb-dark-on-surface leading-none">{upserted.length}</p>
-                    <p className="text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant dark:text-nb-dark-on-variant mt-1">Edited</p>
-                  </div>
-                  <div className="p-2 bg-nb-surface-mid dark:bg-nb-dark-surface-high rounded-lg text-center">
-                    <p className="text-[10px] font-black text-nb-primary leading-none">{deleted.length}</p>
-                    <p className="text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant dark:text-nb-dark-on-variant mt-1">Deleted</p>
-                  </div>
-                </div>
-                <button
-                  onClick={handleCommitAll}
-                  disabled={isCommitting}
-                  className="w-full flex items-center justify-center gap-2.5 bg-nb-primary hover:bg-nb-primary-dim disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-[0.2em] py-3 rounded-xl transition-all shadow-md shadow-nb-primary/20 active:scale-[0.98]"
+              <div className="flex items-center gap-1">
+                <button 
+                  onClick={() => setIsDarkMode(!isDarkMode)}
+                  className="p-1.5 rounded-lg hover:bg-nb-surface-mid dark:hover:bg-nb-dark-outline-variant text-nb-on-surface-variant dark:text-nb-dark-on-variant transition-colors"
+                  title="Toggle Theme"
                 >
-                  {isCommitting ? <Loader2 size={12} className="animate-spin" /> : <GitCommitVertical size={13} />}
-                  {isCommitting ? "Pushing to Origin" : "Commit to GitHub"}
+                  {isDarkMode ? <Sun size={14} /> : <Moon size={14} />}
+                </button>
+                {isMobile && (
+                  <button 
+                    onClick={() => setIsSidebarOpen(false)}
+                    className="p-1.5 rounded-lg hover:bg-nb-surface-mid dark:hover:bg-nb-dark-outline-variant text-nb-on-surface-variant dark:text-nb-dark-on-variant"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Explorer */}
+            <div className="flex-1 overflow-hidden">
+              {isLoading ? (
+                <div className="flex flex-col items-center justify-center h-full text-nb-on-surface-variant/40 gap-3">
+                  <Loader2 size={24} className="animate-spin text-nb-tertiary" />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Synchronizing</span>
+                </div>
+              ) : (
+                <FileExplorer
+                  entries={entries}
+                  resources={resources}
+                  selectedPath={openFile?.path ?? null}
+                  pendingPaths={pendingPathSet}
+                  deletedPaths={deletedPathSet}
+                  onSelectEntry={handleSelectEntry}
+                  onSelectResource={handleSelectResource}
+                  onNewEntry={handleNewEntry}
+                  onUploadResource={handleUploadResource}
+                  onRenameEntry={handleRenameEntry}
+                  onRenameResource={handleRenameResource}
+                  onDeleteEntry={handleDeleteEntry}
+                  onDeleteResource={handleDeleteResource}
+                />
+              )}
+            </div>
+
+            {/* Commit bar / footer */}
+            <div className="shrink-0 border-t border-nb-surface-mid dark:border-nb-dark-outline-variant bg-nb-surface-lowest dark:bg-nb-dark-surface">
+              {workspaceMode === "github" && pendingChanges.length > 0 && (
+                <div className="p-4 border-b border-nb-surface-mid dark:border-nb-dark-outline-variant bg-nb-surface-low/30 dark:bg-nb-dark-surface-low/20">
+                  <div className="flex items-center justify-between mb-3">
+                     <div className="flex items-center gap-1.5">
+                       <div className="w-2 h-2 rounded-full bg-nb-tertiary animate-pulse" />
+                       <span className="text-[10px] font-black uppercase tracking-widest text-nb-secondary dark:text-nb-dark-on-surface">Staged Changes</span>
+                     </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mb-4">
+                    <div className="p-2 bg-nb-surface-mid dark:bg-nb-dark-surface-high rounded-lg text-center">
+                      <p className="text-[10px] font-black text-nb-secondary dark:text-nb-dark-on-surface leading-none">{upserted.length}</p>
+                      <p className="text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant dark:text-nb-dark-on-variant mt-1">Edited</p>
+                    </div>
+                    <div className="p-2 bg-nb-surface-mid dark:bg-nb-dark-surface-high rounded-lg text-center">
+                      <p className="text-[10px] font-black text-nb-primary leading-none">{deleted.length}</p>
+                      <p className="text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant dark:text-nb-dark-on-variant mt-1">Deleted</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleCommitAll}
+                    disabled={isCommitting}
+                    className="w-full flex items-center justify-center gap-2.5 bg-nb-primary hover:bg-nb-primary-dim disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-[0.2em] py-3 rounded-xl transition-all shadow-md shadow-nb-primary/20 active:scale-[0.98]"
+                  >
+                    {isCommitting ? <Loader2 size={12} className="animate-spin" /> : <GitCommitVertical size={13} />}
+                    {isCommitting ? "Pushing to Origin" : "Commit to GitHub"}
+                  </button>
+                </div>
+              )}
+              <div className="px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                   <div className={`w-2 h-2 rounded-full ${isLoading ? 'bg-amber-500' : 'bg-green-500'}`} />
+                   <span className="text-[9px] font-bold uppercase tracking-widest text-nb-on-surface-variant dark:text-nb-dark-on-variant">{isLoading ? 'Syncing' : 'Ready'}</span>
+                </div>
+                <button onClick={handleDisconnect} className="text-[9px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant hover:text-nb-primary transition-colors">
+                  Exit
                 </button>
               </div>
-            )}
-            <div className="px-4 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                 <div className={`w-2 h-2 rounded-full ${isLoading ? 'bg-amber-500' : 'bg-green-500'}`} />
-                 <span className="text-[9px] font-bold uppercase tracking-widest text-nb-on-surface-variant dark:text-nb-dark-on-variant">{isLoading ? 'Syncing' : 'Ready'}</span>
-              </div>
-              <button onClick={handleDisconnect} className="text-[9px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant hover:text-nb-primary transition-colors">
-                Exit
-              </button>
             </div>
-          </div>
-        </Panel>
+          </Panel>
+        )}
 
-        <PanelResizeHandle className="w-1.5 bg-nb-surface-mid dark:bg-nb-dark-outline-variant hover:bg-nb-tertiary/40 transition-colors cursor-col-resize relative">
-           <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-nb-outline-variant/30 dark:bg-nb-dark-outline/20" />
-        </PanelResizeHandle>
+        {!isMobile && (
+          <PanelResizeHandle className="w-1.5 bg-nb-surface-mid dark:bg-nb-dark-outline-variant hover:bg-nb-tertiary/40 transition-colors cursor-col-resize relative">
+             <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-nb-outline-variant/30 dark:bg-nb-dark-outline/20" />
+          </PanelResizeHandle>
+        )}
 
         {/* ── Main panel ── */}
-        <Panel defaultSize={80} className="bg-nb-surface dark:bg-nb-dark-bg">
+        <Panel defaultSize={isMobile ? 100 : 80} className="bg-nb-surface dark:bg-nb-dark-bg">
           {isLoading && !openFile ? (
             <div className="flex flex-col items-center justify-center h-full text-nb-on-surface-variant/40 gap-4">
               <Loader2 size={40} className="animate-spin text-nb-tertiary" />
@@ -979,35 +1035,54 @@ export default function App() {
               </div>
             </div>
           ) : (
-            <PanelGroup direction="horizontal">
-              <Panel defaultSize={50} minSize={30} className="flex flex-col h-full bg-nb-surface dark:bg-nb-dark-bg">
-                <Editor
-                  config={appConfig}
-                  isLocalMode={workspaceMode !== "github"}
-                  initialTitle={openFile.title}
-                  initialAuthor={openFile.author}
-                  initialPhase={openFile.phase}
-                  initialContent={openFile.tiptapContent}
-                  metadataMissing={openFile.metadataMissing}
-                  filename={openFile.path}
-                  onSaved={handleEntrySaved}
-                  onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
-                  onContentChange={(latex) => setLatexContent(latex)}
-                  onTitleChange={(title) => setOpenFile(prev => prev ? { ...prev, title } : null)}
-                  onAuthorChange={(author) => setOpenFile(prev => prev ? { ...prev, author } : null)}
-                  onPhaseChange={(phase) => setOpenFile(prev => prev ? { ...prev, phase } : null)}
-                  onImageUpload={handleImageUploaded}
-                  onMetadataRebuild={handleMetadataRebuild}
-                  onSwitchToRawLatex={handleSwitchToRawLatex}
-                />
-              </Panel>
-              <PanelResizeHandle className="w-1.5 bg-nb-surface-mid dark:bg-nb-dark-outline-variant hover:bg-nb-tertiary/40 transition-colors cursor-col-resize relative">
-                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-nb-outline-variant/30 dark:bg-nb-dark-outline/20" />
-              </PanelResizeHandle>
-              <Panel defaultSize={50} minSize={30} className="flex flex-col h-full bg-nb-surface-low dark:bg-nb-dark-bg">
-                <Preview latexContent={latexContent} />
-              </Panel>
-            </PanelGroup>
+            <div className="flex flex-col h-full overflow-hidden">
+              {/* Mobile top bar */}
+              {isMobile && (
+                <div className="flex items-center justify-between px-4 py-3 bg-nb-surface-lowest dark:bg-nb-dark-surface border-b border-nb-surface-mid dark:border-nb-dark-outline-variant shrink-0">
+                  <button 
+                    onClick={() => setIsSidebarOpen(true)}
+                    className="p-2 rounded-lg bg-nb-surface-low dark:bg-nb-dark-surface-low text-nb-on-surface-variant dark:text-nb-dark-on-variant"
+                  >
+                    <Menu size={18} />
+                  </button>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-nb-secondary dark:text-nb-dark-on-surface truncate max-w-[200px]">
+                    {openFile?.name}
+                  </span>
+                  <div className="w-9" /> {/* Spacer */}
+                </div>
+              )}
+              <PanelGroup direction={isMobile ? "vertical" : "horizontal"}>
+                <Panel defaultSize={50} minSize={30} className="flex flex-col h-full bg-nb-surface dark:bg-nb-dark-bg">
+                  <Editor
+                    config={appConfig}
+                    isLocalMode={workspaceMode !== "github"}
+                    initialTitle={openFile.title}
+                    initialAuthor={openFile.author}
+                    initialPhase={openFile.phase}
+                    initialContent={openFile.tiptapContent}
+                    metadataMissing={openFile.metadataMissing}
+                    filename={openFile.path}
+                    onSaved={handleEntrySaved}
+                    onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
+                    onContentChange={(latex) => setLatexContent(latex)}
+                    onTitleChange={(title) => setOpenFile(prev => prev ? { ...prev, title } : null)}
+                    onAuthorChange={(author) => setOpenFile(prev => prev ? { ...prev, author } : null)}
+                    onPhaseChange={(phase) => setOpenFile(prev => prev ? { ...prev, phase } : null)}
+                    onImageUpload={handleImageUploaded}
+                    onMetadataRebuild={handleMetadataRebuild}
+                    onSwitchToRawLatex={handleSwitchToRawLatex}
+                  />
+                </Panel>
+                {!isMobile && (
+                  <PanelResizeHandle className="w-1.5 bg-nb-surface-mid dark:bg-nb-dark-outline-variant hover:bg-nb-tertiary/40 transition-colors cursor-col-resize relative">
+                    <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-nb-outline-variant/30 dark:bg-nb-dark-outline/20" />
+                  </PanelResizeHandle>
+                )}
+                <Panel defaultSize={50} minSize={30} className="flex flex-col h-full bg-nb-surface-low dark:bg-nb-dark-bg">
+                  <Preview latexContent={latexContent} />
+                </Panel>
+              </PanelGroup>
+            </div>
           )}
         </Panel>
       </PanelGroup>
@@ -1039,4 +1114,4 @@ export default function App() {
   );
 }
 
-import { Check, X, AlertTriangle, BookOpen } from "lucide-react";
+import { Check, X, AlertTriangle, BookOpen, Sun, Moon, Menu } from "lucide-react";

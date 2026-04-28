@@ -26,11 +26,6 @@ export default function Preview({ latexContent }: PreviewProps) {
               <span className="text-[9px] font-black uppercase tracking-widest text-nb-tertiary">LaTeX SRC</span>
            </div>
         </div>
-        <div className="flex gap-1.5 ml-auto">
-          <div className="w-2.5 h-2.5 rounded-full bg-nb-primary/20 border border-nb-primary/40"></div>
-          <div className="w-2.5 h-2.5 rounded-full bg-nb-tertiary/20 border border-nb-tertiary/40"></div>
-          <div className="w-2.5 h-2.5 rounded-full bg-nb-outline/10 border border-nb-outline/20"></div>
-        </div>
       </div>
       <div className="flex-1 overflow-y-auto p-8 relative">
         <div className="absolute inset-0 opacity-[0.02] pointer-events-none" style={{ backgroundImage: 'linear-gradient(0deg, #fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
