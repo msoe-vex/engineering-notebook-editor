@@ -1,44 +1,58 @@
 @import "tailwindcss";
-@import "highlight.js/styles/github-dark.css";
-@import "prismjs/themes/prism-okaidia.css";
 
 /* ═══════════════════════════════════════════════════════════════
    TECHNICAL PRECISION DESIGN SYSTEM
    Palette from DESIGN.MD
    ═══════════════════════════════════════════════════════════════ */
 
+:root {
+  /* ── Light Mode Tokens ────────────────────────────────────── */
+  --nb-bg:              #fbf9f8;
+  --nb-surface-lowest:  #ffffff;
+  --nb-surface-low:     #f5f3f3;
+  --nb-surface-mid:     #eeeeee;
+  --nb-surface-high:    #e6e5e5;
+  --nb-surface-highest: #e0dfdf;
+  --nb-on-surface:      #1c1b1b;
+  --nb-on-surface-variant: #444746;
+  --nb-outline:         #747775;
+  --nb-outline-variant: #c4c7c5;
+}
+
+.dark {
+  /* ── Dark Mode Tokens ─────────────────────────────────────── */
+  --nb-bg:              #111213;
+  --nb-surface-lowest:  #1a1c1e; /* Map dark surface to lowest */
+  --nb-surface-low:     #1f2124;
+  --nb-surface-mid:     #262a2e;
+  --nb-surface-high:    #2e3338;
+  --nb-surface-highest: #334155;
+  --nb-on-surface:      #f1f5f9;
+  --nb-on-surface-variant: #94a3b8;
+  --nb-outline:         #334155;
+  --nb-outline-variant: #1e293b;
+}
+
 @theme inline {
-  /* ── Brand ─────────────────────────────────────────────────── */
+  /* ── Brand (Shared) ────────────────────────────────────────── */
   --color-nb-primary:      #d9282f;
   --color-nb-primary-dim:  #b01f25;
   --color-nb-tertiary:     #0076bc;
   --color-nb-tertiary-dim: #005a91;
   --color-nb-secondary:    #1e293b;
 
-  /* ── Light-mode surfaces ────────────────────────────────────── */
-  --color-nb-surface:              #fbf9f8;
-  --color-nb-surface-dim:          #dbdad9;
-  --color-nb-surface-bright:       #fbf9f8;
-  --color-nb-surface-lowest:       #ffffff;
-  --color-nb-surface-low:          #f5f3f3;
-  --color-nb-surface-mid:          #eeeeee;
-  --color-nb-surface-high:         #e6e5e5;
-  --color-nb-surface-highest:      #e0dfdf;
-  --color-nb-on-surface:           #1c1b1b;
-  --color-nb-on-surface-variant:   #444746;
-  --color-nb-outline:              #747775;
-  --color-nb-outline-variant:      #c4c7c5;
-
-  /* ── Dark-mode surfaces ─────────────────────────────────────── */
-  --color-nb-dark-bg:              #111213;
-  --color-nb-dark-surface:         #1a1c1e;
-  --color-nb-dark-surface-low:     #1f2124;
-  --color-nb-dark-surface-mid:     #262a2e;
-  --color-nb-dark-surface-high:    #2e3338;
-  --color-nb-dark-on-surface:      #f1f5f9;
-  --color-nb-dark-on-variant:      #94a3b8;
-  --color-nb-dark-outline:         #334155;
-  --color-nb-dark-outline-variant: #1e293b;
+  /* ── Semantic Tokens ───────────────────────────────────────── */
+  --color-nb-bg:              var(--nb-bg);
+  --color-nb-surface:         var(--nb-surface-lowest);
+  --color-nb-surface-lowest:  var(--nb-surface-lowest);
+  --color-nb-surface-low:     var(--nb-surface-low);
+  --color-nb-surface-mid:     var(--nb-surface-mid);
+  --color-nb-surface-high:    var(--nb-surface-high);
+  --color-nb-surface-highest: var(--nb-surface-highest);
+  --color-nb-on-surface:      var(--nb-on-surface);
+  --color-nb-on-surface-variant: var(--nb-on-surface-variant);
+  --color-nb-outline:         var(--nb-outline);
+  --color-nb-outline-variant: var(--nb-outline-variant);
 
   /* ── Typography ─────────────────────────────────────────────── */
   --font-sans:  var(--font-work-sans), "Work Sans", system-ui, sans-serif;
@@ -144,6 +158,46 @@ body {
   color: var(--color-nb-dark-on-surface);
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   SYNTAX HIGHLIGHTING (Theme Aware)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Prism & Highlight.js Base */
+code[class*="language-"],
+pre[class*="language-"] {
+  color: var(--color-nb-on-surface) !important;
+  text-shadow: none !important;
+}
+
+.token.comment, .token.prolog, .token.doctype, .token.pi { color: #64748b; }
+.token.punctuation { color: #94a3b8; }
+.token.property, .token.tag, .token.boolean, .token.number, .token.constant, .token.symbol, .token.deleted { color: #d9282f; }
+.token.selector, .token.attr-name, .token.string, .token.char, .token.builtin, .token.inserted { color: #059669; }
+.token.operator, .token.entity, .token.url, .language-css .token.string, .style .token.string { color: #0076bc; }
+.token.atrule, .token.attr-value, .token.keyword { color: #7c3aed; }
+.token.function, .token.class-name { color: #0076bc; }
+.token.regex, .token.important, .token.variable { color: #ea580c; }
+
+.dark .token.comment { color: #94a3b8; }
+.dark .token.property, .dark .token.tag { color: #f87171; }
+.dark .token.selector, .dark .token.attr-name, .dark .token.string { color: #34d399; }
+.dark .token.operator, .dark .token.entity, .dark .token.url { color: #60a5fa; }
+.dark .token.atrule, .dark .token.attr-value, .dark .token.keyword { color: #a78bfa; }
+.dark .token.function { color: #60a5fa; }
+
+/* TipTap Code Block */
+.ProseMirror pre {
+  background: var(--color-nb-surface-low);
+  border: 1px border-nb-outline-variant;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+}
+
+.dark .ProseMirror pre {
+  background: var(--color-nb-dark-surface-low);
+  border-color: var(--color-nb-dark-outline);
+}
+
 .ProseMirror ul,
 .ProseMirror ol {
   margin-left: 1.5rem;
@@ -199,19 +253,6 @@ body {
 .dark .ProseMirror table th {
   background-color: var(--color-nb-dark-surface-high);
   color: var(--color-nb-dark-on-surface);
-}
-
-/* Code blocks */
-.ProseMirror pre {
-  background: #111213;
-  color: #e2e4e8;
-  font-family: var(--font-mono);
-  padding: 1.25rem 1.5rem;
-  border-radius: 8px;
-  margin: 1.75rem 0;
-  border: 1px solid #2e3338;
-  font-size: 13px;
-  overflow-x: auto;
 }
 
 .ProseMirror img {

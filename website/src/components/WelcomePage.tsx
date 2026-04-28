@@ -11,25 +11,26 @@ interface WelcomePageProps {
   workspace: WorkspaceInfo;
   onNewEntry: () => void;
   onDisconnect: () => void;
+  onOpenSidebar: () => void;
 }
 
-export default function WelcomePage({ workspace, onNewEntry, onDisconnect }: WelcomePageProps) {
+export default function WelcomePage({ workspace, onNewEntry, onDisconnect, onOpenSidebar }: WelcomePageProps) {
   const ModeIcon =
     workspace.mode === "github" ? GitBranch :
     workspace.mode === "local"  ? HardDrive : Wifi;
 
   return (
-    <div className="flex flex-col h-full items-center justify-center bg-nb-surface dark:bg-nb-dark-bg p-8">
+    <div className="flex flex-col h-full items-center justify-center bg-nb-bg p-8">
       {/* Header */}
       <div className="flex flex-col items-center gap-6 mb-12">
         <div className="w-20 h-20 rounded-2xl bg-nb-primary flex items-center justify-center shadow-2xl shadow-nb-primary/30">
           <BookOpen size={40} className="text-white" />
         </div>
         <div className="text-center">
-          <h1 className="text-4xl font-black tracking-tighter text-nb-secondary dark:text-nb-dark-on-surface">
+          <h1 className="text-4xl font-black tracking-tighter text-nb-secondary dark:text-nb-on-surface">
             Engineering Notebook
           </h1>
-          <div className="flex items-center gap-2 justify-center mt-3 text-sm text-nb-on-surface-variant dark:text-nb-dark-on-variant">
+          <div className="flex items-center gap-2 justify-center mt-3 text-sm text-nb-on-surface-variant">
             <ModeIcon size={14} className="text-nb-tertiary" />
             <span className="font-mono tracking-tight">{workspace.label}</span>
           </div>
@@ -54,17 +55,15 @@ export default function WelcomePage({ workspace, onNewEntry, onDisconnect }: Wel
 
         <button
           id="welcome-open-entry"
-          className="flex items-center gap-4 w-full bg-nb-surface-lowest dark:bg-nb-dark-surface hover:bg-nb-surface-low dark:hover:bg-nb-dark-surface-low border border-nb-outline-variant dark:border-nb-dark-outline px-6 py-5 rounded-2xl text-left transition-all active:scale-[0.98] group"
-          onClick={() => {
-            document.getElementById("explorer-entries-pane")?.scrollIntoView({ behavior: "smooth" });
-          }}
+          className="flex items-center gap-4 w-full bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant px-6 py-5 rounded-2xl text-left transition-all active:scale-[0.98] group"
+          onClick={onOpenSidebar}
         >
-          <div className="w-12 h-12 rounded-xl bg-nb-surface-mid dark:bg-nb-dark-surface-high flex items-center justify-center shrink-0 group-hover:bg-nb-surface-high dark:group-hover:bg-nb-dark-outline transition-colors">
-            <FolderOpen size={24} className="text-nb-tertiary dark:text-nb-tertiary" />
+          <div className="w-12 h-12 rounded-xl bg-nb-surface-mid flex items-center justify-center shrink-0 group-hover:bg-nb-surface-high transition-colors">
+            <FolderOpen size={24} className="text-nb-tertiary" />
           </div>
           <div>
-            <div className="font-black text-xs uppercase tracking-[0.2em] text-nb-secondary dark:text-nb-dark-on-surface">Open Entry</div>
-            <div className="text-nb-on-surface-variant dark:text-nb-dark-on-variant text-sm font-normal mt-0.5">Select from the sidebar</div>
+            <div className="font-black text-xs uppercase tracking-[0.2em] text-nb-secondary dark:text-nb-on-surface">Open Entry</div>
+            <div className="text-nb-on-surface-variant text-sm font-normal mt-0.5">Select from the sidebar</div>
           </div>
         </button>
       </div>
@@ -74,7 +73,7 @@ export default function WelcomePage({ workspace, onNewEntry, onDisconnect }: Wel
         <button
           id="welcome-disconnect"
           onClick={onDisconnect}
-          className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary dark:text-nb-dark-on-variant dark:hover:text-nb-primary transition-colors border-b border-transparent hover:border-nb-primary pb-0.5"
+          className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary transition-colors border-b border-transparent hover:border-nb-primary pb-0.5"
         >
           Change workspace
         </button>

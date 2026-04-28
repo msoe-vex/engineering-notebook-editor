@@ -39,23 +39,23 @@ export default function RawLatexEditor({
   };
 
   return (
-    <div className="flex flex-col h-full bg-nb-dark-bg">
+    <div className="flex flex-col h-full bg-nb-bg transition-colors duration-300">
       {/* Header */}
-      <div className="flex items-center px-6 py-4 border-b border-nb-dark-outline-variant bg-nb-dark-surface shrink-0 gap-4">
+      <div className="flex items-center px-6 py-4 border-b border-nb-outline-variant bg-nb-surface shrink-0 gap-4">
         <div className="flex gap-1.5 shrink-0">
           <div className="w-2.5 h-2.5 rounded-full bg-nb-primary/40 border border-nb-primary/60" />
           <div className="w-2.5 h-2.5 rounded-full bg-nb-tertiary/40 border border-nb-tertiary/60" />
           <div className="w-2.5 h-2.5 rounded-full bg-nb-outline/20 border border-nb-outline/40" />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-dark-on-variant">
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant">
             Technical Source
           </span>
           <div className="px-1.5 py-0.5 rounded bg-nb-primary/10 border border-nb-primary/20">
             <span className="text-[9px] font-black uppercase tracking-widest text-nb-primary">LaTeX</span>
           </div>
         </div>
-        <span className="text-[10px] font-mono text-nb-dark-on-variant truncate ml-auto max-w-[300px] opacity-40">
+        <span className="text-[10px] font-mono text-nb-on-surface-variant truncate ml-auto max-w-[300px] opacity-40">
           {filename}
         </span>
       </div>
@@ -71,7 +71,7 @@ export default function RawLatexEditor({
       </div>
 
       {/* Editor area — textarea overlaid on Prism highlight div */}
-      <div className="flex-1 relative overflow-hidden bg-nb-dark-bg/50">
+      <div className="flex-1 relative overflow-hidden bg-nb-surface">
         {/* Highlight layer (behind textarea) */}
         <pre
           aria-hidden="true"
@@ -90,8 +90,7 @@ export default function RawLatexEditor({
           onChange={(e) => onChange(e.target.value)}
           onScroll={syncScroll}
           spellCheck={false}
-          className="absolute inset-0 w-full h-full p-6 resize-none bg-transparent text-transparent caret-white font-mono text-[13px] leading-relaxed outline-none border-none z-10"
-          style={{ caretColor: "#fff" }}
+          className="absolute inset-0 w-full h-full p-6 resize-none bg-transparent text-transparent caret-nb-primary font-mono text-[13px] leading-relaxed outline-none border-none z-10"
         />
       </div>
     </div>

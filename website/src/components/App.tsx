@@ -244,6 +244,7 @@ export default function App() {
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [mobileTab, setMobileTab] = useState<"editor" | "preview">("editor");
   const isMobile = useIsMobile();
 
   // Sync dark mode class
@@ -478,6 +479,7 @@ export default function App() {
             isLegacyRaw: false,
           });
           setLatexContent(rawLatex);
+          setMobileTab("editor");
           return;
         } catch { /* fall through to raw */ }
       }
@@ -536,6 +538,7 @@ export default function App() {
         imageSrc,
         isLegacyRaw: false,
       });
+      setMobileTab("editor");
     } finally {
       setIsLoading(false);
     }
@@ -881,7 +884,7 @@ export default function App() {
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
-    <div className={`flex h-screen bg-nb-surface dark:bg-nb-dark-bg overflow-hidden font-sans ${isDarkMode ? 'dark' : ''}`}>
+    <div className={`flex h-screen bg-nb-bg overflow-hidden font-sans ${isDarkMode ? 'dark' : ''}`}>
       <PanelGroup direction="horizontal">
         {/* ── Sidebar ── */}
         {(isSidebarOpen || !isMobile) && (
@@ -889,37 +892,29 @@ export default function App() {
             defaultSize={isMobile ? 100 : 20} 
             minSize={isMobile ? 100 : 15} 
             maxSize={isMobile ? 100 : 35} 
-            className={`flex flex-col border-r border-nb-surface-mid dark:border-nb-dark-outline-variant bg-nb-surface-low dark:bg-nb-dark-surface overflow-hidden transition-all duration-300 ${isMobile ? 'fixed inset-0 z-[150]' : 'relative'}`}
+            className={`flex flex-col border-r border-nb-outline-variant bg-nb-surface-low overflow-hidden transition-all duration-300 ${isMobile ? 'fixed inset-0 z-[150]' : 'relative'}`}
           >
             {/* Sidebar header */}
-            <div className="flex items-center gap-3 px-4 py-4 border-b border-nb-surface-mid dark:border-nb-dark-outline-variant shrink-0 bg-nb-surface-lowest dark:bg-nb-dark-surface-high/50">
+            <div className="flex items-center gap-3 px-4 py-4 border-b border-nb-outline-variant shrink-0 bg-nb-surface">
               <div className="w-6 h-6 rounded-md bg-nb-primary flex items-center justify-center shadow-sm shadow-nb-primary/20">
                 <BookOpen size={14} className="text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-[0.15em] text-nb-secondary dark:text-nb-dark-on-surface truncate">Engineering Notebook</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.15em] text-nb-secondary dark:text-nb-on-surface truncate">Engineering Notebook</p>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <WorkspaceIcon size={10} className="text-nb-tertiary" />
-                  <span className="text-[9px] font-mono text-nb-on-surface-variant dark:text-nb-dark-on-variant truncate">{workspaceLabel}</span>
+                  <span className="text-[9px] font-mono text-nb-on-surface-variant truncate">{workspaceLabel}</span>
                 </div>
               </div>
-              <div className="flex items-center gap-1">
-                <button 
-                  onClick={() => setIsDarkMode(!isDarkMode)}
-                  className="p-1.5 rounded-lg hover:bg-nb-surface-mid dark:hover:bg-nb-dark-outline-variant text-nb-on-surface-variant dark:text-nb-dark-on-variant transition-colors"
-                  title="Toggle Theme"
-                >
-                  {isDarkMode ? <Sun size={14} /> : <Moon size={14} />}
-                </button>
+                <div className="w-8" /> {/* Spacer instead of theme toggle */}
                 {isMobile && (
                   <button 
                     onClick={() => setIsSidebarOpen(false)}
-                    className="p-1.5 rounded-lg hover:bg-nb-surface-mid dark:hover:bg-nb-dark-outline-variant text-nb-on-surface-variant dark:text-nb-dark-on-variant"
+                    className="p-1.5 rounded-lg hover:bg-nb-surface-mid text-nb-on-surface-variant"
                   >
                     <X size={14} />
                   </button>
                 )}
-              </div>
             </div>
 
             {/* Explorer */}
@@ -949,23 +944,23 @@ export default function App() {
             </div>
 
             {/* Commit bar / footer */}
-            <div className="shrink-0 border-t border-nb-surface-mid dark:border-nb-dark-outline-variant bg-nb-surface-lowest dark:bg-nb-dark-surface">
+            <div className="shrink-0 border-t border-nb-outline-variant bg-nb-surface">
               {workspaceMode === "github" && pendingChanges.length > 0 && (
-                <div className="p-4 border-b border-nb-surface-mid dark:border-nb-dark-outline-variant bg-nb-surface-low/30 dark:bg-nb-dark-surface-low/20">
+                <div className="p-4 border-b border-nb-outline-variant bg-nb-surface-low/30">
                   <div className="flex items-center justify-between mb-3">
                      <div className="flex items-center gap-1.5">
                        <div className="w-2 h-2 rounded-full bg-nb-tertiary animate-pulse" />
-                       <span className="text-[10px] font-black uppercase tracking-widest text-nb-secondary dark:text-nb-dark-on-surface">Staged Changes</span>
+                       <span className="text-[10px] font-black uppercase tracking-widest text-nb-secondary dark:text-nb-on-surface">Staged Changes</span>
                      </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2 mb-4">
-                    <div className="p-2 bg-nb-surface-mid dark:bg-nb-dark-surface-high rounded-lg text-center">
-                      <p className="text-[10px] font-black text-nb-secondary dark:text-nb-dark-on-surface leading-none">{upserted.length}</p>
+                    <div className="p-2 bg-nb-surface-mid dark:bg-nb-surface-high rounded-lg text-center">
+                      <p className="text-[10px] font-black text-nb-secondary dark:text-nb-on-surface leading-none">{upserted.length}</p>
                       <p className="text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant dark:text-nb-dark-on-variant mt-1">Edited</p>
                     </div>
                     <div className="p-2 bg-nb-surface-mid dark:bg-nb-dark-surface-high rounded-lg text-center">
                       <p className="text-[10px] font-black text-nb-primary leading-none">{deleted.length}</p>
-                      <p className="text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant dark:text-nb-dark-on-variant mt-1">Deleted</p>
+                      <p className="text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant mt-1">Deleted</p>
                     </div>
                   </div>
                   <button
@@ -992,96 +987,206 @@ export default function App() {
         )}
 
         {!isMobile && (
-          <PanelResizeHandle className="w-1.5 bg-nb-surface-mid dark:bg-nb-dark-outline-variant hover:bg-nb-tertiary/40 transition-colors cursor-col-resize relative">
-             <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-nb-outline-variant/30 dark:bg-nb-dark-outline/20" />
+          <PanelResizeHandle className="w-1.5 bg-nb-surface-mid dark:bg-nb-outline-variant hover:bg-nb-tertiary/40 transition-colors cursor-col-resize relative">
+             <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-nb-outline-variant/30" />
           </PanelResizeHandle>
         )}
 
         {/* ── Main panel ── */}
-        <Panel defaultSize={isMobile ? 100 : 80} className="bg-nb-surface dark:bg-nb-dark-bg">
+        <Panel defaultSize={isMobile ? 100 : 80} className="bg-nb-bg">
           {isLoading && !openFile ? (
             <div className="flex flex-col items-center justify-center h-full text-nb-on-surface-variant/40 gap-4">
               <Loader2 size={40} className="animate-spin text-nb-tertiary" />
               <span className="text-xs font-black uppercase tracking-[0.4em]">Initial Load</span>
             </div>
           ) : openFile === null ? (
-            <WelcomePage
-              workspace={{ mode: workspaceMode, label: workspaceLabel }}
-              onNewEntry={handleNewEntry}
-              onDisconnect={handleDisconnect}
-            />
-          ) : openFile.viewMode === "image" ? (
-            <ImagePreview
-              filename={openFile.name}
-              src={openFile.imageSrc}
-              onRename={(newName) => handleRenameResource({ name: openFile.name, path: openFile.path }, newName)}
-              onDelete={() => handleDeleteResource({ name: openFile.name, path: openFile.path })}
-            />
-          ) : openFile.viewMode === "raw-latex" ? (
-            <div className="flex flex-col h-full bg-nb-dark-bg">
-              <RawLatexEditor
-                filename={openFile.name}
-                content={openFile.rawLatex}
-                onChange={(v) => setOpenFile(prev => prev ? { ...prev, rawLatex: v } : null)}
-                isLegacyFallback={openFile.isLegacyRaw}
-              />
-              <div className="p-4 border-t border-nb-dark-outline-variant bg-nb-dark-surface shrink-0">
-                <button
-                  onClick={handleRawSave}
-                  className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[10px] font-black uppercase tracking-[0.25em] py-3 rounded-xl transition-all active:scale-[0.98] shadow-lg shadow-nb-tertiary/20"
+            <div className="flex flex-col h-full overflow-hidden">
+              {/* Top Bar for Welcome Page */}
+              <div className="flex items-center justify-between px-4 py-3 bg-nb-surface border-b border-nb-outline-variant shrink-0">
+                <button 
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant"
                 >
-                  Save Raw Changes
+                  <Menu size={18} />
                 </button>
+                <span className="text-[10px] font-black uppercase tracking-widest text-nb-secondary dark:text-nb-on-surface">
+                  Notebook
+                </span>
+                <button 
+                  onClick={() => setIsDarkMode(!isDarkMode)}
+                  className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors"
+                >
+                  {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
+                </button>
+              </div>
+              <WelcomePage
+                workspace={{ mode: workspaceMode, label: workspaceLabel }}
+                onNewEntry={handleNewEntry}
+                onDisconnect={handleDisconnect}
+                onOpenSidebar={() => setIsSidebarOpen(true)}
+              />
+            </div>
+          ) : openFile.viewMode === "image" ? (
+            <div className="flex flex-col h-full overflow-hidden">
+              {/* Top Bar for Image Preview */}
+              <div className="flex items-center justify-between px-4 py-3 bg-nb-surface border-b border-nb-outline-variant shrink-0">
+                <button 
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant"
+                >
+                  <Menu size={18} />
+                </button>
+                <span className="text-[10px] font-black uppercase tracking-widest text-nb-secondary dark:text-nb-dark-on-surface truncate max-w-[200px]">
+                  {openFile.name}
+                </span>
+                <button 
+                  onClick={() => setIsDarkMode(!isDarkMode)}
+                  className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors"
+                >
+                  {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
+                </button>
+              </div>
+              <ImagePreview
+                filename={openFile.name}
+                src={openFile.imageSrc}
+                onRename={(newName) => handleRenameResource({ name: openFile.name, path: openFile.path }, newName)}
+                onDelete={() => handleDeleteResource({ name: openFile.name, path: openFile.path })}
+              />
+            </div>
+          ) : openFile.viewMode === "raw-latex" ? (
+            <div className="flex flex-col h-full overflow-hidden">
+              {/* Top Bar for Raw Latex Editor */}
+              <div className="flex items-center justify-between px-4 py-3 bg-nb-surface border-b border-nb-outline-variant shrink-0">
+                <button 
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant"
+                >
+                  <Menu size={18} />
+                </button>
+                <span className="text-[10px] font-black uppercase tracking-widest text-nb-secondary dark:text-nb-dark-on-surface truncate max-w-[200px]">
+                  {openFile.name} (RAW)
+                </span>
+                <button 
+                  onClick={() => setIsDarkMode(!isDarkMode)}
+                  className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors"
+                >
+                  {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
+                </button>
+              </div>
+              <div className="flex-1 overflow-hidden flex flex-col bg-nb-bg">
+                <RawLatexEditor
+                  filename={openFile.name}
+                  content={openFile.rawLatex}
+                  onChange={(v) => setOpenFile(prev => prev ? { ...prev, rawLatex: v } : null)}
+                  isLegacyFallback={openFile.isLegacyRaw}
+                />
+                <div className="p-4 border-t border-nb-outline-variant bg-nb-surface shrink-0">
+                  <button
+                    onClick={handleRawSave}
+                    className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[10px] font-black uppercase tracking-[0.25em] py-3 rounded-xl transition-all active:scale-[0.98] shadow-lg shadow-nb-tertiary/20"
+                  >
+                    Save Raw Changes
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
             <div className="flex flex-col h-full overflow-hidden">
-              {/* Mobile top bar */}
-              {isMobile && (
-                <div className="flex items-center justify-between px-4 py-3 bg-nb-surface-lowest dark:bg-nb-dark-surface border-b border-nb-surface-mid dark:border-nb-dark-outline-variant shrink-0">
-                  <button 
-                    onClick={() => setIsSidebarOpen(true)}
-                    className="p-2 rounded-lg bg-nb-surface-low dark:bg-nb-dark-surface-low text-nb-on-surface-variant dark:text-nb-dark-on-variant"
-                  >
-                    <Menu size={18} />
-                  </button>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-nb-secondary dark:text-nb-dark-on-surface truncate max-w-[200px]">
+              {/* Top Bar with Sidebar access and Mobile Tab Switcher */}
+              <div className="flex items-center justify-between px-4 py-2 bg-nb-surface border-b border-nb-outline-variant shrink-0">
+                <button 
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant"
+                >
+                  <Menu size={18} />
+                </button>
+
+                {isMobile ? (
+                  <div className="flex bg-nb-surface-low rounded-lg p-0.5 border border-nb-outline-variant/30">
+                    <button 
+                      onClick={() => setMobileTab("editor")}
+                      className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${mobileTab === 'editor' ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60'}`}
+                    >
+                      Editor
+                    </button>
+                    <button 
+                      onClick={() => setMobileTab("preview")}
+                      className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${mobileTab === 'preview' ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60'}`}
+                    >
+                      Preview
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-[10px] font-black uppercase tracking-widest text-nb-secondary dark:text-nb-on-surface truncate max-w-[200px]">
                     {openFile?.name}
                   </span>
-                  <div className="w-9" /> {/* Spacer */}
+                )}
+                
+                <button 
+                  onClick={() => setIsDarkMode(!isDarkMode)}
+                  className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors"
+                >
+                  {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
+                </button>
+              </div>
+
+              {isMobile ? (
+                <div className="flex-1 overflow-hidden bg-nb-bg">
+                  {mobileTab === "editor" ? (
+                    <Editor
+                      config={appConfig}
+                      isLocalMode={workspaceMode !== "github"}
+                      initialTitle={openFile.title}
+                      initialAuthor={openFile.author}
+                      initialPhase={openFile.phase}
+                      initialContent={openFile.tiptapContent}
+                      metadataMissing={openFile.metadataMissing}
+                      filename={openFile.path}
+                      onSaved={handleEntrySaved}
+                      onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
+                      onContentChange={(latex) => setLatexContent(latex)}
+                      onTitleChange={(title) => setOpenFile(prev => prev ? { ...prev, title } : null)}
+                      onAuthorChange={(author) => setOpenFile(prev => prev ? { ...prev, author } : null)}
+                      onPhaseChange={(phase) => setOpenFile(prev => prev ? { ...prev, phase } : null)}
+                      onImageUpload={handleImageUploaded}
+                      onMetadataRebuild={handleMetadataRebuild}
+                      onSwitchToRawLatex={handleSwitchToRawLatex}
+                    />
+                  ) : (
+                    <Preview latexContent={latexContent} />
+                  )}
                 </div>
-              )}
-              <PanelGroup direction={isMobile ? "vertical" : "horizontal"}>
-                <Panel defaultSize={50} minSize={30} className="flex flex-col h-full bg-nb-surface dark:bg-nb-dark-bg">
-                  <Editor
-                    config={appConfig}
-                    isLocalMode={workspaceMode !== "github"}
-                    initialTitle={openFile.title}
-                    initialAuthor={openFile.author}
-                    initialPhase={openFile.phase}
-                    initialContent={openFile.tiptapContent}
-                    metadataMissing={openFile.metadataMissing}
-                    filename={openFile.path}
-                    onSaved={handleEntrySaved}
-                    onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
-                    onContentChange={(latex) => setLatexContent(latex)}
-                    onTitleChange={(title) => setOpenFile(prev => prev ? { ...prev, title } : null)}
-                    onAuthorChange={(author) => setOpenFile(prev => prev ? { ...prev, author } : null)}
-                    onPhaseChange={(phase) => setOpenFile(prev => prev ? { ...prev, phase } : null)}
-                    onImageUpload={handleImageUploaded}
-                    onMetadataRebuild={handleMetadataRebuild}
-                    onSwitchToRawLatex={handleSwitchToRawLatex}
-                  />
-                </Panel>
-                {!isMobile && (
+              ) : (
+                <PanelGroup direction="horizontal">
+                  <Panel defaultSize={50} minSize={30} className="flex flex-col h-full bg-nb-surface dark:bg-nb-dark-bg">
+                    <Editor
+                      config={appConfig}
+                      isLocalMode={workspaceMode !== "github"}
+                      initialTitle={openFile.title}
+                      initialAuthor={openFile.author}
+                      initialPhase={openFile.phase}
+                      initialContent={openFile.tiptapContent}
+                      metadataMissing={openFile.metadataMissing}
+                      filename={openFile.path}
+                      onSaved={handleEntrySaved}
+                      onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
+                      onContentChange={(latex) => setLatexContent(latex)}
+                      onTitleChange={(title) => setOpenFile(prev => prev ? { ...prev, title } : null)}
+                      onAuthorChange={(author) => setOpenFile(prev => prev ? { ...prev, author } : null)}
+                      onPhaseChange={(phase) => setOpenFile(prev => prev ? { ...prev, phase } : null)}
+                      onImageUpload={handleImageUploaded}
+                      onMetadataRebuild={handleMetadataRebuild}
+                      onSwitchToRawLatex={handleSwitchToRawLatex}
+                    />
+                  </Panel>
                   <PanelResizeHandle className="w-1.5 bg-nb-surface-mid dark:bg-nb-dark-outline-variant hover:bg-nb-tertiary/40 transition-colors cursor-col-resize relative">
                     <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-nb-outline-variant/30 dark:bg-nb-dark-outline/20" />
                   </PanelResizeHandle>
-                )}
-                <Panel defaultSize={50} minSize={30} className="flex flex-col h-full bg-nb-surface-low dark:bg-nb-dark-bg">
-                  <Preview latexContent={latexContent} />
-                </Panel>
-              </PanelGroup>
+                  <Panel defaultSize={50} minSize={30} className="flex flex-col h-full bg-nb-surface-low dark:bg-nb-dark-bg">
+                    <Preview latexContent={latexContent} />
+                  </Panel>
+                </PanelGroup>
+              )}
             </div>
           )}
         </Panel>

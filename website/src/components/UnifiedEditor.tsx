@@ -44,8 +44,8 @@ const ToolbarButton = ({
     title={title}
     className={`p-1.5 rounded transition-all flex items-center justify-center ${
       active 
-        ? "bg-zinc-200 text-zinc-900" 
-        : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+        ? "bg-nb-surface-mid text-nb-primary" 
+        : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-secondary"
     }`}
   >
     {children}
@@ -73,11 +73,11 @@ const ImageWithCaption = TiptapImage.extend({
 function ImageNodeView({ node, updateAttributes, deleteNode }: any) {
   return (
     <NodeViewWrapper
-      className="my-8 rounded-2xl border-2 border-gray-100 dark:border-zinc-800 hover:border-blue-400/40 dark:hover:border-blue-500/30 transition-all bg-gray-50 dark:bg-zinc-900/50 p-4 group relative"
+      className="my-8 rounded-2xl border-2 border-nb-outline-variant/30 hover:border-nb-tertiary/40 transition-all bg-nb-surface-low p-4 group relative"
       data-drag-handle
     >
       {/* Image */}
-      <div className="rounded-xl overflow-hidden bg-white dark:bg-zinc-900 shadow-md">
+      <div className="rounded-xl overflow-hidden bg-nb-surface shadow-md">
         <img
           src={node.attrs.src}
           alt={node.attrs.alt}
@@ -96,29 +96,29 @@ function ImageNodeView({ node, updateAttributes, deleteNode }: any) {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Caption row */}
-        <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 rounded-xl px-3 py-2">
-          <Pencil size={12} className="text-blue-500 shrink-0" />
+        <div className="flex items-center gap-2 bg-nb-tertiary/5 border border-nb-tertiary/20 rounded-xl px-3 py-2">
+          <Pencil size={12} className="text-nb-tertiary shrink-0" />
           <input
             type="text"
             value={node.attrs.alt ?? ""}
             onChange={(e) => updateAttributes({ alt: e.target.value })}
             placeholder="Figure caption (required)…"
-            className="flex-1 text-sm font-medium bg-transparent outline-none placeholder:text-blue-300 dark:placeholder:text-blue-900 text-gray-800 dark:text-gray-200"
+            className="flex-1 text-sm font-medium bg-transparent outline-none placeholder:text-nb-on-surface-variant/40 text-nb-on-surface"
           />
         </div>
 
         {/* Initials row */}
         <div className="flex items-center gap-2 opacity-60 hover:opacity-100 transition-opacity">
-          <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 shrink-0">Author Initials</span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant shrink-0">Author Initials</span>
           <input
             type="text"
             value={node.attrs.title ?? ""}
             onChange={(e) => updateAttributes({ title: e.target.value })}
             placeholder="AS"
-            className="w-20 text-xs font-mono bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-lg px-2 py-1 outline-none focus:border-blue-400 transition-colors"
+            className="w-20 text-xs font-mono bg-nb-surface border border-nb-outline-variant rounded-lg px-2 py-1 outline-none focus:border-nb-tertiary transition-colors text-nb-on-surface"
           />
           {node.attrs.filePath && (
-            <span className="text-[10px] text-gray-400 font-mono truncate">{node.attrs.filePath}</span>
+            <span className="text-[10px] text-nb-on-surface-variant font-mono truncate">{node.attrs.filePath}</span>
           )}
         </div>
       </div>
@@ -149,13 +149,13 @@ const CustomCodeBlock = CodeBlockLowlight.extend({
 
 function CodeBlockNodeView({ node, updateAttributes }: any) {
   return (
-    <NodeViewWrapper className="my-6 rounded-xl overflow-hidden border border-zinc-800 shadow-lg">
+    <NodeViewWrapper className="my-6 rounded-xl overflow-hidden border border-nb-outline-variant shadow-lg">
       {/* Header bar */}
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div
         contentEditable={false}
         suppressContentEditableWarning
-        className="flex items-center gap-2 px-4 py-2 bg-zinc-800/80 border-b border-zinc-700"
+        className="flex items-center gap-2 px-4 py-2 bg-nb-surface-mid border-b border-nb-outline-variant"
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
@@ -170,7 +170,7 @@ function CodeBlockNodeView({ node, updateAttributes }: any) {
           onChange={(e) => updateAttributes({ language: e.target.value })}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
-          className="text-xs font-mono bg-zinc-700 text-zinc-200 border border-zinc-600 rounded-lg px-3 py-1 outline-none cursor-pointer hover:bg-zinc-600 transition-colors"
+          className="text-xs font-mono bg-nb-surface text-nb-on-surface border border-nb-outline-variant rounded-lg px-3 py-1 outline-none cursor-pointer hover:bg-nb-surface-low transition-colors"
         >
           {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
         </select>
@@ -292,7 +292,7 @@ export default function UnifiedEditor({
   return (
     <div className="flex flex-col gap-4">
       {/* ── TipTap Toolbar ────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-1.5 p-2 border border-nb-outline-variant dark:border-nb-dark-outline rounded-xl bg-nb-surface-lowest dark:bg-nb-dark-surface-high/50 sticky top-0 z-30 shadow-nb-sm">
+      <div className="flex flex-wrap items-center gap-1.5 p-2 border border-nb-outline-variant rounded-xl bg-nb-surface sticky top-0 z-30 shadow-nb-sm">
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}
           active={editor.isActive("bold")}
@@ -322,7 +322,7 @@ export default function UnifiedEditor({
           <Heading2 size={16} />
         </ToolbarButton>
         
-        <div className="w-px h-6 bg-nb-outline-variant/30 dark:bg-nb-dark-outline/30 mx-1" />
+        <div className="w-px h-6 bg-nb-outline-variant/30 mx-1" />
 
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBulletList().run()}
@@ -346,7 +346,7 @@ export default function UnifiedEditor({
           <Code size={16} />
         </ToolbarButton>
         
-        <div className="w-px h-6 bg-nb-outline-variant/30 dark:bg-nb-dark-outline/30 mx-1" />
+        <div className="w-px h-6 bg-nb-outline-variant/30 mx-1" />
 
         <ToolbarButton
           onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
@@ -355,7 +355,7 @@ export default function UnifiedEditor({
           <TableIcon size={16} />
         </ToolbarButton>
 
-        <label className="p-2 rounded-lg cursor-pointer text-nb-on-surface-variant hover:bg-nb-surface-mid dark:hover:bg-nb-dark-surface-high transition-all" title="Upload Image">
+        <label className="p-2 rounded-lg cursor-pointer text-nb-on-surface-variant hover:bg-nb-surface-mid transition-all" title="Upload Image">
           <ImageIcon size={16} />
           <input
             type="file"
@@ -396,7 +396,7 @@ export default function UnifiedEditor({
       )}
 
       {/* ── Main Editor Area ───────────────────────────────────────── */}
-      <div className="bg-nb-surface-lowest dark:bg-nb-dark-bg/60 rounded-2xl border border-nb-outline-variant dark:border-nb-dark-outline shadow-nb-sm min-h-[600px] p-8 md:p-12 relative">
+      <div className="bg-nb-surface rounded-2xl border border-nb-outline-variant shadow-nb-sm min-h-[600px] p-8 md:p-12 relative">
         <EditorContent editor={editor} className="max-w-none" />
       </div>
 
@@ -404,18 +404,18 @@ export default function UnifiedEditor({
       {showRawConfirm && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-nb-secondary/60 backdrop-blur-md px-4" onClick={() => setShowRawConfirm(false)}>
           <div
-            className="bg-nb-surface-lowest dark:bg-nb-dark-surface rounded-2xl p-7 shadow-nb-lg max-w-sm w-full border border-nb-outline-variant dark:border-nb-dark-outline animate-in zoom-in-95 duration-200"
+            className="bg-nb-surface rounded-2xl p-7 shadow-nb-lg max-w-sm w-full border border-nb-outline-variant animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0">
                 <FileCode size={20} className="text-nb-primary" />
               </div>
-              <h3 className="font-black text-sm uppercase tracking-widest text-nb-secondary dark:text-nb-dark-on-surface">Switch to Raw Mode?</h3>
+              <h3 className="font-black text-sm uppercase tracking-widest text-nb-secondary">Switch to Raw Mode?</h3>
             </div>
             
             <div className="space-y-4 mb-8">
-              <p className="text-sm text-nb-on-surface-variant dark:text-nb-dark-on-variant leading-relaxed">
+              <p className="text-sm text-nb-on-surface-variant leading-relaxed">
                 This will strip all rich metadata and lock this file into a raw text editor.
               </p>
               <div className="flex items-start gap-2.5 p-3 bg-nb-primary/5 border border-nb-primary/20 rounded-xl">
@@ -429,7 +429,7 @@ export default function UnifiedEditor({
             <div className="flex gap-3">
               <button
                 onClick={() => setShowRawConfirm(false)}
-                className="flex-1 px-4 py-2.5 rounded-xl border border-nb-outline-variant dark:border-nb-dark-outline text-xs font-black uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-surface-low dark:hover:bg-nb-dark-surface-low transition-colors"
+                className="flex-1 px-4 py-2.5 rounded-xl border border-nb-outline-variant text-xs font-black uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-surface-low transition-colors"
               >
                 Cancel
               </button>
@@ -450,5 +450,5 @@ export default function UnifiedEditor({
 /* ── Shared UI Components ────────────────────────────────────── */
 
 function Sep({ light }: { light?: boolean }) {
-  return <div className={`w-px h-6 self-center mx-2 shrink-0 ${light ? "bg-white/20" : "bg-gray-100 dark:bg-zinc-800"}`} />;
+  return <div className={`w-px h-6 self-center mx-2 shrink-0 ${light ? "bg-white/20" : "bg-nb-outline-variant/30"}`} />;
 }
