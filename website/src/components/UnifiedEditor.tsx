@@ -77,11 +77,10 @@ const TableGridSelector = ({ onSelect, initialRows = 0, initialCols = 0 }: { onS
               key={`${r}-${c}`}
               onMouseEnter={() => setHovered({ r: r + 1, c: c + 1 })}
               onClick={() => onSelect(r + 1, c + 1)}
-              className={`w-3.5 h-3.5 rounded-sm border transition-colors cursor-pointer ${
-                r < hovered.r && c < hovered.c
+              className={`w-3.5 h-3.5 rounded-sm border transition-colors cursor-pointer ${r < hovered.r && c < hovered.c
                   ? "bg-nb-primary border-nb-primary"
                   : "bg-nb-surface-low border-nb-outline-variant/30 hover:border-nb-primary/50"
-              }`}
+                }`}
             />
           ))
         ))}
@@ -113,12 +112,19 @@ const ImageWithCaption = TiptapImage.extend({
 function ImageNodeView({ node, updateAttributes, deleteNode, selected }: any) {
   const [showMenu, setShowMenu] = useState(false);
 
+  React.useEffect(() => {
+    if (!showMenu) return;
+    const handleOutsideClick = () => setShowMenu(false);
+    window.addEventListener("mousedown", handleOutsideClick);
+    return () => window.removeEventListener("mousedown", handleOutsideClick);
+  }, [showMenu]);
+
   return (
     <NodeViewWrapper draggable className={`my-8 group relative max-w-2xl mx-auto transition-all ${selected ? 'z-[100]' : 'z-10'}`}>
       <div className={`relative rounded-xl border bg-nb-surface group-hover:shadow-nb-md transition-all ${selected ? 'border-nb-primary ring-4 ring-nb-primary/30 shadow-nb-lg' : 'border-nb-outline-variant/30 shadow-nb-sm'}`}>
         {/* Drag Handle */}
         <div contentEditable={false} className="absolute top-2 left-2 z-[60]">
-          <div 
+          <div
             className="w-8 h-8 rounded-full bg-white/90 text-nb-on-surface-variant flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm border border-nb-outline-variant/20 hover:bg-white hover:text-nb-primary transition-all"
             data-drag-handle
           >
@@ -137,22 +143,36 @@ function ImageNodeView({ node, updateAttributes, deleteNode, selected }: any) {
           />
         </div>
 
-        {/* Floating Menu Button */}
-        <div contentEditable={false} className="absolute top-2 right-2 flex items-center gap-2 z-[60]">
-          <button 
-            onClick={() => setShowMenu(!showMenu)}
+        {/* Floating Menu Button Area */}
+        <div
+          contentEditable={false}
+          className="absolute top-2 right-2 flex items-center gap-2 z-[70]"
+          onMouseDown={(e) => { e.stopPropagation(); }}
+          onPointerDown={(e) => { e.stopPropagation(); }}
+          onClick={(e) => { e.stopPropagation(); }}
+          onDragStart={(e) => { e.stopPropagation(); }}
+        >
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
             className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${showMenu ? 'bg-nb-primary text-white scale-110 shadow-lg' : 'bg-white/90 text-nb-on-surface-variant hover:bg-white hover:text-nb-primary shadow-sm border border-nb-outline-variant/20'}`}
           >
             <MoreVertical size={16} />
           </button>
 
           {showMenu && (
-            <div className="absolute top-10 right-0 w-64 bg-nb-surface border border-nb-outline-variant shadow-nb-lg rounded-xl z-50 p-4 animate-in fade-in zoom-in duration-200">
+            <div
+              className="absolute top-10 right-0 w-64 bg-nb-surface border border-nb-outline-variant shadow-nb-lg rounded-xl z-50 p-4 animate-in fade-in zoom-in duration-200"
+              onMouseDown={(e) => { e.stopPropagation(); }}
+              onPointerDown={(e) => { e.stopPropagation(); }}
+              onClick={(e) => { e.stopPropagation(); }}
+              draggable="true"
+              onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            >
               <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
                 <Settings size={14} className="text-nb-tertiary" />
                 <span className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant">Image Options</span>
               </div>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Figure Caption</label>
@@ -189,6 +209,10 @@ function ImageNodeView({ node, updateAttributes, deleteNode, selected }: any) {
                       step="5"
                       value={parseInt(node.attrs.width) || 100}
                       onChange={(e) => updateAttributes({ width: `${e.target.value}%` })}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      draggable="true"
+                      onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
                       className="w-full h-1.5 bg-nb-surface-low rounded-lg appearance-none cursor-pointer accent-nb-primary"
                     />
                     <div className="flex justify-between mt-2 text-[8px] font-bold text-nb-on-surface-variant/40 uppercase tracking-tighter">
@@ -200,7 +224,7 @@ function ImageNodeView({ node, updateAttributes, deleteNode, selected }: any) {
                 </div>
 
                 <div className="pt-2">
-                  <button 
+                  <button
                     onClick={() => deleteNode()}
                     className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-bold"
                   >
@@ -213,7 +237,7 @@ function ImageNodeView({ node, updateAttributes, deleteNode, selected }: any) {
           )}
         </div>
       </div>
-      
+
       {node.attrs.alt && (
         <p className="mt-3 text-center text-xs font-medium text-nb-on-surface-variant italic">
           <span className="font-bold uppercase tracking-tighter mr-1.5 opacity-60">Fig.</span>
@@ -256,6 +280,13 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
     return () => { editor.off('selectionUpdate', check); };
   }, [editor, getPos, node.nodeSize]);
 
+  React.useEffect(() => {
+    if (!showMenu) return;
+    const handleOutsideClick = () => setShowMenu(false);
+    window.addEventListener("mousedown", handleOutsideClick);
+    return () => window.removeEventListener("mousedown", handleOutsideClick);
+  }, [showMenu]);
+
   const active = selected || isCursorInside;
 
   return (
@@ -263,7 +294,7 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
       <div className={`relative rounded-xl border bg-nb-surface group-hover:shadow-nb-md transition-all ${active ? 'border-nb-primary ring-4 ring-nb-primary/30 shadow-nb-lg' : 'border-nb-outline-variant/30 shadow-nb-sm'}`}>
         {/* Drag Handle */}
         <div contentEditable={false} className="absolute top-2 left-2 z-[60]">
-          <div 
+          <div
             className={`w-8 h-8 rounded-full flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm border transition-all ${active ? 'bg-nb-primary text-white border-nb-primary' : 'bg-white/90 text-nb-on-surface-variant border-nb-outline-variant/20 hover:bg-white hover:text-nb-secondary'}`}
             data-drag-handle
           >
@@ -271,10 +302,17 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
           </div>
         </div>
 
-        {/* Floating Menu Button */}
-        <div contentEditable={false} className="absolute top-2 right-2 z-[60] flex items-center gap-2">
-          <button 
-            onClick={() => setShowMenu(!showMenu)}
+        {/* Floating Menu Button Area */}
+        <div
+          contentEditable={false}
+          className="absolute top-2 right-2 z-[70] flex items-center gap-2"
+          onMouseDown={(e) => { e.stopPropagation(); }}
+          onPointerDown={(e) => { e.stopPropagation(); }}
+          onClick={(e) => { e.stopPropagation(); }}
+          onDragStart={(e) => { e.stopPropagation(); }}
+        >
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
             className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${showMenu ? 'bg-nb-secondary text-white scale-110 shadow-lg' : 'bg-white/90 text-nb-on-surface-variant hover:bg-white hover:text-nb-secondary shadow-sm border border-nb-outline-variant/20'}`}
           >
             <MoreVertical size={16} />
@@ -282,31 +320,37 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
 
           {showMenu && (
             <>
-              <div className="fixed inset-0 z-[65]" onClick={() => setShowMenu(false)} />
-              <div className="absolute top-10 right-0 w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-lg rounded-xl z-[70] p-4 animate-in fade-in zoom-in duration-200" onClick={(e) => e.stopPropagation()}>
+              <div
+                className="absolute top-10 right-0 w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-lg rounded-xl z-[70] p-4 animate-in fade-in zoom-in duration-200"
+                onMouseDown={(e) => { e.stopPropagation(); }}
+                onPointerDown={(e) => { e.stopPropagation(); }}
+                onClick={(e) => { e.stopPropagation(); }}
+                draggable="true"
+                onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              >
                 <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
                   <TableIcon size={14} className="text-nb-secondary" />
                   <span className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant">Table Management</span>
                 </div>
-                
+
                 <div className="space-y-5 text-nb-on-surface">
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
                       <span className="block text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant/60">Rows</span>
                       <div className="flex bg-nb-surface-low rounded-lg border border-nb-outline-variant/30 p-1">
-                        <button onClick={() => editor.chain().focus().addRowBefore().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronUp size={12}/></button>
-                        <button onClick={() => editor.chain().focus().addRowAfter().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronDown size={12}/></button>
+                        <button onClick={() => editor.chain().focus().addRowBefore().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronUp size={12} /></button>
+                        <button onClick={() => editor.chain().focus().addRowAfter().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronDown size={12} /></button>
                         <div className="w-px h-3 bg-nb-outline-variant/30 mx-0.5 self-center" />
-                        <button onClick={() => editor.chain().focus().deleteRow().run()} className="flex-1 p-1.5 hover:bg-red-50 rounded transition-colors text-red-500"><Trash2 size={12}/></button>
+                        <button onClick={() => editor.chain().focus().deleteRow().run()} className="flex-1 p-1.5 hover:bg-red-50 rounded transition-colors text-red-500"><Trash2 size={12} /></button>
                       </div>
                     </div>
                     <div className="space-y-1">
                       <span className="block text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant/60">Cols</span>
                       <div className="flex bg-nb-surface-low rounded-lg border border-nb-outline-variant/30 p-1">
-                        <button onClick={() => editor.chain().focus().addColumnBefore().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronLeft size={12}/></button>
-                        <button onClick={() => editor.chain().focus().addColumnAfter().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronRight size={12}/></button>
+                        <button onClick={() => editor.chain().focus().addColumnBefore().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronLeft size={12} /></button>
+                        <button onClick={() => editor.chain().focus().addColumnAfter().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronRight size={12} /></button>
                         <div className="w-px h-3 bg-nb-outline-variant/30 mx-0.5 self-center" />
-                        <button onClick={() => editor.chain().focus().deleteColumn().run()} className="flex-1 p-1.5 hover:bg-red-50 rounded transition-colors text-red-500"><Trash2 size={12}/></button>
+                        <button onClick={() => editor.chain().focus().deleteColumn().run()} className="flex-1 p-1.5 hover:bg-red-50 rounded transition-colors text-red-500"><Trash2 size={12} /></button>
                       </div>
                     </div>
                   </div>
@@ -323,7 +367,7 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
                   </div>
 
                   <div className="flex gap-2 pt-2">
-                    <button 
+                    <button
                       onClick={() => editor.chain().focus().deleteTable().run()}
                       className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-[10px] font-bold uppercase"
                     >
@@ -342,7 +386,7 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
           <NodeViewContent as="div" className="border-collapse w-full" />
         </div>
       </div>
-      
+
       {node.attrs.caption && (
         <p className="mt-3 text-center text-xs font-medium text-nb-on-surface-variant italic">
           <span className="font-bold uppercase tracking-tighter mr-1.5 opacity-60">Table.</span>
@@ -386,6 +430,13 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
     return () => { editor.off('selectionUpdate', check); };
   }, [editor, getPos, node.nodeSize]);
 
+  React.useEffect(() => {
+    if (!showMenu) return;
+    const handleOutsideClick = () => setShowMenu(false);
+    window.addEventListener("mousedown", handleOutsideClick);
+    return () => window.removeEventListener("mousedown", handleOutsideClick);
+  }, [showMenu]);
+
   const active = selected || isCursorInside;
 
   return (
@@ -393,7 +444,7 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
       <div className={`relative rounded-xl border bg-zinc-950 group-hover:shadow-nb-md transition-all ${active ? 'border-nb-primary ring-4 ring-nb-primary/30 shadow-nb-lg' : 'border-nb-outline-variant/30 shadow-nb-sm'}`}>
         {/* Drag Handle */}
         <div contentEditable={false} className="absolute top-2 left-2 z-[60]">
-          <div 
+          <div
             className={`w-8 h-8 rounded-full flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm border transition-all ${active ? 'bg-nb-primary text-white border-nb-primary' : 'bg-white/10 text-zinc-400 border-white/5 hover:bg-white/20 hover:text-white'}`}
             data-drag-handle
           >
@@ -401,10 +452,17 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
           </div>
         </div>
 
-        {/* Floating Menu Button */}
-        <div contentEditable={false} className="absolute top-2 right-2 z-[60]">
-          <button 
-            onClick={() => setShowMenu(!showMenu)}
+        {/* Floating Menu Button Area */}
+        <div
+          contentEditable={false}
+          className="absolute top-2 right-2 z-[70]"
+          onMouseDown={(e) => { e.stopPropagation(); }}
+          onPointerDown={(e) => { e.stopPropagation(); }}
+          onClick={(e) => { e.stopPropagation(); }}
+          onDragStart={(e) => { e.stopPropagation(); }}
+        >
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
             className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${showMenu ? 'bg-nb-primary text-white scale-110 shadow-lg' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white shadow-sm border border-white/5'}`}
           >
             <MoreVertical size={16} />
@@ -412,13 +470,19 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
 
           {showMenu && (
             <>
-              <div className="fixed inset-0 z-[65]" onClick={() => setShowMenu(false)} />
-              <div className="absolute top-10 right-0 w-64 bg-nb-surface border border-nb-outline-variant shadow-nb-lg rounded-xl z-[70] p-4 animate-in fade-in zoom-in duration-200" onClick={(e) => e.stopPropagation()}>
+              <div
+                className="absolute top-10 right-0 w-64 bg-nb-surface border border-nb-outline-variant shadow-nb-lg rounded-xl z-[70] p-4 animate-in fade-in zoom-in duration-200"
+                onMouseDown={(e) => { e.stopPropagation(); }}
+                onPointerDown={(e) => { e.stopPropagation(); }}
+                onClick={(e) => { e.stopPropagation(); }}
+                draggable="true"
+                onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              >
                 <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
                   <Code2 size={14} className="text-nb-primary" />
                   <span className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant">Code Options</span>
                 </div>
-                
+
                 <div className="space-y-4">
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Caption</label>
@@ -443,7 +507,7 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
                   </div>
 
                   <div className="pt-2">
-                    <button 
+                    <button
                       onClick={() => deleteNode()}
                       className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-bold"
                     >
@@ -464,7 +528,7 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
           </pre>
         </div>
       </div>
-      
+
       {node.attrs.caption && (
         <p className="mt-3 text-center text-xs font-medium text-nb-on-surface-variant italic">
           <span className="font-bold uppercase tracking-tighter mr-1.5 opacity-60">Snippet.</span>
@@ -558,7 +622,7 @@ export default function UnifiedEditor({
 
           const rect = scrollContainer.getBoundingClientRect();
           const y = event.clientY;
-          const threshold = 250; // pixels from top/bottom to start scrolling
+          const threshold = 50; // pixels from top/bottom to start scrolling
 
           if (y < rect.top + threshold) {
             scrollContainer.scrollBy({ top: -15, behavior: 'auto' });
@@ -625,12 +689,20 @@ export default function UnifiedEditor({
     return () => window.removeEventListener("mousedown", handleOutsideClick);
   }, [showTableGrid]);
 
+  // Dismiss context menu on click away
+  React.useEffect(() => {
+    if (!contextMenu) return;
+    const handleOutsideClick = () => setContextMenu(null);
+    window.addEventListener("mousedown", handleOutsideClick);
+    return () => window.removeEventListener("mousedown", handleOutsideClick);
+  }, [contextMenu]);
+
   if (!editor) return null;
 
   return (
     <div className="flex flex-col gap-4">
       {/* ── TipTap Toolbar ────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-1.5 p-2 border border-nb-outline-variant rounded-xl bg-nb-surface sticky top-0 z-[100] shadow-nb-sm">
+      <div className="flex flex-wrap items-center gap-1.5 p-2 border border-nb-outline-variant rounded-xl bg-nb-surface sticky top-0 z-[120] shadow-nb-sm">
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}
           active={editor.isActive("bold")}
@@ -695,17 +767,17 @@ export default function UnifiedEditor({
           >
             <TableIcon size={16} />
           </ToolbarButton>
-          
+
           {showTableGrid && (
-            <div 
+            <div
               className="absolute top-12 left-0 z-[110] animate-in fade-in zoom-in-95 duration-200 shadow-2xl rounded-xl"
               onMouseDown={(e) => e.stopPropagation()}
             >
-              <TableGridSelector 
+              <TableGridSelector
                 onSelect={(rows, cols) => {
                   editor.chain().focus().insertTable({ rows, cols, withHeaderRow: false }).run();
                   setShowTableGrid(false);
-                }} 
+                }}
               />
             </div>
           )}
@@ -735,68 +807,65 @@ export default function UnifiedEditor({
           </div>
         )}
 
-        <div className="bg-nb-surface min-h-[600px] relative" onClick={() => setContextMenu(null)}>
+        <div className="bg-nb-surface min-h-[600px] relative">
           <EditorContent editor={editor} className="max-w-none" />
-          
+
           {/* Editor Context Menu */}
           {contextMenu && (
-            <>
-              <div className="fixed inset-0 z-[140]" onClick={() => setContextMenu(null)} />
-              <div 
-                className="fixed z-[150] w-56 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-2xl p-2 animate-in fade-in zoom-in-95 duration-150"
-                style={{ top: contextMenu.y, left: contextMenu.x }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="grid grid-cols-1 gap-1">
-                  <ContextMenuItem 
-                    label="Cut" 
-                    icon={<Trash2 size={14}/>} 
-                    onClick={() => {
-                      document.execCommand('cut');
-                      setContextMenu(null);
-                    }} 
-                  />
-                  <ContextMenuItem 
-                    label="Copy" 
-                    icon={<FileCode size={14}/>} 
-                    onClick={() => {
-                      document.execCommand('copy');
-                      setContextMenu(null);
-                    }} 
-                  />
-                  <ContextMenuItem 
-                    label="Paste" 
-                    icon={<Pencil size={14}/>} 
-                    onClick={async () => {
-                      try {
-                        const text = await navigator.clipboard.readText();
-                        editor.chain().focus().insertContent(text).run();
-                      } catch (err) {
-                        console.error("Paste failed", err);
-                      }
-                      setContextMenu(null);
-                    }} 
-                  />
-                  <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
-                  <ContextMenuItem 
-                    label="Insert Image" 
-                    icon={<ImageIcon size={14}/>} 
-                    onClick={() => {
-                      insertImage();
-                      setContextMenu(null);
-                    }} 
-                  />
-                  <ContextMenuItem 
-                    label="Insert Table" 
-                    icon={<TableIcon size={14}/>} 
-                    onClick={() => {
-                      setShowTableGrid(true);
-                      setContextMenu(null);
-                    }} 
-                  />
-                </div>
+            <div
+              className="fixed z-[150] w-56 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-2xl p-2 animate-in fade-in zoom-in-95 duration-150"
+              style={{ top: contextMenu.y, left: contextMenu.x }}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <div className="grid grid-cols-1 gap-1">
+                <ContextMenuItem
+                  label="Cut"
+                  icon={<Trash2 size={14} />}
+                  onClick={() => {
+                    document.execCommand('cut');
+                    setContextMenu(null);
+                  }}
+                />
+                <ContextMenuItem
+                  label="Copy"
+                  icon={<FileCode size={14} />}
+                  onClick={() => {
+                    document.execCommand('copy');
+                    setContextMenu(null);
+                  }}
+                />
+                <ContextMenuItem
+                  label="Paste"
+                  icon={<Pencil size={14} />}
+                  onClick={async () => {
+                    try {
+                      const text = await navigator.clipboard.readText();
+                      editor.chain().focus().insertContent(text).run();
+                    } catch (err) {
+                      console.error("Paste failed", err);
+                    }
+                    setContextMenu(null);
+                  }}
+                />
+                <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
+                <ContextMenuItem
+                  label="Insert Image"
+                  icon={<ImageIcon size={14} />}
+                  onClick={() => {
+                    insertImage();
+                    setContextMenu(null);
+                  }}
+                />
+                <ContextMenuItem
+                  label="Insert Table"
+                  icon={<TableIcon size={14} />}
+                  onClick={() => {
+                    setShowTableGrid(true);
+                    setContextMenu(null);
+                  }}
+                />
               </div>
-            </>
+            </div>
           )}
         </div>
       </div>
