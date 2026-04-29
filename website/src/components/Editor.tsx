@@ -106,13 +106,24 @@ const convertNodeToLatex = (node: any): string => {
     case "image": {
       const filePath = node.attrs?.filePath;
       const src = node.attrs?.src ?? "";
-      const imgSrc = filePath
+      let imgSrc = filePath
         ? filePath
         : src.startsWith("data:") ? "resources/embedded_image.png" : src;
+
+      // Remove redundant resources/ prefix if graphicspath already includes it
+      if (imgSrc.startsWith("resources/")) {
+        imgSrc = imgSrc.replace("resources/", "");
+      }
+
       const escapedCaption = escapeLaTeX(node.attrs?.alt ?? "Figure");
       const escapedInitials = escapeLaTeX(node.attrs?.title ?? "");
-      const escapedWidth = escapeLaTeX(node.attrs?.width ?? "100%");
-      return `\\notebookimage{${imgSrc}}{${escapedCaption}}{${escapedInitials}}{${escapedWidth}}\n\n`;
+      
+      // Convert "55%" to "0.55\textwidth"
+      const rawWidth = (node.attrs?.width ?? "100%").toString().replace("%", "");
+      const widthNum = parseFloat(rawWidth);
+      const latexWidth = isNaN(widthNum) ? "1" : (widthNum / 100).toFixed(2);
+
+      return `\\notebookimage{${imgSrc}}{${escapedCaption}}{${escapedInitials}}{${latexWidth}\\textwidth}\n\n`;
     }
 
     case "table": {
