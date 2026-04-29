@@ -8,7 +8,7 @@
  * Local-folder mode bypasses this store entirely and writes through immediately.
  */
 
-const DB_NAME = "notebook-pending";
+const DEFAULT_DB_NAME = "notebook-pending";
 const DB_VERSION = 1;
 const STORE_NAME = "changes";
 
@@ -27,11 +27,13 @@ export interface PendingChange {
   stagedAt: string;
 }
 
-function openDB(): Promise<IDBDatabase> {
+function openDB(dbName: string = DEFAULT_DB_NAME): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    const req = indexedDB.open(dbName, DB_VERSION);
     req.onupgradeneeded = () => {
-      req.result.createObjectStore(STORE_NAME, { keyPath: "path" });
+      if (!req.result.objectStoreNames.contains(STORE_NAME)) {
+        req.result.createObjectStore(STORE_NAME, { keyPath: "path" });
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -45,8 +47,8 @@ function tx(
   return db.transaction(STORE_NAME, mode).objectStore(STORE_NAME);
 }
 
-export async function stageChange(change: PendingChange): Promise<void> {
-  const db = await openDB();
+export async function stageChange(dbName: string, change: PendingChange): Promise<void> {
+  const db = await openDB(dbName);
   return new Promise((resolve, reject) => {
     const store = tx(db, "readwrite");
     const req = store.put(change);
@@ -55,8 +57,8 @@ export async function stageChange(change: PendingChange): Promise<void> {
   });
 }
 
-export async function removeStaged(path: string): Promise<void> {
-  const db = await openDB();
+export async function removeStaged(dbName: string, path: string): Promise<void> {
+  const db = await openDB(dbName);
   return new Promise((resolve, reject) => {
     const store = tx(db, "readwrite");
     const req = store.delete(path);
@@ -65,8 +67,8 @@ export async function removeStaged(path: string): Promise<void> {
   });
 }
 
-export async function getAllPending(): Promise<PendingChange[]> {
-  const db = await openDB();
+export async function getAllPending(dbName: string): Promise<PendingChange[]> {
+  const db = await openDB(dbName);
   return new Promise((resolve, reject) => {
     const store = tx(db, "readonly");
     const req = store.getAll();
@@ -75,8 +77,8 @@ export async function getAllPending(): Promise<PendingChange[]> {
   });
 }
 
-export async function clearAllPending(): Promise<void> {
-  const db = await openDB();
+export async function clearAllPending(dbName: string): Promise<void> {
+  const db = await openDB(dbName);
   return new Promise((resolve, reject) => {
     const store = tx(db, "readwrite");
     const req = store.clear();
@@ -85,8 +87,8 @@ export async function clearAllPending(): Promise<void> {
   });
 }
 
-export async function getPending(path: string): Promise<PendingChange | undefined> {
-  const db = await openDB();
+export async function getPending(dbName: string, path: string): Promise<PendingChange | undefined> {
+  const db = await openDB(dbName);
   return new Promise((resolve, reject) => {
     const store = tx(db, "readonly");
     const req = store.get(path);

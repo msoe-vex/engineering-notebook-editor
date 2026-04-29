@@ -27,9 +27,17 @@ export interface NotebookMetadata {
   version: number;
   resourceRefs: Record<string, string[]>; // resourcePath -> entryPaths[]
   entries: Record<string, EntryInfo>;      // entryPath -> info
+  knownAuthors: string[];
+  knownProjectTitles: string[];
 }
 
-export const EMPTY_METADATA: NotebookMetadata = { version: 1, resourceRefs: {}, entries: {} };
+export const EMPTY_METADATA: NotebookMetadata = { 
+  version: 1, 
+  resourceRefs: {}, 
+  entries: {},
+  knownAuthors: [],
+  knownProjectTitles: []
+};
 
 // ─── TipTap JSON helpers ──────────────────────────────────────────────────────
 
@@ -157,6 +165,35 @@ export function rebuildEntryRefs(
   }
 
   return { ...metadata, resourceRefs: newRefs, entries: newEntries };
+}
+
+/** 
+ * Update the lists of known authors and project titles in metadata. 
+ * Ensures values are unique and trimmed.
+ */
+export function updateMetadataSuggestions(
+  metadata: NotebookMetadata,
+  author?: string,
+  title?: string
+): NotebookMetadata {
+  const newAuthors = [...metadata.knownAuthors];
+  const newTitles = [...metadata.knownProjectTitles];
+
+  if (author && author.trim()) {
+    const trimmed = author.trim();
+    if (!newAuthors.includes(trimmed)) newAuthors.push(trimmed);
+  }
+
+  if (title && title.trim()) {
+    const trimmed = title.trim();
+    if (!newTitles.includes(trimmed)) newTitles.push(trimmed);
+  }
+
+  return {
+    ...metadata,
+    knownAuthors: newAuthors.sort(),
+    knownProjectTitles: newTitles.sort()
+  };
 }
 
 

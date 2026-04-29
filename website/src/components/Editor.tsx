@@ -75,14 +75,13 @@ const convertNodeToLatex = (node: any): string => {
     }
 
     case "codeBlock": {
-      const lang = node.attrs?.language;
+      const lang = node.attrs?.language ?? "plaintext";
       const code = (node.content || []).map((n: any) => n.text ?? "").join("");
-      const opt = lang && lang !== "plaintext" ? `[language=${lang}]` : "";
-      return `\\begin{lstlisting}${opt}\n${code}\n\\end{lstlisting}\n\n`;
+      const caption = node.attrs?.caption ?? "";
+      return `\\notebook_codeblock{${lang}}{${code}}{${caption}}\n\n`;
     }
 
     case "image": {
-      // Prefer the disk file path; fall back if only a data-URL is available
       const filePath = node.attrs?.filePath;
       const src = node.attrs?.src ?? "";
       const imgSrc = filePath
@@ -90,7 +89,8 @@ const convertNodeToLatex = (node: any): string => {
         : src.startsWith("data:") ? "resources/embedded_image.png" : src;
       const caption = node.attrs?.alt ?? "Figure";
       const initials = node.attrs?.title ?? "";
-      return `\\image{${imgSrc}}{${caption}}{${initials}}\n\n`;
+      const width = node.attrs?.width ?? "100%";
+      return `\\notebook_image{${imgSrc}}{${caption}}{${initials}}{${width}}\n\n`;
     }
 
     case "table": {
@@ -107,7 +107,7 @@ const convertNodeToLatex = (node: any): string => {
         return cells.join(" & ") + " \\\\ \\hline";
       }).join("\n");
 
-      return `\\begin{figure}[h]\n\\centering\n\\begin{tabular}{${colSpec}}\n\\hline\n${body}\n\\end{tabular}\n\\caption{${caption}}\n\\end{figure}\n\n`;
+      return `\\notebook_table{${colSpec}}{${body}}{${caption}}\n\n`;
     }
 
     // tableRow / tableCell / tableHeader — just recurse
@@ -232,10 +232,32 @@ export default function Editor({
     });
     let latex = `% METADATA: ${metadata}\n`;
     const dateStr = dateObj.toISOString().split('T')[0];
-    latex += `\\newentry{${t}}{${dateStr}}{${a}}{${p}}\n\n`;
+    latex += `\\notebook_entry{${t}}{${dateStr}}{${a}}{${p}}\n\n`;
     latex += convertJsonToLatex(cnt);
     return latex;
   };
+
+  const validate = () => {
+    const errors: string[] = [];
+    if (!title.trim()) errors.push("Project Title is required.");
+    if (!author.trim()) errors.push("Author is required.");
+    if (!phase) errors.push("Project Phase is required.");
+
+    try {
+      const doc = JSON.parse(content);
+      const checkCaptions = (node: any) => {
+        if (node.type === "image" && !node.attrs?.alt?.trim()) errors.push("All images must have a caption.");
+        if (node.type === "table" && !node.attrs?.caption?.trim()) errors.push("All tables must have a caption.");
+        if (node.type === "codeBlock" && !node.attrs?.caption?.trim()) errors.push("All code blocks must have a caption.");
+        (node.content ?? []).forEach(checkCaptions);
+      };
+      checkCaptions(doc);
+    } catch { /* ignore */ }
+
+    return { valid: errors.length === 0, errors };
+  };
+
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   // Notify parent of content changes. Callbacks are intentionally omitted from
   // deps — they're new arrow function instances on every App render, and adding
@@ -250,6 +272,13 @@ export default function Editor({
 
 
   const handleSave = async () => {
+    const { valid, errors } = validate();
+    if (!valid) {
+      setValidationErrors(errors);
+      return;
+    }
+
+    setValidationErrors([]);
     setIsSaving(true);
     const latex = generateLatex(content, title, author, phase);
 
@@ -318,15 +347,31 @@ export default function Editor({
           </div>
 
           {/* Row 2: Action Buttons (Center Aligned) */}
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="flex items-center gap-1.5 bg-nb-primary text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md shadow-nb-primary/20 hover:bg-nb-primary-dim transition-all active:scale-[0.98] disabled:opacity-50"
-            >
-              {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-              <span>Save Entry</span>
-            </button>
+          <div className="flex flex-wrap items-center justify-center gap-2 relative">
+            {!isLocalMode && (
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="flex items-center gap-1.5 bg-nb-primary text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md shadow-nb-primary/20 hover:bg-nb-primary-dim transition-all active:scale-[0.98] disabled:opacity-50"
+              >
+                {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                <span>Save to Drive</span>
+              </button>
+            )}
+
+            {validationErrors.length > 0 && (
+              <div className="absolute top-full mt-2 z-[80] w-64 bg-red-50 border border-red-200 rounded-xl p-3 shadow-nb-lg animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="flex items-center gap-2 mb-2 text-red-600">
+                  <AlertCircle size={14} />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Missing Requirements</span>
+                </div>
+                <ul className="space-y-1">
+                  {validationErrors.map((err, i) => (
+                    <li key={i} className="text-[10px] text-red-700 list-disc list-inside font-medium">{err}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <button
               onClick={onClose}

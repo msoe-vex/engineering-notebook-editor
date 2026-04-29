@@ -19,7 +19,7 @@ import {
   Heading1, Heading2, Image as ImageIcon,
   Table as TableIcon, Undo, Redo, Trash2,
   ChevronUp, ChevronDown, ChevronLeft, ChevronRight,
-  Pencil, AlertTriangle, FileCode, Check, Code2
+  Pencil, AlertTriangle, FileCode, Check, Code2, MoreVertical, Settings, UserCircle, Grid3X3, GripVertical
 } from "lucide-react";
 
 const lowlight = createLowlight(common);
@@ -43,18 +43,55 @@ const ToolbarButton = ({
   <button
     onClick={onClick}
     title={title}
-    className={`p-1.5 rounded transition-all flex items-center justify-center ${active
-      ? "bg-nb-primary/10 text-nb-primary shadow-sm"
-      : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-secondary"
+    className={`p-2 rounded-lg transition-all flex items-center justify-center border ${active
+      ? "bg-nb-primary text-white shadow-md border-nb-primary scale-105"
+      : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-secondary border-transparent"
       }`}
   >
     {children}
   </button>
 );
 
+const ContextMenuItem = ({ label, icon, onClick }: { label: string, icon: React.ReactNode, onClick: () => void }) => (
+  <button
+    onClick={onClick}
+    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-primary/10 hover:text-nb-primary transition-all text-left"
+  >
+    <div className="opacity-60">{icon}</div>
+    <span>{label}</span>
+  </button>
+);
+
 /* ─────────────────────────────────────────────────────────────────
    Image Node View  — caption/initials are editable inline
    ───────────────────────────────────────────────────────────────── */
+
+const TableGridSelector = ({ onSelect, initialRows = 0, initialCols = 0 }: { onSelect: (rows: number, cols: number) => void, initialRows?: number, initialCols?: number }) => {
+  const [hovered, setHovered] = useState({ r: initialRows, c: initialCols });
+  return (
+    <div className="p-3 bg-nb-surface border border-nb-outline-variant shadow-nb-lg rounded-xl w-max">
+      <div className="grid grid-cols-10 gap-1 mb-2 w-[180px]">
+        {Array.from({ length: 10 }).map((_, r) => (
+          Array.from({ length: 10 }).map((_, c) => (
+            <div
+              key={`${r}-${c}`}
+              onMouseEnter={() => setHovered({ r: r + 1, c: c + 1 })}
+              onClick={() => onSelect(r + 1, c + 1)}
+              className={`w-3.5 h-3.5 rounded-sm border transition-colors cursor-pointer ${
+                r < hovered.r && c < hovered.c
+                  ? "bg-nb-primary border-nb-primary"
+                  : "bg-nb-surface-low border-nb-outline-variant/30 hover:border-nb-primary/50"
+              }`}
+            />
+          ))
+        ))}
+      </div>
+      <div className="text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant text-center bg-nb-surface-low py-1 rounded">
+        {hovered.r > 0 ? `${hovered.r} x ${hovered.c}` : "Select Size"}
+      </div>
+    </div>
+  );
+};
 
 const ImageWithCaption = TiptapImage.extend({
   addAttributes() {
@@ -64,82 +101,125 @@ const ImageWithCaption = TiptapImage.extend({
       title: { default: "" }, // author initials
       filePath: { default: null }, // disk path for LaTeX
       caption: { default: "" }, // unify with table/code
+      width: { default: "100%" },
     };
   },
+  draggable: true,
   addNodeView() {
     return ReactNodeViewRenderer(ImageNodeView);
   },
 });
 
-function ImageNodeView({ node, updateAttributes, deleteNode }: any) {
+function ImageNodeView({ node, updateAttributes, deleteNode, selected }: any) {
+  const [showMenu, setShowMenu] = useState(false);
+
   return (
-    <NodeViewWrapper className="my-10 group relative">
-      <div className="rounded-2xl border border-nb-outline-variant/40 overflow-hidden bg-nb-surface shadow-nb-sm group-hover:shadow-nb-md transition-shadow">
-        {/* Header bar */}
-        <div
-          contentEditable={false}
-          className="flex items-center gap-2 px-3 py-2 bg-nb-tertiary text-white border-b border-nb-outline-variant/20"
-        >
-          <div className="w-5 h-5 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
-            <ImageIcon size={10} />
-          </div>
-          <span className="text-xs font-semibold">Image Resource</span>
-
-          <div className="flex items-center gap-3 ml-auto mr-2">
-            {node.attrs.filePath && (
-              <span className="text-[9px] font-mono opacity-60 hidden sm:inline">{node.attrs.filePath.split('/').pop()}</span>
-            )}
-            <div className="flex items-center gap-2">
-              <span className="text-[9px] font-bold uppercase tracking-widest opacity-60">By</span>
-              <input
-                type="text"
-                value={node.attrs.title ?? ""}
-                onChange={(e) => updateAttributes({ title: e.target.value })}
-                placeholder="Initials"
-                className="w-12 text-[10px] font-mono font-bold bg-white/10 border border-white/20 rounded px-1.5 py-0.5 outline-none focus:bg-white/20 text-white placeholder:text-white/30"
-              />
-            </div>
-          </div>
-
-          <button
-            onClick={() => deleteNode()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500 transition-colors text-[9px] font-bold uppercase tracking-widest"
+    <NodeViewWrapper draggable className={`my-8 group relative max-w-2xl mx-auto transition-all ${selected ? 'z-[100]' : 'z-10'}`}>
+      <div className={`relative rounded-xl border bg-nb-surface group-hover:shadow-nb-md transition-all ${selected ? 'border-nb-primary ring-4 ring-nb-primary/30 shadow-nb-lg' : 'border-nb-outline-variant/30 shadow-nb-sm'}`}>
+        {/* Drag Handle */}
+        <div contentEditable={false} className="absolute top-2 left-2 z-[60]">
+          <div 
+            className="w-8 h-8 rounded-full bg-white/90 text-nb-on-surface-variant flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm border border-nb-outline-variant/20 hover:bg-white hover:text-nb-primary transition-all"
+            data-drag-handle
           >
-            <Trash2 size={12} />
-            <span>Remove</span>
-          </button>
+            <GripVertical size={14} />
+          </div>
         </div>
 
         {/* Content */}
-        <div className="p-1 bg-nb-bg flex justify-center">
+        <div className="flex justify-center bg-nb-bg/50 rounded-t-xl overflow-hidden">
           <img
             src={node.attrs.src}
             alt={node.attrs.alt}
-            className="max-w-full h-auto block select-none pointer-events-none rounded-lg"
+            style={{ width: node.attrs.width ?? "100%" }}
+            className={`h-auto block select-none pointer-events-none transition-all duration-300 ${selected ? 'ring-4 ring-nb-primary/40 shadow-nb-xl border-2 border-nb-primary rounded-lg' : ''}`}
             draggable={false}
           />
         </div>
 
-        {/* Caption area */}
-        <div
-          contentEditable={false}
-          className="px-5 py-4 bg-nb-surface-mid/30 border-t border-nb-outline-variant/30 flex items-center gap-3"
-        >
-          <div className="w-8 h-8 rounded-lg bg-nb-tertiary/10 flex items-center justify-center shrink-0">
-            <ImageIcon size={14} className="text-nb-tertiary" />
-          </div>
-          <div className="flex-1">
-            <label className="block text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1">Figure Caption</label>
-            <input
-              type="text"
-              value={node.attrs.alt ?? ""}
-              onChange={(e) => updateAttributes({ alt: e.target.value })}
-              placeholder="Descriptive figure caption…"
-              className="w-full text-xs font-medium bg-transparent outline-none placeholder:text-nb-on-surface-variant/40 text-nb-on-surface"
-            />
-          </div>
+        {/* Floating Menu Button */}
+        <div contentEditable={false} className="absolute top-2 right-2 flex items-center gap-2 z-[60]">
+          <button 
+            onClick={() => setShowMenu(!showMenu)}
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${showMenu ? 'bg-nb-primary text-white scale-110 shadow-lg' : 'bg-white/90 text-nb-on-surface-variant hover:bg-white hover:text-nb-primary shadow-sm border border-nb-outline-variant/20'}`}
+          >
+            <MoreVertical size={16} />
+          </button>
+
+          {showMenu && (
+            <div className="absolute top-10 right-0 w-64 bg-nb-surface border border-nb-outline-variant shadow-nb-lg rounded-xl z-50 p-4 animate-in fade-in zoom-in duration-200">
+              <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
+                <Settings size={14} className="text-nb-tertiary" />
+                <span className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant">Image Options</span>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Figure Caption</label>
+                  <input
+                    type="text"
+                    value={node.attrs.alt ?? ""}
+                    onChange={(e) => updateAttributes({ alt: e.target.value })}
+                    placeholder="Describe this figure..."
+                    className="w-full text-xs bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-tertiary transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Author Initials</label>
+                  <div className="flex items-center gap-2">
+                    <UserCircle size={14} className="text-nb-on-surface-variant/40" />
+                    <input
+                      type="text"
+                      value={node.attrs.title ?? ""}
+                      onChange={(e) => updateAttributes({ title: e.target.value })}
+                      placeholder="e.g. JD"
+                      className="flex-1 text-xs font-mono bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-tertiary transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-2.5">Display Width: {node.attrs.width}</label>
+                  <div className="px-1">
+                    <input
+                      type="range"
+                      min="10"
+                      max="100"
+                      step="5"
+                      value={parseInt(node.attrs.width) || 100}
+                      onChange={(e) => updateAttributes({ width: `${e.target.value}%` })}
+                      className="w-full h-1.5 bg-nb-surface-low rounded-lg appearance-none cursor-pointer accent-nb-primary"
+                    />
+                    <div className="flex justify-between mt-2 text-[8px] font-bold text-nb-on-surface-variant/40 uppercase tracking-tighter">
+                      <span>10%</span>
+                      <span>50%</span>
+                      <span>100%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button 
+                    onClick={() => deleteNode()}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-bold"
+                  >
+                    <Trash2 size={14} />
+                    <span>Delete Resource</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+      
+      {node.attrs.alt && (
+        <p className="mt-3 text-center text-xs font-medium text-nb-on-surface-variant italic">
+          <span className="font-bold uppercase tracking-tighter mr-1.5 opacity-60">Fig.</span>
+          {node.attrs.alt}
+        </p>
+      )}
     </NodeViewWrapper>
   );
 }
@@ -155,73 +235,120 @@ const TableWithCaption = Table.extend({
       caption: { default: "" },
     };
   },
+  draggable: true,
   addNodeView() {
     return ReactNodeViewRenderer(TableNodeView);
   },
 });
 
-function TableNodeView({ node, updateAttributes, deleteNode, editor }: any) {
+function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: any) {
+  const [showMenu, setShowMenu] = useState(false);
+  const [isCursorInside, setIsCursorInside] = useState(false);
+
+  React.useEffect(() => {
+    const check = () => {
+      const pos = getPos();
+      const { from, to } = editor.state.selection;
+      setIsCursorInside(from >= pos && to <= pos + node.nodeSize);
+    };
+    check();
+    editor.on('selectionUpdate', check);
+    return () => { editor.off('selectionUpdate', check); };
+  }, [editor, getPos, node.nodeSize]);
+
+  const active = selected || isCursorInside;
+
   return (
-    <NodeViewWrapper className="my-10 group relative">
-      <div className="rounded-2xl border border-nb-outline-variant/40 overflow-hidden bg-nb-surface shadow-nb-sm group-hover:shadow-nb-md transition-shadow">
-        {/* Integrated Header Controls */}
-        <div
-          contentEditable={false}
-          className="flex flex-wrap items-center gap-2 px-3 py-2 bg-nb-secondary text-white border-b border-nb-outline-variant/20"
-        >
-          <div className="w-5 h-5 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
-            <TableIcon size={10} />
-          </div>
-          <span className="text-xs font-semibold mr-2">Table Block</span>
-
-          <div className="flex items-center gap-0.5 bg-white/10 rounded-lg p-0.5 mr-2">
-            <button onClick={() => editor.chain().focus().addRowBefore().run()} className="p-1.5 hover:bg-white/20 rounded-md transition-colors" title="Add Row Above"><ChevronUp size={14} /></button>
-            <button onClick={() => editor.chain().focus().addRowAfter().run()} className="p-1.5 hover:bg-white/20 rounded-md transition-colors" title="Add Row Below"><ChevronDown size={14} /></button>
-            <div className="w-px h-3 bg-white/20 mx-0.5" />
-            <button onClick={() => editor.chain().focus().deleteRow().run()} className="p-1.5 hover:bg-red-500/40 rounded-md transition-colors" title="Delete Row"><Trash2 size={13} /></button>
-          </div>
-
-          <div className="flex items-center gap-0.5 bg-white/10 rounded-lg p-0.5">
-            <button onClick={() => editor.chain().focus().addColumnBefore().run()} className="p-1.5 hover:bg-white/20 rounded-md transition-colors" title="Add Column Left"><ChevronLeft size={14} /></button>
-            <button onClick={() => editor.chain().focus().addColumnAfter().run()} className="p-1.5 hover:bg-white/20 rounded-md transition-colors" title="Add Column Right"><ChevronRight size={14} /></button>
-            <div className="w-px h-3 bg-white/20 mx-0.5" />
-            <button onClick={() => editor.chain().focus().deleteColumn().run()} className="p-1.5 hover:bg-red-500/40 rounded-md transition-colors" title="Delete Column"><Trash2 size={13} /></button>
-          </div>
-
-          <button
-            onClick={() => deleteNode()}
-            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500 transition-colors text-[9px] font-bold uppercase tracking-widest"
+    <NodeViewWrapper draggable className={`my-8 group relative transition-all ${active ? 'z-[100]' : 'z-10'}`}>
+      <div className={`relative rounded-xl border bg-nb-surface group-hover:shadow-nb-md transition-all ${active ? 'border-nb-primary ring-4 ring-nb-primary/30 shadow-nb-lg' : 'border-nb-outline-variant/30 shadow-nb-sm'}`}>
+        {/* Drag Handle */}
+        <div contentEditable={false} className="absolute top-2 left-2 z-[60]">
+          <div 
+            className={`w-8 h-8 rounded-full flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm border transition-all ${active ? 'bg-nb-primary text-white border-nb-primary' : 'bg-white/90 text-nb-on-surface-variant border-nb-outline-variant/20 hover:bg-white hover:text-nb-secondary'}`}
+            data-drag-handle
           >
-            <Trash2 size={12} />
-            <span>Remove</span>
-          </button>
+            <GripVertical size={14} />
+          </div>
         </div>
 
-        {/* Table Content */}
-        <div className="p-1 bg-nb-surface-low overflow-x-auto">
+        {/* Floating Menu Button */}
+        <div contentEditable={false} className="absolute top-2 right-2 z-[60] flex items-center gap-2">
+          <button 
+            onClick={() => setShowMenu(!showMenu)}
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${showMenu ? 'bg-nb-secondary text-white scale-110 shadow-lg' : 'bg-white/90 text-nb-on-surface-variant hover:bg-white hover:text-nb-secondary shadow-sm border border-nb-outline-variant/20'}`}
+          >
+            <MoreVertical size={16} />
+          </button>
+
+          {showMenu && (
+            <>
+              <div className="fixed inset-0 z-[65]" onClick={() => setShowMenu(false)} />
+              <div className="absolute top-10 right-0 w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-lg rounded-xl z-[70] p-4 animate-in fade-in zoom-in duration-200" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
+                  <TableIcon size={14} className="text-nb-secondary" />
+                  <span className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant">Table Management</span>
+                </div>
+                
+                <div className="space-y-5 text-nb-on-surface">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <span className="block text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant/60">Rows</span>
+                      <div className="flex bg-nb-surface-low rounded-lg border border-nb-outline-variant/30 p-1">
+                        <button onClick={() => editor.chain().focus().addRowBefore().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronUp size={12}/></button>
+                        <button onClick={() => editor.chain().focus().addRowAfter().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronDown size={12}/></button>
+                        <div className="w-px h-3 bg-nb-outline-variant/30 mx-0.5 self-center" />
+                        <button onClick={() => editor.chain().focus().deleteRow().run()} className="flex-1 p-1.5 hover:bg-red-50 rounded transition-colors text-red-500"><Trash2 size={12}/></button>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="block text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant/60">Cols</span>
+                      <div className="flex bg-nb-surface-low rounded-lg border border-nb-outline-variant/30 p-1">
+                        <button onClick={() => editor.chain().focus().addColumnBefore().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronLeft size={12}/></button>
+                        <button onClick={() => editor.chain().focus().addColumnAfter().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronRight size={12}/></button>
+                        <div className="w-px h-3 bg-nb-outline-variant/30 mx-0.5 self-center" />
+                        <button onClick={() => editor.chain().focus().deleteColumn().run()} className="flex-1 p-1.5 hover:bg-red-50 rounded transition-colors text-red-500"><Trash2 size={12}/></button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Table Caption</label>
+                    <input
+                      type="text"
+                      value={node.attrs.caption ?? ""}
+                      onChange={(e) => updateAttributes({ caption: e.target.value })}
+                      placeholder="Describe this table..."
+                      className="w-full text-xs bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-secondary transition-all"
+                    />
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <button 
+                      onClick={() => editor.chain().focus().deleteTable().run()}
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-[10px] font-bold uppercase"
+                    >
+                      <Trash2 size={12} />
+                      <span>Delete Table</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Content */}
+        <div className={`p-0.5 overflow-x-auto rounded-xl w-full transition-all duration-300 ${active ? 'ring-4 ring-nb-primary/40 shadow-nb-xl border-2 border-nb-primary' : ''}`}>
           <NodeViewContent as="div" className="border-collapse w-full" />
         </div>
-
-        {/* Caption area */}
-        <div
-          contentEditable={false}
-          className="px-5 py-4 bg-nb-surface-mid/30 border-t border-nb-outline-variant/30 flex items-center gap-3"
-        >
-          <div className="w-8 h-8 rounded-lg bg-nb-secondary/10 flex items-center justify-center shrink-0">
-            <TableIcon size={14} className="text-nb-secondary" />
-          </div>
-          <div className="flex-1">
-            <label className="block text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1">Table Caption</label>
-            <input
-              type="text"
-              value={node.attrs.caption ?? ""}
-              onChange={(e) => updateAttributes({ caption: e.target.value })}
-              placeholder="Description of the table content…"
-              className="w-full text-xs font-medium bg-transparent outline-none placeholder:text-nb-on-surface-variant/40 text-nb-on-surface"
-            />
-          </div>
-        </div>
       </div>
+      
+      {node.attrs.caption && (
+        <p className="mt-3 text-center text-xs font-medium text-nb-on-surface-variant italic">
+          <span className="font-bold uppercase tracking-tighter mr-1.5 opacity-60">Table.</span>
+          {node.attrs.caption}
+        </p>
+      )}
     </NodeViewWrapper>
   );
 }
@@ -238,69 +365,112 @@ const CustomCodeBlock = CodeBlockLowlight.extend({
       caption: { default: "" },
     };
   },
+  draggable: true,
   addNodeView() {
     return ReactNodeViewRenderer(CodeBlockNodeView);
   },
 });
 
-function CodeBlockNodeView({ node, updateAttributes, deleteNode }: any) {
+function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: any) {
+  const [showMenu, setShowMenu] = useState(false);
+  const [isCursorInside, setIsCursorInside] = useState(false);
+
+  React.useEffect(() => {
+    const check = () => {
+      const pos = getPos();
+      const { from, to } = editor.state.selection;
+      setIsCursorInside(from >= pos && to <= pos + node.nodeSize);
+    };
+    check();
+    editor.on('selectionUpdate', check);
+    return () => { editor.off('selectionUpdate', check); };
+  }, [editor, getPos, node.nodeSize]);
+
+  const active = selected || isCursorInside;
+
   return (
-    <NodeViewWrapper className="my-10 group relative">
-      <div className="rounded-2xl border border-nb-outline-variant/40 overflow-hidden bg-nb-surface shadow-nb-sm group-hover:shadow-nb-md transition-shadow">
-        {/* Header bar */}
-        <div
-          contentEditable={false}
-          className="flex items-center gap-2 px-3 py-2 bg-zinc-800 text-white border-b border-white/5"
-        >
-          <div className="w-5 h-5 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
-            <Code2 size={10} className="text-nb-primary" />
+    <NodeViewWrapper draggable className={`my-8 group relative transition-all ${active ? 'z-[100]' : 'z-10'}`}>
+      <div className={`relative rounded-xl border bg-zinc-950 group-hover:shadow-nb-md transition-all ${active ? 'border-nb-primary ring-4 ring-nb-primary/30 shadow-nb-lg' : 'border-nb-outline-variant/30 shadow-nb-sm'}`}>
+        {/* Drag Handle */}
+        <div contentEditable={false} className="absolute top-2 left-2 z-[60]">
+          <div 
+            className={`w-8 h-8 rounded-full flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm border transition-all ${active ? 'bg-nb-primary text-white border-nb-primary' : 'bg-white/10 text-zinc-400 border-white/5 hover:bg-white/20 hover:text-white'}`}
+            data-drag-handle
+          >
+            <GripVertical size={14} />
           </div>
-          <span className="text-xs font-semibold">Code Snippet</span>
+        </div>
 
-          <select
-            value={node.attrs.language ?? "plaintext"}
-            onChange={(e) => updateAttributes({ language: e.target.value })}
-            className="ml-auto text-[9px] font-bold uppercase tracking-widest bg-white/10 text-white border border-white/20 rounded px-2 py-1 outline-none cursor-pointer hover:bg-white/20 transition-colors mr-2"
+        {/* Floating Menu Button */}
+        <div contentEditable={false} className="absolute top-2 right-2 z-[60]">
+          <button 
+            onClick={() => setShowMenu(!showMenu)}
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${showMenu ? 'bg-nb-primary text-white scale-110 shadow-lg' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white shadow-sm border border-white/5'}`}
           >
-            {LANGUAGES.map((l) => <option key={l} value={l} className="bg-zinc-900">{l}</option>)}
-          </select>
-
-          <button
-            onClick={() => deleteNode()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500 transition-colors text-[9px] font-bold uppercase tracking-widest"
-          >
-            <Trash2 size={12} />
-            <span>Remove</span>
+            <MoreVertical size={16} />
           </button>
+
+          {showMenu && (
+            <>
+              <div className="fixed inset-0 z-[65]" onClick={() => setShowMenu(false)} />
+              <div className="absolute top-10 right-0 w-64 bg-nb-surface border border-nb-outline-variant shadow-nb-lg rounded-xl z-[70] p-4 animate-in fade-in zoom-in duration-200" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
+                  <Code2 size={14} className="text-nb-primary" />
+                  <span className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant">Code Options</span>
+                </div>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Caption</label>
+                    <input
+                      type="text"
+                      value={node.attrs.caption ?? ""}
+                      onChange={(e) => updateAttributes({ caption: e.target.value })}
+                      placeholder="Describe this snippet..."
+                      className="w-full text-xs bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-primary transition-all text-nb-on-surface"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Language</label>
+                    <select
+                      value={node.attrs.language ?? "plaintext"}
+                      onChange={(e) => updateAttributes({ language: e.target.value })}
+                      className="w-full text-xs bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-primary transition-all text-nb-on-surface cursor-pointer"
+                    >
+                      {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="pt-2">
+                    <button 
+                      onClick={() => deleteNode()}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-bold"
+                    >
+                      <Trash2 size={14} />
+                      <span>Remove Block</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Content */}
-        <div className="bg-nb-bg">
-          <pre className="p-6 text-sm leading-relaxed overflow-x-auto border-none rounded-none m-0">
+        <div className={`rounded-xl overflow-hidden transition-all duration-300 ${active ? 'ring-4 ring-nb-primary/40 shadow-nb-xl border-2 border-nb-primary' : ''}`}>
+          <pre className="p-6 text-sm leading-relaxed overflow-x-auto border-none m-0 text-zinc-300">
             <NodeViewContent as="div" className="font-mono" />
           </pre>
         </div>
-
-        {/* Caption area */}
-        <div
-          contentEditable={false}
-          className="px-5 py-4 bg-nb-surface-mid/30 border-t border-nb-outline-variant/30 flex items-center gap-3"
-        >
-          <div className="w-8 h-8 rounded-lg bg-nb-primary/10 flex items-center justify-center shrink-0">
-            <Code2 size={14} className="text-nb-primary" />
-          </div>
-          <div className="flex-1">
-            <label className="block text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1">Snippet Caption</label>
-            <input
-              type="text"
-              value={node.attrs.caption ?? ""}
-              onChange={(e) => updateAttributes({ caption: e.target.value })}
-              placeholder="What does this code do?…"
-              className="w-full text-xs font-medium bg-transparent outline-none placeholder:text-nb-on-surface-variant/40 text-nb-on-surface"
-            />
-          </div>
-        </div>
       </div>
+      
+      {node.attrs.caption && (
+        <p className="mt-3 text-center text-xs font-medium text-nb-on-surface-variant italic">
+          <span className="font-bold uppercase tracking-tighter mr-1.5 opacity-60">Snippet.</span>
+          {node.attrs.caption}
+        </p>
+      )}
     </NodeViewWrapper>
   );
 }
@@ -351,6 +521,7 @@ export default function UnifiedEditor({
     reader.readAsDataURL(file);
   };
 
+  const [contextMenu, setContextMenu] = useState<{ x: number, y: number } | null>(null);
   const [, setSelectionUpdate] = useState(0);
 
   const editor = useEditor({
@@ -374,8 +545,34 @@ export default function UnifiedEditor({
     onSelectionUpdate: () => {
       setSelectionUpdate(s => s + 1);
     },
+    onTransaction: () => {
+      setSelectionUpdate(s => s + 1);
+    },
     editorProps: {
       attributes: { class: "focus:outline-none min-h-[600px] max-w-none" },
+      handleDOMEvents: {
+        dragover: (view, event) => {
+          // Auto-scroll logic
+          const scrollContainer = view.dom.closest('.overflow-y-auto');
+          if (!scrollContainer) return false;
+
+          const rect = scrollContainer.getBoundingClientRect();
+          const y = event.clientY;
+          const threshold = 250; // pixels from top/bottom to start scrolling
+
+          if (y < rect.top + threshold) {
+            scrollContainer.scrollBy({ top: -15, behavior: 'auto' });
+          } else if (y > rect.bottom - threshold) {
+            scrollContainer.scrollBy({ top: 15, behavior: 'auto' });
+          }
+          return false;
+        },
+        contextmenu: (view, event) => {
+          event.preventDefault();
+          setContextMenu({ x: event.clientX, y: event.clientY });
+          return true;
+        },
+      },
       handlePaste: (_view, event) => {
         const items = event.clipboardData?.items;
         if (items) {
@@ -411,16 +608,29 @@ export default function UnifiedEditor({
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) handleImageFile(file);
+      // Clear for potential re-upload of same file name
+      input.value = "";
     };
     input.click();
   };
+
+  const [showTableGrid, setShowTableGrid] = useState(false);
+  const [hoveredGrid, setHoveredGrid] = useState({ r: 0, c: 0 });
+
+  // Dismiss table grid on click away
+  React.useEffect(() => {
+    if (!showTableGrid) return;
+    const handleOutsideClick = () => setShowTableGrid(false);
+    window.addEventListener("mousedown", handleOutsideClick);
+    return () => window.removeEventListener("mousedown", handleOutsideClick);
+  }, [showTableGrid]);
 
   if (!editor) return null;
 
   return (
     <div className="flex flex-col gap-4">
       {/* ── TipTap Toolbar ────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-1.5 p-2 border border-nb-outline-variant rounded-xl bg-nb-surface sticky top-0 z-30 shadow-nb-sm">
+      <div className="flex flex-wrap items-center gap-1.5 p-2 border border-nb-outline-variant rounded-xl bg-nb-surface sticky top-0 z-[100] shadow-nb-sm">
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}
           active={editor.isActive("bold")}
@@ -477,12 +687,29 @@ export default function UnifiedEditor({
           <Code size={16} />
         </ToolbarButton>
 
-        <ToolbarButton
-          onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
-          title="Insert Table"
-        >
-          <TableIcon size={16} />
-        </ToolbarButton>
+        <div className="relative">
+          <ToolbarButton
+            onClick={() => setShowTableGrid(!showTableGrid)}
+            active={showTableGrid}
+            title="Insert Table"
+          >
+            <TableIcon size={16} />
+          </ToolbarButton>
+          
+          {showTableGrid && (
+            <div 
+              className="absolute top-12 left-0 z-[110] animate-in fade-in zoom-in-95 duration-200 shadow-2xl rounded-xl"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <TableGridSelector 
+                onSelect={(rows, cols) => {
+                  editor.chain().focus().insertTable({ rows, cols, withHeaderRow: false }).run();
+                  setShowTableGrid(false);
+                }} 
+              />
+            </div>
+          )}
+        </div>
 
         <label className="p-2 rounded-lg cursor-pointer text-nb-on-surface-variant hover:bg-nb-surface-mid transition-all" title="Upload Image">
           <ImageIcon size={16} />
@@ -493,6 +720,8 @@ export default function UnifiedEditor({
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) handleImageFile(file);
+              // Clear value to allow re-upload of same file
+              e.target.value = "";
             }}
           />
         </label>
@@ -506,9 +735,69 @@ export default function UnifiedEditor({
           </div>
         )}
 
-        {/* ── Main Editor Area ───────────────────────────────────────── */}
-        <div className="bg-nb-surface min-h-[600px] relative">
+        <div className="bg-nb-surface min-h-[600px] relative" onClick={() => setContextMenu(null)}>
           <EditorContent editor={editor} className="max-w-none" />
+          
+          {/* Editor Context Menu */}
+          {contextMenu && (
+            <>
+              <div className="fixed inset-0 z-[140]" onClick={() => setContextMenu(null)} />
+              <div 
+                className="fixed z-[150] w-56 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-2xl p-2 animate-in fade-in zoom-in-95 duration-150"
+                style={{ top: contextMenu.y, left: contextMenu.x }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="grid grid-cols-1 gap-1">
+                  <ContextMenuItem 
+                    label="Cut" 
+                    icon={<Trash2 size={14}/>} 
+                    onClick={() => {
+                      document.execCommand('cut');
+                      setContextMenu(null);
+                    }} 
+                  />
+                  <ContextMenuItem 
+                    label="Copy" 
+                    icon={<FileCode size={14}/>} 
+                    onClick={() => {
+                      document.execCommand('copy');
+                      setContextMenu(null);
+                    }} 
+                  />
+                  <ContextMenuItem 
+                    label="Paste" 
+                    icon={<Pencil size={14}/>} 
+                    onClick={async () => {
+                      try {
+                        const text = await navigator.clipboard.readText();
+                        editor.chain().focus().insertContent(text).run();
+                      } catch (err) {
+                        console.error("Paste failed", err);
+                      }
+                      setContextMenu(null);
+                    }} 
+                  />
+                  <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
+                  <ContextMenuItem 
+                    label="Insert Image" 
+                    icon={<ImageIcon size={14}/>} 
+                    onClick={() => {
+                      insertImage();
+                      setContextMenu(null);
+                    }} 
+                  />
+                  <ContextMenuItem 
+                    label="Insert Table" 
+                    icon={<TableIcon size={14}/>} 
+                    onClick={() => {
+                      setShowTableGrid(true);
+                      setContextMenu(null);
+                    }} 
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 

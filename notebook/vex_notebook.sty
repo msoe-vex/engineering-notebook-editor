@@ -194,6 +194,33 @@
     \end{figure}
 }
 
+% Standardized Notebook Commands (Pre-prefixed for easy .sty customization)
+
+% \notebook_entry{Title}{Date}{Author}{Phase}
+\newcommand{\notebook_entry}[4]{\newentry{#1}{#2}{#3}{#4}}
+
+% \notebook_image{filename}{caption}{initials}{width_percent}
+\newcommand{\notebook_image}[4]{
+    \begin{figure}[htbp]
+        \centering
+        \includegraphics[width=#4, max height=0.4\textheight, keepaspectratio]{#1}
+        \caption{#2 (Initials: #3)}
+    \end{figure}
+}
+
+% \notebook_table{columns}{content}{caption}
+\newcommand{\notebook_table}[3]{\customtable{#1}{#2}{#3}}
+
+% \notebook_codeblock{language}{content}{caption}
+\newcommand{\notebook_codeblock}[3]{
+    \begin{itemize}
+        \item[] \textbf{Snippet: #3}
+        \begin{lstlisting}[language=#1]
+#2
+        \end{lstlisting}
+    \end{itemize}
+}
+
 % Easy table insertion
 % Usage: \customtable{columns (e.g. |c|c|)}{content}{caption}
 \newcommand{\customtable}[3]{

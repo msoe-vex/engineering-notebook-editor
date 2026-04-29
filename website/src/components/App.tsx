@@ -14,6 +14,7 @@ import {
   rebuildEntryRefs, computeRenameUpdates, computeDeleteUpdates,
   removeResourceFromMetadata, renameResourceInMetadata,
   parseTipTapFromLatex, renameEntryInMetadata, removeEntryFromMetadata,
+  updateMetadataSuggestions,
 } from "@/lib/metadata";
 import Settings from "./Settings";
 import Editor from "./Editor";
@@ -115,11 +116,11 @@ const convertNodeToLatex = (node: any): string => {
       return `  \\item ${parts.join("\n").trim()}\n`;
     }
     case "codeBlock": {
-      const lang = node.attrs?.language;
+      const lang = node.attrs?.language ?? "plaintext";
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const code = (node.content || []).map((n: any) => n.text ?? "").join("");
-      const opt  = lang && lang !== "plaintext" ? `[language=${lang}]` : "";
-      return `\\begin{lstlisting}${opt}\n${code}\n\\end{lstlisting}\n\n`;
+      const caption = node.attrs?.caption ?? "";
+      return `\\notebook_codeblock{${lang}}{${code}}{${caption}}\n\n`;
     }
     case "image": {
       const filePath = node.attrs?.filePath;
@@ -127,11 +128,13 @@ const convertNodeToLatex = (node: any): string => {
       const imgSrc   = filePath ? filePath : src.startsWith("data:") ? "resources/embedded_image.png" : src;
       const caption  = node.attrs?.alt   ?? "Figure";
       const initials = node.attrs?.title ?? "";
-      return `\\image{${imgSrc}}{${caption}}{${initials}}\n\n`;
+      const width    = node.attrs?.width ?? "100%";
+      return `\\notebook_image{${imgSrc}}{${caption}}{${initials}}{${width}}\n\n`;
     }
     case "table": {
       const rows = node.content ?? [];
       if (!rows.length) return "";
+      const caption = node.attrs?.caption ?? "Design Data";
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const colCount = (rows[0]?.content ?? []).length;
       const colSpec  = "|l".repeat(colCount) + "|";
@@ -143,7 +146,7 @@ const convertNodeToLatex = (node: any): string => {
         );
         return cells.join(" & ") + " \\\\ \\hline";
       }).join("\n");
-      return `\\begin{figure}[h]\n\\centering\n\\begin{tabular}{${colSpec}}\n\\hline\n${body}\n\\end{tabular}\n\\caption{Design Data}\n\\end{figure}\n\n`;
+      return `\\notebook_table{${colSpec}}{${body}}{${caption}}\n\n`;
     }
     case "tableRow": case "tableCell": case "tableHeader": return children();
     case "blockquote": return `\\begin{quote}\n${children()}\\end{quote}\n\n`;
@@ -165,7 +168,7 @@ const convertJsonToLatex = (jsonString: string): string => {
 const generateLatex = (content: string, title: string, author: string, phase: string) => {
   const metadata = JSON.stringify({ content });
   let latex = `% METADATA: ${metadata}\n`;
-  latex += `\\newentry{${title}}{${new Date().toLocaleDateString()}}{${author}}{${phase}}\n\n`;
+  latex += `\\notebook_entry{${title}}{${new Date().toLocaleDateString()}}{${author}}{${phase}}\n\n`;
   latex += convertJsonToLatex(content);
   return latex;
 };
@@ -179,6 +182,29 @@ const getFilenameTimestamp = () =>
 
 const isImage = (name: string) =>
   /\.(png|jpg|jpeg|gif|webp|svg|bmp|ico)$/i.test(name);
+
+/** Validate that all header fields and all component captions are filled. */
+const validateEntry = (tiptapJson: string, title: string, author: string, phase: string): { valid: boolean; errors: string[] } => {
+  const errors: string[] = [];
+  if (!title.trim()) errors.push("Project Title is required.");
+  if (!author.trim()) errors.push("Author is required.");
+  if (!phase || phase === "Select Phase") errors.push("Project Phase is required.");
+
+  try {
+    const doc = JSON.parse(tiptapJson);
+    const checkCaptions = (node: any) => {
+      if (node.type === "image" && !node.attrs?.alt?.trim()) errors.push("All images must have a caption.");
+      if (node.type === "table" && !node.attrs?.caption?.trim()) errors.push("All tables must have a caption.");
+      if (node.type === "codeBlock" && !node.attrs?.caption?.trim()) errors.push("All code blocks must have a caption.");
+      (node.content ?? []).forEach(checkCaptions);
+    };
+    checkCaptions(doc);
+  } catch {
+    // Ignore parse errors here
+  }
+
+  return { valid: errors.length === 0, errors };
+};
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getLocalFileContent = async (rootHandle: any, path: string): Promise<{ text?: string; base64?: string; isImage: boolean }> => {
@@ -258,6 +284,25 @@ export default function App() {
 
   // Notifications
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  /** Get a unique DB name for the current workspace to isolate changes. */
+  const getDBName = useCallback(() => {
+    if (workspaceMode === "github" && config) {
+      return `notebook-${config.owner}-${config.repo}`;
+    }
+    if (workspaceMode === "local" && dirHandle) {
+      return `notebook-local-${dirHandle.name}`;
+    }
+    return "notebook-volatile";
+  }, [workspaceMode, config, dirHandle]);
+
+  // Load initial author from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("nb-last-author");
+    if (saved && openFile && !openFile.author) {
+      setOpenFile(prev => prev ? { ...prev, author: saved } : null);
+    }
+  }, [!!openFile]);
 
   const { theme, setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -349,16 +394,40 @@ export default function App() {
   // ── Pending helpers ──────────────────────────────────────────────────────────
 
   const refreshPending = useCallback(async () => {
-    const all = await getAllPending();
+    const dbName = getDBName();
+    const all = await getAllPending(dbName);
     setPendingChanges(all);
-  }, []);
+  }, [getDBName]);
 
   const stage = useCallback(async (change: Omit<PendingChange, "stagedAt">) => {
-    await stageChange({ ...change, stagedAt: new Date().toISOString() });
+    const dbName = getDBName();
+    await stageChange(dbName, { ...change, stagedAt: new Date().toISOString() });
     await refreshPending();
-  }, [refreshPending]);
+  }, [refreshPending, getDBName]);
 
   useEffect(() => { refreshPending(); }, [refreshPending]);
+
+  // Auto-save effect
+  useEffect(() => {
+    if (!openFile) return;
+    
+    const timeout = setTimeout(async () => {
+      const dbName = getDBName();
+      await stageChange(dbName, {
+        path: openFile.path,
+        operation: "upsert",
+        content: openFile.rawLatex,
+        label: `Auto-save: ${openFile.name}`,
+        stagedAt: isoTimestamp(),
+      });
+      
+      if (openFile.author) {
+        localStorage.setItem("nb-last-author", openFile.author);
+      }
+    }, 1000);
+
+    return () => clearTimeout(timeout);
+  }, [openFile?.rawLatex, openFile?.author, getDBName]);
 
   // ── Content cache helpers ────────────────────────────────────────────────────
 
@@ -435,7 +504,8 @@ export default function App() {
         .map(f => ({ name: f.name, path: f.path }));
 
       // Load metadata.json from pending or GitHub
-      const pending = await getAllPending();
+      const dbName = getDBName();
+      const pending = await getAllPending(dbName);
       const pendingMeta = pending.find(p => p.path === METADATA_PATH && p.operation === "upsert");
       if (pendingMeta?.content) {
         try { setNotebookMetadata(JSON.parse(pendingMeta.content)); } catch { /* ignore */ }
@@ -457,7 +527,7 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
-  }, [config]);
+  }, [config, getDBName]);
 
   useEffect(() => {
     if (workspaceMode === "local" && dirHandle) loadLocalExplorer();
@@ -554,7 +624,8 @@ export default function App() {
       let rawLatex = "";
 
       // Try pending first
-      const allPending = await getAllPending();
+      const dbName = getDBName();
+      const allPending = await getAllPending(dbName);
       const staged = allPending.find(p => p.path === file.path && p.operation === "upsert");
       if (staged?.content) {
         rawLatex = staged.content;
@@ -637,7 +708,8 @@ export default function App() {
       let imageSrc = "";
 
       // Check pending IndexedDB
-      const allPending = await getAllPending();
+      const dbName = getDBName();
+      const allPending = await getAllPending(dbName);
       const staged = allPending.find(p => p.path === file.path && p.operation === "upsert");
       if (staged?.content) {
         // content is base64 data URL
@@ -668,7 +740,7 @@ export default function App() {
       setIsLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceMode, dirHandle, config, contentCache]);
+  }, [workspaceMode, dirHandle, config, contentCache, getDBName]);
 
   // ── Save entry ───────────────────────────────────────────────────────────────
 
@@ -707,7 +779,10 @@ export default function App() {
     } catch { /* ... */ }
 
     setNotebookMetadata(prev => {
-      const updated = rebuildEntryRefs(prev, entryPath, cleanJson, info);
+      let updated = rebuildEntryRefs(prev, entryPath, cleanJson, info);
+      if (info) {
+        updated = updateMetadataSuggestions(updated, info.author, info.title);
+      }
       const metaStr = JSON.stringify(updated, null, 2);
       
       // Secondary action: persist if needed
@@ -779,7 +854,8 @@ export default function App() {
       await loadLocalExplorer();
     } else if (workspaceMode === "github") {
       // Remove any staged upsert for this path, then stage delete
-      await removeStaged(file.path);
+      const dbName = getDBName();
+      await removeStaged(dbName, file.path);
       await stage({ path: file.path, content: undefined, operation: "delete", label: "Entry deleted" });
       await stage({ path: METADATA_PATH, content: metaStr, operation: "upsert", label: "Metadata update" });
       setEntries(prev => prev.filter(e => e.path !== file.path));
@@ -829,7 +905,8 @@ export default function App() {
       await deleteLocalFileAtPath(dirHandle, file.path);
       await loadLocalExplorer();
     } else if (workspaceMode === "github") {
-      await removeStaged(file.path);
+      const dbName = getDBName();
+      await removeStaged(dbName, file.path);
       await stage({ path: file.path, operation: "delete", label: "Resource deleted" });
       await stage({ path: METADATA_PATH, content: metaStr, operation: "upsert", label: "Metadata update" });
       setResources(prev => prev.filter(r => r.path !== file.path));
@@ -866,7 +943,8 @@ export default function App() {
     if (!config || isCommitting) return;
     setIsCommitting(true);
     try {
-      const all = await getAllPending();
+      const dbName = getDBName();
+      const all = await getAllPending(dbName);
       const upserts = all.filter(p => p.operation === "upsert");
       const deletes = all.filter(p => p.operation === "delete");
       const total = all.length;
@@ -882,7 +960,7 @@ export default function App() {
         try { await githubDeleteFile(config, change.path, `Update notebook — ${total} files changed`); } catch { /* may already not exist */ }
       }
 
-      await clearAllPending();
+      await clearAllPending(dbName);
       await refreshPending();
       await loadGitHubExplorer();
       notify("Successfully committed all changes to GitHub.", "success");

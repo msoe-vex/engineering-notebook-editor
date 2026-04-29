@@ -138,6 +138,55 @@ body {
   opacity: 0.4;
 }
 
+.ProseMirror-selectednode {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.ProseMirror table {
+  border-collapse: collapse;
+  table-layout: auto;
+  width: 100% !important;
+  margin: 2rem 0;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.ProseMirror td,
+.ProseMirror th {
+  min-width: 2em;
+  border: 1px solid var(--color-nb-outline-variant);
+  padding: 0 !important; /* Remove padding from cell to allow child to fill */
+  vertical-align: top;
+  box-sizing: border-box;
+  position: relative;
+  background-clip: padding-box;
+}
+
+.ProseMirror td > p,
+.ProseMirror th > p {
+  margin: 0;
+  padding: 12px 16px; /* Move padding here */
+  min-height: 1.5em; /* Ensure height for cursor */
+  width: 100%;
+}
+
+
+
+.dark .ProseMirror td,
+.dark .ProseMirror th {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.ProseMirror .selectedCell:after {
+  z-index: 2;
+  position: absolute;
+  content: "";
+  left: 0; right: 0; top: 0; bottom: 0;
+  background: rgba(var(--color-nb-primary-rgb), 0.1);
+  pointer-events: none;
+}
+
 .ProseMirror h1 {
   font-family: var(--font-sans);
   font-size: 1.875rem;
