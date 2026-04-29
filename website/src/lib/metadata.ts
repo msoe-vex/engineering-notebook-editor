@@ -1,12 +1,12 @@
 /**
  * metadata.ts — resource ↔ entry relationship tracking.
  *
- * notebook/metadata.json shape:
+ * metadata.json shape:
  * {
  *   "version": 1,
  *   "resourceRefs": {
- *     "notebook/resources/2026-04-28T09-00-00.png": [
- *       "notebook/entries/2026-04-28T09-00-00_entry.tex"
+ *     "resources/2026-04-28T09-00-00.png": [
+ *       "entries/2026-04-28T09-00-00_entry.tex"
  *     ]
  *   }
  * }
@@ -57,6 +57,30 @@ export function extractImagePaths(doc: TipTapDoc): string[] {
   }
   walk(doc);
   return paths;
+}
+
+/**
+ * Strips large binary data (base64) from image nodes in TipTap JSON.
+ * Replaces 'src' data URLs with 'filePath' or a placeholder to keep metadata small.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function dehydrateTipTapJson(json: any): any {
+  if (!json || typeof json !== "object") return json;
+
+  if (json.type === "image") {
+    const newAttrs = { ...json.attrs };
+    // If we have a filePath, we don't need the base64 src in metadata
+    if (newAttrs.src?.startsWith("data:")) {
+      newAttrs.src = newAttrs.filePath || "resources/placeholder.png";
+    }
+    return { ...json, attrs: newAttrs };
+  }
+
+  if (Array.isArray(json.content)) {
+    return { ...json, content: json.content.map(dehydrateTipTapJson) };
+  }
+
+  return json;
 }
 
 /**

@@ -73,9 +73,10 @@
 \newcommand{\teammembers}[1]{\renewcommand{\@teammembers}{#1}}
 
 % Title Page Generation
+% Title Page Generation
 \newcommand{\maketeamtitle}{
-    \begin{titlepage}
-        \centering
+    \thispagestyle{empty}
+    \begin{center}
         \vspace*{2cm}
         {\Huge \textbf{\@teamname} \par}
         \vspace{1cm}
@@ -93,7 +94,8 @@
         \vspace{0.5cm}
         {\large \@teammembers \par}
         \vfill
-    \end{titlepage}
+    \end{center}
+    \newpage
 }
 
 % Fancy header
@@ -134,7 +136,7 @@
     }}}}}
 
     \phantomsection
-    \addcontentsline{toc}{section}{\texorpdfstring{\colorbox{\@entryphasecolor}{\strut #4}}{#4} \quad #1 -- #2}
+    \addcontentsline{toc}{section}{#4 -- #1 (#2)}
     \section*{#1}
     \vspace{-0.5cm}
 
@@ -196,11 +198,11 @@
 
 % Standardized Notebook Commands (Pre-prefixed for easy .sty customization)
 
-% \notebook_entry{Title}{Date}{Author}{Phase}
-\newcommand{\notebook_entry}[4]{\newentry{#1}{#2}{#3}{#4}}
+% \notebookentry{Title}{Date}{Author}{Phase}
+\newcommand{\notebookentry}[4]{\newentry{#1}{#2}{#3}{#4}}
 
-% \notebook_image{filename}{caption}{initials}{width_percent}
-\newcommand{\notebook_image}[4]{
+% \notebookimage{filename}{caption}{initials}{width_percent}
+\newcommand{\notebookimage}[4]{
     \begin{figure}[htbp]
         \centering
         \includegraphics[width=#4, max height=0.4\textheight, keepaspectratio]{#1}
@@ -208,17 +210,18 @@
     \end{figure}
 }
 
-% \notebook_table{columns}{content}{caption}
-\newcommand{\notebook_table}[3]{\customtable{#1}{#2}{#3}}
+% \notebooktable{columns}{content}{caption}
+\newcommand{\notebooktable}[3]{\customtable{#1}{#2}{#3}}
 
-% \notebook_codeblock{language}{content}{caption}
-\newcommand{\notebook_codeblock}[3]{
-    \begin{itemize}
-        \item[] \textbf{Snippet: #3}
-        \begin{lstlisting}[language=#1]
-#2
-        \end{lstlisting}
-    \end{itemize}
+% \begin{notebookcodeblock}{language}{caption} ... \end{notebookcodeblock}
+\newcommand{\notebookcodelabel}[1]{\addvspace{1em}\noindent\textbf{Snippet: #1}\par\nopagebreak\smallskip}
+\lstnewenvironment{notebookcodeblock}[2]%
+{%
+    \notebookcodelabel{#2}%
+    \lstset{language=#1, basicstyle=\small\ttfamily, breaklines=true}%
+}%
+{%
+    \addvspace{1em}%
 }
 
 % Easy table insertion
@@ -229,9 +232,9 @@
         \caption{#3}
         \vspace{0.2cm}
         \begin{tabular}{#1}
-            \toprule
+            \hline
             #2
-            \bottomrule
+            \hline
         \end{tabular}
     \end{table}
 }

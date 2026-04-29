@@ -151,7 +151,7 @@ interface DeleteDialogProps {
 
 function DeleteDialog({ filename, onConfirm, onCancel }: DeleteDialogProps) {
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-nb-secondary/60 backdrop-blur-md px-4" onClick={onCancel}>
+    <div className="fixed inset-0 z-[500] flex items-center justify-center bg-nb-secondary/60 backdrop-blur-md px-4" onClick={onCancel}>
       <div
         className="bg-nb-surface-lowest dark:bg-nb-dark-surface rounded-2xl p-7 shadow-nb-lg max-w-sm w-full border border-nb-outline-variant dark:border-nb-dark-outline animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}

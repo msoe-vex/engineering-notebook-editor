@@ -27,8 +27,8 @@ export default function Settings({
   const handleSave = () => {
     onSave({
       token, owner, repo,
-      entriesDir: "notebook/entries",
-      resourcesDir: "notebook/resources",
+      entriesDir: "entries",
+      resourcesDir: "resources",
     });
   };
 

@@ -29,7 +29,7 @@ export default function ImageBlock({ content, onChange, onImageUpload }: {
       if (onImageUpload) {
         // Strip data:image/png;base64, prefix
         const rawBase64 = base64.split(',')[1];
-        onImageUpload(`notebook/resources/${file.name}`, rawBase64);
+        onImageUpload(`resources/${file.name}`, rawBase64);
       }
       
       onChange({ ...content, src: file.name }); 
@@ -43,7 +43,7 @@ export default function ImageBlock({ content, onChange, onImageUpload }: {
         <div className="relative group">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img 
-             src={localSrc.startsWith('data:') ? localSrc : `/notebook/resources/${localSrc}`} 
+             src={localSrc.startsWith('data:') ? localSrc : `/resources/${localSrc}`} 
              alt={content.caption} 
              className="max-h-[300px] mx-auto rounded border dark:border-zinc-700"
              onError={(e) => {

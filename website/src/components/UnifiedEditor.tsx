@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   useEditor, EditorContent,
   NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer,
 } from "@tiptap/react";
+import { getResource } from "@/lib/db";
 import StarterKit from "@tiptap/starter-kit";
 import { Image as TiptapImage } from "@tiptap/extension-image";
 import { Table } from "@tiptap/extension-table";
@@ -93,6 +94,12 @@ const TableGridSelector = ({ onSelect, initialRows = 0, initialCols = 0 }: { onS
 };
 
 const ImageWithCaption = TiptapImage.extend({
+  addOptions() {
+    return {
+      ...this.parent?.(),
+      dbName: 'notebook-pending',
+    } as any;
+  },
   addAttributes() {
     return {
       ...this.parent?.(),
@@ -105,11 +112,11 @@ const ImageWithCaption = TiptapImage.extend({
   },
   draggable: true,
   addNodeView() {
-    return ReactNodeViewRenderer(ImageNodeView);
+    return ReactNodeViewRenderer((props) => <ImageNodeView {...props} dbName={(this.options as any).dbName} />);
   },
 });
 
-function ImageNodeView({ node, updateAttributes, deleteNode, selected }: any) {
+const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName }: any) => {
   const [showMenu, setShowMenu] = useState(false);
 
   React.useEffect(() => {
@@ -118,6 +125,34 @@ function ImageNodeView({ node, updateAttributes, deleteNode, selected }: any) {
     window.addEventListener("mousedown", handleOutsideClick);
     return () => window.removeEventListener("mousedown", handleOutsideClick);
   }, [showMenu]);
+
+  const [resolvedSrc, setResolvedSrc] = useState(node.attrs.src);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      // 1. If it's already a data URL, we're good
+      if (node.attrs.src?.startsWith('data:')) {
+        if (active) setResolvedSrc(node.attrs.src);
+        return;
+      }
+
+      // 2. Try the resource cache (IndexedDB)
+      try {
+        const cached = await getResource(dbName, node.attrs.src);
+        if (cached && active) {
+          setResolvedSrc(cached);
+          return;
+        }
+      } catch { /* cache miss or error */ }
+
+      // 3. Fallback: Trust the initial src.
+      if (active) setResolvedSrc(node.attrs.src);
+    };
+
+    load();
+    return () => { active = false; };
+  }, [node.attrs.src, dbName]);
 
   return (
     <NodeViewWrapper draggable className={`my-8 group relative max-w-2xl mx-auto transition-all ${selected ? 'z-[100]' : 'z-10'}`}>
@@ -135,7 +170,7 @@ function ImageNodeView({ node, updateAttributes, deleteNode, selected }: any) {
         {/* Content */}
         <div className="flex justify-center bg-nb-bg/50 rounded-t-xl overflow-hidden">
           <img
-            src={node.attrs.src}
+            src={resolvedSrc}
             alt={node.attrs.alt}
             style={{ width: node.attrs.width ?? "100%" }}
             className={`h-auto block select-none pointer-events-none transition-all duration-300 ${selected ? 'ring-4 ring-nb-primary/40 shadow-nb-xl border-2 border-nb-primary rounded-lg' : ''}`}
@@ -201,7 +236,7 @@ function ImageNodeView({ node, updateAttributes, deleteNode, selected }: any) {
 
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-2.5">Display Width: {node.attrs.width}</label>
-                  <div className="px-1">
+                  <div className="px-1" onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}>
                     <input
                       type="range"
                       min="10"
@@ -550,10 +585,11 @@ interface UnifiedEditorProps {
   onSwitchToRawLatex?: () => void;
   author?: string;
   filename: string;
+  dbName?: string;
 }
 
 export default function UnifiedEditor({
-  content, onChange, onImageUpload, onSwitchToRawLatex, author, filename,
+  content, onChange, onImageUpload, onSwitchToRawLatex, author, filename, dbName = "notebook-pending",
 }: UnifiedEditorProps) {
   const parseContent = (raw: string) => {
     if (!raw) return "";
@@ -568,7 +604,7 @@ export default function UnifiedEditor({
       const ext = file.name.split(".").pop() || "png";
       // ISO-8601 timestamp filename (colons → hyphens for filesystem safety)
       const ts = new Date().toISOString().replace(/:/g, "-").replace(/\..+/, "");
-      const newPath = `notebook/resources/${ts}.${ext}`;
+      const newPath = `resources/${ts}.${ext}`;
 
       editor?.chain().focus().insertContent({
         type: "image",
@@ -592,7 +628,7 @@ export default function UnifiedEditor({
     immediatelyRender: false,
     extensions: [
       StarterKit.configure({ codeBlock: false }),
-      ImageWithCaption.configure({ inline: false, allowBase64: true }),
+      ImageWithCaption.configure({ inline: false, allowBase64: true, dbName } as any),
       TableWithCaption.configure({ resizable: true }),
       TableRow,
       TableHeader,

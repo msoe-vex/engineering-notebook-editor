@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import UnifiedEditor from "./UnifiedEditor";
 import { saveAs } from "file-saver";
 import { Save, Trash2, Download, AlertCircle, Loader2, User, Target, X, FileCode } from "lucide-react";
+import { dehydrateTipTapJson } from "@/lib/metadata";
 
 const PHASES = [
   "Define Problem",
@@ -22,7 +23,28 @@ const escapeLaTeX = (text: string) =>
     .replace(/#/g, "\\#")
     .replace(/_/g, "\\_")
     .replace(/\{/g, "\\{")
-    .replace(/\}/g, "\\}");
+    .replace(/\}/g, "\\}")
+    .replace(/\^/g, "\\^{}")
+    .replace(/~/g, "\\~{}");
+
+
+const mapLanguageToLatex = (lang: string): string => {
+  const mapping: Record<string, string> = {
+    "cpp": "C++",
+    "c": "C",
+    "python": "Python",
+    "javascript": "JavaScript",
+    "typescript": "JavaScript",
+    "java": "Java",
+    "bash": "bash",
+    "sql": "SQL",
+    "rust": "Rust",
+    "go": "Go",
+    "csharp": "[Sharp]C",
+    "plaintext": "{}",
+  };
+  return mapping[lang] || lang;
+};
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const convertNodeToLatex = (node: any): string => {
@@ -75,10 +97,10 @@ const convertNodeToLatex = (node: any): string => {
     }
 
     case "codeBlock": {
-      const lang = node.attrs?.language ?? "plaintext";
+      const lang = mapLanguageToLatex(node.attrs?.language ?? "plaintext");
       const code = (node.content || []).map((n: any) => n.text ?? "").join("");
-      const caption = node.attrs?.caption ?? "";
-      return `\\notebook_codeblock{${lang}}{${code}}{${caption}}\n\n`;
+      const escapedCaption = escapeLaTeX(node.attrs?.caption ?? "");
+      return `\\begin{notebookcodeblock}{${lang}}{${escapedCaption}}\n${code}\n\\end{notebookcodeblock}\n\n`;
     }
 
     case "image": {
@@ -87,10 +109,10 @@ const convertNodeToLatex = (node: any): string => {
       const imgSrc = filePath
         ? filePath
         : src.startsWith("data:") ? "resources/embedded_image.png" : src;
-      const caption = node.attrs?.alt ?? "Figure";
-      const initials = node.attrs?.title ?? "";
-      const width = node.attrs?.width ?? "100%";
-      return `\\notebook_image{${imgSrc}}{${caption}}{${initials}}{${width}}\n\n`;
+      const escapedCaption = escapeLaTeX(node.attrs?.alt ?? "Figure");
+      const escapedInitials = escapeLaTeX(node.attrs?.title ?? "");
+      const escapedWidth = escapeLaTeX(node.attrs?.width ?? "100%");
+      return `\\notebookimage{${imgSrc}}{${escapedCaption}}{${escapedInitials}}{${escapedWidth}}\n\n`;
     }
 
     case "table": {
@@ -107,7 +129,9 @@ const convertNodeToLatex = (node: any): string => {
         return cells.join(" & ") + " \\\\ \\hline";
       }).join("\n");
 
-      return `\\notebook_table{${colSpec}}{${body}}{${caption}}\n\n`;
+      const escapedCaption = escapeLaTeX(caption);
+
+      return `\\notebooktable{${colSpec}}{${body}}{${escapedCaption}}\n\n`;
     }
 
     // tableRow / tableCell / tableHeader — just recurse
@@ -169,6 +193,7 @@ interface EditorProps {
   /** Called when user confirms switching to raw LaTeX mode */
   onSwitchToRawLatex?: () => void;
   onClose?: () => void;
+  dbName?: string;
 }
 
 export default function Editor({
@@ -191,12 +216,14 @@ export default function Editor({
   onMetadataRebuild,
   onSwitchToRawLatex,
   onClose,
+  dbName,
 }: EditorProps) {
   const [title, setTitle] = useState(initialTitle);
   const [author, setAuthor] = useState(initialAuthor);
   const [phase, setPhase] = useState(initialPhase);
-  const [content, setContent] = useState(initialContent);
+   const [content, setContent] = useState(initialContent);
   const [isSaving, setIsSaving] = useState(false);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Reset local state only when the file changes, not on every parent re-render.
@@ -223,8 +250,17 @@ export default function Editor({
       dateObj = new Date();
     }
 
+    let dehydratedContent = cnt;
+    try {
+      if (cnt && cnt.trim()) {
+        dehydratedContent = JSON.stringify(dehydrateTipTapJson(JSON.parse(cnt)));
+      }
+    } catch (e) {
+      console.error("Failed to parse content for metadata dehydration:", e);
+    }
+
     const metadata = JSON.stringify({
-      content: cnt,
+      content: dehydratedContent,
       title: t,
       author: a,
       phase: p,
@@ -232,7 +268,7 @@ export default function Editor({
     });
     let latex = `% METADATA: ${metadata}\n`;
     const dateStr = dateObj.toISOString().split('T')[0];
-    latex += `\\notebook_entry{${t}}{${dateStr}}{${a}}{${p}}\n\n`;
+    latex += `\\notebookentry{${escapeLaTeX(t)}}{${dateStr}}{${escapeLaTeX(a)}}{${escapeLaTeX(p)}}\n\n`;
     latex += convertJsonToLatex(cnt);
     return latex;
   };
@@ -262,12 +298,26 @@ export default function Editor({
   // Notify parent of content changes. Callbacks are intentionally omitted from
   // deps — they're new arrow function instances on every App render, and adding
   // them would cause an infinite loop.
+  // Notify parent of content changes with debounce to prevent lag
   useEffect(() => {
-    if (onContentChange) onContentChange(generateLatex(content, title, author, phase));
-    if (onTitleChange) onTitleChange(title);
-    if (onAuthorChange) onAuthorChange(author);
-    if (onPhaseChange) onPhaseChange(phase);
+    setIsAutoSaving(true);
+    const timeout = setTimeout(() => {
+      const latex = generateLatex(content, title, author, phase);
+      if (onContentChange) onContentChange(latex);
+      if (onTitleChange) onTitleChange(title);
+      if (onAuthorChange) onAuthorChange(author);
+      if (onPhaseChange) onPhaseChange(phase);
+      setIsAutoSaving(false);
+    }, 2000);
+
+    return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content, title, author, phase]);
+
+  // Clear validation errors on type
+  useEffect(() => {
+    if (validationErrors.length > 0) setValidationErrors([]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, title, author, phase]);
 
 
@@ -359,6 +409,12 @@ export default function Editor({
               </button>
             )}
 
+            {/* Auto-save indicator */}
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-all duration-300 ${isAutoSaving ? 'opacity-100' : 'opacity-0'}`}>
+              <div className="w-1.5 h-1.5 rounded-full bg-nb-tertiary animate-pulse" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant/60">Saving...</span>
+            </div>
+
             {validationErrors.length > 0 && (
               <div className="absolute top-full mt-2 z-[80] w-64 bg-red-50 border border-red-200 rounded-xl p-3 shadow-nb-lg animate-in fade-in slide-in-from-top-2 duration-200">
                 <div className="flex items-center gap-2 mb-2 text-red-600">
@@ -413,13 +469,14 @@ export default function Editor({
             onImageUpload={onImageUpload}
             onSwitchToRawLatex={onSwitchToRawLatex}
             author={author}
+            dbName={dbName}
           />
         </div>
       </div>
 
       {/* ── Delete confirmation ───────────────────────────────────── */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-nb-secondary/60 backdrop-blur-md px-4" onClick={() => setShowDeleteConfirm(false)}>
+        <div className="fixed inset-0 z-[500] flex items-center justify-center bg-nb-secondary/60 backdrop-blur-md px-4" onClick={() => setShowDeleteConfirm(false)}>
           <div
             className="bg-nb-surface rounded-2xl p-7 shadow-nb-lg max-w-sm w-full border border-nb-outline-variant animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}

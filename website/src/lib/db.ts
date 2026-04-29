@@ -9,13 +9,14 @@
  */
 
 const DEFAULT_DB_NAME = "notebook-pending";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = "changes";
+const RESOURCE_STORE = "resources";
 
 export type PendingOperation = "upsert" | "delete";
 
 export interface PendingChange {
-  /** Repo-relative file path, e.g. "notebook/entries/2026-04-28T09-00-00_entry.tex" */
+  /** Repo-relative file path, e.g. "entries/2026-04-28T09-00-00_entry.tex" */
   path: string;
   operation: PendingOperation;
   /** Text content (for .tex / .json files) or base64 string (for images).
@@ -27,12 +28,21 @@ export interface PendingChange {
   stagedAt: string;
 }
 
+export interface ResourceCacheEntry {
+  path: string;
+  dataUrl: string;
+}
+
 function openDB(dbName: string = DEFAULT_DB_NAME): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(dbName, DB_VERSION);
     req.onupgradeneeded = () => {
-      if (!req.result.objectStoreNames.contains(STORE_NAME)) {
-        req.result.createObjectStore(STORE_NAME, { keyPath: "path" });
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: "path" });
+      }
+      if (!db.objectStoreNames.contains(RESOURCE_STORE)) {
+        db.createObjectStore(RESOURCE_STORE, { keyPath: "path" });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -42,15 +52,36 @@ function openDB(dbName: string = DEFAULT_DB_NAME): Promise<IDBDatabase> {
 
 function tx(
   db: IDBDatabase,
+  storeName: string,
   mode: IDBTransactionMode
 ): IDBObjectStore {
-  return db.transaction(STORE_NAME, mode).objectStore(STORE_NAME);
+  return db.transaction(storeName, mode).objectStore(storeName);
+}
+
+export async function putResource(dbName: string, entry: ResourceCacheEntry): Promise<void> {
+  const db = await openDB(dbName);
+  return new Promise((resolve, reject) => {
+    const store = tx(db, RESOURCE_STORE, "readwrite");
+    const req = store.put(entry);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function getResource(dbName: string, path: string): Promise<string | undefined> {
+  const db = await openDB(dbName);
+  return new Promise((resolve, reject) => {
+    const store = tx(db, RESOURCE_STORE, "readonly");
+    const req = store.get(path);
+    req.onsuccess = () => resolve((req.result as ResourceCacheEntry | undefined)?.dataUrl);
+    req.onerror = () => reject(req.error);
+  });
 }
 
 export async function stageChange(dbName: string, change: PendingChange): Promise<void> {
   const db = await openDB(dbName);
   return new Promise((resolve, reject) => {
-    const store = tx(db, "readwrite");
+    const store = tx(db, STORE_NAME, "readwrite");
     const req = store.put(change);
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
@@ -60,7 +91,7 @@ export async function stageChange(dbName: string, change: PendingChange): Promis
 export async function removeStaged(dbName: string, path: string): Promise<void> {
   const db = await openDB(dbName);
   return new Promise((resolve, reject) => {
-    const store = tx(db, "readwrite");
+    const store = tx(db, STORE_NAME, "readwrite");
     const req = store.delete(path);
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
@@ -70,7 +101,7 @@ export async function removeStaged(dbName: string, path: string): Promise<void> 
 export async function getAllPending(dbName: string): Promise<PendingChange[]> {
   const db = await openDB(dbName);
   return new Promise((resolve, reject) => {
-    const store = tx(db, "readonly");
+    const store = tx(db, STORE_NAME, "readonly");
     const req = store.getAll();
     req.onsuccess = () => resolve(req.result as PendingChange[]);
     req.onerror = () => reject(req.error);
@@ -80,7 +111,7 @@ export async function getAllPending(dbName: string): Promise<PendingChange[]> {
 export async function clearAllPending(dbName: string): Promise<void> {
   const db = await openDB(dbName);
   return new Promise((resolve, reject) => {
-    const store = tx(db, "readwrite");
+    const store = tx(db, STORE_NAME, "readwrite");
     const req = store.clear();
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
@@ -90,7 +121,7 @@ export async function clearAllPending(dbName: string): Promise<void> {
 export async function getPending(dbName: string, path: string): Promise<PendingChange | undefined> {
   const db = await openDB(dbName);
   return new Promise((resolve, reject) => {
-    const store = tx(db, "readonly");
+    const store = tx(db, STORE_NAME, "readonly");
     const req = store.get(path);
     req.onsuccess = () => resolve(req.result as PendingChange | undefined);
     req.onerror = () => reject(req.error);

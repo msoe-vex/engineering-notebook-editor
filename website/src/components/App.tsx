@@ -8,13 +8,14 @@ import {
 } from "@/lib/github";
 import {
   stageChange, getAllPending, clearAllPending, removeStaged, PendingChange,
+  putResource, getResource
 } from "@/lib/db";
 import {
   NotebookMetadata, EMPTY_METADATA,
   rebuildEntryRefs, computeRenameUpdates, computeDeleteUpdates,
   removeResourceFromMetadata, renameResourceInMetadata,
   parseTipTapFromLatex, renameEntryInMetadata, removeEntryFromMetadata,
-  updateMetadataSuggestions,
+  updateMetadataSuggestions, dehydrateTipTapJson,
 } from "@/lib/metadata";
 import Settings from "./Settings";
 import Editor from "./Editor";
@@ -69,109 +70,9 @@ interface OpenFileState {
   isLegacyRaw: boolean;
 }
 
-const ENTRIES_DIR = "notebook/entries";
-const RESOURCES_DIR = "notebook/resources";
-const METADATA_PATH = "notebook/metadata.json";
-
-// ─── LaTeX generation (mirrors Editor.tsx) ───────────────────────────────────
-
-const escapeLaTeX = (text: string) =>
-  text
-    .replace(/\\/g, "\\textbackslash{}")
-    .replace(/&/g,  "\\&")
-    .replace(/%/g,  "\\%")
-    .replace(/\$/g, "\\$")
-    .replace(/#/g,  "\\#")
-    .replace(/_/g,  "\\_")
-    .replace(/\{/g, "\\{")
-    .replace(/\}/g, "\\}");
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const convertNodeToLatex = (node: any): string => {
-  if (!node) return "";
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const children = () => (node.content || []).map((n: any) => convertNodeToLatex(n)).join("");
-  switch (node.type) {
-    case "doc": return children();
-    case "text": {
-      let t = escapeLaTeX(node.text ?? "");
-      for (const mark of (node.marks ?? [])) {
-        if (mark.type === "bold")   t = `\\textbf{${t}}`;
-        if (mark.type === "italic") t = `\\textit{${t}}`;
-        if (mark.type === "code")   t = `\\texttt{${t}}`;
-      }
-      return t;
-    }
-    case "hardBreak": return "\\\\\n";
-    case "paragraph": { const inner = children(); return inner.trim() ? `${inner}\n\n` : "\n"; }
-    case "heading": { const level = node.attrs?.level ?? 2; const cmd = level === 1 ? "subsection*" : "subsubsection*"; return `\\${cmd}{${children()}}\n\n`; }
-    case "bulletList":  return `\\begin{itemize}\n${children()}\\end{itemize}\n\n`;
-    case "orderedList": return `\\begin{enumerate}\n${children()}\\end{enumerate}\n\n`;
-    case "listItem": {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const parts = (node.content || []).map((child: any) => {
-        if (child.type === "paragraph") return (child.content || []).map(convertNodeToLatex).join("");
-        return convertNodeToLatex(child);
-      });
-      return `  \\item ${parts.join("\n").trim()}\n`;
-    }
-    case "codeBlock": {
-      const lang = node.attrs?.language ?? "plaintext";
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const code = (node.content || []).map((n: any) => n.text ?? "").join("");
-      const caption = node.attrs?.caption ?? "";
-      return `\\notebook_codeblock{${lang}}{${code}}{${caption}}\n\n`;
-    }
-    case "image": {
-      const filePath = node.attrs?.filePath;
-      const src      = node.attrs?.src ?? "";
-      const imgSrc   = filePath ? filePath : src.startsWith("data:") ? "resources/embedded_image.png" : src;
-      const caption  = node.attrs?.alt   ?? "Figure";
-      const initials = node.attrs?.title ?? "";
-      const width    = node.attrs?.width ?? "100%";
-      return `\\notebook_image{${imgSrc}}{${caption}}{${initials}}{${width}}\n\n`;
-    }
-    case "table": {
-      const rows = node.content ?? [];
-      if (!rows.length) return "";
-      const caption = node.attrs?.caption ?? "Design Data";
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const colCount = (rows[0]?.content ?? []).length;
-      const colSpec  = "|l".repeat(colCount) + "|";
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const body = rows.map((row: any) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const cells = (row.content ?? []).map((cell: any) =>
-          (cell.content ?? []).map(convertNodeToLatex).join("").replace(/\n+$/, "").trim()
-        );
-        return cells.join(" & ") + " \\\\ \\hline";
-      }).join("\n");
-      return `\\notebook_table{${colSpec}}{${body}}{${caption}}\n\n`;
-    }
-    case "tableRow": case "tableCell": case "tableHeader": return children();
-    case "blockquote": return `\\begin{quote}\n${children()}\\end{quote}\n\n`;
-    case "horizontalRule": return "\\noindent\\rule{\\linewidth}{0.4pt}\n\n";
-    default: return children();
-  }
-};
-
-const convertJsonToLatex = (jsonString: string): string => {
-  if (!jsonString) return "";
-  try {
-    const doc = JSON.parse(jsonString);
-    return convertNodeToLatex(doc).replace(/\n{3,}/g, "\n\n").trim() + "\n";
-  } catch {
-    return jsonString.replace(/<[^>]*>/g, "").trim() + "\n";
-  }
-};
-
-const generateLatex = (content: string, title: string, author: string, phase: string) => {
-  const metadata = JSON.stringify({ content });
-  let latex = `% METADATA: ${metadata}\n`;
-  latex += `\\notebook_entry{${title}}{${new Date().toLocaleDateString()}}{${author}}{${phase}}\n\n`;
-  latex += convertJsonToLatex(content);
-  return latex;
-};
+const ENTRIES_DIR = "entries";
+const RESOURCES_DIR = "resources";
+const METADATA_PATH = "metadata.json";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -227,8 +128,10 @@ const getLocalFileContent = async (rootHandle: any, path: string): Promise<{ tex
     }
     const text = await file.text();
     return { text, isImage: false };
-  } catch (e) {
-    console.error(`Local read failed for ${path}`, e);
+  } catch (e: any) {
+    if (e.name !== 'NotFoundError') {
+      console.error(`Local read failed for ${path}`, e);
+    }
     throw e;
   }
 };
@@ -325,9 +228,9 @@ export default function App() {
     }
   }, [desktopViewMode]);
   const isMobile = useIsMobile();
-  
+
   const showPreview = desktopViewMode === "split" || desktopViewMode === "preview";
-  
+
   useEffect(() => setMounted(true), []);
   const isDarkMode = resolvedTheme === "dark";
 
@@ -359,7 +262,7 @@ export default function App() {
   const displayEntries = useMemo(() => {
     return entries.map(f => {
       const m = notebookMetadata.entries?.[f.path];
-      
+
       // Intelligent fallback for timestamp from ISO filename
       let finalTs = m?.createdAt || "";
       if (!finalTs) {
@@ -368,7 +271,7 @@ export default function App() {
         if (parts.length === 2) {
           const datePart = parts[0];
           const timePart = parts[1].replace(/-/g, ':').replace(/:([^:]*)$/, '.$1');
-          try { 
+          try {
             const d = new Date(`${datePart}T${timePart}`);
             if (!isNaN(d.getTime())) finalTs = d.toISOString();
           } catch { /* ignore */ }
@@ -410,24 +313,29 @@ export default function App() {
   // Auto-save effect
   useEffect(() => {
     if (!openFile) return;
-    
+
     const timeout = setTimeout(async () => {
-      const dbName = getDBName();
-      await stageChange(dbName, {
-        path: openFile.path,
-        operation: "upsert",
-        content: openFile.rawLatex,
-        label: `Auto-save: ${openFile.name}`,
-        stagedAt: isoTimestamp(),
-      });
-      
+      if (workspaceMode === "local" && dirHandle) {
+        // Direct write for local folder
+        await writeLocalFile(dirHandle, openFile.path, openFile.rawLatex);
+      } else {
+        const dbName = getDBName();
+        await stageChange(dbName, {
+          path: openFile.path,
+          operation: "upsert",
+          content: openFile.rawLatex,
+          label: `Auto-save: ${openFile.name}`,
+          stagedAt: isoTimestamp(),
+        });
+      }
+
       if (openFile.author) {
         localStorage.setItem("nb-last-author", openFile.author);
       }
     }, 1000);
 
     return () => clearTimeout(timeout);
-  }, [openFile?.rawLatex, openFile?.author, getDBName]);
+  }, [openFile?.rawLatex, openFile?.author, getDBName, workspaceMode, dirHandle]);
 
   // ── Content cache helpers ────────────────────────────────────────────────────
 
@@ -542,7 +450,7 @@ export default function App() {
     const ts = getFilenameTimestamp();
     let filename = `${ts}_entry.tex`;
     let path = `${ENTRIES_DIR}/${filename}`;
-    
+
     // Handle duplicates
     let counter = 1;
     while (entries.some(e => e.path === path)) {
@@ -561,9 +469,9 @@ export default function App() {
       setEntries(prev => [{ name: filename, path }, ...prev]);
     } else {
       // memory
-      setEntries(prev => [{ 
-        name: filename, 
-        path, 
+      setEntries(prev => [{
+        name: filename,
+        path,
       }, ...prev]);
       setNotebookMetadata(prev => ({
         ...prev,
@@ -602,16 +510,6 @@ export default function App() {
     return json;
   }, [contentCache]);
 
-  const dehydrateJson = useCallback((json: any) => {
-    if (!json || typeof json !== 'object') return json;
-    if (json.type === 'image' && json.attrs?.filePath) {
-      return { ...json, attrs: { ...json.attrs, src: "" } };
-    }
-    if (json.content) {
-      return { ...json, content: json.content.map(dehydrateJson) };
-    }
-    return json;
-  }, []);
 
   // ── Select entry ─────────────────────────────────────────────────────────────
 
@@ -648,7 +546,7 @@ export default function App() {
         try {
           const meta: FileMetadata = JSON.parse(metaMatch[1]);
           const entryMatch = rawLatex.match(/\\newentry{(.*?)}{(.*?)}{(.*?)}{(.*?)}/);
-          
+
           // Hydrate image sources before opening
           let tiptapStr = meta.content || "";
           try {
@@ -672,8 +570,8 @@ export default function App() {
           setLatexContent(rawLatex);
           setMobileTab("editor");
           return;
-        } catch (e) { 
-           console.error("JSON parse failed for entry metadata", e);
+        } catch (e) {
+          console.error("JSON parse failed for entry metadata", e);
         }
       }
 
@@ -696,7 +594,7 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceMode, dirHandle, config, contentCache]);
 
   // ── Select resource ───────────────────────────────────────────────────────────
@@ -714,15 +612,21 @@ export default function App() {
       if (staged?.content) {
         // content is base64 data URL
         imageSrc = staged.content.startsWith("data:") ? staged.content : `data:image/*;base64,${staged.content}`;
-      } else if (contentCache.has(file.path)) {
-        imageSrc = contentCache.get(file.path)!;
-      } else if (workspaceMode === "local" && dirHandle) {
-        const result = await getLocalFileContent(dirHandle, file.path);
-        imageSrc = result.base64 ?? "";
-        cacheContent(file.path, imageSrc);
-      } else if (workspaceMode === "github" && config) {
-        // For images on GitHub, construct raw URL as fallback or fetch base64
-        imageSrc = `https://raw.githubusercontent.com/${config.owner}/${config.repo}/HEAD/${file.path}`;
+      } else {
+        // Check persistent resource cache
+        const cached = await getResource(dbName, file.path);
+        if (cached) {
+          imageSrc = cached;
+        } else if (contentCache.has(file.path)) {
+          imageSrc = contentCache.get(file.path)!;
+        } else if (workspaceMode === "local" && dirHandle) {
+          const result = await getLocalFileContent(dirHandle, file.path);
+          imageSrc = result.base64 ?? "";
+          cacheContent(file.path, imageSrc);
+        } else if (workspaceMode === "github" && config) {
+          // For images on GitHub, construct raw URL as fallback or fetch base64
+          imageSrc = `https://raw.githubusercontent.com/${config.owner}/${config.repo}/HEAD/${file.path}`;
+        }
       }
 
       setOpenFile({
@@ -739,7 +643,7 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceMode, dirHandle, config, contentCache, getDBName]);
 
   // ── Save entry ───────────────────────────────────────────────────────────────
@@ -751,7 +655,7 @@ export default function App() {
     } else if (workspaceMode === "github") {
       await stage({ path, content: latex, operation: "upsert", label: "Entry update" });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceMode, dirHandle, stage]);
 
   // ── Raw latex save (from RawLatexEditor) ────────────────────────────────────
@@ -765,7 +669,7 @@ export default function App() {
     } else if (workspaceMode === "github") {
       await stage({ path: openFile.path, content: latex, operation: "upsert", label: "Raw LaTeX edit" });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openFile, workspaceMode, dirHandle, stage]);
 
   // ── Metadata rebuild (called after entry save) ───────────────────────────────
@@ -775,7 +679,7 @@ export default function App() {
     let cleanJson = tiptapJson;
     try {
       const parsed = JSON.parse(tiptapJson);
-      cleanJson = JSON.stringify(dehydrateJson(parsed));
+      cleanJson = JSON.stringify(dehydrateTipTapJson(parsed));
     } catch { /* ... */ }
 
     setNotebookMetadata(prev => {
@@ -784,17 +688,17 @@ export default function App() {
         updated = updateMetadataSuggestions(updated, info.author, info.title);
       }
       const metaStr = JSON.stringify(updated, null, 2);
-      
+
       // Secondary action: persist if needed
       if (workspaceMode === "local" && dirHandle) {
         writeLocalFile(dirHandle, METADATA_PATH, metaStr).catch(console.error);
       } else if (workspaceMode === "github") {
         stage({ path: METADATA_PATH, content: metaStr, operation: "upsert", label: "Metadata update" }).catch(console.error);
       }
-      
+
       return updated;
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notebookMetadata, workspaceMode, dirHandle, stage]);
 
   // ── Image upload from editor ─────────────────────────────────────────────────
@@ -802,6 +706,11 @@ export default function App() {
   const handleImageUploaded = useCallback(async (imagePath: string, base64: string) => {
     const dataUrl = `data:image/*;base64,${base64}`;
     cacheContent(imagePath, dataUrl);
+
+    // Save to persistent resource cache
+    const dbName = getDBName();
+    await putResource(dbName, { path: imagePath, dataUrl });
+
     const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
     if (workspaceMode === "local" && dirHandle) {
       await writeLocalFile(dirHandle, imagePath, bytes);
@@ -814,8 +723,8 @@ export default function App() {
       const imgName = imagePath.split("/").pop()!;
       setResources(prev => [...prev, { name: imgName, path: imagePath }].sort((a, b) => a.name.localeCompare(b.name)));
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceMode, dirHandle, loadLocalExplorer, stage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceMode, dirHandle, loadLocalExplorer, stage, getDBName]);
 
   // ── Upload resource from FileExplorer ────────────────────────────────────────
 
@@ -867,7 +776,7 @@ export default function App() {
       setOpenFile(null);
       setLatexContent("");
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceMode, dirHandle, loadLocalExplorer, stage, openFile, notebookMetadata]);
 
   // ── Resource delete (cascades to entries) ────────────────────────────────────
@@ -917,7 +826,7 @@ export default function App() {
     if (openFile?.path === file.path) {
       setOpenFile(null);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceMode, dirHandle, loadLocalExplorer, stage, entries, contentCache, notebookMetadata, openFile]);
 
   // Renaming entries/resources is disabled to maintain project-title centric navigation.
@@ -1002,17 +911,15 @@ export default function App() {
   // ── Pending change summary ─────────────────────────────────────────────────────
 
   const upserted = pendingChanges.filter(p => p.operation === "upsert");
-  const deleted  = pendingChanges.filter(p => p.operation === "delete");
+  const deleted = pendingChanges.filter(p => p.operation === "delete");
 
   // ── Workspace label ───────────────────────────────────────────────────────────
 
   const workspaceLabel =
     workspaceMode === "github" ? `${config?.owner}/${config?.repo}` :
-    workspaceMode === "local"  ? (dirHandle?.name ?? "Local Folder") : "Memory";
+      workspaceMode === "local" ? (dirHandle?.name ?? "Local Folder") : "Memory";
 
-  const ModeIcon =
-    workspaceMode === "github" ? GitBranch :
-    workspaceMode === "local"  ? HardDrive : ArrowLeftRight;
+  const ModeIcon = ArrowLeftRight;
 
   // ── Pending path sets for FileExplorer ────────────────────────────────────────
 
@@ -1034,7 +941,7 @@ export default function App() {
           <p className="text-sm font-semibold text-nb-on-surface truncate">Notebook</p>
         </div>
         <div className="flex items-center gap-1">
-          <button 
+          <button
             onClick={handleDisconnect}
             title="Switch Workspace"
             className="p-1.5 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors"
@@ -1042,7 +949,7 @@ export default function App() {
             <ModeIcon size={16} />
           </button>
           {isMobile && (
-            <button 
+            <button
               onClick={() => setIsSidebarOpen(false)}
               className="p-1.5 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant transition-colors"
             >
@@ -1073,29 +980,29 @@ export default function App() {
       <div className="p-4 bg-nb-surface border-t border-nb-outline-variant">
         {workspaceMode === "github" && (pendingChanges.length > 0 || isCommitting) && (
           <div className="mb-4">
-             <div className="grid grid-cols-2 gap-2 mb-3">
-               <div className="bg-nb-surface-low rounded-lg p-2.5 border border-nb-outline-variant/30">
-                 <span className="block text-[8px] font-bold text-nb-on-surface-variant/80 uppercase tracking-widest mb-1">Staged</span>
-                 <span className="text-xs font-bold text-nb-on-surface leading-none">{upserted.length}</span>
-               </div>
-               <div className="bg-nb-surface-low rounded-lg p-2.5 border border-nb-outline-variant/30">
-                  <span className="block text-[8px] font-bold text-nb-on-surface-variant/80 uppercase tracking-widest mb-1">Removed</span>
-                  <span className="text-xs font-bold text-nb-on-surface leading-none">{deleted.length}</span>
-               </div>
-             </div>
-             <button
-               onClick={handleCommitAll}
-               disabled={isCommitting || (upserted.length === 0 && deleted.length === 0)}
-               className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[9px] font-bold uppercase tracking-widest py-3 rounded-lg transition-all active:scale-[0.98] shadow-lg shadow-nb-tertiary/20 disabled:opacity-30"
-             >
-               {isCommitting ? "Syncing..." : "Commit Changes"}
-             </button>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <div className="bg-nb-surface-low rounded-lg p-2.5 border border-nb-outline-variant/30">
+                <span className="block text-[8px] font-bold text-nb-on-surface-variant/80 uppercase tracking-widest mb-1">Staged</span>
+                <span className="text-xs font-bold text-nb-on-surface leading-none">{upserted.length}</span>
+              </div>
+              <div className="bg-nb-surface-low rounded-lg p-2.5 border border-nb-outline-variant/30">
+                <span className="block text-[8px] font-bold text-nb-on-surface-variant/80 uppercase tracking-widest mb-1">Removed</span>
+                <span className="text-xs font-bold text-nb-on-surface leading-none">{deleted.length}</span>
+              </div>
+            </div>
+            <button
+              onClick={handleCommitAll}
+              disabled={isCommitting || (upserted.length === 0 && deleted.length === 0)}
+              className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[9px] font-bold uppercase tracking-widest py-3 rounded-lg transition-all active:scale-[0.98] shadow-lg shadow-nb-tertiary/20 disabled:opacity-30"
+            >
+              {isCommitting ? "Syncing..." : "Commit Changes"}
+            </button>
           </div>
         )}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-             <div className={`w-1.5 h-1.5 rounded-full ${isLoading ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`} />
-             <span className="text-[9px] font-bold uppercase tracking-widest text-nb-on-surface-variant">{isLoading ? 'Syncing' : 'Connected'}</span>
+            <div className={`w-1.5 h-1.5 rounded-full ${isLoading ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`} />
+            <span className="text-[9px] font-bold uppercase tracking-widest text-nb-on-surface-variant">{isLoading ? 'Syncing' : 'Connected'}</span>
           </div>
           <span className="text-[9px] font-mono text-nb-on-surface-variant/40 truncate max-w-[120px]">{workspaceLabel}</span>
         </div>
@@ -1107,7 +1014,7 @@ export default function App() {
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 h-14 bg-nb-surface border-b border-nb-outline-variant shrink-0">
-        <button 
+        <button
           onClick={() => setIsSidebarOpen(true)}
           className={`p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors ${isSidebarOpen && !isMobile ? 'invisible' : 'visible'}`}
         >
@@ -1116,13 +1023,13 @@ export default function App() {
 
         {openFile?.viewMode === "entry" && isMobile ? (
           <div className="flex bg-nb-surface-low rounded-lg p-0.5 border border-nb-outline-variant/30">
-            <button 
+            <button
               onClick={() => setMobileTab("editor")}
               className={`px-3 py-1 rounded-md text-[9px] font-bold uppercase tracking-widest transition-all ${mobileTab === 'editor' ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60'}`}
             >
               Editor
             </button>
-            <button 
+            <button
               onClick={() => setMobileTab("preview")}
               className={`px-3 py-1 rounded-md text-[9px] font-bold uppercase tracking-widest transition-all ${mobileTab === 'preview' ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60'}`}
             >
@@ -1138,19 +1045,19 @@ export default function App() {
         <div className="flex items-center gap-2">
           {openFile?.viewMode === "entry" && !isMobile && (
             <div className="flex bg-nb-surface-low rounded-lg p-0.5 border border-nb-outline-variant/30 mr-2 shadow-sm">
-              <button 
+              <button
                 onClick={() => setDesktopViewMode("editor")}
                 className={`px-3 py-1.5 rounded-md text-[9px] font-bold uppercase tracking-widest transition-all ${desktopViewMode === "editor" ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60 hover:text-nb-primary'}`}
               >
                 Editor
               </button>
-              <button 
+              <button
                 onClick={() => setDesktopViewMode("split")}
                 className={`px-3 py-1.5 rounded-md text-[9px] font-bold uppercase tracking-widest transition-all ${desktopViewMode === "split" ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60 hover:text-nb-primary'}`}
               >
                 Split
               </button>
-              <button 
+              <button
                 onClick={() => setDesktopViewMode("preview")}
                 className={`px-3 py-1.5 rounded-md text-[9px] font-bold uppercase tracking-widest transition-all ${desktopViewMode === "preview" ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60 hover:text-nb-primary'}`}
               >
@@ -1158,7 +1065,7 @@ export default function App() {
               </button>
             </div>
           )}
-          <button 
+          <button
             onClick={() => setTheme(isDarkMode ? "light" : "dark")}
             className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors"
           >
@@ -1203,44 +1110,48 @@ export default function App() {
           </div>
         ) : isMobile ? (
           <div className="h-full relative overflow-hidden bg-nb-surface-low">
-             {/* Editor Tab */}
-             <div 
-               className={`absolute inset-0 transition-transform duration-300 ease-out ${mobileTab === 'editor' ? 'translate-x-0' : '-translate-x-full'}`}
-               aria-hidden={mobileTab !== 'editor'}
-             >
-                <Editor
-                  key={openFile.path}
-                  config={appConfig}
-                  isLocalMode={workspaceMode !== "github"}
-                  initialTitle={openFile.title}
-                  initialAuthor={openFile.author}
-                  initialPhase={openFile.phase}
-                  initialContent={openFile.tiptapContent}
-                  metadataMissing={openFile.metadataMissing}
-                  filename={openFile.path}
-                  onSaved={handleEntrySaved}
-                  onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
-                  onContentChange={(latex) => setLatexContent(latex)}
-                  onTitleChange={(title) => setOpenFile(prev => prev ? { ...prev, title } : null)}
-                  onAuthorChange={(author) => setOpenFile(prev => prev ? { ...prev, author } : null)}
-                  onPhaseChange={(phase) => setOpenFile(prev => prev ? { ...prev, phase } : null)}
-                  onImageUpload={handleImageUploaded}
-                  onMetadataRebuild={handleMetadataRebuild}
-                  onSwitchToRawLatex={handleSwitchToRawLatex}
-                />
-             </div>
-             {/* Preview Tab */}
-             <div 
-               className={`absolute inset-0 transition-transform duration-300 ease-out bg-nb-bg ${mobileTab === 'preview' ? 'translate-x-0' : 'translate-x-full'}`}
-               aria-hidden={mobileTab !== 'preview'}
-             >
-                <Preview latexContent={latexContent} />
-             </div>
+            {/* Editor Tab */}
+            <div
+              className={`absolute inset-0 transition-transform duration-300 ease-out ${mobileTab === 'editor' ? 'translate-x-0' : '-translate-x-full'}`}
+              aria-hidden={mobileTab !== 'editor'}
+            >
+              <Editor
+                key={openFile.path}
+                config={appConfig}
+                isLocalMode={workspaceMode !== "github"}
+                initialTitle={openFile.title}
+                initialAuthor={openFile.author}
+                initialPhase={openFile.phase}
+                initialContent={openFile.tiptapContent}
+                metadataMissing={openFile.metadataMissing}
+                filename={openFile.path}
+                onSaved={handleEntrySaved}
+                onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
+                onContentChange={(latex) => {
+                  setLatexContent(latex);
+                  setOpenFile(prev => prev ? { ...prev, rawLatex: latex } : null);
+                }}
+                onTitleChange={(title) => setOpenFile(prev => prev ? { ...prev, title } : null)}
+                onAuthorChange={(author) => setOpenFile(prev => prev ? { ...prev, author } : null)}
+                onPhaseChange={(phase) => setOpenFile(prev => prev ? { ...prev, phase } : null)}
+                onImageUpload={handleImageUploaded}
+                onMetadataRebuild={handleMetadataRebuild}
+                onSwitchToRawLatex={handleSwitchToRawLatex}
+                dbName={getDBName()}
+              />
+            </div>
+            {/* Preview Tab */}
+            <div
+              className={`absolute inset-0 transition-transform duration-300 ease-out bg-nb-bg ${mobileTab === 'preview' ? 'translate-x-0' : 'translate-x-full'}`}
+              aria-hidden={mobileTab !== 'preview'}
+            >
+              <Preview latexContent={latexContent} />
+            </div>
           </div>
         ) : (
           <PanelGroup direction="horizontal" className="h-full" id="editor-preview-group">
-            <Panel 
-              id="editor-panel" 
+            <Panel
+              id="editor-panel"
               order={1}
               ref={editorPanelRef}
               collapsible={true}
@@ -1261,7 +1172,10 @@ export default function App() {
                 filename={openFile.path}
                 onSaved={handleEntrySaved}
                 onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
-                onContentChange={(latex) => setLatexContent(latex)}
+                onContentChange={(latex) => {
+                  setLatexContent(latex);
+                  setOpenFile(prev => prev ? { ...prev, rawLatex: latex } : null);
+                }}
                 onTitleChange={(title) => setOpenFile(prev => prev ? { ...prev, title } : null)}
                 onAuthorChange={(author) => setOpenFile(prev => prev ? { ...prev, author } : null)}
                 onPhaseChange={(phase) => setOpenFile(prev => prev ? { ...prev, phase } : null)}
@@ -1269,15 +1183,14 @@ export default function App() {
                 onMetadataRebuild={handleMetadataRebuild}
                 onSwitchToRawLatex={handleSwitchToRawLatex}
                 onClose={() => setOpenFile(null)}
+                dbName={getDBName()}
               />
             </Panel>
-            
-            {desktopViewMode === "split" && (
-              <PanelResizeHandle id="editor-preview-resizer" className="w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors" />
-            )}
-            
-            <Panel 
-              id="preview-panel" 
+
+            <PanelResizeHandle id="editor-preview-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${desktopViewMode !== 'split' ? 'hidden' : ''}`} />
+
+            <Panel
+              id="preview-panel"
               order={2}
               ref={previewPanelRef}
               collapsible={true}
@@ -1298,7 +1211,7 @@ export default function App() {
       {isMobile ? (
         <div className="flex w-full h-full relative">
           <div className={`fixed inset-0 z-[150] transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-            <div 
+            <div
               className="absolute inset-0 bg-black/40 backdrop-blur-sm"
               onClick={() => setIsSidebarOpen(false)}
             />
@@ -1329,17 +1242,16 @@ export default function App() {
       {/* Notifications */}
       {notification && (
         <div className="fixed bottom-6 right-6 z-[200] animate-in slide-in-from-right-10 duration-300">
-           <div className={`px-5 py-4 rounded-2xl shadow-nb-lg border flex items-center gap-4 ${
-             notification.type === 'error' ? 'bg-nb-primary/5 border-nb-primary/30 text-nb-primary' : 'bg-nb-tertiary/5 border-nb-tertiary/30 text-nb-tertiary'
-           } backdrop-blur-xl bg-white/80 dark:bg-nb-dark-surface/80`}>
-             <div className="flex-1">
-               <p className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">{notification.type === 'error' ? 'Error' : 'Success'}</p>
-               <p className="text-xs font-medium">{notification.message}</p>
-             </div>
-             <button onClick={() => setNotification(null)} className="p-1 hover:bg-black/5 rounded transition-colors">
-               <X size={14} />
-             </button>
-           </div>
+          <div className={`px-5 py-4 rounded-2xl shadow-nb-lg border flex items-center gap-4 ${notification.type === 'error' ? 'bg-nb-primary/5 border-nb-primary/30 text-nb-primary' : 'bg-nb-tertiary/5 border-nb-tertiary/30 text-nb-tertiary'
+            } backdrop-blur-xl bg-white/80 dark:bg-nb-dark-surface/80`}>
+            <div className="flex-1">
+              <p className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">{notification.type === 'error' ? 'Error' : 'Success'}</p>
+              <p className="text-xs font-medium">{notification.message}</p>
+            </div>
+            <button onClick={() => setNotification(null)} className="p-1 hover:bg-black/5 rounded transition-colors">
+              <X size={14} />
+            </button>
+          </div>
         </div>
       )}
     </div>
