@@ -1,3 +1,9 @@
+entries/
+resources/
+metadata.json
+main.pdf
+all_entries.tex
+
 ## Core latex/pdflatex auxiliary files:
 *.aux
 *.lof
