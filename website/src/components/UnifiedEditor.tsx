@@ -118,6 +118,7 @@ const ImageWithCaption = TiptapImage.extend({
 
 const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName }: any) => {
   const [showMenu, setShowMenu] = useState(false);
+  const [dragEnabled, setDragEnabled] = useState(false);
 
   React.useEffect(() => {
     if (!showMenu) return;
@@ -154,123 +155,124 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName }:
     return () => { active = false; };
   }, [node.attrs.src, dbName]);
 
+  const [isResizing, setIsResizing] = useState(false);
+
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    const startX = e.clientX;
+    const startWidth = parseInt(node.attrs.width) || 100;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      // Container is max-w-2xl (~672px). 
+      // A delta of 6.7px is roughly 1%.
+      const newWidth = Math.min(100, Math.max(10, startWidth + (deltaX / 6.7)));
+      updateAttributes({ width: `${Math.round(newWidth)}%` });
+    };
+
+    const onMouseUp = () => {
+      setIsResizing(false);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
+
   return (
-    <NodeViewWrapper draggable className={`my-8 group relative max-w-2xl mx-auto transition-all ${selected ? 'z-[100]' : 'z-10'}`}>
-      <div className={`relative rounded-xl border bg-nb-surface group-hover:shadow-nb-md transition-all ${selected ? 'border-nb-primary ring-4 ring-nb-primary/30 shadow-nb-lg' : 'border-nb-outline-variant/30 shadow-nb-sm'}`}>
-        {/* Drag Handle */}
-        <div contentEditable={false} className="absolute top-2 left-2 z-[60]">
-          <div
-            className="w-8 h-8 rounded-full bg-white/90 text-nb-on-surface-variant flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm border border-nb-outline-variant/20 hover:bg-white hover:text-nb-primary transition-all"
-            data-drag-handle
-          >
-            <GripVertical size={14} />
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="flex justify-center bg-nb-bg/50 rounded-t-xl overflow-hidden">
-          <img
-            src={resolvedSrc}
-            alt={node.attrs.alt}
-            style={{ width: node.attrs.width ?? "100%" }}
-            className={`h-auto block select-none pointer-events-none transition-all duration-300 ${selected ? 'ring-4 ring-nb-primary/40 shadow-nb-xl border-2 border-nb-primary rounded-lg' : ''}`}
-            draggable={false}
-          />
-        </div>
-
-        {/* Floating Menu Button Area */}
-        <div
-          contentEditable={false}
-          className="absolute top-2 right-2 flex items-center gap-2 z-[70]"
-          onMouseDown={(e) => { e.stopPropagation(); }}
-          onPointerDown={(e) => { e.stopPropagation(); }}
-          onClick={(e) => { e.stopPropagation(); }}
-          onDragStart={(e) => { e.stopPropagation(); }}
+    <NodeViewWrapper 
+      draggable={dragEnabled}
+      className={`my-6 group relative max-w-2xl mx-auto transition-all ${selected ? 'z-[100]' : 'z-10'}`}
+    >
+      {/* External Controls (Left side) - Always Visible */}
+      <div contentEditable={false} className="absolute -left-12 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
+        <button
+          onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+          className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${showMenu ? 'bg-nb-primary text-white shadow-lg' : 'bg-nb-surface text-nb-on-surface-variant hover:bg-nb-surface-high hover:text-nb-primary shadow-sm border border-nb-outline-variant/30'}`}
         >
-          <button
-            onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${showMenu ? 'bg-nb-primary text-white scale-110 shadow-lg' : 'bg-white/90 text-nb-on-surface-variant hover:bg-white hover:text-nb-primary shadow-sm border border-nb-outline-variant/20'}`}
-          >
-            <MoreVertical size={16} />
-          </button>
+          <MoreVertical size={16} />
+        </button>
+        
+        <div 
+          data-drag-handle 
+          onMouseEnter={() => setDragEnabled(true)}
+          onMouseLeave={() => setDragEnabled(false)}
+          className="w-8 h-8 rounded-full bg-nb-surface text-nb-on-surface-variant flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm border border-nb-outline-variant/30 hover:bg-nb-surface-high hover:text-nb-primary transition-all"
+        >
+          <GripVertical size={14} />
+        </div>
+      </div>
 
-          {showMenu && (
-            <div
-              className="absolute top-10 right-0 w-64 bg-nb-surface border border-nb-outline-variant shadow-nb-lg rounded-xl z-50 p-4 animate-in fade-in zoom-in duration-200"
-              onMouseDown={(e) => { e.stopPropagation(); }}
-              onPointerDown={(e) => { e.stopPropagation(); }}
-              onClick={(e) => { e.stopPropagation(); }}
-              draggable="true"
-              onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
-            >
-              <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
-                <Settings size={14} className="text-nb-tertiary" />
-                <span className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant">Image Options</span>
+      {/* Main Image Content */}
+      <div className={`relative flex justify-center transition-all duration-300 ${selected ? 'ring-2 ring-nb-primary/50' : ''}`}>
+        <img
+          src={resolvedSrc}
+          alt={node.attrs.alt}
+          style={{ width: node.attrs.width ?? "100%" }}
+          className="h-auto block select-none pointer-events-none"
+          draggable={false}
+        />
+
+        {/* Resize handle (Right edge) */}
+        {selected && (
+          <div
+            contentEditable={false}
+            onMouseDown={startResize}
+            className="absolute top-0 right-0 bottom-0 w-2 cursor-ew-resize hover:bg-nb-primary/30 transition-colors z-50 group/resize"
+          >
+            <div className="absolute top-1/2 -translate-y-1/2 right-0 w-1.5 h-12 bg-nb-primary rounded-l-full opacity-0 group-hover/resize:opacity-100 transition-opacity" />
+          </div>
+        )}
+
+        {/* Floating Options Menu */}
+        {showMenu && (
+          <div
+            contentEditable={false}
+            className="absolute top-0 left-0 w-64 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl z-[100] p-4 animate-in fade-in zoom-in duration-200"
+            onMouseDown={(e) => { e.stopPropagation(); }}
+          >
+            <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
+              <Settings size={14} className="text-nb-tertiary" />
+              <span className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant">Image Options</span>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Figure Caption</label>
+                <input
+                  type="text"
+                  value={node.attrs.alt ?? ""}
+                  onChange={(e) => updateAttributes({ alt: e.target.value })}
+                  placeholder="Describe this figure..."
+                  className="w-full text-xs bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-tertiary transition-all"
+                />
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Figure Caption</label>
-                  <input
-                    type="text"
-                    value={node.attrs.alt ?? ""}
-                    onChange={(e) => updateAttributes({ alt: e.target.value })}
-                    placeholder="Describe this figure..."
-                    className="w-full text-xs bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-tertiary transition-all"
-                  />
-                </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Author Initials</label>
+                <input
+                  type="text"
+                  value={node.attrs.title ?? ""}
+                  onChange={(e) => updateAttributes({ title: e.target.value })}
+                  placeholder="e.g. JD"
+                  className="w-full text-xs font-mono bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-tertiary transition-all"
+                />
+              </div>
 
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Author Initials</label>
-                  <div className="flex items-center gap-2">
-                    <UserCircle size={14} className="text-nb-on-surface-variant/40" />
-                    <input
-                      type="text"
-                      value={node.attrs.title ?? ""}
-                      onChange={(e) => updateAttributes({ title: e.target.value })}
-                      placeholder="e.g. JD"
-                      className="flex-1 text-xs font-mono bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-tertiary transition-all"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-2.5">Display Width: {node.attrs.width}</label>
-                  <div className="px-1" onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}>
-                    <input
-                      type="range"
-                      min="10"
-                      max="100"
-                      step="5"
-                      value={parseInt(node.attrs.width) || 100}
-                      onChange={(e) => updateAttributes({ width: `${e.target.value}%` })}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      draggable="true"
-                      onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                      className="w-full h-1.5 bg-nb-surface-low rounded-lg appearance-none cursor-pointer accent-nb-primary"
-                    />
-                    <div className="flex justify-between mt-2 text-[8px] font-bold text-nb-on-surface-variant/40 uppercase tracking-tighter">
-                      <span>10%</span>
-                      <span>50%</span>
-                      <span>100%</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-2">
-                  <button
-                    onClick={() => deleteNode()}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-bold"
-                  >
-                    <Trash2 size={14} />
-                    <span>Delete Resource</span>
-                  </button>
-                </div>
+              <div className="pt-2">
+                <button
+                  onClick={() => deleteNode()}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-bold"
+                >
+                  <Trash2 size={14} />
+                  <span>Delete Resource</span>
+                </button>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {node.attrs.alt && (
@@ -281,7 +283,7 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName }:
       )}
     </NodeViewWrapper>
   );
-}
+};
 
 /* ─────────────────────────────────────────────────────────────────
    Table Node View — with integrated controls
@@ -303,6 +305,7 @@ const TableWithCaption = Table.extend({
 function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: any) {
   const [showMenu, setShowMenu] = useState(false);
   const [isCursorInside, setIsCursorInside] = useState(false);
+  const [dragEnabled, setDragEnabled] = useState(false);
 
   React.useEffect(() => {
     const check = () => {
@@ -325,101 +328,92 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
   const active = selected || isCursorInside;
 
   return (
-    <NodeViewWrapper draggable className={`my-8 group relative transition-all ${active ? 'z-[100]' : 'z-10'}`}>
-      <div className={`relative rounded-xl border bg-nb-surface group-hover:shadow-nb-md transition-all ${active ? 'border-nb-primary ring-4 ring-nb-primary/30 shadow-nb-lg' : 'border-nb-outline-variant/30 shadow-nb-sm'}`}>
-        {/* Drag Handle */}
-        <div contentEditable={false} className="absolute top-2 left-2 z-[60]">
-          <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm border transition-all ${active ? 'bg-nb-primary text-white border-nb-primary' : 'bg-white/90 text-nb-on-surface-variant border-nb-outline-variant/20 hover:bg-white hover:text-nb-secondary'}`}
-            data-drag-handle
-          >
-            <GripVertical size={14} />
-          </div>
-        </div>
-
-        {/* Floating Menu Button Area */}
-        <div
-          contentEditable={false}
-          className="absolute top-2 right-2 z-[70] flex items-center gap-2"
-          onMouseDown={(e) => { e.stopPropagation(); }}
-          onPointerDown={(e) => { e.stopPropagation(); }}
-          onClick={(e) => { e.stopPropagation(); }}
-          onDragStart={(e) => { e.stopPropagation(); }}
+    <NodeViewWrapper 
+      draggable={dragEnabled}
+      className={`my-6 group relative max-w-2xl mx-auto transition-all ${active ? 'z-[100]' : 'z-10'}`}>
+      {/* External Controls (Left side) - Always Visible */}
+      <div contentEditable={false} className="absolute -left-12 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
+        <button
+          onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+          className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${showMenu ? 'bg-nb-secondary text-white shadow-lg' : 'bg-nb-surface text-nb-on-surface-variant hover:bg-nb-surface-high hover:text-nb-secondary shadow-sm border border-nb-outline-variant/30'}`}
         >
-          <button
-            onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${showMenu ? 'bg-nb-secondary text-white scale-110 shadow-lg' : 'bg-white/90 text-nb-on-surface-variant hover:bg-white hover:text-nb-secondary shadow-sm border border-nb-outline-variant/20'}`}
+          <MoreVertical size={16} />
+        </button>
+        
+        <div 
+          data-drag-handle 
+          onMouseEnter={() => setDragEnabled(true)}
+          onMouseLeave={() => setDragEnabled(false)}
+          className="w-8 h-8 rounded-full bg-nb-surface text-nb-on-surface-variant flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm border border-nb-outline-variant/30 hover:bg-nb-surface-high hover:text-nb-secondary transition-all"
+        >
+          <GripVertical size={14} />
+        </div>
+      </div>
+
+      {/* Main Table Content */}
+      <div className={`overflow-x-auto transition-all duration-300 ${active ? 'ring-2 ring-nb-primary/50' : ''}`}>
+        <NodeViewContent 
+          as={"table" as any} 
+          className="border-collapse w-full table-fixed" 
+        />
+
+        {/* Floating Menu */}
+        {showMenu && (
+          <div
+            contentEditable={false}
+            className="absolute top-0 left-0 w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl z-[100] p-4 animate-in fade-in zoom-in duration-200"
+            onMouseDown={(e) => { e.stopPropagation(); }}
           >
-            <MoreVertical size={16} />
-          </button>
+            <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
+              <TableIcon size={14} className="text-nb-secondary" />
+              <span className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant">Table Management</span>
+            </div>
 
-          {showMenu && (
-            <>
-              <div
-                className="absolute top-10 right-0 w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-lg rounded-xl z-[70] p-4 animate-in fade-in zoom-in duration-200"
-                onMouseDown={(e) => { e.stopPropagation(); }}
-                onPointerDown={(e) => { e.stopPropagation(); }}
-                onClick={(e) => { e.stopPropagation(); }}
-                draggable="true"
-                onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
-              >
-                <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
-                  <TableIcon size={14} className="text-nb-secondary" />
-                  <span className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant">Table Management</span>
+            <div className="space-y-5 text-nb-on-surface">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <span className="block text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant/60">Rows</span>
+                  <div className="flex bg-nb-surface-low rounded-lg border border-nb-outline-variant/30 p-1">
+                    <button onClick={() => editor.chain().focus().addRowBefore().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronUp size={12} /></button>
+                    <button onClick={() => editor.chain().focus().addRowAfter().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronDown size={12} /></button>
+                    <div className="w-px h-3 bg-nb-outline-variant/30 mx-0.5 self-center" />
+                    <button onClick={() => editor.chain().focus().deleteRow().run()} className="flex-1 p-1.5 hover:bg-red-50 rounded transition-colors text-red-500"><Trash2 size={12} /></button>
+                  </div>
                 </div>
-
-                <div className="space-y-5 text-nb-on-surface">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <span className="block text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant/60">Rows</span>
-                      <div className="flex bg-nb-surface-low rounded-lg border border-nb-outline-variant/30 p-1">
-                        <button onClick={() => editor.chain().focus().addRowBefore().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronUp size={12} /></button>
-                        <button onClick={() => editor.chain().focus().addRowAfter().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronDown size={12} /></button>
-                        <div className="w-px h-3 bg-nb-outline-variant/30 mx-0.5 self-center" />
-                        <button onClick={() => editor.chain().focus().deleteRow().run()} className="flex-1 p-1.5 hover:bg-red-50 rounded transition-colors text-red-500"><Trash2 size={12} /></button>
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <span className="block text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant/60">Cols</span>
-                      <div className="flex bg-nb-surface-low rounded-lg border border-nb-outline-variant/30 p-1">
-                        <button onClick={() => editor.chain().focus().addColumnBefore().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronLeft size={12} /></button>
-                        <button onClick={() => editor.chain().focus().addColumnAfter().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronRight size={12} /></button>
-                        <div className="w-px h-3 bg-nb-outline-variant/30 mx-0.5 self-center" />
-                        <button onClick={() => editor.chain().focus().deleteColumn().run()} className="flex-1 p-1.5 hover:bg-red-50 rounded transition-colors text-red-500"><Trash2 size={12} /></button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Table Caption</label>
-                    <input
-                      type="text"
-                      value={node.attrs.caption ?? ""}
-                      onChange={(e) => updateAttributes({ caption: e.target.value })}
-                      placeholder="Describe this table..."
-                      className="w-full text-xs bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-secondary transition-all"
-                    />
-                  </div>
-
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      onClick={() => editor.chain().focus().deleteTable().run()}
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-[10px] font-bold uppercase"
-                    >
-                      <Trash2 size={12} />
-                      <span>Delete Table</span>
-                    </button>
+                <div className="space-y-1">
+                  <span className="block text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant/60">Cols</span>
+                  <div className="flex bg-nb-surface-low rounded-lg border border-nb-outline-variant/30 p-1">
+                    <button onClick={() => editor.chain().focus().addColumnBefore().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronLeft size={12} /></button>
+                    <button onClick={() => editor.chain().focus().addColumnAfter().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronRight size={12} /></button>
+                    <div className="w-px h-3 bg-nb-outline-variant/30 mx-0.5 self-center" />
+                    <button onClick={() => editor.chain().focus().deleteColumn().run()} className="flex-1 p-1.5 hover:bg-red-50 rounded transition-colors text-red-500"><Trash2 size={12} /></button>
                   </div>
                 </div>
               </div>
-            </>
-          )}
-        </div>
 
-        {/* Content */}
-        <div className={`p-0.5 overflow-x-auto rounded-xl w-full transition-all duration-300 ${active ? 'ring-4 ring-nb-primary/40 shadow-nb-xl border-2 border-nb-primary' : ''}`}>
-          <NodeViewContent as="div" className="border-collapse w-full" />
-        </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Table Caption</label>
+                <input
+                  type="text"
+                  value={node.attrs.caption ?? ""}
+                  onChange={(e) => updateAttributes({ caption: e.target.value })}
+                  placeholder="Describe this table..."
+                  className="w-full text-xs bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-secondary transition-all"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => editor.chain().focus().deleteTable().run()}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-[10px] font-bold uppercase"
+                >
+                  <Trash2 size={12} />
+                  <span>Delete Table</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {node.attrs.caption && (
@@ -453,6 +447,7 @@ const CustomCodeBlock = CodeBlockLowlight.extend({
 function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: any) {
   const [showMenu, setShowMenu] = useState(false);
   const [isCursorInside, setIsCursorInside] = useState(false);
+  const [dragEnabled, setDragEnabled] = useState(false);
 
   React.useEffect(() => {
     const check = () => {
@@ -475,93 +470,81 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
   const active = selected || isCursorInside;
 
   return (
-    <NodeViewWrapper draggable className={`my-8 group relative transition-all ${active ? 'z-[100]' : 'z-10'}`}>
-      <div className={`relative rounded-xl border bg-zinc-950 group-hover:shadow-nb-md transition-all ${active ? 'border-nb-primary ring-4 ring-nb-primary/30 shadow-nb-lg' : 'border-nb-outline-variant/30 shadow-nb-sm'}`}>
-        {/* Drag Handle */}
-        <div contentEditable={false} className="absolute top-2 left-2 z-[60]">
-          <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm border transition-all ${active ? 'bg-nb-primary text-white border-nb-primary' : 'bg-white/10 text-zinc-400 border-white/5 hover:bg-white/20 hover:text-white'}`}
-            data-drag-handle
-          >
-            <GripVertical size={14} />
-          </div>
-        </div>
-
-        {/* Floating Menu Button Area */}
-        <div
-          contentEditable={false}
-          className="absolute top-2 right-2 z-[70]"
-          onMouseDown={(e) => { e.stopPropagation(); }}
-          onPointerDown={(e) => { e.stopPropagation(); }}
-          onClick={(e) => { e.stopPropagation(); }}
-          onDragStart={(e) => { e.stopPropagation(); }}
+    <NodeViewWrapper 
+      draggable={dragEnabled}
+      className={`my-6 group relative max-w-2xl mx-auto transition-all ${active ? 'z-[100]' : 'z-10'}`}>
+      {/* External Controls (Left side) - Always Visible */}
+      <div contentEditable={false} className="absolute -left-12 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
+        <button
+          onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+          className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${showMenu ? 'bg-nb-primary text-white shadow-lg' : 'bg-nb-surface text-nb-on-surface-variant hover:bg-nb-surface-high hover:text-nb-primary shadow-sm border border-nb-outline-variant/30'}`}
         >
-          <button
-            onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${showMenu ? 'bg-nb-primary text-white scale-110 shadow-lg' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white shadow-sm border border-white/5'}`}
+          <MoreVertical size={16} />
+        </button>
+        
+        <div 
+          data-drag-handle 
+          onMouseEnter={() => setDragEnabled(true)}
+          onMouseLeave={() => setDragEnabled(false)}
+          className="w-8 h-8 rounded-full bg-nb-surface text-nb-on-surface-variant flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm border border-nb-outline-variant/30 hover:bg-nb-surface-high hover:text-nb-primary transition-all"
+        >
+          <GripVertical size={14} />
+        </div>
+      </div>
+
+      {/* Main Code Content */}
+      <div className={`rounded-xl overflow-hidden bg-zinc-950 transition-all duration-300 ${active ? 'ring-2 ring-nb-primary/50' : ''}`}>
+        <pre className="p-6 text-sm leading-relaxed overflow-x-auto border-none m-0 text-zinc-300">
+          <NodeViewContent as="div" className="font-mono" />
+        </pre>
+
+        {/* Floating Options Menu */}
+        {showMenu && (
+          <div
+            contentEditable={false}
+            className="absolute top-0 left-0 w-64 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl z-[100] p-4 animate-in fade-in zoom-in duration-200"
+            onMouseDown={(e) => { e.stopPropagation(); }}
           >
-            <MoreVertical size={16} />
-          </button>
+            <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
+              <Code2 size={14} className="text-nb-primary" />
+              <span className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant">Code Options</span>
+            </div>
 
-          {showMenu && (
-            <>
-              <div
-                className="absolute top-10 right-0 w-64 bg-nb-surface border border-nb-outline-variant shadow-nb-lg rounded-xl z-[70] p-4 animate-in fade-in zoom-in duration-200"
-                onMouseDown={(e) => { e.stopPropagation(); }}
-                onPointerDown={(e) => { e.stopPropagation(); }}
-                onClick={(e) => { e.stopPropagation(); }}
-                draggable="true"
-                onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
-              >
-                <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
-                  <Code2 size={14} className="text-nb-primary" />
-                  <span className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant">Code Options</span>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Caption</label>
-                    <input
-                      type="text"
-                      value={node.attrs.caption ?? ""}
-                      onChange={(e) => updateAttributes({ caption: e.target.value })}
-                      placeholder="Describe this snippet..."
-                      className="w-full text-xs bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-primary transition-all text-nb-on-surface"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Language</label>
-                    <select
-                      value={node.attrs.language ?? "plaintext"}
-                      onChange={(e) => updateAttributes({ language: e.target.value })}
-                      className="w-full text-xs bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-primary transition-all text-nb-on-surface cursor-pointer"
-                    >
-                      {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
-                    </select>
-                  </div>
-
-                  <div className="pt-2">
-                    <button
-                      onClick={() => deleteNode()}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-bold"
-                    >
-                      <Trash2 size={14} />
-                      <span>Remove Block</span>
-                    </button>
-                  </div>
-                </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Caption</label>
+                <input
+                  type="text"
+                  value={node.attrs.caption ?? ""}
+                  onChange={(e) => updateAttributes({ caption: e.target.value })}
+                  placeholder="Describe this snippet..."
+                  className="w-full text-xs bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-primary transition-all text-nb-on-surface"
+                />
               </div>
-            </>
-          )}
-        </div>
 
-        {/* Content */}
-        <div className={`rounded-xl overflow-hidden transition-all duration-300 ${active ? 'ring-4 ring-nb-primary/40 shadow-nb-xl border-2 border-nb-primary' : ''}`}>
-          <pre className="p-6 text-sm leading-relaxed overflow-x-auto border-none m-0 text-zinc-300">
-            <NodeViewContent as="div" className="font-mono" />
-          </pre>
-        </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Language</label>
+                <select
+                  value={node.attrs.language ?? "plaintext"}
+                  onChange={(e) => updateAttributes({ language: e.target.value })}
+                  className="w-full text-xs bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-primary transition-all text-nb-on-surface cursor-pointer"
+                >
+                  {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  onClick={() => deleteNode()}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-bold"
+                >
+                  <Trash2 size={14} />
+                  <span>Remove Block</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {node.attrs.caption && (
@@ -623,11 +606,18 @@ export default function UnifiedEditor({
 
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number } | null>(null);
   const [, setSelectionUpdate] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
 
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
-      StarterKit.configure({ codeBlock: false }),
+      StarterKit.configure({ 
+        codeBlock: false,
+        dropcursor: {
+          color: '#d9282f',
+          width: 3,
+        }
+      }),
       ImageWithCaption.configure({ inline: false, allowBase64: true, dbName } as any),
       TableWithCaption.configure({ resizable: true }),
       TableRow,
@@ -649,9 +639,15 @@ export default function UnifiedEditor({
       setSelectionUpdate(s => s + 1);
     },
     editorProps: {
-      attributes: { class: "focus:outline-none min-h-[600px] max-w-none" },
+      attributes: { class: "focus:outline-none min-h-[800px] h-full max-w-none p-8 lg:p-12 cursor-text" },
       handleDOMEvents: {
+        dragstart: () => { setIsDragging(true); return false; },
+        dragend: () => { setIsDragging(false); return false; },
+        // Snapping logic handled in handleDrop
         dragover: (view, event) => {
+          // Ensure dragging state is true even if drag started outside (e.g. file drop)
+          if (!isDragging) setIsDragging(true);
+
           // Auto-scroll logic
           const scrollContainer = view.dom.closest('.overflow-y-auto');
           if (!scrollContainer) return false;
@@ -685,13 +681,21 @@ export default function UnifiedEditor({
         }
         return false;
       },
-      handleDrop: (_view, event) => {
+      handleDrop: (view, event, slice, moved) => {
+        setIsDragging(false);
+        
+        // Handle File Drops (Images)
         const files = event.dataTransfer?.files;
-        if (files) {
+        if (files && files.length > 0) {
           for (const file of Array.from(files)) {
-            if (file.type.startsWith("image")) { handleImageFile(file); return true; }
+            if (file.type.startsWith("image")) { 
+              handleImageFile(file); 
+              return true; 
+            }
           }
         }
+
+        // Allow default ProseMirror behavior for moved content (allows dropping anywhere)
         return false;
       },
     },
@@ -738,7 +742,8 @@ export default function UnifiedEditor({
   return (
     <div className="flex flex-col gap-4">
       {/* ── TipTap Toolbar ────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-1.5 p-2 border border-nb-outline-variant rounded-xl bg-nb-surface sticky top-0 z-[120] shadow-nb-sm">
+      <div className="sticky top-0 z-[120] -mx-4 px-4 py-2 pointer-events-none">
+        <div className={`flex flex-wrap items-center gap-1.5 p-2 border border-nb-outline-variant rounded-xl bg-nb-surface/90 backdrop-blur-md shadow-nb-sm transition-opacity duration-200 ${isDragging ? 'pointer-events-none opacity-40' : 'pointer-events-auto opacity-100'}`}>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}
           active={editor.isActive("bold")}
@@ -834,8 +839,9 @@ export default function UnifiedEditor({
           />
         </label>
       </div>
+    </div>
 
-      <div className="relative group/editor">
+    <div className="relative group/editor">
         {/* Table Controls (Now embedded in NodeView, keeping this for fallback/external interaction) */}
         {isInTable && !editor.isActive('table') && (
           <div className="absolute -top-12 left-0 right-0 flex flex-wrap items-center justify-center gap-2 p-1.5 bg-nb-primary text-white rounded-lg shadow-nb-lg z-20 animate-in fade-in slide-in-from-bottom-2 duration-200">
@@ -843,8 +849,8 @@ export default function UnifiedEditor({
           </div>
         )}
 
-        <div className="bg-nb-surface min-h-[600px] relative">
-          <EditorContent editor={editor} className="max-w-none" />
+        <div className="bg-nb-surface min-h-[800px] relative">
+          <EditorContent editor={editor} className="max-w-none h-full" />
 
           {/* Editor Context Menu */}
           {contextMenu && (

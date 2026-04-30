@@ -371,7 +371,7 @@ export default function Editor({
               type="text"
               value={title}
               onChange={(e) => { setTitle(e.target.value); onTitleChange?.(e.target.value); }}
-              placeholder="Entry Title..."
+              placeholder="Project Title..."
               className="w-full text-2xl font-bold bg-transparent text-nb-on-surface outline-none placeholder:text-nb-outline-variant text-center mb-4"
             />
             

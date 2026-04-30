@@ -11,6 +11,7 @@ export interface ExplorerFile {
   name: string;
   path: string;
   title?: string;
+  author?: string;
   timestamp?: string;
 }
 
@@ -89,7 +90,7 @@ function FileRow({ file, isSelected, isPending, isDeleted, icon, onSelect, onDel
 
       {/* Delete button — visible on hover */}
       {!isDeleted && (
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        <div className="flex gap-1 shrink-0">
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
             className={`p-1 rounded-md transition-colors ${isSelected ? 'hover:bg-white/20 text-white' : 'hover:bg-nb-primary/10 text-nb-on-surface-variant/70 hover:text-nb-primary'}`}

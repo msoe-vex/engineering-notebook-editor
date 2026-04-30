@@ -282,13 +282,18 @@ export default function App() {
       }
       if (!finalTs) finalTs = new Date().toISOString();
 
+      // Prioritize openFile for the active path to give immediate sidebar feedback
+      const currentTitle = (openFile?.path === f.path ? openFile.title : m?.title) || "New Entry";
+      const currentAuthor = (openFile?.path === f.path ? openFile.author : m?.author) || "";
+
       return {
         ...f,
-        title: m?.title || "New Entry",
+        title: currentTitle,
+        author: currentAuthor,
         timestamp: finalTs
       };
     }).sort((a, b) => (b.timestamp || b.name).localeCompare(a.timestamp || a.name));
-  }, [entries, notebookMetadata]);
+  }, [entries, notebookMetadata, openFile?.path, openFile?.title, openFile?.author]);
 
   const displayResources = useMemo(() => {
     return resources.sort((a, b) => a.name.localeCompare(b.name));
@@ -332,10 +337,24 @@ export default function App() {
       if (openFile.author) {
         localStorage.setItem("nb-last-author", openFile.author);
       }
+
+      // Update local metadata state so sidebar stays in sync even if not committed
+      setNotebookMetadata(prev => ({
+        ...prev,
+        entries: {
+          ...prev.entries,
+          [openFile.path]: {
+            title: openFile.title,
+            author: openFile.author,
+            phase: openFile.phase,
+            createdAt: openFile.createdAt || isoTimestamp()
+          }
+        }
+      }));
     }, 1000);
 
     return () => clearTimeout(timeout);
-  }, [openFile?.rawLatex, openFile?.author, getDBName, workspaceMode, dirHandle]);
+  }, [openFile?.rawLatex, openFile?.author, openFile?.title, openFile?.phase, getDBName, workspaceMode, dirHandle]);
 
   // ── Content cache helpers ────────────────────────────────────────────────────
 
@@ -451,6 +470,11 @@ export default function App() {
     let filename = `${ts}_entry.tex`;
     let path = `${ENTRIES_DIR}/${filename}`;
 
+    // Pre-populate with last used metadata
+    const lastEntry = displayEntries[0];
+    const defaultTitle = lastEntry?.title && lastEntry.title !== "New Entry" ? lastEntry.title : "";
+    const defaultAuthor = lastEntry?.author || localStorage.getItem("nb-last-author") || "";
+
     // Handle duplicates
     let counter = 1;
     while (entries.some(e => e.path === path)) {
@@ -459,7 +483,7 @@ export default function App() {
       counter++;
     }
 
-    const scaffold = `% METADATA: {"content":""}\n\\newentry{}{${new Date().toISOString().split('T')[0]}}{}{}\n`;
+    const scaffold = `% METADATA: {"content":"","title":"${defaultTitle}","author":"${defaultAuthor}","phase":"","createdAt":"${createdAt}"}\n\\notebookentry{${defaultTitle}}{${createdAt.split('T')[0]}}{${defaultAuthor}}{}\n`;
 
     if (workspaceMode === "local" && dirHandle) {
       await writeLocalFile(dirHandle, path, scaffold);
@@ -477,7 +501,7 @@ export default function App() {
         ...prev,
         entries: {
           ...prev.entries,
-          [path]: { title: "New Entry", author: "", phase: "", createdAt: createdAt }
+          [path]: { title: defaultTitle || "New Entry", author: defaultAuthor, phase: "", createdAt: createdAt }
         }
       }));
       cacheContent(path, scaffold);
@@ -489,14 +513,16 @@ export default function App() {
       viewMode: "entry",
       rawLatex: scaffold,
       tiptapContent: "",
-      title: "", author: "", phase: "",
+      title: defaultTitle, 
+      author: defaultAuthor, 
+      phase: "",
       metadataMissing: false,
       imageSrc: "",
       createdAt: createdAt,
       isLegacyRaw: false,
     });
     setLatexContent(scaffold);
-  }, [workspaceMode, dirHandle, loadLocalExplorer, stage]);
+  }, [workspaceMode, dirHandle, loadLocalExplorer, stage, displayEntries, entries]);
 
   const hydrateJson = useCallback((json: any) => {
     if (!json || typeof json !== 'object') return json;
