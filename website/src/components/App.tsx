@@ -22,7 +22,6 @@ import Editor from "./Editor";
 import Preview from "./Preview";
 import WelcomePage from "./WelcomePage";
 import FileExplorer, { ExplorerFile } from "./FileExplorer";
-import RawLatexEditor from "./RawLatexEditor";
 import ImagePreview from "./ImagePreview";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { GitBranch, HardDrive, ArrowLeftRight, GitCommitVertical, Loader2, Menu, Sun, Moon, X, BookOpen, Check, AlertTriangle } from "lucide-react";
@@ -250,6 +249,8 @@ export default function App() {
 
   // metadata.json contents
   const [notebookMetadata, setNotebookMetadata] = useState<NotebookMetadata>(EMPTY_METADATA);
+  const notebookMetadataRef = useRef(notebookMetadata);
+  useEffect(() => { notebookMetadataRef.current = notebookMetadata; }, [notebookMetadata]);
 
   // Latex preview content (kept in sync by Editor)
   const [latexContent, setLatexContent] = useState("");
@@ -316,45 +317,92 @@ export default function App() {
   useEffect(() => { refreshPending(); }, [refreshPending]);
 
   // Auto-save effect
-  useEffect(() => {
-    if (!openFile) return;
-
-    const timeout = setTimeout(async () => {
-      if (workspaceMode === "local" && dirHandle) {
-        // Direct write for local folder
-        await writeLocalFile(dirHandle, openFile.path, openFile.rawLatex);
-      } else {
-        const dbName = getDBName();
-        await stageChange(dbName, {
-          path: openFile.path,
-          operation: "upsert",
-          content: openFile.rawLatex,
-          label: `Auto-save: ${openFile.name}`,
-          stagedAt: isoTimestamp(),
-        });
+  const handleContentChange = useCallback(async (changedPath: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string }) => {
+    // 1. Update basic state
+    setOpenFile(prev => {
+      if (prev && prev.path === changedPath) {
+        setLatexContent(latex);
+        return { ...prev, rawLatex: latex, tiptapContent, ...info };
       }
+      return prev;
+    });
+    cacheContent(changedPath, latex);
 
-      if (openFile.author) {
-        localStorage.setItem("nb-last-author", openFile.author);
-      }
+    // 2. Persist .tex
+    if (workspaceMode === "local" && dirHandle) {
+      await writeLocalFile(dirHandle, changedPath, latex).catch(console.error);
+    } else if (workspaceMode === "github") {
+      const dbName = getDBName();
+      await stageChange(dbName, {
+        path: changedPath, operation: "upsert", content: latex,
+        label: `Auto-save: ${changedPath.split('/').pop()}`,
+        stagedAt: isoTimestamp()
+      }).catch(console.error);
+    }
 
-      // Update local metadata state so sidebar stays in sync even if not committed
-      setNotebookMetadata(prev => ({
-        ...prev,
-        entries: {
-          ...prev.entries,
-          [openFile.path]: {
-            title: openFile.title,
-            author: openFile.author,
-            phase: openFile.phase,
-            createdAt: openFile.createdAt || isoTimestamp()
-          }
+    if (info.author) {
+      localStorage.setItem("nb-last-author", info.author);
+    }
+
+    // 3. Update metadata.json
+    let dehydratedContent = "";
+    if (tiptapContent) {
+      try {
+        const parsed = JSON.parse(tiptapContent);
+        dehydratedContent = JSON.stringify(dehydrateTipTapJson(parsed));
+      } catch { /* ignore */ }
+    }
+
+    const prevMeta = notebookMetadataRef.current;
+    const withNewEntry = {
+      ...prevMeta,
+      entries: {
+        ...prevMeta.entries,
+        [changedPath]: {
+          ...info,
+          createdAt: prevMeta.entries[changedPath]?.createdAt || isoTimestamp(),
+          content: dehydratedContent
         }
-      }));
-    }, 1000);
+      }
+    };
 
-    return () => clearTimeout(timeout);
-  }, [openFile?.rawLatex, openFile?.author, openFile?.title, openFile?.phase, getDBName, workspaceMode, dirHandle]);
+    const withRefs = rebuildEntryRefs(withNewEntry, changedPath, dehydratedContent);
+    const updatedMeta = updateMetadataSuggestions(withRefs);
+
+    // Garbage collection
+    const orphanedResources: string[] = [];
+    for (const [resPath, refs] of Object.entries(prevMeta.resourceRefs)) {
+      if (refs.length > 0 && (!updatedMeta.resourceRefs[resPath] || updatedMeta.resourceRefs[resPath].length === 0)) {
+        orphanedResources.push(resPath);
+      }
+    }
+
+    const metaStr = JSON.stringify(updatedMeta, null, 2);
+    if (workspaceMode === "local" && dirHandle) {
+      await writeLocalFile(dirHandle, METADATA_PATH, metaStr).catch(console.error);
+      for (const orphan of orphanedResources) {
+        await deleteLocalFileAtPath(dirHandle, orphan).catch(e => console.error("Failed to delete orphaned resource", e));
+      }
+    } else if (workspaceMode === "github") {
+      const dbName = getDBName();
+      await stageChange(dbName, {
+        path: METADATA_PATH, operation: "upsert", content: metaStr,
+        label: "Auto-save metadata", stagedAt: isoTimestamp()
+      }).catch(console.error);
+      for (const orphan of orphanedResources) {
+        await stageChange(dbName, {
+          path: orphan, operation: "delete",
+          label: "Garbage collect resource", stagedAt: isoTimestamp()
+        }).catch(console.error);
+      }
+    }
+
+    setNotebookMetadata(updatedMeta);
+    notebookMetadataRef.current = updatedMeta; // Update ref immediately to prevent stale reads in next rapid call
+    if (orphanedResources.length > 0) {
+      setResources(prev => prev.filter(r => !orphanedResources.includes(r.path)));
+    }
+  }, [workspaceMode, dirHandle, getDBName]);
 
   // ── Content cache helpers ────────────────────────────────────────────────────
 
@@ -398,7 +446,10 @@ export default function App() {
       // Load metadata.json independently
       try {
         const result = await getLocalFileContent(dirHandle, METADATA_PATH);
-        if (result.text) setNotebookMetadata(JSON.parse(result.text));
+        if (result.text) {
+          const parsed = JSON.parse(result.text);
+          setNotebookMetadata(updateMetadataSuggestions(parsed));
+        }
       } catch { /* not found */ }
 
       // Load sty
@@ -435,11 +486,15 @@ export default function App() {
       const pending = await getAllPending(dbName);
       const pendingMeta = pending.find(p => p.path === METADATA_PATH && p.operation === "upsert");
       if (pendingMeta?.content) {
-        try { setNotebookMetadata(JSON.parse(pendingMeta.content)); } catch { /* ignore */ }
+        try { 
+          const parsed = JSON.parse(pendingMeta.content);
+          setNotebookMetadata(updateMetadataSuggestions(parsed)); 
+        } catch { /* ignore */ }
       } else {
         try {
           const metaStr = await fetchFileContent(config, METADATA_PATH);
-          setNotebookMetadata(JSON.parse(metaStr));
+          const parsed = JSON.parse(metaStr);
+          setNotebookMetadata(updateMetadataSuggestions(parsed));
         } catch { /* not found yet */ }
       }
 
@@ -471,9 +526,8 @@ export default function App() {
     let path = `${ENTRIES_DIR}/${filename}`;
 
     // Pre-populate with last used metadata
-    const lastEntry = displayEntries[0];
-    const defaultTitle = lastEntry?.title && lastEntry.title !== "New Entry" ? lastEntry.title : "";
-    const defaultAuthor = lastEntry?.author || localStorage.getItem("nb-last-author") || "";
+    const defaultTitle = "";
+    const defaultAuthor = localStorage.getItem("nb-last-author") || "";
 
     // Handle duplicates
     let counter = 1;
@@ -483,27 +537,30 @@ export default function App() {
       counter++;
     }
 
-    const scaffold = `% METADATA: {"content":"","title":"${defaultTitle}","author":"${defaultAuthor}","phase":"","createdAt":"${createdAt}"}\n\\notebookentry{${defaultTitle}}{${createdAt.split('T')[0]}}{${defaultAuthor}}{}\n`;
+    const scaffold = `\\notebookentry{${defaultTitle}}{${createdAt.split('T')[0]}}{${defaultAuthor}}{}\n\n`;
+
+    const newMetadata = {
+      ...notebookMetadata,
+      entries: {
+        ...notebookMetadata.entries,
+        [path]: { title: defaultTitle || "New Entry", author: defaultAuthor, phase: "", createdAt: createdAt, content: "" }
+      }
+    };
+    const metaStr = JSON.stringify(newMetadata, null, 2);
 
     if (workspaceMode === "local" && dirHandle) {
       await writeLocalFile(dirHandle, path, scaffold);
+      await writeLocalFile(dirHandle, METADATA_PATH, metaStr);
       await loadLocalExplorer();
     } else if (workspaceMode === "github") {
       await stage({ path, content: scaffold, operation: "upsert", label: "New entry" });
+      await stage({ path: METADATA_PATH, content: metaStr, operation: "upsert", label: "Initialize metadata for entry" });
       setEntries(prev => [{ name: filename, path }, ...prev]);
+      setNotebookMetadata(newMetadata);
     } else {
       // memory
-      setEntries(prev => [{
-        name: filename,
-        path,
-      }, ...prev]);
-      setNotebookMetadata(prev => ({
-        ...prev,
-        entries: {
-          ...prev.entries,
-          [path]: { title: defaultTitle || "New Entry", author: defaultAuthor, phase: "", createdAt: createdAt }
-        }
-      }));
+      setEntries(prev => [{ name: filename, path }, ...prev]);
+      setNotebookMetadata(newMetadata);
       cacheContent(path, scaffold);
     }
 
@@ -566,42 +623,39 @@ export default function App() {
         rawLatex = contentCache.get(file.path) ?? "";
       }
 
-      // Parse metadata
-      const metaMatch = rawLatex.match(/^% METADATA: (.+)$/m);
-      if (metaMatch) {
-        try {
-          const meta: FileMetadata = JSON.parse(metaMatch[1]);
-          const entryMatch = rawLatex.match(/\\newentry{(.*?)}{(.*?)}{(.*?)}{(.*?)}/);
-
-          // Hydrate image sources before opening
-          let tiptapStr = meta.content || "";
+      // First, try loading from metadata.json
+      const entryMeta = notebookMetadata.entries?.[file.path];
+      
+      if (entryMeta) {
+        // Hydrate image sources before opening
+        let tiptapStr = "";
+        if (entryMeta.content) {
           try {
-            const parsed = JSON.parse(tiptapStr);
+            const parsed = typeof entryMeta.content === "string" ? JSON.parse(entryMeta.content) : entryMeta.content;
             tiptapStr = JSON.stringify(hydrateJson(parsed));
           } catch { /* not json */ }
-
-          setOpenFile({
-            path: file.path, name: file.name,
-            viewMode: "entry",
-            rawLatex,
-            tiptapContent: tiptapStr,
-            title: meta.title || entryMatch?.[1] || "",
-            author: meta.author || entryMatch?.[3] || "",
-            phase: meta.phase || entryMatch?.[4] || "",
-            metadataMissing: false,
-            imageSrc: "",
-            createdAt: meta.createdAt || notebookMetadata.entries?.[file.path]?.createdAt || entryMatch?.[2] || new Date().toISOString(),
-            isLegacyRaw: false,
-          });
-          setLatexContent(rawLatex);
-          setMobileTab("editor");
-          return;
-        } catch (e) {
-          console.error("JSON parse failed for entry metadata", e);
         }
+
+        setOpenFile({
+          path: file.path, name: file.name,
+          viewMode: "entry",
+          rawLatex,
+          tiptapContent: tiptapStr,
+          title: entryMeta.title || "",
+          author: entryMeta.author || "",
+          phase: entryMeta.phase || "",
+          metadataMissing: false,
+          imageSrc: "",
+          createdAt: entryMeta.createdAt || new Date().toISOString(),
+          isLegacyRaw: false,
+        });
+        setLatexContent(rawLatex);
+        setMobileTab("editor");
+        return;
       }
 
-      // No valid metadata — open raw
+
+      // No valid metadata — open as read-only preview
       setOpenFile({
         path: file.path, name: file.name,
         viewMode: "raw-latex",
@@ -684,19 +738,7 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceMode, dirHandle, stage]);
 
-  // ── Raw latex save (from RawLatexEditor) ────────────────────────────────────
 
-  const handleRawSave = useCallback(async () => {
-    if (!openFile) return;
-    const latex = openFile.rawLatex;
-    cacheContent(openFile.path, latex);
-    if (workspaceMode === "local" && dirHandle) {
-      await writeLocalFile(dirHandle, openFile.path, latex);
-    } else if (workspaceMode === "github") {
-      await stage({ path: openFile.path, content: latex, operation: "upsert", label: "Raw LaTeX edit" });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openFile, workspaceMode, dirHandle, stage]);
 
   // ── Metadata rebuild (called after entry save) ───────────────────────────────
 
@@ -711,7 +753,7 @@ export default function App() {
     setNotebookMetadata(prev => {
       let updated = rebuildEntryRefs(prev, entryPath, cleanJson, info);
       if (info) {
-        updated = updateMetadataSuggestions(updated, info.author, info.title);
+        updated = updateMetadataSuggestions(updated);
       }
       const metaStr = JSON.stringify(updated, null, 2);
 
@@ -779,7 +821,7 @@ export default function App() {
 
   const handleDeleteEntry = useCallback(async (file: ExplorerFile) => {
     // Update metadata
-    const updatedMeta = removeEntryFromMetadata(notebookMetadata, file.path);
+    const updatedMeta = updateMetadataSuggestions(removeEntryFromMetadata(notebookMetadata, file.path));
     setNotebookMetadata(updatedMeta);
     const metaStr = JSON.stringify(updatedMeta, null, 2);
 
@@ -808,16 +850,10 @@ export default function App() {
   // ── Resource delete (cascades to entries) ────────────────────────────────────
 
   const handleDeleteResource = useCallback(async (file: ExplorerFile) => {
-    // Build entry content map for cascade
-    const entryContentMap = new Map<string, string>();
-    for (const entry of entries) {
-      const cached = contentCache.get(entry.path);
-      if (cached) entryContentMap.set(entry.path, cached);
-    }
-    const cascadeUpdates = computeDeleteUpdates(notebookMetadata, file.path, entryContentMap);
+    const cascadeUpdates = computeDeleteUpdates(notebookMetadata, file.path);
 
     // Apply cascade
-    for (const { entryPath, updatedLatex } of cascadeUpdates) {
+    for (const { entryPath, updatedLatex, updatedDoc } of cascadeUpdates) {
       cacheContent(entryPath, updatedLatex);
       if (workspaceMode === "local" && dirHandle) {
         await writeLocalFile(dirHandle, entryPath, updatedLatex);
@@ -826,8 +862,7 @@ export default function App() {
       }
       // If this entry is currently open, update its view
       if (openFile?.path === entryPath) {
-        const doc = parseTipTapFromLatex(updatedLatex);
-        setOpenFile(prev => prev ? { ...prev, rawLatex: updatedLatex, tiptapContent: doc ? JSON.stringify(doc) : "" } : null);
+        setOpenFile(prev => prev ? { ...prev, rawLatex: updatedLatex, tiptapContent: JSON.stringify(updatedDoc) } : null);
       }
     }
 
@@ -857,20 +892,7 @@ export default function App() {
 
   // Renaming entries/resources is disabled to maintain project-title centric navigation.
 
-  // ── Switch to raw LaTeX ───────────────────────────────────────────────────────
 
-  const handleSwitchToRawLatex = useCallback(() => {
-    if (!openFile) return;
-    // Strip the METADATA tag from the stored latex
-    const stripped = openFile.rawLatex.replace(/^% METADATA: .+\n/m, "");
-    setOpenFile(prev => prev ? {
-      ...prev,
-      viewMode: "raw-latex",
-      rawLatex: stripped,
-      isLegacyRaw: false,
-    } : null);
-    setLatexContent(stripped);
-  }, [openFile]);
 
   // ── GitHub commit all ─────────────────────────────────────────────────────────
 
@@ -1116,24 +1138,7 @@ export default function App() {
             onDelete={() => handleDeleteResource({ name: openFile.name, path: openFile.path })}
           />
         ) : openFile.viewMode === "raw-latex" ? (
-          <div className="flex flex-col h-full">
-            <div className="flex-1 overflow-hidden">
-              <RawLatexEditor
-                filename={openFile.name}
-                content={openFile.rawLatex}
-                onChange={(v) => setOpenFile(prev => prev ? { ...prev, rawLatex: v } : null)}
-                isLegacyFallback={openFile.isLegacyRaw}
-              />
-            </div>
-            <div className="p-4 border-t border-nb-outline-variant bg-nb-surface shrink-0">
-              <button
-                onClick={handleRawSave}
-                className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[10px] font-bold uppercase tracking-widest py-3 rounded-xl transition-all shadow-lg shadow-nb-tertiary/20"
-              >
-                Save Raw Changes
-              </button>
-            </div>
-          </div>
+          <Preview latexContent={openFile.rawLatex} />
         ) : isMobile ? (
           <div className="h-full relative overflow-hidden bg-nb-surface-low">
             {/* Editor Tab */}
@@ -1150,19 +1155,17 @@ export default function App() {
                 initialPhase={openFile.phase}
                 initialContent={openFile.tiptapContent}
                 metadataMissing={openFile.metadataMissing}
+                knownAuthors={notebookMetadata.knownAuthors}
+                knownProjectTitles={notebookMetadata.knownProjectTitles}
                 filename={openFile.path}
                 onSaved={handleEntrySaved}
                 onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
-                onContentChange={(latex) => {
-                  setLatexContent(latex);
-                  setOpenFile(prev => prev ? { ...prev, rawLatex: latex } : null);
-                }}
+                onContentChange={handleContentChange}
                 onTitleChange={(title) => setOpenFile(prev => prev ? { ...prev, title } : null)}
                 onAuthorChange={(author) => setOpenFile(prev => prev ? { ...prev, author } : null)}
                 onPhaseChange={(phase) => setOpenFile(prev => prev ? { ...prev, phase } : null)}
                 onImageUpload={handleImageUploaded}
                 onMetadataRebuild={handleMetadataRebuild}
-                onSwitchToRawLatex={handleSwitchToRawLatex}
                 dbName={getDBName()}
               />
             </div>
@@ -1195,19 +1198,17 @@ export default function App() {
                 initialCreatedAt={openFile.createdAt}
                 initialContent={openFile.tiptapContent}
                 metadataMissing={openFile.metadataMissing}
+                knownAuthors={notebookMetadata.knownAuthors}
+                knownProjectTitles={notebookMetadata.knownProjectTitles}
                 filename={openFile.path}
                 onSaved={handleEntrySaved}
                 onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
-                onContentChange={(latex) => {
-                  setLatexContent(latex);
-                  setOpenFile(prev => prev ? { ...prev, rawLatex: latex } : null);
-                }}
+                onContentChange={handleContentChange}
                 onTitleChange={(title) => setOpenFile(prev => prev ? { ...prev, title } : null)}
                 onAuthorChange={(author) => setOpenFile(prev => prev ? { ...prev, author } : null)}
                 onPhaseChange={(phase) => setOpenFile(prev => prev ? { ...prev, phase } : null)}
                 onImageUpload={handleImageUploaded}
                 onMetadataRebuild={handleMetadataRebuild}
-                onSwitchToRawLatex={handleSwitchToRawLatex}
                 onClose={() => setOpenFile(null)}
                 dbName={getDBName()}
               />

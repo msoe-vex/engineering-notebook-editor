@@ -1,3 +1,5 @@
+import { generateEntryLatex } from "./latex";
+
 /**
  * metadata.ts — resource ↔ entry relationship tracking.
  *
@@ -21,22 +23,23 @@ export interface EntryInfo {
   author: string;
   phase: string;
   createdAt: string;
+  content?: any;
 }
 
 export interface NotebookMetadata {
   version: number;
   resourceRefs: Record<string, string[]>; // resourcePath -> entryPaths[]
   entries: Record<string, EntryInfo>;      // entryPath -> info
-  knownAuthors: string[];
-  knownProjectTitles: string[];
+  knownAuthors: Record<string, string[]>;
+  knownProjectTitles: Record<string, string[]>;
 }
 
 export const EMPTY_METADATA: NotebookMetadata = { 
   version: 1, 
   resourceRefs: {}, 
   entries: {},
-  knownAuthors: [],
-  knownProjectTitles: []
+  knownAuthors: {},
+  knownProjectTitles: {}
 };
 
 // ─── TipTap JSON helpers ──────────────────────────────────────────────────────
@@ -193,30 +196,29 @@ export function rebuildEntryRefs(
 
 /** 
  * Update the lists of known authors and project titles in metadata. 
- * Ensures values are unique and trimmed.
+ * Rebuilds the lists based on all current entries.
  */
-export function updateMetadataSuggestions(
-  metadata: NotebookMetadata,
-  author?: string,
-  title?: string
-): NotebookMetadata {
-  const newAuthors = [...metadata.knownAuthors];
-  const newTitles = [...metadata.knownProjectTitles];
+export function updateMetadataSuggestions(metadata: NotebookMetadata): NotebookMetadata {
+  const newAuthors: Record<string, string[]> = {};
+  const newTitles: Record<string, string[]> = {};
 
-  if (author && author.trim()) {
-    const trimmed = author.trim();
-    if (!newAuthors.includes(trimmed)) newAuthors.push(trimmed);
-  }
-
-  if (title && title.trim()) {
-    const trimmed = title.trim();
-    if (!newTitles.includes(trimmed)) newTitles.push(trimmed);
+  for (const [entryPath, info] of Object.entries(metadata.entries)) {
+    if (info.author?.trim()) {
+      const a = info.author.trim();
+      if (!newAuthors[a]) newAuthors[a] = [];
+      newAuthors[a].push(entryPath);
+    }
+    if (info.title?.trim() && !info.title.endsWith(".tex")) {
+      const t = info.title.trim();
+      if (!newTitles[t]) newTitles[t] = [];
+      newTitles[t].push(entryPath);
+    }
   }
 
   return {
     ...metadata,
-    knownAuthors: newAuthors.sort(),
-    knownProjectTitles: newTitles.sort()
+    knownAuthors: newAuthors,
+    knownProjectTitles: newTitles,
   };
 }
 
@@ -230,32 +232,32 @@ export function computeRenameUpdates(
   metadata: NotebookMetadata,
   oldResourcePath: string,
   newResourcePath: string,
-  /** Map of entryPath -> raw latex content */
-  entryContents: Map<string, string>
 ): { entryPath: string; updatedLatex: string; updatedDoc: TipTapDoc }[] {
   const affected = metadata.resourceRefs[oldResourcePath] ?? [];
   const updates: { entryPath: string; updatedLatex: string; updatedDoc: TipTapDoc }[] = [];
 
   for (const entryPath of affected) {
-    const latex = entryContents.get(entryPath);
-    if (!latex) continue;
-    const doc = parseTipTapFromLatex(latex);
-    if (!doc) continue;
+    const entryInfo = metadata.entries[entryPath];
+    if (!entryInfo || !entryInfo.content) continue;
+    
+    let doc: TipTapDoc;
+    try {
+      doc = typeof entryInfo.content === "string" ? JSON.parse(entryInfo.content) : entryInfo.content;
+    } catch {
+      continue;
+    }
+    
     const updatedDoc = renameImageInDoc(doc, oldResourcePath, newResourcePath);
     const updatedContent = JSON.stringify(updatedDoc);
-    // Replace the metadata content field in the latex string
-    const updatedLatex = latex.replace(
-      /^(% METADATA: )(.+)$/m,
-      (_match, prefix, json) => {
-        try {
-          const meta = JSON.parse(json);
-          meta.content = updatedContent;
-          return `${prefix}${JSON.stringify(meta)}`;
-        } catch {
-          return _match;
-        }
-      }
+    
+    const updatedLatex = generateEntryLatex(
+      updatedContent,
+      entryInfo.title,
+      entryInfo.author,
+      entryInfo.phase,
+      entryInfo.createdAt
     );
+    
     updates.push({ entryPath, updatedLatex, updatedDoc });
   }
   return updates;
@@ -268,30 +270,32 @@ export function computeRenameUpdates(
 export function computeDeleteUpdates(
   metadata: NotebookMetadata,
   deletedResourcePath: string,
-  entryContents: Map<string, string>
 ): { entryPath: string; updatedLatex: string; updatedDoc: TipTapDoc }[] {
   const affected = metadata.resourceRefs[deletedResourcePath] ?? [];
   const updates: { entryPath: string; updatedLatex: string; updatedDoc: TipTapDoc }[] = [];
 
   for (const entryPath of affected) {
-    const latex = entryContents.get(entryPath);
-    if (!latex) continue;
-    const doc = parseTipTapFromLatex(latex);
-    if (!doc) continue;
+    const entryInfo = metadata.entries[entryPath];
+    if (!entryInfo || !entryInfo.content) continue;
+    
+    let doc: TipTapDoc;
+    try {
+      doc = typeof entryInfo.content === "string" ? JSON.parse(entryInfo.content) : entryInfo.content;
+    } catch {
+      continue;
+    }
+    
     const updatedDoc = removeImageFromDoc(doc, deletedResourcePath);
     const updatedContent = JSON.stringify(updatedDoc);
-    const updatedLatex = latex.replace(
-      /^(% METADATA: )(.+)$/m,
-      (_match, prefix, json) => {
-        try {
-          const meta = JSON.parse(json);
-          meta.content = updatedContent;
-          return `${prefix}${JSON.stringify(meta)}`;
-        } catch {
-          return _match;
-        }
-      }
+    
+    const updatedLatex = generateEntryLatex(
+      updatedContent,
+      entryInfo.title,
+      entryInfo.author,
+      entryInfo.phase,
+      entryInfo.createdAt
     );
+    
     updates.push({ entryPath, updatedLatex, updatedDoc });
   }
   return updates;

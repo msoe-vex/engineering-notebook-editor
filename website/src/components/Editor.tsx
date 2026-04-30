@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import UnifiedEditor from "./UnifiedEditor";
 import { saveAs } from "file-saver";
 import { Save, Trash2, Download, AlertCircle, Loader2, User, Target, X, FileCode } from "lucide-react";
-import { dehydrateTipTapJson } from "@/lib/metadata";
+import { generateEntryLatex } from "@/lib/latex";
+import AutocompleteInput from "./AutocompleteInput";
 
 const PHASES = [
   "Define Problem",
@@ -14,164 +15,7 @@ const PHASES = [
   "Evaluate Solution",
 ];
 
-const escapeLaTeX = (text: string) =>
-  text
-    .replace(/\\/g, "\\textbackslash{}")
-    .replace(/&/g, "\\&")
-    .replace(/%/g, "\\%")
-    .replace(/\$/g, "\\$")
-    .replace(/#/g, "\\#")
-    .replace(/_/g, "\\_")
-    .replace(/\{/g, "\\{")
-    .replace(/\}/g, "\\}")
-    .replace(/\^/g, "\\^{}")
-    .replace(/~/g, "\\~{}");
 
-
-const mapLanguageToLatex = (lang: string): string => {
-  const mapping: Record<string, string> = {
-    "cpp": "C++",
-    "c": "C",
-    "python": "Python",
-    "javascript": "JavaScript",
-    "typescript": "JavaScript",
-    "java": "Java",
-    "bash": "bash",
-    "sql": "SQL",
-    "rust": "Rust",
-    "go": "Go",
-    "csharp": "[Sharp]C",
-    "plaintext": "{}",
-  };
-  return mapping[lang] || lang;
-};
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const convertNodeToLatex = (node: any): string => {
-  if (!node) return "";
-  const children = () => (node.content || []).map(convertNodeToLatex).join("");
-
-  switch (node.type) {
-    case "doc":
-      return children();
-
-    case "text": {
-      let t = escapeLaTeX(node.text ?? "");
-      for (const mark of (node.marks ?? [])) {
-        if (mark.type === "bold") t = `\\textbf{${t}}`;
-        if (mark.type === "italic") t = `\\textit{${t}}`;
-        if (mark.type === "code") t = `\\texttt{${t}}`;
-      }
-      return t;
-    }
-
-    case "hardBreak":
-      return "\\\\\n";
-
-    case "paragraph": {
-      const inner = children();
-      return inner.trim() ? `${inner}\n\n` : "\n";
-    }
-
-    case "heading": {
-      const level = node.attrs?.level ?? 2;
-      const cmd = level === 1 ? "subsection*" : "subsubsection*";
-      return `\\${cmd}{${children()}}\n\n`;
-    }
-
-    case "bulletList":
-      return `\\begin{itemize}\n${children()}\\end{itemize}\n\n`;
-
-    case "orderedList":
-      return `\\begin{enumerate}\n${children()}\\end{enumerate}\n\n`;
-
-    case "listItem": {
-      // listItem wraps content in a paragraph; extract raw text
-      const parts = (node.content || []).map((child: any) => {
-        if (child.type === "paragraph") {
-          return (child.content || []).map(convertNodeToLatex).join("");
-        }
-        return convertNodeToLatex(child);
-      });
-      return `  \\item ${parts.join("\n").trim()}\n`;
-    }
-
-    case "codeBlock": {
-      const lang = mapLanguageToLatex(node.attrs?.language ?? "plaintext");
-      const code = (node.content || []).map((n: any) => n.text ?? "").join("");
-      const escapedCaption = escapeLaTeX(node.attrs?.caption ?? "");
-      return `\\begin{notebookcodeblock}{${lang}}{${escapedCaption}}\n${code}\n\\end{notebookcodeblock}\n\n`;
-    }
-
-    case "image": {
-      const filePath = node.attrs?.filePath;
-      const src = node.attrs?.src ?? "";
-      let imgSrc = filePath
-        ? filePath
-        : src.startsWith("data:") ? "resources/embedded_image.png" : src;
-
-      // Remove redundant resources/ prefix if graphicspath already includes it
-      if (imgSrc.startsWith("resources/")) {
-        imgSrc = imgSrc.replace("resources/", "");
-      }
-
-      const escapedCaption = escapeLaTeX(node.attrs?.alt ?? "Figure");
-      const escapedInitials = escapeLaTeX(node.attrs?.title ?? "");
-      
-      // Convert "55%" to "0.55\textwidth"
-      const rawWidth = (node.attrs?.width ?? "100%").toString().replace("%", "");
-      const widthNum = parseFloat(rawWidth);
-      const latexWidth = isNaN(widthNum) ? "1" : (widthNum / 100).toFixed(2);
-
-      return `\\notebookimage{${imgSrc}}{${escapedCaption}}{${escapedInitials}}{${latexWidth}\\textwidth}\n\n`;
-    }
-
-    case "table": {
-      const rows = node.content ?? [];
-      if (!rows.length) return "";
-      const colCount = (rows[0]?.content ?? []).length;
-      const colSpec = "|l".repeat(colCount) + "|";
-      const caption = node.attrs?.caption ?? "Design Data";
-
-      const body = rows.map((row: any) => {
-        const cells = (row.content ?? []).map((cell: any) =>
-          (cell.content ?? []).map(convertNodeToLatex).join("").replace(/\n+$/, "").trim()
-        );
-        return cells.join(" & ") + " \\\\ \\hline";
-      }).join("\n");
-
-      const escapedCaption = escapeLaTeX(caption);
-
-      return `\\notebooktable{${colSpec}}{${body}}{${escapedCaption}}\n\n`;
-    }
-
-    // tableRow / tableCell / tableHeader — just recurse
-    case "tableRow":
-    case "tableCell":
-    case "tableHeader":
-      return children();
-
-    case "blockquote":
-      return `\\begin{quote}\n${children()}\\end{quote}\n\n`;
-
-    case "horizontalRule":
-      return "\\noindent\\rule{\\linewidth}{0.4pt}\n\n";
-
-    default:
-      return children();
-  }
-};
-
-const convertJsonToLatex = (jsonString: string): string => {
-  if (!jsonString) return "";
-  try {
-    const doc = JSON.parse(jsonString);
-    return convertNodeToLatex(doc).replace(/\n{3,}/g, "\n\n").trim() + "\n";
-  } catch {
-    // Legacy: plain HTML or raw text — strip tags as fallback
-    return jsonString.replace(/<[^>]*>/g, "").trim() + "\n";
-  }
-};
 
 /* ─────────────────────────────────────────────────────────────────
    Component
@@ -195,16 +39,16 @@ interface EditorProps {
   metadataMissing?: boolean;
   onSaved: (path: string, latexContent: string) => void;
   onDeleted: (path: string) => void;
-  onContentChange?: (latex: string) => void;
+  onContentChange?: (filename: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string }) => void;
   onTitleChange?: (title: string) => void;
   onAuthorChange?: (author: string) => void;
   onPhaseChange?: (phase: string) => void;
   onImageUpload?: (path: string, base64: string) => void;
   onMetadataRebuild?: (entryPath: string, tiptapJson: string, info?: { title: string; author: string; phase: string; createdAt?: string }) => void;
-  /** Called when user confirms switching to raw LaTeX mode */
-  onSwitchToRawLatex?: () => void;
   onClose?: () => void;
   dbName?: string;
+  knownAuthors?: Record<string, string[]>;
+  knownProjectTitles?: Record<string, string[]>;
 }
 
 export default function Editor({
@@ -225,14 +69,15 @@ export default function Editor({
   onAuthorChange,
   onPhaseChange,
   onMetadataRebuild,
-  onSwitchToRawLatex,
   onClose,
   dbName,
+  knownAuthors = {},
+  knownProjectTitles = {},
 }: EditorProps) {
   const [title, setTitle] = useState(initialTitle);
   const [author, setAuthor] = useState(initialAuthor);
   const [phase, setPhase] = useState(initialPhase);
-   const [content, setContent] = useState(initialContent);
+  const [content, setContent] = useState(initialContent);
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -248,40 +93,7 @@ export default function Editor({
   }, [filename]);
 
   const generateLatex = (cnt: string, t: string, a: string, p: string) => {
-    let dateObj = initialCreatedAt ? new Date(initialCreatedAt) : new Date();
-
-    // Fallback for mangled timestamps (e.g. 2026-04-28T17-36-32)
-    if (isNaN(dateObj.getTime()) && initialCreatedAt) {
-      const repaired = initialCreatedAt.replace(/(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})/, "$1T$2:$3:$4");
-      dateObj = new Date(repaired);
-    }
-
-    // Final fallback to now if still invalid
-    if (isNaN(dateObj.getTime())) {
-      dateObj = new Date();
-    }
-
-    let dehydratedContent = cnt;
-    try {
-      if (cnt && cnt.trim()) {
-        dehydratedContent = JSON.stringify(dehydrateTipTapJson(JSON.parse(cnt)));
-      }
-    } catch (e) {
-      console.error("Failed to parse content for metadata dehydration:", e);
-    }
-
-    const metadata = JSON.stringify({
-      content: dehydratedContent,
-      title: t,
-      author: a,
-      phase: p,
-      createdAt: initialCreatedAt || dateObj.toISOString()
-    });
-    let latex = `% METADATA: ${metadata}\n`;
-    const dateStr = dateObj.toISOString().split('T')[0];
-    latex += `\\notebookentry{${escapeLaTeX(t)}}{${dateStr}}{${escapeLaTeX(a)}}{${escapeLaTeX(p)}}\n\n`;
-    latex += convertJsonToLatex(cnt);
-    return latex;
+    return generateEntryLatex(cnt, t, a, p, initialCreatedAt);
   };
 
   const validate = () => {
@@ -309,26 +121,47 @@ export default function Editor({
   // Notify parent of content changes. Callbacks are intentionally omitted from
   // deps — they're new arrow function instances on every App render, and adding
   // them would cause an infinite loop.
+  const stateRef = useRef({ content, title, author, phase, filename, generateLatex });
+  useEffect(() => {
+    stateRef.current = { content, title, author, phase, filename, generateLatex };
+  }, [content, title, author, phase, filename, generateLatex]);
+
+  const callbacksRef = useRef({ onContentChange });
+  useEffect(() => {
+    callbacksRef.current = { onContentChange };
+  });
+
   // Notify parent of content changes with debounce to prevent lag
   useEffect(() => {
     setIsAutoSaving(true);
     const timeout = setTimeout(() => {
       const latex = generateLatex(content, title, author, phase);
-      if (onContentChange) onContentChange(latex);
+      if (onContentChange) onContentChange(filename, latex, content, { title, author, phase });
       if (onTitleChange) onTitleChange(title);
       if (onAuthorChange) onAuthorChange(author);
       if (onPhaseChange) onPhaseChange(phase);
       setIsAutoSaving(false);
-    }, 2000);
+    }, 500);
 
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [content, title, author, phase]);
+  }, [content, title, author, phase, filename]);
+
+  // Flush pending changes on unmount to prevent data loss on fast entry switch
+  useEffect(() => {
+    return () => {
+      const s = stateRef.current;
+      const cb = callbacksRef.current;
+      if (!cb.onContentChange) return;
+      const latex = s.generateLatex(s.content, s.title, s.author, s.phase);
+      cb.onContentChange(s.filename, latex, s.content, { title: s.title, author: s.author, phase: s.phase });
+    };
+  }, []);
 
   // Clear validation errors on type
   useEffect(() => {
     if (validationErrors.length > 0) setValidationErrors([]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, title, author, phase]);
 
 
@@ -364,31 +197,46 @@ export default function Editor({
       {/* ── Editor Header ────────────────────────────────────────── */}
       <div className="px-6 py-5 border-b border-nb-outline-variant bg-nb-surface-low shrink-0">
         <div className="max-w-4xl mx-auto flex flex-col items-center gap-4">
-          
+
           {/* Row 1: Metadata (Center Aligned) */}
           <div className="w-full flex flex-col items-center text-center">
-            <input
+            <AutocompleteInput
               type="text"
               value={title}
+              options={Object.keys(knownProjectTitles).filter(t => {
+                // Normalize slashes for comparison
+                const normFilename = filename.replace(/\\/g, '/');
+                const otherRefs = (knownProjectTitles[t] || []).filter(p => p.replace(/\\/g, '/') !== normFilename);
+                return otherRefs.length > 0 && t.trim() !== title.trim();
+              })}
+              onSelectOption={(val) => { setTitle(val); onTitleChange?.(val); }}
               onChange={(e) => { setTitle(e.target.value); onTitleChange?.(e.target.value); }}
               placeholder="Project Title..."
               className="w-full text-2xl font-bold bg-transparent text-nb-on-surface outline-none placeholder:text-nb-outline-variant text-center mb-4"
+              wrapperClassName="w-full"
             />
-            
+
             <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
               <div className="flex items-center gap-2 group">
                 <User size={14} className="text-nb-tertiary" />
-                <input
+                <AutocompleteInput
                   type="text"
                   value={author}
+                  options={Object.keys(knownAuthors).filter(a => {
+                    // Normalize slashes for comparison
+                    const normFilename = filename.replace(/\\/g, '/');
+                    const otherRefs = (knownAuthors[a] || []).filter(p => p.replace(/\\/g, '/') !== normFilename);
+                    return otherRefs.length > 0 && a.trim() !== author.trim();
+                  })}
+                  onSelectOption={(val) => { setAuthor(val); onAuthorChange?.(val); }}
                   onChange={(e) => { setAuthor(e.target.value); onAuthorChange?.(e.target.value); }}
                   placeholder="Author"
                   className="text-xs font-semibold text-nb-on-surface-variant bg-transparent outline-none border-b border-nb-outline-variant/30 focus:border-nb-tertiary transition-all w-32 text-center"
                 />
               </div>
-              
+
               <div className="hidden md:block w-px h-4 bg-nb-outline-variant/30" />
-              
+
               <div className="flex items-center gap-2 group">
                 <Target size={14} className="text-nb-tertiary" />
                 <select
@@ -447,16 +295,8 @@ export default function Editor({
               <X size={14} />
               <span>Close</span>
             </button>
-            
-            <div className="hidden sm:block w-px h-4 bg-nb-outline-variant/30 mx-1" />
 
-            <button
-              onClick={onSwitchToRawLatex}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold text-nb-on-surface-variant/80 hover:text-nb-on-surface hover:bg-nb-surface-mid transition-all"
-            >
-              <FileCode size={14} />
-              <span>Raw LaTeX</span>
-            </button>
+            <div className="hidden sm:block w-px h-4 bg-nb-outline-variant/30 mx-1" />
 
             <button
               onClick={() => setShowDeleteConfirm(true)}
@@ -478,7 +318,6 @@ export default function Editor({
             content={content}
             onChange={setContent}
             onImageUpload={onImageUpload}
-            onSwitchToRawLatex={onSwitchToRawLatex}
             author={author}
             dbName={dbName}
           />
@@ -498,7 +337,7 @@ export default function Editor({
               </div>
               <h3 className="font-bold text-sm uppercase tracking-widest text-nb-secondary">Delete Entry?</h3>
             </div>
-            
+
             <p className="text-sm text-nb-on-surface-variant leading-relaxed mb-8">
               This will permanently remove the entry from your notebook. This action cannot be undone once committed.
             </p>

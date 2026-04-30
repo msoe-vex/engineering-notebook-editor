@@ -565,14 +565,13 @@ interface UnifiedEditorProps {
   content: string;
   onChange: (content: string) => void;
   onImageUpload?: (path: string, base64: string) => void;
-  onSwitchToRawLatex?: () => void;
   author?: string;
   filename: string;
   dbName?: string;
 }
 
 export default function UnifiedEditor({
-  content, onChange, onImageUpload, onSwitchToRawLatex, author, filename, dbName = "notebook-pending",
+  content, onChange, onImageUpload, author, filename, dbName = "notebook-pending",
 }: UnifiedEditorProps) {
   const parseContent = (raw: string) => {
     if (!raw) return "";
@@ -700,8 +699,6 @@ export default function UnifiedEditor({
       },
     },
   });
-
-  const [showRawConfirm, setShowRawConfirm] = useState(false);
 
   const isInTable = editor?.isActive("tableCell") || editor?.isActive("tableHeader") || false;
 
@@ -911,50 +908,6 @@ export default function UnifiedEditor({
           )}
         </div>
       </div>
-
-      {/* ── Raw LaTeX Confirm Dialog ────────────────────────────────── */}
-      {showRawConfirm && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-nb-secondary/60 backdrop-blur-md px-4" onClick={() => setShowRawConfirm(false)}>
-          <div
-            className="bg-nb-surface rounded-2xl p-7 shadow-nb-lg max-w-sm w-full border border-nb-outline-variant animate-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0">
-                <FileCode size={20} className="text-nb-primary" />
-              </div>
-              <h3 className="font-bold text-sm uppercase tracking-widest text-nb-secondary">Switch to Raw Mode?</h3>
-            </div>
-
-            <div className="space-y-4 mb-8">
-              <p className="text-sm text-nb-on-surface-variant leading-relaxed">
-                This will strip all rich metadata and lock this file into a raw text editor.
-              </p>
-              <div className="flex items-start gap-2.5 p-3 bg-nb-primary/5 border border-nb-primary/20 rounded-xl">
-                <AlertTriangle size={14} className="text-nb-primary mt-0.5 shrink-0" />
-                <p className="text-[11px] text-nb-primary leading-normal font-bold">
-                  Warning: You cannot go back to rich editing once you switch.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowRawConfirm(false)}
-                className="flex-1 px-4 py-2.5 rounded-xl border border-nb-outline-variant text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-surface-low transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => { setShowRawConfirm(false); onSwitchToRawLatex?.(); }}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-nb-primary text-white text-xs font-bold uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20 active:scale-[0.98]"
-              >
-                Confirm Switch
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
