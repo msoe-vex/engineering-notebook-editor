@@ -35,22 +35,25 @@ export const LANGUAGES = [
 export const ToolbarButton = ({
   onClick,
   active,
+  disabled,
   children,
   title
 }: {
   onClick: (e?: React.MouseEvent) => void;
   active?: boolean;
+  disabled?: boolean;
   children: React.ReactNode;
   title?: string
 }) => (
   <button
     type="button"
-    onClick={(e) => onClick(e)}
+    onClick={(e) => !disabled && onClick(e)}
+    disabled={disabled}
     title={title}
     className={`p-2 rounded-lg transition-all flex items-center justify-center border ${active
       ? "bg-nb-primary text-white shadow-md border-nb-primary scale-105"
       : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-secondary border-transparent"
-      }`}
+      } ${disabled ? "opacity-30 cursor-not-allowed grayscale" : ""}`}
   >
     {children}
   </button>
@@ -231,48 +234,37 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName }:
           </div>
         )}
 
-        {/* Floating Options Menu */}
+        {/* Floating Menu */}
         {showMenu && (
           <div
             contentEditable={false}
-            className="absolute top-0 left-0 w-64 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl z-[100] p-4 animate-in fade-in zoom-in duration-200"
+            className="absolute top-0 left-0 w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl z-[300] p-4 animate-in fade-in zoom-in duration-200"
             onMouseDown={(e) => { e.stopPropagation(); }}
           >
             <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
-              <Settings size={14} className="text-nb-tertiary" />
-              <span className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant">Image Options</span>
+              <ImageIcon size={14} className="text-nb-primary" />
+              <span className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant">Image Management</span>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Figure Caption</label>
                 <input
                   type="text"
                   value={node.attrs.alt ?? ""}
                   onChange={(e) => updateAttributes({ alt: e.target.value })}
-                  placeholder="Describe this figure..."
-                  className="w-full text-xs bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-tertiary transition-all"
+                  placeholder="Describe this image..."
+                  className="w-full text-xs bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-primary transition-all"
                 />
               </div>
 
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Author Initials</label>
-                <input
-                  type="text"
-                  value={node.attrs.title ?? ""}
-                  onChange={(e) => updateAttributes({ title: e.target.value })}
-                  placeholder="e.g. JD"
-                  className="w-full text-xs font-mono bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-tertiary transition-all"
-                />
-              </div>
-
-              <div className="pt-2">
+              <div className="flex gap-2 pt-2">
                 <button
                   onClick={() => deleteNode()}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-bold"
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-[10px] font-bold uppercase"
                 >
-                  <Trash2 size={14} />
-                  <span>Delete Resource</span>
+                  <Trash2 size={12} />
+                  <span>Delete Image</span>
                 </button>
               </div>
             </div>
@@ -307,6 +299,14 @@ const TableWithCaption = Table.extend({
   },
 });
 
+const RestrictedTableCell = TableCell.extend({
+  content: 'paragraph+',
+});
+
+const RestrictedTableHeader = TableHeader.extend({
+  content: 'paragraph+',
+});
+
 function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: any) {
   const [showMenu, setShowMenu] = useState(false);
   const [isCursorInside, setIsCursorInside] = useState(false);
@@ -314,9 +314,14 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
 
   React.useEffect(() => {
     const check = () => {
-      const pos = getPos();
-      const { from, to } = editor.state.selection;
-      setIsCursorInside(from >= pos && to <= pos + node.nodeSize);
+      try {
+        const pos = getPos();
+        if (typeof pos !== 'number' || pos < 0) return;
+        const { from, to } = editor.state.selection;
+        setIsCursorInside(from >= pos && to <= pos + node.nodeSize);
+      } catch (e) {
+        // Node probably deleted
+      }
     };
     check();
     editor.on('selectionUpdate', check);
@@ -367,7 +372,7 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
         {showMenu && (
           <div
             contentEditable={false}
-            className="absolute top-0 left-0 w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl z-[100] p-4 animate-in fade-in zoom-in duration-200"
+            className="absolute top-0 left-0 w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl z-[300] p-4 animate-in fade-in zoom-in duration-200"
             onMouseDown={(e) => { e.stopPropagation(); }}
           >
             <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
@@ -457,9 +462,14 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
 
   React.useEffect(() => {
     const check = () => {
-      const pos = getPos();
-      const { from, to } = editor.state.selection;
-      setIsCursorInside(from >= pos && to <= pos + node.nodeSize);
+      try {
+        const pos = getPos();
+        if (typeof pos !== 'number' || pos < 0) return;
+        const { from, to } = editor.state.selection;
+        setIsCursorInside(from >= pos && to <= pos + node.nodeSize);
+      } catch (e) {
+        // Node probably deleted
+      }
     };
     check();
     editor.on('selectionUpdate', check);
@@ -505,48 +515,50 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
           <NodeViewContent as="div" className="font-mono" />
         </pre>
 
-        {/* Floating Options Menu */}
+        {/* Floating Menu */}
         {showMenu && (
           <div
             contentEditable={false}
-            className="absolute top-0 left-0 w-64 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl z-[100] p-4 animate-in fade-in zoom-in duration-200"
+            className="absolute top-0 left-0 w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl z-[100] p-4 animate-in fade-in zoom-in duration-200"
             onMouseDown={(e) => { e.stopPropagation(); }}
           >
             <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
-              <Code2 size={14} className="text-nb-primary" />
-              <span className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant">Code Options</span>
+              <Code size={14} className="text-nb-primary" />
+              <span className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant">Snippet Management</span>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Caption</label>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Language</label>
+                <select
+                  value={node.attrs.language}
+                  onChange={(e) => updateAttributes({ language: e.target.value })}
+                  className="w-full text-xs bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-primary transition-all cursor-pointer appearance-none font-bold uppercase tracking-widest"
+                >
+                  {LANGUAGES.map((lang) => (
+                    <option key={lang} value={lang}>{lang}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Snippet Caption</label>
                 <input
                   type="text"
                   value={node.attrs.caption ?? ""}
                   onChange={(e) => updateAttributes({ caption: e.target.value })}
-                  placeholder="Describe this snippet..."
-                  className="w-full text-xs bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-primary transition-all text-nb-on-surface"
+                  placeholder="What does this code do?"
+                  className="w-full text-xs bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-primary transition-all"
                 />
               </div>
 
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Language</label>
-                <select
-                  value={node.attrs.language ?? "plaintext"}
-                  onChange={(e) => updateAttributes({ language: e.target.value })}
-                  className="w-full text-xs bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-primary transition-all text-nb-on-surface cursor-pointer"
-                >
-                  {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
-                </select>
-              </div>
-
-              <div className="pt-2">
+              <div className="flex gap-2 pt-2">
                 <button
                   onClick={() => deleteNode()}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-bold"
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-[10px] font-bold uppercase"
                 >
-                  <Trash2 size={14} />
-                  <span>Remove Block</span>
+                  <Trash2 size={12} />
+                  <span>Delete Snippet</span>
                 </button>
               </div>
             </div>
@@ -595,16 +607,33 @@ export default function UnifiedEditor({
       // ISO-8601 timestamp filename (colons → hyphens for filesystem safety)
       const ts = new Date().toISOString().replace(/:/g, "-").replace(/\..+/, "");
       const newPath = `resources/${ts}.${ext}`;
+ 
+      if (editor?.isActive('tableCell') || editor?.isActive('tableHeader')) {
+        // Prevent image insertion inside tables as LaTeX cannot render them
+        return;
+      }
 
-      editor?.chain().focus().insertContent({
-        type: "image",
-        attrs: {
-          src: dataUrl,
-          alt: "",
-          title: author ?? "",
-          filePath: newPath,
-        },
-      }).run();
+      if (editor?.state.selection instanceof NodeSelection) {
+        editor.chain().focus().insertContentAt(editor.state.selection.to, {
+          type: "image",
+          attrs: {
+            src: dataUrl,
+            alt: "",
+            title: author ?? "",
+            filePath: newPath,
+          },
+        }).run();
+      } else {
+        editor?.chain().focus().insertContent({
+          type: "image",
+          attrs: {
+            src: dataUrl,
+            alt: "",
+            title: author ?? "",
+            filePath: newPath,
+          },
+        }).run();
+      }
 
       if (onImageUpload) onImageUpload(newPath, base64);
     };
@@ -627,8 +656,8 @@ export default function UnifiedEditor({
       ImageWithCaption.configure({ inline: false, allowBase64: true, dbName } as any),
       TableWithCaption.configure({ resizable: true }),
       TableRow,
-      TableHeader,
-      TableCell,
+      RestrictedTableHeader,
+      RestrictedTableCell,
       CustomCodeBlock.configure({ lowlight }),
       Placeholder.configure({
         placeholder: "Start writing...",
