@@ -3,21 +3,24 @@
 import React, { useState, useEffect } from "react";
 import UnifiedEditor, { ToolbarButton, TableGridSelector } from "./UnifiedEditor";
 import { saveAs } from "file-saver";
-import { 
+import {
   Save, Trash2, Download, AlertCircle, Loader2, User, Target, X, FileCode,
-  Undo2, Redo2, ImagePlus, Plus, ChevronDown, FileText, Type, List, ListOrdered, 
-  Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon
+  Undo2, Redo2, ImagePlus, Plus, ChevronDown, FileText, Type, List, ListOrdered,
+  Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
+  Brain, PencilRuler, Hammer, SearchCheck, Goal
 } from "lucide-react";
 import { generateEntryLatex } from "@/lib/latex";
 import AutocompleteInput from "./AutocompleteInput";
 
-const PHASES = [
-  "Define Problem",
-  "Generate Concepts",
-  "Develop Solution",
-  "Construct and Test",
-  "Evaluate Solution",
-];
+const PHASE_CONFIG: Record<string, { icon: any, color: string, bg: string, border: string, text: string }> = {
+  "Define Problem": { icon: Goal, color: "text-blue-500", bg: "bg-blue-50/50", border: "border-blue-200/50", text: "text-blue-700" },
+  "Generate Concepts": { icon: Brain, color: "text-purple-500", bg: "bg-purple-50/50", border: "border-purple-200/50", text: "text-purple-700" },
+  "Develop Solution": { icon: PencilRuler, color: "text-indigo-500", bg: "bg-indigo-50/50", border: "border-indigo-200/50", text: "text-indigo-700" },
+  "Construct and Test": { icon: Hammer, color: "text-orange-500", bg: "bg-orange-50/50", border: "border-orange-200/50", text: "text-orange-700" },
+  "Evaluate Solution": { icon: SearchCheck, color: "text-emerald-500", bg: "bg-emerald-50/50", border: "border-emerald-200/50", text: "text-emerald-700" },
+};
+
+const PHASES = Object.keys(PHASE_CONFIG);
 
 /* ─────────────────────────────────────────────────────────────────
    Component
@@ -110,10 +113,10 @@ export default function Editor({
 
   // Notify parent of content changes with debounce to prevent lag
   useEffect(() => {
-    const isChanged = 
-      title !== initialTitle || 
-      author !== initialAuthor || 
-      phase !== initialPhase || 
+    const isChanged =
+      title !== initialTitle ||
+      author !== initialAuthor ||
+      phase !== initialPhase ||
       content !== initialContent;
 
     if (!isChanged) {
@@ -197,14 +200,13 @@ export default function Editor({
         type="button"
         onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === label ? null : label); }}
         onMouseEnter={() => { if (activeMenu) setActiveMenu(label); }}
-        className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-widest transition-colors ${
-          activeMenu === label ? "bg-nb-primary text-white" : "text-nb-on-surface-variant hover:bg-nb-surface-mid"
-        }`}
+        className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-widest transition-colors ${activeMenu === label ? "bg-nb-primary text-white" : "text-nb-on-surface-variant hover:bg-nb-surface-mid"
+          }`}
       >
         {label}
       </button>
       {activeMenu === label && (
-        <div 
+        <div
           className="absolute top-full left-0 mt-1 w-48 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl p-1.5 z-[200] animate-in fade-in slide-in-from-top-1 duration-150"
           onMouseDown={(e) => e.stopPropagation()}
         >
@@ -240,12 +242,12 @@ export default function Editor({
           const ext = file.name.split(".").pop() || "png";
           const ts = new Date().toISOString().replace(/:/g, "-").replace(/\..+/, "");
           const newPath = `resources/${ts}.${ext}`;
-          
+
           editor.chain().focus().insertContent({
             type: "image",
             attrs: { src: dataUrl, filePath: newPath, title: author }
           }).run();
-          
+
           onImageUpload?.(newPath, base64);
         };
         reader.readAsDataURL(file);
@@ -259,243 +261,250 @@ export default function Editor({
       <div className="flex flex-col min-h-full min-w-[500px]">
         {/* ── Fixed Header ────────────────────────────────────────── */}
         <div className="shrink-0 border-b border-nb-outline-variant bg-nb-surface/80 backdrop-blur-md z-[150]">
-        
-        {/* Row 1: Menu Bar */}
-        <div className="px-4 h-10 flex items-center gap-2 border-b border-nb-outline-variant/30">
-          <MenuItem label="File">
-            <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} />
-            <MenuAction icon={<Download size={14} />} label="Download LaTeX" onClick={handleDownload} />
-            <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
-            <MenuAction icon={<X size={14} />} label="Close" onClick={onClose || (() => {})} />
-            <MenuAction icon={<Trash2 size={14} />} label="Delete" onClick={() => setShowDeleteConfirm(true)} />
-          </MenuItem>
-          
-          <MenuItem label="Edit">
-            <MenuAction 
-              icon={<Undo2 size={14} />} 
-              label="Undo" 
-              onClick={() => editor?.chain().focus().undo().run()} 
-              disabled={!editor?.can().undo()} 
-            />
-            <MenuAction 
-              icon={<Redo2 size={14} />} 
-              label="Redo" 
-              onClick={() => editor?.chain().focus().redo().run()} 
-              disabled={!editor?.can().redo()} 
-            />
-          </MenuItem>
 
-          <MenuItem label="Insert">
-            <MenuAction icon={<ImagePlus size={14} />} label="Image" onClick={insertImage} />
-            <MenuAction 
-              icon={<TableIcon size={14} />} 
-              label="Table" 
-              onClick={() => setShowTableGrid(true)} 
-            />
-            <MenuAction 
-              icon={<Code size={14} />} 
-              label="Code Block" 
-              onClick={() => editor?.chain().focus().toggleCodeBlock().run()} 
-            />
-          </MenuItem>
+          {/* Row 1: Menu Bar */}
+          <div className="px-4 h-10 flex items-center gap-2 border-b border-nb-outline-variant/30">
+            <MenuItem label="File">
+              <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} />
+              <MenuAction icon={<Download size={14} />} label="Download LaTeX" onClick={handleDownload} />
+              <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
+              <MenuAction icon={<X size={14} />} label="Close" onClick={onClose || (() => { })} />
+              <MenuAction icon={<Trash2 size={14} />} label="Delete" onClick={() => setShowDeleteConfirm(true)} />
+            </MenuItem>
 
-          <div className="flex-1" />
+            <MenuItem label="Edit">
+              <MenuAction
+                icon={<Undo2 size={14} />}
+                label="Undo"
+                onClick={() => editor?.chain().focus().undo().run()}
+                disabled={!editor?.can().undo()}
+              />
+              <MenuAction
+                icon={<Redo2 size={14} />}
+                label="Redo"
+                onClick={() => editor?.chain().focus().redo().run()}
+                disabled={!editor?.can().redo()}
+              />
+            </MenuItem>
 
-          {/* Save Status Indicator */}
-          <div className="flex items-center gap-2 mr-2">
-            {isAutoSaving || isSaving ? (
-              <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-primary animate-pulse">
-                <Loader2 size={12} className="animate-spin" />
-                <span>SAVING...</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-on-surface-variant/40">
-                <Check size={12} />
-                <span>SAVED</span>
-              </div>
-            )}
-          </div>
-        </div>
+            <MenuItem label="Insert">
+              <MenuAction icon={<ImagePlus size={14} />} label="Image" onClick={insertImage} />
+              <MenuAction
+                icon={<TableIcon size={14} />}
+                label="Table"
+                onClick={() => setShowTableGrid(true)}
+              />
+              <MenuAction
+                icon={<Code size={14} />}
+                label="Code Block"
+                onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
+              />
+            </MenuItem>
 
-        {/* Row 2: Metadata Row */}
-        <div className="px-6 py-2.5 flex flex-wrap items-center gap-6 max-w-7xl mx-auto">
-          <div className="flex-1 min-w-[300px]">
-            <AutocompleteInput
-              type="text"
-              value={title}
-              options={Object.keys(knownProjectTitles).filter(t => {
-                const normFilename = filename.replace(/\\/g, "/");
-                const otherRefs = (knownProjectTitles[t] || []).filter(p => p.replace(/\\/g, "/") !== normFilename);
-                return otherRefs.length > 0 && t.trim() !== title.trim();
-              })}
-              onSelectOption={(val) => { setTitle(val); onTitleChange?.(val); }}
-              onChange={(e) => { setTitle(e.target.value); onTitleChange?.(e.target.value); }}
-              placeholder="Project Title..."
-              className="w-full text-xl font-bold bg-transparent text-nb-on-surface outline-none placeholder:text-nb-outline-variant"
-            />
+            <div className="flex-1" />
+
+            {/* Save Status Indicator */}
+            <div className="flex items-center gap-2 mr-2">
+              {isAutoSaving || isSaving ? (
+                <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-primary animate-pulse">
+                  <Loader2 size={12} className="animate-spin" />
+                  <span>SAVING...</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-on-surface-variant/40">
+                  <Check size={12} />
+                  <span>SAVED</span>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50">
-              <User size={14} className="text-nb-tertiary" />
+          {/* Row 2: Metadata Row */}
+          <div className="px-6 py-2.5 flex flex-wrap items-center gap-2 max-w-7xl mx-auto">
+            <div className="flex-1 min-w-[300px]">
               <AutocompleteInput
                 type="text"
-                value={author}
-                options={Object.keys(knownAuthors).filter(a => {
+                value={title}
+                options={Object.keys(knownProjectTitles).filter(t => {
                   const normFilename = filename.replace(/\\/g, "/");
-                  const otherRefs = (knownAuthors[a] || []).filter(p => p.replace(/\\/g, "/") !== normFilename);
-                  return otherRefs.length > 0 && a.trim() !== author.trim();
+                  const otherRefs = (knownProjectTitles[t] || []).filter(p => p.replace(/\\/g, "/") !== normFilename);
+                  return otherRefs.length > 0 && t.trim() !== title.trim();
                 })}
-                onSelectOption={(val) => { setAuthor(val); onAuthorChange?.(val); }}
-                onChange={(e) => { setAuthor(e.target.value); onAuthorChange?.(e.target.value); }}
-                placeholder="Author"
-                className="text-xs font-semibold text-nb-on-surface-variant bg-transparent outline-none w-36"
+                onSelectOption={(val) => { setTitle(val); onTitleChange?.(val); }}
+                onChange={(e) => { setTitle(e.target.value); onTitleChange?.(e.target.value); }}
+                placeholder="Project Title..."
+                className="w-full text-xl font-bold bg-transparent text-nb-on-surface outline-none placeholder:text-nb-outline-variant"
               />
             </div>
 
-            <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50">
-              <Target size={14} className="text-nb-secondary" />
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50">
+                <User size={14} className="text-nb-tertiary" />
+                <AutocompleteInput
+                  type="text"
+                  value={author}
+                  options={Object.keys(knownAuthors).filter(a => {
+                    const normFilename = filename.replace(/\\/g, "/");
+                    const otherRefs = (knownAuthors[a] || []).filter(p => p.replace(/\\/g, "/") !== normFilename);
+                    return otherRefs.length > 0 && a.trim() !== author.trim();
+                  })}
+                  onSelectOption={(val) => { setAuthor(val); onAuthorChange?.(val); }}
+                  onChange={(e) => { setAuthor(e.target.value); onAuthorChange?.(e.target.value); }}
+                  placeholder="Author"
+                  className="text-xs font-semibold text-nb-on-surface-variant bg-transparent outline-none w-36"
+                />
+              </div>
+
+              <div className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl border transition-all focus-within:ring-2 focus-within:ring-nb-primary/20 ${phase && PHASE_CONFIG[phase] ? `${PHASE_CONFIG[phase].bg} ${PHASE_CONFIG[phase].border}` : "bg-nb-surface-low border-nb-outline-variant/30"}`}>
+              {phase && PHASE_CONFIG[phase] && (
+                React.createElement(PHASE_CONFIG[phase].icon, { size: 14, className: PHASE_CONFIG[phase].color })
+              )}
               <select
                 value={phase}
                 onChange={(e) => { setPhase(e.target.value); onPhaseChange?.(e.target.value); }}
-                className="text-xs font-semibold text-nb-on-surface-variant bg-transparent outline-none cursor-pointer"
+                className={`text-xs font-bold tracking-widest bg-transparent outline-none cursor-pointer appearance-none ${phase && PHASE_CONFIG[phase] ? PHASE_CONFIG[phase].text : "text-nb-on-surface-variant/60"}`}
               >
-                <option value="" disabled>Select Phase</option>
-                {PHASES.map(p => <option key={p} value={p}>{p}</option>)}
+                {!phase && <option value="" disabled>Phase</option>}
+                {PHASES.map(p => (
+                  <option key={p} value={p} className="text-nb-on-surface bg-nb-surface">
+                    {p}
+                  </option>
+                ))}
               </select>
+              <ChevronDown size={12} className="text-nb-on-surface-variant/40" />
+            </div>
             </div>
           </div>
-        </div>
 
-        {/* Row 3: Rich Toolbar */}
-        {editor && (
-          <div className="px-6 py-2 border-t border-nb-outline-variant/30 bg-nb-surface-mid/50">
-            <div className="max-w-7xl mx-auto flex items-center gap-1">
-              <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} title="Bold">
-                <Bold size={16} />
-              </ToolbarButton>
-              <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} title="Italic">
-                <Italic size={16} />
-              </ToolbarButton>
-              
-              <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
-
-              <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} active={editor.isActive("heading", { level: 1 })} title="Heading 1">
-                <Heading1 size={16} />
-              </ToolbarButton>
-              <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} active={editor.isActive("heading", { level: 2 })} title="Heading 2">
-                <Heading2 size={16} />
-              </ToolbarButton>
-
-              <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
-
-              <ToolbarButton onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive("bulletList")} title="Bullet List">
-                <List size={16} />
-              </ToolbarButton>
-              <ToolbarButton onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive("orderedList")} title="Ordered List">
-                <ListOrdered size={16} />
-              </ToolbarButton>
-
-              <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
-
-              <ToolbarButton onClick={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive("codeBlock")} title="Code Block">
-                <Code size={16} />
-              </ToolbarButton>
-
-              <div className="relative">
-                <ToolbarButton 
-                  onClick={(e) => { e?.stopPropagation(); setShowTableGrid(!showTableGrid); }} 
-                  active={showTableGrid} 
-                  title="Insert Table"
-                >
-                  <TableIcon size={16} />
+          {/* Row 3: Rich Toolbar */}
+          {editor && (
+            <div className="px-6 py-2 border-t border-nb-outline-variant/30 bg-nb-surface-mid/50">
+              <div className="max-w-7xl mx-auto flex items-center gap-1">
+                <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} title="Bold">
+                  <Bold size={16} />
                 </ToolbarButton>
-                {showTableGrid && (
-                  <div 
-                    className="absolute top-full left-0 mt-2 z-[200] shadow-2xl rounded-xl animate-in fade-in zoom-in-95 duration-200"
-                    onMouseDown={(e) => e.stopPropagation()}
+                <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} title="Italic">
+                  <Italic size={16} />
+                </ToolbarButton>
+
+                <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
+
+                <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} active={editor.isActive("heading", { level: 1 })} title="Heading 1">
+                  <Heading1 size={16} />
+                </ToolbarButton>
+                <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} active={editor.isActive("heading", { level: 2 })} title="Heading 2">
+                  <Heading2 size={16} />
+                </ToolbarButton>
+
+                <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
+
+                <ToolbarButton onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive("bulletList")} title="Bullet List">
+                  <List size={16} />
+                </ToolbarButton>
+                <ToolbarButton onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive("orderedList")} title="Ordered List">
+                  <ListOrdered size={16} />
+                </ToolbarButton>
+
+                <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
+
+                <ToolbarButton onClick={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive("codeBlock")} title="Code Block">
+                  <Code size={16} />
+                </ToolbarButton>
+
+                <div className="relative">
+                  <ToolbarButton
+                    onClick={(e) => { e?.stopPropagation(); setShowTableGrid(!showTableGrid); }}
+                    active={showTableGrid}
+                    title="Insert Table"
                   >
-                    <TableGridSelector
-                      onSelect={(rows, cols) => {
-                        editor.chain().focus().insertTable({ rows, cols, withHeaderRow: false }).run();
-                        setShowTableGrid(false);
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
+                    <TableIcon size={16} />
+                  </ToolbarButton>
+                  {showTableGrid && (
+                    <div
+                      className="absolute top-full left-0 mt-2 z-[200] shadow-2xl rounded-xl animate-in fade-in zoom-in-95 duration-200"
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
+                      <TableGridSelector
+                        onSelect={(rows, cols) => {
+                          editor.chain().focus().insertTable({ rows, cols, withHeaderRow: false }).run();
+                          setShowTableGrid(false);
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
 
-              <ToolbarButton onClick={insertImage} title="Insert Image">
-                <ImageIcon size={16} />
-              </ToolbarButton>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ── Scrollable Workspace ──────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto bg-nb-surface scrollbar-hide">
-        <div className="max-w-7xl mx-auto pl-16 pr-8 py-4 min-h-full">
-          {validationErrors.length > 0 && (
-            <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3 animate-in slide-in-from-top-2">
-              <AlertCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <h4 className="text-xs font-bold uppercase tracking-widest text-red-600 mb-1">Missing Information</h4>
-                <ul className="list-disc list-inside text-xs text-red-500 space-y-0.5">
-                  {validationErrors.map((err, i) => <li key={i}>{err}</li>)}
-                </ul>
+                <ToolbarButton onClick={insertImage} title="Insert Image">
+                  <ImageIcon size={16} />
+                </ToolbarButton>
               </div>
             </div>
           )}
-
-          <UnifiedEditor
-            key={filename}
-            filename={filename}
-            content={content}
-            onChange={setContent}
-            onImageUpload={onImageUpload}
-            author={author}
-            dbName={dbName}
-            onEditorInit={setEditor}
-          />
         </div>
-      </div>
 
-      {/* ── Delete confirmation ───────────────────────────────────── */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-[500] flex items-center justify-center bg-nb-secondary/60 backdrop-blur-md px-4" onClick={() => setShowDeleteConfirm(false)}>
-          <div
-            className="bg-nb-surface rounded-2xl p-7 shadow-nb-lg max-w-sm w-full border border-nb-outline-variant animate-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0">
-                <Trash2 size={20} className="text-nb-primary" />
+        {/* ── Scrollable Workspace ──────────────────────────────────── */}
+        <div className="flex-1 overflow-y-auto bg-nb-surface scrollbar-hide">
+          <div className="max-w-7xl mx-auto pl-16 pr-8 py-4 min-h-full">
+            {validationErrors.length > 0 && (
+              <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3 animate-in slide-in-from-top-2">
+                <AlertCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-red-600 mb-1">Missing Information</h4>
+                  <ul className="list-disc list-inside text-xs text-red-500 space-y-0.5">
+                    {validationErrors.map((err, i) => <li key={i}>{err}</li>)}
+                  </ul>
+                </div>
               </div>
-              <h3 className="font-bold text-sm uppercase tracking-widest text-nb-secondary">Delete Entry?</h3>
-            </div>
-            <p className="text-sm text-nb-on-surface-variant leading-relaxed mb-8">
-              This will permanently remove the entry from your notebook. This action cannot be undone once committed.
-            </p>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 px-4 py-2.5 rounded-xl border border-nb-outline-variant text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-surface-low transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => { setShowDeleteConfirm(false); onDeleted(filename); }}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-nb-primary text-white text-xs font-bold uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20"
-              >
-                Delete
-              </button>
-            </div>
+            )}
+
+            <UnifiedEditor
+              key={filename}
+              filename={filename}
+              content={content}
+              onChange={setContent}
+              onImageUpload={onImageUpload}
+              author={author}
+              dbName={dbName}
+              onEditorInit={setEditor}
+            />
           </div>
         </div>
-      )}
+
+        {/* ── Delete confirmation ───────────────────────────────────── */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 z-[500] flex items-center justify-center bg-nb-secondary/60 backdrop-blur-md px-4" onClick={() => setShowDeleteConfirm(false)}>
+            <div
+              className="bg-nb-surface rounded-2xl p-7 shadow-nb-lg max-w-sm w-full border border-nb-outline-variant animate-in zoom-in-95 duration-200"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0">
+                  <Trash2 size={20} className="text-nb-primary" />
+                </div>
+                <h3 className="font-bold text-sm uppercase tracking-widest text-nb-secondary">Delete Entry?</h3>
+              </div>
+              <p className="text-sm text-nb-on-surface-variant leading-relaxed mb-8">
+                This will permanently remove the entry from your notebook. This action cannot be undone once committed.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-nb-outline-variant text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-surface-low transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowDeleteConfirm(false); onDeleted(filename); }}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-nb-primary text-white text-xs font-bold uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
