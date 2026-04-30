@@ -30,7 +30,7 @@ export const LANGUAGES = [
   "typescript", "java", "bash", "sql", "rust", "go", "csharp",
 ];
 
-const ToolbarButton = ({
+export const ToolbarButton = ({
   onClick,
   active,
   children,
@@ -42,6 +42,7 @@ const ToolbarButton = ({
   title?: string
 }) => (
   <button
+    type="button"
     onClick={onClick}
     title={title}
     className={`p-2 rounded-lg transition-all flex items-center justify-center border ${active
@@ -67,7 +68,7 @@ const ContextMenuItem = ({ label, icon, onClick }: { label: string, icon: React.
    Image Node View  — caption/initials are editable inline
    ───────────────────────────────────────────────────────────────── */
 
-const TableGridSelector = ({ onSelect, initialRows = 0, initialCols = 0 }: { onSelect: (rows: number, cols: number) => void, initialRows?: number, initialCols?: number }) => {
+export const TableGridSelector = ({ onSelect, initialRows = 0, initialCols = 0 }: { onSelect: (rows: number, cols: number) => void, initialRows?: number, initialCols?: number }) => {
   const [hovered, setHovered] = useState({ r: initialRows, c: initialCols });
   return (
     <div className="p-3 bg-nb-surface border border-nb-outline-variant shadow-nb-lg rounded-xl w-max">
@@ -568,10 +569,11 @@ interface UnifiedEditorProps {
   author?: string;
   filename: string;
   dbName?: string;
+  onEditorInit?: (editor: any) => void;
 }
 
 export default function UnifiedEditor({
-  content, onChange, onImageUpload, author, filename, dbName = "notebook-pending",
+  content, onChange, onImageUpload, author, filename, dbName = "notebook-pending", onEditorInit,
 }: UnifiedEditorProps) {
   const parseContent = (raw: string) => {
     if (!raw) return "";
@@ -700,6 +702,12 @@ export default function UnifiedEditor({
     },
   });
 
+  useEffect(() => {
+    if (editor && onEditorInit) {
+      onEditorInit(editor);
+    }
+  }, [editor, onEditorInit]);
+
   const isInTable = editor?.isActive("tableCell") || editor?.isActive("tableHeader") || false;
 
   const insertImage = () => {
@@ -738,105 +746,6 @@ export default function UnifiedEditor({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* ── TipTap Toolbar ────────────────────────────────────────── */}
-      <div className="sticky top-0 z-[120] -mx-4 px-4 py-2 pointer-events-none">
-        <div className={`flex flex-wrap items-center gap-1.5 p-2 border border-nb-outline-variant rounded-xl bg-nb-surface/90 backdrop-blur-md shadow-nb-sm transition-opacity duration-200 ${isDragging ? 'pointer-events-none opacity-40' : 'pointer-events-auto opacity-100'}`}>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleBold().run()}
-          active={editor.isActive("bold")}
-          title="Bold"
-        >
-          <Bold size={16} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-          active={editor.isActive("italic")}
-          title="Italic"
-        >
-          <Italic size={16} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          active={editor.isActive("heading", { level: 1 })}
-          title="Heading 1"
-        >
-          <Heading1 size={16} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          active={editor.isActive("heading", { level: 2 })}
-          title="Heading 2"
-        >
-          <Heading2 size={16} />
-        </ToolbarButton>
-
-        <div className="w-px h-6 bg-nb-outline-variant/30 mx-1" />
-
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
-          active={editor.isActive("bulletList")}
-          title="Bullet List"
-        >
-          <List size={16} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          active={editor.isActive("orderedList")}
-          title="Ordered List"
-        >
-          <ListOrdered size={16} />
-        </ToolbarButton>
-
-        <div className="w-px h-6 bg-nb-outline-variant/30 mx-1" />
-
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-          active={editor.isActive("codeBlock")}
-          title="Code Block"
-        >
-          <Code size={16} />
-        </ToolbarButton>
-
-        <div className="relative">
-          <ToolbarButton
-            onClick={() => setShowTableGrid(!showTableGrid)}
-            active={showTableGrid}
-            title="Insert Table"
-          >
-            <TableIcon size={16} />
-          </ToolbarButton>
-
-          {showTableGrid && (
-            <div
-              className="absolute top-12 left-0 z-[110] animate-in fade-in zoom-in-95 duration-200 shadow-2xl rounded-xl"
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              <TableGridSelector
-                onSelect={(rows, cols) => {
-                  editor.chain().focus().insertTable({ rows, cols, withHeaderRow: false }).run();
-                  setShowTableGrid(false);
-                }}
-              />
-            </div>
-          )}
-        </div>
-
-        <label className="p-2 rounded-lg cursor-pointer text-nb-on-surface-variant hover:bg-nb-surface-mid transition-all" title="Upload Image">
-          <ImageIcon size={16} />
-          <input
-            type="file"
-            className="hidden"
-            accept="image/*"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleImageFile(file);
-              // Clear value to allow re-upload of same file
-              e.target.value = "";
-            }}
-          />
-        </label>
-      </div>
-    </div>
 
     <div className="relative group/editor">
         {/* Table Controls (Now embedded in NodeView, keeping this for fallback/external interaction) */}

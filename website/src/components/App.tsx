@@ -624,7 +624,7 @@ export default function App() {
       }
 
       // First, try loading from metadata.json
-      const entryMeta = notebookMetadata.entries?.[file.path];
+      const entryMeta = notebookMetadataRef.current.entries?.[file.path];
       
       if (entryMeta) {
         // Hydrate image sources before opening
