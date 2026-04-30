@@ -224,6 +224,16 @@ export default function App() {
 
   const editorPanelRef = useRef<ImperativePanelHandle>(null);
   const previewPanelRef = useRef<ImperativePanelHandle>(null);
+  const sidebarPanelRef = useRef<ImperativePanelHandle>(null);
+
+  useEffect(() => {
+    if (!sidebarPanelRef.current) return;
+    if (isSidebarOpen) {
+      sidebarPanelRef.current.expand();
+    } else {
+      sidebarPanelRef.current.collapse();
+    }
+  }, [isSidebarOpen]);
 
   useEffect(() => {
     if (editorPanelRef.current && previewPanelRef.current) {
@@ -1083,8 +1093,9 @@ export default function App() {
       {/* Header */}
       <div className="flex items-center justify-between px-4 h-14 bg-nb-surface border-b border-nb-outline-variant shrink-0">
         <button
-          onClick={() => setIsSidebarOpen(true)}
-          className={`p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors ${isSidebarOpen && !isMobile ? 'invisible' : 'visible'}`}
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors"
+          title={isSidebarOpen ? "Close Sidebar" : "Open Sidebar"}
         >
           <Menu size={18} />
         </button>
@@ -1204,7 +1215,7 @@ export default function App() {
               order={1}
               ref={editorPanelRef}
               collapsible={true}
-              minSize={0}
+              minSize={30}
               defaultSize={desktopViewMode === "editor" ? 100 : (desktopViewMode === "preview" ? 0 : 50)}
               className={`flex flex-col h-full transition-all duration-300 ease-out ${desktopViewMode === "preview" ? "opacity-0 pointer-events-none" : "opacity-100"}`}
             >
@@ -1241,7 +1252,7 @@ export default function App() {
               order={2}
               ref={previewPanelRef}
               collapsible={true}
-              minSize={0}
+              minSize={30}
               defaultSize={desktopViewMode === "preview" ? 100 : (desktopViewMode === "editor" ? 0 : 50)}
               className={`flex flex-col h-full bg-nb-surface-low transition-all duration-300 ease-out ${desktopViewMode === "editor" ? "opacity-0 pointer-events-none" : "opacity-100"}`}
             >
@@ -1272,15 +1283,24 @@ export default function App() {
         </div>
       ) : (
         <PanelGroup direction="horizontal" className="w-full h-full" id="main-layout-group">
-          {isSidebarOpen && (
-            <>
-              <Panel id="sidebar-panel" defaultSize={20} minSize={15} maxSize={35} className="flex flex-col">
-                {sidebarContent}
-              </Panel>
-              <PanelResizeHandle id="sidebar-resizer" className="w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors" />
-            </>
-          )}
-          <Panel id="main-panel" defaultSize={isSidebarOpen ? 80 : 100} className="flex flex-col">
+          <Panel 
+            id="sidebar-panel" 
+            order={1} 
+            ref={sidebarPanelRef}
+            defaultSize={20} 
+            minSize={15} 
+            maxSize={40} 
+            collapsible={true}
+            onCollapse={() => setIsSidebarOpen(false)}
+            onExpand={() => setIsSidebarOpen(true)}
+            className="flex flex-col transition-all duration-300 ease-out"
+          >
+            <div className={`flex-1 flex flex-col transition-all duration-300 ease-out ${!isSidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+              {sidebarContent}
+            </div>
+          </Panel>
+          <PanelResizeHandle id="sidebar-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${!isSidebarOpen ? 'hidden' : ''}`} />
+          <Panel id="main-panel" order={2} defaultSize={isSidebarOpen ? 80 : 100} minSize={30} className="flex flex-col">
             {mainContent}
           </Panel>
         </PanelGroup>

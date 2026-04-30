@@ -169,7 +169,6 @@ export default function Editor({
     saveAs(blob, filename);
   };
 
-  // Close menus on click away
   useEffect(() => {
     if (!activeMenu && !showTableGrid) return;
     const handleOutsideClick = () => {
@@ -179,6 +178,18 @@ export default function Editor({
     window.addEventListener("mousedown", handleOutsideClick);
     return () => window.removeEventListener("mousedown", handleOutsideClick);
   }, [activeMenu, showTableGrid]);
+
+  // Keyboard Shortcuts (Ctrl+S)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [content, title, author, phase, filename]);
 
   const MenuItem = ({ label, children }: { label: string, children: React.ReactNode }) => (
     <div className="relative h-full flex items-center">
@@ -244,9 +255,10 @@ export default function Editor({
   };
 
   return (
-    <div className="flex flex-col h-full bg-nb-surface overflow-hidden">
-      {/* ── Fixed Header ────────────────────────────────────────── */}
-      <div className="shrink-0 border-b border-nb-outline-variant bg-nb-surface/80 backdrop-blur-md z-[150]">
+    <div className="flex flex-col h-full bg-nb-surface overflow-x-auto overflow-y-hidden scrollbar-hide">
+      <div className="flex flex-col min-h-full min-w-[500px]">
+        {/* ── Fixed Header ────────────────────────────────────────── */}
+        <div className="shrink-0 border-b border-nb-outline-variant bg-nb-surface/80 backdrop-blur-md z-[150]">
         
         {/* Row 1: Menu Bar */}
         <div className="px-4 h-10 flex items-center gap-2 border-b border-nb-outline-variant/30">
@@ -419,7 +431,6 @@ export default function Editor({
             </div>
           </div>
         )}
-
       </div>
 
       {/* ── Scrollable Workspace ──────────────────────────────────── */}
@@ -485,6 +496,7 @@ export default function Editor({
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import {
   useEditor, EditorContent,
   NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer,
 } from "@tiptap/react";
+import { NodeSelection } from "@tiptap/pm/state";
 import { getResource } from "@/lib/db";
 import StarterKit from "@tiptap/starter-kit";
 import { Image as TiptapImage } from "@tiptap/extension-image";
@@ -20,7 +21,8 @@ import {
   Heading1, Heading2, Image as ImageIcon,
   Table as TableIcon, Undo, Redo, Trash2,
   ChevronUp, ChevronDown, ChevronLeft, ChevronRight,
-  Pencil, AlertTriangle, FileCode, Check, Code2, MoreVertical, Settings, UserCircle, Grid3X3, GripVertical
+  Pencil, AlertTriangle, FileCode, Check, Code2, MoreVertical, Settings, UserCircle, Grid3X3, GripVertical,
+  Scissors as Scissor, Copy, Clipboard
 } from "lucide-react";
 
 const lowlight = createLowlight(common);
@@ -54,10 +56,10 @@ export const ToolbarButton = ({
   </button>
 );
 
-const ContextMenuItem = ({ label, icon, onClick }: { label: string, icon: React.ReactNode, onClick: () => void }) => (
+const ContextMenuItem = ({ label, icon, onClick, danger }: { label: string, icon: React.ReactNode, onClick: () => void, danger?: boolean }) => (
   <button
-    onClick={onClick}
-    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-primary/10 hover:text-nb-primary transition-all text-left"
+    onClick={(e) => { e.stopPropagation(); onClick(); }}
+    className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${danger ? "text-red-500 hover:bg-red-50" : "text-nb-on-surface-variant hover:bg-nb-primary/10 hover:text-nb-primary"} text-left`}
   >
     <div className="opacity-60">{icon}</div>
     <span>{label}</span>
@@ -70,6 +72,7 @@ const ContextMenuItem = ({ label, icon, onClick }: { label: string, icon: React.
 
 export const TableGridSelector = ({ onSelect, initialRows = 0, initialCols = 0 }: { onSelect: (rows: number, cols: number) => void, initialRows?: number, initialCols?: number }) => {
   const [hovered, setHovered] = useState({ r: initialRows, c: initialCols });
+
   return (
     <div className="p-3 bg-nb-surface border border-nb-outline-variant shadow-nb-lg rounded-xl w-max">
       <div className="grid grid-cols-10 gap-1 mb-2 w-[180px]">
@@ -181,6 +184,7 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName }:
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
   };
+
 
   return (
     <NodeViewWrapper
@@ -328,6 +332,7 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
 
   const active = selected || isCursorInside;
 
+
   return (
     <NodeViewWrapper
       draggable={dragEnabled}
@@ -469,6 +474,7 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
   }, [showMenu]);
 
   const active = selected || isCursorInside;
+
 
   return (
     <NodeViewWrapper
@@ -744,6 +750,7 @@ export default function UnifiedEditor({
 
   if (!editor) return null;
 
+
   return (
     <div className="flex flex-col gap-4">
 
@@ -766,36 +773,68 @@ export default function UnifiedEditor({
               onMouseDown={(e) => e.stopPropagation()}
             >
               <div className="grid grid-cols-1 gap-1">
+                {/* Node-specific options */}
+                {editor.state.selection instanceof NodeSelection && (
+                  <>
+                    <ContextMenuItem
+                      label="Block Options"
+                      icon={<Settings size={14} />}
+                      onClick={() => {
+                        // This assumes the NodeView has its own menu state, 
+                        // but we can try to trigger it by simulating a click on the handle
+                        // or better, we can't easily reach into NodeView state from here.
+                        // However, we can use the selection to tell the user what's selected.
+                        // For now, let's just show standard actions.
+                        setContextMenu(null);
+                      }}
+                    />
+                    <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
+                  </>
+                )}
+
                 <ContextMenuItem
                   label="Cut"
-                  icon={<Trash2 size={14} />}
+                  icon={<Scissor size={14} />}
                   onClick={() => {
-                    document.execCommand('cut');
+                    editor.chain().focus().cut().run();
                     setContextMenu(null);
                   }}
                 />
                 <ContextMenuItem
                   label="Copy"
-                  icon={<FileCode size={14} />}
+                  icon={<Copy size={14} />}
                   onClick={() => {
-                    document.execCommand('copy');
+                    editor.chain().focus().copy().run();
                     setContextMenu(null);
                   }}
                 />
                 <ContextMenuItem
                   label="Paste"
-                  icon={<Pencil size={14} />}
+                  icon={<Clipboard size={14} />}
                   onClick={async () => {
                     try {
+                      // Attempting to paste from clipboard
                       const text = await navigator.clipboard.readText();
                       editor.chain().focus().insertContent(text).run();
                     } catch (err) {
-                      console.error("Paste failed", err);
+                      // Fallback to execCommand if clipboard API fails
+                      document.execCommand('paste');
                     }
                     setContextMenu(null);
                   }}
                 />
+                <ContextMenuItem
+                  label="Delete"
+                  danger
+                  icon={<Trash2 size={14} />}
+                  onClick={() => {
+                    editor.chain().focus().deleteSelection().run();
+                    setContextMenu(null);
+                  }}
+                />
+                
                 <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
+                
                 <ContextMenuItem
                   label="Insert Image"
                   icon={<ImageIcon size={14} />}
