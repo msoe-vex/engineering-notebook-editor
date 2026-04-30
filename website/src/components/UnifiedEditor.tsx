@@ -611,7 +611,6 @@ export default function UnifiedEditor({
     reader.readAsDataURL(file);
   };
 
-  const [contextMenu, setContextMenu] = useState<{ x: number, y: number } | null>(null);
   const [, setSelectionUpdate] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -669,11 +668,6 @@ export default function UnifiedEditor({
             scrollContainer.scrollBy({ top: 15, behavior: 'auto' });
           }
           return false;
-        },
-        contextmenu: (view, event) => {
-          event.preventDefault();
-          setContextMenu({ x: event.clientX, y: event.clientY });
-          return true;
         },
       },
       handlePaste: (_view, event) => {
@@ -740,13 +734,6 @@ export default function UnifiedEditor({
     return () => window.removeEventListener("mousedown", handleOutsideClick);
   }, [showTableGrid]);
 
-  // Dismiss context menu on click away
-  React.useEffect(() => {
-    if (!contextMenu) return;
-    const handleOutsideClick = () => setContextMenu(null);
-    window.addEventListener("mousedown", handleOutsideClick);
-    return () => window.removeEventListener("mousedown", handleOutsideClick);
-  }, [contextMenu]);
 
   if (!editor) return null;
 
@@ -764,96 +751,6 @@ export default function UnifiedEditor({
 
         <div className="bg-nb-surface min-h-[800px] relative">
           <EditorContent editor={editor} className="max-w-none h-full" />
-
-          {/* Editor Context Menu */}
-          {contextMenu && (
-            <div
-              className="fixed z-[150] w-56 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-2xl p-2 animate-in fade-in zoom-in-95 duration-150"
-              style={{ top: contextMenu.y, left: contextMenu.x }}
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              <div className="grid grid-cols-1 gap-1">
-                {/* Node-specific options */}
-                {editor.state.selection instanceof NodeSelection && (
-                  <>
-                    <ContextMenuItem
-                      label="Block Options"
-                      icon={<Settings size={14} />}
-                      onClick={() => {
-                        // This assumes the NodeView has its own menu state, 
-                        // but we can try to trigger it by simulating a click on the handle
-                        // or better, we can't easily reach into NodeView state from here.
-                        // However, we can use the selection to tell the user what's selected.
-                        // For now, let's just show standard actions.
-                        setContextMenu(null);
-                      }}
-                    />
-                    <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
-                  </>
-                )}
-
-                <ContextMenuItem
-                  label="Cut"
-                  icon={<Scissor size={14} />}
-                  onClick={() => {
-                    editor.chain().focus().cut().run();
-                    setContextMenu(null);
-                  }}
-                />
-                <ContextMenuItem
-                  label="Copy"
-                  icon={<Copy size={14} />}
-                  onClick={() => {
-                    editor.chain().focus().copy().run();
-                    setContextMenu(null);
-                  }}
-                />
-                <ContextMenuItem
-                  label="Paste"
-                  icon={<Clipboard size={14} />}
-                  onClick={async () => {
-                    try {
-                      // Attempting to paste from clipboard
-                      const text = await navigator.clipboard.readText();
-                      editor.chain().focus().insertContent(text).run();
-                    } catch (err) {
-                      // Fallback to execCommand if clipboard API fails
-                      document.execCommand('paste');
-                    }
-                    setContextMenu(null);
-                  }}
-                />
-                <ContextMenuItem
-                  label="Delete"
-                  danger
-                  icon={<Trash2 size={14} />}
-                  onClick={() => {
-                    editor.chain().focus().deleteSelection().run();
-                    setContextMenu(null);
-                  }}
-                />
-                
-                <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
-                
-                <ContextMenuItem
-                  label="Insert Image"
-                  icon={<ImageIcon size={14} />}
-                  onClick={() => {
-                    insertImage();
-                    setContextMenu(null);
-                  }}
-                />
-                <ContextMenuItem
-                  label="Insert Table"
-                  icon={<TableIcon size={14} />}
-                  onClick={() => {
-                    setShowTableGrid(true);
-                    setContextMenu(null);
-                  }}
-                />
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
