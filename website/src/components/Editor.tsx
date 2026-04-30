@@ -253,7 +253,7 @@ export default function Editor({
             <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} />
             <MenuAction icon={<Download size={14} />} label="Download LaTeX" onClick={handleDownload} />
             <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
-            <MenuAction icon={<X size={14} />} label="Close" onClick={onClose} />
+            <MenuAction icon={<X size={14} />} label="Close" onClick={onClose || (() => {})} />
             <MenuAction icon={<Trash2 size={14} />} label="Delete" onClick={() => setShowDeleteConfirm(true)} />
           </MenuItem>
           
@@ -391,7 +391,7 @@ export default function Editor({
 
               <div className="relative">
                 <ToolbarButton 
-                  onClick={(e) => { e.stopPropagation(); setShowTableGrid(!showTableGrid); }} 
+                  onClick={(e) => { e?.stopPropagation(); setShowTableGrid(!showTableGrid); }} 
                   active={showTableGrid} 
                   title="Insert Table"
                 >

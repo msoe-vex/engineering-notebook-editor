@@ -36,14 +36,14 @@ export const ToolbarButton = ({
   children,
   title
 }: {
-  onClick: () => void;
+  onClick: (e?: React.MouseEvent) => void;
   active?: boolean;
   children: React.ReactNode;
   title?: string
 }) => (
   <button
     type="button"
-    onClick={onClick}
+    onClick={(e) => onClick(e)}
     title={title}
     className={`p-2 rounded-lg transition-all flex items-center justify-center border ${active
       ? "bg-nb-primary text-white shadow-md border-nb-primary scale-105"

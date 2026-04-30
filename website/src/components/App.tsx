@@ -181,6 +181,16 @@ export default function App() {
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
   const [isCommitting, setIsCommitting] = useState(false);
 
+  // Serialized queue for local file system operations to prevent InvalidStateError
+  const localWriteQueueRef = useRef<Promise<any>>(Promise.resolve());
+  const queueLocalOp = useCallback(async (op: () => Promise<any>) => {
+    const next = localWriteQueueRef.current.then(op).catch(e => {
+      console.error("Local FS operation failed in queue", e);
+    });
+    localWriteQueueRef.current = next;
+    return next;
+  }, []);
+
   // Current open file
   const [openFile, setOpenFile] = useState<OpenFileState | null>(null);
 
@@ -330,7 +340,7 @@ export default function App() {
 
     // 2. Persist .tex
     if (workspaceMode === "local" && dirHandle) {
-      await writeLocalFile(dirHandle, changedPath, latex).catch(console.error);
+      queueLocalOp(() => writeLocalFile(dirHandle, changedPath, latex));
     } else if (workspaceMode === "github") {
       const dbName = getDBName();
       await stageChange(dbName, {
@@ -379,10 +389,12 @@ export default function App() {
 
     const metaStr = JSON.stringify(updatedMeta, null, 2);
     if (workspaceMode === "local" && dirHandle) {
-      await writeLocalFile(dirHandle, METADATA_PATH, metaStr).catch(console.error);
-      for (const orphan of orphanedResources) {
-        await deleteLocalFileAtPath(dirHandle, orphan).catch(e => console.error("Failed to delete orphaned resource", e));
-      }
+      queueLocalOp(async () => {
+        await writeLocalFile(dirHandle, METADATA_PATH, metaStr);
+        for (const orphan of orphanedResources) {
+          await deleteLocalFileAtPath(dirHandle, orphan).catch(e => console.error("Failed to delete orphaned resource", e));
+        }
+      });
     } else if (workspaceMode === "github") {
       const dbName = getDBName();
       await stageChange(dbName, {
@@ -549,9 +561,11 @@ export default function App() {
     const metaStr = JSON.stringify(newMetadata, null, 2);
 
     if (workspaceMode === "local" && dirHandle) {
-      await writeLocalFile(dirHandle, path, scaffold);
-      await writeLocalFile(dirHandle, METADATA_PATH, metaStr);
-      await loadLocalExplorer();
+      await queueLocalOp(async () => {
+        await writeLocalFile(dirHandle, path, scaffold);
+        await writeLocalFile(dirHandle, METADATA_PATH, metaStr);
+        await loadLocalExplorer();
+      });
     } else if (workspaceMode === "github") {
       await stage({ path, content: scaffold, operation: "upsert", label: "New entry" });
       await stage({ path: METADATA_PATH, content: metaStr, operation: "upsert", label: "Initialize metadata for entry" });
@@ -731,7 +745,7 @@ export default function App() {
   const handleEntrySaved = useCallback(async (path: string, latex: string) => {
     cacheContent(path, latex);
     if (workspaceMode === "local" && dirHandle) {
-      await writeLocalFile(dirHandle, path, latex);
+      queueLocalOp(() => writeLocalFile(dirHandle, path, latex));
     } else if (workspaceMode === "github") {
       await stage({ path, content: latex, operation: "upsert", label: "Entry update" });
     }
@@ -759,7 +773,7 @@ export default function App() {
 
       // Secondary action: persist if needed
       if (workspaceMode === "local" && dirHandle) {
-        writeLocalFile(dirHandle, METADATA_PATH, metaStr).catch(console.error);
+        queueLocalOp(() => writeLocalFile(dirHandle, METADATA_PATH, metaStr));
       } else if (workspaceMode === "github") {
         stage({ path: METADATA_PATH, content: metaStr, operation: "upsert", label: "Metadata update" }).catch(console.error);
       }
@@ -781,8 +795,10 @@ export default function App() {
 
     const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
     if (workspaceMode === "local" && dirHandle) {
-      await writeLocalFile(dirHandle, imagePath, bytes);
-      await loadLocalExplorer();
+      await queueLocalOp(async () => {
+        await writeLocalFile(dirHandle, imagePath, bytes);
+        await loadLocalExplorer();
+      });
     } else if (workspaceMode === "github") {
       await stage({ path: imagePath, content: dataUrl, operation: "upsert", label: "Image upload" });
       const imgName = imagePath.split("/").pop()!;
@@ -826,9 +842,11 @@ export default function App() {
     const metaStr = JSON.stringify(updatedMeta, null, 2);
 
     if (workspaceMode === "local" && dirHandle) {
-      await writeLocalFile(dirHandle, METADATA_PATH, metaStr);
-      await deleteLocalFileAtPath(dirHandle, file.path);
-      await loadLocalExplorer();
+      await queueLocalOp(async () => {
+        await writeLocalFile(dirHandle, METADATA_PATH, metaStr);
+        await deleteLocalFileAtPath(dirHandle, file.path);
+        await loadLocalExplorer();
+      });
     } else if (workspaceMode === "github") {
       // Remove any staged upsert for this path, then stage delete
       const dbName = getDBName();
@@ -856,7 +874,7 @@ export default function App() {
     for (const { entryPath, updatedLatex, updatedDoc } of cascadeUpdates) {
       cacheContent(entryPath, updatedLatex);
       if (workspaceMode === "local" && dirHandle) {
-        await writeLocalFile(dirHandle, entryPath, updatedLatex);
+        queueLocalOp(() => writeLocalFile(dirHandle, entryPath, updatedLatex));
       } else if (workspaceMode === "github") {
         await stage({ path: entryPath, content: updatedLatex, operation: "upsert", label: "Image ref removed" });
       }
@@ -871,9 +889,11 @@ export default function App() {
     setNotebookMetadata(updatedMeta);
     const metaStr = JSON.stringify(updatedMeta, null, 2);
     if (workspaceMode === "local" && dirHandle) {
-      await writeLocalFile(dirHandle, METADATA_PATH, metaStr);
-      await deleteLocalFileAtPath(dirHandle, file.path);
-      await loadLocalExplorer();
+      await queueLocalOp(async () => {
+        await writeLocalFile(dirHandle, METADATA_PATH, metaStr);
+        await deleteLocalFileAtPath(dirHandle, file.path);
+        await loadLocalExplorer();
+      });
     } else if (workspaceMode === "github") {
       const dbName = getDBName();
       await removeStaged(dbName, file.path);
