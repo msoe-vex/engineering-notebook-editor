@@ -80,8 +80,8 @@ export const TableGridSelector = ({ onSelect, initialRows = 0, initialCols = 0 }
               onMouseEnter={() => setHovered({ r: r + 1, c: c + 1 })}
               onClick={() => onSelect(r + 1, c + 1)}
               className={`w-3.5 h-3.5 rounded-sm border transition-colors cursor-pointer ${r < hovered.r && c < hovered.c
-                  ? "bg-nb-primary border-nb-primary"
-                  : "bg-nb-surface-low border-nb-outline-variant/30 hover:border-nb-primary/50"
+                ? "bg-nb-primary border-nb-primary"
+                : "bg-nb-surface-low border-nb-outline-variant/30 hover:border-nb-primary/50"
                 }`}
             />
           ))
@@ -183,9 +183,9 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName }:
   };
 
   return (
-    <NodeViewWrapper 
+    <NodeViewWrapper
       draggable={dragEnabled}
-      className={`my-6 group relative max-w-2xl mx-auto transition-all ${selected ? 'z-[100]' : 'z-10'}`}
+      className={`my-6 group relative max-w-4xl mx-auto transition-all ${selected ? 'z-[100]' : 'z-10'}`}
     >
       {/* External Controls (Left side) - Always Visible */}
       <div contentEditable={false} className="absolute -left-12 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
@@ -195,9 +195,9 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName }:
         >
           <MoreVertical size={16} />
         </button>
-        
-        <div 
-          data-drag-handle 
+
+        <div
+          data-drag-handle
           onMouseEnter={() => setDragEnabled(true)}
           onMouseLeave={() => setDragEnabled(false)}
           className="w-8 h-8 rounded-full bg-nb-surface text-nb-on-surface-variant flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm border border-nb-outline-variant/30 hover:bg-nb-surface-high hover:text-nb-primary transition-all"
@@ -329,9 +329,9 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
   const active = selected || isCursorInside;
 
   return (
-    <NodeViewWrapper 
+    <NodeViewWrapper
       draggable={dragEnabled}
-      className={`my-6 group relative max-w-2xl mx-auto transition-all ${active ? 'z-[100]' : 'z-10'}`}>
+      className={`my-6 group relative max-w-4xl mx-auto transition-all ${active ? 'z-[100]' : 'z-10'}`}>
       {/* External Controls (Left side) - Always Visible */}
       <div contentEditable={false} className="absolute -left-12 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
         <button
@@ -340,9 +340,9 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
         >
           <MoreVertical size={16} />
         </button>
-        
-        <div 
-          data-drag-handle 
+
+        <div
+          data-drag-handle
           onMouseEnter={() => setDragEnabled(true)}
           onMouseLeave={() => setDragEnabled(false)}
           className="w-8 h-8 rounded-full bg-nb-surface text-nb-on-surface-variant flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm border border-nb-outline-variant/30 hover:bg-nb-surface-high hover:text-nb-secondary transition-all"
@@ -353,9 +353,9 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
 
       {/* Main Table Content */}
       <div className={`overflow-x-auto transition-all duration-300 ${active ? 'ring-2 ring-nb-primary/50' : ''}`}>
-        <NodeViewContent 
-          as={"table" as any} 
-          className="border-collapse w-full table-fixed" 
+        <NodeViewContent
+          as={"table" as any}
+          className="border-collapse w-full table-fixed"
         />
 
         {/* Floating Menu */}
@@ -471,9 +471,9 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
   const active = selected || isCursorInside;
 
   return (
-    <NodeViewWrapper 
+    <NodeViewWrapper
       draggable={dragEnabled}
-      className={`my-6 group relative max-w-2xl mx-auto transition-all ${active ? 'z-[100]' : 'z-10'}`}>
+      className={`my-6 group relative max-w-4xl mx-auto transition-all ${active ? 'z-[100]' : 'z-10'}`}>
       {/* External Controls (Left side) - Always Visible */}
       <div contentEditable={false} className="absolute -left-12 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
         <button
@@ -482,9 +482,9 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
         >
           <MoreVertical size={16} />
         </button>
-        
-        <div 
-          data-drag-handle 
+
+        <div
+          data-drag-handle
           onMouseEnter={() => setDragEnabled(true)}
           onMouseLeave={() => setDragEnabled(false)}
           className="w-8 h-8 rounded-full bg-nb-surface text-nb-on-surface-variant flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm border border-nb-outline-variant/30 hover:bg-nb-surface-high hover:text-nb-primary transition-all"
@@ -612,7 +612,7 @@ export default function UnifiedEditor({
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
-      StarterKit.configure({ 
+      StarterKit.configure({
         codeBlock: false,
         dropcursor: {
           color: '#d9282f',
@@ -640,7 +640,7 @@ export default function UnifiedEditor({
       setSelectionUpdate(s => s + 1);
     },
     editorProps: {
-      attributes: { class: "focus:outline-none min-h-[800px] h-full max-w-none p-8 lg:p-12 cursor-text" },
+      attributes: { class: "focus:outline-none min-h-[800px] h-full max-w-none p-4 lg:p-6 cursor-text" },
       handleDOMEvents: {
         dragstart: () => { setIsDragging(true); return false; },
         dragend: () => { setIsDragging(false); return false; },
@@ -684,14 +684,14 @@ export default function UnifiedEditor({
       },
       handleDrop: (view, event, slice, moved) => {
         setIsDragging(false);
-        
+
         // Handle File Drops (Images)
         const files = event.dataTransfer?.files;
         if (files && files.length > 0) {
           for (const file of Array.from(files)) {
-            if (file.type.startsWith("image")) { 
-              handleImageFile(file); 
-              return true; 
+            if (file.type.startsWith("image")) {
+              handleImageFile(file);
+              return true;
             }
           }
         }
@@ -747,7 +747,7 @@ export default function UnifiedEditor({
   return (
     <div className="flex flex-col gap-4">
 
-    <div className="relative group/editor">
+      <div className="relative group/editor">
         {/* Table Controls (Now embedded in NodeView, keeping this for fallback/external interaction) */}
         {isInTable && !editor.isActive('table') && (
           <div className="absolute -top-12 left-0 right-0 flex flex-wrap items-center justify-center gap-2 p-1.5 bg-nb-primary text-white rounded-lg shadow-nb-lg z-20 animate-in fade-in slide-in-from-bottom-2 duration-200">

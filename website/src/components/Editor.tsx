@@ -185,6 +185,7 @@ export default function Editor({
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === label ? null : label); }}
+        onMouseEnter={() => { if (activeMenu) setActiveMenu(label); }}
         className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-widest transition-colors ${
           activeMenu === label ? "bg-nb-primary text-white" : "text-nb-on-surface-variant hover:bg-nb-surface-mid"
         }`}
@@ -305,7 +306,7 @@ export default function Editor({
         </div>
 
         {/* Row 2: Metadata Row */}
-        <div className="px-6 py-4 flex flex-wrap items-center gap-8 max-w-7xl mx-auto">
+        <div className="px-6 py-2.5 flex flex-wrap items-center gap-6 max-w-7xl mx-auto">
           <div className="flex-1 min-w-[300px]">
             <AutocompleteInput
               type="text"
@@ -423,7 +424,7 @@ export default function Editor({
 
       {/* ── Scrollable Workspace ──────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto bg-nb-surface scrollbar-hide">
-        <div className="max-w-4xl mx-auto px-6 lg:px-12 py-12 min-h-full">
+        <div className="max-w-7xl mx-auto pl-16 pr-8 py-4 min-h-full">
           {validationErrors.length > 0 && (
             <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3 animate-in slide-in-from-top-2">
               <AlertCircle size={18} className="text-red-500 shrink-0 mt-0.5" />

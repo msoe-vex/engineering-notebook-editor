@@ -48,7 +48,7 @@ export default function AutocompleteInput({
       />
       {isOpen && filteredOptions.length > 0 && (
         <ul
-          className={`absolute z-50 left-1/2 -translate-x-1/2 mt-2 w-max min-w-[140px] max-w-[300px] max-h-48 overflow-y-auto bg-nb-surface border border-nb-outline-variant/30 rounded shadow-xl py-1 text-left ${dropdownClassName}`}
+          className={`absolute z-50 left-0 mt-2 w-max min-w-[140px] max-w-[300px] max-h-48 overflow-y-auto bg-nb-surface border border-nb-outline-variant/30 rounded shadow-xl py-1 text-left ${dropdownClassName}`}
         >
           {filteredOptions.map((opt) => (
             <li
