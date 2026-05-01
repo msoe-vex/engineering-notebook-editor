@@ -329,10 +329,10 @@ export default function Editor({
                   label="Code Block"
                   onClick={() => {
                     const { selection } = editor.state;
-                    const safePos = (selection instanceof NodeSelection) ? selection.to : 
-                                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ? 
-                                    (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-                    
+                    const safePos = (selection instanceof NodeSelection) ? selection.to :
+                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
                     if (safePos !== null) {
                       editor.chain().focus().insertContentAt(safePos, { type: 'codeBlock' }).run();
                     } else {
@@ -380,7 +380,7 @@ export default function Editor({
             </div>
 
             <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50">
+              <div className="h-9 flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50">
                 <User size={14} className="text-nb-tertiary" />
                 <AutocompleteInput
                   type="text"
@@ -397,24 +397,24 @@ export default function Editor({
                 />
               </div>
 
-              <div className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl border transition-all focus-within:ring-2 focus-within:ring-nb-primary/20 ${phase && PHASE_CONFIG[phase] ? `${PHASE_CONFIG[phase].bg} ${PHASE_CONFIG[phase].border}` : "bg-nb-surface-low border-nb-outline-variant/30"}`}>
-              {phase && PHASE_CONFIG[phase] && (
-                React.createElement(PHASE_CONFIG[phase].icon, { size: 14, className: PHASE_CONFIG[phase].color })
-              )}
-              <select
-                value={phase}
-                onChange={(e) => { setPhase(e.target.value); onPhaseChange?.(e.target.value); }}
-                className={`text-xs font-bold tracking-widest bg-transparent outline-none cursor-pointer appearance-none ${phase && PHASE_CONFIG[phase] ? PHASE_CONFIG[phase].text : "text-nb-on-surface-variant/60"}`}
-              >
-                {!phase && <option value="" disabled>Phase</option>}
-                {PHASES.map(p => (
-                  <option key={p} value={p} className="text-nb-on-surface bg-nb-surface">
-                    {p}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={12} className="text-nb-on-surface-variant/40" />
-            </div>
+              <div className={`h-9 w-[230px] shrink-0 flex items-center gap-2.5 px-3 rounded-xl border transition-all focus-within:ring-2 focus-within:ring-nb-primary/20 ${phase && PHASE_CONFIG[phase] ? `${PHASE_CONFIG[phase].bg} ${PHASE_CONFIG[phase].border}` : "bg-nb-surface-low border-nb-outline-variant/30"}`}>
+                {phase && PHASE_CONFIG[phase] && (
+                  React.createElement(PHASE_CONFIG[phase].icon, { size: 14, className: `${PHASE_CONFIG[phase].color} shrink-0` })
+                )}
+                <select
+                  value={phase}
+                  onChange={(e) => { setPhase(e.target.value); onPhaseChange?.(e.target.value); }}
+                  className={`flex-1 w-full min-w-0 text-xs font-bold tracking-widest bg-transparent outline-none cursor-pointer appearance-none ${phase && PHASE_CONFIG[phase] ? PHASE_CONFIG[phase].text : "text-nb-on-surface-variant/60"}`}
+                >
+                  {!phase && <option value="" disabled>Phase</option>}
+                  {PHASES.map(p => (
+                    <option key={p} value={p} className="text-nb-on-surface bg-nb-surface">
+                      {p}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={12} className="text-nb-on-surface-variant/40 shrink-0" />
+              </div>
             </div>
           </div>
 
@@ -431,38 +431,38 @@ export default function Editor({
 
                 <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
 
-                <ToolbarButton 
+                <ToolbarButton
                   onClick={() => {
                     const { selection } = editor.state;
-                    const safePos = (selection instanceof NodeSelection) ? selection.to : 
-                                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ? 
-                                    (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-                    
+                    const safePos = (selection instanceof NodeSelection) ? selection.to :
+                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
                     if (safePos !== null) {
                       editor.chain().focus().insertContentAt(safePos, { type: 'heading', attrs: { level: 1 } }).run();
                     } else {
                       editor.chain().focus().toggleHeading({ level: 1 }).run();
                     }
-                  }} 
-                  active={editor.isActive("heading", { level: 1 })} 
+                  }}
+                  active={editor.isActive("heading", { level: 1 })}
                   title="Heading 1"
                 >
                   <Heading1 size={16} />
                 </ToolbarButton>
-                <ToolbarButton 
+                <ToolbarButton
                   onClick={() => {
                     const { selection } = editor.state;
-                    const safePos = (selection instanceof NodeSelection) ? selection.to : 
-                                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ? 
-                                    (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-                    
+                    const safePos = (selection instanceof NodeSelection) ? selection.to :
+                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
                     if (safePos !== null) {
                       editor.chain().focus().insertContentAt(safePos, { type: 'heading', attrs: { level: 2 } }).run();
                     } else {
                       editor.chain().focus().toggleHeading({ level: 2 }).run();
                     }
-                  }} 
-                  active={editor.isActive("heading", { level: 2 })} 
+                  }}
+                  active={editor.isActive("heading", { level: 2 })}
                   title="Heading 2"
                 >
                   <Heading2 size={16} />
@@ -470,44 +470,44 @@ export default function Editor({
 
                 <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
 
-                <ToolbarButton 
+                <ToolbarButton
                   onClick={() => {
                     const { selection } = editor.state;
-                    const safePos = (selection instanceof NodeSelection) ? selection.to : 
-                                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ? 
-                                    (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-                    
+                    const safePos = (selection instanceof NodeSelection) ? selection.to :
+                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
                     if (safePos !== null) {
-                      editor.chain().focus().insertContentAt(safePos, { 
+                      editor.chain().focus().insertContentAt(safePos, {
                         type: 'bulletList',
                         content: [{ type: 'listItem', content: [{ type: 'paragraph' }] }]
                       }).run();
                     } else {
                       editor.chain().focus().toggleBulletList().run();
                     }
-                  }} 
-                  active={editor.isActive("bulletList")} 
+                  }}
+                  active={editor.isActive("bulletList")}
                   title="Bullet List"
                 >
                   <List size={16} />
                 </ToolbarButton>
-                <ToolbarButton 
+                <ToolbarButton
                   onClick={() => {
                     const { selection } = editor.state;
-                    const safePos = (selection instanceof NodeSelection) ? selection.to : 
-                                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ? 
-                                    (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-                    
+                    const safePos = (selection instanceof NodeSelection) ? selection.to :
+                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
                     if (safePos !== null) {
-                      editor.chain().focus().insertContentAt(safePos, { 
+                      editor.chain().focus().insertContentAt(safePos, {
                         type: 'orderedList',
                         content: [{ type: 'listItem', content: [{ type: 'paragraph' }] }]
                       }).run();
                     } else {
                       editor.chain().focus().toggleOrderedList().run();
                     }
-                  }} 
-                  active={editor.isActive("orderedList")} 
+                  }}
+                  active={editor.isActive("orderedList")}
                   title="Ordered List"
                 >
                   <ListOrdered size={16} />
@@ -515,20 +515,20 @@ export default function Editor({
 
                 <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
 
-                <ToolbarButton 
+                <ToolbarButton
                   onClick={() => {
                     const { selection } = editor.state;
-                    const safePos = (selection instanceof NodeSelection) ? selection.to : 
-                                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ? 
-                                    (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-                    
+                    const safePos = (selection instanceof NodeSelection) ? selection.to :
+                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
                     if (safePos !== null) {
                       editor.chain().focus().insertContentAt(safePos, { type: 'codeBlock' }).run();
                     } else {
                       editor.chain().focus().toggleCodeBlock().run();
                     }
-                  }} 
-                  active={editor.isActive("codeBlock")} 
+                  }}
+                  active={editor.isActive("codeBlock")}
                   title="Code Block"
                 >
                   <Code size={16} />
@@ -561,9 +561,9 @@ export default function Editor({
                           };
 
                           const { selection } = editor.state;
-                          const safePos = (selection instanceof NodeSelection) ? selection.to : 
-                                          (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ? 
-                                          (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+                          const safePos = (selection instanceof NodeSelection) ? selection.to :
+                            (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                              (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
 
                           if (safePos !== null) {
                             editor.chain().focus().insertContentAt(safePos, tableContent).run();
@@ -577,8 +577,8 @@ export default function Editor({
                   )}
                 </div>
 
-                <ToolbarButton 
-                  onClick={insertImage} 
+                <ToolbarButton
+                  onClick={insertImage}
                   title="Insert Image"
                 >
                   <ImageIcon size={16} />

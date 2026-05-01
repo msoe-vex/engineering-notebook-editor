@@ -124,12 +124,13 @@ const ImageWithCaption = TiptapImage.extend({
 });
 
 const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName }: any) => {
-  const [showMenu, setShowMenu] = useState(false);
+  const [menuPos, setMenuPos] = useState<{top: number, left: number} | null>(null);
+  const showMenu = menuPos !== null;
   const [dragEnabled, setDragEnabled] = useState(false);
 
   React.useEffect(() => {
     if (!showMenu) return;
-    const handleOutsideClick = () => setShowMenu(false);
+    const handleOutsideClick = () => setMenuPos(null);
     window.addEventListener("mousedown", handleOutsideClick);
     return () => window.removeEventListener("mousedown", handleOutsideClick);
   }, [showMenu]);
@@ -192,22 +193,35 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName }:
   return (
     <NodeViewWrapper
       draggable={dragEnabled}
-      className={`my-6 group relative max-w-4xl mx-auto transition-all ${selected ? 'z-[100]' : 'z-10'}`}
+      className={`my-6 group relative max-w-4xl mx-auto transition ${showMenu ? 'z-[200]' : selected ? 'z-[100]' : 'z-10'}`}
     >
       {/* External Controls (Left side) - Always Visible */}
       <div contentEditable={false} className="absolute -left-12 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
         <button
-          onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-          className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${showMenu ? 'bg-nb-primary text-white shadow-lg' : 'bg-nb-surface text-nb-on-surface-variant hover:bg-nb-surface-high hover:text-nb-primary shadow-sm border border-nb-outline-variant/30'}`}
+          onMouseDown={(e) => { 
+            e.stopPropagation(); 
+            if (menuPos) {
+              setMenuPos(null);
+            } else {
+              const blockElement = e.currentTarget.closest('.group');
+              if (blockElement) {
+                const rect = blockElement.getBoundingClientRect();
+                setMenuPos({ top: e.clientY - rect.top, left: e.clientX - rect.left + 24 });
+              } else {
+                setMenuPos({ top: 0, left: 0 });
+              }
+            }
+          }}
+          className={`w-8 h-8 rounded-full flex items-center justify-center transition ${showMenu ? 'bg-nb-primary text-white shadow-lg' : 'bg-nb-surface text-nb-on-surface-variant hover:bg-nb-surface-high hover:text-nb-primary shadow-sm border border-nb-outline-variant/30'}`}
         >
-          <MoreVertical size={16} />
+          <Settings size={16} />
         </button>
 
         <div
           data-drag-handle
           onMouseEnter={() => setDragEnabled(true)}
           onMouseLeave={() => setDragEnabled(false)}
-          className="w-8 h-8 rounded-full bg-nb-surface text-nb-on-surface-variant flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm border border-nb-outline-variant/30 hover:bg-nb-surface-high hover:text-nb-primary transition-all"
+          className="w-8 h-8 rounded-full bg-nb-surface text-nb-on-surface-variant flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm border border-nb-outline-variant/30 hover:bg-nb-surface-high hover:text-nb-primary transition"
         >
           <GripVertical size={14} />
         </div>
@@ -238,7 +252,8 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName }:
         {showMenu && (
           <div
             contentEditable={false}
-            className="absolute top-0 left-0 w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl z-[300] p-4 animate-in fade-in zoom-in duration-200"
+            style={{ top: menuPos?.top, left: menuPos?.left }}
+            className="absolute w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl z-[300] p-4 animate-in fade-in zoom-in duration-200"
             onMouseDown={(e) => { e.stopPropagation(); }}
           >
             <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
@@ -308,7 +323,8 @@ const RestrictedTableHeader = TableHeader.extend({
 });
 
 function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: any) {
-  const [showMenu, setShowMenu] = useState(false);
+  const [menuPos, setMenuPos] = useState<{top: number, left: number} | null>(null);
+  const showMenu = menuPos !== null;
   const [isCursorInside, setIsCursorInside] = useState(false);
   const [dragEnabled, setDragEnabled] = useState(false);
 
@@ -330,7 +346,7 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
 
   React.useEffect(() => {
     if (!showMenu) return;
-    const handleOutsideClick = () => setShowMenu(false);
+    const handleOutsideClick = () => setMenuPos(null);
     window.addEventListener("mousedown", handleOutsideClick);
     return () => window.removeEventListener("mousedown", handleOutsideClick);
   }, [showMenu]);
@@ -341,21 +357,34 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
   return (
     <NodeViewWrapper
       draggable={dragEnabled}
-      className={`my-6 group relative max-w-4xl mx-auto transition-all ${active ? 'z-[100]' : 'z-10'}`}>
+      className={`my-6 group relative max-w-4xl mx-auto transition ${showMenu ? 'z-[200]' : active ? 'z-[100]' : 'z-10'}`}>
       {/* External Controls (Left side) - Always Visible */}
       <div contentEditable={false} className="absolute -left-12 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
         <button
-          onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-          className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${showMenu ? 'bg-nb-secondary text-white shadow-lg' : 'bg-nb-surface text-nb-on-surface-variant hover:bg-nb-surface-high hover:text-nb-secondary shadow-sm border border-nb-outline-variant/30'}`}
+          onMouseDown={(e) => { 
+            e.stopPropagation(); 
+            if (menuPos) {
+              setMenuPos(null);
+            } else {
+              const blockElement = e.currentTarget.closest('.group');
+              if (blockElement) {
+                const rect = blockElement.getBoundingClientRect();
+                setMenuPos({ top: e.clientY - rect.top, left: e.clientX - rect.left + 24 });
+              } else {
+                setMenuPos({ top: 0, left: 0 });
+              }
+            }
+          }}
+          className={`w-8 h-8 rounded-full flex items-center justify-center transition ${showMenu ? 'bg-nb-primary text-white shadow-lg' : 'bg-nb-surface text-nb-on-surface-variant hover:bg-nb-surface-high hover:text-nb-primary shadow-sm border border-nb-outline-variant/30'}`}
         >
-          <MoreVertical size={16} />
+          <Settings size={16} />
         </button>
 
         <div
           data-drag-handle
           onMouseEnter={() => setDragEnabled(true)}
           onMouseLeave={() => setDragEnabled(false)}
-          className="w-8 h-8 rounded-full bg-nb-surface text-nb-on-surface-variant flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm border border-nb-outline-variant/30 hover:bg-nb-surface-high hover:text-nb-secondary transition-all"
+          className="w-8 h-8 rounded-full bg-nb-surface text-nb-on-surface-variant flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm border border-nb-outline-variant/30 hover:bg-nb-surface-high hover:text-nb-primary transition"
         >
           <GripVertical size={14} />
         </div>
@@ -372,7 +401,8 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
         {showMenu && (
           <div
             contentEditable={false}
-            className="absolute top-0 left-0 w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl z-[300] p-4 animate-in fade-in zoom-in duration-200"
+            style={{ top: menuPos?.top, left: menuPos?.left }}
+            className="absolute w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl z-[300] p-4 animate-in fade-in zoom-in duration-200"
             onMouseDown={(e) => { e.stopPropagation(); }}
           >
             <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
@@ -456,7 +486,8 @@ const CustomCodeBlock = CodeBlockLowlight.extend({
 });
 
 function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: any) {
-  const [showMenu, setShowMenu] = useState(false);
+  const [menuPos, setMenuPos] = useState<{top: number, left: number} | null>(null);
+  const showMenu = menuPos !== null;
   const [isCursorInside, setIsCursorInside] = useState(false);
   const [dragEnabled, setDragEnabled] = useState(false);
 
@@ -478,7 +509,7 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
 
   React.useEffect(() => {
     if (!showMenu) return;
-    const handleOutsideClick = () => setShowMenu(false);
+    const handleOutsideClick = () => setMenuPos(null);
     window.addEventListener("mousedown", handleOutsideClick);
     return () => window.removeEventListener("mousedown", handleOutsideClick);
   }, [showMenu]);
@@ -489,21 +520,34 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
   return (
     <NodeViewWrapper
       draggable={dragEnabled}
-      className={`my-6 group relative max-w-4xl mx-auto transition-all ${active ? 'z-[100]' : 'z-10'}`}>
+      className={`my-6 group relative max-w-4xl mx-auto transition ${showMenu ? 'z-[200]' : active ? 'z-[100]' : 'z-10'}`}>
       {/* External Controls (Left side) - Always Visible */}
       <div contentEditable={false} className="absolute -left-12 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
         <button
-          onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-          className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${showMenu ? 'bg-nb-primary text-white shadow-lg' : 'bg-nb-surface text-nb-on-surface-variant hover:bg-nb-surface-high hover:text-nb-primary shadow-sm border border-nb-outline-variant/30'}`}
+          onMouseDown={(e) => { 
+            e.stopPropagation(); 
+            if (menuPos) {
+              setMenuPos(null);
+            } else {
+              const blockElement = e.currentTarget.closest('.group');
+              if (blockElement) {
+                const rect = blockElement.getBoundingClientRect();
+                setMenuPos({ top: e.clientY - rect.top, left: e.clientX - rect.left + 24 });
+              } else {
+                setMenuPos({ top: 0, left: 0 });
+              }
+            }
+          }}
+          className={`w-8 h-8 rounded-full flex items-center justify-center transition ${showMenu ? 'bg-nb-primary text-white shadow-lg' : 'bg-nb-surface text-nb-on-surface-variant hover:bg-nb-surface-high hover:text-nb-primary shadow-sm border border-nb-outline-variant/30'}`}
         >
-          <MoreVertical size={16} />
+          <Settings size={16} />
         </button>
 
         <div
           data-drag-handle
           onMouseEnter={() => setDragEnabled(true)}
           onMouseLeave={() => setDragEnabled(false)}
-          className="w-8 h-8 rounded-full bg-nb-surface text-nb-on-surface-variant flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm border border-nb-outline-variant/30 hover:bg-nb-surface-high hover:text-nb-primary transition-all"
+          className="w-8 h-8 rounded-full bg-nb-surface text-nb-on-surface-variant flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm border border-nb-outline-variant/30 hover:bg-nb-surface-high hover:text-nb-primary transition"
         >
           <GripVertical size={14} />
         </div>
@@ -519,7 +563,8 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
         {showMenu && (
           <div
             contentEditable={false}
-            className="absolute top-0 left-0 w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl z-[100] p-4 animate-in fade-in zoom-in duration-200"
+            style={{ top: menuPos?.top, left: menuPos?.left }}
+            className="absolute w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl z-[300] p-4 animate-in fade-in zoom-in duration-200"
             onMouseDown={(e) => { e.stopPropagation(); }}
           >
             <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
