@@ -31,6 +31,15 @@ import "prismjs/components/prism-rust";
 import "prismjs/components/prism-sql";
 import "prismjs/components/prism-typescript";
 
+// Fix Prism LaTeX highlighting for escaped percents
+if (Prism.languages.latex) {
+  const { comment, ...rest } = Prism.languages.latex;
+  Prism.languages.latex = { ...rest, comment };
+  Prism.languages.tex = Prism.languages.latex;
+  Prism.languages.context = Prism.languages.latex;
+}
+
+
 import {
   Bold, Italic, List, ListOrdered, Code,
   Heading1, Heading2, Image as ImageIcon,
