@@ -7,8 +7,9 @@ import {
   Save, Trash2, Download, AlertCircle, Loader2, User, Target, X, FileCode,
   Undo2, Redo2, ImagePlus, Plus, ChevronDown, FileText, Type, List, ListOrdered,
   Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
-  Brain, PencilRuler, Hammer, SearchCheck, Goal
+  Brain, PencilRuler, Hammer, SearchCheck, Goal, Terminal
 } from "lucide-react";
+import { generateUUID, hashContent, getExtensionFromDataUrl } from "@/lib/utils";
 import { generateEntryLatex } from "@/lib/latex";
 import AutocompleteInput from "./AutocompleteInput";
 import { NodeSelection } from "@tiptap/pm/state";
@@ -50,6 +51,7 @@ interface EditorProps {
   onPhaseChange?: (phase: string) => void;
   onImageUpload?: (path: string, base64: string) => void;
   onMetadataRebuild?: (entryPath: string, tiptapJson: string, info?: { title: string; author: string; phase: string; createdAt?: string }) => void;
+  onDownloadPortable?: (filename: string, content: string, info: { title: string; author: string; phase: string, createdAt: string }) => void;
   onClose?: () => void;
   dbName?: string;
   knownAuthors?: Record<string, string[]>;
@@ -74,6 +76,7 @@ export default function Editor({
   onAuthorChange,
   onPhaseChange,
   onMetadataRebuild,
+  onDownloadPortable,
   onClose,
   dbName,
   knownAuthors = {},
@@ -249,12 +252,13 @@ export default function Editor({
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file && editor) {
         const reader = new FileReader();
-        reader.onload = () => {
+        reader.onload = async () => {
           const dataUrl = reader.result as string;
           const base64 = dataUrl.split(",")[1];
-          const ext = file.name.split(".").pop() || "png";
-          const ts = new Date().toISOString().replace(/:/g, "-").replace(/\..+/, "");
-          const newPath = `resources/${ts}.${ext}`;
+          
+          const hash = await hashContent(base64);
+          const ext = getExtensionFromDataUrl(dataUrl);
+          const newPath = `assets/${hash}.${ext}`;
 
           const safePos = (() => {
             const { selection } = editor.state;
@@ -268,12 +272,12 @@ export default function Editor({
           if (safePos !== null) {
             editor.chain().focus().insertContentAt(safePos, {
               type: "image",
-              attrs: { src: dataUrl, filePath: newPath, title: author }
+              attrs: { id: generateUUID(), src: dataUrl, filePath: newPath, title: author }
             }).run();
           } else {
             editor.chain().focus().insertContent({
               type: "image",
-              attrs: { src: dataUrl, filePath: newPath, title: author }
+              attrs: { id: generateUUID(), src: dataUrl, filePath: newPath, title: author }
             }).run();
           }
 
@@ -296,6 +300,11 @@ export default function Editor({
             <MenuItem label="File">
               <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} />
               <MenuAction icon={<Download size={14} />} label="Download LaTeX" onClick={handleDownload} />
+              <MenuAction 
+                icon={<FileCode size={14} />} 
+                label="Download Portable (.json)" 
+                onClick={() => onDownloadPortable?.(filename, content, { title, author, phase, createdAt: initialCreatedAt })} 
+              />
               <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
               <MenuAction icon={<X size={14} />} label="Close" onClick={onClose || (() => { })} />
               <MenuAction icon={<Trash2 size={14} />} label="Delete" onClick={() => setShowDeleteConfirm(true)} />
@@ -334,9 +343,25 @@ export default function Editor({
                         (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
 
                     if (safePos !== null) {
-                      editor.chain().focus().insertContentAt(safePos, { type: 'codeBlock' }).run();
+                      editor.chain().focus().insertContentAt(safePos, { type: 'codeBlock', attrs: { id: generateUUID() } }).run();
                     } else {
-                      editor.chain().focus().toggleCodeBlock().run();
+                      editor.chain().focus().insertContent({ type: 'codeBlock', attrs: { id: generateUUID() } }).run();
+                    }
+                  }}
+                />
+                <MenuAction
+                  icon={<Terminal size={14} />}
+                  label="Raw LaTeX"
+                  onClick={() => {
+                    const { selection } = editor.state;
+                    const safePos = (selection instanceof NodeSelection) ? selection.to :
+                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
+                    if (safePos !== null) {
+                      editor.chain().focus().insertContentAt(safePos, { type: 'rawLatex', attrs: { id: generateUUID() } }).run();
+                    } else {
+                      editor.chain().focus().insertContent({ type: 'rawLatex', attrs: { id: generateUUID() } }).run();
                     }
                   }}
                 />
@@ -523,15 +548,34 @@ export default function Editor({
                         (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
 
                     if (safePos !== null) {
-                      editor.chain().focus().insertContentAt(safePos, { type: 'codeBlock' }).run();
+                      editor.chain().focus().insertContentAt(safePos, { type: 'codeBlock', attrs: { id: generateUUID() } }).run();
                     } else {
-                      editor.chain().focus().toggleCodeBlock().run();
+                      editor.chain().focus().insertContent({ type: 'codeBlock', attrs: { id: generateUUID() } }).run();
                     }
                   }}
                   active={editor.isActive("codeBlock")}
                   title="Code Block"
                 >
                   <Code size={16} />
+                </ToolbarButton>
+
+                <ToolbarButton
+                  onClick={() => {
+                    const { selection } = editor.state;
+                    const safePos = (selection instanceof NodeSelection) ? selection.to :
+                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
+                    if (safePos !== null) {
+                      editor.chain().focus().insertContentAt(safePos, { type: 'rawLatex', attrs: { id: generateUUID() } }).run();
+                    } else {
+                      editor.chain().focus().insertContent({ type: 'rawLatex', attrs: { id: generateUUID() } }).run();
+                    }
+                  }}
+                  active={editor.isActive("rawLatex")}
+                  title="Raw LaTeX"
+                >
+                  <Terminal size={16} />
                 </ToolbarButton>
 
                 <div className="relative">
@@ -551,6 +595,7 @@ export default function Editor({
                         onSelect={(rows, cols) => {
                           const tableContent = {
                             type: 'table',
+                            attrs: { id: generateUUID() },
                             content: Array.from({ length: rows }, () => ({
                               type: 'tableRow',
                               content: Array.from({ length: cols }, () => ({

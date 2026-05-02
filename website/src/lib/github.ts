@@ -53,7 +53,7 @@ export const fetchEntries = async (config: GitHubConfig): Promise<GitHubFile[]> 
     });
 
     if (Array.isArray(response.data)) {
-      return response.data.filter((file) => file.name.endsWith(".tex")) as GitHubFile[];
+      return response.data.filter((file) => file.name.endsWith(".json")) as GitHubFile[];
     }
     return [];
   } catch (error: unknown) {

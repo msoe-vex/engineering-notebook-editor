@@ -7,8 +7,8 @@ import { generateEntryLatex } from "./latex";
  * {
  *   "version": 1,
  *   "resourceRefs": {
- *     "resources/2026-04-28T09-00-00.png": [
- *       "entries/2026-04-28T09-00-00_entry.tex"
+ *     "assets/2026-04-28T09-00-00.png": [
+ *       "entries/2026-04-28T09-00-00.json"
  *     ]
  *   }
  * }
@@ -18,25 +18,29 @@ import { generateEntryLatex } from "./latex";
  * This is more robust than scanning generated LaTeX.
  */
 
-export interface EntryInfo {
+export interface EntryMetadata {
+  id: string;
   title: string;
   author: string;
   phase: string;
   createdAt: string;
-  content?: any;
+}
+
+export interface EntryWrapper {
+  version: number;
+  metadata: EntryMetadata;
+  content: any; // TipTap JSON
 }
 
 export interface NotebookMetadata {
   version: number;
-  resourceRefs: Record<string, string[]>; // resourcePath -> entryPaths[]
-  entries: Record<string, EntryInfo>;      // entryPath -> info
+  entries: Record<string, EntryMetadata>; // entryPath -> metadata (e.g. "entries/uuid.json")
   knownAuthors: Record<string, string[]>;
   knownProjectTitles: Record<string, string[]>;
 }
 
 export const EMPTY_METADATA: NotebookMetadata = { 
-  version: 1, 
-  resourceRefs: {}, 
+  version: 2, 
   entries: {},
   knownAuthors: {},
   knownProjectTitles: {}
@@ -74,7 +78,7 @@ export function dehydrateTipTapJson(json: any): any {
     const newAttrs = { ...json.attrs };
     // If we have a filePath, we don't need the base64 src in metadata
     if (newAttrs.src?.startsWith("data:")) {
-      newAttrs.src = newAttrs.filePath || "resources/placeholder.png";
+      newAttrs.src = newAttrs.filePath || "assets/placeholder.png";
     }
     return { ...json, attrs: newAttrs };
   }
@@ -129,69 +133,67 @@ export function removeImageFromDoc(doc: TipTapDoc, deletedPath: string): TipTapD
   return walk(doc);
 }
 
-// ─── metadata.json helpers ────────────────────────────────────────────────────
+/**
+ * Replaces Base64 data URLs with hashed asset paths.
+ * Returns { cleanDoc, newAssets }.
+ * newAssets is a list of { path, base64 } to be saved.
+ */
+export async function dehydrateAssets(doc: any): Promise<{ cleanDoc: any; newAssets: { path: string; base64: string }[] }> {
+  const { hashContent, getExtensionFromDataUrl } = await import("./utils");
+  const assets: { path: string; base64: string }[] = [];
 
-/** Parse the METADATA comment from a .tex file and return the TipTap JSON doc, or null. */
-export function parseTipTapFromLatex(latexContent: string): TipTapDoc | null {
-  const match = latexContent.match(/^% METADATA: (.+)$/m);
-  if (!match) return null;
-  try {
-    const meta = JSON.parse(match[1]);
-    if (!meta.content) return null;
-    return typeof meta.content === "string" ? JSON.parse(meta.content) : meta.content;
-  } catch {
-    return null;
+  async function walk(node: any): Promise<any> {
+    if (!node) return node;
+    if (node.type === "image" && node.attrs?.src?.startsWith("data:")) {
+      const base64 = node.attrs.src.split(",")[1];
+      const hash = await hashContent(base64);
+      const ext = getExtensionFromDataUrl(node.attrs.src);
+      const assetPath = `assets/${hash}.${ext}`;
+      
+      assets.push({ path: assetPath, base64 });
+      return { ...node, attrs: { ...node.attrs, src: assetPath, filePath: assetPath } };
+    }
+    if (node.content) {
+      const newContent = await Promise.all(node.content.map(walk));
+      return { ...node, content: newContent };
+    }
+    return node;
   }
+
+  const cleanDoc = await walk(doc);
+  return { cleanDoc, newAssets: assets };
 }
 
-/** Extract image filePaths from a raw .tex file string. */
-export function extractImagePathsFromLatex(latexContent: string): string[] {
-  const doc = parseTipTapFromLatex(latexContent);
-  if (!doc) return [];
-  return extractImagePaths(doc);
+/**
+ * Replaces asset paths with data URLs from the provided cache.
+ */
+export function hydrateAssets(doc: any, assetCache: Map<string, string>): any {
+  function walk(node: any): any {
+    if (!node) return node;
+    if (node.type === "image" && node.attrs?.src?.startsWith("assets/")) {
+      const dataUrl = assetCache.get(node.attrs.src);
+      if (dataUrl) {
+        return { ...node, attrs: { ...node.attrs, src: dataUrl } };
+      }
+    }
+    if (node.content) {
+      return { ...node, content: node.content.map(walk) };
+    }
+    return node;
+  }
+  return walk(doc);
 }
 
-/** Rebuild the resourceRefs entry for a single entry after it has been saved. */
-export function rebuildEntryRefs(
+// ─── notebook.json helpers ────────────────────────────────────────────────────
+
+/** Rebuild the index for a single entry. */
+export function updateEntryInIndex(
   metadata: NotebookMetadata,
   entryPath: string,
-  tiptapDocOrContent: TipTapDoc | string,
-  info?: Partial<EntryInfo>
+  info: EntryMetadata
 ): NotebookMetadata {
-  let doc: TipTapDoc = null;
-  if (typeof tiptapDocOrContent === "string") {
-    try { doc = JSON.parse(tiptapDocOrContent); } catch { doc = null; }
-  } else {
-    doc = tiptapDocOrContent;
-  }
-  
-  const usedPaths = doc ? extractImagePaths(doc) : [];
-
-  // Remove this entry from all existing refs
-  const newRefs: Record<string, string[]> = {};
-  for (const [resource, entries] of Object.entries(metadata.resourceRefs)) {
-    const filtered = entries.filter((e) => e !== entryPath);
-    if (filtered.length > 0) newRefs[resource] = filtered;
-  }
-
-  // Add fresh refs
-  for (const p of usedPaths) {
-    newRefs[p] = [...(newRefs[p] ?? []), entryPath];
-  }
-
-  // Update entry info
-  const newEntries = { ...metadata.entries };
-  if (info) {
-    const existing = newEntries[entryPath] ?? { title: "", author: "", phase: "", createdAt: "" };
-    newEntries[entryPath] = {
-      ...existing,
-      ...info,
-      // Only set createdAt if it doesn't exist yet (first save) or if explicitly provided
-      createdAt: info.createdAt || existing.createdAt || new Date().toISOString(),
-    };
-  }
-
-  return { ...metadata, resourceRefs: newRefs, entries: newEntries };
+  const newEntries = { ...metadata.entries, [entryPath]: info };
+  return updateMetadataSuggestions({ ...metadata, entries: newEntries });
 }
 
 /** 
@@ -222,109 +224,6 @@ export function updateMetadataSuggestions(metadata: NotebookMetadata): NotebookM
   };
 }
 
-
-/**
- * Returns a list of { entryPath, updatedLatex } for every entry that
- * references oldResourcePath, with the path replaced by newResourcePath.
- * Caller is responsible for staging / writing these files.
- */
-export function computeRenameUpdates(
-  metadata: NotebookMetadata,
-  oldResourcePath: string,
-  newResourcePath: string,
-): { entryPath: string; updatedLatex: string; updatedDoc: TipTapDoc }[] {
-  const affected = metadata.resourceRefs[oldResourcePath] ?? [];
-  const updates: { entryPath: string; updatedLatex: string; updatedDoc: TipTapDoc }[] = [];
-
-  for (const entryPath of affected) {
-    const entryInfo = metadata.entries[entryPath];
-    if (!entryInfo || !entryInfo.content) continue;
-    
-    let doc: TipTapDoc;
-    try {
-      doc = typeof entryInfo.content === "string" ? JSON.parse(entryInfo.content) : entryInfo.content;
-    } catch {
-      continue;
-    }
-    
-    const updatedDoc = renameImageInDoc(doc, oldResourcePath, newResourcePath);
-    const updatedContent = JSON.stringify(updatedDoc);
-    
-    const updatedLatex = generateEntryLatex(
-      updatedContent,
-      entryInfo.title,
-      entryInfo.author,
-      entryInfo.phase,
-      entryInfo.createdAt
-    );
-    
-    updates.push({ entryPath, updatedLatex, updatedDoc });
-  }
-  return updates;
-}
-
-/**
- * Returns a list of { entryPath, updatedLatex } for every entry that
- * references deletedResourcePath, with the image node removed.
- */
-export function computeDeleteUpdates(
-  metadata: NotebookMetadata,
-  deletedResourcePath: string,
-): { entryPath: string; updatedLatex: string; updatedDoc: TipTapDoc }[] {
-  const affected = metadata.resourceRefs[deletedResourcePath] ?? [];
-  const updates: { entryPath: string; updatedLatex: string; updatedDoc: TipTapDoc }[] = [];
-
-  for (const entryPath of affected) {
-    const entryInfo = metadata.entries[entryPath];
-    if (!entryInfo || !entryInfo.content) continue;
-    
-    let doc: TipTapDoc;
-    try {
-      doc = typeof entryInfo.content === "string" ? JSON.parse(entryInfo.content) : entryInfo.content;
-    } catch {
-      continue;
-    }
-    
-    const updatedDoc = removeImageFromDoc(doc, deletedResourcePath);
-    const updatedContent = JSON.stringify(updatedDoc);
-    
-    const updatedLatex = generateEntryLatex(
-      updatedContent,
-      entryInfo.title,
-      entryInfo.author,
-      entryInfo.phase,
-      entryInfo.createdAt
-    );
-    
-    updates.push({ entryPath, updatedLatex, updatedDoc });
-  }
-  return updates;
-}
-
-/** Remove a resource from the metadata index entirely. */
-export function removeResourceFromMetadata(
-  metadata: NotebookMetadata,
-  resourcePath: string
-): NotebookMetadata {
-  const newRefs = { ...metadata.resourceRefs };
-  delete newRefs[resourcePath];
-  return { ...metadata, resourceRefs: newRefs };
-}
-
-/** Rename a resource in the metadata index. */
-export function renameResourceInMetadata(
-  metadata: NotebookMetadata,
-  oldPath: string,
-  newPath: string
-): NotebookMetadata {
-  const newRefs = { ...metadata.resourceRefs };
-  if (newRefs[oldPath]) {
-    newRefs[newPath] = newRefs[oldPath];
-    delete newRefs[oldPath];
-  }
-  return { ...metadata, resourceRefs: newRefs };
-}
-
 /** Remove an entry from the metadata index. */
 export function removeEntryFromMetadata(
   metadata: NotebookMetadata,
@@ -332,15 +231,7 @@ export function removeEntryFromMetadata(
 ): NotebookMetadata {
   const newEntries = { ...metadata.entries };
   delete newEntries[entryPath];
-
-  // Also remove from all resourceRefs
-  const newRefs: Record<string, string[]> = {};
-  for (const [res, entries] of Object.entries(metadata.resourceRefs)) {
-    const filtered = entries.filter(e => e !== entryPath);
-    if (filtered.length > 0) newRefs[res] = filtered;
-  }
-
-  return { ...metadata, entries: newEntries, resourceRefs: newRefs };
+  return updateMetadataSuggestions({ ...metadata, entries: newEntries });
 }
 
 /** Rename an entry in the metadata index. */
@@ -354,12 +245,5 @@ export function renameEntryInMetadata(
     newEntries[newPath] = newEntries[oldPath];
     delete newEntries[oldPath];
   }
-
-  // Also update resourceRefs
-  const newRefs: Record<string, string[]> = {};
-  for (const [res, entries] of Object.entries(metadata.resourceRefs)) {
-    newRefs[res] = entries.map(e => e === oldPath ? newPath : e);
-  }
-
-  return { ...metadata, entries: newEntries, resourceRefs: newRefs };
+  return updateMetadataSuggestions({ ...metadata, entries: newEntries });
 }

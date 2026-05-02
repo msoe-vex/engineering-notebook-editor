@@ -1,8 +1,9 @@
 entries/
-resources/
-metadata.json
+assets/
+notebook.json
 main.pdf
 all_entries.tex
+latex/
 
 ## Core latex/pdflatex auxiliary files:
 *.aux

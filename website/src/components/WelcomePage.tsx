@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, FolderOpen, GitBranch, HardDrive, Plus, ArrowLeftRight } from "lucide-react";
+import { BookOpen, FolderOpen, GitBranch, HardDrive, Plus, ArrowLeftRight, Upload } from "lucide-react";
 
 interface WorkspaceInfo {
   mode: "github" | "local" | "memory";
@@ -10,11 +10,12 @@ interface WorkspaceInfo {
 interface WelcomePageProps {
   workspace: WorkspaceInfo;
   onNewEntry: () => void;
+  onImportEntry: () => void;
   onDisconnect: () => void;
   onOpenSidebar: () => void;
 }
 
-export default function WelcomePage({ workspace, onNewEntry, onDisconnect, onOpenSidebar }: WelcomePageProps) {
+export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDisconnect, onOpenSidebar }: WelcomePageProps) {
   const ModeIcon =
     workspace.mode === "github" ? GitBranch :
     workspace.mode === "local"  ? HardDrive : ArrowLeftRight;
@@ -64,6 +65,20 @@ export default function WelcomePage({ workspace, onNewEntry, onDisconnect, onOpe
           <div>
             <div className="font-bold text-xs uppercase tracking-widest text-nb-on-surface">Open Entry</div>
             <div className="text-nb-on-surface-variant text-sm font-normal mt-0.5">Select from the sidebar</div>
+          </div>
+        </button>
+
+        <button
+          id="welcome-import-entry"
+          className="flex items-center gap-4 w-full bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant px-6 py-5 rounded-2xl text-left transition-all active:scale-[0.98] group"
+          onClick={onImportEntry}
+        >
+          <div className="w-12 h-12 rounded-xl bg-nb-surface-mid flex items-center justify-center shrink-0 group-hover:bg-nb-surface-high transition-colors">
+            <Upload size={24} className="text-nb-tertiary" />
+          </div>
+          <div>
+            <div className="font-bold text-xs uppercase tracking-widest text-nb-on-surface">Import Portable</div>
+            <div className="text-nb-on-surface-variant text-sm font-normal mt-0.5">Import a .json entry bundle</div>
           </div>
         </button>
       </div>

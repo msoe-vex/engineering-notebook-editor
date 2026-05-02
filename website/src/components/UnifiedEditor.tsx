@@ -15,17 +15,20 @@ import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight";
 import Placeholder from "@tiptap/extension-placeholder";
-import { common, createLowlight } from "lowlight";
+import { createLowlight, common } from "lowlight";
+const lowlight = createLowlight(common);
 import {
   Bold, Italic, List, ListOrdered, Code,
   Heading1, Heading2, Image as ImageIcon,
   Table as TableIcon, Undo, Redo, Trash2,
   ChevronUp, ChevronDown, ChevronLeft, ChevronRight,
   Pencil, AlertTriangle, FileCode, Check, Code2, MoreVertical, Settings, UserCircle, Grid3X3, GripVertical,
-  Scissors as Scissor, Copy, Clipboard
+  Scissors as Scissor, Copy, Clipboard, Terminal
 } from "lucide-react";
-
-const lowlight = createLowlight(common);
+import { generateUUID, hashContent, getExtensionFromDataUrl } from "@/lib/utils";
+import CodeEditor from "react-simple-code-editor";
+import { highlight, languages } from "prismjs";
+import "prismjs/components/prism-latex";
 
 export const LANGUAGES = [
   "plaintext", "cpp", "c", "python", "javascript",
@@ -52,7 +55,7 @@ export const ToolbarButton = ({
     title={title}
     className={`p-2 rounded-lg transition-all flex items-center justify-center border ${active
       ? "bg-nb-primary text-white shadow-md border-nb-primary scale-105"
-      : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-secondary border-transparent"
+      : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface border-transparent"
       } ${disabled ? "opacity-30 cursor-not-allowed grayscale" : ""}`}
   >
     {children}
@@ -110,6 +113,11 @@ const ImageWithCaption = TiptapImage.extend({
   addAttributes() {
     return {
       ...this.parent?.(),
+      id: { 
+        default: null,
+        parseHTML: element => element.getAttribute('data-id'),
+        renderHTML: attributes => ({ 'data-id': attributes.id }),
+      },
       alt: { default: "" },
       title: { default: "" }, // author initials
       filePath: { default: null }, // disk path for LaTeX
@@ -305,6 +313,11 @@ const TableWithCaption = Table.extend({
   addAttributes() {
     return {
       ...this.parent?.(),
+      id: { 
+        default: null,
+        parseHTML: element => element.getAttribute('data-id'),
+        renderHTML: attributes => ({ 'data-id': attributes.id }),
+      },
       caption: { default: "" },
     };
   },
@@ -472,9 +485,25 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
    ───────────────────────────────────────────────────────────────── */
 
 const CustomCodeBlock = CodeBlockLowlight.extend({
+  addOptions() {
+    return {
+      ...this.parent?.(),
+      lowlight,
+      languageClassPrefix: 'language-',
+      defaultLanguage: null,
+      exitOnTripleEnter: true,
+      exitOnArrowDown: true,
+      HTMLAttributes: {},
+    } as any;
+  },
   addAttributes() {
     return {
       ...this.parent?.(),
+      id: { 
+        default: null,
+        parseHTML: element => element.getAttribute('data-id'),
+        renderHTML: attributes => ({ 'data-id': attributes.id }),
+      },
       language: { default: "plaintext" },
       caption: { default: "" },
     };
@@ -554,8 +583,8 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
       </div>
 
       {/* Main Code Content */}
-      <div className={`rounded-xl overflow-hidden bg-zinc-950 transition-all duration-300 ${active ? 'ring-2 ring-nb-primary/50' : ''}`}>
-        <pre className="p-6 text-sm leading-relaxed overflow-x-auto border-none m-0 text-zinc-300">
+      <div className={`rounded-xl overflow-hidden bg-nb-surface-low border border-nb-outline-variant/30 transition-all duration-300 ${active ? 'ring-2 ring-nb-primary/50' : ''}`}>
+        <pre className="p-6 text-sm leading-relaxed overflow-x-auto border-none m-0 text-nb-on-surface">
           <NodeViewContent as="div" className="font-mono" />
         </pre>
 
@@ -622,6 +651,150 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
 }
 
 /* ─────────────────────────────────────────────────────────────────
+   Raw LaTeX Node View
+   ───────────────────────────────────────────────────────────────── */
+
+const RawLatexBlock = StarterKit.options.codeBlock === false ? null : ({} as any); // placeholder if needed
+
+const CustomRawLatex = CodeBlockLowlight.extend({
+  name: "rawLatex",
+  addOptions() {
+    return {
+      ...this.parent?.(),
+      lowlight,
+      languageClassPrefix: 'language-',
+      defaultLanguage: null,
+      exitOnTripleEnter: true,
+      exitOnArrowDown: true,
+      HTMLAttributes: {},
+    } as any;
+  },
+  addAttributes() {
+    return {
+      id: { 
+        default: null,
+        parseHTML: element => element.getAttribute('data-id'),
+        renderHTML: attributes => ({ 'data-id': attributes.id }),
+      },
+      content: { default: "" },
+    };
+  },
+  parseHTML() {
+    return [{ tag: 'div[data-type="raw-latex"]' }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['div', { 'data-type': 'raw-latex', ...HTMLAttributes }, 0];
+  },
+  addNodeView() {
+    return ReactNodeViewRenderer(RawLatexNodeView);
+  },
+});
+
+function RawLatexNodeView({ node, updateAttributes, deleteNode, selected }: any) {
+  const [dragEnabled, setDragEnabled] = useState(false);
+  const [menuPos, setMenuPos] = useState<{top: number, left: number} | null>(null);
+  const showMenu = menuPos !== null;
+
+  React.useEffect(() => {
+    if (!showMenu) return;
+    const handleOutsideClick = () => setMenuPos(null);
+    window.addEventListener("mousedown", handleOutsideClick);
+    return () => window.removeEventListener("mousedown", handleOutsideClick);
+  }, [showMenu]);
+
+  return (
+    <NodeViewWrapper
+      draggable={dragEnabled}
+      className={`my-6 group relative max-w-4xl mx-auto transition ${showMenu ? 'z-[200]' : selected ? 'z-[100]' : 'z-10'}`}
+    >
+      {/* External Controls */}
+      <div contentEditable={false} className="absolute -left-12 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
+        <button
+          onMouseDown={(e) => { 
+            e.stopPropagation(); 
+            if (menuPos) {
+              setMenuPos(null);
+            } else {
+              const blockElement = e.currentTarget.closest('.group');
+              if (blockElement) {
+                const rect = blockElement.getBoundingClientRect();
+                setMenuPos({ top: e.clientY - rect.top, left: e.clientX - rect.left + 24 });
+              } else {
+                setMenuPos({ top: 0, left: 0 });
+              }
+            }
+          }}
+          className={`w-8 h-8 rounded-full flex items-center justify-center transition ${showMenu ? 'bg-nb-primary text-white shadow-lg' : 'bg-nb-surface text-nb-on-surface-variant hover:bg-nb-surface-high hover:text-nb-primary shadow-sm border border-nb-outline-variant/30'}`}
+        >
+          <Settings size={16} />
+        </button>
+
+        <div
+          data-drag-handle
+          onMouseEnter={() => setDragEnabled(true)}
+          onMouseLeave={() => setDragEnabled(false)}
+          className="w-8 h-8 rounded-full bg-nb-surface text-nb-on-surface-variant flex items-center justify-center cursor-grab active:cursor-grabbing shadow-sm border border-nb-outline-variant/30 hover:bg-nb-surface-high hover:text-nb-primary transition"
+        >
+          <GripVertical size={14} />
+        </div>
+      </div>
+
+      <div className={`rounded-xl overflow-hidden bg-nb-surface-low border border-nb-outline-variant transition-all duration-300 ${selected ? 'ring-2 ring-nb-primary/50' : ''}`}>
+        <div className="flex items-center gap-2 px-4 py-2 bg-nb-surface border-b border-nb-outline-variant/30">
+          <Terminal size={12} className="text-nb-primary" />
+          <span className="text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant">Raw LaTeX Injection</span>
+        </div>
+        
+        <div className="p-4 font-mono text-sm">
+          <CodeEditor
+            value={node.attrs.content || ""}
+            onValueChange={code => updateAttributes({ content: code })}
+            highlight={code => highlight(code, languages.latex, 'latex')}
+            padding={10}
+            className="min-h-[100px] text-nb-on-surface focus:outline-none"
+            style={{
+              fontFamily: '"Fira code", "Fira Mono", monospace',
+              fontSize: 14,
+            }}
+          />
+        </div>
+
+        {/* Floating Menu */}
+        {showMenu && (
+          <div
+            contentEditable={false}
+            style={{ top: menuPos?.top, left: menuPos?.left }}
+            className="absolute w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl z-[300] p-4 animate-in fade-in zoom-in duration-200"
+            onMouseDown={(e) => { e.stopPropagation(); }}
+          >
+            <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
+              <Terminal size={14} className="text-nb-primary" />
+              <span className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant">LaTeX Management</span>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-[10px] text-nb-on-surface-variant leading-relaxed">
+                This block is injected directly into the LaTeX output without escaping. Use it for TikZ, custom environments, or raw commands.
+              </p>
+              
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => deleteNode()}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-[10px] font-bold uppercase"
+                >
+                  <Trash2 size={12} />
+                  <span>Delete Block</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </NodeViewWrapper>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────
    Main Component
    ───────────────────────────────────────────────────────────────── */
 
@@ -645,38 +818,36 @@ export default function UnifiedEditor({
 
   const handleImageFile = (file: File) => {
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       const dataUrl = reader.result as string;
       const base64 = dataUrl.split(",")[1];
-      const ext = file.name.split(".").pop() || "png";
-      // ISO-8601 timestamp filename (colons → hyphens for filesystem safety)
-      const ts = new Date().toISOString().replace(/:/g, "-").replace(/\..+/, "");
-      const newPath = `resources/${ts}.${ext}`;
+      
+      const hash = await hashContent(base64);
+      const ext = getExtensionFromDataUrl(dataUrl);
+      const newPath = `assets/${hash}.${ext}`;
  
       if (editor?.isActive('tableCell') || editor?.isActive('tableHeader')) {
         // Prevent image insertion inside tables as LaTeX cannot render them
         return;
       }
 
+      const imageAttrs = {
+        id: generateUUID(),
+        src: dataUrl, // Keep dataUrl for immediate preview
+        alt: "",
+        title: author ?? "",
+        filePath: newPath,
+      };
+
       if (editor?.state.selection instanceof NodeSelection) {
         editor.chain().focus().insertContentAt(editor.state.selection.to, {
           type: "image",
-          attrs: {
-            src: dataUrl,
-            alt: "",
-            title: author ?? "",
-            filePath: newPath,
-          },
+          attrs: imageAttrs,
         }).run();
       } else {
         editor?.chain().focus().insertContent({
           type: "image",
-          attrs: {
-            src: dataUrl,
-            alt: "",
-            title: author ?? "",
-            filePath: newPath,
-          },
+          attrs: imageAttrs,
         }).run();
       }
 
@@ -704,6 +875,7 @@ export default function UnifiedEditor({
       RestrictedTableHeader,
       RestrictedTableCell,
       CustomCodeBlock.configure({ lowlight }),
+      CustomRawLatex,
       Placeholder.configure({
         placeholder: "Start writing...",
       }),

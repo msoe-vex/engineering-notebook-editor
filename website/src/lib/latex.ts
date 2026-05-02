@@ -84,7 +84,8 @@ export const convertNodeToLatex = (node: any): string => {
       const lang = mapLanguageToLatex(node.attrs?.language ?? "plaintext");
       const code = (node.content || []).map((n: any) => n.text ?? "").join("");
       const escapedCaption = escapeLaTeX(node.attrs?.caption ?? "");
-      return `\\begin{notebookcodeblock}{${lang}}{${escapedCaption}}\n${code}\n\\end{notebookcodeblock}\n\n`;
+      const label = node.attrs?.id ? `\\label{code:${node.attrs.id}}` : "";
+      return `\\begin{notebookcodeblock}{${lang}}{${escapedCaption}}\n${code}\n\\end{notebookcodeblock}\n${label}\n\n`;
     }
 
     case "image": {
@@ -92,11 +93,14 @@ export const convertNodeToLatex = (node: any): string => {
       const src = node.attrs?.src ?? "";
       let imgSrc = filePath
         ? filePath
-        : src.startsWith("data:") ? "resources/embedded_image.png" : src;
+        : src.startsWith("data:") ? "assets/embedded_image.png" : src;
 
-      // Remove redundant resources/ prefix if graphicspath already includes it
+      // Remove redundant resources/ or assets/ prefix if graphicspath already includes it
       if (imgSrc.startsWith("resources/")) {
         imgSrc = imgSrc.replace("resources/", "");
+      }
+      if (imgSrc.startsWith("assets/")) {
+        imgSrc = imgSrc.replace("assets/", "");
       }
 
       const escapedCaption = escapeLaTeX(node.attrs?.alt ?? "Figure");
@@ -107,7 +111,8 @@ export const convertNodeToLatex = (node: any): string => {
       const widthNum = parseFloat(rawWidth);
       const latexWidth = isNaN(widthNum) ? "1" : (widthNum / 100).toFixed(2);
 
-      return `\\notebookimage{${imgSrc}}{${escapedCaption}}{${escapedInitials}}{${latexWidth}\\textwidth}\n\n`;
+      const label = node.attrs?.id ? `\\label{fig:${node.attrs.id}}` : "";
+      return `\\notebookimage{${imgSrc}}{${escapedCaption}}{${escapedInitials}}{${latexWidth}\\textwidth}\n${label}\n\n`;
     }
 
     case "table": {
@@ -125,8 +130,9 @@ export const convertNodeToLatex = (node: any): string => {
       }).join("\n");
 
       const escapedCaption = escapeLaTeX(caption);
+      const label = node.attrs?.id ? `\\label{tab:${node.attrs.id}}` : "";
 
-      return `\\notebooktable{${colSpec}}{${body}}{${escapedCaption}}\n\n`;
+      return `\\notebooktable{${colSpec}}{${body}}{${escapedCaption}}\n${label}\n\n`;
     }
 
     // tableRow / tableCell / tableHeader — just recurse
@@ -137,6 +143,10 @@ export const convertNodeToLatex = (node: any): string => {
 
     case "blockquote":
       return `\\begin{quote}\n${children()}\\end{quote}\n\n`;
+
+    case "rawLatex": {
+      return (node.attrs?.content ?? "") + "\n\n";
+    }
 
     case "horizontalRule":
       return "\\noindent\\rule{\\linewidth}{0.4pt}\n\n";
