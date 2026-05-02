@@ -511,6 +511,38 @@ const CustomCodeBlock = CodeBlockLowlight.extend({
   addNodeView() {
     return ReactNodeViewRenderer(CodeBlockNodeView);
   },
+  addKeyboardShortcuts() {
+    return {
+      'Mod-a': ({ editor }) => {
+        const { state } = editor;
+        const { selection } = state;
+        const { $from, $to } = selection;
+
+        let blockPos = -1;
+        let blockSize = -1;
+
+        state.doc.nodesBetween($from.pos, $to.pos, (node, pos) => {
+          if (node.type.name === this.name) {
+            blockPos = pos;
+            blockSize = node.nodeSize;
+            return false;
+          }
+        });
+
+        if (blockPos !== -1) {
+          const isFullSelected = selection.from === blockPos + 1 && selection.to === blockPos + blockSize - 1;
+          if (!isFullSelected) {
+            editor.commands.setTextSelection({
+              from: blockPos + 1,
+              to: blockPos + blockSize - 1,
+            });
+            return true;
+          }
+        }
+        return false;
+      },
+    };
+  },
 });
 
 function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: any) {
@@ -608,7 +640,10 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
           </div>
         </div>
         
-        <pre className="p-6 text-sm leading-relaxed overflow-x-auto border-none m-0 text-nb-on-surface">
+        <pre 
+          spellCheck="false" 
+          className={`p-6 text-[12px] leading-[1.8] overflow-x-auto border-none m-0 text-nb-on-surface hljs language-${node.attrs.language}`}
+        >
           <NodeViewContent as="div" className="font-mono" />
         </pre>
 
@@ -705,6 +740,38 @@ const CustomRawLatex = CodeBlockLowlight.extend({
   addNodeView() {
     return ReactNodeViewRenderer(RawLatexNodeView);
   },
+  addKeyboardShortcuts() {
+    return {
+      'Mod-a': ({ editor }) => {
+        const { state } = editor;
+        const { selection } = state;
+        const { $from, $to } = selection;
+
+        let blockPos = -1;
+        let blockSize = -1;
+
+        state.doc.nodesBetween($from.pos, $to.pos, (node, pos) => {
+          if (node.type.name === this.name) {
+            blockPos = pos;
+            blockSize = node.nodeSize;
+            return false;
+          }
+        });
+
+        if (blockPos !== -1) {
+          const isFullSelected = selection.from === blockPos + 1 && selection.to === blockPos + blockSize - 1;
+          if (!isFullSelected) {
+            editor.commands.setTextSelection({
+              from: blockPos + 1,
+              to: blockPos + blockSize - 1,
+            });
+            return true;
+          }
+        }
+        return false;
+      },
+    };
+  },
 });
 
 function RawLatexNodeView({ node, updateAttributes, deleteNode, selected }: any) {
@@ -767,7 +834,10 @@ function RawLatexNodeView({ node, updateAttributes, deleteNode, selected }: any)
           </div>
         </div>
         
-        <pre className="p-6 text-sm leading-relaxed overflow-x-auto border-none m-0 text-nb-on-surface">
+        <pre 
+          spellCheck="false" 
+          className="p-6 text-[12px] leading-[1.8] overflow-x-auto border-none m-0 text-nb-on-surface hljs language-latex"
+        >
           <NodeViewContent as="div" className="font-mono" />
         </pre>
 
@@ -887,7 +957,7 @@ export default function UnifiedEditor({
       RestrictedTableHeader,
       RestrictedTableCell,
       CustomCodeBlock.configure({ lowlight }),
-      CustomRawLatex,
+      CustomRawLatex.configure({ lowlight }),
       Placeholder.configure({
         placeholder: "Start writing...",
       }),
