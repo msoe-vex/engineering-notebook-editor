@@ -222,7 +222,7 @@ const ImageWithCaption = TiptapImage.extend({
   },
 });
 
-const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName }: any) => {
+const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName, editor }: any) => {
   const [resolvedSrc, setResolvedSrc] = useState(node.attrs.src);
   const [dragEnabled, setDragEnabled] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -281,12 +281,13 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName }:
           <GripVertical size={14} />
         </div>
         <button
-          onClick={() => deleteNode()}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); (editor as any)?.commands.focus(); }}
           title="Delete Image"
           className="w-8 h-8 rounded-full bg-nb-surface text-red-500 flex items-center justify-center hover:bg-red-50 transition border border-nb-outline-variant/30 shadow-sm"
         >
           <Trash2 size={14} />
         </button>
+
       </div>
 
       <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${selected ? 'ring-2 ring-nb-primary/50' : ''}`}>
@@ -393,12 +394,13 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
           <GripVertical size={14} />
         </div>
         <button
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); }}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); (editor as any)?.commands.focus(); }}
           title="Delete Table"
           className="w-8 h-8 rounded-full bg-nb-surface text-red-500 flex items-center justify-center hover:bg-red-50 transition border border-nb-outline-variant/30 shadow-sm"
         >
           <Trash2 size={14} />
         </button>
+
       </div>
 
       <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${active ? 'ring-2 ring-nb-primary/50' : ''}`}>
@@ -602,12 +604,13 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
           <GripVertical size={14} />
         </div>
         <button
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); }}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); (editor as any)?.commands.focus(); }}
           title="Delete Snippet"
           className="w-8 h-8 rounded-full bg-nb-surface text-red-500 flex items-center justify-center hover:bg-red-50 transition border border-nb-outline-variant/30 shadow-sm"
         >
           <Trash2 size={14} />
         </button>
+
       </div>
 
       <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${active ? 'ring-2 ring-nb-primary/50' : ''}`}>
@@ -728,7 +731,8 @@ const CustomRawLatex = CodeBlock.extend({
   },
 });
 
-function RawLatexNodeView({ node, deleteNode, selected }: any) {
+function RawLatexNodeView({ node, deleteNode, selected, editor }: any) {
+
   const [dragEnabled, setDragEnabled] = useState(false);
 
   return (
@@ -746,12 +750,13 @@ function RawLatexNodeView({ node, deleteNode, selected }: any) {
           <GripVertical size={14} />
         </div>
         <button
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); }}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); (editor as any)?.commands.focus(); }}
           title="Delete Block"
           className="w-8 h-8 rounded-full bg-nb-surface text-red-500 flex items-center justify-center hover:bg-red-50 transition border border-nb-outline-variant/30 shadow-sm"
         >
           <Trash2 size={14} />
         </button>
+
       </div>
 
       <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${selected ? 'ring-2 ring-nb-primary/50' : ''}`}>
