@@ -88,7 +88,8 @@ body {
 }
 
 .dark {
-  scrollbar-color: var(--color-nb-dark-outline) transparent;
+  /* Use defined dark-mode outline token so scrollbar is visible in dark theme */
+  scrollbar-color: var(--color-nb-outline-variant) transparent;
 }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -102,10 +103,10 @@ body {
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background: var(--color-nb-dark-outline);
+  background: var(--color-nb-outline-variant);
 }
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-nb-dark-on-variant);
+  background: var(--color-nb-on-surface-variant);
 }
 
 /* ═══════════════════════════════════════════════════════════════

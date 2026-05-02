@@ -269,8 +269,9 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName, e
   return (
     <NodeViewWrapper
       draggable={dragEnabled}
-      className={`my-6 group relative max-w-4xl mx-auto transition ${selected ? 'z-[100]' : 'z-10'}`}
+      className={`my-6 group relative w-full transition ${selected ? 'z-[100]' : 'z-10'}`}
     >
+
       <div contentEditable={false} className="absolute -left-12 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
         <div
           data-drag-handle
@@ -299,15 +300,14 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName, e
             className="h-auto block select-none pointer-events-none"
             draggable={false}
           />
-          {selected && (
-            <div
-              contentEditable={false}
-              onMouseDown={startResize}
-              className="absolute top-0 right-0 bottom-0 w-2 cursor-ew-resize hover:bg-nb-primary/30 transition-colors z-50 group/resize"
-            >
-              <div className="absolute top-1/2 -translate-y-1/2 right-0 w-1.5 h-12 bg-nb-primary rounded-l-full opacity-0 group-hover/resize:opacity-100 transition-opacity" />
-            </div>
-          )}
+          <div
+            contentEditable={false}
+            onMouseDown={startResize}
+            className="absolute top-0 right-0 bottom-0 w-2 cursor-ew-resize hover:bg-nb-primary/30 transition-colors z-50 group/resize"
+            aria-hidden="true"
+          >
+            <div className={`absolute top-1/2 -translate-y-1/2 right-0 w-1.5 h-12 bg-nb-primary rounded-l-full transition-opacity ${selected ? 'opacity-100' : 'opacity-30 group-hover/resize:opacity-100'}`} />
+          </div>
         </div>
 
         <div contentEditable={false} className="bg-nb-surface-low/30 border-t border-nb-outline-variant/10 px-4 py-2 flex items-center justify-center gap-2 group/caption">
@@ -383,7 +383,8 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
   return (
     <NodeViewWrapper
       draggable={dragEnabled}
-      className={`my-6 group relative max-w-4xl mx-auto transition ${active ? 'z-[100]' : 'z-10'}`}>
+      className={`my-6 group relative w-full transition ${active ? 'z-[100]' : 'z-10'}`}>
+
       <div contentEditable={false} className="absolute -left-12 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
         <div
           data-drag-handle
@@ -592,8 +593,9 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
   return (
     <NodeViewWrapper
       draggable={dragEnabled}
-      className={`my-6 group relative max-w-4xl mx-auto transition ${active ? 'z-[100]' : 'z-10'}`}
+      className={`my-6 group relative w-full transition ${active ? 'z-[100]' : 'z-10'}`}
     >
+
       <div contentEditable={false} className="absolute -left-12 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
         <div
           data-drag-handle
@@ -738,8 +740,9 @@ function RawLatexNodeView({ node, deleteNode, selected, editor }: any) {
   return (
     <NodeViewWrapper
       draggable={dragEnabled}
-      className={`my-6 group relative max-w-4xl mx-auto transition ${selected ? 'z-[100]' : 'z-10'}`}
+      className={`my-6 group relative w-full transition ${selected ? 'z-[100]' : 'z-10'}`}
     >
+
       <div contentEditable={false} className="absolute -left-12 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
         <div
           data-drag-handle
