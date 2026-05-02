@@ -185,6 +185,9 @@ export default function App() {
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
   const [isCommitting, setIsCommitting] = useState(false);
 
+  // Background saving state
+  const [savingPaths, setSavingPaths] = useState<Set<string>>(new Set());
+
   // Serialized queue for local file system operations to prevent InvalidStateError
   const localWriteQueueRef = useRef<Promise<any>>(Promise.resolve());
   const queueLocalOp = useCallback(async (op: () => Promise<any>) => {
@@ -307,18 +310,19 @@ export default function App() {
       }
       if (!finalTs) finalTs = new Date().toISOString();
 
-      // Prioritize openFile for the active path to give immediate sidebar feedback
-      const currentTitle = (openFile?.path === f.path ? openFile.title : m?.title) || "New Entry";
-      const currentAuthor = (openFile?.path === f.path ? openFile.author : m?.author) || "";
+      // Use notebookMetadata (which is updated optimistically) or openFile as fallback
+      const currentTitle = m?.title ?? (openFile?.path === f.path ? openFile.title : "") ?? "";
+      const currentAuthor = m?.author ?? (openFile?.path === f.path ? openFile.author : "") ?? "";
 
       return {
         ...f,
-        title: currentTitle,
+        title: currentTitle || "Untitled Entry",
         author: currentAuthor,
-        timestamp: finalTs
+        timestamp: finalTs,
+        isSaving: savingPaths.has(f.path)
       };
     }).sort((a, b) => (b.timestamp || b.name).localeCompare(a.timestamp || a.name));
-  }, [entries, notebookMetadata, openFile?.path, openFile?.title, openFile?.author]);
+  }, [entries, notebookMetadata, openFile?.path, openFile?.title, openFile?.author, savingPaths]);
 
   const displayResources = useMemo(() => {
     return resources.sort((a, b) => a.name.localeCompare(b.name));
@@ -343,13 +347,24 @@ export default function App() {
   // Auto-save effect
   const handleContentChange = useCallback(async (changedPath: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string }) => {
     // 1. Update basic state
+    const entryId = changedPath.split('/').pop()?.replace('.json', '') || "";
+
+    // Update Preview & Internal Content State (Debounced)
+    setLatexContent(latex);
     setOpenFile(prev => {
       if (prev && prev.path === changedPath) {
-        setLatexContent(latex);
-        return { ...prev, rawLatex: latex, tiptapContent, ...info };
+        return { ...prev, rawLatex: latex, tiptapContent };
       }
       return prev;
     });
+
+    setSavingPaths(prev => new Set(prev).add(changedPath));
+
+    const entryMeta: EntryMetadata = {
+      id: entryId,
+      ...info,
+      createdAt: openFile?.path === changedPath ? openFile.createdAt : (notebookMetadata.entries?.[changedPath]?.createdAt || isoTimestamp())
+    };
 
     if (info.author) {
       localStorage.setItem("nb-last-author", info.author);
@@ -358,21 +373,16 @@ export default function App() {
     // 2. Dehydrate Assets & Prepare Entry Wrapper
     let entryJsonStr = "";
     let assetsToSave: { path: string; base64: string }[] = [];
-    const entryId = openFile?.id || changedPath.split('/').pop()?.replace('.json', '') || "";
 
     if (tiptapContent) {
       try {
         const parsed = JSON.parse(tiptapContent);
         const { cleanDoc, newAssets } = await dehydrateAssets(parsed);
         assetsToSave = newAssets;
-        
+
         const wrapper: EntryWrapper = {
           version: 2,
-          metadata: {
-            id: entryId,
-            ...info,
-            createdAt: openFile?.createdAt || isoTimestamp()
-          },
+          metadata: entryMeta,
           content: cleanDoc
         };
         entryJsonStr = JSON.stringify(wrapper, null, 2);
@@ -382,93 +392,88 @@ export default function App() {
     }
 
     // 3. Persist everything
-    if (workspaceMode === "local" && dirHandle) {
-      queueLocalOp(async () => {
+    try {
+      if (workspaceMode === "local" && dirHandle) {
+        await queueLocalOp(async () => {
+          // Save assets
+          for (const asset of assetsToSave) {
+            const binary = atob(asset.base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            await writeLocalFile(dirHandle, asset.path, bytes);
+          }
+
+          // Save Entry JSON
+          await writeLocalFile(dirHandle, changedPath, entryJsonStr);
+
+          // Save LaTeX (in latex/ directory)
+          const latexPath = `${LATEX_DIR}/${entryId}.tex`;
+          await writeLocalFile(dirHandle, latexPath, latex);
+
+          // Update notebook.json
+          const meta = notebookMetadataRef.current;
+          const updatedMeta = updateEntryInIndex(meta, changedPath, entryMeta);
+          await writeLocalFile(dirHandle, INDEX_PATH, JSON.stringify(updatedMeta, null, 2));
+
+          notebookMetadataRef.current = updatedMeta;
+        });
+      } else if (workspaceMode === "github") {
+        const dbName = getDBName();
+
         // Save assets
         for (const asset of assetsToSave) {
-          const parts = asset.path.split('/');
-          const base64Data = asset.base64;
-          const binary = atob(base64Data);
-          const bytes = new Uint8Array(binary.length);
-          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-          await writeLocalFile(dirHandle, asset.path, bytes);
+          await stageChange(dbName, {
+            path: asset.path, operation: "upsert", content: asset.base64,
+            label: `Asset: ${asset.path.split('/').pop()}`, stagedAt: isoTimestamp()
+          });
+          await putResource(dbName, { path: asset.path, dataUrl: `data:image/*;base64,${asset.base64}` });
         }
 
         // Save Entry JSON
-        await writeLocalFile(dirHandle, changedPath, entryJsonStr);
+        await stageChange(dbName, {
+          path: changedPath, operation: "upsert", content: entryJsonStr,
+          label: `Auto-save: ${info.title}`, stagedAt: isoTimestamp()
+        });
 
-        // Save LaTeX (in latex/ directory)
+        // Save LaTeX
         const latexPath = `${LATEX_DIR}/${entryId}.tex`;
-        await writeLocalFile(dirHandle, latexPath, latex);
+        await stageChange(dbName, {
+          path: latexPath, operation: "upsert", content: latex,
+          label: `Generate LaTeX: ${info.title}`, stagedAt: isoTimestamp()
+        });
 
         // Update notebook.json
         const meta = notebookMetadataRef.current;
-        const entryMeta: EntryMetadata = {
-          id: entryId,
-          ...info,
-          createdAt: openFile?.createdAt || isoTimestamp()
-        };
         const updatedMeta = updateEntryInIndex(meta, changedPath, entryMeta);
-        await writeLocalFile(dirHandle, INDEX_PATH, JSON.stringify(updatedMeta, null, 2));
-        
-        setNotebookMetadata(updatedMeta);
-        notebookMetadataRef.current = updatedMeta;
-      });
-    } else if (workspaceMode === "github") {
-      const dbName = getDBName();
-      
-      // Save assets
-      for (const asset of assetsToSave) {
+        const metaStr = JSON.stringify(updatedMeta, null, 2);
+
         await stageChange(dbName, {
-          path: asset.path, operation: "upsert", content: asset.base64,
-          label: `Asset: ${asset.path.split('/').pop()}`, stagedAt: isoTimestamp()
+          path: INDEX_PATH, operation: "upsert", content: metaStr,
+          label: "Auto-save metadata", stagedAt: isoTimestamp()
         });
-        await putResource(dbName, { path: asset.path, dataUrl: `data:image/*;base64,${asset.base64}` });
+
+        notebookMetadataRef.current = updatedMeta;
       }
 
-      // Save Entry JSON
-      await stageChange(dbName, {
-        path: changedPath, operation: "upsert", content: entryJsonStr,
-        label: `Auto-save: ${info.title}`, stagedAt: isoTimestamp()
-      });
-
-      // Save LaTeX
-      const latexPath = `${LATEX_DIR}/${entryId}.tex`;
-      await stageChange(dbName, {
-        path: latexPath, operation: "upsert", content: latex,
-        label: `Generate LaTeX: ${info.title}`, stagedAt: isoTimestamp()
-      });
-
-      // Update notebook.json
-      const meta = notebookMetadataRef.current;
-      const entryMeta: EntryMetadata = {
-        id: entryId,
-        ...info,
-        createdAt: openFile?.createdAt || isoTimestamp()
-      };
-      const updatedMeta = updateEntryInIndex(meta, changedPath, entryMeta);
-      const metaStr = JSON.stringify(updatedMeta, null, 2);
-      
-      await stageChange(dbName, {
-        path: INDEX_PATH, operation: "upsert", content: metaStr,
-        label: "Auto-save metadata", stagedAt: isoTimestamp()
-      });
-
-      setNotebookMetadata(updatedMeta);
-      notebookMetadataRef.current = updatedMeta;
-    }
-
-    if (assetsToSave.length > 0) {
-      // Refresh resources list if new assets were added
-      setResources(prev => {
-        const existingPaths = new Set(prev.map(r => r.path));
-        const newResources = assetsToSave
-          .filter(a => !existingPaths.has(a.path))
-          .map(a => ({ name: a.path.split('/').pop() || "", path: a.path }));
-        return [...prev, ...newResources];
+      if (assetsToSave.length > 0) {
+        // Refresh resources list if new assets were added
+        setResources(prev => {
+          const existingPaths = new Set(prev.map(r => r.path));
+          const newResources = assetsToSave
+            .filter(a => !existingPaths.has(a.path))
+            .map(a => ({ name: a.path.split('/').pop() || "", path: a.path }));
+          return [...prev, ...newResources];
+        });
+      }
+    } finally {
+      // Cleanup saving status
+      setSavingPaths(prev => {
+        const next = new Set(prev);
+        next.delete(changedPath);
+        return next;
       });
     }
-  }, [workspaceMode, dirHandle, getDBName, openFile?.id, openFile?.createdAt]);
+  }, [workspaceMode, dirHandle, getDBName, openFile?.path, openFile?.createdAt, openFile?.id, notebookMetadata]);
 
   // ── Content cache helpers ────────────────────────────────────────────────────
 
@@ -552,9 +557,9 @@ export default function App() {
       const pending = await getAllPending(dbName);
       const pendingMeta = pending.find(p => p.path === INDEX_PATH && p.operation === "upsert");
       if (pendingMeta?.content) {
-        try { 
+        try {
           const parsed = JSON.parse(pendingMeta.content);
-          setNotebookMetadata(updateMetadataSuggestions(parsed)); 
+          setNotebookMetadata(updateMetadataSuggestions(parsed));
         } catch { /* ignore */ }
       } else {
         try {
@@ -591,7 +596,7 @@ export default function App() {
     const filename = `${entryId}.json`;
     const path = `${ENTRIES_DIR}/${filename}`;
 
-    const defaultTitle = "New Entry";
+    const defaultTitle = "";
     const defaultAuthor = localStorage.getItem("nb-last-author") || "";
 
     const wrapper: EntryWrapper = {
@@ -612,21 +617,7 @@ export default function App() {
     const newMetadata = updateEntryInIndex(notebookMetadata, path, wrapper.metadata);
     const metaStr = JSON.stringify(newMetadata, null, 2);
 
-    if (workspaceMode === "local" && dirHandle) {
-      await queueLocalOp(async () => {
-        await writeLocalFile(dirHandle, path, jsonStr);
-        await writeLocalFile(dirHandle, INDEX_PATH, metaStr);
-        await writeLocalFile(dirHandle, `${LATEX_DIR}/${entryId}.tex`, initialLatex);
-        await loadLocalExplorer();
-      });
-    } else if (workspaceMode === "github") {
-      await stage({ path, content: jsonStr, operation: "upsert", label: "New entry" });
-      await stage({ path: INDEX_PATH, content: metaStr, operation: "upsert", label: "Update index" });
-      await stage({ path: `${LATEX_DIR}/${entryId}.tex`, content: initialLatex, operation: "upsert", label: "Init LaTeX" });
-      setEntries(prev => [{ name: filename, path }, ...prev]);
-      setNotebookMetadata(newMetadata);
-    }
-
+    // Optimistic UI updates
     setOpenFile({
       path, name: filename, id: entryId,
       viewMode: "entry",
@@ -639,7 +630,36 @@ export default function App() {
       isLegacyRaw: false,
     });
     setLatexContent(initialLatex);
-  }, [workspaceMode, dirHandle, loadLocalExplorer, stage, notebookMetadata]);
+    setEntries(prev => [{ name: filename, path }, ...prev]);
+    setNotebookMetadata(newMetadata);
+    setSavingPaths(prev => new Set(prev).add(path));
+
+    // Background save
+    const saveOp = async () => {
+      try {
+        if (workspaceMode === "local" && dirHandle) {
+          await queueLocalOp(async () => {
+            await writeLocalFile(dirHandle, path, jsonStr);
+            await writeLocalFile(dirHandle, INDEX_PATH, metaStr);
+            await writeLocalFile(dirHandle, `${LATEX_DIR}/${entryId}.tex`, initialLatex);
+            // No need to call loadLocalExplorer anymore since we updated state optimistically
+          });
+        } else if (workspaceMode === "github") {
+          await stage({ path, content: jsonStr, operation: "upsert", label: "New entry" });
+          await stage({ path: INDEX_PATH, content: metaStr, operation: "upsert", label: "Update index" });
+          await stage({ path: `${LATEX_DIR}/${entryId}.tex`, content: initialLatex, operation: "upsert", label: "Init LaTeX" });
+        }
+      } finally {
+        setSavingPaths(prev => {
+          const next = new Set(prev);
+          next.delete(path);
+          return next;
+        });
+      }
+    };
+
+    saveOp();
+  }, [workspaceMode, dirHandle, stage, notebookMetadata]);
 
   // ── Select entry ─────────────────────────────────────────────────────────────
 
@@ -647,7 +667,7 @@ export default function App() {
     setIsLoading(true);
     if (isMobile) setIsSidebarOpen(false);
     setMobileTab("editor");
-    
+
     try {
       const dbName = getDBName();
       let entryJsonStr = "";
@@ -692,8 +712,8 @@ export default function App() {
           if (cached) {
             assetCache.set(imgPath, cached);
           } else if (workspaceMode === "local" && dirHandle) {
-            try { 
-              const res = await getLocalFileContent(dirHandle, imgPath); 
+            try {
+              const res = await getLocalFileContent(dirHandle, imgPath);
               if (res.base64) assetCache.set(imgPath, res.base64);
             } catch { /* ignore */ }
           }
@@ -867,15 +887,15 @@ export default function App() {
           try {
             const content = reader.result as string;
             const wrapper: EntryWrapper = JSON.parse(content);
-            
+
             // Generate a new UUID for the imported entry to avoid collisions
             const newId = generateUUID();
             const filename = `${newId}.json`;
             const path = `${ENTRIES_DIR}/${filename}`;
-            
+
             // Dehydrate assets in the imported doc (it might have embedded assets)
             const { cleanDoc, newAssets } = await dehydrateAssets(wrapper.content);
-            
+
             const newWrapper: EntryWrapper = {
               ...wrapper,
               metadata: {
@@ -885,15 +905,15 @@ export default function App() {
               content: cleanDoc
             };
             const jsonStr = JSON.stringify(newWrapper, null, 2);
-            
+
             // Save everything
             if (workspaceMode === "local" && dirHandle) {
               await queueLocalOp(async () => {
                 for (const asset of newAssets) {
-                   const binary = atob(asset.base64);
-                   const bytes = new Uint8Array(binary.length);
-                   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                   await writeLocalFile(dirHandle, asset.path, bytes);
+                  const binary = atob(asset.base64);
+                  const bytes = new Uint8Array(binary.length);
+                  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                  await writeLocalFile(dirHandle, asset.path, bytes);
                 }
                 await writeLocalFile(dirHandle, path, jsonStr);
                 const latex = generateEntryLatex(JSON.stringify(cleanDoc), wrapper.metadata.title, wrapper.metadata.author, wrapper.metadata.phase, wrapper.metadata.createdAt);
@@ -902,16 +922,16 @@ export default function App() {
                 await loadLocalExplorer();
               });
             } else if (workspaceMode === "github") {
-               const dbName = getDBName();
-               for (const asset of newAssets) {
-                 await stageChange(dbName, { path: asset.path, operation: "upsert", content: asset.base64, label: `Import asset`, stagedAt: isoTimestamp() });
-               }
-               await stage({ path, content: jsonStr, operation: "upsert", label: "Import entry" });
-               const latex = generateEntryLatex(JSON.stringify(cleanDoc), wrapper.metadata.title, wrapper.metadata.author, wrapper.metadata.phase, wrapper.metadata.createdAt);
-               await stage({ path: `${LATEX_DIR}/${newId}.tex`, content: latex, operation: "upsert", label: "Import LaTeX" });
-               await handleRebuildIndex();
+              const dbName = getDBName();
+              for (const asset of newAssets) {
+                await stageChange(dbName, { path: asset.path, operation: "upsert", content: asset.base64, label: `Import asset`, stagedAt: isoTimestamp() });
+              }
+              await stage({ path, content: jsonStr, operation: "upsert", label: "Import entry" });
+              const latex = generateEntryLatex(JSON.stringify(cleanDoc), wrapper.metadata.title, wrapper.metadata.author, wrapper.metadata.phase, wrapper.metadata.createdAt);
+              await stage({ path: `${LATEX_DIR}/${newId}.tex`, content: latex, operation: "upsert", label: "Import LaTeX" });
+              await handleRebuildIndex();
             }
-            
+
             notify("Entry imported successfully.", "success");
           } catch (e) {
             console.error("Import failed", e);
@@ -990,6 +1010,10 @@ export default function App() {
       await queueLocalOp(async () => {
         await writeLocalFile(dirHandle, INDEX_PATH, metaStr);
         await deleteLocalFileAtPath(dirHandle, file.path);
+        const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
+        try {
+          await deleteLocalFileAtPath(dirHandle, `${LATEX_DIR}/${entryId}.tex`);
+        } catch { /* ignore if not found */ }
         await loadLocalExplorer();
       });
     } else if (workspaceMode === "github") {
@@ -997,6 +1021,8 @@ export default function App() {
       const dbName = getDBName();
       await removeStaged(dbName, file.path);
       await stage({ path: file.path, content: undefined, operation: "delete", label: "Entry deleted" });
+      const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
+      await stage({ path: `${LATEX_DIR}/${entryId}.tex`, content: undefined, operation: "delete", label: "LaTeX deleted" });
       await stage({ path: INDEX_PATH, content: metaStr, operation: "upsert", label: "Metadata update" });
       setEntries(prev => prev.filter(e => e.path !== file.path));
     } else {
@@ -1017,7 +1043,7 @@ export default function App() {
     const updatedMeta = removeEntryFromMetadata(notebookMetadata, file.path); // Use same helper or just remove from list
     setNotebookMetadata(updatedMeta);
     const metaStr = JSON.stringify(updatedMeta, null, 2);
-    
+
     if (workspaceMode === "local" && dirHandle) {
       await queueLocalOp(async () => {
         await writeLocalFile(dirHandle, INDEX_PATH, metaStr);
@@ -1056,8 +1082,8 @@ export default function App() {
           if (cached) {
             assetCache.set(imgPath, cached);
           } else if (workspaceMode === "local" && dirHandle) {
-            try { 
-              const res = await getLocalFileContent(dirHandle, imgPath); 
+            try {
+              const res = await getLocalFileContent(dirHandle, imgPath);
               if (res.base64) assetCache.set(imgPath, res.base64);
             } catch { /* ignore */ }
           }
@@ -1355,13 +1381,44 @@ export default function App() {
                 onSaved={handleEntrySaved}
                 onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
                 onContentChange={handleContentChange}
-                onTitleChange={(title) => setOpenFile(prev => prev ? { ...prev, title } : null)}
-                onAuthorChange={(author) => setOpenFile(prev => prev ? { ...prev, author } : null)}
-                onPhaseChange={(phase) => setOpenFile(prev => prev ? { ...prev, phase } : null)}
+                onTitleChange={(title) => {
+                  setOpenFile(prev => prev ? { ...prev, title } : null);
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.path, { 
+                    ...prev.entries[openFile.path], 
+                    title,
+                    id: openFile.id,
+                    author: openFile.author,
+                    phase: openFile.phase,
+                    createdAt: openFile.createdAt
+                  }));
+                }}
+                onAuthorChange={(author) => {
+                  setOpenFile(prev => prev ? { ...prev, author } : null);
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.path, { 
+                    ...prev.entries[openFile.path], 
+                    author,
+                    id: openFile.id,
+                    title: openFile.title,
+                    phase: openFile.phase,
+                    createdAt: openFile.createdAt
+                  }));
+                }}
+                onPhaseChange={(phase) => {
+                  setOpenFile(prev => prev ? { ...prev, phase } : null);
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.path, { 
+                    ...prev.entries[openFile.path], 
+                    phase,
+                    id: openFile.id,
+                    title: openFile.title,
+                    author: openFile.author,
+                    createdAt: openFile.createdAt
+                  }));
+                }}
                 onImageUpload={handleImageUploaded}
                 onMetadataRebuild={handleMetadataRebuild}
                 onDownloadPortable={handleDownloadPortable}
                 dbName={getDBName()}
+                isSaving={savingPaths.has(openFile.path)}
               />
             </div>
             {/* Preview Tab */}
@@ -1399,14 +1456,45 @@ export default function App() {
                 onSaved={handleEntrySaved}
                 onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
                 onContentChange={handleContentChange}
-                onTitleChange={(title) => setOpenFile(prev => prev ? { ...prev, title } : null)}
-                onAuthorChange={(author) => setOpenFile(prev => prev ? { ...prev, author } : null)}
-                onPhaseChange={(phase) => setOpenFile(prev => prev ? { ...prev, phase } : null)}
+                onTitleChange={(title) => {
+                  setOpenFile(prev => prev ? { ...prev, title } : null);
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.path, { 
+                    ...prev.entries[openFile.path], 
+                    title,
+                    id: openFile.id,
+                    author: openFile.author,
+                    phase: openFile.phase,
+                    createdAt: openFile.createdAt
+                  }));
+                }}
+                onAuthorChange={(author) => {
+                  setOpenFile(prev => prev ? { ...prev, author } : null);
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.path, { 
+                    ...prev.entries[openFile.path], 
+                    author,
+                    id: openFile.id,
+                    title: openFile.title,
+                    phase: openFile.phase,
+                    createdAt: openFile.createdAt
+                  }));
+                }}
+                onPhaseChange={(phase) => {
+                  setOpenFile(prev => prev ? { ...prev, phase } : null);
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.path, { 
+                    ...prev.entries[openFile.path], 
+                    phase,
+                    id: openFile.id,
+                    title: openFile.title,
+                    author: openFile.author,
+                    createdAt: openFile.createdAt
+                  }));
+                }}
                 onImageUpload={handleImageUploaded}
                 onMetadataRebuild={handleMetadataRebuild}
                 onDownloadPortable={handleDownloadPortable}
                 onClose={() => setOpenFile(null)}
                 dbName={getDBName()}
+                isSaving={savingPaths.has(openFile.path)}
               />
             </Panel>
 
@@ -1448,13 +1536,13 @@ export default function App() {
         </div>
       ) : (
         <PanelGroup direction="horizontal" className="w-full h-full" id="main-layout-group">
-          <Panel 
-            id="sidebar-panel" 
-            order={1} 
+          <Panel
+            id="sidebar-panel"
+            order={1}
             ref={sidebarPanelRef}
-            defaultSize={20} 
-            minSize={15} 
-            maxSize={40} 
+            defaultSize={20}
+            minSize={15}
+            maxSize={40}
             collapsible={true}
             onCollapse={() => setIsSidebarOpen(false)}
             onExpand={() => setIsSidebarOpen(true)}

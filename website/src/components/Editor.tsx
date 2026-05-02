@@ -56,9 +56,10 @@ interface EditorProps {
   dbName?: string;
   knownAuthors?: Record<string, string[]>;
   knownProjectTitles?: Record<string, string[]>;
+  isSaving?: boolean;
 }
 
-export default function Editor({
+const Editor = React.memo(function Editor({
   config,
   filename,
   isLocalMode,
@@ -81,6 +82,7 @@ export default function Editor({
   dbName,
   knownAuthors = {},
   knownProjectTitles = {},
+  isSaving: isExternalSaving = false,
 }: EditorProps) {
   const [title, setTitle] = useState(initialTitle);
   const [author, setAuthor] = useState(initialAuthor);
@@ -143,10 +145,8 @@ export default function Editor({
     setIsAutoSaving(true);
     const timeout = setTimeout(() => {
       const latex = generateLatex(content, title, author, phase);
-      if (onContentChange) onContentChange(filename, latex, content, { title, author, phase });
-      if (onTitleChange) onTitleChange(title);
-      if (onAuthorChange) onAuthorChange(author);
-      if (onPhaseChange) onPhaseChange(phase);
+      const contentStr = JSON.stringify(content);
+      if (onContentChange) onContentChange(filename, latex, contentStr, { title, author, phase });
       setIsAutoSaving(false);
     }, 500);
 
@@ -158,7 +158,8 @@ export default function Editor({
   useEffect(() => {
     return () => {
       const latex = generateLatex(content, title, author, phase);
-      if (onContentChange) onContentChange(filename, latex, content, { title, author, phase });
+      const contentStr = JSON.stringify(content);
+      if (onContentChange) onContentChange(filename, latex, contentStr, { title, author, phase });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, title, author, phase, filename]);
@@ -255,7 +256,7 @@ export default function Editor({
         reader.onload = async () => {
           const dataUrl = reader.result as string;
           const base64 = dataUrl.split(",")[1];
-          
+
           const hash = await hashContent(base64);
           const ext = getExtensionFromDataUrl(dataUrl);
           const newPath = `assets/${hash}.${ext}`;
@@ -300,10 +301,10 @@ export default function Editor({
             <MenuItem label="File">
               <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} />
               <MenuAction icon={<Download size={14} />} label="Download LaTeX" onClick={handleDownload} />
-              <MenuAction 
-                icon={<FileCode size={14} />} 
-                label="Download Portable (.json)" 
-                onClick={() => onDownloadPortable?.(filename, content, { title, author, phase, createdAt: initialCreatedAt })} 
+              <MenuAction
+                icon={<FileCode size={14} />}
+                label="Download Portable (.json)"
+                onClick={() => onDownloadPortable?.(filename, content, { title, author, phase, createdAt: initialCreatedAt })}
               />
               <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
               <MenuAction icon={<X size={14} />} label="Close" onClick={onClose || (() => { })} />
@@ -370,9 +371,8 @@ export default function Editor({
 
             <div className="flex-1" />
 
-            {/* Save Status Indicator */}
             <div className="flex items-center gap-2 mr-2">
-              {isAutoSaving || isSaving ? (
+              {isAutoSaving || isSaving || isExternalSaving ? (
                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-primary animate-pulse">
                   <Loader2 size={12} className="animate-spin" />
                   <span>SAVING...</span>
@@ -699,4 +699,14 @@ export default function Editor({
       </div>
     </div>
   );
-}
+}, (prev, next) => {
+  return (
+    prev.filename === next.filename &&
+    prev.isSaving === next.isSaving &&
+    prev.isLocalMode === next.isLocalMode &&
+    prev.config === next.config &&
+    prev.dbName === next.dbName
+  );
+});
+
+export default Editor;
