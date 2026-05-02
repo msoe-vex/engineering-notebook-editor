@@ -84,15 +84,29 @@ const Editor = React.memo(function Editor({
   knownProjectTitles = {},
   isSaving: isExternalSaving = false,
 }: EditorProps) {
+  const parseInitialContent = (raw: any): any => {
+    if (!raw) return raw;
+    if (typeof raw === 'object') return raw;
+    if (typeof raw !== 'string') return raw;
+    
+    const trimmed = raw.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        // If we got another string, try parsing it again (recursive unwrap)
+        if (typeof parsed === 'string') return parseInitialContent(parsed);
+        return parsed;
+      } catch (e) {
+        return raw;
+      }
+    }
+    return raw;
+  };
+
   const [title, setTitle] = useState(initialTitle);
   const [author, setAuthor] = useState(initialAuthor);
   const [phase, setPhase] = useState(initialPhase);
-  const [content, setContent] = useState(() => {
-    if (typeof initialContent === 'string' && initialContent.startsWith('{')) {
-      try { return JSON.parse(initialContent); } catch (e) { return initialContent; }
-    }
-    return initialContent;
-  });
+  const [content, setContent] = useState(() => parseInitialContent(initialContent));
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -120,19 +134,14 @@ const Editor = React.memo(function Editor({
     };
   }, [editor]);
 
-  // Reset local state only when the file changes, not on every parent re-render.
+  // Update content when filename changes (new entry loaded)
   useEffect(() => {
     setTitle(initialTitle);
     setAuthor(initialAuthor);
     setPhase(initialPhase);
-    
-    if (typeof initialContent === 'string' && initialContent.startsWith('{')) {
-      try { setContent(JSON.parse(initialContent)); } catch (e) { setContent(initialContent); }
-    } else {
-      setContent(initialContent);
-    }
+    setContent(parseInitialContent(initialContent));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filename]);
+  }, [filename, initialContent]);
 
   const generateLatex = (cnt: string, t: string, a: string, p: string) => {
     return generateEntryLatex(cnt, t, a, p, initialCreatedAt);

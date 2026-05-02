@@ -369,22 +369,30 @@ export default function App() {
       localStorage.setItem("nb-last-author", info.author);
     }
 
-    // 2. Dehydrate Assets & Prepare Entry Wrapper
-    let entryJsonStr = "";
-    let assetsToSave: { path: string; base64: string }[] = [];
-
-    if (tiptapContent) {
+    const parseContent = (raw: any): any => {
+      if (!raw) return raw;
+      if (typeof raw === 'object') return raw;
+      if (typeof raw !== 'string') return raw;
       try {
-        const parsed = JSON.parse(tiptapContent);
-        const { cleanDoc, newAssets } = await dehydrateAssets(parsed);
-        assetsToSave = newAssets;
+        const parsed = JSON.parse(raw);
+        if (typeof parsed === 'string') return parseContent(parsed);
+        return parsed;
+      } catch {
+        return raw;
+      }
+    };
 
-        const wrapper: EntryWrapper = {
-          version: 2,
-          metadata: entryMeta,
-          content: cleanDoc
-        };
-        entryJsonStr = JSON.stringify(wrapper, null, 2);
+    const contentObj = parseContent(tiptapContent);
+
+    // 2. Dehydrate Assets & Prepare Entry
+    let assetsToSave: { path: string; base64: string }[] = [];
+    let finalDoc = contentObj;
+
+    if (contentObj) {
+      try {
+        const { cleanDoc, newAssets } = await dehydrateAssets(contentObj);
+        assetsToSave = newAssets;
+        finalDoc = cleanDoc;
       } catch (e) {
         console.error("Failed to dehydrate assets", e);
       }
@@ -392,7 +400,14 @@ export default function App() {
 
     // 3. Persist everything
     try {
-      if (workspaceMode === "local" && dirHandle) {
+      const entryWrapper: EntryWrapper = {
+        version: 2,
+        metadata: entryMeta,
+        content: finalDoc,
+      };
+      const entryJsonStr = JSON.stringify(entryWrapper, null, 2);
+
+      if (workspaceMode !== "github" && dirHandle) {
         await queueLocalOp(async () => {
           // Save assets
           for (const asset of assetsToSave) {
