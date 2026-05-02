@@ -68,16 +68,16 @@ function getPrismDecorations(doc: any) {
       const tokens = Prism.tokenize(text, prismLang);
 
       let currentPos = pos + 1;
-      
+
       const addDecorations = (tokenList: any[]) => {
         tokenList.forEach(token => {
           if (typeof token === 'string') {
             currentPos += token.length;
           } else {
-            const length = Array.isArray(token.content) 
+            const length = Array.isArray(token.content)
               ? token.content.reduce((acc: number, t: any) => acc + (typeof t === 'string' ? t.length : (t.length || 0)), 0)
               : token.length || token.content.length;
-            
+
             decorations.push(Decoration.inline(currentPos, currentPos + length, {
               class: `token ${token.type} ${token.alias || ''}`.trim()
             }));
@@ -204,7 +204,7 @@ const ImageWithCaption = TiptapImage.extend({
   addAttributes() {
     return {
       ...this.parent?.(),
-      id: { 
+      id: {
         default: null,
         parseHTML: element => element.getAttribute('data-id'),
         renderHTML: attributes => ({ 'data-id': attributes.id }),
@@ -223,99 +223,55 @@ const ImageWithCaption = TiptapImage.extend({
 });
 
 const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName }: any) => {
-  const [menuPos, setMenuPos] = useState<{top: number, left: number} | null>(null);
-  const showMenu = menuPos !== null;
-  const [dragEnabled, setDragEnabled] = useState(false);
-
-  React.useEffect(() => {
-    if (!showMenu) return;
-    const handleOutsideClick = () => setMenuPos(null);
-    window.addEventListener("mousedown", handleOutsideClick);
-    return () => window.removeEventListener("mousedown", handleOutsideClick);
-  }, [showMenu]);
-
   const [resolvedSrc, setResolvedSrc] = useState(node.attrs.src);
+  const [dragEnabled, setDragEnabled] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
 
   useEffect(() => {
     let active = true;
     const load = async () => {
-      // 1. If it's already a data URL, we're good
       if (node.attrs.src?.startsWith('data:')) {
         if (active) setResolvedSrc(node.attrs.src);
         return;
       }
-
-      // 2. Try the resource cache (IndexedDB)
       try {
         const cached = await getResource(dbName, node.attrs.src);
         if (cached && active) {
           setResolvedSrc(cached);
           return;
         }
-      } catch { /* cache miss or error */ }
-
-      // 3. Fallback: Trust the initial src.
+      } catch { }
       if (active) setResolvedSrc(node.attrs.src);
     };
-
     load();
     return () => { active = false; };
   }, [node.attrs.src, dbName]);
-
-  const [isResizing, setIsResizing] = useState(false);
 
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsResizing(true);
     const startX = e.clientX;
     const startWidth = parseInt(node.attrs.width) || 100;
-
     const onMouseMove = (moveEvent: MouseEvent) => {
       const deltaX = moveEvent.clientX - startX;
-      // Container is max-w-2xl (~672px). 
-      // A delta of 6.7px is roughly 1%.
       const newWidth = Math.min(100, Math.max(10, startWidth + (deltaX / 6.7)));
       updateAttributes({ width: `${Math.round(newWidth)}%` });
     };
-
     const onMouseUp = () => {
       setIsResizing(false);
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
     };
-
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
   };
 
-
   return (
     <NodeViewWrapper
       draggable={dragEnabled}
-      className={`my-6 group relative max-w-4xl mx-auto transition ${showMenu ? 'z-[200]' : selected ? 'z-[100]' : 'z-10'}`}
+      className={`my-6 group relative max-w-4xl mx-auto transition ${selected ? 'z-[100]' : 'z-10'}`}
     >
-      {/* External Controls (Left side) - Always Visible */}
       <div contentEditable={false} className="absolute -left-12 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
-        <button
-          onMouseDown={(e) => { 
-            e.stopPropagation(); 
-            if (menuPos) {
-              setMenuPos(null);
-            } else {
-              const blockElement = e.currentTarget.closest('.group');
-              if (blockElement) {
-                const rect = blockElement.getBoundingClientRect();
-                setMenuPos({ top: e.clientY - rect.top, left: e.clientX - rect.left + 24 });
-              } else {
-                setMenuPos({ top: 0, left: 0 });
-              }
-            }
-          }}
-          className={`w-8 h-8 rounded-full flex items-center justify-center transition ${showMenu ? 'bg-nb-primary text-white shadow-lg' : 'bg-nb-surface text-nb-on-surface-variant hover:bg-nb-surface-high hover:text-nb-primary shadow-sm border border-nb-outline-variant/30'}`}
-        >
-          <Settings size={16} />
-        </button>
-
         <div
           data-drag-handle
           onMouseEnter={() => setDragEnabled(true)}
@@ -324,74 +280,50 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName }:
         >
           <GripVertical size={14} />
         </div>
+        <button
+          onClick={() => deleteNode()}
+          title="Delete Image"
+          className="w-8 h-8 rounded-full bg-nb-surface text-red-500 flex items-center justify-center hover:bg-red-50 transition border border-nb-outline-variant/30 shadow-sm"
+        >
+          <Trash2 size={14} />
+        </button>
       </div>
 
-      {/* Main Image Content */}
-      <div className={`relative flex justify-center transition-all duration-300 ${selected ? 'ring-2 ring-nb-primary/50' : ''}`}>
-        <img
-          src={resolvedSrc}
-          alt={node.attrs.caption || node.attrs.alt || ""}
-          style={{ width: node.attrs.width ?? "100%" }}
-
-          className="h-auto block select-none pointer-events-none"
-          draggable={false}
-        />
-
-        {/* Resize handle (Right edge) */}
-        {selected && (
-          <div
-            contentEditable={false}
-            onMouseDown={startResize}
-            className="absolute top-0 right-0 bottom-0 w-2 cursor-ew-resize hover:bg-nb-primary/30 transition-colors z-50 group/resize"
-          >
-            <div className="absolute top-1/2 -translate-y-1/2 right-0 w-1.5 h-12 bg-nb-primary rounded-l-full opacity-0 group-hover/resize:opacity-100 transition-opacity" />
-          </div>
-        )}
-
-        {/* Floating Menu */}
-        {showMenu && (
-          <div
-            contentEditable={false}
-            style={{ top: menuPos?.top, left: menuPos?.left }}
-            className="absolute w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl z-[300] p-4 animate-in fade-in zoom-in duration-200"
-            onMouseDown={(e) => { e.stopPropagation(); }}
-          >
-            <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
-              <ImageIcon size={14} className="text-nb-primary" />
-              <span className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant">Image Management</span>
+      <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${selected ? 'ring-2 ring-nb-primary/50' : ''}`}>
+        <div className="relative flex justify-center">
+          <img
+            src={resolvedSrc}
+            alt={node.attrs.caption || node.attrs.alt || ""}
+            style={{ width: node.attrs.width ?? "100%" }}
+            className="h-auto block select-none pointer-events-none"
+            draggable={false}
+          />
+          {selected && (
+            <div
+              contentEditable={false}
+              onMouseDown={startResize}
+              className="absolute top-0 right-0 bottom-0 w-2 cursor-ew-resize hover:bg-nb-primary/30 transition-colors z-50 group/resize"
+            >
+              <div className="absolute top-1/2 -translate-y-1/2 right-0 w-1.5 h-12 bg-nb-primary rounded-l-full opacity-0 group-hover/resize:opacity-100 transition-opacity" />
             </div>
+          )}
+        </div>
 
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={() => deleteNode()}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-[10px] font-bold uppercase"
-              >
-                <Trash2 size={12} />
-                <span>Delete Image</span>
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-      
-      <div contentEditable={false} className="mt-3 flex items-center justify-center gap-2 group/caption">
-
-        <span className="text-[10px] font-bold uppercase tracking-tighter opacity-40 group-hover/caption:opacity-100 transition-opacity whitespace-nowrap">
-          Fig.
-        </span>
-        <input
-          type="text"
-          value={node.attrs.caption || ""}
-          onChange={(e) => updateAttributes({ caption: e.target.value })}
-          placeholder="Add figure description..."
-          className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface-variant focus:text-nb-primary transition-colors"
-        />
+        <div contentEditable={false} className="bg-nb-surface-low/30 border-t border-nb-outline-variant/10 px-4 py-2 flex items-center justify-center gap-2 group/caption">
+          <input
+            type="text"
+            value={node.attrs.caption || ""}
+            onChange={(e) => updateAttributes({ caption: e.target.value })}
+            placeholder="Add figure description..."
+            className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface-variant focus:text-nb-primary transition-colors"
+          />
+        </div>
       </div>
     </NodeViewWrapper>
-
-
   );
 };
+
+
 
 /* ─────────────────────────────────────────────────────────────────
    Table Node View — with integrated controls
@@ -401,7 +333,7 @@ const TableWithCaption = Table.extend({
   addAttributes() {
     return {
       ...this.parent?.(),
-      id: { 
+      id: {
         default: null,
         parseHTML: element => element.getAttribute('data-id'),
         renderHTML: attributes => ({ 'data-id': attributes.id }),
@@ -424,10 +356,10 @@ const RestrictedTableHeader = TableHeader.extend({
 });
 
 function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: any) {
-  const [menuPos, setMenuPos] = useState<{top: number, left: number} | null>(null);
-  const showMenu = menuPos !== null;
   const [isCursorInside, setIsCursorInside] = useState(false);
+  const [isHoveringToolbar, setIsHoveringToolbar] = useState(false);
   const [dragEnabled, setDragEnabled] = useState(false);
+
 
   React.useEffect(() => {
     const check = () => {
@@ -436,51 +368,21 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
         if (typeof pos !== 'number' || pos < 0) return;
         const { from, to } = editor.state.selection;
         setIsCursorInside(from >= pos && to <= pos + node.nodeSize);
-      } catch (e) {
-        // Node probably deleted
-      }
+      } catch (e) { }
     };
     check();
     editor.on('selectionUpdate', check);
     return () => { editor.off('selectionUpdate', check); };
   }, [editor, getPos, node.nodeSize]);
 
-  React.useEffect(() => {
-    if (!showMenu) return;
-    const handleOutsideClick = () => setMenuPos(null);
-    window.addEventListener("mousedown", handleOutsideClick);
-    return () => window.removeEventListener("mousedown", handleOutsideClick);
-  }, [showMenu]);
-
-  const active = selected || isCursorInside;
+  const active = selected || isCursorInside || isHoveringToolbar;
 
 
   return (
     <NodeViewWrapper
       draggable={dragEnabled}
-      className={`my-6 group relative max-w-4xl mx-auto transition ${showMenu ? 'z-[200]' : active ? 'z-[100]' : 'z-10'}`}>
-      {/* External Controls (Left side) - Always Visible */}
+      className={`my-6 group relative max-w-4xl mx-auto transition ${active ? 'z-[100]' : 'z-10'}`}>
       <div contentEditable={false} className="absolute -left-12 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
-        <button
-          onMouseDown={(e) => { 
-            e.stopPropagation(); 
-            if (menuPos) {
-              setMenuPos(null);
-            } else {
-              const blockElement = e.currentTarget.closest('.group');
-              if (blockElement) {
-                const rect = blockElement.getBoundingClientRect();
-                setMenuPos({ top: e.clientY - rect.top, left: e.clientX - rect.left + 24 });
-              } else {
-                setMenuPos({ top: 0, left: 0 });
-              }
-            }
-          }}
-          className={`w-8 h-8 rounded-full flex items-center justify-center transition ${showMenu ? 'bg-nb-primary text-white shadow-lg' : 'bg-nb-surface text-nb-on-surface-variant hover:bg-nb-surface-high hover:text-nb-primary shadow-sm border border-nb-outline-variant/30'}`}
-        >
-          <Settings size={16} />
-        </button>
-
         <div
           data-drag-handle
           onMouseEnter={() => setDragEnabled(true)}
@@ -489,85 +391,114 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
         >
           <GripVertical size={14} />
         </div>
+        <button
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); }}
+          title="Delete Table"
+          className="w-8 h-8 rounded-full bg-nb-surface text-red-500 flex items-center justify-center hover:bg-red-50 transition border border-nb-outline-variant/30 shadow-sm"
+        >
+          <Trash2 size={14} />
+        </button>
       </div>
 
-      {/* Main Table Content */}
-      <div className={`w-full overflow-x-auto transition-all duration-300 ${active ? 'ring-2 ring-nb-primary/50' : ''}`}>
+      <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${active ? 'ring-2 ring-nb-primary/50' : ''}`}>
+        {/* Integrated Table Toolbar */}
+        <div
+          contentEditable={false}
+          onMouseEnter={() => setIsHoveringToolbar(true)}
+          onMouseLeave={() => setIsHoveringToolbar(false)}
+          className="flex items-center gap-1.5 px-3 py-2 bg-nb-surface-low/50 border-b border-nb-outline-variant/10 overflow-x-auto"
+        >
 
-        <NodeViewContent
-          as={"table" as any}
-          className="border-collapse min-w-full table-auto"
-        />
-
-
-
-
-        {/* Floating Menu */}
-        {showMenu && (
-          <div
-            contentEditable={false}
-            style={{ top: menuPos?.top, left: menuPos?.left }}
-            className="absolute w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl z-[300] p-4 animate-in fade-in zoom-in duration-200"
-            onMouseDown={(e) => { e.stopPropagation(); }}
-          >
-            <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
-              <TableIcon size={14} className="text-nb-secondary" />
-              <span className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant">Table Management</span>
-            </div>
-
-            <div className="space-y-5 text-nb-on-surface">
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <span className="block text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant/60">Rows</span>
-                  <div className="flex bg-nb-surface-low rounded-lg border border-nb-outline-variant/30 p-1">
-                    <button onClick={() => editor.chain().focus().addRowBefore().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronUp size={12} /></button>
-                    <button onClick={() => editor.chain().focus().addRowAfter().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronDown size={12} /></button>
-                    <div className="w-px h-3 bg-nb-outline-variant/30 mx-0.5 self-center" />
-                    <button onClick={() => editor.chain().focus().deleteRow().run()} className="flex-1 p-1.5 hover:bg-red-50 rounded transition-colors text-red-500"><Trash2 size={12} /></button>
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <span className="block text-[8px] font-bold uppercase tracking-widest text-nb-on-surface-variant/60">Cols</span>
-                  <div className="flex bg-nb-surface-low rounded-lg border border-nb-outline-variant/30 p-1">
-                    <button onClick={() => editor.chain().focus().addColumnBefore().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronLeft size={12} /></button>
-                    <button onClick={() => editor.chain().focus().addColumnAfter().run()} className="flex-1 p-1.5 hover:bg-white rounded transition-colors text-nb-secondary"><ChevronRight size={12} /></button>
-                    <div className="w-px h-3 bg-nb-outline-variant/30 mx-0.5 self-center" />
-                    <button onClick={() => editor.chain().focus().deleteColumn().run()} className="flex-1 p-1.5 hover:bg-red-50 rounded transition-colors text-red-500"><Trash2 size={12} /></button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  onClick={() => editor.chain().focus().deleteTable().run()}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-[10px] font-bold uppercase"
-                >
-                  <Trash2 size={12} />
-                  <span>Delete Table</span>
-                </button>
-              </div>
-            </div>
+          <div className="flex items-center gap-1.5 pr-3 border-r border-nb-outline-variant/20 mr-1 shrink-0">
+            <TableIcon size={12} className="text-nb-secondary" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant">Table</span>
           </div>
-        )}
-      </div>
 
-      <div contentEditable={false} className="mt-3 flex items-center justify-center gap-2 group/caption">
+          <div className={`flex items-center gap-0.5 shrink-0 transition-opacity duration-200 ${isCursorInside || isHoveringToolbar ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
+            <div className="flex items-center bg-white/50 rounded-lg border border-nb-outline-variant/20 p-0.5">
+              <button
+                onMouseDown={(e) => { e.preventDefault(); }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); editor.chain().focus(undefined, { scrollIntoView: false }).addRowBefore().run(); }}
+                className="p-1.5 hover:bg-nb-surface rounded transition-colors text-nb-secondary"
+                title="Add Row Above"
+              >
+                <ChevronUp size={12} />
+              </button>
+              <button
+                onMouseDown={(e) => { e.preventDefault(); }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); editor.chain().focus(undefined, { scrollIntoView: false }).addRowAfter().run(); }}
+                className="p-1.5 hover:bg-nb-surface rounded transition-colors text-nb-secondary"
+                title="Add Row Below"
+              >
+                <ChevronDown size={12} />
+              </button>
+              <div className="w-px h-3 bg-nb-outline-variant/30 mx-0.5" />
+              <button
+                onMouseDown={(e) => { e.preventDefault(); }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); editor.chain().focus(undefined, { scrollIntoView: false }).deleteRow().run(); }}
+                className="p-1.5 hover:bg-red-50 rounded transition-colors text-red-500"
+                title="Delete Row"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
 
-        <span className="text-[10px] font-bold uppercase tracking-tighter opacity-40 group-hover/caption:opacity-100 transition-opacity whitespace-nowrap">
-          Table.
-        </span>
-        <input
-          type="text"
-          value={node.attrs.caption || ""}
-          onChange={(e) => updateAttributes({ caption: e.target.value })}
-          placeholder="Describe this table..."
-          className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface-variant focus:text-nb-secondary transition-colors"
-        />
+
+            <div className="flex items-center bg-white/50 rounded-lg border border-nb-outline-variant/20 p-0.5 ml-1.5">
+              <button
+                onMouseDown={(e) => { e.preventDefault(); }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); editor.chain().focus(undefined, { scrollIntoView: false }).addColumnBefore().run(); }}
+                className="p-1.5 hover:bg-nb-surface rounded transition-colors text-nb-secondary"
+                title="Add Column Left"
+              >
+                <ChevronLeft size={12} />
+              </button>
+              <button
+                onMouseDown={(e) => { e.preventDefault(); }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); editor.chain().focus(undefined, { scrollIntoView: false }).addColumnAfter().run(); }}
+                className="p-1.5 hover:bg-nb-surface rounded transition-colors text-nb-secondary"
+                title="Add Column Right"
+              >
+                <ChevronRight size={12} />
+              </button>
+              <div className="w-px h-3 bg-nb-outline-variant/30 mx-0.5" />
+              <button
+                onMouseDown={(e) => { e.preventDefault(); }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); editor.chain().focus(undefined, { scrollIntoView: false }).deleteColumn().run(); }}
+                className="p-1.5 hover:bg-red-50 rounded transition-colors text-red-500"
+                title="Delete Column"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+
+          </div>
+
+          {!isCursorInside && (
+            <span className="text-[9px] font-medium text-nb-on-surface-variant/40 ml-2 animate-pulse italic">
+              Click table to enable controls
+            </span>
+          )}
+        </div>
+
+        <div className="w-full overflow-x-auto">
+          <NodeViewContent as={"table" as any} className="border-collapse min-w-full table-auto" />
+        </div>
+
+        <div contentEditable={false} className="bg-nb-surface-low/30 border-t border-nb-outline-variant/10 px-4 py-2 flex items-center justify-center gap-2 group/caption">
+          <input
+            type="text"
+            value={node.attrs.caption || ""}
+            onChange={(e) => updateAttributes({ caption: e.target.value })}
+            placeholder="Describe this table..."
+            className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface-variant focus:text-nb-secondary transition-colors"
+          />
+        </div>
       </div>
     </NodeViewWrapper>
-
   );
 }
+
 
 /* ─────────────────────────────────────────────────────────────────
    Code Block Node View — per-block language selector inline
@@ -588,7 +519,7 @@ const CustomCodeBlock = CodeBlock.extend({
   addAttributes() {
     return {
       ...this.parent?.(),
-      id: { 
+      id: {
         default: null,
         parseHTML: element => element.getAttribute('data-id'),
         renderHTML: attributes => ({ 'data-id': attributes.id }),
@@ -638,8 +569,6 @@ const CustomCodeBlock = CodeBlock.extend({
 
 
 function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: any) {
-  const [menuPos, setMenuPos] = useState<{top: number, left: number} | null>(null);
-  const showMenu = menuPos !== null;
   const [isCursorInside, setIsCursorInside] = useState(false);
   const [dragEnabled, setDragEnabled] = useState(false);
 
@@ -650,51 +579,21 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
         if (typeof pos !== 'number' || pos < 0) return;
         const { from, to } = editor.state.selection;
         setIsCursorInside(from >= pos && to <= pos + node.nodeSize);
-      } catch (e) {
-        // Node probably deleted
-      }
+      } catch (e) { }
     };
     check();
     editor.on('selectionUpdate', check);
     return () => { editor.off('selectionUpdate', check); };
   }, [editor, getPos, node.nodeSize]);
 
-  React.useEffect(() => {
-    if (!showMenu) return;
-    const handleOutsideClick = () => setMenuPos(null);
-    window.addEventListener("mousedown", handleOutsideClick);
-    return () => window.removeEventListener("mousedown", handleOutsideClick);
-  }, [showMenu]);
-
   const active = selected || isCursorInside;
-
 
   return (
     <NodeViewWrapper
       draggable={dragEnabled}
-      className={`my-6 group relative max-w-4xl mx-auto transition ${showMenu ? 'z-[200]' : active ? 'z-[100]' : 'z-10'}`}>
-      {/* External Controls (Left side) - Always Visible */}
+      className={`my-6 group relative max-w-4xl mx-auto transition ${active ? 'z-[100]' : 'z-10'}`}
+    >
       <div contentEditable={false} className="absolute -left-12 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
-        <button
-          onMouseDown={(e) => { 
-            e.stopPropagation(); 
-            if (menuPos) {
-              setMenuPos(null);
-            } else {
-              const blockElement = e.currentTarget.closest('.group');
-              if (blockElement) {
-                const rect = blockElement.getBoundingClientRect();
-                setMenuPos({ top: e.clientY - rect.top, left: e.clientX - rect.left + 24 });
-              } else {
-                setMenuPos({ top: 0, left: 0 });
-              }
-            }
-          }}
-          className={`w-8 h-8 rounded-full flex items-center justify-center transition ${showMenu ? 'bg-nb-primary text-white shadow-lg' : 'bg-nb-surface text-nb-on-surface-variant hover:bg-nb-surface-high hover:text-nb-primary shadow-sm border border-nb-outline-variant/30'}`}
-        >
-          <Settings size={16} />
-        </button>
-
         <div
           data-drag-handle
           onMouseEnter={() => setDragEnabled(true)}
@@ -703,11 +602,17 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
         >
           <GripVertical size={14} />
         </div>
+        <button
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); }}
+          title="Delete Snippet"
+          className="w-8 h-8 rounded-full bg-nb-surface text-red-500 flex items-center justify-center hover:bg-red-50 transition border border-nb-outline-variant/30 shadow-sm"
+        >
+          <Trash2 size={14} />
+        </button>
       </div>
 
-      {/* Main Code Content */}
-      <div className={`rounded-xl overflow-hidden bg-nb-surface-low border border-nb-outline-variant/30 transition-all duration-300 ${active ? 'ring-2 ring-nb-primary/50' : ''}`}>
-        <div className="flex items-center justify-between px-4 py-2 bg-nb-surface border-b border-nb-outline-variant/30">
+      <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${active ? 'ring-2 ring-nb-primary/50' : ''}`}>
+        <div className="flex items-center justify-between px-4 py-2 bg-nb-surface-low/50 border-b border-nb-outline-variant/10">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 text-nb-primary">
               <Code2 size={12} />
@@ -727,71 +632,27 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
               </div>
             </div>
           </div>
-          <div className="text-[10px] font-bold uppercase tracking-tighter text-nb-on-surface-variant/40">
-            Code Snippet
-          </div>
+          <div className="text-[10px] font-bold uppercase tracking-tighter text-nb-on-surface-variant/40">Code Snippet</div>
         </div>
-        
-        <pre 
-          spellCheck="false" 
-          className={`p-6 text-[12px] leading-[1.8] overflow-x-auto border-none m-0 text-nb-on-surface language-${node.attrs.language}`}
-        >
+        <pre spellCheck="false" className={`p-6 text-[12px] leading-[1.8] overflow-x-auto border-none m-0 text-nb-on-surface bg-transparent language-${node.attrs.language}`}>
           <NodeViewContent as="div" className="font-mono" />
         </pre>
 
-
-        {/* Floating Menu */}
-        {showMenu && (
-          <div
-            contentEditable={false}
-            style={{ top: menuPos?.top, left: menuPos?.left }}
-            className="absolute w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl z-[300] p-4 animate-in fade-in zoom-in duration-200"
-            onMouseDown={(e) => { e.stopPropagation(); }}
-          >
-            <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
-              <Code size={14} className="text-nb-primary" />
-              <span className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant">Snippet Management</span>
-            </div>
-
-            <div className="space-y-5">
-              <div className="p-3 rounded-lg bg-nb-surface-low border border-nb-outline-variant/30">
-                <p className="text-[10px] text-nb-on-surface-variant leading-relaxed">
-                  Use the header dropdown to change the programming language for syntax highlighting.
-                </p>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  onClick={() => deleteNode()}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-[10px] font-bold uppercase"
-                >
-                  <Trash2 size={12} />
-                  <span>Delete Snippet</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <div contentEditable={false} className="bg-nb-surface-low/30 border-t border-nb-outline-variant/10 px-4 py-2 flex items-center justify-center gap-2 group/caption">
+          <input
+            type="text"
+            value={node.attrs.caption || ""}
+            onChange={(e) => updateAttributes({ caption: e.target.value })}
+            placeholder="What does this code do?"
+            className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface-variant focus:text-nb-primary transition-colors"
+          />
+        </div>
       </div>
-
-
-      <div contentEditable={false} className="mt-3 flex items-center justify-center gap-2 group/caption">
-        <span className="text-[10px] font-bold uppercase tracking-tighter opacity-40 group-hover/caption:opacity-100 transition-opacity whitespace-nowrap">
-          Snippet.
-        </span>
-        <input
-          type="text"
-          value={node.attrs.caption || ""}
-          onChange={(e) => updateAttributes({ caption: e.target.value })}
-          placeholder="What does this code do?"
-          className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface-variant focus:text-nb-primary transition-colors"
-        />
-      </div>
-
     </NodeViewWrapper>
-
   );
 }
+
+
 
 /* ─────────────────────────────────────────────────────────────────
    Raw LaTeX Node View
@@ -814,7 +675,7 @@ const CustomRawLatex = CodeBlock.extend({
 
   addAttributes() {
     return {
-      id: { 
+      id: {
         default: null,
         parseHTML: element => element.getAttribute('data-id'),
         renderHTML: attributes => ({ 'data-id': attributes.id }),
@@ -868,45 +729,15 @@ const CustomRawLatex = CodeBlock.extend({
   },
 });
 
-function RawLatexNodeView({ node, updateAttributes, deleteNode, selected }: any) {
+function RawLatexNodeView({ node, deleteNode, selected }: any) {
   const [dragEnabled, setDragEnabled] = useState(false);
-  const [menuPos, setMenuPos] = useState<{top: number, left: number} | null>(null);
-  const showMenu = menuPos !== null;
-
-  React.useEffect(() => {
-    if (!showMenu) return;
-    const handleOutsideClick = () => setMenuPos(null);
-    window.addEventListener("mousedown", handleOutsideClick);
-    return () => window.removeEventListener("mousedown", handleOutsideClick);
-  }, [showMenu]);
 
   return (
     <NodeViewWrapper
       draggable={dragEnabled}
-      className={`my-6 group relative max-w-4xl mx-auto transition ${showMenu ? 'z-[200]' : selected ? 'z-[100]' : 'z-10'}`}
+      className={`my-6 group relative max-w-4xl mx-auto transition ${selected ? 'z-[100]' : 'z-10'}`}
     >
-      {/* External Controls */}
       <div contentEditable={false} className="absolute -left-12 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
-        <button
-          onMouseDown={(e) => { 
-            e.stopPropagation(); 
-            if (menuPos) {
-              setMenuPos(null);
-            } else {
-              const blockElement = e.currentTarget.closest('.group');
-              if (blockElement) {
-                const rect = blockElement.getBoundingClientRect();
-                setMenuPos({ top: e.clientY - rect.top, left: e.clientX - rect.left + 24 });
-              } else {
-                setMenuPos({ top: 0, left: 0 });
-              }
-            }
-          }}
-          className={`w-8 h-8 rounded-full flex items-center justify-center transition ${showMenu ? 'bg-nb-primary text-white shadow-lg' : 'bg-nb-surface text-nb-on-surface-variant hover:bg-nb-surface-high hover:text-nb-primary shadow-sm border border-nb-outline-variant/30'}`}
-        >
-          <Settings size={16} />
-        </button>
-
         <div
           data-drag-handle
           onMouseEnter={() => setDragEnabled(true)}
@@ -915,76 +746,32 @@ function RawLatexNodeView({ node, updateAttributes, deleteNode, selected }: any)
         >
           <GripVertical size={14} />
         </div>
+        <button
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); }}
+          title="Delete Block"
+          className="w-8 h-8 rounded-full bg-nb-surface text-red-500 flex items-center justify-center hover:bg-red-50 transition border border-nb-outline-variant/30 shadow-sm"
+        >
+          <Trash2 size={14} />
+        </button>
       </div>
 
-      <div className={`rounded-xl overflow-hidden bg-nb-surface-low border border-nb-outline-variant transition-all duration-300 ${selected ? 'ring-2 ring-nb-primary/50' : ''}`}>
-        <div className="flex items-center justify-between px-4 py-2 bg-nb-surface border-b border-nb-outline-variant/30">
+      <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${selected ? 'ring-2 ring-nb-primary/50' : ''}`}>
+        <div className="flex items-center justify-between px-4 py-2 bg-nb-surface-low/50 border-b border-nb-outline-variant/10">
           <div className="flex items-center gap-2">
             <Terminal size={12} className="text-nb-primary" />
             <span className="text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant">LaTeX</span>
           </div>
-          <div className="text-[10px] font-bold uppercase tracking-tighter text-nb-on-surface-variant/40">
-            Raw Injection
-          </div>
+          <div className="text-[10px] font-bold uppercase tracking-tighter text-nb-on-surface-variant/40">Raw Injection</div>
         </div>
-        
-        <pre 
-          spellCheck="false" 
-          className="p-6 text-[12px] leading-[1.8] overflow-x-auto border-none m-0 text-nb-on-surface language-latex"
-        >
+        <pre spellCheck="false" className="p-6 text-[12px] leading-[1.8] overflow-x-auto border-none m-0 text-nb-on-surface bg-transparent language-latex">
           <NodeViewContent as="div" className="font-mono" />
         </pre>
-
-
-        {/* Floating Menu */}
-        {showMenu && (
-          <div
-            contentEditable={false}
-            style={{ top: menuPos?.top, left: menuPos?.left }}
-            className="absolute w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl z-[300] p-4 animate-in fade-in zoom-in duration-200"
-            onMouseDown={(e) => { e.stopPropagation(); }}
-          >
-            <div className="flex items-center gap-2 mb-4 pb-2 border-b border-nb-outline-variant/30">
-              <Terminal size={14} className="text-nb-primary" />
-              <span className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant">LaTeX Management</span>
-            </div>
-
-            <div className="space-y-4">
-              <p className="text-[10px] text-nb-on-surface-variant leading-relaxed">
-                This block is injected directly into the LaTeX output without escaping. Use it for TikZ, custom environments, or raw commands.
-              </p>
-              
-              <div className="flex gap-2 pt-2">
-                <button
-                  onClick={() => deleteNode()}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-[10px] font-bold uppercase"
-                >
-                  <Trash2 size={12} />
-                  <span>Delete Block</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
-      
-      <div contentEditable={false} className="mt-3 flex items-center justify-center gap-2 group/caption">
-        <span className="text-[10px] font-bold uppercase tracking-tighter opacity-40 group-hover/caption:opacity-100 transition-opacity whitespace-nowrap">
-          LaTeX.
-        </span>
-        <input
-          type="text"
-          value={node.attrs.caption || ""}
-          onChange={(e) => updateAttributes({ caption: e.target.value })}
-          placeholder="Describe this LaTeX block..."
-          className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface-variant focus:text-nb-primary transition-colors"
-        />
-      </div>
-
     </NodeViewWrapper>
-
   );
 }
+
+
 
 /* ─────────────────────────────────────────────────────────────────
    Main Component
@@ -1013,11 +800,11 @@ export default function UnifiedEditor({
     reader.onload = async () => {
       const dataUrl = reader.result as string;
       const base64 = dataUrl.split(",")[1];
-      
+
       const hash = await hashContent(base64);
       const ext = getExtensionFromDataUrl(dataUrl);
       const newPath = `assets/${hash}.${ext}`;
- 
+
       if (editor?.isActive('tableCell') || editor?.isActive('tableHeader')) {
         // Prevent image insertion inside tables as LaTeX cannot render them
         return;
