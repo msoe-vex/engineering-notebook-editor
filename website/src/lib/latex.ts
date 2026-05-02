@@ -103,7 +103,8 @@ export const convertNodeToLatex = (node: any): string => {
         imgSrc = imgSrc.replace("assets/", "");
       }
 
-      const escapedCaption = escapeLaTeX(node.attrs?.alt ?? "Figure");
+      const escapedCaption = escapeLaTeX(node.attrs?.caption || node.attrs?.alt || "Figure");
+
       const escapedInitials = escapeLaTeX(node.attrs?.title ?? "");
 
       // Convert "55%" to "0.55\textwidth"

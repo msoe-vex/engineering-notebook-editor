@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from "react";
 import {
-  useEditor, EditorContent,
+  useEditor, EditorContent, Extension,
   NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer,
+
 } from "@tiptap/react";
 import { NodeSelection, Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
@@ -62,7 +63,8 @@ function getPrismDecorations(doc: any) {
     if (node.type.name === 'codeBlock' || node.type.name === 'rawLatex') {
       const language = node.attrs.language || (node.type.name === 'rawLatex' ? 'latex' : 'plaintext');
       const text = node.textContent;
-      const prismLang = Prism.languages[language] || Prism.languages.plaintext;
+      const prismLang = Prism.languages[language] || Prism.languages.markup || {};
+
       const tokens = Prism.tokenize(text, prismLang);
 
       let currentPos = pos + 1;
@@ -114,6 +116,14 @@ const PrismHighlightPlugin = new Plugin({
     },
   },
 });
+
+const PrismHighlightExtension = Extension.create({
+  name: 'prismHighlight',
+  addProseMirrorPlugins() {
+    return [PrismHighlightPlugin];
+  },
+});
+
 
 
 export const ToolbarButton = ({
@@ -320,8 +330,9 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName }:
       <div className={`relative flex justify-center transition-all duration-300 ${selected ? 'ring-2 ring-nb-primary/50' : ''}`}>
         <img
           src={resolvedSrc}
-          alt={node.attrs.alt}
+          alt={node.attrs.caption || node.attrs.alt || ""}
           style={{ width: node.attrs.width ?? "100%" }}
+
           className="h-auto block select-none pointer-events-none"
           draggable={false}
         />
@@ -350,39 +361,35 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName }:
               <span className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant">Image Management</span>
             </div>
 
-            <div className="space-y-5">
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Figure Caption</label>
-                <input
-                  type="text"
-                  value={node.attrs.alt ?? ""}
-                  onChange={(e) => updateAttributes({ alt: e.target.value })}
-                  placeholder="Describe this image..."
-                  className="w-full text-xs bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-primary transition-all"
-                />
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  onClick={() => deleteNode()}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-[10px] font-bold uppercase"
-                >
-                  <Trash2 size={12} />
-                  <span>Delete Image</span>
-                </button>
-              </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => deleteNode()}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-[10px] font-bold uppercase"
+              >
+                <Trash2 size={12} />
+                <span>Delete Image</span>
+              </button>
             </div>
           </div>
         )}
       </div>
+      
+      <div contentEditable={false} className="mt-3 flex items-center justify-center gap-2 group/caption">
 
-      {node.attrs.alt && (
-        <p className="mt-3 text-center text-xs font-medium text-nb-on-surface-variant italic">
-          <span className="font-bold uppercase tracking-tighter mr-1.5 opacity-60">Fig.</span>
-          {node.attrs.alt}
-        </p>
-      )}
+        <span className="text-[10px] font-bold uppercase tracking-tighter opacity-40 group-hover/caption:opacity-100 transition-opacity whitespace-nowrap">
+          Fig.
+        </span>
+        <input
+          type="text"
+          value={node.attrs.caption || ""}
+          onChange={(e) => updateAttributes({ caption: e.target.value })}
+          placeholder="Add figure description..."
+          className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface-variant focus:text-nb-primary transition-colors"
+        />
+      </div>
     </NodeViewWrapper>
+
+
   );
 };
 
@@ -530,17 +537,6 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Table Caption</label>
-                <input
-                  type="text"
-                  value={node.attrs.caption ?? ""}
-                  onChange={(e) => updateAttributes({ caption: e.target.value })}
-                  placeholder="Describe this table..."
-                  className="w-full text-xs bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-secondary transition-all"
-                />
-              </div>
-
               <div className="flex gap-2 pt-2">
                 <button
                   onClick={() => editor.chain().focus().deleteTable().run()}
@@ -555,13 +551,21 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
         )}
       </div>
 
-      {node.attrs.caption && (
-        <p className="mt-3 text-center text-xs font-medium text-nb-on-surface-variant italic">
-          <span className="font-bold uppercase tracking-tighter mr-1.5 opacity-60">Table.</span>
-          {node.attrs.caption}
-        </p>
-      )}
+      <div contentEditable={false} className="mt-3 flex items-center justify-center gap-2 group/caption">
+
+        <span className="text-[10px] font-bold uppercase tracking-tighter opacity-40 group-hover/caption:opacity-100 transition-opacity whitespace-nowrap">
+          Table.
+        </span>
+        <input
+          type="text"
+          value={node.attrs.caption || ""}
+          onChange={(e) => updateAttributes({ caption: e.target.value })}
+          placeholder="Describe this table..."
+          className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface-variant focus:text-nb-secondary transition-colors"
+        />
+      </div>
     </NodeViewWrapper>
+
   );
 }
 
@@ -629,10 +633,8 @@ const CustomCodeBlock = CodeBlock.extend({
       },
     };
   },
-  addProseMirrorPlugins() {
-    return [PrismHighlightPlugin];
-  },
 });
+
 
 
 function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: any) {
@@ -758,17 +760,6 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
                 </p>
               </div>
 
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Snippet Caption</label>
-                <input
-                  type="text"
-                  value={node.attrs.caption ?? ""}
-                  onChange={(e) => updateAttributes({ caption: e.target.value })}
-                  placeholder="What does this code do?"
-                  className="w-full text-xs bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-primary transition-all"
-                />
-              </div>
-
               <div className="flex gap-2 pt-2">
                 <button
                   onClick={() => deleteNode()}
@@ -783,13 +774,22 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
         )}
       </div>
 
-      {node.attrs.caption && (
-        <p className="mt-3 text-center text-xs font-medium text-nb-on-surface-variant italic">
-          <span className="font-bold uppercase tracking-tighter mr-1.5 opacity-60">Snippet.</span>
-          {node.attrs.caption}
-        </p>
-      )}
+
+      <div contentEditable={false} className="mt-3 flex items-center justify-center gap-2 group/caption">
+        <span className="text-[10px] font-bold uppercase tracking-tighter opacity-40 group-hover/caption:opacity-100 transition-opacity whitespace-nowrap">
+          Snippet.
+        </span>
+        <input
+          type="text"
+          value={node.attrs.caption || ""}
+          onChange={(e) => updateAttributes({ caption: e.target.value })}
+          placeholder="What does this code do?"
+          className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface-variant focus:text-nb-primary transition-colors"
+        />
+      </div>
+
     </NodeViewWrapper>
+
   );
 }
 
@@ -820,9 +820,12 @@ const CustomRawLatex = CodeBlock.extend({
         renderHTML: attributes => ({ 'data-id': attributes.id }),
       },
       content: { default: "" },
+      caption: { default: "" },
     };
   },
   parseHTML() {
+
+
     return [{ tag: 'div[data-type="raw-latex"]' }];
   },
   renderHTML({ HTMLAttributes }) {
@@ -964,7 +967,22 @@ function RawLatexNodeView({ node, updateAttributes, deleteNode, selected }: any)
           </div>
         )}
       </div>
+      
+      <div contentEditable={false} className="mt-3 flex items-center justify-center gap-2 group/caption">
+        <span className="text-[10px] font-bold uppercase tracking-tighter opacity-40 group-hover/caption:opacity-100 transition-opacity whitespace-nowrap">
+          LaTeX.
+        </span>
+        <input
+          type="text"
+          value={node.attrs.caption || ""}
+          onChange={(e) => updateAttributes({ caption: e.target.value })}
+          placeholder="Describe this LaTeX block..."
+          className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface-variant focus:text-nb-primary transition-colors"
+        />
+      </div>
+
     </NodeViewWrapper>
+
   );
 }
 
@@ -1050,7 +1068,9 @@ export default function UnifiedEditor({
       RestrictedTableCell,
       CustomCodeBlock,
       CustomRawLatex,
+      PrismHighlightExtension,
       Placeholder.configure({
+
         placeholder: "Start writing...",
       }),
     ],
