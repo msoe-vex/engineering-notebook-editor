@@ -16,7 +16,9 @@ import { TableHeader } from "@tiptap/extension-table-header";
 import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight";
 import Placeholder from "@tiptap/extension-placeholder";
 import { createLowlight, common } from "lowlight";
+import latex from "highlight.js/lib/languages/latex";
 const lowlight = createLowlight(common);
+lowlight.register("latex", latex);
 import {
   Bold, Italic, List, ListOrdered, Code,
   Heading1, Heading2, Image as ImageIcon,
@@ -26,9 +28,6 @@ import {
   Scissors as Scissor, Copy, Clipboard, Terminal
 } from "lucide-react";
 import { generateUUID, hashContent, getExtensionFromDataUrl } from "@/lib/utils";
-import CodeEditor from "react-simple-code-editor";
-import { highlight, languages } from "prismjs";
-import "prismjs/components/prism-latex";
 
 export const LANGUAGES = [
   "plaintext", "cpp", "c", "python", "javascript",
@@ -584,6 +583,31 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
 
       {/* Main Code Content */}
       <div className={`rounded-xl overflow-hidden bg-nb-surface-low border border-nb-outline-variant/30 transition-all duration-300 ${active ? 'ring-2 ring-nb-primary/50' : ''}`}>
+        <div className="flex items-center justify-between px-4 py-2 bg-nb-surface border-b border-nb-outline-variant/30">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-nb-primary">
+              <Code2 size={12} />
+            </div>
+            <div className="relative group/select">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-nb-surface-low border border-nb-outline-variant/50 hover:border-nb-primary/50 hover:bg-nb-surface transition-all cursor-pointer">
+                <select
+                  value={node.attrs.language}
+                  onChange={(e) => updateAttributes({ language: e.target.value })}
+                  className="text-[10px] font-bold uppercase tracking-widest bg-transparent border-none outline-none text-nb-on-surface-variant cursor-pointer hover:text-nb-primary transition-colors appearance-none pr-4"
+                >
+                  {LANGUAGES.map((lang) => (
+                    <option key={lang} value={lang}>{lang}</option>
+                  ))}
+                </select>
+                <ChevronDown size={10} className="absolute right-2 text-nb-on-surface-variant/40 group-hover/select:text-nb-primary transition-colors pointer-events-none" />
+              </div>
+            </div>
+          </div>
+          <div className="text-[10px] font-bold uppercase tracking-tighter text-nb-on-surface-variant/40">
+            Code Snippet
+          </div>
+        </div>
+        
         <pre className="p-6 text-sm leading-relaxed overflow-x-auto border-none m-0 text-nb-on-surface">
           <NodeViewContent as="div" className="font-mono" />
         </pre>
@@ -602,17 +626,10 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
             </div>
 
             <div className="space-y-5">
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant mb-1.5">Language</label>
-                <select
-                  value={node.attrs.language}
-                  onChange={(e) => updateAttributes({ language: e.target.value })}
-                  className="w-full text-xs bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg px-3 py-2 outline-none focus:border-nb-primary transition-all cursor-pointer appearance-none font-bold uppercase tracking-widest"
-                >
-                  {LANGUAGES.map((lang) => (
-                    <option key={lang} value={lang}>{lang}</option>
-                  ))}
-                </select>
+              <div className="p-3 rounded-lg bg-nb-surface-low border border-nb-outline-variant/30">
+                <p className="text-[10px] text-nb-on-surface-variant leading-relaxed">
+                  Use the header dropdown to change the programming language for syntax highlighting.
+                </p>
               </div>
 
               <div>
@@ -740,24 +757,19 @@ function RawLatexNodeView({ node, updateAttributes, deleteNode, selected }: any)
       </div>
 
       <div className={`rounded-xl overflow-hidden bg-nb-surface-low border border-nb-outline-variant transition-all duration-300 ${selected ? 'ring-2 ring-nb-primary/50' : ''}`}>
-        <div className="flex items-center gap-2 px-4 py-2 bg-nb-surface border-b border-nb-outline-variant/30">
-          <Terminal size={12} className="text-nb-primary" />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant">Raw LaTeX Injection</span>
+        <div className="flex items-center justify-between px-4 py-2 bg-nb-surface border-b border-nb-outline-variant/30">
+          <div className="flex items-center gap-2">
+            <Terminal size={12} className="text-nb-primary" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant">LaTeX</span>
+          </div>
+          <div className="text-[10px] font-bold uppercase tracking-tighter text-nb-on-surface-variant/40">
+            Raw Injection
+          </div>
         </div>
         
-        <div className="p-4 font-mono text-sm">
-          <CodeEditor
-            value={node.attrs.content || ""}
-            onValueChange={code => updateAttributes({ content: code })}
-            highlight={code => highlight(code, languages.latex, 'latex')}
-            padding={10}
-            className="min-h-[100px] text-nb-on-surface focus:outline-none"
-            style={{
-              fontFamily: '"Fira code", "Fira Mono", monospace',
-              fontSize: 14,
-            }}
-          />
-        </div>
+        <pre className="p-6 text-sm leading-relaxed overflow-x-auto border-none m-0 text-nb-on-surface">
+          <NodeViewContent as="div" className="font-mono" />
+        </pre>
 
         {/* Floating Menu */}
         {showMenu && (

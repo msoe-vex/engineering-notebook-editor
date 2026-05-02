@@ -145,7 +145,8 @@ export const convertNodeToLatex = (node: any): string => {
       return `\\begin{quote}\n${children()}\\end{quote}\n\n`;
 
     case "rawLatex": {
-      return (node.attrs?.content ?? "") + "\n\n";
+      const code = (node.content || []).map((n: any) => n.text ?? "").join("");
+      return code + "\n\n";
     }
 
     case "horizontalRule":
