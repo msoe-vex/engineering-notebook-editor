@@ -631,7 +631,6 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
               </div>
             </div>
           </div>
-          <div className="text-[10px] font-bold uppercase tracking-tighter text-nb-on-surface-variant/40">Code Snippet</div>
         </div>
         <pre spellCheck="false" className={`p-6 text-[12px] leading-[1.8] overflow-x-auto border-none m-0 text-nb-on-surface bg-transparent language-${node.attrs.language}`}>
           <NodeViewContent as="div" className="font-mono" />
@@ -759,9 +758,8 @@ function RawLatexNodeView({ node, deleteNode, selected }: any) {
         <div className="flex items-center justify-between px-4 py-2 bg-nb-surface-low/50 border-b border-nb-outline-variant/10">
           <div className="flex items-center gap-2">
             <Terminal size={12} className="text-nb-primary" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant">LaTeX</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant">Raw LaTeX</span>
           </div>
-          <div className="text-[10px] font-bold uppercase tracking-tighter text-nb-on-surface-variant/40">Raw Injection</div>
         </div>
         <pre spellCheck="false" className="p-6 text-[12px] leading-[1.8] overflow-x-auto border-none m-0 text-nb-on-surface bg-transparent language-latex">
           <NodeViewContent as="div" className="font-mono" />
