@@ -5,7 +5,8 @@ import {
   useEditor, EditorContent,
   NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer,
 } from "@tiptap/react";
-import { NodeSelection } from "@tiptap/pm/state";
+import { NodeSelection, Plugin, PluginKey } from "@tiptap/pm/state";
+import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { getResource } from "@/lib/db";
 import StarterKit from "@tiptap/starter-kit";
 import { Image as TiptapImage } from "@tiptap/extension-image";
@@ -13,12 +14,23 @@ import { Table } from "@tiptap/extension-table";
 import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
-import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight";
+import { CodeBlock } from "@tiptap/extension-code-block";
 import Placeholder from "@tiptap/extension-placeholder";
-import { createLowlight, common } from "lowlight";
-import latex from "highlight.js/lib/languages/latex";
-const lowlight = createLowlight(common);
-lowlight.register("latex", latex);
+
+import Prism from "prismjs";
+import "prismjs/components/prism-latex";
+import "prismjs/components/prism-bash";
+import "prismjs/components/prism-c";
+import "prismjs/components/prism-cpp";
+import "prismjs/components/prism-csharp";
+import "prismjs/components/prism-go";
+import "prismjs/components/prism-java";
+import "prismjs/components/prism-javascript";
+import "prismjs/components/prism-python";
+import "prismjs/components/prism-rust";
+import "prismjs/components/prism-sql";
+import "prismjs/components/prism-typescript";
+
 import {
   Bold, Italic, List, ListOrdered, Code,
   Heading1, Heading2, Image as ImageIcon,
@@ -33,6 +45,67 @@ export const LANGUAGES = [
   "plaintext", "cpp", "c", "python", "javascript",
   "typescript", "java", "bash", "sql", "rust", "go", "csharp",
 ];
+
+function getPrismDecorations(doc: any) {
+  const decorations: Decoration[] = [];
+
+  doc.descendants((node: any, pos: number) => {
+    if (node.type.name === 'codeBlock' || node.type.name === 'rawLatex') {
+      const language = node.attrs.language || (node.type.name === 'rawLatex' ? 'latex' : 'plaintext');
+      const text = node.textContent;
+      const prismLang = Prism.languages[language] || Prism.languages.plaintext;
+      const tokens = Prism.tokenize(text, prismLang);
+
+      let currentPos = pos + 1;
+      
+      const addDecorations = (tokenList: any[]) => {
+        tokenList.forEach(token => {
+          if (typeof token === 'string') {
+            currentPos += token.length;
+          } else {
+            const length = Array.isArray(token.content) 
+              ? token.content.reduce((acc: number, t: any) => acc + (typeof t === 'string' ? t.length : (t.length || 0)), 0)
+              : token.length || token.content.length;
+            
+            decorations.push(Decoration.inline(currentPos, currentPos + length, {
+              class: `token ${token.type} ${token.alias || ''}`.trim()
+            }));
+
+            if (Array.isArray(token.content)) {
+              addDecorations(token.content);
+            } else {
+              currentPos += length;
+            }
+          }
+        });
+      };
+
+      addDecorations(tokens);
+    }
+    return true;
+  });
+
+  return DecorationSet.create(doc, decorations);
+}
+
+const PrismHighlightPlugin = new Plugin({
+  key: new PluginKey('prism-highlight'),
+  state: {
+    init: (_, { doc }) => getPrismDecorations(doc),
+    apply: (tr, set) => {
+      if (tr.docChanged) {
+        return getPrismDecorations(tr.doc);
+      }
+      return set.map(tr.mapping, tr.doc);
+    },
+  },
+  props: {
+    decorations(state) {
+      return this.getState(state);
+    },
+  },
+});
+
 
 export const ToolbarButton = ({
   onClick,
@@ -483,11 +556,10 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
    Code Block Node View — per-block language selector inline
    ───────────────────────────────────────────────────────────────── */
 
-const CustomCodeBlock = CodeBlockLowlight.extend({
+const CustomCodeBlock = CodeBlock.extend({
   addOptions() {
     return {
       ...this.parent?.(),
-      lowlight,
       languageClassPrefix: 'language-',
       defaultLanguage: null,
       exitOnTripleEnter: true,
@@ -495,6 +567,7 @@ const CustomCodeBlock = CodeBlockLowlight.extend({
       HTMLAttributes: {},
     } as any;
   },
+
   addAttributes() {
     return {
       ...this.parent?.(),
@@ -543,7 +616,11 @@ const CustomCodeBlock = CodeBlockLowlight.extend({
       },
     };
   },
+  addProseMirrorPlugins() {
+    return [PrismHighlightPlugin];
+  },
 });
+
 
 function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: any) {
   const [menuPos, setMenuPos] = useState<{top: number, left: number} | null>(null);
@@ -642,10 +719,11 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
         
         <pre 
           spellCheck="false" 
-          className={`p-6 text-[12px] leading-[1.8] overflow-x-auto border-none m-0 text-nb-on-surface hljs language-${node.attrs.language}`}
+          className={`p-6 text-[12px] leading-[1.8] overflow-x-auto border-none m-0 text-nb-on-surface language-${node.attrs.language}`}
         >
           <NodeViewContent as="div" className="font-mono" />
         </pre>
+
 
         {/* Floating Menu */}
         {showMenu && (
@@ -708,12 +786,11 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
 
 const RawLatexBlock = StarterKit.options.codeBlock === false ? null : ({} as any); // placeholder if needed
 
-const CustomRawLatex = CodeBlockLowlight.extend({
+const CustomRawLatex = CodeBlock.extend({
   name: "rawLatex",
   addOptions() {
     return {
       ...this.parent?.(),
-      lowlight,
       languageClassPrefix: 'language-',
       defaultLanguage: null,
       exitOnTripleEnter: true,
@@ -721,6 +798,7 @@ const CustomRawLatex = CodeBlockLowlight.extend({
       HTMLAttributes: {},
     } as any;
   },
+
   addAttributes() {
     return {
       id: { 
@@ -836,10 +914,11 @@ function RawLatexNodeView({ node, updateAttributes, deleteNode, selected }: any)
         
         <pre 
           spellCheck="false" 
-          className="p-6 text-[12px] leading-[1.8] overflow-x-auto border-none m-0 text-nb-on-surface hljs language-latex"
+          className="p-6 text-[12px] leading-[1.8] overflow-x-auto border-none m-0 text-nb-on-surface language-latex"
         >
           <NodeViewContent as="div" className="font-mono" />
         </pre>
+
 
         {/* Floating Menu */}
         {showMenu && (
@@ -956,8 +1035,8 @@ export default function UnifiedEditor({
       TableRow,
       RestrictedTableHeader,
       RestrictedTableCell,
-      CustomCodeBlock.configure({ lowlight }),
-      CustomRawLatex.configure({ lowlight }),
+      CustomCodeBlock,
+      CustomRawLatex,
       Placeholder.configure({
         placeholder: "Start writing...",
       }),
