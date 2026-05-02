@@ -15,11 +15,11 @@ import AutocompleteInput from "./AutocompleteInput";
 import { NodeSelection } from "@tiptap/pm/state";
 
 const PHASE_CONFIG: Record<string, { icon: any, color: string, bg: string, border: string, text: string }> = {
-  "Define Problem": { icon: Goal, color: "text-blue-500", bg: "bg-blue-50/50", border: "border-blue-200/50", text: "text-blue-700" },
-  "Generate Concepts": { icon: Brain, color: "text-purple-500", bg: "bg-purple-50/50", border: "border-purple-200/50", text: "text-purple-700" },
-  "Develop Solution": { icon: PencilRuler, color: "text-indigo-500", bg: "bg-indigo-50/50", border: "border-indigo-200/50", text: "text-indigo-700" },
-  "Construct and Test": { icon: Hammer, color: "text-orange-500", bg: "bg-orange-50/50", border: "border-orange-200/50", text: "text-orange-700" },
-  "Evaluate Solution": { icon: SearchCheck, color: "text-emerald-500", bg: "bg-emerald-50/50", border: "border-emerald-200/50", text: "text-emerald-700" },
+  "Define Problem": { icon: Goal, color: "text-blue-500", bg: "bg-blue-500/10", border: "border-blue-500/20", text: "text-blue-600 dark:text-blue-400" },
+  "Generate Concepts": { icon: Brain, color: "text-purple-500", bg: "bg-purple-500/10", border: "border-purple-500/20", text: "text-purple-600 dark:text-purple-400" },
+  "Develop Solution": { icon: PencilRuler, color: "text-indigo-500", bg: "bg-indigo-500/10", border: "border-indigo-500/20", text: "text-indigo-600 dark:text-indigo-400" },
+  "Construct and Test": { icon: Hammer, color: "text-orange-500", bg: "bg-orange-500/10", border: "border-orange-500/20", text: "text-orange-600 dark:text-orange-400" },
+  "Evaluate Solution": { icon: SearchCheck, color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/20", text: "text-emerald-600 dark:text-emerald-400" },
 };
 
 const PHASES = Object.keys(PHASE_CONFIG);

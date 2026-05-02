@@ -315,9 +315,10 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName }:
             value={node.attrs.caption || ""}
             onChange={(e) => updateAttributes({ caption: e.target.value })}
             placeholder="Add figure description..."
-            className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface-variant focus:text-nb-primary transition-colors"
+            className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface/50 group-hover/caption:text-nb-on-surface focus:text-nb-on-surface focus:opacity-100 transition-all"
           />
         </div>
+
       </div>
     </NodeViewWrapper>
   );
@@ -410,28 +411,30 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
         >
 
           <div className="flex items-center gap-1.5 pr-3 border-r border-nb-outline-variant/20 mr-1 shrink-0">
-            <TableIcon size={12} className="text-nb-secondary" />
+            <TableIcon size={12} className="text-nb-primary" />
             <span className="text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant">Table</span>
           </div>
 
           <div className={`flex items-center gap-0.5 shrink-0 transition-opacity duration-200 ${isCursorInside || isHoveringToolbar ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
-            <div className="flex items-center bg-white/50 rounded-lg border border-nb-outline-variant/20 p-0.5">
+            <div className="flex items-center bg-nb-surface border border-nb-outline-variant/30 p-0.5 rounded-lg shadow-sm">
               <button
                 onMouseDown={(e) => { e.preventDefault(); }}
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); editor.chain().focus(undefined, { scrollIntoView: false }).addRowBefore().run(); }}
-                className="p-1.5 hover:bg-nb-surface rounded transition-colors text-nb-secondary"
+                className="p-1.5 hover:bg-nb-surface-high rounded transition-colors text-nb-on-surface-variant hover:text-nb-primary"
                 title="Add Row Above"
               >
                 <ChevronUp size={12} />
               </button>
+
               <button
                 onMouseDown={(e) => { e.preventDefault(); }}
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); editor.chain().focus(undefined, { scrollIntoView: false }).addRowAfter().run(); }}
-                className="p-1.5 hover:bg-nb-surface rounded transition-colors text-nb-secondary"
+                className="p-1.5 hover:bg-nb-surface-high rounded transition-colors text-nb-on-surface-variant hover:text-nb-primary"
                 title="Add Row Below"
               >
                 <ChevronDown size={12} />
               </button>
+
               <div className="w-px h-3 bg-nb-outline-variant/30 mx-0.5" />
               <button
                 onMouseDown={(e) => { e.preventDefault(); }}
@@ -444,11 +447,11 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
             </div>
 
 
-            <div className="flex items-center bg-white/50 rounded-lg border border-nb-outline-variant/20 p-0.5 ml-1.5">
+            <div className="flex items-center bg-nb-surface border border-nb-outline-variant/30 p-0.5 ml-1.5 rounded-lg shadow-sm">
               <button
                 onMouseDown={(e) => { e.preventDefault(); }}
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); editor.chain().focus(undefined, { scrollIntoView: false }).addColumnBefore().run(); }}
-                className="p-1.5 hover:bg-nb-surface rounded transition-colors text-nb-secondary"
+                className="p-1.5 hover:bg-nb-surface-high rounded transition-colors text-nb-on-surface-variant hover:text-nb-primary"
                 title="Add Column Left"
               >
                 <ChevronLeft size={12} />
@@ -456,11 +459,12 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
               <button
                 onMouseDown={(e) => { e.preventDefault(); }}
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); editor.chain().focus(undefined, { scrollIntoView: false }).addColumnAfter().run(); }}
-                className="p-1.5 hover:bg-nb-surface rounded transition-colors text-nb-secondary"
+                className="p-1.5 hover:bg-nb-surface-high rounded transition-colors text-nb-on-surface-variant hover:text-nb-primary"
                 title="Add Column Right"
               >
                 <ChevronRight size={12} />
               </button>
+
               <div className="w-px h-3 bg-nb-outline-variant/30 mx-0.5" />
               <button
                 onMouseDown={(e) => { e.preventDefault(); }}
@@ -473,12 +477,6 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
             </div>
 
           </div>
-
-          {!isCursorInside && (
-            <span className="text-[9px] font-medium text-nb-on-surface-variant/40 ml-2 animate-pulse italic">
-              Click table to enable controls
-            </span>
-          )}
         </div>
 
         <div className="w-full overflow-x-auto">
@@ -491,9 +489,10 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
             value={node.attrs.caption || ""}
             onChange={(e) => updateAttributes({ caption: e.target.value })}
             placeholder="Describe this table..."
-            className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface-variant focus:text-nb-secondary transition-colors"
+            className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface/50 group-hover/caption:text-nb-on-surface focus:text-nb-on-surface focus:opacity-100 transition-all"
           />
         </div>
+
       </div>
     </NodeViewWrapper>
   );
@@ -644,9 +643,10 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
             value={node.attrs.caption || ""}
             onChange={(e) => updateAttributes({ caption: e.target.value })}
             placeholder="What does this code do?"
-            className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface-variant focus:text-nb-primary transition-colors"
+            className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface/50 group-hover/caption:text-nb-on-surface focus:text-nb-on-surface focus:opacity-100 transition-all"
           />
         </div>
+
       </div>
     </NodeViewWrapper>
   );
