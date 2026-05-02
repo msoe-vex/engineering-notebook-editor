@@ -346,11 +346,10 @@ export default function App() {
 
   // Auto-save effect
   const handleContentChange = useCallback(async (changedPath: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string }) => {
-    // 1. Update basic state
+    // 1. Update Preview & Internal state tracking
+    setLatexContent(latex);
     const entryId = changedPath.split('/').pop()?.replace('.json', '') || "";
 
-    // Update Preview & Internal Content State (Debounced)
-    setLatexContent(latex);
     setOpenFile(prev => {
       if (prev && prev.path === changedPath) {
         return { ...prev, rawLatex: latex, tiptapContent };

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import UnifiedEditor, { ToolbarButton, TableGridSelector } from "./UnifiedEditor";
 import { saveAs } from "file-saver";
 import {
@@ -46,12 +46,12 @@ interface EditorProps {
   onSaved: (path: string, latexContent: string) => void;
   onDeleted: (path: string) => void;
   onContentChange?: (filename: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string }) => void;
-  onTitleChange?: (title: string) => void;
-  onAuthorChange?: (author: string) => void;
-  onPhaseChange?: (phase: string) => void;
+  onTitleChange: (title: string) => void;
+  onAuthorChange: (author: string) => void;
+  onPhaseChange: (phase: string) => void;
   onImageUpload?: (path: string, base64: string) => void;
-  onMetadataRebuild?: (entryPath: string, tiptapJson: string, info?: { title: string; author: string; phase: string; createdAt?: string }) => void;
-  onDownloadPortable?: (filename: string, content: string, info: { title: string; author: string; phase: string, createdAt: string }) => void;
+  onMetadataRebuild?: (path: string, content: any, info: { title: string; author: string; phase: string; createdAt: string }) => void;
+  onDownloadPortable?: (path: string, content: any, info: { title: string; author: string; phase: string; createdAt: string }) => void;
   onClose?: () => void;
   dbName?: string;
   knownAuthors?: Record<string, string[]>;
@@ -87,7 +87,12 @@ const Editor = React.memo(function Editor({
   const [title, setTitle] = useState(initialTitle);
   const [author, setAuthor] = useState(initialAuthor);
   const [phase, setPhase] = useState(initialPhase);
-  const [content, setContent] = useState(initialContent);
+  const [content, setContent] = useState(() => {
+    if (typeof initialContent === 'string' && initialContent.startsWith('{')) {
+      try { return JSON.parse(initialContent); } catch (e) { return initialContent; }
+    }
+    return initialContent;
+  });
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -95,6 +100,14 @@ const Editor = React.memo(function Editor({
   const [showTableGrid, setShowTableGrid] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [, setSelectionUpdate] = useState(0);
+
+  const latestContentRef = useRef(content);
+  const latestMetadataRef = useRef({ title, author, phase });
+
+  useEffect(() => {
+    latestContentRef.current = content;
+    latestMetadataRef.current = { title, author, phase };
+  }, [content, title, author, phase]);
 
   useEffect(() => {
     if (!editor) return;
@@ -112,7 +125,12 @@ const Editor = React.memo(function Editor({
     setTitle(initialTitle);
     setAuthor(initialAuthor);
     setPhase(initialPhase);
-    setContent(initialContent);
+    
+    if (typeof initialContent === 'string' && initialContent.startsWith('{')) {
+      try { setContent(JSON.parse(initialContent)); } catch (e) { setContent(initialContent); }
+    } else {
+      setContent(initialContent);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filename]);
 
@@ -129,13 +147,28 @@ const Editor = React.memo(function Editor({
 
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const lastSyncedRef = useRef({ 
+    title: initialTitle, 
+    author: initialAuthor, 
+    phase: initialPhase, 
+    contentStr: initialContent 
+  });
+
   // Notify parent of content changes with debounce to prevent lag
   useEffect(() => {
+    // Clear any existing timer
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    const contentStr = JSON.stringify(content);
     const isChanged =
-      title !== initialTitle ||
-      author !== initialAuthor ||
-      phase !== initialPhase ||
-      content !== initialContent;
+      title !== lastSyncedRef.current.title ||
+      author !== lastSyncedRef.current.author ||
+      phase !== lastSyncedRef.current.phase ||
+      contentStr !== lastSyncedRef.current.contentStr;
 
     if (!isChanged) {
       setIsAutoSaving(false);
@@ -143,26 +176,42 @@ const Editor = React.memo(function Editor({
     }
 
     setIsAutoSaving(true);
-    const timeout = setTimeout(() => {
+    autoSaveTimerRef.current = setTimeout(() => {
       const latex = generateLatex(content, title, author, phase);
-      const contentStr = JSON.stringify(content);
       if (onContentChange) onContentChange(filename, latex, contentStr, { title, author, phase });
+      
+      lastSyncedRef.current = { title, author, phase, contentStr };
       setIsAutoSaving(false);
+      autoSaveTimerRef.current = null;
     }, 500);
 
-    return () => clearTimeout(timeout);
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [content, title, author, phase, filename, initialTitle, initialAuthor, initialPhase, initialContent]);
+  }, [content, title, author, phase, filename, onContentChange]);
 
   // Flush pending changes on unmount to prevent data loss on fast entry switch
   useEffect(() => {
     return () => {
-      const latex = generateLatex(content, title, author, phase);
+      const content = latestContentRef.current;
+      const { title, author, phase } = latestMetadataRef.current;
+      
+      // Only flush if there's something to flush
       const contentStr = JSON.stringify(content);
-      if (onContentChange) onContentChange(filename, latex, contentStr, { title, author, phase });
+      const isChanged =
+        title !== initialTitle ||
+        author !== initialAuthor ||
+        phase !== initialPhase ||
+        contentStr !== initialContent;
+
+      if (isChanged && onContentChange) {
+        const latex = generateLatex(content, title, author, phase);
+        onContentChange(filename, latex, contentStr, { title, author, phase });
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [content, title, author, phase, filename]);
+  }, [filename]);
 
   const handleSave = async () => {
     const { valid, errors } = validate();

@@ -156,15 +156,20 @@ export const convertNodeToLatex = (node: any): string => {
   }
 };
 
-export const convertJsonToLatex = (jsonString: string): string => {
-  if (!jsonString) return "";
-  try {
-    const doc = JSON.parse(jsonString);
-    return convertNodeToLatex(doc).replace(/\n{3,}/g, "\n\n").trim() + "\n";
-  } catch {
-    // Legacy: plain HTML or raw text — strip tags as fallback
-    return jsonString.replace(/<[^>]*>/g, "").trim() + "\n";
+export const convertJsonToLatex = (input: any): string => {
+  if (!input) return "";
+  
+  let doc = input;
+  if (typeof input === 'string') {
+    try {
+      doc = JSON.parse(input);
+    } catch {
+      // Legacy: plain HTML or raw text — strip tags as fallback
+      return input.replace(/<[^>]*>/g, "").trim() + "\n";
+    }
   }
+
+  return convertNodeToLatex(doc).replace(/\n{3,}/g, "\n\n").trim() + "\n";
 };
 
 export const generateEntryLatex = (cnt: string, t: string, a: string, p: string, initialCreatedAt: string | undefined): string => {
