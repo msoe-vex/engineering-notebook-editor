@@ -485,11 +485,15 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
       </div>
 
       {/* Main Table Content */}
-      <div className={`overflow-x-auto transition-all duration-300 ${active ? 'ring-2 ring-nb-primary/50' : ''}`}>
+      <div className={`w-full overflow-x-auto transition-all duration-300 ${active ? 'ring-2 ring-nb-primary/50' : ''}`}>
+
         <NodeViewContent
           as={"table" as any}
-          className="border-collapse w-full table-fixed"
+          className="border-collapse min-w-full table-auto"
         />
+
+
+
 
         {/* Floating Menu */}
         {showMenu && (
