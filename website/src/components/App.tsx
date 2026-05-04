@@ -407,12 +407,11 @@ export default function App() {
 
     // 3. Persist everything
     try {
-      const entryWrapper: EntryWrapper = {
-        version: 2,
-        metadata: entryMeta,
+      const entryJsonObj = {
+        version: 3,
         content: finalDoc,
       };
-      const entryJsonStr = JSON.stringify(entryWrapper, null, 2);
+      const entryJsonStr = JSON.stringify(entryJsonObj, null, 2);
 
       if (workspaceMode !== "github" && dirHandle) {
         await queueLocalOp(async () => {
@@ -471,7 +470,7 @@ export default function App() {
 
         // Update notebook.json
         const meta = notebookMetadataRef.current;
-        const updatedMeta = updateEntryInIndex(meta, changedPath, entryMeta);
+        const updatedMeta = updateEntryInIndex(meta, entryId, entryMeta);
         const metaStr = JSON.stringify(updatedMeta, null, 2);
 
         await stageChange(dbName, {
@@ -642,16 +641,15 @@ export default function App() {
       resources: {}
     };
 
-    const wrapper: EntryWrapper = {
-      version: 2,
-      metadata: entryMeta,
+    const wrapper = {
+      version: 3,
       content: { type: "doc", content: [{ type: "paragraph" }] }
     };
     const jsonStr = JSON.stringify(wrapper, null, 2);
 
     const initialLatex = `\\notebookentry{${defaultTitle}}{${createdAt.split('T')[0]}}{${defaultAuthor}}{}\n\\label{${entryId}}\n\n`;
 
-    const newMetadata = updateEntryInIndex(notebookMetadata, entryId, wrapper.metadata);
+    const newMetadata = updateEntryInIndex(notebookMetadata, entryId, entryMeta);
     const metaStr = JSON.stringify(newMetadata, null, 2);
 
     // Optimistic UI updates
@@ -722,10 +720,23 @@ export default function App() {
       }
 
       if (!entryJsonStr) throw new Error("Entry not found");
-      const wrapper: EntryWrapper = JSON.parse(entryJsonStr);
+      const rawData = JSON.parse(entryJsonStr);
+      
+      // Support both legacy (wrapper.metadata/content) and new (just content or wrapper.content)
+      const isWrapper = (rawData.content !== undefined);
+      const content = isWrapper ? rawData.content : rawData;
+      
+      // Get entry metadata from global index, falling back to embedded if available (legacy)
+      const entryId = file.name.replace('.json', '');
+      const metaFromIndex = notebookMetadata.entries[entryId];
+      const embeddedMeta = isWrapper ? rawData.metadata : null;
+      
+      const title = metaFromIndex?.title || embeddedMeta?.title || "";
+      const author = metaFromIndex?.author || embeddedMeta?.author || "";
+      const phase = metaFromIndex?.phase || embeddedMeta?.phase || "";
+      const createdAt = metaFromIndex?.createdAt || embeddedMeta?.createdAt || isoTimestamp();
 
       // 2. Load LaTeX for preview
-      const entryId = wrapper.metadata.id;
       const latexPath = `${LATEX_DIR}/${entryId}.tex`;
       const stagedLatex = (await getAllPending(dbName)).find(p => p.path === latexPath && p.operation === "upsert");
       if (stagedLatex?.content) {
@@ -737,9 +748,8 @@ export default function App() {
       }
 
       // 3. Hydrate Assets
-      // We need a cache of assets. For now, we'll fetch them on demand or use IndexedDB
       const assetCache = new Map<string, string>();
-      const images = extractImagePaths(wrapper.content);
+      const images = extractImagePaths(content);
       for (const imgPath of images) {
         const staged = (await getAllPending(dbName)).find(p => p.path === imgPath && p.operation === "upsert");
         if (staged?.content) {
@@ -758,19 +768,19 @@ export default function App() {
         }
       }
 
-      const hydratedContent = hydrateAssets(wrapper.content, assetCache);
+      const hydratedContent = hydrateAssets(content, assetCache);
 
       setOpenFile({
         path: file.path, name: file.name, id: entryId,
         viewMode: "entry",
         rawLatex: latexStr,
         tiptapContent: JSON.stringify(hydratedContent),
-        title: wrapper.metadata.title,
-        author: wrapper.metadata.author,
-        phase: wrapper.metadata.phase,
+        title: title,
+        author: author,
+        phase: phase,
         metadataMissing: false,
         imageSrc: "",
-        createdAt: wrapper.metadata.createdAt,
+        createdAt: createdAt,
         isLegacyRaw: false,
       });
       setLatexContent(latexStr);
@@ -882,13 +892,21 @@ export default function App() {
 
         if (content) {
           try {
-            const wrapper: EntryWrapper = JSON.parse(content);
-            const entryId = wrapper.metadata.id || file.path.split('/').pop()?.replace('.json', '') || "";
+            const rawData = JSON.parse(content);
+            const isWrapper = (rawData.content !== undefined);
+            const entryContent = isWrapper ? rawData.content : rawData;
+            const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
+            
+            // Reconstruct metadata from index or fallback to embedded legacy data
+            const embeddedMeta = isWrapper ? rawData.metadata : null;
             const entryMeta: EntryMetadata = {
-              ...wrapper.metadata,
               id: entryId,
+              title: embeddedMeta?.title || "",
+              author: embeddedMeta?.author || "",
+              phase: embeddedMeta?.phase || "",
+              createdAt: embeddedMeta?.createdAt || isoTimestamp(),
               filename: file.path,
-              resources: extractResources(wrapper.content)
+              resources: extractResources(entryContent)
             };
             newIndex = updateEntryInIndex(newIndex, entryId, entryMeta);
           } catch (e) {
@@ -928,26 +946,42 @@ export default function App() {
         reader.onload = async () => {
           try {
             const content = reader.result as string;
-            const wrapper: EntryWrapper = JSON.parse(content);
+            const rawData = JSON.parse(content);
+            
+            // Portable entries MUST have metadata to be imported correctly
+            const isWrapper = (rawData.content !== undefined && rawData.metadata !== undefined);
+            if (!isWrapper) {
+              notify("Import failed: Selected file is not a portable entry (missing metadata).", "error");
+              return;
+            }
+
+            const wrapper = rawData as EntryWrapper;
 
             // Generate a new UUID for the imported entry to avoid collisions
             const newId = generateUUID();
             const filename = `${newId}.json`;
             const path = `${ENTRIES_DIR}/${filename}`;
 
-            // Dehydrate assets in the imported doc (it might have embedded assets)
+            // Remap IDs within the document to prevent collisions and update internal links
             const remappedContent = remapContentIds(wrapper.content);
             const { cleanDoc, newAssets } = await dehydrateAssets(remappedContent);
 
-            const newWrapper: EntryWrapper = {
-              ...wrapper,
-              metadata: {
-                ...wrapper.metadata,
-                id: newId
-              },
+            // New entries are saved in the simplified format (content-only)
+            const newEntryFileObj = {
+              version: 3,
               content: cleanDoc
             };
-            const jsonStr = JSON.stringify(newWrapper, null, 2);
+            const jsonStr = JSON.stringify(newEntryFileObj, null, 2);
+
+            const newEntryMeta: EntryMetadata = {
+              id: newId,
+              title: wrapper.metadata.title,
+              author: wrapper.metadata.author,
+              phase: wrapper.metadata.phase,
+              createdAt: wrapper.metadata.createdAt || isoTimestamp(),
+              filename: path,
+              resources: extractResources(cleanDoc)
+            };
 
             // Save everything
             if (workspaceMode === "local" && dirHandle) {
@@ -959,9 +993,10 @@ export default function App() {
                   await writeLocalFile(dirHandle, asset.path, bytes);
                 }
                 await writeLocalFile(dirHandle, path, jsonStr);
-                const latex = generateEntryLatex(JSON.stringify(cleanDoc), wrapper.metadata.title, wrapper.metadata.author, wrapper.metadata.phase, wrapper.metadata.createdAt, newId);
+                const latex = generateEntryLatex(JSON.stringify(cleanDoc), newEntryMeta.title, newEntryMeta.author, newEntryMeta.phase, newEntryMeta.createdAt, newId);
                 await writeLocalFile(dirHandle, `${LATEX_DIR}/${newId}.tex`, latex);
-                await handleRebuildIndex();
+                
+                setNotebookMetadata(prev => updateEntryInIndex(prev, newId, newEntryMeta));
                 await loadLocalExplorer();
               });
             } else if (workspaceMode === "github") {
@@ -970,9 +1005,10 @@ export default function App() {
                 await stageChange(dbName, { path: asset.path, operation: "upsert", content: asset.base64, label: `Import asset`, stagedAt: isoTimestamp() });
               }
               await stage({ path, content: jsonStr, operation: "upsert", label: "Import entry" });
-              const latex = generateEntryLatex(JSON.stringify(cleanDoc), wrapper.metadata.title, wrapper.metadata.author, wrapper.metadata.phase, wrapper.metadata.createdAt, newId);
+              const latex = generateEntryLatex(JSON.stringify(cleanDoc), newEntryMeta.title, newEntryMeta.author, newEntryMeta.phase, newEntryMeta.createdAt, newId);
               await stage({ path: `${LATEX_DIR}/${newId}.tex`, content: latex, operation: "upsert", label: "Import LaTeX" });
-              await handleRebuildIndex();
+              
+              setNotebookMetadata(prev => updateEntryInIndex(prev, newId, newEntryMeta));
             }
 
             notify("Entry imported successfully.", "success");
