@@ -1070,6 +1070,20 @@ export default function UnifiedEditor({
   const [, setSelectionUpdate] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [showLinkPopup, setShowLinkPopup] = useState(false);
+  const [isCtrlPressed, setIsCtrlPressed] = useState(false);
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => setIsCtrlPressed(e.ctrlKey || e.metaKey);
+    const handleBlur = () => setIsCtrlPressed(false);
+    window.addEventListener('keydown', handleKey);
+    window.addEventListener('keyup', handleKey);
+    window.addEventListener('blur', handleBlur);
+    return () => {
+      window.removeEventListener('keydown', handleKey);
+      window.removeEventListener('keyup', handleKey);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -1097,7 +1111,7 @@ export default function UnifiedEditor({
         autolink: true,
         linkOnPaste: true,
         HTMLAttributes: {
-          class: 'text-nb-primary underline decoration-nb-primary/30 underline-offset-4 hover:decoration-nb-primary transition-all cursor-text',
+          class: 'text-nb-primary !no-underline hover:underline underline-offset-4 hover:decoration-nb-primary transition-all cursor-text',
         },
       }),
       Placeholder.configure({
@@ -1117,78 +1131,14 @@ export default function UnifiedEditor({
     editorProps: {
       attributes: { class: "focus:outline-none min-h-[800px] h-full max-w-none p-4 lg:p-6 cursor-text" },
       handleDOMEvents: {
-        auxclick: (view, event) => {
-          const target = event.target as HTMLElement;
-          const anchor = target.closest('a');
-          if (anchor && event.button === 1) {
-            console.log('[UnifiedEditor link] auxclick blocked', {
-              button: event.button,
-              ctrlKey: event.ctrlKey,
-              metaKey: event.metaKey,
-              href: anchor.getAttribute('href'),
-              text: anchor.textContent,
-            });
-            event.preventDefault();
-            event.stopPropagation();
-            return true;
-          }
-          return false;
-        },
         click: (view, event) => {
           const target = event.target as HTMLElement;
           const anchor = target.closest('a');
-          if (anchor) {
-            console.log('[UnifiedEditor link] click', {
-              button: event.button,
-              ctrlKey: event.ctrlKey,
-              metaKey: event.metaKey,
-              href: anchor.getAttribute('href'),
-              text: anchor.textContent,
-              targetTag: target.tagName,
-            });
-            if (event.ctrlKey || event.metaKey) {
-              // Let the browser handle Ctrl/Cmd + Click (new tab)
-              return false;
-            }
-            console.log('[UnifiedEditor link] click blocked');
-            event.preventDefault();
-            event.stopPropagation();
+          if (anchor && (event.ctrlKey || event.metaKey)) {
+            window.open(anchor.href, '_blank');
             return true;
           }
-          return false;
-        },
-        mousedown: (view, event) => {
-          const target = event.target as HTMLElement;
-          const anchor = target.closest('a');
-          if (anchor) {
-            console.log('[UnifiedEditor link] mousedown', {
-              button: event.button,
-              ctrlKey: event.ctrlKey,
-              metaKey: event.metaKey,
-              href: anchor.getAttribute('href'),
-              text: anchor.textContent,
-              targetTag: target.tagName,
-            });
-          }
-          if (anchor && !event.ctrlKey && !event.metaKey) return false;
-          return false;
-        },
-        mouseup: (view, event) => {
-          const target = event.target as HTMLElement;
-          const anchor = target.closest('a');
-          if (anchor && event.button === 0 && !event.ctrlKey && !event.metaKey) {
-            console.log('[UnifiedEditor link] mouseup blocked', {
-              button: event.button,
-              ctrlKey: event.ctrlKey,
-              metaKey: event.metaKey,
-              href: anchor.getAttribute('href'),
-              text: anchor.textContent,
-              targetTag: target.tagName,
-            });
-            event.preventDefault();
-            return true;
-          }
-          return false;
+          return false; // Let editor handle (move cursor)
         },
         dragstart: () => { setIsDragging(true); return false; },
         dragend: () => { setIsDragging(false); return false; },
@@ -1273,35 +1223,6 @@ export default function UnifiedEditor({
     return () => window.removeEventListener("mousedown", handleOutsideClick);
   }, [showTableGrid]);
 
-  const blockPlainLinkActivation = (event: React.MouseEvent<HTMLElement>) => {
-    const target = event.target as HTMLElement;
-    const anchor = target.closest('a');
-
-    if (!anchor) return;
-
-    if (event.ctrlKey || event.metaKey) {
-      console.log('[UnifiedEditor link] capture allow', {
-        button: event.button,
-        ctrlKey: event.ctrlKey,
-        metaKey: event.metaKey,
-        href: anchor.getAttribute('href'),
-        text: anchor.textContent,
-        targetTag: target.tagName,
-      });
-      return;
-    }
-
-    console.log('[UnifiedEditor link] capture blocked', {
-      button: event.button,
-      ctrlKey: event.ctrlKey,
-      metaKey: event.metaKey,
-      href: anchor.getAttribute('href'),
-      text: anchor.textContent,
-      targetTag: target.tagName,
-    });
-    event.preventDefault();
-    event.stopPropagation();
-  };
 
 
   if (!editor) return null;
@@ -1319,12 +1240,7 @@ export default function UnifiedEditor({
         )}
 
         <div className="bg-nb-surface min-h-[800px] relative">
-          <div
-            className="max-w-none h-full"
-            onMouseDownCapture={blockPlainLinkActivation}
-            onClickCapture={blockPlainLinkActivation}
-            onAuxClickCapture={blockPlainLinkActivation}
-          >
+          <div className={`max-w-none h-full ${isCtrlPressed ? '[&_a]:!cursor-pointer' : ''}`}>
             <EditorContent editor={editor} className="h-full" />
           </div>
           {showLinkPopup && (
