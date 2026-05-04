@@ -58,10 +58,11 @@ interface FileRowProps {
   isDeleted: boolean;
   icon: React.ReactNode;
   isValid?: boolean;
+  sortBy: "created" | "updated" | "title";
   onSelect: () => void;
 }
 
-function FileRow({ file, isSelected, isPending, isDeleted, icon, isValid = true, onSelect }: FileRowProps) {
+function FileRow({ file, isSelected, isPending, isDeleted, icon, isValid = true, sortBy, onSelect }: FileRowProps) {
   return (
     <div
       onClick={isDeleted ? undefined : onSelect}
@@ -84,10 +85,13 @@ function FileRow({ file, isSelected, isPending, isDeleted, icon, isValid = true,
         </span>
         <span className={`text-[9px] font-mono truncate mt-0.5 ${isSelected ? 'text-white/70' : 'opacity-40'}`}>
            {(() => {
-             const ts = file.updatedAt || file.timestamp || Date.now();
+             const ts = (sortBy === "updated") 
+               ? (file.updatedAt || file.timestamp || Date.now())
+               : (file.timestamp || Date.now());
              const d = new Date(ts);
              const valid = !isNaN(d.getTime());
-             return (valid ? d : new Date()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+             const prefix = sortBy === "updated" ? "Modified: " : "Created: ";
+             return prefix + (valid ? d : new Date()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
            })()}
         </span>
       </div>
@@ -331,6 +335,7 @@ export default function FileExplorer({
             isDeleted={deletedPaths.has(f.path)}
             icon={<FileText size={13} />}
             isValid={f.isValid}
+            sortBy={sortBy}
             onSelect={() => onSelectEntry(f)}
           />
         ))}

@@ -410,18 +410,6 @@ const Editor = React.memo(function Editor({
 
           {/* Row 1: Menu Bar */}
           <div className="px-4 h-10 flex items-center gap-2 border-b border-nb-outline-variant/30">
-            <div className="flex flex-col min-w-0">
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-bold text-nb-on-surface truncate">
-                  {title || "Untitled Entry"}
-                </h2>
-                {!localIsValid && (
-                  <div className="text-amber-500 animate-pulse" title="Incomplete metadata or resource captions">
-                    <AlertTriangle size={14} />
-                  </div>
-                )}
-              </div>
-            </div>
 
             <MenuItem label="File">
               <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} />
@@ -532,6 +520,12 @@ const Editor = React.memo(function Editor({
                 className="w-full text-xl font-bold bg-transparent text-nb-on-surface outline-none placeholder:text-nb-outline-variant"
               />
             </div>
+
+            {!localIsValid && (
+              <div className="shrink-0 text-amber-500 animate-pulse mr-4" title="Incomplete metadata or resource captions">
+                <AlertTriangle size={20} />
+              </div>
+            )}
 
             <div className="flex items-center gap-6">
               <div className="h-9 flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50">

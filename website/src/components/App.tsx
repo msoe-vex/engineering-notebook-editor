@@ -305,8 +305,7 @@ export default function App() {
         title: meta?.title || "",
         author: meta?.author || "",
         timestamp: meta?.createdAt || "",
-        // Use lastOpenedAt for sticky sorting in the sidebar
-        updatedAt: (openFile?.id === id) ? openFile.lastOpenedAt : (meta?.updatedAt || meta?.createdAt || ""),
+        updatedAt: meta?.updatedAt || meta?.createdAt || "",
         id,
         isSaving: savingPaths.has(e.path),
         isValid: meta?.isValid !== false // Default to true if not present, but check if explicitly false
