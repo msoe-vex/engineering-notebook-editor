@@ -10,7 +10,7 @@ import { NodeSelection, Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { Slice, Fragment } from "@tiptap/pm/model";
 import { getResource } from "@/lib/db";
-import { extractResources } from "@/lib/metadata";
+import { remapContentIds, extractResources } from "@/lib/metadata";
 import StarterKit from "@tiptap/starter-kit";
 import { Image as TiptapImage } from "@tiptap/extension-image";
 import { Table } from "@tiptap/extension-table";
@@ -317,7 +317,6 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName, e
           <GripVertical size={14} />
         </div>
         <div className="flex flex-col gap-1 items-center">
-          <div className="text-[8px] font-bold tracking-tighter text-nb-on-surface-variant/40 rotate-90 whitespace-nowrap mb-2">IMAGE</div>
           <button
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); (editor as any)?.commands.focus(); }}
             title="Delete Image"
@@ -812,6 +811,30 @@ const CustomRawLatex = CodeBlock.extend({
 });
 
 
+const IdRemapper = Extension.create({
+  name: 'idRemapper',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey('idRemapper'),
+        props: {
+          transformPasted: (slice: Slice): Slice => {
+            const json = slice.content.toJSON();
+            const remapped = remapContentIds(json);
+            try {
+              const fragment = Fragment.fromJSON(this.editor.schema, remapped);
+              return new Slice(fragment, slice.openStart, slice.openEnd);
+            } catch (e) {
+              console.error("Failed to remap pasted IDs", e);
+              return slice;
+            }
+          }
+        }
+      })
+    ]
+  }
+});
+
 function RawLatexNodeView({ node, deleteNode, selected, editor, updateAttributes }: any) {
 
   const [dragEnabled, setDragEnabled] = useState(false);
@@ -1217,6 +1240,7 @@ export default function UnifiedEditor({
       Placeholder.configure({
         placeholder: "Start writing...",
       }),
+      IdRemapper,
     ],
     content: parseContent(content),
     onUpdate: ({ editor }) => {
@@ -1229,7 +1253,7 @@ export default function UnifiedEditor({
       setSelectionUpdate(s => s + 1);
     },
     editorProps: {
-      attributes: { class: "focus:outline-none min-h-[800px] h-full max-w-none p-4 lg:p-6 cursor-text" },
+      attributes: { class: "focus:outline-none min-h-[800px] h-full max-w-5xl mx-auto p-4 lg:p-6 cursor-text" },
       handleDOMEvents: {
         click: (view, event) => {
           const target = event.target as HTMLElement;
@@ -1361,7 +1385,7 @@ export default function UnifiedEditor({
 
         <div className="bg-nb-surface min-h-[800px] relative">
           <div
-            className={`max-w-none h-full ${isCtrlPressed ? '[&_a]:!cursor-pointer' : ''}`}
+            className={`max-w-5xl mx-auto h-full ${isCtrlPressed ? '[&_a]:!cursor-pointer' : ''}`}
             onMouseDown={() => setShowLinkPopup(false)}
           >
             <EditorContent editor={editor} className="h-full" />
