@@ -19,11 +19,13 @@ import { generateEntryLatex } from "./latex";
  */
 
 export interface EntryMetadata {
-  id: string;
+  id: string; // Entry UUID
   title: string;
   author: string;
   phase: string;
   createdAt: string;
+  filename: string; // Path to the entry file (e.g. "entries/uuid.json")
+  resources?: Record<string, { title: string, type: string }>; // block uuid -> metadata
 }
 
 export interface EntryWrapper {
@@ -34,13 +36,13 @@ export interface EntryWrapper {
 
 export interface NotebookMetadata {
   version: number;
-  entries: Record<string, EntryMetadata>; // entryPath -> metadata (e.g. "entries/uuid.json")
-  knownAuthors: Record<string, string[]>;
-  knownProjectTitles: Record<string, string[]>;
+  entries: Record<string, EntryMetadata>; // uuid -> metadata
+  knownAuthors: Record<string, string[]>; // author -> uuids
+  knownProjectTitles: Record<string, string[]>; // title -> uuids
 }
 
 export const EMPTY_METADATA: NotebookMetadata = { 
-  version: 2, 
+  version: 3, 
   entries: {},
   knownAuthors: {},
   knownProjectTitles: {}
@@ -64,6 +66,33 @@ export function extractImagePaths(doc: TipTapDoc): string[] {
   }
   walk(doc);
   return paths;
+}
+
+/** Walk every node and extract resources (blocks with IDs and titles). */
+export function extractResources(doc: TipTapDoc): Record<string, { title: string, type: string }> {
+  const resources: Record<string, { title: string, type: string }> = {};
+  
+  function walk(node: any) {
+    if (!node) return;
+    
+    // We only care about blocks that have an ID and either a title or a caption (legacy)
+    if (node.attrs?.id) {
+      const title = node.attrs.title || node.attrs.caption || "";
+      if (title) {
+        resources[node.attrs.id] = {
+          title,
+          type: node.type
+        };
+      }
+    }
+    
+    if (Array.isArray(node.content)) {
+      node.content.forEach(walk);
+    }
+  }
+  
+  walk(doc);
+  return resources;
 }
 
 /**
@@ -189,10 +218,10 @@ export function hydrateAssets(doc: any, assetCache: Map<string, string>): any {
 /** Rebuild the index for a single entry. */
 export function updateEntryInIndex(
   metadata: NotebookMetadata,
-  entryPath: string,
+  entryId: string,
   info: EntryMetadata
 ): NotebookMetadata {
-  const newEntries = { ...metadata.entries, [entryPath]: info };
+  const newEntries = { ...metadata.entries, [entryId]: info };
   return updateMetadataSuggestions({ ...metadata, entries: newEntries });
 }
 
@@ -204,16 +233,16 @@ export function updateMetadataSuggestions(metadata: NotebookMetadata): NotebookM
   const newAuthors: Record<string, string[]> = {};
   const newTitles: Record<string, string[]> = {};
 
-  for (const [entryPath, info] of Object.entries(metadata.entries)) {
+  for (const [entryId, info] of Object.entries(metadata.entries)) {
     if (info.author?.trim()) {
       const a = info.author.trim();
       if (!newAuthors[a]) newAuthors[a] = [];
-      newAuthors[a].push(entryPath);
+      newAuthors[a].push(entryId);
     }
     if (info.title?.trim() && !info.title.endsWith(".tex")) {
       const t = info.title.trim();
       if (!newTitles[t]) newTitles[t] = [];
-      newTitles[t].push(entryPath);
+      newTitles[t].push(entryId);
     }
   }
 
@@ -227,23 +256,55 @@ export function updateMetadataSuggestions(metadata: NotebookMetadata): NotebookM
 /** Remove an entry from the metadata index. */
 export function removeEntryFromMetadata(
   metadata: NotebookMetadata,
-  entryPath: string
+  entryId: string
 ): NotebookMetadata {
   const newEntries = { ...metadata.entries };
-  delete newEntries[entryPath];
+  delete newEntries[entryId];
   return updateMetadataSuggestions({ ...metadata, entries: newEntries });
 }
 
 /** Rename an entry in the metadata index. */
 export function renameEntryInMetadata(
   metadata: NotebookMetadata,
-  oldPath: string,
-  newPath: string
+  oldId: string,
+  newId: string
 ): NotebookMetadata {
   const newEntries = { ...metadata.entries };
-  if (newEntries[oldPath]) {
-    newEntries[newPath] = newEntries[oldPath];
-    delete newEntries[oldPath];
+  if (newEntries[oldId]) {
+    newEntries[newId] = newEntries[oldId];
+    delete newEntries[oldId];
   }
   return updateMetadataSuggestions({ ...metadata, entries: newEntries });
+}
+
+/** 
+ * Migration helper to convert older notebook.json formats to the current UUID-based structure.
+ */
+export function migrateMetadata(raw: any): NotebookMetadata {
+  if (!raw || typeof raw !== "object") return EMPTY_METADATA;
+
+  // Version 2: entries indexed by path
+  if (raw.version === 2) {
+    const newEntries: Record<string, EntryMetadata> = {};
+    for (const [path, info] of Object.entries(raw.entries as Record<string, any>)) {
+      const id = info.id || path.split('/').pop()?.replace('.json', '') || "";
+      newEntries[id] = {
+        ...info,
+        id,
+        filename: path,
+      } as EntryMetadata;
+    }
+    return updateMetadataSuggestions({
+      ...raw,
+      version: 3,
+      entries: newEntries,
+    });
+  }
+
+  // Version 1: very old format, unlikely to exist but safe to handle
+  if (!raw.version || raw.version === 1) {
+    return { ...EMPTY_METADATA, ...raw, version: 3 };
+  }
+
+  return raw as NotebookMetadata;
 }

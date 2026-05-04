@@ -45,6 +45,15 @@ export const convertNodeToLatex = (node: any): string => {
         if (mark.type === "bold") t = `\\textbf{${t}}`;
         if (mark.type === "italic") t = `\\textit{${t}}`;
         if (mark.type === "code") t = `\\texttt{${t}}`;
+        if (mark.type === "underline") t = `\\underline{${t}}`;
+        if (mark.type === "link") {
+          const { href, resourceId } = mark.attrs ?? {};
+          if (resourceId) {
+            t = `\\hyperref[${resourceId}]{${t}}`;
+          } else if (href) {
+            t = `\\href{${href}}{${t}}`;
+          }
+        }
       }
       return t;
     }
@@ -83,8 +92,9 @@ export const convertNodeToLatex = (node: any): string => {
     case "codeBlock": {
       const lang = mapLanguageToLatex(node.attrs?.language ?? "plaintext");
       const code = (node.content || []).map((n: any) => n.text ?? "").join("");
-      const escapedCaption = escapeLaTeX(node.attrs?.caption ?? "");
-      const label = node.attrs?.id ? `\\label{code:${node.attrs.id}}` : "";
+      const title = node.attrs?.title ? `${node.attrs.title}: ` : "";
+      const escapedCaption = escapeLaTeX(title + (node.attrs?.caption ?? ""));
+      const label = node.attrs?.id ? `\\label{${node.attrs.id}}` : "";
       return `\\begin{notebookcodeblock}{${lang}}{${escapedCaption}}\n${code}\n\\end{notebookcodeblock}\n${label}\n\n`;
     }
 
@@ -103,16 +113,17 @@ export const convertNodeToLatex = (node: any): string => {
         imgSrc = imgSrc.replace("assets/", "");
       }
 
-      const escapedCaption = escapeLaTeX(node.attrs?.caption || node.attrs?.alt || "Figure");
+      const title = node.attrs?.title ? `${node.attrs.title}: ` : "";
+      const escapedCaption = escapeLaTeX(title + (node.attrs?.caption || node.attrs?.alt || "Figure"));
 
-      const escapedInitials = escapeLaTeX(node.attrs?.title ?? "");
+      const escapedInitials = escapeLaTeX(node.attrs?.initials ?? "");
 
       // Convert "55%" to "0.55\textwidth"
       const rawWidth = (node.attrs?.width ?? "100%").toString().replace("%", "");
       const widthNum = parseFloat(rawWidth);
       const latexWidth = isNaN(widthNum) ? "1" : (widthNum / 100).toFixed(2);
 
-      const label = node.attrs?.id ? `\\label{fig:${node.attrs.id}}` : "";
+      const label = node.attrs?.id ? `\\label{${node.attrs.id}}` : "";
       return `\\notebookimage{${imgSrc}}{${escapedCaption}}{${escapedInitials}}{${latexWidth}\\textwidth}\n${label}\n\n`;
     }
 
@@ -121,7 +132,8 @@ export const convertNodeToLatex = (node: any): string => {
       if (!rows.length) return "";
       const colCount = (rows[0]?.content ?? []).length;
       const colSpec = "|l".repeat(colCount) + "|";
-      const caption = node.attrs?.caption ?? "Design Data";
+      const title = node.attrs?.title ? `${node.attrs.title}: ` : "";
+      const caption = title + (node.attrs?.caption ?? "Design Data");
 
       const body = rows.map((row: any) => {
         const cells = (row.content ?? []).map((cell: any) =>
@@ -131,7 +143,7 @@ export const convertNodeToLatex = (node: any): string => {
       }).join("\n");
 
       const escapedCaption = escapeLaTeX(caption);
-      const label = node.attrs?.id ? `\\label{tab:${node.attrs.id}}` : "";
+      const label = node.attrs?.id ? `\\label{${node.attrs.id}}` : "";
 
       return `\\notebooktable{${colSpec}}{${body}}{${escapedCaption}}\n${label}\n\n`;
     }
@@ -174,7 +186,7 @@ export const convertJsonToLatex = (input: any): string => {
   return convertNodeToLatex(doc).replace(/\n{3,}/g, "\n\n").trim() + "\n";
 };
 
-export const generateEntryLatex = (cnt: string, t: string, a: string, p: string, initialCreatedAt: string | undefined): string => {
+export const generateEntryLatex = (cnt: string, t: string, a: string, p: string, initialCreatedAt: string | undefined, id?: string): string => {
   let dateObj = initialCreatedAt ? new Date(initialCreatedAt) : new Date();
 
   // Fallback for mangled timestamps (e.g. 2026-04-28T17-36-32)
@@ -189,7 +201,11 @@ export const generateEntryLatex = (cnt: string, t: string, a: string, p: string,
   }
 
   const dateStr = dateObj.toISOString().split('T')[0];
-  let latex = `\\notebookentry{${escapeLaTeX(t)}}{${dateStr}}{${escapeLaTeX(a)}}{${escapeLaTeX(p)}}\n\n`;
+  let latex = `\\notebookentry{${escapeLaTeX(t)}}{${dateStr}}{${escapeLaTeX(a)}}{${escapeLaTeX(p)}}\n`;
+  if (id) {
+    latex += `\\label{${id}}\n`;
+  }
+  latex += `\n`;
   latex += convertJsonToLatex(cnt);
   return latex;
 };

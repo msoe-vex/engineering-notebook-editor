@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   useEditor, EditorContent, Extension,
   NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer,
@@ -17,6 +17,8 @@ import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { CodeBlock } from "@tiptap/extension-code-block";
 import Placeholder from "@tiptap/extension-placeholder";
+import Link from "@tiptap/extension-link";
+import Underline from "@tiptap/extension-underline";
 
 import Prism from "prismjs";
 import "prismjs/components/prism-latex";
@@ -47,7 +49,7 @@ import {
   Table as TableIcon, Undo, Redo, Trash2,
   ChevronUp, ChevronDown, ChevronLeft, ChevronRight,
   Pencil, AlertTriangle, FileCode, Check, Code2, MoreVertical, Settings, UserCircle, Grid3X3, GripVertical,
-  Scissors as Scissor, Copy, Clipboard, Terminal
+  Scissors as Scissor, Copy, Clipboard, Terminal, X, Underline as UnderlineIcon
 } from "lucide-react";
 import { generateUUID, hashContent, getExtensionFromDataUrl } from "@/lib/utils";
 
@@ -55,6 +57,26 @@ export const LANGUAGES = [
   "plaintext", "cpp", "c", "python", "javascript",
   "typescript", "java", "bash", "sql", "rust", "go", "csharp",
 ];
+
+const CustomLink = Link.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      resourceId: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-resource-id'),
+        renderHTML: attributes => {
+          if (!attributes.resourceId) return {};
+          return { 'data-resource-id': attributes.resourceId };
+        },
+      },
+    };
+  },
+  // Disable the default click handler plugin by providing an empty list or overriding props
+  addProseMirrorPlugins() {
+    return [];
+  },
+});
 
 function getPrismDecorations(doc: any) {
   const decorations: Decoration[] = [];
@@ -210,7 +232,8 @@ const ImageWithCaption = TiptapImage.extend({
         renderHTML: attributes => ({ 'data-id': attributes.id }),
       },
       alt: { default: "" },
-      title: { default: "" }, // author initials
+      title: { default: "" }, // Title for referencing
+      initials: { default: "" }, // author initials (legacy title field)
       filePath: { default: null }, // disk path for LaTeX
       caption: { default: "" }, // unify with table/code
       width: { default: "100%" },
@@ -281,17 +304,44 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName, e
         >
           <GripVertical size={14} />
         </div>
-        <button
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); (editor as any)?.commands.focus(); }}
-          title="Delete Image"
-          className="w-8 h-8 rounded-full bg-nb-surface text-red-500 flex items-center justify-center hover:bg-red-50 transition border border-nb-outline-variant/30 shadow-sm"
-        >
-          <Trash2 size={14} />
-        </button>
+        <div className="flex flex-col gap-1 items-center">
+          <div className="text-[8px] font-bold uppercase tracking-tighter text-nb-on-surface-variant/40 rotate-90 whitespace-nowrap mb-2">IMAGE</div>
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); (editor as any)?.commands.focus(); }}
+            title="Delete Image"
+            className="w-8 h-8 rounded-full bg-nb-surface text-red-500 flex items-center justify-center hover:bg-red-50 transition border border-nb-outline-variant/30 shadow-sm"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
 
       </div>
 
       <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${selected ? 'ring-2 ring-nb-primary/50' : ''}`}>
+        {/* Block Header */}
+        <div contentEditable={false} className="flex items-center justify-between px-4 py-2 bg-nb-surface-low/50 border-b border-nb-outline-variant/10">
+          <div className="flex-1 flex items-center gap-3">
+            <ImageIcon size={12} className="text-nb-primary shrink-0" />
+            <input
+              type="text"
+              value={node.attrs.title || ""}
+              onChange={(e) => updateAttributes({ title: e.target.value })}
+              placeholder="Give this image a title..."
+              className="flex-1 bg-transparent border-none outline-none text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
+            />
+          </div>
+          <div className="flex items-center gap-2 px-2 py-0.5 rounded-full bg-nb-surface-mid/50 border border-nb-outline-variant/20">
+            <UserCircle size={10} className="text-nb-tertiary" />
+            <input
+              type="text"
+              value={node.attrs.initials || ""}
+              onChange={(e) => updateAttributes({ initials: e.target.value })}
+              placeholder="Initials"
+              className="w-12 bg-transparent border-none outline-none text-[8px] font-bold uppercase text-nb-on-surface-variant"
+            />
+          </div>
+        </div>
+
         <div className="relative flex justify-center">
           <img
             src={resolvedSrc}
@@ -341,6 +391,7 @@ const TableWithCaption = Table.extend({
         renderHTML: attributes => ({ 'data-id': attributes.id }),
       },
       caption: { default: "" },
+      title: { default: "" },
     };
   },
   draggable: true,
@@ -415,7 +466,13 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
 
           <div className="flex items-center gap-1.5 pr-3 border-r border-nb-outline-variant/20 mr-1 shrink-0">
             <TableIcon size={12} className="text-nb-primary" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant">Table</span>
+            <input
+              type="text"
+              value={node.attrs.title || ""}
+              onChange={(e) => updateAttributes({ title: e.target.value })}
+              placeholder="Table Title..."
+              className="bg-transparent border-none outline-none text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30 w-48"
+            />
           </div>
 
           <div className={`flex items-center gap-0.5 shrink-0 transition-opacity duration-200 ${isCursorInside || isHoveringToolbar ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
@@ -528,6 +585,7 @@ const CustomCodeBlock = CodeBlock.extend({
       },
       language: { default: "plaintext" },
       caption: { default: "" },
+      title: { default: "" },
     };
   },
   draggable: true,
@@ -617,11 +675,18 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
 
       <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${active ? 'ring-2 ring-nb-primary/50' : ''}`}>
         <div className="flex items-center justify-between px-4 py-2 bg-nb-surface-low/50 border-b border-nb-outline-variant/10">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-nb-primary">
+          <div className="flex-1 flex items-center gap-3">
+            <div className="flex items-center gap-2 text-nb-primary shrink-0">
               <Code2 size={12} />
             </div>
-            <div className="relative group/select">
+            <input
+              type="text"
+              value={node.attrs.title || ""}
+              onChange={(e) => updateAttributes({ title: e.target.value })}
+              placeholder="Code Snippet Title..."
+              className="flex-1 bg-transparent border-none outline-none text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
+            />
+            <div className="relative group/select shrink-0 ml-auto">
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-nb-surface-low border border-nb-outline-variant/50 hover:border-nb-primary/50 hover:bg-nb-surface transition-all cursor-pointer">
                 <select
                   value={node.attrs.language}
@@ -686,6 +751,7 @@ const CustomRawLatex = CodeBlock.extend({
       },
       content: { default: "" },
       caption: { default: "" },
+      title: { default: "" },
     };
   },
   parseHTML() {
@@ -733,7 +799,7 @@ const CustomRawLatex = CodeBlock.extend({
   },
 });
 
-function RawLatexNodeView({ node, deleteNode, selected, editor }: any) {
+function RawLatexNodeView({ node, deleteNode, selected, editor, updateAttributes }: any) {
 
   const [dragEnabled, setDragEnabled] = useState(false);
 
@@ -764,9 +830,15 @@ function RawLatexNodeView({ node, deleteNode, selected, editor }: any) {
 
       <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${selected ? 'ring-2 ring-nb-primary/50' : ''}`}>
         <div className="flex items-center justify-between px-4 py-2 bg-nb-surface-low/50 border-b border-nb-outline-variant/10">
-          <div className="flex items-center gap-2">
-            <Terminal size={12} className="text-nb-primary" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant">Raw LaTeX</span>
+          <div className="flex-1 flex items-center gap-2">
+            <Terminal size={12} className="text-nb-primary shrink-0" />
+            <input
+              type="text"
+              value={node.attrs.title || ""}
+              onChange={(e) => updateAttributes({ title: e.target.value })}
+              placeholder="LaTeX Block Title..."
+              className="flex-1 bg-transparent border-none outline-none text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
+            />
           </div>
         </div>
         <pre spellCheck="false" className="p-6 text-[12px] leading-[1.8] overflow-x-auto border-none m-0 text-nb-on-surface bg-transparent language-latex">
@@ -791,10 +863,165 @@ interface UnifiedEditorProps {
   filename: string;
   dbName?: string;
   onEditorInit?: (editor: any) => void;
+  onToggleLink?: (fn: () => void) => void;
+  notebookMetadata?: any;
+}
+
+function LinkReferencePopup({ 
+  editor, 
+  onClose, 
+  metadata 
+}: { 
+  editor: any, 
+  onClose: () => void, 
+  metadata: any 
+}) {
+  const [query, setQuery] = useState("");
+  const [text, setText] = useState("");
+  const [link, setLink] = useState("");
+  const [selectedResource, setSelectedResource] = useState<{ id: string, title: string, type: string } | null>(null);
+
+  useEffect(() => {
+    const { from, to } = editor.state.selection;
+    const selectedText = editor.state.doc.textBetween(from, to, " ");
+    setText(selectedText);
+    
+    if (editor.isActive('link')) {
+      const attrs = editor.getAttributes('link');
+      setLink(attrs.href || "");
+      if (attrs.resourceId) {
+        // Find resource in metadata
+        let found = null;
+        for (const entry of Object.values(metadata?.entries || {})) {
+          const e = entry as any;
+          if (e.id === attrs.resourceId) {
+            found = { id: e.id, title: e.title, type: 'entry' };
+            break;
+          }
+          if (e.resources?.[attrs.resourceId]) {
+            found = { id: attrs.resourceId, ...e.resources[attrs.resourceId] };
+            break;
+          }
+        }
+        if (found) setSelectedResource(found);
+      }
+    }
+  }, [editor, metadata]);
+
+  const allResources = useMemo(() => {
+    const list: any[] = [];
+    if (!metadata || !metadata.entries) return list;
+    for (const [entryId, entry] of Object.entries(metadata.entries)) {
+      const e = entry as any;
+      list.push({ id: e.id, title: e.title, type: "entry", entryTitle: e.title, entryDate: e.createdAt?.split('T')[0] });
+      if (e.resources) {
+        for (const [resId, res] of Object.entries(e.resources)) {
+          const r = res as any;
+          list.push({ id: resId, title: r.title, type: r.type, entryTitle: e.title, entryDate: e.createdAt?.split('T')[0] });
+        }
+      }
+    }
+    return list;
+  }, [metadata]);
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return [];
+    const q = query.toLowerCase();
+    return allResources.filter(r => 
+      (r.title || "").toLowerCase().includes(q) || 
+      (r.entryTitle || "").toLowerCase().includes(q)
+    ).slice(0, 5);
+  }, [allResources, query]);
+
+  const handleApply = () => {
+    if (selectedResource) {
+      editor.chain().focus().extendMarkRange('link').setLink({ 
+        href: `#${selectedResource.id}`, 
+        resourceId: selectedResource.id 
+      }).run();
+    } else if (link) {
+      editor.chain().focus().extendMarkRange('link').setLink({ href: link }).run();
+    } else {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run();
+    }
+    onClose();
+  };
+
+  const rect = editor.view.coordsAtPos(editor.state.selection.from);
+
+  return (
+    <div 
+      className="fixed z-[1000] w-72 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-2xl p-4 animate-in zoom-in-95 fade-in duration-200"
+      style={{ 
+        top: Math.min(window.innerHeight - 300, rect.bottom + 10), 
+        left: Math.min(window.innerWidth - 300, rect.left) 
+      }}
+      onClick={e => e.stopPropagation()}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-[10px] font-black uppercase tracking-widest text-nb-secondary">Insert Link/Reference</span>
+        <button onClick={onClose} className="p-1 hover:bg-nb-surface-low rounded"><X size={14}/></button>
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <label className="block text-[8px] font-bold uppercase text-nb-on-surface-variant/50 mb-1">Display Text</label>
+          <input 
+            type="text" 
+            value={text} 
+            onChange={e => setText(e.target.value)}
+            className="w-full px-3 py-2 bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg outline-none text-xs focus:border-nb-primary"
+            placeholder="Text to display..."
+          />
+        </div>
+
+        <div>
+          <label className="block text-[8px] font-bold uppercase text-nb-on-surface-variant/50 mb-1">Link or Resource</label>
+          <div className="relative">
+            <input 
+              type="text" 
+              value={selectedResource ? selectedResource.title : link} 
+              onChange={e => {
+                setLink(e.target.value);
+                setSelectedResource(null);
+                setQuery(e.target.value);
+              }}
+              className="w-full px-3 py-2 bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg outline-none text-xs focus:border-nb-primary"
+              placeholder="URL or search resource..."
+            />
+            {query && !selectedResource && filtered.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-nb-surface border border-nb-outline-variant shadow-nb-lg rounded-lg overflow-hidden z-50">
+                {filtered.map(r => (
+                  <button
+                    key={r.id}
+                    onClick={() => {
+                      setSelectedResource(r);
+                      setQuery("");
+                    }}
+                    className="w-full px-3 py-2 text-left hover:bg-nb-primary/5 transition-colors border-b border-nb-outline-variant/10 last:border-0"
+                  >
+                    <div className="text-[10px] font-bold text-nb-on-surface truncate">{r.title}</div>
+                    <div className="text-[8px] text-nb-on-surface-variant/60 uppercase">{r.type} • {r.entryTitle}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <button 
+          onClick={handleApply}
+          className="w-full py-2 bg-nb-primary text-white text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20"
+        >
+          Apply Link
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default function UnifiedEditor({
-  content, onChange, onImageUpload, author, filename, dbName = "notebook-pending", onEditorInit,
+  content, onChange, onImageUpload, author, filename, dbName = "notebook-pending", onEditorInit, notebookMetadata, onToggleLink
 }: UnifiedEditorProps) {
   const parseContent = (raw: string) => {
     if (!raw) return "";
@@ -843,6 +1070,7 @@ export default function UnifiedEditor({
 
   const [, setSelectionUpdate] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [showLinkPopup, setShowLinkPopup] = useState(false);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -862,8 +1090,16 @@ export default function UnifiedEditor({
       CustomCodeBlock,
       CustomRawLatex,
       PrismHighlightExtension,
+      Underline,
+      CustomLink.configure({
+        openOnClick: false,
+        autolink: true,
+        linkOnPaste: true,
+        HTMLAttributes: {
+          class: 'text-nb-primary underline decoration-nb-primary/30 underline-offset-4 hover:decoration-nb-primary transition-all cursor-text',
+        },
+      }),
       Placeholder.configure({
-
         placeholder: "Start writing...",
       }),
     ],
@@ -880,6 +1116,36 @@ export default function UnifiedEditor({
     editorProps: {
       attributes: { class: "focus:outline-none min-h-[800px] h-full max-w-none p-4 lg:p-6 cursor-text" },
       handleDOMEvents: {
+        click: (view, event) => {
+          const pos = view.posAtCoords({ left: event.clientX, top: event.clientY });
+          if (pos) {
+            const marks = view.state.doc.resolve(pos.pos).marks();
+            const linkMark = marks.find(m => m.type.name === 'link');
+            if (linkMark) {
+              if (event.ctrlKey || event.metaKey) {
+                const { href } = linkMark.attrs;
+                if (href) window.open(href, '_blank');
+              }
+              event.preventDefault();
+              event.stopPropagation();
+              return true;
+            }
+          }
+          return false;
+        },
+        mousedown: (view, event) => {
+          const pos = view.posAtCoords({ left: event.clientX, top: event.clientY });
+          if (pos) {
+            const marks = view.state.doc.resolve(pos.pos).marks();
+            if (marks.find(m => m.type.name === 'link')) {
+              if (!event.ctrlKey && !event.metaKey) {
+                // Allow normal selection behavior on links without jumping
+                return false;
+              }
+            }
+          }
+          return false;
+        },
         dragstart: () => { setIsDragging(true); return false; },
         dragend: () => { setIsDragging(false); return false; },
         // Snapping logic handled in handleDrop
@@ -941,6 +1207,12 @@ export default function UnifiedEditor({
     }
   }, [editor, onEditorInit]);
 
+  useEffect(() => {
+    if (onToggleLink) {
+      onToggleLink(() => setShowLinkPopup(true));
+    }
+  }, [onToggleLink]);
+
   const isInTable = editor?.isActive("tableCell") || editor?.isActive("tableHeader") || false;
 
   const insertImage = () => {
@@ -984,6 +1256,13 @@ export default function UnifiedEditor({
 
         <div className="bg-nb-surface min-h-[800px] relative">
           <EditorContent editor={editor} className="max-w-none h-full" />
+          {showLinkPopup && (
+            <LinkReferencePopup 
+              editor={editor} 
+              metadata={notebookMetadata} 
+              onClose={() => setShowLinkPopup(false)} 
+            />
+          )}
         </div>
       </div>
     </div>

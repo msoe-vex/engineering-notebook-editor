@@ -27,7 +27,8 @@ import { ImperativePanelHandle } from "react-resizable-panels";
 import { saveAs } from "file-saver";
 import { generateUUID } from "@/lib/utils";
 import { generateEntryLatex } from "@/lib/latex";
-import { extractImagePaths } from "@/lib/metadata";
+import { extractImagePaths, extractResources, migrateMetadata } from "@/lib/metadata";
+import ReferenceSearch from "./ReferenceSearch";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -200,6 +201,7 @@ export default function App() {
 
   // Current open file
   const [openFile, setOpenFile] = useState<OpenFileState | null>(null);
+  const [showReferenceSearch, setShowReferenceSearch] = useState(false);
 
   // Notifications
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -289,7 +291,8 @@ export default function App() {
 
   const displayEntries = useMemo(() => {
     return entries.map(f => {
-      const m = notebookMetadata.entries?.[f.path];
+      const entryId = f.path.split('/').pop()?.replace('.json', '') || "";
+      const m = notebookMetadata.entries?.[entryId];
 
       // Intelligent fallback for timestamp from ISO filename
       let finalTs = m?.createdAt || "";
@@ -359,16 +362,6 @@ export default function App() {
 
     setSavingPaths(prev => new Set(prev).add(changedPath));
 
-    const entryMeta: EntryMetadata = {
-      id: entryId,
-      ...info,
-      createdAt: openFile?.path === changedPath ? openFile.createdAt : (notebookMetadata.entries?.[changedPath]?.createdAt || isoTimestamp())
-    };
-
-    if (info.author) {
-      localStorage.setItem("nb-last-author", info.author);
-    }
-
     const parseContent = (raw: any): any => {
       if (!raw) return raw;
       if (typeof raw === 'object') return raw;
@@ -383,6 +376,19 @@ export default function App() {
     };
 
     const contentObj = parseContent(tiptapContent);
+    const resources = contentObj ? extractResources(contentObj) : {};
+
+    const entryMeta: EntryMetadata = {
+      id: entryId,
+      ...info,
+      createdAt: openFile?.path === changedPath ? openFile.createdAt : (notebookMetadata.entries?.[entryId]?.createdAt || isoTimestamp()),
+      filename: changedPath,
+      resources
+    };
+
+    if (info.author) {
+      localStorage.setItem("nb-last-author", info.author);
+    }
 
     // 2. Dehydrate Assets & Prepare Entry
     let assetsToSave: { path: string; base64: string }[] = [];
@@ -426,7 +432,7 @@ export default function App() {
 
           // Update notebook.json
           const meta = notebookMetadataRef.current;
-          const updatedMeta = updateEntryInIndex(meta, changedPath, entryMeta);
+          const updatedMeta = updateEntryInIndex(meta, entryId, entryMeta);
           await writeLocalFile(dirHandle, INDEX_PATH, JSON.stringify(updatedMeta, null, 2));
 
           notebookMetadataRef.current = updatedMeta;
@@ -533,7 +539,7 @@ export default function App() {
         const result = await getLocalFileContent(dirHandle, INDEX_PATH);
         if (result.text) {
           const parsed = JSON.parse(result.text);
-          setNotebookMetadata(updateMetadataSuggestions(parsed));
+          setNotebookMetadata(migrateMetadata(parsed));
         }
       } catch { /* not found */ }
 
@@ -573,13 +579,13 @@ export default function App() {
       if (pendingMeta?.content) {
         try {
           const parsed = JSON.parse(pendingMeta.content);
-          setNotebookMetadata(updateMetadataSuggestions(parsed));
+          setNotebookMetadata(migrateMetadata(parsed));
         } catch { /* ignore */ }
       } else {
         try {
           const metaStr = await fetchFileContent(config, INDEX_PATH);
           const parsed = JSON.parse(metaStr);
-          setNotebookMetadata(updateMetadataSuggestions(parsed));
+          setNotebookMetadata(migrateMetadata(parsed));
         } catch { /* not found yet */ }
       }
 
@@ -613,22 +619,26 @@ export default function App() {
     const defaultTitle = "";
     const defaultAuthor = localStorage.getItem("nb-last-author") || "";
 
+    const entryMeta: EntryMetadata = {
+      id: entryId,
+      title: defaultTitle,
+      author: defaultAuthor,
+      phase: "",
+      createdAt: createdAt,
+      filename: path,
+      resources: {}
+    };
+
     const wrapper: EntryWrapper = {
       version: 2,
-      metadata: {
-        id: entryId,
-        title: defaultTitle,
-        author: defaultAuthor,
-        phase: "",
-        createdAt: createdAt
-      },
+      metadata: entryMeta,
       content: { type: "doc", content: [{ type: "paragraph" }] }
     };
     const jsonStr = JSON.stringify(wrapper, null, 2);
 
-    const initialLatex = `\\notebookentry{${defaultTitle}}{${createdAt.split('T')[0]}}{${defaultAuthor}}{}\n\n`;
+    const initialLatex = `\\notebookentry{${defaultTitle}}{${createdAt.split('T')[0]}}{${defaultAuthor}}{}\n\\label{${entryId}}\n\n`;
 
-    const newMetadata = updateEntryInIndex(notebookMetadata, path, wrapper.metadata);
+    const newMetadata = updateEntryInIndex(notebookMetadata, entryId, wrapper.metadata);
     const metaStr = JSON.stringify(newMetadata, null, 2);
 
     // Optimistic UI updates
@@ -828,8 +838,8 @@ export default function App() {
     if (workspaceMode === "local" && !dirHandle) return;
     setIsLoading(true);
     try {
-      const newIndex: NotebookMetadata = {
-        version: 2,
+      let newIndex: NotebookMetadata = {
+        version: 3,
         entries: {},
         knownAuthors: {},
         knownProjectTitles: {},
@@ -862,7 +872,14 @@ export default function App() {
         if (content) {
           try {
             const wrapper: EntryWrapper = JSON.parse(content);
-            updateEntryInIndex(newIndex, file.path, wrapper.metadata);
+            const entryId = wrapper.metadata.id || file.path.split('/').pop()?.replace('.json', '') || "";
+            const entryMeta: EntryMetadata = {
+              ...wrapper.metadata,
+              id: entryId,
+              filename: file.path,
+              resources: extractResources(wrapper.content)
+            };
+            newIndex = updateEntryInIndex(newIndex, entryId, entryMeta);
           } catch (e) {
             console.error(`Failed to parse ${file.path}`, e);
           }
@@ -930,7 +947,7 @@ export default function App() {
                   await writeLocalFile(dirHandle, asset.path, bytes);
                 }
                 await writeLocalFile(dirHandle, path, jsonStr);
-                const latex = generateEntryLatex(JSON.stringify(cleanDoc), wrapper.metadata.title, wrapper.metadata.author, wrapper.metadata.phase, wrapper.metadata.createdAt);
+                const latex = generateEntryLatex(JSON.stringify(cleanDoc), wrapper.metadata.title, wrapper.metadata.author, wrapper.metadata.phase, wrapper.metadata.createdAt, newId);
                 await writeLocalFile(dirHandle, `${LATEX_DIR}/${newId}.tex`, latex);
                 await handleRebuildIndex();
                 await loadLocalExplorer();
@@ -941,7 +958,7 @@ export default function App() {
                 await stageChange(dbName, { path: asset.path, operation: "upsert", content: asset.base64, label: `Import asset`, stagedAt: isoTimestamp() });
               }
               await stage({ path, content: jsonStr, operation: "upsert", label: "Import entry" });
-              const latex = generateEntryLatex(JSON.stringify(cleanDoc), wrapper.metadata.title, wrapper.metadata.author, wrapper.metadata.phase, wrapper.metadata.createdAt);
+              const latex = generateEntryLatex(JSON.stringify(cleanDoc), wrapper.metadata.title, wrapper.metadata.author, wrapper.metadata.phase, wrapper.metadata.createdAt, newId);
               await stage({ path: `${LATEX_DIR}/${newId}.tex`, content: latex, operation: "upsert", label: "Import LaTeX" });
               await handleRebuildIndex();
             }
@@ -1109,6 +1126,8 @@ export default function App() {
         version: 2,
         metadata: {
           id: openFile?.id || "entry",
+          filename: filename,
+          resources: {},
           ...info
         },
         content: hydratedDoc
@@ -1397,35 +1416,38 @@ export default function App() {
                 onContentChange={handleContentChange}
                 onTitleChange={(title) => {
                   setOpenFile(prev => prev ? { ...prev, title } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.path, { 
-                    ...prev.entries[openFile.path], 
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, { 
+                    ...prev.entries[openFile.id], 
                     title,
                     id: openFile.id,
                     author: openFile.author,
                     phase: openFile.phase,
-                    createdAt: openFile.createdAt
+                    createdAt: openFile.createdAt,
+                    filename: openFile.path
                   }));
                 }}
                 onAuthorChange={(author) => {
                   setOpenFile(prev => prev ? { ...prev, author } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.path, { 
-                    ...prev.entries[openFile.path], 
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, { 
+                    ...prev.entries[openFile.id], 
                     author,
                     id: openFile.id,
                     title: openFile.title,
                     phase: openFile.phase,
-                    createdAt: openFile.createdAt
+                    createdAt: openFile.createdAt,
+                    filename: openFile.path
                   }));
                 }}
                 onPhaseChange={(phase) => {
                   setOpenFile(prev => prev ? { ...prev, phase } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.path, { 
-                    ...prev.entries[openFile.path], 
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, { 
+                    ...prev.entries[openFile.id], 
                     phase,
                     id: openFile.id,
                     title: openFile.title,
                     author: openFile.author,
-                    createdAt: openFile.createdAt
+                    createdAt: openFile.createdAt,
+                    filename: openFile.path
                   }));
                 }}
                 onImageUpload={handleImageUploaded}
@@ -1433,6 +1455,7 @@ export default function App() {
                 onDownloadPortable={handleDownloadPortable}
                 dbName={getDBName()}
                 isSaving={savingPaths.has(openFile.path)}
+                notebookMetadata={notebookMetadata}
               />
             </div>
             {/* Preview Tab */}
@@ -1472,35 +1495,38 @@ export default function App() {
                 onContentChange={handleContentChange}
                 onTitleChange={(title) => {
                   setOpenFile(prev => prev ? { ...prev, title } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.path, { 
-                    ...prev.entries[openFile.path], 
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, { 
+                    ...prev.entries[openFile.id], 
                     title,
                     id: openFile.id,
                     author: openFile.author,
                     phase: openFile.phase,
-                    createdAt: openFile.createdAt
+                    createdAt: openFile.createdAt,
+                    filename: openFile.path
                   }));
                 }}
                 onAuthorChange={(author) => {
                   setOpenFile(prev => prev ? { ...prev, author } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.path, { 
-                    ...prev.entries[openFile.path], 
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, { 
+                    ...prev.entries[openFile.id], 
                     author,
                     id: openFile.id,
                     title: openFile.title,
                     phase: openFile.phase,
-                    createdAt: openFile.createdAt
+                    createdAt: openFile.createdAt,
+                    filename: openFile.path
                   }));
                 }}
                 onPhaseChange={(phase) => {
                   setOpenFile(prev => prev ? { ...prev, phase } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.path, { 
-                    ...prev.entries[openFile.path], 
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, { 
+                    ...prev.entries[openFile.id], 
                     phase,
                     id: openFile.id,
                     title: openFile.title,
                     author: openFile.author,
-                    createdAt: openFile.createdAt
+                    createdAt: openFile.createdAt,
+                    filename: openFile.path
                   }));
                 }}
                 onImageUpload={handleImageUploaded}
@@ -1509,6 +1535,7 @@ export default function App() {
                 onClose={() => setOpenFile(null)}
                 dbName={getDBName()}
                 isSaving={savingPaths.has(openFile.path)}
+                notebookMetadata={notebookMetadata}
               />
             </Panel>
 

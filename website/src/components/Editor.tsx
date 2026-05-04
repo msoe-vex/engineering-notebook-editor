@@ -7,7 +7,7 @@ import {
   Save, Trash2, Download, AlertCircle, Loader2, User, Target, X, FileCode,
   Undo2, Redo2, ImagePlus, Plus, ChevronDown, FileText, Type, List, ListOrdered,
   Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
-  Brain, PencilRuler, Hammer, SearchCheck, Goal, Terminal
+  Brain, PencilRuler, Hammer, SearchCheck, Goal, Terminal, Link as LinkIcon, Underline as UnderlineIcon
 } from "lucide-react";
 import { generateUUID, hashContent, getExtensionFromDataUrl } from "@/lib/utils";
 import { generateEntryLatex } from "@/lib/latex";
@@ -57,6 +57,7 @@ interface EditorProps {
   knownAuthors?: Record<string, string[]>;
   knownProjectTitles?: Record<string, string[]>;
   isSaving?: boolean;
+  notebookMetadata?: any;
 }
 
 const Editor = React.memo(function Editor({
@@ -83,6 +84,7 @@ const Editor = React.memo(function Editor({
   knownAuthors = {},
   knownProjectTitles = {},
   isSaving: isExternalSaving = false,
+  notebookMetadata,
 }: EditorProps) {
   const parseInitialContent = (raw: any): any => {
     if (!raw) return raw;
@@ -110,6 +112,7 @@ const Editor = React.memo(function Editor({
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const toggleLinkFn = useRef<(() => void) | null>(null);
   const [editor, setEditor] = useState<any>(null);
   const [showTableGrid, setShowTableGrid] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -144,7 +147,8 @@ const Editor = React.memo(function Editor({
   }, [filename, initialContent]);
 
   const generateLatex = (cnt: string, t: string, a: string, p: string) => {
-    return generateEntryLatex(cnt, t, a, p, initialCreatedAt);
+    const entryId = filename.split('/').pop()?.replace('.json', '') || "";
+    return generateEntryLatex(cnt, t, a, p, initialCreatedAt, entryId);
   };
 
   const validate = () => {
@@ -451,8 +455,8 @@ const Editor = React.memo(function Editor({
                 type="text"
                 value={title}
                 options={Object.keys(knownProjectTitles).filter(t => {
-                  const normFilename = filename.replace(/\\/g, "/");
-                  const otherRefs = (knownProjectTitles[t] || []).filter(p => p.replace(/\\/g, "/") !== normFilename);
+                  const entryId = filename.split('/').pop()?.replace('.json', '') || "";
+                  const otherRefs = (knownProjectTitles[t] || []).filter(id => id !== entryId);
                   return otherRefs.length > 0 && t.trim() !== title.trim();
                 })}
                 onSelectOption={(val) => { setTitle(val); onTitleChange?.(val); }}
@@ -469,8 +473,8 @@ const Editor = React.memo(function Editor({
                   type="text"
                   value={author}
                   options={Object.keys(knownAuthors).filter(a => {
-                    const normFilename = filename.replace(/\\/g, "/");
-                    const otherRefs = (knownAuthors[a] || []).filter(p => p.replace(/\\/g, "/") !== normFilename);
+                    const entryId = filename.split('/').pop()?.replace('.json', '') || "";
+                    const otherRefs = (knownAuthors[a] || []).filter(id => id !== entryId);
                     return otherRefs.length > 0 && a.trim() !== author.trim();
                   })}
                   onSelectOption={(val) => { setAuthor(val); onAuthorChange?.(val); }}
@@ -510,6 +514,19 @@ const Editor = React.memo(function Editor({
                 </ToolbarButton>
                 <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} title="Italic">
                   <Italic size={16} />
+                </ToolbarButton>
+                <ToolbarButton onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive("underline")} title="Underline">
+                  <UnderlineIcon size={16} />
+                </ToolbarButton>
+
+                <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
+
+                <ToolbarButton 
+                  onClick={() => toggleLinkFn.current?.()} 
+                  active={editor.isActive("link")} 
+                  title="Insert Link/Reference"
+                >
+                  <LinkIcon size={16} />
                 </ToolbarButton>
 
                 <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
@@ -715,6 +732,8 @@ const Editor = React.memo(function Editor({
               author={author}
               dbName={dbName}
               onEditorInit={setEditor}
+              onToggleLink={(fn) => { toggleLinkFn.current = fn; }}
+              notebookMetadata={notebookMetadata}
             />
           </div>
         </div>
