@@ -13,7 +13,7 @@ import {
 import {
   NotebookMetadata, EMPTY_METADATA, EntryMetadata, EntryWrapper,
   updateEntryInIndex, renameEntryInMetadata, removeEntryFromMetadata,
-  updateMetadataSuggestions, dehydrateAssets, hydrateAssets, remapContentIds,
+  dehydrateAssets, hydrateAssets, remapContentIds,
 } from "@/lib/metadata";
 import Settings from "./Settings";
 import Editor from "./Editor";
@@ -854,8 +854,6 @@ export default function App() {
       let newIndex: NotebookMetadata = {
         version: 3,
         entries: {},
-        knownAuthors: {},
-        knownProjectTitles: {},
       };
 
       let entryFiles: { name: string; path: string }[] = [];
@@ -1423,8 +1421,6 @@ export default function App() {
                 initialPhase={openFile.phase}
                 initialContent={openFile.tiptapContent}
                 metadataMissing={openFile.metadataMissing}
-                knownAuthors={notebookMetadata.knownAuthors}
-                knownProjectTitles={notebookMetadata.knownProjectTitles}
                 filename={openFile.path}
                 onSaved={handleEntrySaved}
                 onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
@@ -1502,8 +1498,6 @@ export default function App() {
                 initialCreatedAt={openFile.createdAt}
                 initialContent={openFile.tiptapContent}
                 metadataMissing={openFile.metadataMissing}
-                knownAuthors={notebookMetadata.knownAuthors}
-                knownProjectTitles={notebookMetadata.knownProjectTitles}
                 filename={openFile.path}
                 onSaved={handleEntrySaved}
                 onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}

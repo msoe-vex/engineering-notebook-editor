@@ -38,18 +38,15 @@ export interface EntryWrapper {
 export interface NotebookMetadata {
   version: number;
   entries: Record<string, EntryMetadata>; // uuid -> metadata
-  knownAuthors: Record<string, string[]>; // author -> uuids
-  knownProjectTitles: Record<string, string[]>; // title -> uuids
 }
 
 export const EMPTY_METADATA: NotebookMetadata = { 
   version: 3, 
   entries: {},
-  knownAuthors: {},
-  knownProjectTitles: {}
 };
 
 // ─── TipTap JSON helpers ──────────────────────────────────────────────────────
+// ... (omitting unchanged TipTap helpers for brevity in thought, but tool will replace the block)
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type TipTapDoc = any;
@@ -228,35 +225,9 @@ export function updateEntryInIndex(
   entryId: string,
   info: EntryMetadata
 ): NotebookMetadata {
-  const newEntries = { ...metadata.entries, [entryId]: info };
-  return updateMetadataSuggestions({ ...metadata, entries: newEntries });
-}
-
-/** 
- * Update the lists of known authors and project titles in metadata. 
- * Rebuilds the lists based on all current entries.
- */
-export function updateMetadataSuggestions(metadata: NotebookMetadata): NotebookMetadata {
-  const newAuthors: Record<string, string[]> = {};
-  const newTitles: Record<string, string[]> = {};
-
-  for (const [entryId, info] of Object.entries(metadata.entries)) {
-    if (info.author?.trim()) {
-      const a = info.author.trim();
-      if (!newAuthors[a]) newAuthors[a] = [];
-      newAuthors[a].push(entryId);
-    }
-    if (info.title?.trim() && !info.title.endsWith(".tex")) {
-      const t = info.title.trim();
-      if (!newTitles[t]) newTitles[t] = [];
-      newTitles[t].push(entryId);
-    }
-  }
-
   return {
     ...metadata,
-    knownAuthors: newAuthors,
-    knownProjectTitles: newTitles,
+    entries: { ...metadata.entries, [entryId]: info }
   };
 }
 
@@ -267,7 +238,7 @@ export function removeEntryFromMetadata(
 ): NotebookMetadata {
   const newEntries = { ...metadata.entries };
   delete newEntries[entryId];
-  return updateMetadataSuggestions({ ...metadata, entries: newEntries });
+  return { ...metadata, entries: newEntries };
 }
 
 /** Rename an entry in the metadata index. */
@@ -281,7 +252,7 @@ export function renameEntryInMetadata(
     newEntries[newId] = newEntries[oldId];
     delete newEntries[oldId];
   }
-  return updateMetadataSuggestions({ ...metadata, entries: newEntries });
+  return { ...metadata, entries: newEntries };
 }
 
 /** 
@@ -301,11 +272,10 @@ export function migrateMetadata(raw: any): NotebookMetadata {
         filename: path,
       } as EntryMetadata;
     }
-    return updateMetadataSuggestions({
-      ...raw,
+    return {
       version: 3,
       entries: newEntries,
-    });
+    };
   }
 
   // Version 1: very old format, unlikely to exist but safe to handle

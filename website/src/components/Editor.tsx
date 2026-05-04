@@ -54,8 +54,6 @@ interface EditorProps {
   onDownloadPortable?: (path: string, content: any, info: { title: string; author: string; phase: string; createdAt: string }) => void;
   onClose?: () => void;
   dbName?: string;
-  knownAuthors?: Record<string, string[]>;
-  knownProjectTitles?: Record<string, string[]>;
   isSaving?: boolean;
   notebookMetadata?: any;
 }
@@ -81,8 +79,6 @@ const Editor = React.memo(function Editor({
   onDownloadPortable,
   onClose,
   dbName,
-  knownAuthors = {},
-  knownProjectTitles = {},
   isSaving: isExternalSaving = false,
   notebookMetadata,
 }: EditorProps) {
@@ -117,6 +113,24 @@ const Editor = React.memo(function Editor({
   const [showTableGrid, setShowTableGrid] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [, setSelectionUpdate] = useState(0);
+
+  const entryId = filename.split('/').pop()?.replace('.json', '') || "";
+
+  const otherAuthors = React.useMemo(() => {
+    const authors = new Set<string>();
+    Object.entries(notebookMetadata?.entries || {}).forEach(([id, e]: [string, any]) => {
+      if (id !== entryId && e.author?.trim()) authors.add(e.author.trim());
+    });
+    return Array.from(authors).sort();
+  }, [notebookMetadata?.entries, entryId]);
+
+  const otherTitles = React.useMemo(() => {
+    const titles = new Set<string>();
+    Object.entries(notebookMetadata?.entries || {}).forEach(([id, e]: [string, any]) => {
+      if (id !== entryId && e.title?.trim() && !e.title.endsWith(".tex")) titles.add(e.title.trim());
+    });
+    return Array.from(titles).sort();
+  }, [notebookMetadata?.entries, entryId]);
 
   const latestContentRef = useRef(content);
   const latestMetadataRef = useRef({ title, author, phase });
@@ -454,11 +468,7 @@ const Editor = React.memo(function Editor({
               <AutocompleteInput
                 type="text"
                 value={title}
-                options={Object.keys(knownProjectTitles).filter(t => {
-                  const entryId = filename.split('/').pop()?.replace('.json', '') || "";
-                  const otherRefs = (knownProjectTitles[t] || []).filter(id => id !== entryId);
-                  return otherRefs.length > 0 && t.trim() !== title.trim();
-                })}
+                options={otherTitles}
                 onSelectOption={(val) => { setTitle(val); onTitleChange?.(val); }}
                 onChange={(e) => { setTitle(e.target.value); onTitleChange?.(e.target.value); }}
                 placeholder="Project Title..."
@@ -472,11 +482,7 @@ const Editor = React.memo(function Editor({
                 <AutocompleteInput
                   type="text"
                   value={author}
-                  options={Object.keys(knownAuthors).filter(a => {
-                    const entryId = filename.split('/').pop()?.replace('.json', '') || "";
-                    const otherRefs = (knownAuthors[a] || []).filter(id => id !== entryId);
-                    return otherRefs.length > 0 && a.trim() !== author.trim();
-                  })}
+                  options={otherAuthors}
                   onSelectOption={(val) => { setAuthor(val); onAuthorChange?.(val); }}
                   onChange={(e) => { setAuthor(e.target.value); onAuthorChange?.(e.target.value); }}
                   placeholder="Author"
