@@ -467,7 +467,7 @@ export default function App() {
             setNotebookMetadata(updatedMeta);
           }, 500);
         });
-      } else if (workspaceMode === "github") {
+      } else if (workspaceMode === "github" || workspaceMode === "memory") {
         const dbName = getDBName();
 
         // Save assets
@@ -735,7 +735,7 @@ export default function App() {
             await writeLocalFile(dirHandle, `${LATEX_DIR}/${entryId}.tex`, initialLatex);
             // No need to call loadLocalExplorer anymore since we updated state optimistically
           });
-        } else if (workspaceMode === "github") {
+        } else if (workspaceMode === "github" || workspaceMode === "memory") {
           await stage({ path, content: jsonStr, operation: "upsert", label: "New entry" });
           await stage({ path: INDEX_PATH, content: metaStr, operation: "upsert", label: "Update index" });
           await stage({ path: `${LATEX_DIR}/${entryId}.tex`, content: initialLatex, operation: "upsert", label: "Init LaTeX" });
@@ -967,7 +967,7 @@ export default function App() {
                 setNotebookMetadata(prev => updateEntryInIndex(prev, newId, newEntryMeta));
                 await loadLocalExplorer();
               });
-            } else if (workspaceMode === "github") {
+            } else if (workspaceMode === "github" || workspaceMode === "memory") {
               const dbName = getDBName();
               for (const asset of newAssets) {
                 await stageChange(dbName, { path: asset.path, operation: "upsert", content: asset.base64, label: `Import asset`, stagedAt: isoTimestamp() });
@@ -1007,11 +1007,8 @@ export default function App() {
         await writeLocalFile(dirHandle, imagePath, bytes);
         await loadLocalExplorer();
       });
-    } else if (workspaceMode === "github") {
+    } else if (workspaceMode === "github" || workspaceMode === "memory") {
       await stage({ path: imagePath, content: dataUrl, operation: "upsert", label: "Image upload" });
-      const imgName = imagePath.split("/").pop()!;
-      setResources(prev => [...prev, { name: imgName, path: imagePath }].sort((a, b) => a.name.localeCompare(b.name)));
-    } else {
       const imgName = imagePath.split("/").pop()!;
       setResources(prev => [...prev, { name: imgName, path: imagePath }].sort((a, b) => a.name.localeCompare(b.name)));
     }
@@ -1060,7 +1057,7 @@ export default function App() {
         } catch { /* ignore if not found */ }
         await loadLocalExplorer();
       });
-    } else if (workspaceMode === "github") {
+    } else if (workspaceMode === "github" || workspaceMode === "memory") {
       // Remove any staged upsert for this path, then stage delete
       const dbName = getDBName();
       await removeStaged(dbName, file.path);
@@ -1068,8 +1065,6 @@ export default function App() {
       const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
       await stage({ path: `${LATEX_DIR}/${entryId}.tex`, content: undefined, operation: "delete", label: "LaTeX deleted" });
       await stage({ path: INDEX_PATH, content: metaStr, operation: "upsert", label: "Metadata update" });
-      setEntries(prev => prev.filter(e => e.path !== file.path));
-    } else {
       setEntries(prev => prev.filter(e => e.path !== file.path));
     }
 
