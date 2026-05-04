@@ -366,7 +366,7 @@ const Editor = React.memo(function Editor({
               <MenuAction
                 icon={<FileCode size={14} />}
                 label="Download Portable (.json)"
-                onClick={() => onDownloadPortable?.(filename, content, { title, author, phase, createdAt: initialCreatedAt })}
+                onClick={() => onDownloadPortable?.(filename, JSON.stringify(content), { title, author, phase, createdAt: initialCreatedAt })}
               />
               <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
               <MenuAction icon={<X size={14} />} label="Close" onClick={onClose || (() => { })} />
@@ -688,7 +688,7 @@ const Editor = React.memo(function Editor({
                           if (safePos !== null) {
                             editor.chain().focus().insertContentAt(safePos, tableContent).run();
                           } else {
-                            editor.chain().focus().insertTable({ rows, cols, withHeaderRow: false }).run();
+                            editor.chain().focus().insertContent(tableContent).run();
                           }
                           setShowTableGrid(false);
                         }}

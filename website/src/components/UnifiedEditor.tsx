@@ -8,7 +8,9 @@ import {
 } from "@tiptap/react";
 import { NodeSelection, Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import { Slice, Fragment } from "@tiptap/pm/model";
 import { getResource } from "@/lib/db";
+import { remapContentIds } from "@/lib/metadata";
 import StarterKit from "@tiptap/starter-kit";
 import { Image as TiptapImage } from "@tiptap/extension-image";
 import { Table } from "@tiptap/extension-table";
@@ -798,6 +800,30 @@ const CustomRawLatex = CodeBlock.extend({
   },
 });
 
+const IdRemapper = Extension.create({
+  name: 'idRemapper',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey('idRemapper'),
+        props: {
+          transformPasted: (slice: Slice): Slice => {
+            const json = slice.content.toJSON();
+            const remapped = remapContentIds(json);
+            try {
+              const fragment = Fragment.fromJSON(this.editor.schema, remapped);
+              return new Slice(fragment, slice.openStart, slice.openEnd);
+            } catch (e) {
+              console.error("Failed to remap pasted IDs", e);
+              return slice;
+            }
+          }
+        }
+      })
+    ]
+  }
+});
+
 function RawLatexNodeView({ node, deleteNode, selected, editor, updateAttributes }: any) {
 
   const [dragEnabled, setDragEnabled] = useState(false);
@@ -1188,6 +1214,7 @@ export default function UnifiedEditor({
       Placeholder.configure({
         placeholder: "Start writing...",
       }),
+      IdRemapper,
     ],
     content: parseContent(content),
     onUpdate: ({ editor }) => {

@@ -203,23 +203,25 @@
 % \notebookentry{Title}{Date}{Author}{Phase}
 \newcommand{\notebookentry}[4]{\newentry{#1}{#2}{#3}{#4}}
 
-% \notebookimage{filename}{caption}{initials}{width_percent}
-\newcommand{\notebookimage}[4]{
+% \notebookimage{filename}{caption}{initials}{width_percent}{label}
+\newcommand{\notebookimage}[5]{
     \begin{figure}[htbp]
         \centering
         \includegraphics[width=#4, max height=0.4\textheight, keepaspectratio]{#1}
         \caption{#2 (Initials: #3)}
+        \label{#5}
     \end{figure}
 }
 
-% \notebooktable{columns}{content}{caption}
-\newcommand{\notebooktable}[3]{\customtable{#1}{#2}{#3}}
+% \notebooktable{columns}{content}{caption}{label}
+\newcommand{\notebooktable}[4]{\customtable{#1}{#2}{#3}{#4}}
 
-% \begin{notebookcodeblock}{language}{caption} ... \end{notebookcodeblock}
+% \begin{notebookcodeblock}{language}{caption}{label} ... \end{notebookcodeblock}
 \newcommand{\notebookcodelabel}[1]{\addvspace{1em}\noindent\textbf{Snippet: #1}\par\nopagebreak\smallskip}
-\lstnewenvironment{notebookcodeblock}[2]%
+\lstnewenvironment{notebookcodeblock}[3]%
 {%
     \notebookcodelabel{#2}%
+    \label{#3}%
     \lstset{language=#1, basicstyle=\small\ttfamily, breaklines=true}%
 }%
 {%
@@ -227,11 +229,12 @@
 }
 
 % Easy table insertion
-% Usage: \customtable{columns (e.g. |c|c|)}{content}{caption}
-\newcommand{\customtable}[3]{
+% Usage: \customtable{columns (e.g. |c|c|)}{content}{caption}{label}
+\newcommand{\customtable}[4]{
     \begin{table}[htbp]
         \centering
         \caption{#3}
+        \label{#4}
         \vspace{0.2cm}
         \begin{tabular}{#1}
             \hline

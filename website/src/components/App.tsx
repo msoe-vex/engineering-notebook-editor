@@ -13,7 +13,7 @@ import {
 import {
   NotebookMetadata, EMPTY_METADATA, EntryMetadata, EntryWrapper,
   updateEntryInIndex, renameEntryInMetadata, removeEntryFromMetadata,
-  updateMetadataSuggestions, dehydrateAssets, hydrateAssets,
+  updateMetadataSuggestions, dehydrateAssets, hydrateAssets, remapContentIds,
 } from "@/lib/metadata";
 import Settings from "./Settings";
 import Editor from "./Editor";
@@ -938,7 +938,8 @@ export default function App() {
             const path = `${ENTRIES_DIR}/${filename}`;
 
             // Dehydrate assets in the imported doc (it might have embedded assets)
-            const { cleanDoc, newAssets } = await dehydrateAssets(wrapper.content);
+            const remappedContent = remapContentIds(wrapper.content);
+            const { cleanDoc, newAssets } = await dehydrateAssets(remappedContent);
 
             const newWrapper: EntryWrapper = {
               ...wrapper,
@@ -1046,7 +1047,8 @@ export default function App() {
 
   const handleDeleteEntry = useCallback(async (file: ExplorerFile) => {
     // Update metadata
-    const updatedMeta = updateMetadataSuggestions(removeEntryFromMetadata(notebookMetadata, file.path));
+    const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
+    const updatedMeta = removeEntryFromMetadata(notebookMetadata, entryId);
     setNotebookMetadata(updatedMeta);
     const metaStr = JSON.stringify(updatedMeta, null, 2);
 

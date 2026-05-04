@@ -94,8 +94,8 @@ export const convertNodeToLatex = (node: any): string => {
       const code = (node.content || []).map((n: any) => n.text ?? "").join("");
       const title = node.attrs?.title ? `${node.attrs.title}: ` : "";
       const escapedCaption = escapeLaTeX(title + (node.attrs?.caption ?? ""));
-      const label = node.attrs?.id ? `\\label{${node.attrs.id}}` : "";
-      return `\\begin{notebookcodeblock}{${lang}}{${escapedCaption}}\n${code}\n\\end{notebookcodeblock}\n${label}\n\n`;
+      const labelId = node.attrs?.id || "";
+      return `\\begin{notebookcodeblock}{${lang}}{${escapedCaption}}{${labelId}}\n${code}\n\\end{notebookcodeblock}\n\n`;
     }
 
     case "image": {
@@ -123,8 +123,8 @@ export const convertNodeToLatex = (node: any): string => {
       const widthNum = parseFloat(rawWidth);
       const latexWidth = isNaN(widthNum) ? "1" : (widthNum / 100).toFixed(2);
 
-      const label = node.attrs?.id ? `\\label{${node.attrs.id}}` : "";
-      return `\\notebookimage{${imgSrc}}{${escapedCaption}}{${escapedInitials}}{${latexWidth}\\textwidth}\n${label}\n\n`;
+      const labelId = node.attrs?.id || "";
+      return `\\notebookimage{${imgSrc}}{${escapedCaption}}{${escapedInitials}}{${latexWidth}\\textwidth}{${labelId}}\n\n`;
     }
 
     case "table": {
@@ -143,9 +143,9 @@ export const convertNodeToLatex = (node: any): string => {
       }).join("\n");
 
       const escapedCaption = escapeLaTeX(caption);
-      const label = node.attrs?.id ? `\\label{${node.attrs.id}}` : "";
+      const labelId = node.attrs?.id || "";
 
-      return `\\notebooktable{${colSpec}}{${body}}{${escapedCaption}}\n${label}\n\n`;
+      return `\\notebooktable{${colSpec}}{${body}}{${escapedCaption}}{${labelId}}\n\n`;
     }
 
     // tableRow / tableCell / tableHeader — just recurse
