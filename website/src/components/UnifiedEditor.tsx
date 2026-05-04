@@ -72,9 +72,8 @@ const CustomLink = Link.extend({
       },
     };
   },
-  // Disable the default click handler plugin by providing an empty list or overriding props
   addProseMirrorPlugins() {
-    return [];
+    return this.parent?.() || [];
   },
 });
 
@@ -1116,51 +1115,88 @@ export default function UnifiedEditor({
     editorProps: {
       attributes: { class: "focus:outline-none min-h-[800px] h-full max-w-none p-4 lg:p-6 cursor-text" },
       handleDOMEvents: {
+        auxclick: (view, event) => {
+          const target = event.target as HTMLElement;
+          const anchor = target.closest('a');
+          if (anchor && event.button === 1) {
+            console.log('[UnifiedEditor link] auxclick blocked', {
+              button: event.button,
+              ctrlKey: event.ctrlKey,
+              metaKey: event.metaKey,
+              href: anchor.getAttribute('href'),
+              text: anchor.textContent,
+            });
+            event.preventDefault();
+            event.stopPropagation();
+            return true;
+          }
+          return false;
+        },
         click: (view, event) => {
-          const pos = view.posAtCoords({ left: event.clientX, top: event.clientY });
-          if (pos) {
-            const marks = view.state.doc.resolve(pos.pos).marks();
-            const linkMark = marks.find(m => m.type.name === 'link');
-            if (linkMark) {
-              if (event.ctrlKey || event.metaKey) {
-                const { href } = linkMark.attrs;
-                if (href) window.open(href, '_blank');
-              }
-              event.preventDefault();
-              event.stopPropagation();
-              return true;
+          const target = event.target as HTMLElement;
+          const anchor = target.closest('a');
+          if (anchor) {
+            console.log('[UnifiedEditor link] click', {
+              button: event.button,
+              ctrlKey: event.ctrlKey,
+              metaKey: event.metaKey,
+              href: anchor.getAttribute('href'),
+              text: anchor.textContent,
+              targetTag: target.tagName,
+            });
+            if (event.ctrlKey || event.metaKey) {
+              // Let the browser handle Ctrl/Cmd + Click (new tab)
+              return false;
             }
+            console.log('[UnifiedEditor link] click blocked');
+            event.preventDefault();
+            event.stopPropagation();
+            return true;
           }
           return false;
         },
         mousedown: (view, event) => {
-          const pos = view.posAtCoords({ left: event.clientX, top: event.clientY });
-          if (pos) {
-            const marks = view.state.doc.resolve(pos.pos).marks();
-            if (marks.find(m => m.type.name === 'link')) {
-              if (!event.ctrlKey && !event.metaKey) {
-                // Allow normal selection behavior on links without jumping
-                return false;
-              }
-            }
+          const target = event.target as HTMLElement;
+          const anchor = target.closest('a');
+          if (anchor) {
+            console.log('[UnifiedEditor link] mousedown', {
+              button: event.button,
+              ctrlKey: event.ctrlKey,
+              metaKey: event.metaKey,
+              href: anchor.getAttribute('href'),
+              text: anchor.textContent,
+              targetTag: target.tagName,
+            });
+          }
+          if (anchor && !event.ctrlKey && !event.metaKey) return false;
+          return false;
+        },
+        mouseup: (view, event) => {
+          const target = event.target as HTMLElement;
+          const anchor = target.closest('a');
+          if (anchor && event.button === 0 && !event.ctrlKey && !event.metaKey) {
+            console.log('[UnifiedEditor link] mouseup blocked', {
+              button: event.button,
+              ctrlKey: event.ctrlKey,
+              metaKey: event.metaKey,
+              href: anchor.getAttribute('href'),
+              text: anchor.textContent,
+              targetTag: target.tagName,
+            });
+            event.preventDefault();
+            return true;
           }
           return false;
         },
         dragstart: () => { setIsDragging(true); return false; },
         dragend: () => { setIsDragging(false); return false; },
-        // Snapping logic handled in handleDrop
         dragover: (view, event) => {
-          // Ensure dragging state is true even if drag started outside (e.g. file drop)
           if (!isDragging) setIsDragging(true);
-
-          // Auto-scroll logic
           const scrollContainer = view.dom.closest('.overflow-y-auto');
           if (!scrollContainer) return false;
-
           const rect = scrollContainer.getBoundingClientRect();
           const y = event.clientY;
-          const threshold = 50; // pixels from top/bottom to start scrolling
-
+          const threshold = 50;
           if (y < rect.top + threshold) {
             scrollContainer.scrollBy({ top: -15, behavior: 'auto' });
           } else if (y > rect.bottom - threshold) {
@@ -1183,8 +1219,6 @@ export default function UnifiedEditor({
       },
       handleDrop: (view, event, slice, moved) => {
         setIsDragging(false);
-
-        // Handle File Drops (Images)
         const files = event.dataTransfer?.files;
         if (files && files.length > 0) {
           for (const file of Array.from(files)) {
@@ -1194,8 +1228,6 @@ export default function UnifiedEditor({
             }
           }
         }
-
-        // Allow default ProseMirror behavior for moved content (allows dropping anywhere)
         return false;
       },
     },
@@ -1239,6 +1271,36 @@ export default function UnifiedEditor({
     return () => window.removeEventListener("mousedown", handleOutsideClick);
   }, [showTableGrid]);
 
+  const blockPlainLinkActivation = (event: React.MouseEvent<HTMLElement>) => {
+    const target = event.target as HTMLElement;
+    const anchor = target.closest('a');
+
+    if (!anchor) return;
+
+    if (event.ctrlKey || event.metaKey) {
+      console.log('[UnifiedEditor link] capture allow', {
+        button: event.button,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        href: anchor.getAttribute('href'),
+        text: anchor.textContent,
+        targetTag: target.tagName,
+      });
+      return;
+    }
+
+    console.log('[UnifiedEditor link] capture blocked', {
+      button: event.button,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      href: anchor.getAttribute('href'),
+      text: anchor.textContent,
+      targetTag: target.tagName,
+    });
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
 
   if (!editor) return null;
 
@@ -1255,7 +1317,14 @@ export default function UnifiedEditor({
         )}
 
         <div className="bg-nb-surface min-h-[800px] relative">
-          <EditorContent editor={editor} className="max-w-none h-full" />
+          <div
+            className="max-w-none h-full"
+            onMouseDownCapture={blockPlainLinkActivation}
+            onClickCapture={blockPlainLinkActivation}
+            onAuxClickCapture={blockPlainLinkActivation}
+          >
+            <EditorContent editor={editor} className="h-full" />
+          </div>
           {showLinkPopup && (
             <LinkReferencePopup 
               editor={editor} 
