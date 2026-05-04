@@ -75,14 +75,7 @@ export function extractResources(doc: TipTapDoc): Record<string, { title: string
     
     // Include any node that has a UUID id
     if (node.attrs?.id) {
-      let title = node.attrs.title || node.attrs.caption || "";
-      
-      // Fallback titles for better linking UX if title is missing
-      if (!title) {
-        const type = node.type || "block";
-        const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
-        title = `Untitled ${typeLabel}`;
-      }
+      const title = node.attrs.title || node.attrs.caption || "";
 
       resources[node.attrs.id] = {
         title,

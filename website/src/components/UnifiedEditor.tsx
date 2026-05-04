@@ -10,7 +10,7 @@ import { NodeSelection, Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { Slice, Fragment } from "@tiptap/pm/model";
 import { getResource } from "@/lib/db";
-import { remapContentIds } from "@/lib/metadata";
+import { remapContentIds, extractResources } from "@/lib/metadata";
 import StarterKit from "@tiptap/starter-kit";
 import { Image as TiptapImage } from "@tiptap/extension-image";
 import { Table } from "@tiptap/extension-table";
@@ -895,11 +895,13 @@ interface UnifiedEditorProps {
 function LinkReferencePopup({ 
   editor, 
   onClose, 
-  metadata 
+  metadata,
+  filename
 }: { 
   editor: any, 
   onClose: () => void, 
-  metadata: any 
+  metadata: any,
+  filename?: string
 }) {
   const [query, setQuery] = useState("");
   const [text, setText] = useState("");
@@ -937,18 +939,31 @@ function LinkReferencePopup({
   const allResources = useMemo(() => {
     const list: any[] = [];
     if (!metadata || !metadata.entries) return list;
+
+    // 1. Get resources from the current editor state (most up-to-date for active entry)
+    const currentEntryId = (editor as any).options.element.closest('[data-filename]')?.dataset.filename?.split('/').pop()?.replace('.json', '') 
+      || filename?.split('/').pop()?.replace('.json', '');
+    
+    // We can also just extract directly from the editor JSON
+    const localResources = extractResources(editor.getJSON());
+
     for (const [entryId, entry] of Object.entries(metadata.entries)) {
       const e = entry as any;
-      list.push({ id: e.id, title: e.title, type: "entry", entryTitle: e.title, entryDate: e.createdAt?.split('T')[0] });
-      if (e.resources) {
-        for (const [resId, res] of Object.entries(e.resources)) {
-          const r = res as any;
-          list.push({ id: resId, title: r.title, type: r.type, entryTitle: e.title, entryDate: e.createdAt?.split('T')[0] });
-        }
+      const entryTitle = e.title?.trim() || "Untitled Entry";
+      const entryDate = e.createdAt?.split('T')[0];
+      
+      list.push({ id: e.id, title: entryTitle, type: "entry", entryTitle, entryDate });
+      
+      const resources = (e.id === currentEntryId) ? { ...e.resources, ...localResources } : (e.resources || {});
+      
+      for (const [resId, res] of Object.entries(resources)) {
+        const r = res as any;
+        const resTitle = r.title?.trim() || `Untitled ${r.type?.charAt(0).toUpperCase() + r.type?.slice(1) || 'Block'}`;
+        list.push({ id: resId, title: resTitle, type: r.type, entryTitle, entryDate });
       }
     }
     return list;
-  }, [metadata]);
+  }, [metadata, editor, filename]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return [];
@@ -1369,6 +1384,7 @@ export default function UnifiedEditor({
               editor={editor} 
               metadata={notebookMetadata} 
               onClose={() => setShowLinkPopup(false)} 
+              filename={filename}
             />
           )}
         </div>
