@@ -1076,6 +1076,8 @@ export default function UnifiedEditor({
     extensions: [
       StarterKit.configure({
         codeBlock: false,
+        link: false,
+        underline: false,
         dropcursor: {
           color: '#d9282f',
           width: 3,
