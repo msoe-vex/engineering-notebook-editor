@@ -49,7 +49,7 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
             <Plus size={24} />
           </div>
           <div>
-            <div className="font-bold text-xs uppercase tracking-widest">New Entry</div>
+            <div className="font-bold text-xs tracking-widest">New Entry</div>
             <div className="text-white/70 text-sm font-normal mt-0.5">Start a new notebook entry</div>
           </div>
         </button>
@@ -63,7 +63,7 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
             <FolderOpen size={24} className="text-nb-tertiary" />
           </div>
           <div>
-            <div className="font-bold text-xs uppercase tracking-widest text-nb-on-surface">Open Entry</div>
+            <div className="font-bold text-xs tracking-widest text-nb-on-surface">Open Entry</div>
             <div className="text-nb-on-surface-variant text-sm font-normal mt-0.5">Select from the sidebar</div>
           </div>
         </button>
@@ -77,7 +77,7 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
             <Upload size={24} className="text-nb-tertiary" />
           </div>
           <div>
-            <div className="font-bold text-xs uppercase tracking-widest text-nb-on-surface">Import Portable</div>
+            <div className="font-bold text-xs tracking-widest text-nb-on-surface">Import Portable</div>
             <div className="text-nb-on-surface-variant text-sm font-normal mt-0.5">Import a .json entry bundle</div>
           </div>
         </button>
@@ -88,7 +88,7 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
         <button
           id="welcome-disconnect"
           onClick={onDisconnect}
-          className="text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary transition-colors border-b border-transparent hover:border-nb-primary pb-0.5"
+          className="text-xs font-bold tracking-widest text-nb-on-surface-variant hover:text-nb-primary transition-colors border-b border-transparent hover:border-nb-primary pb-0.5"
         >
           Change workspace
         </button>

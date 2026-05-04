@@ -73,7 +73,7 @@ export default function ReferenceSearch({ metadata, onClose, onSelect }: Referen
       >
         <div className="p-6 border-b border-nb-outline-variant/30">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-black uppercase tracking-widest text-nb-secondary">Reference Tool</h2>
+            <h2 className="text-sm font-black tracking-widest text-nb-secondary">Reference Tool</h2>
             <button onClick={onClose} className="p-2 rounded-xl hover:bg-nb-surface-high transition-colors">
               <X size={20} />
             </button>
@@ -94,7 +94,7 @@ export default function ReferenceSearch({ metadata, onClose, onSelect }: Referen
         <div className="flex-1 overflow-y-auto p-2 scrollbar-hide">
           {filtered.length === 0 ? (
             <div className="py-12 text-center text-nb-on-surface-variant/40">
-              <p className="text-sm font-bold uppercase tracking-widest">No resources found</p>
+              <p className="text-sm font-bold tracking-widest">No resources found</p>
             </div>
           ) : (
             <div className="grid gap-1">
@@ -109,8 +109,8 @@ export default function ReferenceSearch({ metadata, onClose, onSelect }: Referen
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-nb-primary/60">{res.type}</span>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant/30">•</span>
+                      <span className="text-[10px] font-black tracking-widest text-nb-primary/60">{res.type}</span>
+                      <span className="text-[10px] font-black tracking-widest text-nb-on-surface-variant/30">•</span>
                       <span className="text-[10px] font-bold text-nb-on-surface-variant/60">{res.entryDate}</span>
                     </div>
                     <h3 className="font-bold text-nb-on-surface group-hover:text-nb-primary transition-colors truncate">{res.title}</h3>

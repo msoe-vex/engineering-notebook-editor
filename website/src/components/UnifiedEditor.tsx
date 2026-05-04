@@ -179,7 +179,7 @@ export const ToolbarButton = ({
 const ContextMenuItem = ({ label, icon, onClick, danger }: { label: string, icon: React.ReactNode, onClick: () => void, danger?: boolean }) => (
   <button
     onClick={(e) => { e.stopPropagation(); onClick(); }}
-    className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${danger ? "text-red-500 hover:bg-red-50" : "text-nb-on-surface-variant hover:bg-nb-primary/10 hover:text-nb-primary"} text-left`}
+    className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-[10px] font-bold tracking-widest transition-all ${danger ? "text-red-500 hover:bg-red-50" : "text-nb-on-surface-variant hover:bg-nb-primary/10 hover:text-nb-primary"} text-left`}
   >
     <div className="opacity-60">{icon}</div>
     <span>{label}</span>
@@ -210,7 +210,7 @@ export const TableGridSelector = ({ onSelect, initialRows = 0, initialCols = 0 }
           ))
         ))}
       </div>
-      <div className="text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant text-center bg-nb-surface-low py-1 rounded">
+      <div className="text-[10px] font-bold tracking-widest text-nb-on-surface-variant text-center bg-nb-surface-low py-1 rounded">
         {hovered.r > 0 ? `${hovered.r} x ${hovered.c}` : "Select Size"}
       </div>
     </div>
@@ -306,7 +306,7 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName, e
           <GripVertical size={14} />
         </div>
         <div className="flex flex-col gap-1 items-center">
-          <div className="text-[8px] font-bold uppercase tracking-tighter text-nb-on-surface-variant/40 rotate-90 whitespace-nowrap mb-2">IMAGE</div>
+          <div className="text-[8px] font-bold tracking-tighter text-nb-on-surface-variant/40 rotate-90 whitespace-nowrap mb-2">IMAGE</div>
           <button
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); (editor as any)?.commands.focus(); }}
             title="Delete Image"
@@ -328,7 +328,7 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName, e
               value={node.attrs.title || ""}
               onChange={(e) => updateAttributes({ title: e.target.value })}
               placeholder="Give this image a title..."
-              className="flex-1 bg-transparent border-none outline-none text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
+              className="flex-1 bg-transparent border-none outline-none text-[10px] font-bold tracking-widest text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
             />
           </div>
           <div className="flex items-center gap-2 px-2 py-0.5 rounded-full bg-nb-surface-mid/50 border border-nb-outline-variant/20">
@@ -338,7 +338,7 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName, e
               value={node.attrs.initials || ""}
               onChange={(e) => updateAttributes({ initials: e.target.value })}
               placeholder="Initials"
-              className="w-12 bg-transparent border-none outline-none text-[8px] font-bold uppercase text-nb-on-surface-variant"
+              className="w-12 bg-transparent border-none outline-none text-[8px] font-bold text-nb-on-surface-variant"
             />
           </div>
         </div>
@@ -472,7 +472,7 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
               value={node.attrs.title || ""}
               onChange={(e) => updateAttributes({ title: e.target.value })}
               placeholder="Table Title..."
-              className="bg-transparent border-none outline-none text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30 w-48"
+              className="bg-transparent border-none outline-none text-[10px] font-bold tracking-widest text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30 w-48"
             />
           </div>
 
@@ -685,14 +685,14 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
               value={node.attrs.title || ""}
               onChange={(e) => updateAttributes({ title: e.target.value })}
               placeholder="Code Snippet Title..."
-              className="flex-1 bg-transparent border-none outline-none text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
+              className="flex-1 bg-transparent border-none outline-none text-[10px] font-bold tracking-widest text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
             />
             <div className="relative group/select shrink-0 ml-auto">
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-nb-surface-low border border-nb-outline-variant/50 hover:border-nb-primary/50 hover:bg-nb-surface transition-all cursor-pointer">
                 <select
                   value={node.attrs.language}
                   onChange={(e) => updateAttributes({ language: e.target.value })}
-                  className="text-[10px] font-bold uppercase tracking-widest bg-transparent border-none outline-none text-nb-on-surface-variant cursor-pointer hover:text-nb-primary transition-colors appearance-none pr-4"
+                  className="text-[10px] font-bold tracking-widest bg-transparent border-none outline-none text-nb-on-surface-variant cursor-pointer hover:text-nb-primary transition-colors appearance-none pr-4"
                 >
                   {LANGUAGES.map((lang) => (
                     <option key={lang} value={lang}>{lang}</option>
@@ -862,7 +862,7 @@ function RawLatexNodeView({ node, deleteNode, selected, editor, updateAttributes
               value={node.attrs.title || ""}
               onChange={(e) => updateAttributes({ title: e.target.value })}
               placeholder="LaTeX Block Title..."
-              className="flex-1 bg-transparent border-none outline-none text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
+              className="flex-1 bg-transparent border-none outline-none text-[10px] font-bold tracking-widest text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
             />
           </div>
         </div>
@@ -1020,13 +1020,13 @@ function LinkReferencePopup({
       onClick={e => e.stopPropagation()}
     >
       <div className="flex items-center justify-between mb-4">
-        <span className="text-[10px] font-black uppercase tracking-widest text-nb-secondary">Insert Link/Reference</span>
+        <span className="text-[10px] font-black tracking-widest text-nb-secondary">Insert Link/Reference</span>
         <button onClick={onClose} className="p-1.5 hover:bg-nb-surface-low rounded-lg transition-colors"><X size={16}/></button>
       </div>
 
       <div className="space-y-4">
         <div>
-          <label className="block text-[10px] font-bold uppercase text-nb-on-surface-variant/50 mb-1.5">Display Text</label>
+          <label className="block text-[10px] font-bold text-nb-on-surface-variant/50 mb-1.5">Display Text</label>
           <input 
             type="text" 
             value={text} 
@@ -1037,7 +1037,7 @@ function LinkReferencePopup({
         </div>
 
         <div>
-          <label className="block text-[10px] font-bold uppercase text-nb-on-surface-variant/50 mb-1.5">Link or Resource</label>
+          <label className="block text-[10px] font-bold text-nb-on-surface-variant/50 mb-1.5">Link or Resource</label>
           <div className="relative">
             <input 
               type="text" 
@@ -1065,7 +1065,7 @@ function LinkReferencePopup({
                     className="w-full px-4 py-2.5 text-left hover:bg-nb-primary/5 transition-colors border-b border-nb-outline-variant/10 last:border-0"
                   >
                     <div className="text-sm font-bold text-nb-on-surface truncate">{r.title}</div>
-                    <div className="text-[11px] text-nb-on-surface-variant/60 uppercase truncate">
+                    <div className="text-[11px] text-nb-on-surface-variant/60 truncate">
                       {r.type} • {r.entryTitle} • {r.entryDate}
                     </div>
                   </button>
@@ -1077,14 +1077,14 @@ function LinkReferencePopup({
           {(selectedResource || link.trim()) && (
             <div className="mt-3 p-3 bg-nb-surface-low border border-nb-outline-variant/20 rounded-xl flex items-center justify-between gap-3 animate-in slide-in-from-top-1 duration-200">
               <div className="flex-1 min-w-0">
-                <div className="text-[9px] font-black uppercase text-nb-primary mb-0.5 tracking-tighter">
+                <div className="text-[9px] font-black text-nb-primary mb-0.5 tracking-tighter">
                   {selectedResource ? "Linked Resource" : "External Link"}
                 </div>
                 <div className="text-sm font-bold text-nb-on-surface truncate">
                   {selectedResource ? selectedResource.title : link}
                 </div>
                 {selectedResource && (
-                  <div className="text-[11px] text-nb-on-surface-variant/60 uppercase truncate">
+                  <div className="text-[11px] text-nb-on-surface-variant/60 truncate">
                     {selectedResource.type} • {selectedResource.entryTitle} • {selectedResource.entryDate}
                   </div>
                 )}
@@ -1111,7 +1111,7 @@ function LinkReferencePopup({
         <div className="flex gap-2 pt-2">
           <button 
             onClick={handleApply}
-            className="flex-1 py-2.5 bg-nb-primary text-white text-[11px] font-bold uppercase tracking-widest rounded-lg hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20"
+            className="flex-1 py-2.5 bg-nb-primary text-white text-[11px] font-bold tracking-widest rounded-lg hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20"
           >
             Apply Link
           </button>

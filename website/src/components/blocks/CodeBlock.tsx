@@ -28,7 +28,7 @@ export default function CodeBlock({ content, onChange }: { content: CodeContent,
           <option value="python">Python</option>
           <option value="javascript">JavaScript</option>
         </select>
-        <span className="text-[10px] uppercase font-bold text-gray-400">Code Snippet</span>
+        <span className="text-[10px] font-bold text-gray-400">Code Snippet</span>
       </div>
       
       <div className="border dark:border-zinc-700 rounded-b-lg overflow-hidden bg-[#2d2d2d]">

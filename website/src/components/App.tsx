@@ -1300,18 +1300,18 @@ export default function App() {
           <div className="mb-4">
             <div className="grid grid-cols-2 gap-2 mb-3">
               <div className="bg-nb-surface-low rounded-lg p-2.5 border border-nb-outline-variant/30">
-                <span className="block text-[8px] font-bold text-nb-on-surface-variant/80 uppercase tracking-widest mb-1">Staged</span>
+                <span className="block text-[8px] font-bold text-nb-on-surface-variant/80 tracking-widest mb-1">Staged</span>
                 <span className="text-xs font-bold text-nb-on-surface leading-none">{upserted.length}</span>
               </div>
               <div className="bg-nb-surface-low rounded-lg p-2.5 border border-nb-outline-variant/30">
-                <span className="block text-[8px] font-bold text-nb-on-surface-variant/80 uppercase tracking-widest mb-1">Removed</span>
+                <span className="block text-[8px] font-bold text-nb-on-surface-variant/80 tracking-widest mb-1">Removed</span>
                 <span className="text-xs font-bold text-nb-on-surface leading-none">{deleted.length}</span>
               </div>
             </div>
             <button
               onClick={handleCommitAll}
               disabled={isCommitting || (upserted.length === 0 && deleted.length === 0)}
-              className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[9px] font-bold uppercase tracking-widest py-3 rounded-lg transition-all active:scale-[0.98] shadow-lg shadow-nb-tertiary/20 disabled:opacity-30"
+              className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[9px] font-bold tracking-widest py-3 rounded-lg transition-all active:scale-[0.98] shadow-lg shadow-nb-tertiary/20 disabled:opacity-30"
             >
               {isCommitting ? "Syncing..." : "Commit Changes"}
             </button>
@@ -1320,7 +1320,7 @@ export default function App() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className={`w-1.5 h-1.5 rounded-full ${isLoading ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`} />
-            <span className="text-[9px] font-bold uppercase tracking-widest text-nb-on-surface-variant">{isLoading ? 'Syncing' : 'Connected'}</span>
+            <span className="text-[9px] font-bold tracking-widest text-nb-on-surface-variant">{isLoading ? 'Syncing' : 'Connected'}</span>
           </div>
           <span className="text-[9px] font-mono text-nb-on-surface-variant/40 truncate max-w-[120px]">{workspaceLabel}</span>
         </div>
@@ -1344,13 +1344,13 @@ export default function App() {
           <div className="flex bg-nb-surface-low rounded-lg p-0.5 border border-nb-outline-variant/30">
             <button
               onClick={() => setMobileTab("editor")}
-              className={`px-3 py-1 rounded-md text-[9px] font-bold uppercase tracking-widest transition-all ${mobileTab === 'editor' ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60'}`}
+              className={`px-3 py-1 rounded-md text-[9px] font-bold tracking-widest transition-all ${mobileTab === 'editor' ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60'}`}
             >
               Editor
             </button>
             <button
               onClick={() => setMobileTab("preview")}
-              className={`px-3 py-1 rounded-md text-[9px] font-bold uppercase tracking-widest transition-all ${mobileTab === 'preview' ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60'}`}
+              className={`px-3 py-1 rounded-md text-[9px] font-bold tracking-widest transition-all ${mobileTab === 'preview' ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60'}`}
             >
               Preview
             </button>
@@ -1366,19 +1366,19 @@ export default function App() {
             <div className="flex bg-nb-surface-low rounded-lg p-0.5 border border-nb-outline-variant/30 mr-2 shadow-sm">
               <button
                 onClick={() => setDesktopViewMode("editor")}
-                className={`px-3 py-1.5 rounded-md text-[9px] font-bold uppercase tracking-widest transition-all ${desktopViewMode === "editor" ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60 hover:text-nb-primary'}`}
+                className={`px-3 py-1.5 rounded-md text-[9px] font-bold tracking-widest transition-all ${desktopViewMode === "editor" ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60 hover:text-nb-primary'}`}
               >
                 Editor
               </button>
               <button
                 onClick={() => setDesktopViewMode("split")}
-                className={`px-3 py-1.5 rounded-md text-[9px] font-bold uppercase tracking-widest transition-all ${desktopViewMode === "split" ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60 hover:text-nb-primary'}`}
+                className={`px-3 py-1.5 rounded-md text-[9px] font-bold tracking-widest transition-all ${desktopViewMode === "split" ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60 hover:text-nb-primary'}`}
               >
                 Split
               </button>
               <button
                 onClick={() => setDesktopViewMode("preview")}
-                className={`px-3 py-1.5 rounded-md text-[9px] font-bold uppercase tracking-widest transition-all ${desktopViewMode === "preview" ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60 hover:text-nb-primary'}`}
+                className={`px-3 py-1.5 rounded-md text-[9px] font-bold tracking-widest transition-all ${desktopViewMode === "preview" ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60 hover:text-nb-primary'}`}
               >
                 LaTeX
               </button>

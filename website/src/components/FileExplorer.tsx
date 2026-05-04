@@ -212,7 +212,7 @@ export default function FileExplorer({
           <div className="relative flex-1">
             <button
               onClick={() => setIsSortOpen(!isSortOpen)}
-              className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-nb-surface-low border border-nb-outline-variant rounded-xl text-[10px] font-bold uppercase tracking-wider text-nb-on-surface-variant hover:border-nb-primary transition-all"
+              className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-nb-surface-low border border-nb-outline-variant rounded-xl text-[10px] font-bold tracking-wider text-nb-on-surface-variant hover:border-nb-primary transition-all"
             >
               <div className="flex items-center gap-2">
                 {sortBy === 'updated' ? <Clock size={12} /> : sortBy === 'created' ? <Calendar size={12} /> : <SortAsc size={12} />}
@@ -236,7 +236,7 @@ export default function FileExplorer({
                         onSortChange(s.id as any);
                         setIsSortOpen(false);
                       }}
-                      className={`w-full flex items-center gap-3 px-3 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${sortBy === s.id ? 'text-nb-primary bg-nb-primary/5' : 'text-nb-on-surface-variant/70 hover:bg-nb-surface-low'}`}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-[10px] font-bold tracking-wider transition-colors ${sortBy === s.id ? 'text-nb-primary bg-nb-primary/5' : 'text-nb-on-surface-variant/70 hover:bg-nb-surface-low'}`}
                     >
                       {s.icon}
                       {s.label}
@@ -271,7 +271,7 @@ export default function FileExplorer({
                 <div className="fixed inset-0 z-40" onClick={() => setIsFilterOpen(false)} />
                 <div className="absolute top-full right-0 mt-2 z-50 bg-nb-surface border border-nb-outline-variant rounded-2xl shadow-nb-lg p-4 w-64 animate-in fade-in zoom-in-95 duration-200">
                   <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant">Date Range</h4>
+                    <h4 className="text-[10px] font-bold tracking-widest text-nb-on-surface-variant">Date Range</h4>
                     {dateRange && (
                       <button
                         onClick={() => { onDateRangeChange(null); setIsFilterOpen(false); }}
@@ -284,7 +284,7 @@ export default function FileExplorer({
 
                   <div className="space-y-3">
                     <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-nb-on-surface-variant/50 uppercase ml-1">From</label>
+                      <label className="text-[9px] font-bold text-nb-on-surface-variant/50 ml-1">From</label>
                       <input
                         type="date"
                         value={dateRange?.start || ""}
@@ -293,7 +293,7 @@ export default function FileExplorer({
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-nb-on-surface-variant/50 uppercase ml-1">To</label>
+                      <label className="text-[9px] font-bold text-nb-on-surface-variant/50 ml-1">To</label>
                       <input
                         type="date"
                         value={dateRange?.end || ""}
@@ -305,7 +305,7 @@ export default function FileExplorer({
 
                   <button
                     onClick={() => setIsFilterOpen(false)}
-                    className="w-full mt-4 py-2 bg-nb-primary text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20"
+                    className="w-full mt-4 py-2 bg-nb-primary text-white rounded-xl text-[10px] font-bold tracking-widest hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20"
                   >
                     Apply Filter
                   </button>

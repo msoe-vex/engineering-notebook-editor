@@ -68,7 +68,7 @@ export default function Settings({
 
         {/* Open local folder */}
         <div>
-          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant mb-4">Local Workspace</h2>
+          <h2 className="text-[10px] font-black tracking-[0.2em] text-nb-on-surface-variant mb-4">Local Workspace</h2>
           <button
             onClick={handleOpenFolder}
             className="w-full bg-nb-secondary hover:bg-slate-700 text-white py-3.5 px-4 rounded-xl font-bold text-sm transition-all active:scale-[0.98] shadow-nb-sm flex items-center justify-center gap-2"
@@ -79,16 +79,16 @@ export default function Settings({
 
         <div className="relative flex items-center py-2">
           <div className="flex-1 h-px bg-nb-outline-variant" />
-          <span className="px-3 text-[10px] text-nb-on-surface-variant font-bold uppercase tracking-widest">or</span>
+          <span className="px-3 text-[10px] text-nb-on-surface-variant font-bold tracking-widest">or</span>
           <div className="flex-1 h-px bg-nb-outline-variant" />
         </div>
 
         {/* GitHub */}
         <div>
-          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant mb-4">GitHub Repository</h2>
+          <h2 className="text-[10px] font-black tracking-[0.2em] text-nb-on-surface-variant mb-4">GitHub Repository</h2>
           <div className="flex flex-col gap-3">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-nb-on-surface-variant ml-1">Owner</label>
+              <label className="text-[10px] font-bold tracking-wider text-nb-on-surface-variant ml-1">Owner</label>
               <input
                 type="text"
                 className="w-full border border-nb-outline-variant p-2.5 rounded-xl bg-nb-surface-low text-nb-on-surface text-sm outline-none focus:ring-2 focus:ring-nb-tertiary/40 transition-all"
@@ -98,7 +98,7 @@ export default function Settings({
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-nb-on-surface-variant ml-1">Repository</label>
+              <label className="text-[10px] font-bold tracking-wider text-nb-on-surface-variant ml-1">Repository</label>
               <input
                 type="text"
                 className="w-full border border-nb-outline-variant p-2.5 rounded-xl bg-nb-surface-low text-nb-on-surface text-sm outline-none focus:ring-2 focus:ring-nb-tertiary/40 transition-all"
@@ -108,7 +108,7 @@ export default function Settings({
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-nb-on-surface-variant ml-1">Token</label>
+              <label className="text-[10px] font-bold tracking-wider text-nb-on-surface-variant ml-1">Token</label>
               <input
                 type="password"
                 className="w-full border border-nb-outline-variant p-2.5 rounded-xl bg-nb-surface-low text-nb-on-surface text-sm outline-none focus:ring-2 focus:ring-nb-tertiary/40 transition-all"
