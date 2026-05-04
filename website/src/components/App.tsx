@@ -308,7 +308,8 @@ export default function App() {
         // Use lastOpenedAt for sticky sorting in the sidebar
         updatedAt: (openFile?.id === id) ? openFile.lastOpenedAt : (meta?.updatedAt || meta?.createdAt || ""),
         id,
-        isSaving: savingPaths.has(e.path)
+        isSaving: savingPaths.has(e.path),
+        isValid: meta?.isValid !== false // Default to true if not present, but check if explicitly false
       };
     });
 
@@ -656,6 +657,21 @@ export default function App() {
     else if (workspaceMode === "github" && config) loadGitHubExplorer();
     else if (workspaceMode === "memory") { setEntries([]); setResources([]); }
   }, [workspaceMode, dirHandle, config, loadLocalExplorer, loadGitHubExplorer]);
+
+  const handleValidationChange = useCallback((isValid: boolean) => {
+    if (!openFile) return;
+    setNotebookMetadata(prev => {
+      const entry = prev.entries[openFile.id];
+      if (!entry || entry.isValid === isValid) return prev;
+      return {
+        ...prev,
+        entries: {
+          ...prev.entries,
+          [openFile.id]: { ...entry, isValid }
+        }
+      };
+    });
+  }, [openFile]);
 
   // ── New Entry ────────────────────────────────────────────────────────────────
 
@@ -1507,6 +1523,8 @@ export default function App() {
                 initialCreatedAt={openFile.createdAt}
                 initialUpdatedAt={openFile.updatedAt}
                 metadataMissing={openFile.metadataMissing}
+                isValid={notebookMetadata.entries[openFile.id]?.isValid}
+                onValidationChange={handleValidationChange}
                 filename={openFile.path}
                 onSaved={handleEntrySaved}
                 onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
@@ -1588,6 +1606,8 @@ export default function App() {
                 initialUpdatedAt={openFile.updatedAt}
                 initialContent={openFile.tiptapContent}
                 metadataMissing={openFile.metadataMissing}
+                isValid={notebookMetadata.entries[openFile.id]?.isValid}
+                onValidationChange={handleValidationChange}
                 filename={openFile.path}
                 onSaved={handleEntrySaved}
                 onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}

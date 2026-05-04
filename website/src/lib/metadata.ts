@@ -27,7 +27,8 @@ export interface EntryMetadata {
   createdAt: string;
   updatedAt: string;
   filename: string; // Path to the entry file (e.g. "entries/uuid.json")
-  resources?: Record<string, { title: string, type: string }>; // block uuid -> metadata
+  resources?: Record<string, { title: string, caption: string, type: string }>; // block uuid -> metadata
+  isValid?: boolean;
 }
 
 export interface EntryWrapper {
@@ -68,18 +69,20 @@ export function extractImagePaths(doc: TipTapDoc): string[] {
 }
 
 /** Walk every node and extract resources (blocks with IDs and titles). */
-export function extractResources(doc: TipTapDoc): Record<string, { title: string, type: string }> {
-  const resources: Record<string, { title: string, type: string }> = {};
+export function extractResources(doc: TipTapDoc): Record<string, { title: string, caption: string, type: string }> {
+  const resources: Record<string, { title: string, caption: string, type: string }> = {};
   
   function walk(node: any) {
     if (!node) return;
     
     // Include any node that has a UUID id
     if (node.attrs?.id) {
-      const title = node.attrs.title || node.attrs.caption || "";
+      const title = node.attrs.title || "";
+      const caption = node.attrs.caption || "";
 
       resources[node.attrs.id] = {
         title,
+        caption,
         type: node.type
       };
     }
@@ -211,18 +214,38 @@ export function hydrateAssets(doc: any, assetCache: Map<string, string>): any {
   return walk(doc);
 }
 
-// ─── notebook.json helpers ────────────────────────────────────────────────────
-
-/** Rebuild the index for a single entry. */
+// ─── notebook.json helpers ────────────────────────────────────────────────────/** Rebuild the index for a single entry. */
 export function updateEntryInIndex(
   metadata: NotebookMetadata,
   entryId: string,
   info: EntryMetadata
 ): NotebookMetadata {
+
   return {
     ...metadata,
-    entries: { ...metadata.entries, [entryId]: info }
+    entries: { 
+      ...metadata.entries, 
+      [entryId]: {
+        ...info,
+        isValid: isEntryValid(info)
+      } 
+    }
   };
+}
+
+/** Check if an entry has all required metadata fields. */
+export function isEntryValid(info: EntryMetadata): boolean {
+  if (!info.title?.trim()) return false;
+  if (!info.author?.trim()) return false;
+  if (!info.phase?.trim()) return false;
+  
+  if (info.resources) {
+    for (const res of Object.values(info.resources)) {
+      if (!res.title?.trim() || !res.caption?.trim()) return false;
+    }
+  }
+  
+  return true;
 }
 
 /** Remove an entry from the metadata index. */

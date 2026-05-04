@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import UnifiedEditor, { ToolbarButton, TableGridSelector } from "./UnifiedEditor";
 import { saveAs } from "file-saver";
 import {
-  Save, Trash2, Download, AlertCircle, Loader2, User, Target, X, FileCode,
+  Save, Trash2, Download, AlertCircle, AlertTriangle, Loader2, User, Target, X, FileCode,
   Undo2, Redo2, ImagePlus, Plus, ChevronDown, FileText, Type, List, ListOrdered,
   Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
   Brain, PencilRuler, Hammer, SearchCheck, Goal, Terminal, Link as LinkIcon, Underline as UnderlineIcon
@@ -12,6 +12,7 @@ import {
 import { generateUUID, hashContent, getExtensionFromDataUrl } from "@/lib/utils";
 import { generateEntryLatex } from "@/lib/latex";
 import AutocompleteInput from "./AutocompleteInput";
+import { extractResources } from "@/lib/metadata";
 import { NodeSelection } from "@tiptap/pm/state";
 
 const PHASE_CONFIG: Record<string, { icon: any, color: string, bg: string, border: string, text: string }> = {
@@ -44,6 +45,7 @@ interface EditorProps {
   initialCreatedAt?: string;
   initialUpdatedAt?: string;
   metadataMissing?: boolean;
+  isValid?: boolean;
   onSaved: (path: string, latexContent: string) => void;
   onDeleted: (path: string) => void;
   onContentChange?: (filename: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string }) => void;
@@ -57,6 +59,7 @@ interface EditorProps {
   dbName?: string;
   isSaving?: boolean;
   notebookMetadata?: any;
+  onValidationChange?: (isValid: boolean) => void;
 }
 
 const Editor = React.memo(function Editor({
@@ -70,9 +73,11 @@ const Editor = React.memo(function Editor({
   initialCreatedAt = "",
   initialUpdatedAt = "",
   metadataMissing = false,
+  isValid = true,
   onSaved,
   onDeleted,
   onContentChange,
+  onValidationChange,
   onImageUpload,
   onTitleChange,
   onAuthorChange,
@@ -107,12 +112,41 @@ const Editor = React.memo(function Editor({
   const [author, setAuthor] = useState(initialAuthor);
   const [phase, setPhase] = useState(initialPhase);
   const [content, setContent] = useState(() => parseInitialContent(initialContent));
+  const [editor, setEditor] = useState<any>(null);
+  const [showTableGrid, setShowTableGrid] = useState(false);
+
+  // Local validation state for immediate UI feedback
+  const [localIsValid, setLocalIsValid] = useState(isValid);
+
+  // Sync external validity if it changes
+  useEffect(() => {
+    setLocalIsValid(isValid);
+  }, [isValid]);
+
+  const checkValidity = useCallback(() => {
+    if (!title?.trim() || !author?.trim() || !phase?.trim()) return false;
+    if (!editor) return true;
+    
+    const resources = extractResources(editor.getJSON());
+    for (const res of Object.values(resources)) {
+      if (!res.title?.trim() || !res.caption?.trim()) return false;
+    }
+    return true;
+  }, [title, author, phase, editor]);
+
+  // Immediate validation effect
+  useEffect(() => {
+    const valid = checkValidity();
+    if (valid !== localIsValid) {
+      setLocalIsValid(valid);
+      onValidationChange?.(valid);
+    }
+  }, [title, author, phase, editor?.state.doc.content, checkValidity, localIsValid, onValidationChange]);
+
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const toggleLinkFn = useRef<(() => void) | null>(null);
-  const [editor, setEditor] = useState<any>(null);
-  const [showTableGrid, setShowTableGrid] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [, setSelectionUpdate] = useState(0);
 
@@ -376,6 +410,19 @@ const Editor = React.memo(function Editor({
 
           {/* Row 1: Menu Bar */}
           <div className="px-4 h-10 flex items-center gap-2 border-b border-nb-outline-variant/30">
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold text-nb-on-surface truncate">
+                  {title || "Untitled Entry"}
+                </h2>
+                {!localIsValid && (
+                  <div className="text-amber-500 animate-pulse" title="Incomplete metadata or resource captions">
+                    <AlertTriangle size={14} />
+                  </div>
+                )}
+              </div>
+            </div>
+
             <MenuItem label="File">
               <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} />
               <MenuAction icon={<Download size={14} />} label="Download LaTeX" onClick={handleDownload} />

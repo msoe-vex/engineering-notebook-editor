@@ -14,6 +14,7 @@ export interface ExplorerFile {
   author?: string;
   timestamp?: string;
   updatedAt?: string;
+  isValid?: boolean;
 }
 
 interface FileExplorerProps {
@@ -56,10 +57,11 @@ interface FileRowProps {
   isPending: boolean;
   isDeleted: boolean;
   icon: React.ReactNode;
+  isValid?: boolean;
   onSelect: () => void;
 }
 
-function FileRow({ file, isSelected, isPending, isDeleted, icon, onSelect }: FileRowProps) {
+function FileRow({ file, isSelected, isPending, isDeleted, icon, isValid = true, onSelect }: FileRowProps) {
   return (
     <div
       onClick={isDeleted ? undefined : onSelect}
@@ -89,6 +91,16 @@ function FileRow({ file, isSelected, isPending, isDeleted, icon, onSelect }: Fil
            })()}
         </span>
       </div>
+
+      {/* Validation Warning */}
+      {!isValid && !isDeleted && (
+        <div 
+          className={`shrink-0 w-6 h-6 rounded-lg flex items-center justify-center animate-pulse ${isSelected ? 'bg-white/20 text-white' : 'bg-amber-500/10 text-amber-500'}`} 
+          title="Incomplete entry metadata or resource captions"
+        >
+          <AlertTriangle size={12} />
+        </div>
+      )}
 
       {/* Pending dot */}
       {isPending && !isDeleted && (
@@ -318,6 +330,7 @@ export default function FileExplorer({
             isPending={pendingPaths.has(f.path)}
             isDeleted={deletedPaths.has(f.path)}
             icon={<FileText size={13} />}
+            isValid={f.isValid}
             onSelect={() => onSelectEntry(f)}
           />
         ))}
