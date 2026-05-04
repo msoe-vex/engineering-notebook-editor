@@ -13,7 +13,7 @@ import {
 import {
   NotebookMetadata, EMPTY_METADATA, EntryMetadata, EntryWrapper,
   updateEntryInIndex, renameEntryInMetadata, removeEntryFromMetadata,
-  dehydrateAssets, hydrateAssets, remapContentIds, isEntryValid,
+  dehydrateAssets, hydrateAssets, isEntryValid,
 } from "@/lib/metadata";
 import Settings from "./Settings";
 import Editor from "./Editor";
@@ -928,9 +928,8 @@ export default function App() {
             const filename = `${newId}.json`;
             const path = `${ENTRIES_DIR}/${filename}`;
 
-            // Remap IDs within the document to prevent collisions and update internal links
-            const remappedContent = remapContentIds(wrapper.content);
-            const { cleanDoc, newAssets } = await dehydrateAssets(remappedContent);
+            // We use the content directly because UUID v7 ensures uniqueness
+            const { cleanDoc, newAssets } = await dehydrateAssets(wrapper.content);
 
             // New entries are saved in the simplified format (content-only)
             const newEntryFileObj = {
