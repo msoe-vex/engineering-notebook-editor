@@ -26,12 +26,14 @@ interface FileExplorerProps {
   onSelectResource: (file: ExplorerFile) => void;
   onNewEntry: () => void;
   onUploadResource: () => void;
-  onDeleteEntry: (file: ExplorerFile) => void;
-  onDeleteResource: (file: ExplorerFile) => void;
   search: string;
   onSearchChange: (val: string) => void;
   sortBy: "created" | "updated" | "title";
   onSortChange: (val: "created" | "updated" | "title") => void;
+  sortDirection: "asc" | "desc";
+  onSortDirectionToggle: () => void;
+  dateRange: { start: string; end: string } | null;
+  onDateRangeChange: (range: { start: string; end: string } | null) => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -55,10 +57,9 @@ interface FileRowProps {
   isDeleted: boolean;
   icon: React.ReactNode;
   onSelect: () => void;
-  onDelete: () => void;
 }
 
-function FileRow({ file, isSelected, isPending, isDeleted, icon, onSelect, onDelete }: FileRowProps) {
+function FileRow({ file, isSelected, isPending, isDeleted, icon, onSelect }: FileRowProps) {
   return (
     <div
       onClick={isDeleted ? undefined : onSelect}
@@ -94,18 +95,6 @@ function FileRow({ file, isSelected, isPending, isDeleted, icon, onSelect, onDel
         <span className={`w-1.5 h-1.5 rounded-full shrink-0 animate-pulse shadow-sm ${isSelected ? 'bg-white' : 'bg-nb-tertiary shadow-nb-tertiary/50'}`} title="Staged change" />
       )}
 
-      {/* Delete button — visible on hover */}
-      {!isDeleted && (
-        <div className="flex gap-1 shrink-0">
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className={`p-1 rounded-md transition-colors ${isSelected ? 'hover:bg-white/20 text-white' : 'hover:bg-nb-primary/10 text-nb-on-surface-variant/70 hover:text-nb-primary'}`}
-            title="Delete"
-          >
-            <Trash2 size={11} />
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -148,65 +137,10 @@ function Pane({ id, title, actionLabel, actionIcon, onAction, children, empty, h
   );
 }
 
-// ─── Delete confirmation dialog ───────────────────────────────────────────────
-
-interface DeleteDialogProps {
-  filename: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-}
-
-function DeleteDialog({ filename, onConfirm, onCancel }: DeleteDialogProps) {
-  return (
-    <div className="fixed inset-0 z-[500] flex items-center justify-center bg-nb-secondary/60 backdrop-blur-md px-4" onClick={onCancel}>
-      <div
-        className="bg-nb-surface-lowest dark:bg-nb-dark-surface rounded-2xl p-7 shadow-nb-lg max-w-sm w-full border border-nb-outline-variant dark:border-nb-dark-outline animate-in zoom-in-95 duration-200"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0">
-            <Trash2 size={20} className="text-nb-primary" />
-          </div>
-          <h3 className="font-bold text-sm uppercase tracking-widest text-nb-secondary dark:text-white">Confirm Delete</h3>
-        </div>
-        
-        <div className="space-y-4 mb-8">
-          <p className="text-sm text-nb-on-surface-variant dark:text-nb-dark-on-variant leading-relaxed">
-            Are you sure you want to delete the following file? This action is staged until you commit.
-          </p>
-          <div className="p-3 bg-nb-surface-low dark:bg-nb-dark-surface-low border border-nb-outline-variant dark:border-nb-dark-outline rounded-xl">
-            <p className="text-xs font-mono text-nb-primary break-all font-bold">{filename}</p>
-          </div>
-          <div className="flex items-start gap-2.5 p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-200/50 dark:border-amber-800/30 rounded-xl">
-            <AlertTriangle size={14} className="text-amber-600 dark:text-amber-500 mt-0.5 shrink-0" />
-            <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-normal font-medium">
-              If this is a resource, all references in your entries will be automatically updated.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex gap-3">
-          <button
-            onClick={onCancel}
-            className="flex-1 px-4 py-2.5 rounded-xl border border-nb-outline-variant dark:border-nb-dark-outline text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-surface-low dark:hover:bg-nb-dark-surface-low transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 px-4 py-2.5 rounded-xl bg-nb-primary text-white text-xs font-bold uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20 active:scale-[0.98]"
-          >
-            Delete
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── Icons for pane ────────────────────────────────────────────────────────────
 
-import { AlertTriangle, Search, SortAsc, Clock, Calendar } from "lucide-react";
+import { AlertTriangle, Search, SortAsc, SortDesc, Clock, Calendar, Filter, ChevronDown, CalendarDays } from "lucide-react";
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -220,21 +154,17 @@ export default function FileExplorer({
   onSelectResource,
   onNewEntry,
   onUploadResource,
-  onDeleteEntry,
-  onDeleteResource,
   search,
   onSearchChange,
   sortBy,
   onSortChange,
+  sortDirection,
+  onSortDirectionToggle,
+  dateRange,
+  onDateRangeChange,
 }: FileExplorerProps) {
-  const [deleteTarget, setDeleteTarget] = useState<{ file: ExplorerFile; type: "entry" | "resource" } | null>(null);
-
-  const confirmDelete = () => {
-    if (!deleteTarget) return;
-    if (deleteTarget.type === "entry") onDeleteEntry(deleteTarget.file);
-    else onDeleteResource(deleteTarget.file);
-    setDeleteTarget(null);
-  };
+  const [isSortOpen, setIsSortOpen] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -261,27 +191,112 @@ export default function FileExplorer({
           )}
         </div>
 
-        <div className="flex gap-2">
-          {[
-            { id: 'updated', label: 'Recent', icon: <Clock size={10} /> },
-            { id: 'created', label: 'History', icon: <Calendar size={10} /> },
-            { id: 'title', label: 'A-Z', icon: <SortAsc size={10} /> }
-          ].map((s) => (
+        <div className="flex items-center gap-2">
+          {/* Sort Dropdown */}
+          <div className="relative flex-1">
             <button
-              key={s.id}
-              onClick={() => onSortChange(s.id as any)}
-              className={`
-                flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all
-                ${sortBy === s.id 
-                  ? 'bg-nb-tertiary text-white shadow-sm shadow-nb-tertiary/20' 
-                  : 'bg-nb-surface-low text-nb-on-surface-variant/60 hover:text-nb-primary hover:bg-nb-surface-mid'
-                }
-              `}
+              onClick={() => setIsSortOpen(!isSortOpen)}
+              className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-nb-surface-low border border-nb-outline-variant rounded-xl text-[10px] font-bold uppercase tracking-wider text-nb-on-surface-variant hover:border-nb-primary transition-all"
             >
-              {s.icon}
-              {s.label}
+              <div className="flex items-center gap-2">
+                {sortBy === 'updated' ? <Clock size={12} /> : sortBy === 'created' ? <Calendar size={12} /> : <SortAsc size={12} />}
+                <span>Sort: {sortBy}</span>
+              </div>
+              <ChevronDown size={12} className={`transition-transform duration-200 ${isSortOpen ? 'rotate-180' : ''}`} />
             </button>
-          ))}
+
+            {isSortOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIsSortOpen(false)} />
+                <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-nb-surface border border-nb-outline-variant rounded-xl shadow-nb-lg py-1.5 animate-in fade-in zoom-in-95 duration-200">
+                  {[
+                    { id: 'updated', label: 'Recently Modified', icon: <Clock size={12} /> },
+                    { id: 'created', label: 'Creation Date', icon: <Calendar size={12} /> },
+                    { id: 'title', label: 'Alphabetical', icon: <SortAsc size={12} /> }
+                  ].map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => {
+                        onSortChange(s.id as any);
+                        setIsSortOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${sortBy === s.id ? 'text-nb-primary bg-nb-primary/5' : 'text-nb-on-surface-variant/70 hover:bg-nb-surface-low'}`}
+                    >
+                      {s.icon}
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Direction Toggle */}
+          <button
+            onClick={onSortDirectionToggle}
+            className="p-2 bg-nb-surface-low border border-nb-outline-variant rounded-xl text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary transition-all shadow-sm active:scale-95"
+            title={sortDirection === 'asc' ? "Ascending" : "Descending"}
+          >
+            {sortDirection === 'asc' ? <SortAsc size={14} /> : <SortDesc size={14} />}
+          </button>
+
+          {/* Date Filter */}
+          <div className="relative">
+            <button
+              onClick={() => setIsFilterOpen(!isFilterOpen)}
+              className={`p-2 border rounded-xl transition-all shadow-sm active:scale-95 ${dateRange ? 'bg-nb-tertiary text-white border-nb-tertiary shadow-nb-tertiary/20' : 'bg-nb-surface-low border-nb-outline-variant text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary'}`}
+              title="Filter by Date"
+            >
+              <CalendarDays size={14} />
+            </button>
+
+            {isFilterOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIsFilterOpen(false)} />
+                <div className="absolute top-full right-0 mt-2 z-50 bg-nb-surface border border-nb-outline-variant rounded-2xl shadow-nb-lg p-4 w-64 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant">Date Range</h4>
+                    {dateRange && (
+                      <button 
+                        onClick={() => { onDateRangeChange(null); setIsFilterOpen(false); }}
+                        className="text-[9px] font-bold text-nb-primary hover:underline"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-nb-on-surface-variant/50 uppercase ml-1">From</label>
+                      <input 
+                        type="date"
+                        value={dateRange?.start || ""}
+                        onChange={(e) => onDateRangeChange({ start: e.target.value, end: dateRange?.end || "" })}
+                        className="w-full bg-nb-surface-low border border-nb-outline-variant rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-nb-primary/20 focus:border-nb-primary outline-none transition-all"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-nb-on-surface-variant/50 uppercase ml-1">To</label>
+                      <input 
+                        type="date"
+                        value={dateRange?.end || ""}
+                        onChange={(e) => onDateRangeChange({ start: dateRange?.start || "", end: e.target.value })}
+                        className="w-full bg-nb-surface-low border border-nb-outline-variant rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-nb-primary/20 focus:border-nb-primary outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setIsFilterOpen(false)}
+                    className="w-full mt-4 py-2 bg-nb-primary text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20"
+                  >
+                    Apply Filter
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -304,21 +319,11 @@ export default function FileExplorer({
             isDeleted={deletedPaths.has(f.path)}
             icon={<FileText size={13} />}
             onSelect={() => onSelectEntry(f)}
-            onDelete={() => setDeleteTarget({ file: f, type: "entry" })}
           />
         ))}
       </Pane>
 
       {/* Resources pane hidden to simplify UI */}
-
-      {/* Delete dialog */}
-      {deleteTarget && (
-        <DeleteDialog
-          filename={deleteTarget.file.name}
-          onConfirm={confirmDelete}
-          onCancel={() => setDeleteTarget(null)}
-        />
-      )}
     </div>
   );
 }

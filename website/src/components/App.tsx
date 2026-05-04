@@ -70,6 +70,7 @@ interface OpenFileState {
   imageSrc: string;
   createdAt: string;
   updatedAt: string;
+  lastOpenedAt: string;
   // Raw latex: is it a legacy (no metadata) file?
   isLegacyRaw: boolean;
 }
@@ -230,7 +231,9 @@ export default function App() {
   const [mounted, setMounted] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [entrySearch, setEntrySearch] = useState("");
-  const [entrySort, setEntrySort] = useState<"created" | "updated" | "title">("updated");
+  const [entrySort, setEntrySort] = useState<"created" | "updated" | "title">("created");
+  const [entrySortDirection, setEntrySortDirection] = useState<"asc" | "desc">("desc");
+  const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
   const [mobileTab, setMobileTab] = useState<"editor" | "preview">("editor");
   const [desktopViewMode, setDesktopViewMode] = useState<"editor" | "split" | "preview">("editor");
 
@@ -302,7 +305,8 @@ export default function App() {
         title: meta?.title || "",
         author: meta?.author || "",
         timestamp: meta?.createdAt || "",
-        updatedAt: meta?.updatedAt || meta?.createdAt || "",
+        // Use lastOpenedAt for sticky sorting in the sidebar
+        updatedAt: (openFile?.id === id) ? openFile.lastOpenedAt : (meta?.updatedAt || meta?.createdAt || ""),
         id,
         isSaving: savingPaths.has(e.path)
       };
@@ -317,19 +321,34 @@ export default function App() {
       );
     }
 
+    if (dateRange) {
+      const start = dateRange.start ? new Date(dateRange.start).getTime() : 0;
+      const end = dateRange.end ? new Date(dateRange.end).getTime() + (24 * 60 * 60 * 1000) - 1 : Infinity;
+
+      list = list.filter(e => {
+        const ts = new Date(e.timestamp || 0).getTime();
+        return ts >= start && ts <= end;
+      });
+    }
+
     list.sort((a, b) => {
-      if (entrySort === "title") {
-        return (a.title || "").localeCompare(b.title || "");
+      let comparison = 0;
+      if (entrySort === 'updated') {
+        const timeA = new Date(a.updatedAt || a.timestamp || 0).getTime();
+        const timeB = new Date(b.updatedAt || b.timestamp || 0).getTime();
+        comparison = timeA - timeB;
+      } else if (entrySort === 'created') {
+        const timeA = new Date(a.timestamp || 0).getTime();
+        const timeB = new Date(b.timestamp || 0).getTime();
+        comparison = timeA - timeB;
+      } else if (entrySort === 'title') {
+        comparison = (a.title || "").localeCompare(b.title || "");
       }
-      if (entrySort === "created") {
-        return (b.timestamp || "").localeCompare(a.timestamp || "");
-      }
-      // default: updated
-      return (b.updatedAt || "").localeCompare(a.updatedAt || "");
+      return entrySortDirection === "asc" ? comparison : -comparison;
     });
 
     return list;
-  }, [entries, notebookMetadata, entrySearch, entrySort, savingPaths]);
+  }, [entries, notebookMetadata, entrySearch, entrySort, entrySortDirection, dateRange, openFile, savingPaths]);
 
   const displayResources = useMemo(() => {
     return resources.sort((a, b) => a.name.localeCompare(b.name));
@@ -682,6 +701,7 @@ export default function App() {
       imageSrc: "",
       createdAt: createdAt,
       updatedAt: createdAt,
+      lastOpenedAt: createdAt,
       isLegacyRaw: false,
     });
     setLatexContent(initialLatex);
@@ -798,6 +818,7 @@ export default function App() {
         imageSrc: "",
         createdAt: createdAt,
         updatedAt: updatedAt,
+        lastOpenedAt: updatedAt,
         isLegacyRaw: false,
       });
       setLatexContent(latexStr);
@@ -850,6 +871,7 @@ export default function App() {
         imageSrc,
         createdAt: file.timestamp || new Date().toISOString(),
         updatedAt: file.updatedAt || file.timestamp || new Date().toISOString(),
+        lastOpenedAt: file.updatedAt || file.timestamp || new Date().toISOString(),
         isLegacyRaw: false,
       });
       setMobileTab("editor");
@@ -1339,12 +1361,14 @@ export default function App() {
           deletedPaths={deletedPathSet}
           onNewEntry={handleNewEntry}
           onUploadResource={handleUploadResource}
-          onDeleteEntry={handleDeleteEntry}
-          onDeleteResource={handleDeleteResource}
           search={entrySearch}
           onSearchChange={setEntrySearch}
           sortBy={entrySort}
           onSortChange={setEntrySort}
+          sortDirection={entrySortDirection}
+          onSortDirectionToggle={() => setEntrySortDirection(prev => prev === "asc" ? "desc" : "asc")}
+          dateRange={dateRange}
+          onDateRangeChange={setDateRange}
         />
       </div>
 
