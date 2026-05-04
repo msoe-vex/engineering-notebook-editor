@@ -68,8 +68,8 @@ function FileRow({ file, isSelected, isPending, isDeleted, icon, isValid = true,
       onClick={isDeleted ? undefined : onSelect}
       className={`
         group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer select-none
-        ${isSelected 
-          ? 'bg-nb-tertiary text-white shadow-lg shadow-nb-tertiary/20' 
+        ${isSelected
+          ? 'bg-nb-tertiary text-white shadow-lg shadow-nb-tertiary/20'
           : 'hover:bg-nb-surface-mid text-nb-on-surface'
         }
         ${isDeleted ? 'opacity-30 grayscale' : ''}
@@ -81,25 +81,25 @@ function FileRow({ file, isSelected, isPending, isDeleted, icon, isValid = true,
 
       <div className="flex flex-col flex-1 min-w-0">
         <span className={`truncate font-bold tracking-tight leading-tight ${isSelected ? 'text-white' : 'text-nb-on-surface'}`}>
-          {file.title || "New Entry"}
+          {file.title || "Untitled Entry"}
         </span>
         <span className={`text-[9px] font-mono truncate mt-0.5 ${isSelected ? 'text-white/70' : 'opacity-40'}`}>
-           {(() => {
-             const ts = (sortBy === "updated") 
-               ? (file.updatedAt || file.timestamp || Date.now())
-               : (file.timestamp || Date.now());
-             const d = new Date(ts);
-             const valid = !isNaN(d.getTime());
-             const prefix = sortBy === "updated" ? "Modified: " : "Created: ";
-             return prefix + (valid ? d : new Date()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-           })()}
+          {(() => {
+            const ts = (sortBy === "updated")
+              ? (file.updatedAt || file.timestamp || Date.now())
+              : (file.timestamp || Date.now());
+            const d = new Date(ts);
+            const valid = !isNaN(d.getTime());
+            const prefix = sortBy === "updated" ? "Modified: " : "Created: ";
+            return prefix + (valid ? d : new Date()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+          })()}
         </span>
       </div>
 
       {/* Validation Warning */}
       {!isValid && !isDeleted && (
-        <div 
-          className={`shrink-0 w-6 h-6 rounded-lg flex items-center justify-center animate-pulse ${isSelected ? 'bg-white/20 text-white' : 'bg-amber-500/10 text-amber-500'}`} 
+        <div
+          className={`shrink-0 w-6 h-6 rounded-lg flex items-center justify-center animate-pulse ${isSelected ? 'bg-white/20 text-white' : 'bg-amber-500/10 text-amber-500'}`}
           title="Incomplete entry metadata or resource captions"
         >
           <AlertTriangle size={12} />
@@ -273,7 +273,7 @@ export default function FileExplorer({
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant">Date Range</h4>
                     {dateRange && (
-                      <button 
+                      <button
                         onClick={() => { onDateRangeChange(null); setIsFilterOpen(false); }}
                         className="text-[9px] font-bold text-nb-primary hover:underline"
                       >
@@ -281,11 +281,11 @@ export default function FileExplorer({
                       </button>
                     )}
                   </div>
-                  
+
                   <div className="space-y-3">
                     <div className="space-y-1">
                       <label className="text-[9px] font-bold text-nb-on-surface-variant/50 uppercase ml-1">From</label>
-                      <input 
+                      <input
                         type="date"
                         value={dateRange?.start || ""}
                         onChange={(e) => onDateRangeChange({ start: e.target.value, end: dateRange?.end || "" })}
@@ -294,7 +294,7 @@ export default function FileExplorer({
                     </div>
                     <div className="space-y-1">
                       <label className="text-[9px] font-bold text-nb-on-surface-variant/50 uppercase ml-1">To</label>
-                      <input 
+                      <input
                         type="date"
                         value={dateRange?.end || ""}
                         onChange={(e) => onDateRangeChange({ start: dateRange?.start || "", end: e.target.value })}

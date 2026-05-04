@@ -13,7 +13,7 @@ import {
 import {
   NotebookMetadata, EMPTY_METADATA, EntryMetadata, EntryWrapper,
   updateEntryInIndex, renameEntryInMetadata, removeEntryFromMetadata,
-  dehydrateAssets, hydrateAssets, remapContentIds,
+  dehydrateAssets, hydrateAssets, remapContentIds, isEntryValid,
 } from "@/lib/metadata";
 import Settings from "./Settings";
 import Editor from "./Editor";
@@ -898,97 +898,7 @@ export default function App() {
 
   // ── Save entry ───────────────────────────────────────────────────────────────
 
-  const handleEntrySaved = useCallback(async (path: string, latex: string) => {
-    cacheContent(path, latex);
-    if (workspaceMode === "local" && dirHandle) {
-      queueLocalOp(() => writeLocalFile(dirHandle, path, latex));
-    } else if (workspaceMode === "github") {
-      await stage({ path, content: latex, operation: "upsert", label: "Entry update" });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceMode, dirHandle, stage]);
-
-
-
   // ── Metadata rebuild (called after entry save) ───────────────────────────────
-
-  const handleRebuildIndex = useCallback(async () => {
-    if (workspaceMode === "local" && !dirHandle) return;
-    setIsLoading(true);
-    try {
-      let newIndex: NotebookMetadata = {
-        version: 3,
-        entries: {},
-      };
-
-      let entryFiles: { name: string; path: string }[] = [];
-      if (workspaceMode === "local" && dirHandle) {
-        let entriesDir: any = dirHandle;
-        for (const part of ENTRIES_DIR.split('/')) {
-          entriesDir = await entriesDir.getDirectoryHandle(part, { create: true });
-        }
-        for await (const entry of entriesDir.values()) {
-          if (entry.kind === "file" && entry.name.endsWith(".json")) {
-            entryFiles.push({ name: entry.name, path: `${ENTRIES_DIR}/${entry.name}` });
-          }
-        }
-      } else if (workspaceMode === "github" && config) {
-        const tree = await fetchDirectoryTree(config, ENTRIES_DIR, false);
-        entryFiles = tree.filter(f => f.type === "file" && f.name.endsWith(".json")).map(f => ({ name: f.name, path: f.path }));
-      }
-
-      for (const file of entryFiles) {
-        let content = "";
-        if (workspaceMode === "local" && dirHandle) {
-          content = (await getLocalFileContent(dirHandle, file.path)).text || "";
-        } else if (workspaceMode === "github" && config) {
-          content = await fetchFileContent(config, file.path);
-        }
-
-        if (content) {
-          try {
-            const rawData = JSON.parse(content);
-            const entryContent = rawData.content || rawData;
-            const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
-
-            // Reconstruct metadata from global index
-            const meta = notebookMetadataRef.current.entries[entryId];
-            const entryMeta: EntryMetadata = {
-              id: entryId,
-              title: meta?.title || "",
-              author: meta?.author || "",
-              phase: meta?.phase || "",
-              createdAt: meta?.createdAt || isoTimestamp(),
-              updatedAt: meta?.updatedAt || meta?.createdAt || isoTimestamp(),
-              filename: file.path,
-              resources: extractResources(entryContent)
-            };
-            newIndex = updateEntryInIndex(newIndex, entryId, entryMeta);
-          } catch (e) {
-            console.error(`Failed to parse ${file.path}`, e);
-          }
-        }
-      }
-
-      setNotebookMetadata(newIndex);
-      notebookMetadataRef.current = newIndex;
-      const metaStr = JSON.stringify(newIndex, null, 2);
-
-      if (workspaceMode === "local" && dirHandle) {
-        await writeLocalFile(dirHandle, INDEX_PATH, metaStr);
-      } else if (workspaceMode === "github") {
-        const dbName = getDBName();
-        await stage({ path: INDEX_PATH, content: metaStr, operation: "upsert", label: "Rebuild index" });
-      }
-
-      notify("Index rebuilt successfully.", "success");
-    } catch (e) {
-      console.error("Failed to rebuild index", e);
-      notify("Failed to rebuild index.", "error");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [workspaceMode, dirHandle, config, stage, getDBName]);
 
   const handleImportEntry = useCallback(() => {
     const input = document.createElement("input");
@@ -1038,6 +948,7 @@ export default function App() {
               filename: path,
               resources: extractResources(cleanDoc)
             };
+            newEntryMeta.isValid = isEntryValid(newEntryMeta);
 
             // Save everything
             if (workspaceMode === "local" && dirHandle) {
@@ -1077,11 +988,7 @@ export default function App() {
       }
     };
     input.click();
-  }, [workspaceMode, dirHandle, stage, handleRebuildIndex, getDBName]);
-
-  const handleMetadataRebuild = useCallback(() => {
-    handleRebuildIndex();
-  }, [handleRebuildIndex]);
+  }, [workspaceMode, dirHandle, stage, getDBName]);
 
   // ── Image upload from editor ─────────────────────────────────────────────────
 
@@ -1525,7 +1432,6 @@ export default function App() {
                 isValid={notebookMetadata.entries[openFile.id]?.isValid}
                 onValidationChange={handleValidationChange}
                 filename={openFile.path}
-                onSaved={handleEntrySaved}
                 onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
                 onContentChange={handleContentChange}
                 onTitleChange={(title) => {
@@ -1568,7 +1474,6 @@ export default function App() {
                   }));
                 }}
                 onImageUpload={handleImageUploaded}
-                onMetadataRebuild={handleMetadataRebuild}
                 onDownloadPortable={handleDownloadPortable}
                 dbName={getDBName()}
                 isSaving={savingPaths.has(openFile.path)}
@@ -1608,7 +1513,6 @@ export default function App() {
                 isValid={notebookMetadata.entries[openFile.id]?.isValid}
                 onValidationChange={handleValidationChange}
                 filename={openFile.path}
-                onSaved={handleEntrySaved}
                 onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
                 onContentChange={handleContentChange}
                 onTitleChange={(title) => {
@@ -1651,7 +1555,6 @@ export default function App() {
                   }));
                 }}
                 onImageUpload={handleImageUploaded}
-                onMetadataRebuild={handleMetadataRebuild}
                 onDownloadPortable={handleDownloadPortable}
                 onClose={() => setOpenFile(null)}
                 dbName={getDBName()}

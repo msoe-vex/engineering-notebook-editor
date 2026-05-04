@@ -46,14 +46,12 @@ interface EditorProps {
   initialUpdatedAt?: string;
   metadataMissing?: boolean;
   isValid?: boolean;
-  onSaved: (path: string, latexContent: string) => void;
   onDeleted: (path: string) => void;
   onContentChange?: (filename: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string }) => void;
   onTitleChange: (title: string) => void;
   onAuthorChange: (author: string) => void;
   onPhaseChange: (phase: string) => void;
   onImageUpload?: (path: string, base64: string) => void;
-  onMetadataRebuild?: (path: string, content: any, info: { title: string; author: string; phase: string; createdAt: string }) => void;
   onDownloadPortable?: (path: string, content: any, info: { title: string; author: string; phase: string; createdAt: string; updatedAt: string }) => void;
   onClose?: () => void;
   dbName?: string;
@@ -74,7 +72,6 @@ const Editor = React.memo(function Editor({
   initialUpdatedAt = "",
   metadataMissing = false,
   isValid = true,
-  onSaved,
   onDeleted,
   onContentChange,
   onValidationChange,
@@ -82,7 +79,6 @@ const Editor = React.memo(function Editor({
   onTitleChange,
   onAuthorChange,
   onPhaseChange,
-  onMetadataRebuild,
   onDownloadPortable,
   onClose,
   dbName,
@@ -285,13 +281,22 @@ const Editor = React.memo(function Editor({
 
     setValidationErrors([]);
     setIsSaving(true);
-    const latex = generateLatex(content, title, author, phase);
 
-    if (onMetadataRebuild) {
-      onMetadataRebuild(filename, content, { title, author, phase, createdAt: initialCreatedAt });
+    // Clear auto-save timer if it exists to avoid redundant saves
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
     }
 
-    await onSaved(filename, latex);
+    const latex = generateLatex(content, title, author, phase);
+    const contentStr = JSON.stringify(content);
+
+    if (onContentChange) {
+      await onContentChange(filename, latex, contentStr, { title, author, phase });
+      lastSyncedRef.current = { title, author, phase, contentStr };
+      setIsAutoSaving(false);
+    }
+
     setIsSaving(false);
   };
 
