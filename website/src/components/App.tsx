@@ -279,6 +279,7 @@ export default function App() {
   // metadata.json contents
   const [notebookMetadata, setNotebookMetadata] = useState<NotebookMetadata>(EMPTY_METADATA);
   const notebookMetadataRef = useRef(notebookMetadata);
+  const metadataSyncTimeoutRef = useRef<any>(null);
   useEffect(() => { notebookMetadataRef.current = notebookMetadata; }, [notebookMetadata]);
 
   // Latex preview content (kept in sync by Editor)
@@ -436,6 +437,12 @@ export default function App() {
           await writeLocalFile(dirHandle, INDEX_PATH, JSON.stringify(updatedMeta, null, 2));
 
           notebookMetadataRef.current = updatedMeta;
+
+          // Sync to state with debounce to avoid excessive re-renders during typing
+          if (metadataSyncTimeoutRef.current) clearTimeout(metadataSyncTimeoutRef.current);
+          metadataSyncTimeoutRef.current = setTimeout(() => {
+            setNotebookMetadata(updatedMeta);
+          }, 500);
         });
       } else if (workspaceMode === "github") {
         const dbName = getDBName();
@@ -473,6 +480,12 @@ export default function App() {
         });
 
         notebookMetadataRef.current = updatedMeta;
+
+        // Sync to state with debounce to avoid excessive re-renders during typing
+        if (metadataSyncTimeoutRef.current) clearTimeout(metadataSyncTimeoutRef.current);
+        metadataSyncTimeoutRef.current = setTimeout(() => {
+          setNotebookMetadata(updatedMeta);
+        }, 500);
       }
 
       if (assetsToSave.length > 0) {

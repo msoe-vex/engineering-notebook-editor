@@ -49,7 +49,7 @@ import {
   Table as TableIcon, Undo, Redo, Trash2,
   ChevronUp, ChevronDown, ChevronLeft, ChevronRight,
   Pencil, AlertTriangle, FileCode, Check, Code2, MoreVertical, Settings, UserCircle, Grid3X3, GripVertical,
-  Scissors as Scissor, Copy, Clipboard, Terminal, X, Underline as UnderlineIcon
+  Scissors as Scissor, Copy, Clipboard, Terminal, X, Underline as UnderlineIcon, Link2Off, ExternalLink
 } from "lucide-react";
 import { generateUUID, hashContent, getExtensionFromDataUrl } from "@/lib/utils";
 
@@ -878,7 +878,8 @@ function LinkReferencePopup({
   const [query, setQuery] = useState("");
   const [text, setText] = useState("");
   const [link, setLink] = useState("");
-  const [selectedResource, setSelectedResource] = useState<{ id: string, title: string, type: string } | null>(null);
+  const [selectedResource, setSelectedResource] = useState<{ id: string, title: string, type: string, entryTitle?: string, entryDate?: string } | null>(null);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   useEffect(() => {
     const { from, to } = editor.state.selection;
@@ -929,19 +930,39 @@ function LinkReferencePopup({
     return allResources.filter(r => 
       (r.title || "").toLowerCase().includes(q) || 
       (r.entryTitle || "").toLowerCase().includes(q)
-    ).slice(0, 5);
+    ).slice(0, 10);
   }, [allResources, query]);
 
   const handleApply = () => {
-    if (selectedResource) {
-      editor.chain().focus().extendMarkRange('link').setLink({ 
-        href: `#${selectedResource.id}`, 
-        resourceId: selectedResource.id 
-      }).run();
-    } else if (link) {
-      editor.chain().focus().extendMarkRange('link').setLink({ href: link }).run();
+    const trimmedText = text.trim();
+    let finalLink = selectedResource ? `#${selectedResource.id}` : link.trim();
+    const resourceId = selectedResource?.id;
+
+    // Auto-prepend https:// for external links that look like domains
+    if (!selectedResource && finalLink && !finalLink.startsWith('#')) {
+      const hasProtocol = /^[a-z]+:/i.test(finalLink);
+      const isDomain = finalLink.includes('.') && !finalLink.includes(' ');
+      if (!hasProtocol && isDomain) {
+        finalLink = `https://${finalLink}`;
+      }
+    }
+
+    if (finalLink || trimmedText) {
+      const marks: any[] = [{ type: 'underline' }];
+      if (finalLink) {
+        marks.push({ type: 'link', attrs: { href: finalLink, resourceId } });
+      }
+
+      editor.chain()
+        .focus()
+        .insertContent({
+          type: 'text',
+          text: trimmedText || finalLink,
+          marks: marks
+        })
+        .run();
     } else {
-      editor.chain().focus().extendMarkRange('link').unsetLink().run();
+      editor.chain().focus().extendMarkRange('link').unsetLink().unsetMark('underline').run();
     }
     onClose();
   };
@@ -950,70 +971,120 @@ function LinkReferencePopup({
 
   return (
     <div 
-      className="fixed z-[1000] w-72 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-2xl p-4 animate-in zoom-in-95 fade-in duration-200"
+      className="fixed z-[1000] w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-2xl p-5 animate-in zoom-in-95 fade-in duration-200"
       style={{ 
-        top: Math.min(window.innerHeight - 300, rect.bottom + 10), 
-        left: Math.min(window.innerWidth - 300, rect.left) 
+        top: Math.min(window.innerHeight - 400, rect.bottom + 10), 
+        left: Math.min(window.innerWidth - 350, rect.left) 
       }}
       onClick={e => e.stopPropagation()}
     >
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-4">
         <span className="text-[10px] font-black uppercase tracking-widest text-nb-secondary">Insert Link/Reference</span>
-        <button onClick={onClose} className="p-1 hover:bg-nb-surface-low rounded"><X size={14}/></button>
+        <button onClick={onClose} className="p-1.5 hover:bg-nb-surface-low rounded-lg transition-colors"><X size={16}/></button>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         <div>
-          <label className="block text-[8px] font-bold uppercase text-nb-on-surface-variant/50 mb-1">Display Text</label>
+          <label className="block text-[10px] font-bold uppercase text-nb-on-surface-variant/50 mb-1.5">Display Text</label>
           <input 
             type="text" 
             value={text} 
             onChange={e => setText(e.target.value)}
-            className="w-full px-3 py-2 bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg outline-none text-xs focus:border-nb-primary"
+            className="w-full px-3 py-2 bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg outline-none text-sm focus:border-nb-primary transition-all"
             placeholder="Text to display..."
           />
         </div>
 
         <div>
-          <label className="block text-[8px] font-bold uppercase text-nb-on-surface-variant/50 mb-1">Link or Resource</label>
+          <label className="block text-[10px] font-bold uppercase text-nb-on-surface-variant/50 mb-1.5">Link or Resource</label>
           <div className="relative">
             <input 
               type="text" 
               value={selectedResource ? selectedResource.title : link} 
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setIsSearchFocused(false)}
               onChange={e => {
                 setLink(e.target.value);
                 setSelectedResource(null);
                 setQuery(e.target.value);
               }}
-              className="w-full px-3 py-2 bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg outline-none text-xs focus:border-nb-primary"
+              className="w-full px-3 py-2 bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg outline-none text-sm focus:border-nb-primary transition-all"
               placeholder="URL or search resource..."
             />
-            {query && !selectedResource && filtered.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-nb-surface border border-nb-outline-variant shadow-nb-lg rounded-lg overflow-hidden z-50">
+            {isSearchFocused && query && !selectedResource && filtered.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-nb-surface border border-nb-outline-variant shadow-nb-lg rounded-lg overflow-hidden z-50 max-h-60 overflow-y-auto scrollbar-thin">
                 {filtered.map(r => (
                   <button
                     key={r.id}
+                    onMouseDown={e => e.preventDefault()}
                     onClick={() => {
                       setSelectedResource(r);
                       setQuery("");
                     }}
-                    className="w-full px-3 py-2 text-left hover:bg-nb-primary/5 transition-colors border-b border-nb-outline-variant/10 last:border-0"
+                    className="w-full px-4 py-2.5 text-left hover:bg-nb-primary/5 transition-colors border-b border-nb-outline-variant/10 last:border-0"
                   >
-                    <div className="text-[10px] font-bold text-nb-on-surface truncate">{r.title}</div>
-                    <div className="text-[8px] text-nb-on-surface-variant/60 uppercase">{r.type} • {r.entryTitle}</div>
+                    <div className="text-sm font-bold text-nb-on-surface truncate">{r.title}</div>
+                    <div className="text-[11px] text-nb-on-surface-variant/60 uppercase truncate">
+                      {r.type} • {r.entryTitle} • {r.entryDate}
+                    </div>
                   </button>
                 ))}
               </div>
             )}
           </div>
+
+          {(selectedResource || link.trim()) && (
+            <div className="mt-3 p-3 bg-nb-surface-low border border-nb-outline-variant/20 rounded-xl flex items-center justify-between gap-3 animate-in slide-in-from-top-1 duration-200">
+              <div className="flex-1 min-w-0">
+                <div className="text-[9px] font-black uppercase text-nb-primary mb-0.5 tracking-tighter">
+                  {selectedResource ? "Linked Resource" : "External Link"}
+                </div>
+                <div className="text-sm font-bold text-nb-on-surface truncate">
+                  {selectedResource ? selectedResource.title : link}
+                </div>
+                {selectedResource && (
+                  <div className="text-[11px] text-nb-on-surface-variant/60 uppercase truncate">
+                    {selectedResource.type} • {selectedResource.entryTitle} • {selectedResource.entryDate}
+                  </div>
+                )}
+              </div>
+              <button 
+                onClick={() => {
+                  let url = selectedResource ? `#${selectedResource.id}` : link.trim();
+                  if (!selectedResource && url && !url.startsWith('#')) {
+                    const hasProtocol = /^[a-z]+:/i.test(url);
+                    const isDomain = url.includes('.') && !url.includes(' ');
+                    if (!hasProtocol && isDomain) url = `https://${url}`;
+                  }
+                  window.open(url, '_blank');
+                }}
+                title="Go to Link"
+                className="p-2 bg-nb-surface text-nb-primary rounded-lg hover:bg-nb-primary/10 transition-colors shrink-0 border border-nb-outline-variant/30 shadow-sm"
+              >
+                <ExternalLink size={14} />
+              </button>
+            </div>
+          )}
         </div>
 
-        <button 
-          onClick={handleApply}
-          className="w-full py-2 bg-nb-primary text-white text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20"
-        >
-          Apply Link
-        </button>
+        <div className="flex gap-2 pt-2">
+          <button 
+            onClick={handleApply}
+            className="flex-1 py-2.5 bg-nb-primary text-white text-[11px] font-bold uppercase tracking-widest rounded-lg hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20"
+          >
+            Apply Link
+          </button>
+          
+          {editor.isActive('link') && (
+            <button 
+              onClick={() => { editor.chain().focus().unsetLink().unsetMark('underline').run(); onClose(); }}
+              title="Remove Link"
+              className="px-3 py-2 bg-nb-surface-low text-red-500 rounded-lg hover:bg-red-50 transition-all border border-nb-outline-variant/30"
+            >
+              <Link2Off size={14} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1111,7 +1182,7 @@ export default function UnifiedEditor({
         autolink: true,
         linkOnPaste: true,
         HTMLAttributes: {
-          class: 'text-nb-primary !no-underline hover:underline underline-offset-4 hover:decoration-nb-primary transition-all cursor-text',
+          class: 'text-nb-primary hover:underline hover:decoration-nb-primary transition-all cursor-text',
         },
       }),
       Placeholder.configure({
@@ -1192,10 +1263,30 @@ export default function UnifiedEditor({
   }, [editor, onEditorInit]);
 
   useEffect(() => {
-    if (onToggleLink) {
-      onToggleLink(() => setShowLinkPopup(true));
+    if (onToggleLink && editor) {
+      onToggleLink(() => {
+        // 1. Clean selection (strip whitespace)
+        if (editor.isActive('link')) {
+          editor.commands.extendMarkRange('link');
+        } else {
+          const { from, to } = editor.state.selection;
+          if (from !== to) {
+            const text = editor.state.doc.textBetween(from, to, " ");
+            const startOffset = text.search(/\S/);
+            const endOffset = text.trimEnd().length;
+            if (startOffset !== -1) {
+              editor.chain().setTextSelection({ 
+                from: from + startOffset, 
+                to: from + endOffset 
+              }).run();
+            }
+          }
+        }
+        // 2. Open popup
+        setShowLinkPopup(true);
+      });
     }
-  }, [onToggleLink]);
+  }, [onToggleLink, editor]);
 
   const isInTable = editor?.isActive("tableCell") || editor?.isActive("tableHeader") || false;
 
@@ -1240,7 +1331,10 @@ export default function UnifiedEditor({
         )}
 
         <div className="bg-nb-surface min-h-[800px] relative">
-          <div className={`max-w-none h-full ${isCtrlPressed ? '[&_a]:!cursor-pointer' : ''}`}>
+          <div 
+            className={`max-w-none h-full ${isCtrlPressed ? '[&_a]:!cursor-pointer' : ''}`}
+            onMouseDown={() => setShowLinkPopup(false)}
+          >
             <EditorContent editor={editor} className="h-full" />
           </div>
           {showLinkPopup && (

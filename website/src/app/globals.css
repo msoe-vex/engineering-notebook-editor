@@ -139,6 +139,35 @@ body {
   opacity: 0.4;
 }
 
+.ProseMirror u, 
+.ProseMirror a {
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1px;
+}
+
+.ProseMirror a {
+  text-decoration: none;
+}
+
+.ProseMirror a:hover {
+  text-decoration: underline;
+}
+
+.ProseMirror a::after {
+  content: "\2197"; /* Unicode North East Arrow */
+  font-size: 0.7em;
+  margin-left: 2px;
+  vertical-align: super;
+  opacity: 0.5;
+  color: var(--color-nb-primary);
+  display: inline-block;
+  transition: opacity 0.2s;
+}
+
+.ProseMirror a:hover::after {
+  opacity: 1;
+}
+
 .ProseMirror-selectednode {
   outline: none !important;
   box-shadow: none !important;
