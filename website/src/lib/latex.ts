@@ -1,3 +1,5 @@
+import { ASSETS_DIR, DATA_DIR } from "./constants";
+
 export const escapeLaTeX = (text: string) =>
   text
     .replace(/\\/g, "\\textbackslash{}")
@@ -103,14 +105,14 @@ export const convertNodeToLatex = (node: any): string => {
       const src = node.attrs?.src ?? "";
       let imgSrc = filePath
         ? filePath
-        : src.startsWith("data:") ? "assets/embedded_image.png" : src;
+        : src.startsWith("data:") ? `${ASSETS_DIR}/embedded_image.png` : src;
 
       // Remove redundant resources/ or assets/ prefix if graphicspath already includes it
       if (imgSrc.startsWith("resources/")) {
         imgSrc = imgSrc.replace("resources/", "");
       }
-      if (imgSrc.startsWith("assets/")) {
-        imgSrc = imgSrc.replace("assets/", "");
+      if (imgSrc.startsWith(`${ASSETS_DIR}/`)) {
+        imgSrc = imgSrc.replace(`${ASSETS_DIR}/`, "");
       }
 
       const title = node.attrs?.title ? `${node.attrs.title}: ` : "";
@@ -208,4 +210,13 @@ export const generateEntryLatex = (cnt: string, t: string, a: string, p: string,
   latex += `\n`;
   latex += convertJsonToLatex(cnt);
   return latex;
+};
+
+export const generateAllEntriesLatex = (metadata: { entries: Record<string, any> }, prefix: string = `${DATA_DIR}/`): string => {
+  const entries = Object.values(metadata.entries)
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+  return entries
+    .map(entry => `\\input{${prefix}latex/${entry.id}.tex}`)
+    .join("\n") + "\n";
 };

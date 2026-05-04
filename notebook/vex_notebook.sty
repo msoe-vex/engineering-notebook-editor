@@ -54,8 +54,8 @@
 \definecolor{PhaseEvaluate}{HTML}{B3D9FF} % Light Blue
 \definecolor{PhaseDefault}{HTML}{E0E0E0} % Gray
 
-% Graphic path setup: Images can be placed in resources folder
-\graphicspath{{resources/}{../resources/}}
+% Graphic path setup: Images can be placed in ./data/assets/
+\graphicspath{{./data/assets/}}
 
 % Variables setup
 \newcommand{\@teamname}{}
@@ -130,12 +130,12 @@
 
     % Determine color based on phase
     \ifthenelse{\equal{#4}{Define Problem}}{\renewcommand{\@entryphasecolor}{PhaseDefine}}{
-    \ifthenelse{\equal{#4}{Generate Concepts}}{\renewcommand{\@entryphasecolor}{PhaseGenerate}}{
-    \ifthenelse{\equal{#4}{Develop Solution}}{\renewcommand{\@entryphasecolor}{PhaseDevelop}}{
-    \ifthenelse{\equal{#4}{Construct and Test}}{\renewcommand{\@entryphasecolor}{PhaseConstruct}}{
-    \ifthenelse{\equal{#4}{Evaluate Solution}}{\renewcommand{\@entryphasecolor}{PhaseEvaluate}}{
-    \renewcommand{\@entryphasecolor}{PhaseDefault}
-    }}}}}
+        \ifthenelse{\equal{#4}{Generate Concepts}}{\renewcommand{\@entryphasecolor}{PhaseGenerate}}{
+            \ifthenelse{\equal{#4}{Develop Solution}}{\renewcommand{\@entryphasecolor}{PhaseDevelop}}{
+                \ifthenelse{\equal{#4}{Construct and Test}}{\renewcommand{\@entryphasecolor}{PhaseConstruct}}{
+                    \ifthenelse{\equal{#4}{Evaluate Solution}}{\renewcommand{\@entryphasecolor}{PhaseEvaluate}}{
+                        \renewcommand{\@entryphasecolor}{PhaseDefault}
+                    }}}}}
 
     \phantomsection
     \addcontentsline{toc}{section}{#4 -- #1 (#2)}

@@ -13,6 +13,7 @@ import { generateUUID, hashContent, getExtensionFromDataUrl } from "@/lib/utils"
 import { generateEntryLatex } from "@/lib/latex";
 import AutocompleteInput from "./AutocompleteInput";
 import { extractResources } from "@/lib/metadata";
+import { ASSETS_DIR } from "@/lib/constants";
 import { NodeSelection } from "@tiptap/pm/state";
 
 const PHASE_CONFIG: Record<string, { icon: any, color: string, bg: string, border: string, text: string }> = {
@@ -376,7 +377,7 @@ const Editor = React.memo(function Editor({
 
           const hash = await hashContent(base64);
           const ext = getExtensionFromDataUrl(dataUrl);
-          const newPath = `assets/${hash}.${ext}`;
+          const newPath = `${ASSETS_DIR}/${hash}.${ext}`;
 
           const safePos = (() => {
             const { selection } = editor.state;

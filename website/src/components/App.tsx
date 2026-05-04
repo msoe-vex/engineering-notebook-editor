@@ -26,8 +26,9 @@ import { GitBranch, HardDrive, ArrowLeftRight, GitCommitVertical, Loader2, Menu,
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { saveAs } from "file-saver";
 import { generateUUID } from "@/lib/utils";
-import { generateEntryLatex } from "@/lib/latex";
+import { generateEntryLatex, generateAllEntriesLatex } from "@/lib/latex";
 import { extractImagePaths, extractResources } from "@/lib/metadata";
+import { ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, INDEX_PATH, ALL_ENTRIES_PATH } from "@/lib/constants";
 import ReferenceSearch from "./ReferenceSearch";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -75,10 +76,6 @@ interface OpenFileState {
   isLegacyRaw: boolean;
 }
 
-const ENTRIES_DIR = "entries";
-const ASSETS_DIR = "assets";
-const LATEX_DIR = "latex";
-const INDEX_PATH = "notebook.json";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -502,6 +499,12 @@ export default function App() {
           label: "Auto-save metadata", stagedAt: isoTimestamp()
         });
 
+        const allEntriesTex = generateAllEntriesLatex(updatedMeta, "data/");
+        await stageChange(dbName, {
+          path: ALL_ENTRIES_PATH, operation: "upsert", content: allEntriesTex,
+          label: "Update entry list", stagedAt: isoTimestamp()
+        });
+
         notebookMetadataRef.current = updatedMeta;
 
         // Sync to state with debounce to avoid excessive re-renders during typing
@@ -643,6 +646,8 @@ export default function App() {
       const save = async () => {
         try {
           await writeLocalFile(dirHandle, INDEX_PATH, JSON.stringify(notebookMetadata, null, 2));
+          const allEntriesTex = generateAllEntriesLatex(notebookMetadata, "data/");
+          await writeLocalFile(dirHandle, ALL_ENTRIES_PATH, allEntriesTex);
         } catch (e) {
           console.error("Failed to auto-save metadata", e);
         }
@@ -738,6 +743,8 @@ export default function App() {
         } else if (workspaceMode === "github" || workspaceMode === "memory") {
           await stage({ path, content: jsonStr, operation: "upsert", label: "New entry" });
           await stage({ path: INDEX_PATH, content: metaStr, operation: "upsert", label: "Update index" });
+          const allEntriesTex = generateAllEntriesLatex(newMetadata, "data/");
+          await stage({ path: ALL_ENTRIES_PATH, content: allEntriesTex, operation: "upsert", label: "Update entry list" });
           await stage({ path: `${LATEX_DIR}/${entryId}.tex`, content: initialLatex, operation: "upsert", label: "Init LaTeX" });
         }
       } finally {
@@ -975,7 +982,12 @@ export default function App() {
               const latex = generateEntryLatex(JSON.stringify(cleanDoc), newEntryMeta.title, newEntryMeta.author, newEntryMeta.phase, newEntryMeta.createdAt, newId);
               await stage({ path: `${LATEX_DIR}/${newId}.tex`, content: latex, operation: "upsert", label: "Import LaTeX" });
 
-              setNotebookMetadata(prev => updateEntryInIndex(prev, newId, newEntryMeta));
+              const updatedMeta = updateEntryInIndex(notebookMetadata, newId, newEntryMeta);
+              const allEntriesTex = generateAllEntriesLatex(updatedMeta, "data/");
+              await stage({ path: INDEX_PATH, content: JSON.stringify(updatedMeta, null, 2), operation: "upsert", label: "Update index" });
+              await stage({ path: ALL_ENTRIES_PATH, content: allEntriesTex, operation: "upsert", label: "Update entry list" });
+
+              setNotebookMetadata(updatedMeta);
             }
 
             notify("Entry imported successfully.", "success");
@@ -1064,6 +1076,10 @@ export default function App() {
       const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
       await stage({ path: `${LATEX_DIR}/${entryId}.tex`, content: undefined, operation: "delete", label: "LaTeX deleted" });
       await stage({ path: INDEX_PATH, content: metaStr, operation: "upsert", label: "Metadata update" });
+      
+      const allEntriesTex = generateAllEntriesLatex(updatedMeta, "data/");
+      await stage({ path: ALL_ENTRIES_PATH, content: allEntriesTex, operation: "upsert", label: "Update entry list" });
+      
       setEntries(prev => prev.filter(e => e.path !== file.path));
     }
 

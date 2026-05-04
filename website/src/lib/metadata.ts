@@ -1,4 +1,5 @@
 import { generateEntryLatex } from "./latex";
+import { ASSETS_DIR, DATA_DIR } from "./constants";
 
 /**
  * metadata.ts — resource ↔ entry relationship tracking.
@@ -107,7 +108,7 @@ export function dehydrateTipTapJson(json: any): any {
     const newAttrs = { ...json.attrs };
     // If we have a filePath, we don't need the base64 src in metadata
     if (newAttrs.src?.startsWith("data:")) {
-      newAttrs.src = newAttrs.filePath || "assets/placeholder.png";
+      newAttrs.src = newAttrs.filePath || `${ASSETS_DIR}/placeholder.png`;
     }
     return { ...json, attrs: newAttrs };
   }
@@ -177,7 +178,7 @@ export async function dehydrateAssets(doc: any): Promise<{ cleanDoc: any; newAss
       const base64 = node.attrs.src.split(",")[1];
       const hash = await hashContent(base64);
       const ext = getExtensionFromDataUrl(node.attrs.src);
-      const assetPath = `assets/${hash}.${ext}`;
+      const assetPath = `${ASSETS_DIR}/${hash}.${ext}`;
       
       assets.push({ path: assetPath, base64 });
       return { ...node, attrs: { ...node.attrs, src: assetPath, filePath: assetPath } };
@@ -199,7 +200,7 @@ export async function dehydrateAssets(doc: any): Promise<{ cleanDoc: any; newAss
 export function hydrateAssets(doc: any, assetCache: Map<string, string>): any {
   function walk(node: any): any {
     if (!node) return node;
-    if (node.type === "image" && node.attrs?.src?.startsWith("assets/")) {
+    if (node.type === "image" && node.attrs?.src?.startsWith(`${ASSETS_DIR}/`)) {
       const dataUrl = assetCache.get(node.attrs.src);
       if (dataUrl) {
         return { ...node, attrs: { ...node.attrs, src: dataUrl } };

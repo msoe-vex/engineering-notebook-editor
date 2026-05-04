@@ -20,6 +20,7 @@ import { TableHeader } from "@tiptap/extension-table-header";
 import { CodeBlock } from "@tiptap/extension-code-block";
 import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
+import { ASSETS_DIR } from "@/lib/constants";
 import Underline from "@tiptap/extension-underline";
 
 import Prism from "prismjs";
@@ -1134,7 +1135,7 @@ export default function UnifiedEditor({
 
       const hash = await hashContent(base64);
       const ext = getExtensionFromDataUrl(dataUrl);
-      const newPath = `assets/${hash}.${ext}`;
+      const newPath = `${ASSETS_DIR}/${hash}.${ext}`;
 
       if (editor?.isActive('tableCell') || editor?.isActive('tableHeader')) {
         // Prevent image insertion inside tables as LaTeX cannot render them
