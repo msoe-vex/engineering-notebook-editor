@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import UnifiedEditor, { ToolbarButton, TableGridSelector } from "./UnifiedEditor";
+import { createPortal } from "react-dom";
 import { saveAs } from "file-saver";
 import {
   Save, Trash2, Download, AlertCircle, AlertTriangle, Loader2, User, Target, X, FileCode,
@@ -110,7 +111,6 @@ const Editor = React.memo(function Editor({
   const [phase, setPhase] = useState(initialPhase);
   const [content, setContent] = useState(() => parseInitialContent(initialContent));
   const [editor, setEditor] = useState<any>(null);
-  const [showTableGrid, setShowTableGrid] = useState(false);
 
   // Local validation state for immediate UI feedback
   const [localIsValid, setLocalIsValid] = useState(isValid);
@@ -142,6 +142,10 @@ const Editor = React.memo(function Editor({
 
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [showTableGrid, setShowTableGrid] = useState(false);
+  const tableButtonRef = useRef<HTMLDivElement>(null);
+  const [gridPos, setGridPos] = useState({ top: 0, left: 0 });
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const toggleLinkFn = useRef<(() => void) | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -244,7 +248,6 @@ const Editor = React.memo(function Editor({
       setIsAutoSaving(false);
       autoSaveTimerRef.current = null;
     }, 500);
-
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
@@ -721,17 +724,30 @@ const Editor = React.memo(function Editor({
                   <Terminal size={16} />
                 </ToolbarButton>
 
-                <div className="relative">
+                <div className="relative" ref={tableButtonRef}>
                   <ToolbarButton
-                    onClick={(e) => { e?.stopPropagation(); setShowTableGrid(!showTableGrid); }}
+                    onClick={(e) => { 
+                      e?.stopPropagation(); 
+                      if (!showTableGrid && tableButtonRef.current) {
+                        const rect = tableButtonRef.current.getBoundingClientRect();
+                        setGridPos({ top: rect.bottom + 8, left: rect.right });
+                      }
+                      setShowTableGrid(!showTableGrid); 
+                    }}
                     active={showTableGrid}
                     title="Insert Table"
                   >
                     <TableIcon size={16} />
                   </ToolbarButton>
-                  {showTableGrid && (
+                  {showTableGrid && createPortal(
                     <div
-                      className="absolute top-full left-0 mt-2 z-[200] shadow-2xl rounded-xl animate-in fade-in zoom-in-95 duration-200"
+                      style={{ 
+                        position: 'fixed', 
+                        top: gridPos.top, 
+                        left: gridPos.left - 204, // Grid width (180) + padding/shadow room
+                        zIndex: 9999 
+                      }}
+                      className="shadow-2xl rounded-xl animate-in fade-in zoom-in-95 duration-200"
                       onMouseDown={(e) => e.stopPropagation()}
                     >
                       <TableGridSelector
@@ -761,7 +777,8 @@ const Editor = React.memo(function Editor({
                           setShowTableGrid(false);
                         }}
                       />
-                    </div>
+                    </div>,
+                    document.body
                   )}
                 </div>
 

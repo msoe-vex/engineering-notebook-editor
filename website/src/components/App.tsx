@@ -644,18 +644,20 @@ export default function App() {
   useEffect(() => {
     if (workspaceMode === "local" && dirHandle && notebookMetadata !== EMPTY_METADATA) {
       const save = async () => {
-        try {
-          await writeLocalFile(dirHandle, INDEX_PATH, JSON.stringify(notebookMetadata, null, 2));
-          const allEntriesTex = generateAllEntriesLatex(notebookMetadata, "data/");
-          await writeLocalFile(dirHandle, ALL_ENTRIES_PATH, allEntriesTex);
-        } catch (e) {
-          console.error("Failed to auto-save metadata", e);
-        }
+        await queueLocalOp(async () => {
+          try {
+            await writeLocalFile(dirHandle, INDEX_PATH, JSON.stringify(notebookMetadata, null, 2));
+            const allEntriesTex = generateAllEntriesLatex(notebookMetadata, "data/");
+            await writeLocalFile(dirHandle, ALL_ENTRIES_PATH, allEntriesTex);
+          } catch (e) {
+            console.error("Failed to auto-save metadata", e);
+          }
+        });
       };
       const timeout = setTimeout(save, 1000);
       return () => clearTimeout(timeout);
     }
-  }, [notebookMetadata, workspaceMode, dirHandle]);
+  }, [notebookMetadata, workspaceMode, dirHandle, queueLocalOp]);
 
   useEffect(() => {
     if (workspaceMode === "local" && dirHandle) loadLocalExplorer();
