@@ -285,11 +285,12 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName, e
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsResizing(true);
-    const startX = e.clientX;
+    const startY = e.clientY;
     const startWidth = parseInt(node.attrs.width) || 100;
     const onMouseMove = (moveEvent: MouseEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      const newWidth = Math.min(100, Math.max(10, startWidth + (deltaX / 6.7)));
+      const deltaY = moveEvent.clientY - startY;
+      // Dragging down (positive deltaY) increases width
+      const newWidth = Math.min(100, Math.max(10, startWidth + (deltaY / 4)));
       updateAttributes({ width: `${Math.round(newWidth)}%` });
     };
     const onMouseUp = () => {
@@ -364,10 +365,10 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName, e
           <div
             contentEditable={false}
             onMouseDown={startResize}
-            className="absolute top-0 right-0 bottom-0 w-2 cursor-ew-resize hover:bg-nb-primary/30 transition-colors z-50 group/resize"
+            className="absolute -bottom-1 left-0 right-0 h-4 cursor-ns-resize flex items-center justify-center group/resize z-50"
             aria-hidden="true"
           >
-            <div className={`absolute top-1/2 -translate-y-1/2 right-0 w-1.5 h-12 bg-nb-primary rounded-l-full transition-opacity ${selected ? 'opacity-100' : 'opacity-30 group-hover/resize:opacity-100'}`} />
+            <div className={`w-16 h-1 bg-nb-primary rounded-full transition-opacity ${selected ? 'opacity-100' : 'opacity-30 group-hover/resize:opacity-100'}`} />
           </div>
         </div>
 
