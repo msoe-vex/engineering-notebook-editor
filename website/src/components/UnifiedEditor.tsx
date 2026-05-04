@@ -55,10 +55,20 @@ import {
 } from "lucide-react";
 import { generateUUID, hashContent, getExtensionFromDataUrl } from "@/lib/utils";
 
-export const LANGUAGES = [
-  "plaintext", "cpp", "c", "python", "javascript",
-  "typescript", "java", "bash", "sql", "rust", "go", "csharp",
-];
+export const LANGUAGES: Record<string, string> = {
+  plaintext: "Plain Text",
+  cpp: "C++",
+  c: "C",
+  python: "Python",
+  javascript: "JavaScript",
+  typescript: "TypeScript",
+  java: "Java",
+  bash: "Bash/Shell",
+  sql: "SQL",
+  rust: "Rust",
+  go: "Go",
+  csharp: "C#",
+};
 
 const CustomLink = Link.extend({
   addAttributes() {
@@ -692,10 +702,10 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
                 <select
                   value={node.attrs.language}
                   onChange={(e) => updateAttributes({ language: e.target.value })}
-                  className="text-[10px] font-bold tracking-widest bg-transparent border-none outline-none text-nb-on-surface-variant cursor-pointer hover:text-nb-primary transition-colors appearance-none pr-4"
+                  className="text-[10px] font-bold tracking-widest bg-transparent border-none outline-none text-nb-on-surface cursor-pointer transition-colors appearance-none pr-4"
                 >
-                  {LANGUAGES.map((lang) => (
-                    <option key={lang} value={lang}>{lang}</option>
+                  {Object.entries(LANGUAGES).map(([key, label]) => (
+                    <option key={key} value={key} className="text-nb-on-surface bg-nb-surface">{label}</option>
                   ))}
                 </select>
                 <ChevronDown size={10} className="absolute right-2 text-nb-on-surface-variant/40 group-hover/select:text-nb-primary transition-colors pointer-events-none" />
@@ -892,14 +902,14 @@ interface UnifiedEditorProps {
   notebookMetadata?: any;
 }
 
-function LinkReferencePopup({ 
-  editor, 
-  onClose, 
+function LinkReferencePopup({
+  editor,
+  onClose,
   metadata,
   filename
-}: { 
-  editor: any, 
-  onClose: () => void, 
+}: {
+  editor: any,
+  onClose: () => void,
   metadata: any,
   filename?: string
 }) {
@@ -913,7 +923,7 @@ function LinkReferencePopup({
     const { from, to } = editor.state.selection;
     const selectedText = editor.state.doc.textBetween(from, to, " ");
     setText(selectedText);
-    
+
     if (editor.isActive('link')) {
       const attrs = editor.getAttributes('link');
       setLink(attrs.href || "");
@@ -941,9 +951,9 @@ function LinkReferencePopup({
     if (!metadata || !metadata.entries) return list;
 
     // 1. Get resources from the current editor state (most up-to-date for active entry)
-    const currentEntryId = (editor as any).options.element.closest('[data-filename]')?.dataset.filename?.split('/').pop()?.replace('.json', '') 
+    const currentEntryId = (editor as any).options.element.closest('[data-filename]')?.dataset.filename?.split('/').pop()?.replace('.json', '')
       || filename?.split('/').pop()?.replace('.json', '');
-    
+
     // We can also just extract directly from the editor JSON
     const localResources = extractResources(editor.getJSON());
 
@@ -951,11 +961,11 @@ function LinkReferencePopup({
       const e = entry as any;
       const entryTitle = e.title?.trim() || "Untitled Entry";
       const entryDate = e.createdAt?.split('T')[0];
-      
+
       list.push({ id: e.id, title: entryTitle, type: "entry", entryTitle, entryDate });
-      
+
       const resources = (e.id === currentEntryId) ? { ...e.resources, ...localResources } : (e.resources || {});
-      
+
       for (const [resId, res] of Object.entries(resources)) {
         const r = res as any;
         const resTitle = r.title?.trim() || `Untitled ${r.type?.charAt(0).toUpperCase() + r.type?.slice(1) || 'Block'}`;
@@ -968,8 +978,8 @@ function LinkReferencePopup({
   const filtered = useMemo(() => {
     if (!query.trim()) return [];
     const q = query.toLowerCase();
-    return allResources.filter(r => 
-      (r.title || "").toLowerCase().includes(q) || 
+    return allResources.filter(r =>
+      (r.title || "").toLowerCase().includes(q) ||
       (r.entryTitle || "").toLowerCase().includes(q)
     ).slice(0, 10);
   }, [allResources, query]);
@@ -1011,25 +1021,25 @@ function LinkReferencePopup({
   const rect = editor.view.coordsAtPos(editor.state.selection.from);
 
   return (
-    <div 
+    <div
       className="fixed z-[1000] w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-2xl p-5 animate-in zoom-in-95 fade-in duration-200"
-      style={{ 
-        top: Math.min(window.innerHeight - 400, rect.bottom + 10), 
-        left: Math.min(window.innerWidth - 350, rect.left) 
+      style={{
+        top: Math.min(window.innerHeight - 400, rect.bottom + 10),
+        left: Math.min(window.innerWidth - 350, rect.left)
       }}
       onClick={e => e.stopPropagation()}
     >
       <div className="flex items-center justify-between mb-4">
         <span className="text-[10px] font-black tracking-widest text-nb-secondary">Insert Link/Reference</span>
-        <button onClick={onClose} className="p-1.5 hover:bg-nb-surface-low rounded-lg transition-colors"><X size={16}/></button>
+        <button onClick={onClose} className="p-1.5 hover:bg-nb-surface-low rounded-lg transition-colors"><X size={16} /></button>
       </div>
 
       <div className="space-y-4">
         <div>
           <label className="block text-[10px] font-bold text-nb-on-surface-variant/50 mb-1.5">Display Text</label>
-          <input 
-            type="text" 
-            value={text} 
+          <input
+            type="text"
+            value={text}
             onChange={e => setText(e.target.value)}
             className="w-full px-3 py-2 bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg outline-none text-sm focus:border-nb-primary transition-all"
             placeholder="Text to display..."
@@ -1039,9 +1049,9 @@ function LinkReferencePopup({
         <div>
           <label className="block text-[10px] font-bold text-nb-on-surface-variant/50 mb-1.5">Link or Resource</label>
           <div className="relative">
-            <input 
-              type="text" 
-              value={selectedResource ? selectedResource.title : link} 
+            <input
+              type="text"
+              value={selectedResource ? selectedResource.title : link}
               onFocus={() => setIsSearchFocused(true)}
               onBlur={() => setIsSearchFocused(false)}
               onChange={e => {
@@ -1089,7 +1099,7 @@ function LinkReferencePopup({
                   </div>
                 )}
               </div>
-              <button 
+              <button
                 onClick={() => {
                   let url = selectedResource ? `#${selectedResource.id}` : link.trim();
                   if (!selectedResource && url && !url.startsWith('#')) {
@@ -1109,15 +1119,15 @@ function LinkReferencePopup({
         </div>
 
         <div className="flex gap-2 pt-2">
-          <button 
+          <button
             onClick={handleApply}
             className="flex-1 py-2.5 bg-nb-primary text-white text-[11px] font-bold tracking-widest rounded-lg hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20"
           >
             Apply Link
           </button>
-          
+
           {editor.isActive('link') && (
-            <button 
+            <button
               onClick={() => { editor.chain().focus().unsetLink().unsetMark('underline').run(); onClose(); }}
               title="Remove Link"
               className="px-3 py-2 bg-nb-surface-low text-red-500 rounded-lg hover:bg-red-50 transition-all border border-nb-outline-variant/30"
@@ -1317,9 +1327,9 @@ export default function UnifiedEditor({
             const startOffset = text.search(/\S/);
             const endOffset = text.trimEnd().length;
             if (startOffset !== -1) {
-              editor.chain().setTextSelection({ 
-                from: from + startOffset, 
-                to: from + endOffset 
+              editor.chain().setTextSelection({
+                from: from + startOffset,
+                to: from + endOffset
               }).run();
             }
           }
@@ -1373,17 +1383,17 @@ export default function UnifiedEditor({
         )}
 
         <div className="bg-nb-surface min-h-[800px] relative">
-          <div 
+          <div
             className={`max-w-none h-full ${isCtrlPressed ? '[&_a]:!cursor-pointer' : ''}`}
             onMouseDown={() => setShowLinkPopup(false)}
           >
             <EditorContent editor={editor} className="h-full" />
           </div>
           {showLinkPopup && (
-            <LinkReferencePopup 
-              editor={editor} 
-              metadata={notebookMetadata} 
-              onClose={() => setShowLinkPopup(false)} 
+            <LinkReferencePopup
+              editor={editor}
+              metadata={notebookMetadata}
+              onClose={() => setShowLinkPopup(false)}
               filename={filename}
             />
           )}

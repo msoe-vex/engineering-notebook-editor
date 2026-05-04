@@ -574,8 +574,8 @@ const Editor = React.memo(function Editor({
 
           {/* Row 3: Rich Toolbar */}
           {editor && (
-            <div className="px-6 py-2 border-t border-nb-outline-variant/30 bg-nb-surface-mid/50">
-              <div className="max-w-7xl mx-auto flex items-center gap-1">
+            <div className="px-6 py-2 border-t border-nb-outline-variant/30 bg-nb-surface-mid/50 overflow-x-auto scrollbar-hide">
+              <div className="max-w-7xl mx-auto flex items-center gap-1 min-w-max">
                 <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} title="Bold">
                   <Bold size={16} />
                 </ToolbarButton>

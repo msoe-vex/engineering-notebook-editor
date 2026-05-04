@@ -244,7 +244,8 @@ export default function App() {
   useEffect(() => {
     if (!sidebarPanelRef.current) return;
     if (isSidebarOpen) {
-      sidebarPanelRef.current.expand();
+      // If we are opening it, reset to default size
+      sidebarPanelRef.current.resize(20);
     } else {
       sidebarPanelRef.current.collapse();
     }
@@ -1497,6 +1498,8 @@ export default function App() {
               collapsible={true}
               minSize={30}
               defaultSize={desktopViewMode === "editor" ? 100 : (desktopViewMode === "preview" ? 0 : 50)}
+              onCollapse={() => { if (desktopViewMode !== "preview") setDesktopViewMode("preview"); }}
+              onExpand={() => { if (desktopViewMode === "preview") setDesktopViewMode("split"); }}
               className={`flex flex-col h-full transition-all duration-300 ease-out ${desktopViewMode === "preview" ? "opacity-0 pointer-events-none" : "opacity-100"}`}
             >
               <Editor
@@ -1572,6 +1575,8 @@ export default function App() {
               collapsible={true}
               minSize={30}
               defaultSize={desktopViewMode === "preview" ? 100 : (desktopViewMode === "editor" ? 0 : 50)}
+              onCollapse={() => { if (desktopViewMode !== "editor") setDesktopViewMode("editor"); }}
+              onExpand={() => { if (desktopViewMode === "editor") setDesktopViewMode("split"); }}
               className={`flex flex-col h-full bg-nb-surface-low transition-all duration-300 ease-out ${desktopViewMode === "editor" ? "opacity-0 pointer-events-none" : "opacity-100"}`}
             >
               <Preview latexContent={latexContent} />
