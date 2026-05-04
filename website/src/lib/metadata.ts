@@ -248,36 +248,6 @@ export function renameEntryInMetadata(
   return { ...metadata, entries: newEntries };
 }
 
-/** 
- * Migration helper to convert older notebook.json formats to the current UUID-based structure.
- */
-export function migrateMetadata(raw: any): NotebookMetadata {
-  if (!raw || typeof raw !== "object") return EMPTY_METADATA;
-
-  // Version 2: entries indexed by path
-  if (raw.version === 2) {
-    const newEntries: Record<string, EntryMetadata> = {};
-    for (const [path, info] of Object.entries(raw.entries as Record<string, any>)) {
-      const id = info.id || path.split('/').pop()?.replace('.json', '') || "";
-      newEntries[id] = {
-        ...info,
-        id,
-        filename: path,
-      } as EntryMetadata;
-    }
-    return {
-      version: 3,
-      entries: newEntries,
-    };
-  }
-
-  // Version 1: very old format, unlikely to exist but safe to handle
-  if (!raw.version || raw.version === 1) {
-    return { ...EMPTY_METADATA, ...raw, version: 3 };
-  }
-
-  return raw as NotebookMetadata;
-}
 
 /**
  * Recursively walks a TipTap document and generates new UUIDs for all nodes with an 'id' attribute.

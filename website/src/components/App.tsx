@@ -27,7 +27,7 @@ import { ImperativePanelHandle } from "react-resizable-panels";
 import { saveAs } from "file-saver";
 import { generateUUID } from "@/lib/utils";
 import { generateEntryLatex } from "@/lib/latex";
-import { extractImagePaths, extractResources, migrateMetadata } from "@/lib/metadata";
+import { extractImagePaths, extractResources } from "@/lib/metadata";
 import ReferenceSearch from "./ReferenceSearch";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -551,7 +551,7 @@ export default function App() {
         const result = await getLocalFileContent(dirHandle, INDEX_PATH);
         if (result.text) {
           const parsed = JSON.parse(result.text);
-          setNotebookMetadata(migrateMetadata(parsed));
+          setNotebookMetadata(parsed);
         }
       } catch { /* not found */ }
 
@@ -591,13 +591,13 @@ export default function App() {
       if (pendingMeta?.content) {
         try {
           const parsed = JSON.parse(pendingMeta.content);
-          setNotebookMetadata(migrateMetadata(parsed));
+          setNotebookMetadata(parsed);
         } catch { /* ignore */ }
       } else {
         try {
           const metaStr = await fetchFileContent(config, INDEX_PATH);
           const parsed = JSON.parse(metaStr);
-          setNotebookMetadata(migrateMetadata(parsed));
+          setNotebookMetadata(parsed);
         } catch { /* not found yet */ }
       }
 
@@ -721,20 +721,15 @@ export default function App() {
 
       if (!entryJsonStr) throw new Error("Entry not found");
       const rawData = JSON.parse(entryJsonStr);
+      const content = rawData.content || rawData;
       
-      // Support both legacy (wrapper.metadata/content) and new (just content or wrapper.content)
-      const isWrapper = (rawData.content !== undefined);
-      const content = isWrapper ? rawData.content : rawData;
-      
-      // Get entry metadata from global index, falling back to embedded if available (legacy)
       const entryId = file.name.replace('.json', '');
-      const metaFromIndex = notebookMetadata.entries[entryId];
-      const embeddedMeta = isWrapper ? rawData.metadata : null;
+      const meta = notebookMetadata.entries[entryId];
       
-      const title = metaFromIndex?.title || embeddedMeta?.title || "";
-      const author = metaFromIndex?.author || embeddedMeta?.author || "";
-      const phase = metaFromIndex?.phase || embeddedMeta?.phase || "";
-      const createdAt = metaFromIndex?.createdAt || embeddedMeta?.createdAt || isoTimestamp();
+      const title = meta?.title || "";
+      const author = meta?.author || "";
+      const phase = meta?.phase || "";
+      const createdAt = meta?.createdAt || isoTimestamp();
 
       // 2. Load LaTeX for preview
       const latexPath = `${LATEX_DIR}/${entryId}.tex`;
@@ -893,18 +888,17 @@ export default function App() {
         if (content) {
           try {
             const rawData = JSON.parse(content);
-            const isWrapper = (rawData.content !== undefined);
-            const entryContent = isWrapper ? rawData.content : rawData;
+            const entryContent = rawData.content || rawData;
             const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
             
-            // Reconstruct metadata from index or fallback to embedded legacy data
-            const embeddedMeta = isWrapper ? rawData.metadata : null;
+            // Reconstruct metadata from global index
+            const meta = notebookMetadataRef.current.entries[entryId];
             const entryMeta: EntryMetadata = {
               id: entryId,
-              title: embeddedMeta?.title || "",
-              author: embeddedMeta?.author || "",
-              phase: embeddedMeta?.phase || "",
-              createdAt: embeddedMeta?.createdAt || isoTimestamp(),
+              title: meta?.title || "",
+              author: meta?.author || "",
+              phase: meta?.phase || "",
+              createdAt: meta?.createdAt || isoTimestamp(),
               filename: file.path,
               resources: extractResources(entryContent)
             };
