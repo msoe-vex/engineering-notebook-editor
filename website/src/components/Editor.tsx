@@ -42,6 +42,7 @@ interface EditorProps {
   initialPhase?: string;
   initialContent: string;
   initialCreatedAt?: string;
+  initialUpdatedAt?: string;
   metadataMissing?: boolean;
   onSaved: (path: string, latexContent: string) => void;
   onDeleted: (path: string) => void;
@@ -51,7 +52,7 @@ interface EditorProps {
   onPhaseChange: (phase: string) => void;
   onImageUpload?: (path: string, base64: string) => void;
   onMetadataRebuild?: (path: string, content: any, info: { title: string; author: string; phase: string; createdAt: string }) => void;
-  onDownloadPortable?: (path: string, content: any, info: { title: string; author: string; phase: string; createdAt: string }) => void;
+  onDownloadPortable?: (path: string, content: any, info: { title: string; author: string; phase: string; createdAt: string; updatedAt: string }) => void;
   onClose?: () => void;
   dbName?: string;
   isSaving?: boolean;
@@ -67,6 +68,7 @@ const Editor = React.memo(function Editor({
   initialPhase = "",
   initialContent = "",
   initialCreatedAt = "",
+  initialUpdatedAt = "",
   metadataMissing = false,
   onSaved,
   onDeleted,
@@ -158,7 +160,7 @@ const Editor = React.memo(function Editor({
     setPhase(initialPhase);
     setContent(parseInitialContent(initialContent));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filename, initialContent]);
+  }, [filename]);
 
   const generateLatex = (cnt: string, t: string, a: string, p: string) => {
     const entryId = filename.split('/').pop()?.replace('.json', '') || "";
@@ -380,7 +382,15 @@ const Editor = React.memo(function Editor({
               <MenuAction
                 icon={<FileCode size={14} />}
                 label="Download Portable (.json)"
-                onClick={() => onDownloadPortable?.(filename, JSON.stringify(content), { title, author, phase, createdAt: initialCreatedAt })}
+                onClick={() => {
+                  const latestMeta = notebookMetadata?.entries?.[entryId];
+                  const currentUpdatedAt = latestMeta?.updatedAt || initialUpdatedAt || initialCreatedAt;
+                  onDownloadPortable?.(filename, JSON.stringify(content), { 
+                    title, author, phase, 
+                    createdAt: initialCreatedAt, 
+                    updatedAt: currentUpdatedAt 
+                  });
+                }}
               />
               <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
               <MenuAction icon={<X size={14} />} label="Close" onClick={onClose || (() => { })} />

@@ -13,6 +13,7 @@ export interface ExplorerFile {
   title?: string;
   author?: string;
   timestamp?: string;
+  updatedAt?: string;
 }
 
 interface FileExplorerProps {
@@ -27,6 +28,10 @@ interface FileExplorerProps {
   onUploadResource: () => void;
   onDeleteEntry: (file: ExplorerFile) => void;
   onDeleteResource: (file: ExplorerFile) => void;
+  search: string;
+  onSearchChange: (val: string) => void;
+  sortBy: "created" | "updated" | "title";
+  onSortChange: (val: "created" | "updated" | "title") => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -76,7 +81,8 @@ function FileRow({ file, isSelected, isPending, isDeleted, icon, onSelect, onDel
         </span>
         <span className={`text-[9px] font-mono truncate mt-0.5 ${isSelected ? 'text-white/70' : 'opacity-40'}`}>
            {(() => {
-             const d = new Date(file.timestamp || Date.now());
+             const ts = file.updatedAt || file.timestamp || Date.now();
+             const d = new Date(ts);
              const valid = !isNaN(d.getTime());
              return (valid ? d : new Date()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
            })()}
@@ -200,7 +206,7 @@ function DeleteDialog({ filename, onConfirm, onCancel }: DeleteDialogProps) {
 
 // ── Icons for pane ────────────────────────────────────────────────────────────
 
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Search, SortAsc, Clock, Calendar } from "lucide-react";
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -216,6 +222,10 @@ export default function FileExplorer({
   onUploadResource,
   onDeleteEntry,
   onDeleteResource,
+  search,
+  onSearchChange,
+  sortBy,
+  onSortChange,
 }: FileExplorerProps) {
   const [deleteTarget, setDeleteTarget] = useState<{ file: ExplorerFile; type: "entry" | "resource" } | null>(null);
 
@@ -228,6 +238,53 @@ export default function FileExplorer({
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      {/* Search and Sort Header */}
+      <div className="px-3 py-3 bg-nb-surface border-b border-nb-outline-variant space-y-3 shrink-0">
+        <div className="relative group">
+          <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-nb-on-surface-variant/40 group-focus-within:text-nb-primary transition-colors">
+            <Search size={14} />
+          </div>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Search entries..."
+            className="w-full bg-nb-surface-low border border-nb-outline-variant rounded-xl py-2 pl-9 pr-4 text-xs font-medium placeholder:text-nb-on-surface-variant/40 focus:outline-none focus:ring-2 focus:ring-nb-primary/20 focus:border-nb-primary transition-all"
+          />
+          {search && (
+            <button
+              onClick={() => onSearchChange("")}
+              className="absolute inset-y-0 right-3 flex items-center text-nb-on-surface-variant/40 hover:text-nb-primary transition-colors"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          {[
+            { id: 'updated', label: 'Recent', icon: <Clock size={10} /> },
+            { id: 'created', label: 'History', icon: <Calendar size={10} /> },
+            { id: 'title', label: 'A-Z', icon: <SortAsc size={10} /> }
+          ].map((s) => (
+            <button
+              key={s.id}
+              onClick={() => onSortChange(s.id as any)}
+              className={`
+                flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all
+                ${sortBy === s.id 
+                  ? 'bg-nb-tertiary text-white shadow-sm shadow-nb-tertiary/20' 
+                  : 'bg-nb-surface-low text-nb-on-surface-variant/60 hover:text-nb-primary hover:bg-nb-surface-mid'
+                }
+              `}
+            >
+              {s.icon}
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Entries pane */}
       <Pane
         id="explorer-entries-pane"
@@ -235,7 +292,7 @@ export default function FileExplorer({
         actionLabel="New"
         actionIcon={<Plus size={11} />}
         onAction={onNewEntry}
-        empty="No entries yet."
+        empty={search ? "No matches found." : "No entries yet."}
         hasItems={entries.length > 0}
       >
         {entries.map((f) => (

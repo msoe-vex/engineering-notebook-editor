@@ -25,6 +25,7 @@ export interface EntryMetadata {
   author: string;
   phase: string;
   createdAt: string;
+  updatedAt: string;
   filename: string; // Path to the entry file (e.g. "entries/uuid.json")
   resources?: Record<string, { title: string, type: string }>; // block uuid -> metadata
 }

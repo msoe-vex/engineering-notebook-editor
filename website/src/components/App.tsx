@@ -69,6 +69,7 @@ interface OpenFileState {
   // Image preview
   imageSrc: string;
   createdAt: string;
+  updatedAt: string;
   // Raw latex: is it a legacy (no metadata) file?
   isLegacyRaw: boolean;
 }
@@ -228,6 +229,8 @@ export default function App() {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [entrySearch, setEntrySearch] = useState("");
+  const [entrySort, setEntrySort] = useState<"created" | "updated" | "title">("updated");
   const [mobileTab, setMobileTab] = useState<"editor" | "preview">("editor");
   const [desktopViewMode, setDesktopViewMode] = useState<"editor" | "split" | "preview">("editor");
 
@@ -291,42 +294,42 @@ export default function App() {
   // ── Computed display lists ───────────────────────────────────────────────────
 
   const displayEntries = useMemo(() => {
-    return entries.map(f => {
-      const entryId = f.path.split('/').pop()?.replace('.json', '') || "";
-      const m = notebookMetadata.entries?.[entryId];
-
-      // Intelligent fallback for timestamp from ISO filename
-      let finalTs = m?.createdAt || "";
-      if (!finalTs) {
-        // Filename is YYYY-MM-DDTHH-mm-ss-msZ_entry.tex
-        const parts = f.name.split('_')[0].split('T');
-        if (parts.length === 2) {
-          const datePart = parts[0];
-          const timePart = parts[1].replace(/-/g, ':').replace(/:([^:]*)$/, '.$1');
-          try {
-            const d = new Date(`${datePart}T${timePart}`);
-            if (!isNaN(d.getTime())) finalTs = d.toISOString();
-          } catch { /* ignore */ }
-        } else if (f.name.match(/^\d{4}-\d{2}-\d{2}/)) {
-          // Just a date
-          finalTs = f.name.substring(0, 10) + "T00:00:00.000Z";
-        }
-      }
-      if (!finalTs) finalTs = new Date().toISOString();
-
-      // Use notebookMetadata (which is updated optimistically) or openFile as fallback
-      const currentTitle = m?.title ?? (openFile?.path === f.path ? openFile.title : "") ?? "";
-      const currentAuthor = m?.author ?? (openFile?.path === f.path ? openFile.author : "") ?? "";
-
+    let list = entries.map(e => {
+      const id = e.name.replace('.json', '');
+      const meta = notebookMetadata.entries[id];
       return {
-        ...f,
-        title: currentTitle || "Untitled Entry",
-        author: currentAuthor,
-        timestamp: finalTs,
-        isSaving: savingPaths.has(f.path)
+        ...e,
+        title: meta?.title || "",
+        author: meta?.author || "",
+        timestamp: meta?.createdAt || "",
+        updatedAt: meta?.updatedAt || meta?.createdAt || "",
+        id,
+        isSaving: savingPaths.has(e.path)
       };
-    }).sort((a, b) => (b.timestamp || b.name).localeCompare(a.timestamp || a.name));
-  }, [entries, notebookMetadata, openFile?.path, openFile?.title, openFile?.author, savingPaths]);
+    });
+
+    if (entrySearch) {
+      const q = entrySearch.toLowerCase();
+      list = list.filter(e =>
+        (e.title || "").toLowerCase().includes(q) ||
+        (e.author || "").toLowerCase().includes(q) ||
+        e.name.toLowerCase().includes(q)
+      );
+    }
+
+    list.sort((a, b) => {
+      if (entrySort === "title") {
+        return (a.title || "").localeCompare(b.title || "");
+      }
+      if (entrySort === "created") {
+        return (b.timestamp || "").localeCompare(a.timestamp || "");
+      }
+      // default: updated
+      return (b.updatedAt || "").localeCompare(a.updatedAt || "");
+    });
+
+    return list;
+  }, [entries, notebookMetadata, entrySearch, entrySort, savingPaths]);
 
   const displayResources = useMemo(() => {
     return resources.sort((a, b) => a.name.localeCompare(b.name));
@@ -356,7 +359,7 @@ export default function App() {
 
     setOpenFile(prev => {
       if (prev && prev.path === changedPath) {
-        return { ...prev, rawLatex: latex, tiptapContent };
+        return { ...prev, rawLatex: latex, tiptapContent, updatedAt: isoTimestamp() };
       }
       return prev;
     });
@@ -382,7 +385,8 @@ export default function App() {
     const entryMeta: EntryMetadata = {
       id: entryId,
       ...info,
-      createdAt: openFile?.path === changedPath ? openFile.createdAt : (notebookMetadata.entries?.[entryId]?.createdAt || isoTimestamp()),
+      createdAt: openFile?.path === changedPath ? openFile.createdAt : (notebookMetadataRef.current.entries?.[entryId]?.createdAt || isoTimestamp()),
+      updatedAt: isoTimestamp(),
       filename: changedPath,
       resources
     };
@@ -615,6 +619,20 @@ export default function App() {
   }, [config, getDBName]);
 
   useEffect(() => {
+    if (workspaceMode === "local" && dirHandle && notebookMetadata !== EMPTY_METADATA) {
+      const save = async () => {
+        try {
+          await writeLocalFile(dirHandle, INDEX_PATH, JSON.stringify(notebookMetadata, null, 2));
+        } catch (e) {
+          console.error("Failed to auto-save metadata", e);
+        }
+      };
+      const timeout = setTimeout(save, 1000);
+      return () => clearTimeout(timeout);
+    }
+  }, [notebookMetadata, workspaceMode, dirHandle]);
+
+  useEffect(() => {
     if (workspaceMode === "local" && dirHandle) loadLocalExplorer();
     else if (workspaceMode === "github" && config) loadGitHubExplorer();
     else if (workspaceMode === "memory") { setEntries([]); setResources([]); }
@@ -637,6 +655,7 @@ export default function App() {
       author: defaultAuthor,
       phase: "",
       createdAt: createdAt,
+      updatedAt: createdAt,
       filename: path,
       resources: {}
     };
@@ -662,6 +681,7 @@ export default function App() {
       metadataMissing: false,
       imageSrc: "",
       createdAt: createdAt,
+      updatedAt: createdAt,
       isLegacyRaw: false,
     });
     setLatexContent(initialLatex);
@@ -722,14 +742,15 @@ export default function App() {
       if (!entryJsonStr) throw new Error("Entry not found");
       const rawData = JSON.parse(entryJsonStr);
       const content = rawData.content || rawData;
-      
+
       const entryId = file.name.replace('.json', '');
-      const meta = notebookMetadata.entries[entryId];
-      
+      const meta = notebookMetadataRef.current.entries[entryId];
+
       const title = meta?.title || "";
       const author = meta?.author || "";
       const phase = meta?.phase || "";
       const createdAt = meta?.createdAt || isoTimestamp();
+      const updatedAt = meta?.updatedAt || createdAt;
 
       // 2. Load LaTeX for preview
       const latexPath = `${LATEX_DIR}/${entryId}.tex`;
@@ -776,6 +797,7 @@ export default function App() {
         metadataMissing: false,
         imageSrc: "",
         createdAt: createdAt,
+        updatedAt: updatedAt,
         isLegacyRaw: false,
       });
       setLatexContent(latexStr);
@@ -827,6 +849,7 @@ export default function App() {
         metadataMissing: false,
         imageSrc,
         createdAt: file.timestamp || new Date().toISOString(),
+        updatedAt: file.updatedAt || file.timestamp || new Date().toISOString(),
         isLegacyRaw: false,
       });
       setMobileTab("editor");
@@ -890,7 +913,7 @@ export default function App() {
             const rawData = JSON.parse(content);
             const entryContent = rawData.content || rawData;
             const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
-            
+
             // Reconstruct metadata from global index
             const meta = notebookMetadataRef.current.entries[entryId];
             const entryMeta: EntryMetadata = {
@@ -899,6 +922,7 @@ export default function App() {
               author: meta?.author || "",
               phase: meta?.phase || "",
               createdAt: meta?.createdAt || isoTimestamp(),
+              updatedAt: meta?.updatedAt || meta?.createdAt || isoTimestamp(),
               filename: file.path,
               resources: extractResources(entryContent)
             };
@@ -941,7 +965,7 @@ export default function App() {
           try {
             const content = reader.result as string;
             const rawData = JSON.parse(content);
-            
+
             // Portable entries MUST have metadata to be imported correctly
             const isWrapper = (rawData.content !== undefined && rawData.metadata !== undefined);
             if (!isWrapper) {
@@ -973,6 +997,7 @@ export default function App() {
               author: wrapper.metadata.author,
               phase: wrapper.metadata.phase,
               createdAt: wrapper.metadata.createdAt || isoTimestamp(),
+              updatedAt: isoTimestamp(),
               filename: path,
               resources: extractResources(cleanDoc)
             };
@@ -989,7 +1014,7 @@ export default function App() {
                 await writeLocalFile(dirHandle, path, jsonStr);
                 const latex = generateEntryLatex(JSON.stringify(cleanDoc), newEntryMeta.title, newEntryMeta.author, newEntryMeta.phase, newEntryMeta.createdAt, newId);
                 await writeLocalFile(dirHandle, `${LATEX_DIR}/${newId}.tex`, latex);
-                
+
                 setNotebookMetadata(prev => updateEntryInIndex(prev, newId, newEntryMeta));
                 await loadLocalExplorer();
               });
@@ -1001,7 +1026,7 @@ export default function App() {
               await stage({ path, content: jsonStr, operation: "upsert", label: "Import entry" });
               const latex = generateEntryLatex(JSON.stringify(cleanDoc), newEntryMeta.title, newEntryMeta.author, newEntryMeta.phase, newEntryMeta.createdAt, newId);
               await stage({ path: `${LATEX_DIR}/${newId}.tex`, content: latex, operation: "upsert", label: "Import LaTeX" });
-              
+
               setNotebookMetadata(prev => updateEntryInIndex(prev, newId, newEntryMeta));
             }
 
@@ -1140,7 +1165,7 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceMode, dirHandle, loadLocalExplorer, stage, entries, contentCache, notebookMetadata, openFile]);
 
-  const handleDownloadPortable = useCallback(async (filename: string, content: string, info: { title: string; author: string; phase: string, createdAt: string }) => {
+  const handleDownloadPortable = useCallback(async (filename: string, content: string, info: { title: string; author: string; phase: string, createdAt: string, updatedAt?: string }) => {
     try {
       const parsed = JSON.parse(content);
       // Hydrate all assets into Base64 for the export
@@ -1171,6 +1196,7 @@ export default function App() {
           id: openFile?.id || "entry",
           filename: filename,
           resources: {},
+          updatedAt: info.updatedAt || info.createdAt,
           ...info
         },
         content: hydratedDoc
@@ -1315,6 +1341,10 @@ export default function App() {
           onUploadResource={handleUploadResource}
           onDeleteEntry={handleDeleteEntry}
           onDeleteResource={handleDeleteResource}
+          search={entrySearch}
+          onSearchChange={setEntrySearch}
+          sortBy={entrySort}
+          onSortChange={setEntrySort}
         />
       </div>
 
@@ -1381,7 +1411,7 @@ export default function App() {
           </div>
         ) : (
           <span className="text-sm font-semibold text-nb-on-surface truncate max-w-[200px]">
-            {openFile?.viewMode === "entry" ? "" : (openFile ? openFile.name : 'Engineering Notebook')}
+            {openFile?.viewMode === "entry" ? (openFile.title || "Untitled Entry") : (openFile ? openFile.name : 'Engineering Notebook')}
           </span>
         )}
 
@@ -1450,6 +1480,8 @@ export default function App() {
                 initialAuthor={openFile.author}
                 initialPhase={openFile.phase}
                 initialContent={openFile.tiptapContent}
+                initialCreatedAt={openFile.createdAt}
+                initialUpdatedAt={openFile.updatedAt}
                 metadataMissing={openFile.metadataMissing}
                 filename={openFile.path}
                 onSaved={handleEntrySaved}
@@ -1457,37 +1489,40 @@ export default function App() {
                 onContentChange={handleContentChange}
                 onTitleChange={(title) => {
                   setOpenFile(prev => prev ? { ...prev, title } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, { 
-                    ...prev.entries[openFile.id], 
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, {
+                    ...prev.entries[openFile.id],
                     title,
                     id: openFile.id,
                     author: openFile.author,
                     phase: openFile.phase,
                     createdAt: openFile.createdAt,
+                    updatedAt: isoTimestamp(),
                     filename: openFile.path
                   }));
                 }}
                 onAuthorChange={(author) => {
                   setOpenFile(prev => prev ? { ...prev, author } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, { 
-                    ...prev.entries[openFile.id], 
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, {
+                    ...prev.entries[openFile.id],
                     author,
                     id: openFile.id,
                     title: openFile.title,
                     phase: openFile.phase,
                     createdAt: openFile.createdAt,
+                    updatedAt: isoTimestamp(),
                     filename: openFile.path
                   }));
                 }}
                 onPhaseChange={(phase) => {
                   setOpenFile(prev => prev ? { ...prev, phase } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, { 
-                    ...prev.entries[openFile.id], 
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, {
+                    ...prev.entries[openFile.id],
                     phase,
                     id: openFile.id,
                     title: openFile.title,
                     author: openFile.author,
                     createdAt: openFile.createdAt,
+                    updatedAt: isoTimestamp(),
                     filename: openFile.path
                   }));
                 }}
@@ -1526,6 +1561,7 @@ export default function App() {
                 initialAuthor={openFile.author}
                 initialPhase={openFile.phase}
                 initialCreatedAt={openFile.createdAt}
+                initialUpdatedAt={openFile.updatedAt}
                 initialContent={openFile.tiptapContent}
                 metadataMissing={openFile.metadataMissing}
                 filename={openFile.path}
@@ -1534,37 +1570,40 @@ export default function App() {
                 onContentChange={handleContentChange}
                 onTitleChange={(title) => {
                   setOpenFile(prev => prev ? { ...prev, title } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, { 
-                    ...prev.entries[openFile.id], 
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, {
+                    ...prev.entries[openFile.id],
                     title,
                     id: openFile.id,
                     author: openFile.author,
                     phase: openFile.phase,
                     createdAt: openFile.createdAt,
+                    updatedAt: isoTimestamp(),
                     filename: openFile.path
                   }));
                 }}
                 onAuthorChange={(author) => {
                   setOpenFile(prev => prev ? { ...prev, author } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, { 
-                    ...prev.entries[openFile.id], 
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, {
+                    ...prev.entries[openFile.id],
                     author,
                     id: openFile.id,
                     title: openFile.title,
                     phase: openFile.phase,
                     createdAt: openFile.createdAt,
+                    updatedAt: isoTimestamp(),
                     filename: openFile.path
                   }));
                 }}
                 onPhaseChange={(phase) => {
                   setOpenFile(prev => prev ? { ...prev, phase } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, { 
-                    ...prev.entries[openFile.id], 
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, {
+                    ...prev.entries[openFile.id],
                     phase,
                     id: openFile.id,
                     title: openFile.title,
                     author: openFile.author,
                     createdAt: openFile.createdAt,
+                    updatedAt: isoTimestamp(),
                     filename: openFile.path
                   }));
                 }}
