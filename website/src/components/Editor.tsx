@@ -332,7 +332,7 @@ const Editor = React.memo(function Editor({
     <div className="relative h-full flex items-center">
       <button
         type="button"
-        onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === label ? null : label); }}
+        onMouseDown={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === label ? null : label); }}
         onMouseEnter={() => { if (activeMenu) setActiveMenu(label); }}
         className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-widest transition-colors ${activeMenu === label ? "bg-nb-primary text-white" : "text-nb-on-surface-variant hover:bg-nb-surface-mid"
           }`}
@@ -533,7 +533,9 @@ const Editor = React.memo(function Editor({
             )}
 
             <div className="flex items-center gap-6">
-              <div className="h-9 flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50">
+              <div
+                className="h-9 flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50"
+              >
                 <User size={14} className="text-nb-tertiary" />
                 <AutocompleteInput
                   type="text"
@@ -546,14 +548,14 @@ const Editor = React.memo(function Editor({
                 />
               </div>
 
-              <div className={`h-9 w-[230px] shrink-0 flex items-center gap-2.5 px-3 rounded-xl border transition-all focus-within:ring-2 focus-within:ring-nb-primary/20 ${phase && PHASE_CONFIG[phase] ? `${PHASE_CONFIG[phase].bg} ${PHASE_CONFIG[phase].border}` : "bg-nb-surface-low border-nb-outline-variant/30"}`}>
+              <div className={`h-9 w-[230px] shrink-0 flex items-center gap-2.5 px-3 rounded-xl border transition-all relative focus-within:ring-2 focus-within:ring-nb-primary/20 ${phase && PHASE_CONFIG[phase] ? `${PHASE_CONFIG[phase].bg} ${PHASE_CONFIG[phase].border}` : "bg-nb-surface-low border-nb-outline-variant/30"}`}>
                 {phase && PHASE_CONFIG[phase] && (
                   React.createElement(PHASE_CONFIG[phase].icon, { size: 14, className: `${PHASE_CONFIG[phase].color} shrink-0` })
                 )}
                 <select
                   value={phase}
                   onChange={(e) => { setPhase(e.target.value); onPhaseChange?.(e.target.value); }}
-                  className={`flex-1 w-full min-w-0 text-xs font-bold tracking-widest bg-transparent outline-none cursor-pointer appearance-none ${phase && PHASE_CONFIG[phase] ? PHASE_CONFIG[phase].text : "text-nb-on-surface-variant/60"}`}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                 >
                   {!phase && <option value="" disabled>Phase</option>}
                   {PHASES.map(p => (
@@ -562,6 +564,9 @@ const Editor = React.memo(function Editor({
                     </option>
                   ))}
                 </select>
+                <div className={`flex-1 w-full min-w-0 text-xs font-bold tracking-widest truncate ${phase && PHASE_CONFIG[phase] ? PHASE_CONFIG[phase].text : "text-nb-on-surface-variant/60"}`}>
+                  {phase || "Phase"}
+                </div>
                 <ChevronDown size={12} className="text-nb-on-surface-variant/40 shrink-0" />
               </div>
             </div>
