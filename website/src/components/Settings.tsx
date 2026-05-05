@@ -150,7 +150,7 @@ export default function Settings({
   if (!mounted) return null;
 
   return (
-    <div className="min-h-screen bg-nb-bg p-6 flex flex-col items-center justify-center font-sans">
+    <div className="min-h-screen bg-nb-bg p-6 pt-12 pb-24 lg:pt-24 lg:pb-32 flex flex-col items-center font-sans">
       <div className="w-full max-w-4xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
         {/* Left Side: Brand & Actions */}
@@ -596,6 +596,18 @@ export default function Settings({
           </div>
         </div>
       )}
+      {/* Footer */}
+      <div className="w-full max-w-4xl mt-12 flex items-center justify-center border-t border-nb-outline-variant/20 pt-8">
+        <a
+          href="https://github.com/msoe-vex/engineering-notebook-editor/issues"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-nb-surface border border-nb-outline-variant/30 text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary/50 transition-all shadow-nb-sm"
+        >
+          <AlertCircle size={14} />
+          Report Issue
+        </a>
+      </div>
     </div>
   );
 }

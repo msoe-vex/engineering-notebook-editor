@@ -16,9 +16,5 @@ export default function Home() {
     return null; // Prevent SSR hydration mismatches by skipping render on the server
   }
 
-  return (
-    <div className="h-screen overflow-hidden">
-      <App />
-    </div>
-  );
+  return <App />;
 }
