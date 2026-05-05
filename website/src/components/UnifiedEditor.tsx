@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   useEditor, EditorContent, Extension,
   NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer,
@@ -81,6 +81,14 @@ const CustomLink = Link.extend({
         renderHTML: attributes => {
           if (!attributes.resourceId) return {};
           return { 'data-resource-id': attributes.resourceId };
+        },
+      },
+      entryId: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-entry-id'),
+        renderHTML: attributes => {
+          if (!attributes.entryId) return {};
+          return { 'data-entry-id': attributes.entryId };
         },
       },
     };
@@ -305,6 +313,7 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName, e
   return (
     <NodeViewWrapper
       draggable={dragEnabled}
+      data-id={node.attrs.id}
       className={`my-6 group relative w-full transition ${selected ? 'z-[100]' : 'z-10'}`}
     >
 
@@ -446,6 +455,7 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
   return (
     <NodeViewWrapper
       draggable={dragEnabled}
+      data-id={node.attrs.id}
       className={`my-6 group relative w-full transition ${active ? 'z-[100]' : 'z-10'}`}>
 
       <div contentEditable={false} className="absolute -left-12 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
@@ -663,6 +673,7 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
   return (
     <NodeViewWrapper
       draggable={dragEnabled}
+      data-id={node.attrs.id}
       className={`my-6 group relative w-full transition ${active ? 'z-[100]' : 'z-10'}`}
     >
 
@@ -843,6 +854,7 @@ function RawLatexNodeView({ node, deleteNode, selected, editor, updateAttributes
   return (
     <NodeViewWrapper
       draggable={dragEnabled}
+      data-id={node.attrs.id}
       className={`my-6 group relative w-full transition ${selected ? 'z-[100]' : 'z-10'}`}
     >
 
@@ -901,7 +913,8 @@ interface UnifiedEditorProps {
   dbName?: string;
   onEditorInit?: (editor: any) => void;
   onToggleLink?: (fn: () => void) => void;
-  notebookMetadata?: any;
+  notebookMetadata: any;
+  targetResourceId?: string | null;
 }
 
 function LinkReferencePopup({
@@ -918,7 +931,7 @@ function LinkReferencePopup({
   const [query, setQuery] = useState("");
   const [text, setText] = useState("");
   const [link, setLink] = useState("");
-  const [selectedResource, setSelectedResource] = useState<{ id: string, title: string, type: string, entryTitle?: string, entryDate?: string } | null>(null);
+  const [selectedResource, setSelectedResource] = useState<{ id: string, title: string, type: string, entryTitle?: string, entryDate?: string, entryId?: string } | null>(null);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   useEffect(() => {
@@ -939,7 +952,7 @@ function LinkReferencePopup({
             break;
           }
           if (e.resources?.[attrs.resourceId]) {
-            found = { id: attrs.resourceId, ...e.resources[attrs.resourceId] };
+            found = { id: attrs.resourceId, entryId: e.id, ...e.resources[attrs.resourceId] };
             break;
           }
         }
@@ -964,14 +977,14 @@ function LinkReferencePopup({
       const entryTitle = e.title?.trim() || "Untitled Entry";
       const entryDate = e.createdAt?.split('T')[0];
 
-      list.push({ id: e.id, title: entryTitle, type: "entry", entryTitle, entryDate });
+      list.push({ id: e.id, title: entryTitle, type: "entry", entryTitle, entryDate, entryId: e.id });
 
       const resources = (e.id === currentEntryId) ? { ...e.resources, ...localResources } : (e.resources || {});
 
       for (const [resId, res] of Object.entries(resources)) {
         const r = res as any;
         const resTitle = r.title?.trim() || `Untitled ${r.type?.charAt(0).toUpperCase() + r.type?.slice(1) || 'Block'}`;
-        list.push({ id: resId, title: resTitle, type: r.type, entryTitle, entryDate });
+        list.push({ id: resId, title: resTitle, type: r.type, entryTitle, entryDate, entryId: e.id });
       }
     }
     return list;
@@ -990,6 +1003,7 @@ function LinkReferencePopup({
     const trimmedText = text.trim();
     let finalLink = selectedResource ? `#${selectedResource.id}` : link.trim();
     const resourceId = selectedResource?.id;
+    const entryId = selectedResource?.entryId;
 
     // Auto-prepend https:// for external links that look like domains
     if (!selectedResource && finalLink && !finalLink.startsWith('#')) {
@@ -1003,7 +1017,7 @@ function LinkReferencePopup({
     if (finalLink || trimmedText) {
       const marks: any[] = [{ type: 'underline' }];
       if (finalLink) {
-        marks.push({ type: 'link', attrs: { href: finalLink, resourceId } });
+        marks.push({ type: 'link', attrs: { href: finalLink, resourceId, entryId } });
       }
 
       editor.chain()
@@ -1144,12 +1158,15 @@ function LinkReferencePopup({
 }
 
 export default function UnifiedEditor({
-  content, onChange, onImageUpload, author, filename, dbName = "notebook-pending", onEditorInit, notebookMetadata, onToggleLink
+  content, onChange, onImageUpload, author, filename, dbName = "notebook-pending", onEditorInit, notebookMetadata, onToggleLink, targetResourceId
 }: UnifiedEditorProps) {
   const parseContent = (raw: string) => {
     if (!raw) return "";
-    try { return JSON.parse(raw); } catch { return raw; }
+    try {
+      return typeof raw === "string" ? JSON.parse(raw) : raw;
+    } catch { return raw; }
   };
+
 
   const handleImageFile = (file: File) => {
     const reader = new FileReader();
@@ -1259,9 +1276,38 @@ export default function UnifiedEditor({
         click: (view, event) => {
           const target = event.target as HTMLElement;
           const anchor = target.closest('a');
-          if (anchor && (event.ctrlKey || event.metaKey)) {
-            window.open(anchor.href, '_blank');
-            return true;
+          if (anchor) {
+            event.preventDefault(); // Stop browser from navigating
+            const href = anchor.getAttribute('href');
+            if (href?.startsWith('#')) {
+              if (event.ctrlKey || event.metaKey) {
+                const resId = href.slice(1);
+                const linkEntryId = anchor.getAttribute('data-entry-id');
+                const params = new URLSearchParams(window.location.search);
+                
+                let changed = false;
+                if (linkEntryId && linkEntryId !== params.get('entry')) {
+                  params.set('entry', linkEntryId);
+                  changed = true;
+                }
+                
+                if (resId !== params.get('resource')) {
+                  params.set('resource', resId);
+                  changed = true;
+                }
+
+                if (changed) {
+                  window.history.pushState({}, '', `?${params.toString()}`);
+                  window.dispatchEvent(new Event('locationchange'));
+                }
+                return true;
+              }
+              return false; // No Ctrl: move cursor
+            }
+            if (event.ctrlKey || event.metaKey) {
+              window.open(anchor.href, '_blank');
+              return true;
+            }
           }
           return false; // Let editor handle (move cursor)
         },
@@ -1315,6 +1361,28 @@ export default function UnifiedEditor({
       onEditorInit(editor);
     }
   }, [editor, onEditorInit]);
+
+  const lastFilenameRef = useRef(filename);
+
+  useEffect(() => {
+    if (editor && targetResourceId) {
+      const isNewEntry = lastFilenameRef.current !== filename;
+      lastFilenameRef.current = filename;
+      const delay = isNewEntry ? 100 : 0;
+
+      const timeout = setTimeout(() => {
+        const element = document.querySelector(`[data-id="${targetResourceId}"]`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element.classList.add('ring-4', 'ring-nb-primary', 'ring-offset-2', 'transition-all', 'duration-1000');
+          setTimeout(() => {
+            element.classList.remove('ring-4', 'ring-nb-primary', 'ring-offset-2');
+          }, 2000);
+        }
+      }, delay);
+      return () => clearTimeout(timeout);
+    }
+  }, [editor, targetResourceId, content, filename]);
 
   useEffect(() => {
     if (onToggleLink && editor) {

@@ -202,8 +202,17 @@ export default function App() {
   const [openFile, setOpenFile] = useState<OpenFileState | null>(null);
   const [showReferenceSearch, setShowReferenceSearch] = useState(false);
 
+  // metadata.json contents
+  const [notebookMetadata, setNotebookMetadata] = useState<NotebookMetadata>(EMPTY_METADATA);
+  const notebookMetadataRef = useRef(notebookMetadata);
+  const metadataSyncTimeoutRef = useRef<any>(null);
+  useEffect(() => { notebookMetadataRef.current = notebookMetadata; }, [notebookMetadata]);
+
   // Notifications
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // URL-based navigation state
+  const [targetResourceId, setTargetResourceId] = useState<string | null>(null);
 
   /** Get a unique DB name for the current workspace to isolate changes. */
   const getDBName = useCallback(() => {
@@ -215,6 +224,55 @@ export default function App() {
     }
     return "notebook-volatile";
   }, [workspaceMode, config, dirHandle]);
+
+  // URL Sync Effect
+  useEffect(() => {
+    const handleUrlChange = () => {
+      const params = new URLSearchParams(window.location.search);
+      const entryId = params.get('entry');
+      const resourceId = params.get('resource');
+      const mode = params.get('mode') as WorkspaceMode;
+
+      // 1. Sync Mode (initial load)
+      if (mode && !workspaceMode && (mode === "local" || mode === "github" || mode === "memory")) {
+        setWorkspaceMode(mode);
+      }
+
+      // 2. Sync Resources
+      if (resourceId !== targetResourceId) {
+        setTargetResourceId(resourceId);
+      }
+
+      // 3. Sync Entry Selection
+      if (entryId && entryId !== openFile?.id && notebookMetadata.entries[entryId]) {
+        const filename = `${ENTRIES_DIR}/${entryId}.json`;
+        handleSelectEntry({ name: `${entryId}.json`, path: filename });
+      } else if (!entryId && openFile) {
+        setOpenFile(null);
+      }
+    };
+
+    window.addEventListener('popstate', handleUrlChange);
+    window.addEventListener('locationchange', handleUrlChange);
+    handleUrlChange();
+
+    return () => {
+      window.removeEventListener('popstate', handleUrlChange);
+      window.removeEventListener('locationchange', handleUrlChange);
+    };
+  }, [workspaceMode, targetResourceId, openFile?.id, notebookMetadata]);
+
+  // Sync Workspace Mode to URL
+  useEffect(() => {
+    if (workspaceMode) {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('mode') !== workspaceMode) {
+        params.set('mode', workspaceMode);
+        window.history.replaceState({}, '', `?${params.toString()}`);
+        window.dispatchEvent(new Event('locationchange'));
+      }
+    }
+  }, [workspaceMode]);
 
   // Load initial author from localStorage
   useEffect(() => {
@@ -279,12 +337,6 @@ export default function App() {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 4000);
   };
-
-  // metadata.json contents
-  const [notebookMetadata, setNotebookMetadata] = useState<NotebookMetadata>(EMPTY_METADATA);
-  const notebookMetadataRef = useRef(notebookMetadata);
-  const metadataSyncTimeoutRef = useRef<any>(null);
-  useEffect(() => { notebookMetadataRef.current = notebookMetadata; }, [notebookMetadata]);
 
   // Latex preview content (kept in sync by Editor)
   const [latexContent, setLatexContent] = useState("");
@@ -730,6 +782,13 @@ export default function App() {
     setLatexContent(initialLatex);
     setEntries(prev => [{ name: filename, path }, ...prev]);
     setNotebookMetadata(newMetadata);
+
+    // Update URL for new entry
+    const params = new URLSearchParams(window.location.search);
+    params.set('entry', entryId);
+    params.delete('resource');
+    window.history.pushState({}, '', `?${params.toString()}`);
+    window.dispatchEvent(new Event('locationchange'));
     setSavingPaths(prev => new Set(prev).add(path));
 
     // Background save
@@ -773,6 +832,16 @@ export default function App() {
       let entryJsonStr = "";
       let latexStr = "";
 
+      // Update URL
+      const entryId = file.name.replace('.json', '');
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('entry') !== entryId) {
+        params.set('entry', entryId);
+        params.delete('resource'); // Reset resource ID when switching entries manually
+        window.history.pushState({}, '', `?${params.toString()}`);
+        window.dispatchEvent(new Event('locationchange'));
+      }
+
       // 1. Load Entry JSON
       const stagedEntry = (await getAllPending(dbName)).find(p => p.path === file.path && p.operation === "upsert");
       if (stagedEntry?.content) {
@@ -788,7 +857,6 @@ export default function App() {
       const rawData = JSON.parse(entryJsonStr);
       const content = rawData.content || rawData;
 
-      const entryId = file.name.replace('.json', '');
       const meta = notebookMetadataRef.current.entries[entryId];
 
       const title = meta?.title || "";
@@ -1079,10 +1147,10 @@ export default function App() {
       const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
       await stage({ path: `${LATEX_DIR}/${entryId}.tex`, content: undefined, operation: "delete", label: "LaTeX deleted" });
       await stage({ path: INDEX_PATH, content: metaStr, operation: "upsert", label: "Metadata update" });
-      
+
       const allEntriesTex = generateAllEntriesLatex(updatedMeta, "data/");
       await stage({ path: ALL_ENTRIES_PATH, content: allEntriesTex, operation: "upsert", label: "Update entry list" });
-      
+
       setEntries(prev => prev.filter(e => e.path !== file.path));
     }
 
@@ -1492,6 +1560,7 @@ export default function App() {
                 dbName={getDBName()}
                 isSaving={savingPaths.has(openFile.path)}
                 notebookMetadata={notebookMetadata}
+                targetResourceId={targetResourceId}
               />
             </div>
             {/* Preview Tab */}
@@ -1576,6 +1645,7 @@ export default function App() {
                 dbName={getDBName()}
                 isSaving={savingPaths.has(openFile.path)}
                 notebookMetadata={notebookMetadata}
+                targetResourceId={targetResourceId}
               />
             </Panel>
 

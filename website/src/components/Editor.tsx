@@ -60,6 +60,7 @@ interface EditorProps {
   isSaving?: boolean;
   notebookMetadata?: any;
   onValidationChange?: (isValid: boolean) => void;
+  targetResourceId?: string | null;
 }
 
 const Editor = React.memo(function Editor({
@@ -86,6 +87,7 @@ const Editor = React.memo(function Editor({
   dbName,
   isSaving: isExternalSaving = false,
   notebookMetadata,
+  targetResourceId,
 }: EditorProps) {
   const parseInitialContent = (raw: any): any => {
     if (!raw) return raw;
@@ -819,6 +821,7 @@ const Editor = React.memo(function Editor({
               onEditorInit={setEditor}
               onToggleLink={(fn) => { toggleLinkFn.current = fn; }}
               notebookMetadata={notebookMetadata}
+              targetResourceId={targetResourceId}
             />
           </div>
         </div>
