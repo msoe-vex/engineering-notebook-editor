@@ -97,7 +97,7 @@ export async function clearWorkspaceHandle(): Promise<void> {
 export interface Project {
   id: string;
   name: string;
-  type: "github" | "local" | "memory";
+  type: "github" | "local" | "temporary";
   lastOpened: string;
   githubConfig?: any;
   folderName?: string;

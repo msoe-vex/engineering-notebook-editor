@@ -34,7 +34,7 @@ import ReferenceSearch from "./ReferenceSearch";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type WorkspaceMode = "github" | "local" | "memory";
+type WorkspaceMode = "github" | "local" | "temporary";
 type ViewMode = "welcome" | "entry" | "raw-latex" | "image" | "none";
 
 const useIsMobile = () => {
@@ -258,12 +258,12 @@ export default function App() {
                 setWorkspaceMode(null);
                 setCurrentProjectId(null);
               }
-            } else if (p.type === "memory") {
-              setWorkspaceMode("memory");
+            } else if (p.type === "temporary") {
+              setWorkspaceMode("temporary");
             }
           } else if (projectId === "temporary") {
             setCurrentProjectId("temporary");
-            setWorkspaceMode("memory");
+            setWorkspaceMode("temporary");
           }
         });
       }
@@ -320,7 +320,7 @@ export default function App() {
   // Warning for Temporary Workspace
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (workspaceMode === "memory") {
+      if (workspaceMode === "temporary") {
         e.preventDefault();
         e.returnValue = "You have unsaved changes in your Temporary Workspace. Reloading will lose all data.";
         return e.returnValue;
@@ -572,7 +572,7 @@ export default function App() {
             setNotebookMetadata(updatedMeta);
           }, 500);
         });
-      } else if (workspaceMode === "github" || workspaceMode === "memory") {
+      } else if (workspaceMode === "github" || workspaceMode === "temporary") {
         const dbName = getDBName();
 
         // Save assets
@@ -770,7 +770,7 @@ export default function App() {
   useEffect(() => {
     if (workspaceMode === "local" && dirHandle) loadLocalExplorer();
     else if (workspaceMode === "github" && config) loadGitHubExplorer();
-    else if (workspaceMode === "memory") { setEntries([]); setResources([]); }
+    else if (workspaceMode === "temporary") { setEntries([]); setResources([]); }
   }, [workspaceMode, dirHandle, config, loadLocalExplorer, loadGitHubExplorer]);
 
   const handleValidationChange = useCallback((isValid: boolean) => {
@@ -857,7 +857,7 @@ export default function App() {
             await writeLocalFile(dirHandle, `${LATEX_DIR}/${entryId}.tex`, initialLatex);
             // No need to call loadLocalExplorer anymore since we updated state optimistically
           });
-        } else if (workspaceMode === "github" || workspaceMode === "memory") {
+        } else if (workspaceMode === "github" || workspaceMode === "temporary") {
           await stage({ path, content: jsonStr, operation: "upsert", label: "New entry" });
           await stage({ path: INDEX_PATH, content: metaStr, operation: "upsert", label: "Update index" });
           const allEntriesTex = generateAllEntriesLatex(newMetadata, "data/");
@@ -1100,7 +1100,7 @@ export default function App() {
                 setNotebookMetadata(prev => updateEntryInIndex(prev, newId, newEntryMeta));
                 await loadLocalExplorer();
               });
-            } else if (workspaceMode === "github" || workspaceMode === "memory") {
+            } else if (workspaceMode === "github" || workspaceMode === "temporary") {
               const dbName = getDBName();
               for (const asset of newAssets) {
                 await stageChange(dbName, { path: asset.path, operation: "upsert", content: asset.base64, label: `Import asset`, stagedAt: isoTimestamp() });
@@ -1145,7 +1145,7 @@ export default function App() {
         await writeLocalFile(dirHandle, imagePath, bytes);
         await loadLocalExplorer();
       });
-    } else if (workspaceMode === "github" || workspaceMode === "memory") {
+    } else if (workspaceMode === "github" || workspaceMode === "temporary") {
       await stage({ path: imagePath, content: dataUrl, operation: "upsert", label: "Image upload" });
       const imgName = imagePath.split("/").pop()!;
       setResources(prev => [...prev, { name: imgName, path: imagePath }].sort((a, b) => a.name.localeCompare(b.name)));
@@ -1195,7 +1195,7 @@ export default function App() {
         } catch { /* ignore if not found */ }
         await loadLocalExplorer();
       });
-    } else if (workspaceMode === "github" || workspaceMode === "memory") {
+    } else if (workspaceMode === "github" || workspaceMode === "temporary") {
       // Remove any staged upsert for this path, then stage delete
       const dbName = getDBName();
       await removeStaged(dbName, file.path);
@@ -1339,7 +1339,7 @@ export default function App() {
       p.lastOpened = isoTimestamp();
       await saveProject(p);
       setProjects(await getProjects());
-      
+
       setCurrentProjectId(p.id);
       if (p.type === "github" && p.githubConfig) {
         setConfig(p.githubConfig);
@@ -1352,8 +1352,8 @@ export default function App() {
         } else {
           notify("Local folder handle not found. Please re-open.", "error");
         }
-      } else if (p.type === "memory") {
-        setWorkspaceMode("memory");
+      } else if (p.type === "temporary") {
+        setWorkspaceMode("temporary");
       }
     }
   };
@@ -1409,15 +1409,15 @@ export default function App() {
     setWorkspaceMode("local");
   };
 
-  const handleCreateMemory = async () => {
+  const handleCreateTemporary = async () => {
     setCurrentProjectId("temporary");
-    setWorkspaceMode("memory");
+    setWorkspaceMode("temporary");
   };
 
   // ── Disconnect ────────────────────────────────────────────────────────────────
 
   const handleDisconnect = () => {
-    if (workspaceMode === "memory") {
+    if (workspaceMode === "temporary") {
       const confirmLeave = window.confirm("You are in a Temporary Workspace. All unsaved changes will be lost. Are you sure you want to leave?");
       if (!confirmLeave) return;
     }
@@ -1454,7 +1454,7 @@ export default function App() {
         onRenameProject={handleRenameProject}
         onCreateGithub={handleCreateGithub}
         onCreateLocal={handleCreateLocal}
-        onCreateMemory={handleCreateMemory}
+        onCreateTemporary={handleCreateTemporary}
       />
     );
   }
@@ -1613,7 +1613,7 @@ export default function App() {
                 className="bg-nb-surface-low border border-nb-primary/30 px-3 py-1 rounded-lg text-sm font-bold text-nb-on-surface outline-none focus:ring-2 focus:ring-nb-primary/30 w-full max-w-[300px]"
               />
             ) : (
-              <span 
+              <span
                 onClick={() => {
                   if (currentProjectId === "temporary") return;
                   const p = projects.find(p => p.id === currentProjectId);

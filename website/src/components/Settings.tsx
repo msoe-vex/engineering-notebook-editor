@@ -11,7 +11,7 @@ export default function Settings({
   onRenameProject,
   onCreateGithub,
   onCreateLocal,
-  onCreateMemory,
+  onCreateTemporary,
 }: {
   projects: Project[];
   onSelectProject: (id: string) => void;
@@ -19,7 +19,7 @@ export default function Settings({
   onRenameProject: (id: string, name: string) => void;
   onCreateGithub: (config: GitHubConfig) => void;
   onCreateLocal: (handle: any) => void;
-  onCreateMemory: () => void;
+  onCreateTemporary: () => void;
 }) {
   const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -130,7 +130,7 @@ export default function Settings({
               )}
 
               <button
-                onClick={onCreateMemory}
+                onClick={onCreateTemporary}
                 className="group flex items-center gap-4 p-4 rounded-2xl bg-nb-surface border border-nb-outline-variant/30 hover:border-nb-tertiary/50 hover:bg-nb-tertiary/5 transition-all text-left shadow-nb-sm"
               >
                 <div className="w-10 h-10 rounded-xl bg-nb-tertiary/10 text-nb-tertiary flex items-center justify-center group-hover:scale-110 transition-transform">

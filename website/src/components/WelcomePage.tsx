@@ -3,7 +3,7 @@
 import { BookOpen, FolderOpen, GitBranch, HardDrive, Plus, ArrowLeftRight, Upload } from "lucide-react";
 
 interface WorkspaceInfo {
-  mode: "github" | "local" | "memory";
+  mode: "github" | "local" | "temporary";
   label: string; // e.g. "owner/repo" or folder name or "Memory"
 }
 
