@@ -1,0 +1,16 @@
+{
+  "version": 3,
+  "entries": {
+    "019df657-212d-7ec7-beed-7fd6dba1c088": {
+      "id": "019df657-212d-7ec7-beed-7fd6dba1c088",
+      "title": "Test Entry",
+      "author": "Andrew Needham",
+      "phase": "Define Problem",
+      "createdAt": "2026-05-05T04:13:18.509Z",
+      "updatedAt": "2026-05-05T04:13:29.468Z",
+      "filename": "data/entries/019df657-212d-7ec7-beed-7fd6dba1c088.json",
+      "resources": {},
+      "isValid": true
+    }
+  }
+}
