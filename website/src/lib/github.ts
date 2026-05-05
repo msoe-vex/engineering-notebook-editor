@@ -23,12 +23,16 @@ export const getOctokit = (token: string) => {
 
   const octokit = new Octokit({
     auth: token,
+    headers: {
+      "X-GitHub-Api-Version": "2026-03-10",
+      "Accept": "application/vnd.github+json",
+    }
   });
 
   octokit.hook.before("request", (options) => {
-    options.headers["X-GitHub-Api-Version"] = "2022-11-28";
+    options.headers["X-GitHub-Api-Version"] = "2026-03-10";
     options.headers["Accept"] = "application/vnd.github+json";
-    // Ensure we use the 'token' prefix for OAuth tokens if Octokit hasn't set it
+    // Ensure we use the 'token' prefix for OAuth tokens
     if (!options.headers.authorization) {
       options.headers.authorization = `token ${token}`;
     }
