@@ -343,11 +343,47 @@ export const commitChanges = async (config: GitHubConfig, changes: GitChange[], 
 
 export const fetchUserRepositories = async (token: string) => {
   const octokit = getOctokit(token);
-  const response = await octokit.rest.repos.listForAuthenticatedUser({
-    sort: "updated",
-    per_page: 100,
-  });
-  return response.data;
+  try {
+    // 1. Get all installations that the user can access for this app
+    const { data } = await octokit.rest.apps.listInstallationsForAuthenticatedUser({
+      per_page: 100,
+      // Manual cache buster in case headers are ignored
+      t: Date.now()
+    } as any);
+
+    const installations = data.installations;
+    if (!installations || installations.length === 0) {
+      console.warn("No installations found for the authenticated user.");
+      return [];
+    }
+
+    // 2. Fetch repositories for each installation explicitly
+    const allRepos: any[] = [];
+    for (const inst of installations) {
+      try {
+        const { data: repoData } = await octokit.rest.apps.listInstallationReposForAuthenticatedUser({
+          installation_id: inst.id,
+          per_page: 100,
+          t: Date.now()
+        } as any);
+        allRepos.push(...repoData.repositories);
+      } catch (err) {
+        console.error(`Failed to fetch repos for installation ${inst.id}:`, err);
+      }
+    }
+
+    // Deduplicate by ID and sort by most recently updated
+    const uniqueRepos = Array.from(new Map(allRepos.map(r => [r.id, r])).values());
+    return uniqueRepos.sort((a, b) => {
+      const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+      const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+      return dateB - dateA;
+    });
+  } catch (e) {
+    console.error("Failed to fetch repositories via installations:", e);
+    // If the installation check fails, we return an empty list to stay strict
+    return [];
+  }
 };
 
 

@@ -172,6 +172,7 @@ export default function App() {
   // Workspace state
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [projectPendingCounts, setProjectPendingCounts] = useState<Record<string, number>>({});
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [config, setConfig] = useState<GitHubConfig | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -300,10 +301,37 @@ export default function App() {
   // URL Sync Effect
 
 
+  const getProjectDBName = (p: Project) => {
+    if (p.type === "github" && p.githubConfig) {
+      return `notebook-${p.githubConfig.owner}-${p.githubConfig.repo}`;
+    }
+    if (p.type === "local") {
+      return `notebook-local-${p.name}`;
+    }
+    return "notebook-volatile";
+  };
+
+  const refreshProjectList = useCallback(async () => {
+    const p = await getProjects();
+    setProjects(p);
+
+    const counts: Record<string, number> = {};
+    for (const proj of p) {
+      if (proj.type === "github") {
+        const dbName = getProjectDBName(proj);
+        const pending = await getAllPending(dbName);
+        counts[proj.id] = pending.length;
+      } else {
+        counts[proj.id] = 0;
+      }
+    }
+    setProjectPendingCounts(counts);
+  }, []);
+
   // Load projects on mount
   useEffect(() => {
-    getProjects().then(setProjects);
-  }, []);
+    refreshProjectList();
+  }, [refreshProjectList]);
 
   // Warning for Temporary Workspace
   useEffect(() => {
@@ -476,6 +504,28 @@ export default function App() {
       };
     });
 
+    // Merge pending upserts that aren't in the list yet
+    const existingPaths = new Set(list.map(e => e.path));
+    pendingChanges.forEach(p => {
+      if (p.operation === "upsert" && p.path.startsWith(currentEntriesDir) && p.path.endsWith(".json") && !existingPaths.has(p.path)) {
+        const id = p.path.split('/').pop()?.replace('.json', '') || "";
+        const meta = notebookMetadata.entries[id];
+        list.push({
+          name: p.path.split('/').pop() || "",
+          path: p.path,
+          title: meta?.title || "",
+          author: meta?.author || "",
+          timestamp: meta?.createdAt || "",
+          updatedAt: meta?.updatedAt || meta?.createdAt || "",
+          id,
+          isSaving: savingPaths.has(p.path),
+          isValid: meta?.isValid !== false,
+          validationErrors: meta?.validationErrors
+        });
+        existingPaths.add(p.path);
+      }
+    });
+
     if (entrySearch) {
       const q = entrySearch.toLowerCase();
       list = list.filter(e =>
@@ -512,11 +562,23 @@ export default function App() {
     });
 
     return list;
-  }, [entries, notebookMetadata, entrySearch, entrySort, entrySortDirection, dateRange, openFile, savingPaths]);
+  }, [entries, notebookMetadata, entrySearch, entrySort, entrySortDirection, dateRange, openFile, savingPaths, pendingChanges, currentEntriesDir]);
 
   const displayResources = useMemo(() => {
-    return resources.sort((a, b) => a.name.localeCompare(b.name));
-  }, [resources]);
+    let list = [...resources];
+    const existingPaths = new Set(list.map(e => e.path));
+    pendingChanges.forEach(p => {
+      if (p.operation === "upsert" && p.path.startsWith(currentAssetsDir) && isImage(p.path) && !existingPaths.has(p.path)) {
+        list.push({
+          name: p.path.split('/').pop() || "",
+          path: p.path,
+          timestamp: new Date().toISOString()
+        });
+        existingPaths.add(p.path);
+      }
+    });
+    return list.sort((a, b) => a.name.localeCompare(b.name));
+  }, [resources, pendingChanges, currentAssetsDir]);
 
   // ── Pending helpers ──────────────────────────────────────────────────────────
 
@@ -1648,9 +1710,13 @@ export default function App() {
       await refreshPending();
       await loadGitHubExplorer();
       notify("Successfully committed all changes to GitHub.", "success");
-    } catch (e) {
+    } catch (e: any) {
       console.error("Commit failed", e);
-      notify("Commit failed. Check console for details.", "error");
+      if (e.message?.includes("Resource not accessible by integration")) {
+        notify("Commit failed: The GitHub App may not be installed on this repository or lacks 'Contents' permissions. Please check your GitHub App settings.", "error");
+      } else {
+        notify(`Commit failed: ${e.message || "Check console for details."}`, "error");
+      }
     } finally {
       setIsCommitting(false);
       setIsLoading(false);
@@ -1918,6 +1984,7 @@ export default function App() {
     pageContent = (
       <Settings
         projects={projects}
+        pendingCounts={projectPendingCounts}
         onSelectProject={handleSelectProject}
         onDeleteProject={handleDeleteProject}
         onRenameProject={handleRenameProject}
@@ -2422,7 +2489,7 @@ export default function App() {
   );
 
   return (
-    <div className="flex flex-col h-screen w-full bg-nb-bg overflow-hidden font-sans">
+    <div className={`flex flex-col h-screen w-full bg-nb-bg font-sans ${pageContent ? "overflow-y-auto" : "overflow-hidden"}`}>
       {pageContent ? pageContent : (
         isMobile ? (
           <div className="flex w-full h-full relative">

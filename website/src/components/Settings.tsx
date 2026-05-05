@@ -1,5 +1,6 @@
 import { GitHubConfig, fetchUserRepositories, getOctokit, fetchRepoFolders } from "@/lib/github";
 import { Project } from "@/lib/db";
+import { DATA_DIR, ENTRIES_DIR, ASSETS_DIR, INDEX_PATH, GITHUB_APP_INSTALL_URL, GITHUB_ISSUES_URL } from "@/lib/constants";
 import React, { useState, useEffect, useMemo } from "react";
 import { BookOpen, Moon, Sun, GitBranch, Folder, HardDrive, Trash2, Clock, Plus, ArrowRight, History, Edit2, Check, X, Search, ExternalLink, AlertCircle, Loader2 } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -15,6 +16,7 @@ export default function Settings({
   githubToken,
   githubUser,
   onSignOutGithub,
+  pendingCounts = {},
 }: {
   projects: Project[];
   onSelectProject: (id: string) => void;
@@ -26,6 +28,7 @@ export default function Settings({
   githubToken: string | null;
   githubUser: string | null;
   onSignOutGithub: () => void;
+  pendingCounts?: Record<string, number>;
 }) {
   const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -78,7 +81,7 @@ export default function Settings({
     localStorage.setItem("nb-create-type", "github");
 
     const redirectUri = window.location.origin;
-    const scope = "repo";
+    const scope = ""; // No 'repo' scope so we respect GitHub App installations
     const url = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${redirectUri}&scope=${scope}`;
     window.location.href = url;
   };
@@ -221,6 +224,7 @@ export default function Settings({
             {isDarkMode ? <Sun size={14} /> : <Moon size={14} />}
             <span>Switch to {isDarkMode ? "Light" : "Dark"} Mode</span>
           </button>
+
         </div>
 
         {/* Right Side: Recent Projects */}
@@ -276,6 +280,15 @@ export default function Settings({
                           </div>
                           <div className="w-1 h-1 rounded-full bg-nb-outline-variant/50" />
                           <span className="text-[9px] font-black text-nb-on-surface-variant/40 tracking-widest italic">{project.type === "github" ? "GitHub" : project.type === "local" ? "Local" : "Temporary"}</span>
+                          {pendingCounts[project.id] > 0 && (
+                            <>
+                              <div className="w-1 h-1 rounded-full bg-nb-outline-variant/50" />
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-1.5 h-1.5 rounded-full bg-nb-tertiary animate-pulse" />
+                                <span className="text-[9px] font-black text-nb-tertiary tracking-widest uppercase">{pendingCounts[project.id]} Pending</span>
+                              </div>
+                            </>
+                          )}
                         </div>
                       </>
                     )}
@@ -377,7 +390,7 @@ export default function Settings({
                     </div>
                     <div className="flex items-center gap-3">
                       <a
-                        href="https://github.com/settings/installations"
+                        href={GITHUB_APP_INSTALL_URL}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-[9px] font-black text-nb-on-surface-variant hover:text-nb-primary transition-colors uppercase tracking-[0.1em] flex items-center gap-1"
@@ -418,7 +431,23 @@ export default function Settings({
                           ) : (
                             <div className="grid grid-cols-1 gap-0.5">
                               {filteredRepos.length === 0 ? (
-                                <div className="py-6 text-center text-[9px] text-nb-on-surface-variant font-black uppercase tracking-widest opacity-40">No repositories</div>
+                                <div className="py-5 px-5 text-center space-y-4">
+                                  <div className="text-[9px] text-nb-on-surface-variant font-black uppercase tracking-widest opacity-40">No repositories found</div>
+                                  <div className="space-y-2">
+                                    <p className="text-[10px] text-nb-on-surface-variant/60 leading-relaxed font-medium">
+                                      The GitHub App may not be installed on your repositories.
+                                    </p>
+                                    <a
+                                      href={GITHUB_APP_INSTALL_URL}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-nb-primary/10 text-nb-primary text-[10px] font-bold hover:bg-nb-primary/20 transition-all"
+                                    >
+                                      Install GitHub App
+                                      <Plus size={12} />
+                                    </a>
+                                  </div>
+                                </div>
                               ) : (
                                 filteredRepos.map(repo => (
                                   <button
@@ -599,7 +628,7 @@ export default function Settings({
       {/* Footer */}
       <div className="w-full max-w-4xl mt-12 flex items-center justify-center border-t border-nb-outline-variant/20 pt-8">
         <a
-          href="https://github.com/msoe-vex/engineering-notebook-editor/issues"
+          href={GITHUB_ISSUES_URL}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-nb-surface border border-nb-outline-variant/30 text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary/50 transition-all shadow-nb-sm"
