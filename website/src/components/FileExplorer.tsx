@@ -216,7 +216,7 @@ export default function FileExplorer({
             >
               <div className="flex items-center gap-2">
                 {sortBy === 'updated' ? <Clock size={12} /> : sortBy === 'created' ? <Calendar size={12} /> : <SortAsc size={12} />}
-                <span>Sort: {sortBy}</span>
+                <span>Sort: {sortBy.charAt(0).toUpperCase() + sortBy.slice(1)}</span>
               </div>
               <ChevronDown size={12} className={`transition-transform duration-200 ${isSortOpen ? 'rotate-180' : ''}`} />
             </button>
@@ -226,9 +226,9 @@ export default function FileExplorer({
                 <div className="fixed inset-0 z-40" onClick={() => setIsSortOpen(false)} />
                 <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-nb-surface border border-nb-outline-variant rounded-xl shadow-nb-lg py-1.5 animate-in fade-in zoom-in-95 duration-200">
                   {[
-                    { id: 'updated', label: 'Recently Modified', icon: <Clock size={12} /> },
-                    { id: 'created', label: 'Creation Date', icon: <Calendar size={12} /> },
-                    { id: 'title', label: 'Alphabetical', icon: <SortAsc size={12} /> }
+                    { id: 'updated', label: 'Updated', icon: <Clock size={12} /> },
+                    { id: 'created', label: 'Created', icon: <Calendar size={12} /> },
+                    { id: 'title', label: 'Title', icon: <SortAsc size={12} /> }
                   ].map((s) => (
                     <button
                       key={s.id}

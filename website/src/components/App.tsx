@@ -275,86 +275,7 @@ export default function App() {
   };
 
   // URL Sync Effect
-  useEffect(() => {
-    const handleUrlChange = () => {
-      const params = new URLSearchParams(window.location.search);
-      const entryId = params.get('entry');
-      const resourceId = params.get('resource');
-      const mode = params.get('mode') as WorkspaceMode;
 
-      // 1. Sync Project (initial load)
-      const projectId = params.get('project');
-      if (projectId && !currentProjectId) {
-        getProject(projectId).then(async p => {
-          if (p) {
-            setCurrentProjectId(p.id);
-            if (p.type === "github" && p.githubConfig) {
-              setConfig(p.githubConfig);
-              setWorkspaceMode("github");
-            } else if (p.type === "local") {
-              const handle = await getProjectHandle(p.id);
-              if (handle) {
-                setDirHandle(handle);
-                setWorkspaceMode("local");
-                checkPermission(handle);
-              } else {
-                // If handle lost, we might need to go to settings
-                setWorkspaceMode(null);
-                setCurrentProjectId(null);
-              }
-            } else if (p.type === "temporary") {
-              setWorkspaceMode("temporary");
-            }
-          } else if (projectId === "temporary") {
-            setCurrentProjectId("temporary");
-            setWorkspaceMode("temporary");
-          }
-        });
-      }
-
-      // 2. Sync Resources
-      if (resourceId !== targetResourceId) {
-        setTargetResourceId(resourceId);
-      }
-
-      // 3. Sync Entry Selection
-      if (entryId && entryId !== openFile?.id && notebookMetadata.entries[entryId]) {
-        const filename = `${ENTRIES_DIR}/${entryId}.json`;
-        handleSelectEntry({ name: `${entryId}.json`, path: filename });
-      } else if (!entryId && openFile) {
-        setOpenFile(null);
-      }
-    };
-
-    window.addEventListener('popstate', handleUrlChange);
-    window.addEventListener('locationchange', handleUrlChange);
-    handleUrlChange();
-
-    return () => {
-      window.removeEventListener('popstate', handleUrlChange);
-      window.removeEventListener('locationchange', handleUrlChange);
-    };
-  }, [workspaceMode, targetResourceId, openFile?.id, notebookMetadata]);
-
-  // Sync Project to URL
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (currentProjectId) {
-      if (params.get('project') !== currentProjectId) {
-        params.set('project', currentProjectId);
-        window.history.replaceState({}, '', `?${params.toString()}`);
-        window.dispatchEvent(new Event('locationchange'));
-      }
-    } else {
-      if (params.has('project')) {
-        params.delete('project');
-        params.delete('entry');
-        params.delete('resource');
-        window.history.replaceState({}, '', `?${params.toString()}`);
-        window.dispatchEvent(new Event('locationchange'));
-      }
-    }
-  }, [currentProjectId]);
 
   // Load projects on mount
   useEffect(() => {
@@ -1081,6 +1002,86 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceMode, dirHandle, config, contentCache, getDBName]);
+
+  // ── URL synchronization ──────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const handleUrlChange = () => {
+      const params = new URLSearchParams(window.location.search);
+      const entryId = params.get('entry');
+      const resourceId = params.get('resource');
+
+      // 1. Sync Project (initial load)
+      const projectId = params.get('project');
+      if (projectId && !currentProjectId) {
+        getProject(projectId).then(async p => {
+          if (p) {
+            setCurrentProjectId(p.id);
+            if (p.type === "github" && p.githubConfig) {
+              setConfig(p.githubConfig);
+              setWorkspaceMode("github");
+            } else if (p.type === "local") {
+              const handle = await getProjectHandle(p.id);
+              if (handle) {
+                setDirHandle(handle);
+                setWorkspaceMode("local");
+                checkPermission(handle);
+              } else {
+                // If handle lost, we might need to go to settings
+                setWorkspaceMode(null);
+                setCurrentProjectId(null);
+              }
+            } else if (p.type === "temporary") {
+              setWorkspaceMode("temporary");
+            }
+          } else if (projectId === "temporary") {
+            setCurrentProjectId("temporary");
+            setWorkspaceMode("temporary");
+          }
+        });
+      }
+
+      // 2. Sync Resources
+      if (resourceId !== targetResourceId) {
+        setTargetResourceId(resourceId);
+      }
+
+      // 3. Sync Entry Selection
+      if (entryId && entryId !== openFile?.id && notebookMetadata.entries[entryId]) {
+        const filename = `${ENTRIES_DIR}/${entryId}.json`;
+        handleSelectEntry({ name: `${entryId}.json`, path: filename });
+      } else if (!entryId && openFile) {
+        setOpenFile(null);
+      }
+    };
+
+    window.addEventListener('popstate', handleUrlChange);
+    window.addEventListener('locationchange', handleUrlChange);
+    handleUrlChange();
+
+    return () => {
+      window.removeEventListener('popstate', handleUrlChange);
+      window.removeEventListener('locationchange', handleUrlChange);
+    };
+  }, [workspaceMode, currentProjectId, dirHandle, handleSelectEntry, targetResourceId, openFile?.id, notebookMetadata, needsPermission]);
+
+  // Sync Project to URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (currentProjectId) {
+      if (params.get('project') !== currentProjectId) {
+        params.set('project', currentProjectId);
+        window.history.replaceState({}, '', `?${params.toString()}`);
+        window.dispatchEvent(new Event('locationchange'));
+      }
+    } else {
+      if (params.has('project')) {
+        params.delete('project');
+        window.history.replaceState({}, '', `?${params.toString()}`);
+        window.dispatchEvent(new Event('locationchange'));
+      }
+    }
+  }, [currentProjectId]);
 
   // ── Save entry ───────────────────────────────────────────────────────────────
 
