@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTheme } from "next-themes";
 import {
   GitHubConfig, fetchDirectoryTree, fetchFileContent, GitHubFile,
-  saveFile, deleteFile as githubDeleteFile, commitChanges, GitChange
+  saveFile, deleteFile as githubDeleteFile, commitChanges, GitChange, fetchGitHubUser
 } from "@/lib/github";
 import {
   stageChange, getAllPending, clearAllPending, removeStaged, PendingChange,
@@ -371,13 +371,7 @@ export default function App() {
             setGithubToken(data.access_token);
 
             // Fetch user info to show who is signed in
-            fetch("https://api.github.com/user", {
-              headers: {
-                "Authorization": `Bearer ${data.access_token}`,
-                "X-GitHub-Api-Version": "2026-03-10"
-              }
-            })
-              .then(res => res.json())
+            fetchGitHubUser(data.access_token)
               .then(user => {
                 if (user.login) {
                   localStorage.setItem("nb-github-user", user.login);

@@ -16,40 +16,28 @@ export interface GitChange {
   isBinary?: boolean;
 }
 
-let octokitInstance: Octokit | null = null;
-let lastToken: string | null = null;
-
 export const getOctokit = (token: string) => {
-  if (octokitInstance && lastToken === token) {
-    return octokitInstance;
+  if (!token) {
+    throw new Error("GitHub token is required");
   }
 
-  lastToken = token;
   const octokit = new Octokit({
     auth: token,
-    log: {
-      debug: () => { },
-      info: () => { },
-      warn: (message: string) => {
-        // Filter out the noisy "is deprecated" warnings for the contents API 
-        // since we are explicitly using the latest 2026-03-10 version.
-        // if (message.includes("is deprecated") && message.includes("/contents/")) return;
-        console.warn(message);
-      },
-      error: console.error,
+  });
+
+  octokit.hook.before("request", (options) => {
+    options.headers["X-GitHub-Api-Version"] = "2022-11-28";
+    options.headers["Accept"] = "application/vnd.github+json";
+    // Ensure we use the 'token' prefix for OAuth tokens if Octokit hasn't set it
+    if (!options.headers.authorization) {
+      options.headers.authorization = `token ${token}`;
     }
   });
 
-  // Force the version and Bearer headers on EVERY request using a hook
-  octokit.hook.before("request", (options) => {
-    options.headers["Authorization"] = `Bearer ${token}`;
-    options.headers["X-GitHub-Api-Version"] = "2026-03-10";
-    options.headers["Accept"] = "application/vnd.github+json";
-  });
-
-  octokitInstance = octokit;
-  return octokitInstance;
+  return octokit;
 };
+
+
 
 // Properly encode and decode base64 including UTF-8 characters
 const encodeBase64 = (str: string) => {
@@ -348,3 +336,49 @@ export const commitChanges = async (config: GitHubConfig, changes: GitChange[], 
     sha: newCommit.sha,
   });
 };
+
+export const fetchUserRepositories = async (token: string) => {
+  const octokit = getOctokit(token);
+  const response = await octokit.rest.repos.listForAuthenticatedUser({
+    sort: "updated",
+    per_page: 100,
+  });
+  return response.data;
+};
+
+export const fetchUserInstallations = async (token: string) => {
+  const octokit = getOctokit(token);
+  try {
+    const response = await octokit.rest.apps.listInstallationsForAuthenticatedUser();
+    return response.data.installations;
+  } catch (e) {
+    // Fail silently - this might be an OAuth app that doesn't support installations
+    return [];
+  }
+
+};
+
+export const fetchRepoFolders = async (token: string, owner: string, repo: string, path: string = "") => {
+  const octokit = getOctokit(token);
+  try {
+    const response = await octokit.rest.repos.getContent({
+      owner,
+      repo,
+      path,
+    });
+    if (Array.isArray(response.data)) {
+      return response.data.filter(item => item.type === 'dir');
+    }
+    return [];
+  } catch (e) {
+    console.error("Failed to fetch folders", e);
+    return [];
+  }
+};
+
+export const fetchGitHubUser = async (token: string) => {
+  const octokit = getOctokit(token);
+  const response = await octokit.rest.users.getAuthenticated();
+  return response.data;
+};
+
