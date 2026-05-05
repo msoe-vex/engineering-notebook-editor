@@ -1,0 +1,16 @@
+{
+  "version": 3,
+  "entries": {
+    "019df675-346b-7cf8-9062-90c0cd18091d": {
+      "id": "019df675-346b-7cf8-9062-90c0cd18091d",
+      "title": "Test 1",
+      "author": "Andrew Needam",
+      "phase": "Define Problem",
+      "createdAt": "2026-05-05T04:46:09.515Z",
+      "updatedAt": "2026-05-05T04:46:20.782Z",
+      "filename": "notebook/data/entries/019df675-346b-7cf8-9062-90c0cd18091d.json",
+      "resources": {},
+      "isValid": true
+    }
+  }
+}
