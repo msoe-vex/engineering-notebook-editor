@@ -1,0 +1,3 @@
+[submodule "notebook"]
+	path = notebook
+	url = https://github.com/msoe-vex/engineering-notebook-template.git
