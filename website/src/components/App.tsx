@@ -261,6 +261,9 @@ export default function App() {
             } else if (p.type === "memory") {
               setWorkspaceMode("memory");
             }
+          } else if (projectId === "temporary") {
+            setCurrentProjectId("temporary");
+            setWorkspaceMode("memory");
           }
         });
       }
@@ -313,6 +316,19 @@ export default function App() {
   useEffect(() => {
     getProjects().then(setProjects);
   }, []);
+
+  // Warning for Temporary Workspace
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (workspaceMode === "memory") {
+        e.preventDefault();
+        e.returnValue = "You have unsaved changes in your Temporary Workspace. Reloading will lose all data.";
+        return e.returnValue;
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [workspaceMode]);
 
   // Load initial author from localStorage
   useEffect(() => {
@@ -1394,22 +1410,18 @@ export default function App() {
   };
 
   const handleCreateMemory = async () => {
-    const id = generateUUID();
-    const p: Project = {
-      id,
-      name: "Temporary Workspace",
-      type: "memory",
-      lastOpened: isoTimestamp()
-    };
-    await saveProject(p);
-    setProjects(await getProjects());
-    setCurrentProjectId(id);
+    setCurrentProjectId("temporary");
     setWorkspaceMode("memory");
   };
 
   // ── Disconnect ────────────────────────────────────────────────────────────────
 
   const handleDisconnect = () => {
+    if (workspaceMode === "memory") {
+      const confirmLeave = window.confirm("You are in a Temporary Workspace. All unsaved changes will be lost. Are you sure you want to leave?");
+      if (!confirmLeave) return;
+    }
+
     // Clear URL params explicitly to prevent re-sync loop
     const params = new URLSearchParams(window.location.search);
     params.delete('project');
@@ -1584,7 +1596,7 @@ export default function App() {
           </div>
         ) : (
           <div className="flex-1 flex justify-center min-w-0 px-4">
-            {isRenamingProject ? (
+            {isRenamingProject && currentProjectId !== "temporary" ? (
               <input
                 autoFocus
                 type="text"
@@ -1603,16 +1615,17 @@ export default function App() {
             ) : (
               <span 
                 onClick={() => {
+                  if (currentProjectId === "temporary") return;
                   const p = projects.find(p => p.id === currentProjectId);
                   if (p) {
                     setProjectRenameValue(p.name);
                     setIsRenamingProject(true);
                   }
                 }}
-                className="text-sm font-bold text-nb-on-surface truncate max-w-[300px] cursor-pointer hover:text-nb-primary transition-colors px-2 py-1 rounded-md hover:bg-nb-surface-low"
-                title="Click to rename project"
+                className={`text-sm font-bold text-nb-on-surface truncate max-w-[300px] transition-colors px-2 py-1 rounded-md ${currentProjectId === "temporary" ? "" : "cursor-pointer hover:text-nb-primary hover:bg-nb-surface-low"}`}
+                title={currentProjectId === "temporary" ? "" : "Click to rename project"}
               >
-                {projects.find(p => p.id === currentProjectId)?.name || "Engineering Notebook"}
+                {currentProjectId === "temporary" ? "Temporary Workspace" : (projects.find(p => p.id === currentProjectId)?.name || "Engineering Notebook")}
               </span>
             )}
           </div>

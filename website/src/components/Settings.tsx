@@ -137,8 +137,8 @@ export default function Settings({
                   <HardDrive size={20} />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-sm font-bold text-nb-on-surface">Ephemeral Workspace</h3>
-                  <p className="text-[10px] text-nb-on-surface-variant">In-memory only (testing)</p>
+                  <h3 className="text-sm font-bold text-nb-on-surface">Temporary Workspace</h3>
+                  <p className="text-[10px] text-nb-on-surface-variant">In-memory only. Lost on reload.</p>
                 </div>
                 <Plus size={16} className="text-nb-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity" />
               </button>
