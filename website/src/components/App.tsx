@@ -175,6 +175,7 @@ export default function App() {
   const [config, setConfig] = useState<GitHubConfig | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [dirHandle, setDirHandle] = useState<any>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   // Explorer file lists
   const [entries, setEntries] = useState<ExplorerFile[]>([]);
@@ -1006,40 +1007,44 @@ export default function App() {
   // ── URL synchronization ──────────────────────────────────────────────────────
 
   useEffect(() => {
-    const handleUrlChange = () => {
+    let active = true;
+
+    const handleUrlChange = async () => {
       const params = new URLSearchParams(window.location.search);
       const entryId = params.get('entry');
       const resourceId = params.get('resource');
-
-      // 1. Sync Project (initial load)
       const projectId = params.get('project');
+
+      // 1. Sync Project
       if (projectId && !currentProjectId) {
-        getProject(projectId).then(async p => {
-          if (p) {
-            setCurrentProjectId(p.id);
-            if (p.type === "github" && p.githubConfig) {
-              setConfig(p.githubConfig);
-              setWorkspaceMode("github");
-            } else if (p.type === "local") {
-              const handle = await getProjectHandle(p.id);
-              if (handle) {
-                setDirHandle(handle);
-                setWorkspaceMode("local");
-                checkPermission(handle);
-              } else {
-                // If handle lost, we might need to go to settings
-                setWorkspaceMode(null);
-                setCurrentProjectId(null);
-              }
-            } else if (p.type === "temporary") {
-              setWorkspaceMode("temporary");
+        const p = await getProject(projectId);
+        if (!active) return;
+        if (p) {
+          setCurrentProjectId(p.id);
+          if (p.type === "github" && p.githubConfig) {
+            setConfig(p.githubConfig);
+            setWorkspaceMode("github");
+          } else if (p.type === "local") {
+            const handle = await getProjectHandle(p.id);
+            if (handle) {
+              setDirHandle(handle);
+              setWorkspaceMode("local");
+              await checkPermission(handle);
+            } else {
+              setWorkspaceMode(null);
+              setCurrentProjectId(null);
             }
-          } else if (projectId === "temporary") {
-            setCurrentProjectId("temporary");
+          } else if (p.type === "temporary") {
             setWorkspaceMode("temporary");
           }
-        });
+        } else if (projectId === "temporary") {
+          setCurrentProjectId("temporary");
+          setWorkspaceMode("temporary");
+        }
       }
+
+      // If we have a project but no workspace mode yet, wait.
+      if (projectId && !workspaceMode) return;
 
       // 2. Sync Resources
       if (resourceId !== targetResourceId) {
@@ -1047,11 +1052,22 @@ export default function App() {
       }
 
       // 3. Sync Entry Selection
-      if (entryId && entryId !== openFile?.id && notebookMetadata.entries[entryId]) {
-        const filename = `${ENTRIES_DIR}/${entryId}.json`;
-        handleSelectEntry({ name: `${entryId}.json`, path: filename });
+      if (entryId && entryId !== openFile?.id) {
+        // If metadata isn't loaded yet, wait for it.
+        if (notebookMetadata === EMPTY_METADATA) return;
+
+        if (notebookMetadata.entries[entryId]) {
+          const filename = `${ENTRIES_DIR}/${entryId}.json`;
+          await handleSelectEntry({ name: `${entryId}.json`, path: filename });
+          if (!active) return;
+        }
       } else if (!entryId && openFile) {
         setOpenFile(null);
+      }
+
+      // 4. Settle initialization
+      if (active) {
+        setIsInitializing(false);
       }
     };
 
@@ -1060,13 +1076,16 @@ export default function App() {
     handleUrlChange();
 
     return () => {
+      active = false;
       window.removeEventListener('popstate', handleUrlChange);
       window.removeEventListener('locationchange', handleUrlChange);
     };
-  }, [workspaceMode, currentProjectId, dirHandle, handleSelectEntry, targetResourceId, openFile?.id, notebookMetadata, needsPermission]);
+  }, [workspaceMode, currentProjectId, dirHandle, handleSelectEntry, targetResourceId, openFile?.id, notebookMetadata, needsPermission, isLoading]);
 
   // Sync Project to URL
   useEffect(() => {
+    if (isInitializing) return;
+
     const params = new URLSearchParams(window.location.search);
     if (currentProjectId) {
       if (params.get('project') !== currentProjectId) {
@@ -1548,6 +1567,27 @@ export default function App() {
 
 
   // ── Workspace setup ───────────────────────────────────────────────────────────
+
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen bg-nb-bg flex flex-col items-center justify-center font-sans animate-in fade-in duration-500">
+        <div className="flex flex-col items-center gap-6">
+          <div className="w-20 h-20 rounded-[2.5rem] bg-nb-primary flex items-center justify-center shadow-2xl shadow-nb-primary/30 animate-pulse">
+            <BookOpen size={40} className="text-white" />
+          </div>
+          <div className="text-center space-y-2">
+            <h1 className="text-xl font-black tracking-tight text-nb-on-surface">Notebook</h1>
+            <p className="text-[10px] font-black tracking-[0.2em] text-nb-on-surface-variant uppercase opacity-40">Engineering Editor</p>
+          </div>
+          <div className="flex items-center gap-1 mt-4">
+            <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce [animation-delay:-0.3s]" />
+            <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce [animation-delay:-0.15s]" />
+            <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!workspaceMode) {
     return (
