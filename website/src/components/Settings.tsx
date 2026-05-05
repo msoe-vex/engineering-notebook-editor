@@ -166,6 +166,7 @@ export default function Settings({
                           <label className="text-[9px] font-black tracking-widest text-nb-on-surface-variant uppercase ml-1">Repository URL</label>
                           <input
                             type="text"
+                            autoComplete="off"
                             className="w-full bg-nb-surface-low border border-nb-outline-variant/30 p-2.5 rounded-xl text-xs outline-none focus:ring-2 focus:ring-nb-primary/30 transition-all"
                             value={repoUrl}
                             onChange={(e) => setRepoUrl(e.target.value)}
@@ -176,6 +177,7 @@ export default function Settings({
                           <label className="text-[9px] font-black tracking-widest text-nb-on-surface-variant uppercase ml-1">Project Folder (Optional)</label>
                           <input
                             type="text"
+                            autoComplete="off"
                             className="w-full bg-nb-surface-low border border-nb-outline-variant/30 p-2.5 rounded-xl text-xs outline-none focus:ring-2 focus:ring-nb-primary/30 transition-all"
                             value={folderPath}
                             onChange={(e) => setFolderPath(e.target.value)}
@@ -215,14 +217,17 @@ export default function Settings({
                             localStorage.setItem("nb-github-repo-url", repoUrl);
                             localStorage.setItem("nb-github-folder", folderPath);
                             
-                            const base = folderPath.trim() ? (folderPath.trim().endsWith('/') ? folderPath.trim() : folderPath.trim() + '/') : "";
+                            const base = folderPath.trim();
+                            const prefix = base ? (base.endsWith('/') ? base : base + '/') : "";
+
                             onCreateGithub({ 
                               token: githubToken!, 
                               owner: parsed.owner, 
                               repo: parsed.repo, 
                               branch,
-                              entriesDir: `${base}entries`, 
-                              resourcesDir: `${base}resources` 
+                              baseDir: base,
+                              entriesDir: `${prefix}data/entries`, 
+                              resourcesDir: `${prefix}data/assets` 
                             });
                           } catch (e) {
                             console.error(e);

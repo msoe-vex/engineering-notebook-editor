@@ -16,6 +16,18 @@ const WORKSPACE_STORE = "workspace"; // Legacy
 const PROJECT_STORE = "projects";
 const HANDLE_STORE = "handles";
 
+export async function deleteProjectDatabase(dbName: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.deleteDatabase(dbName);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+    req.onblocked = () => {
+      console.warn(`Deletion of database ${dbName} is blocked`);
+      resolve(); // Still resolve to avoid hanging
+    };
+  });
+}
+
 export type PendingOperation = "upsert" | "delete";
 
 export interface PendingChange {

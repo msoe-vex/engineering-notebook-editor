@@ -545,6 +545,7 @@ const Editor = React.memo(function Editor({
                 <User size={14} className="text-nb-tertiary" />
                 <AutocompleteInput
                   type="text"
+                  autoComplete="off"
                   value={author}
                   options={otherAuthors}
                   onSelectOption={(val) => { setAuthor(val); onAuthorChange?.(val); }}

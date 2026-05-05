@@ -5,6 +5,7 @@ export interface GitHubConfig {
   owner: string;
   repo: string;
   branch: string;
+  baseDir: string;
   entriesDir: string;
   resourcesDir: string;
 }

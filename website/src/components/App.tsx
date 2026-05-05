@@ -9,7 +9,7 @@ import {
 import {
   stageChange, getAllPending, clearAllPending, removeStaged, PendingChange,
   putResource, getResource, saveWorkspaceHandle, getWorkspaceHandle, clearWorkspaceHandle,
-  Project, getProjects, getProject, saveProject, deleteProject, getProjectHandle, saveProjectHandle, deleteProjectHandle
+  Project, getProjects, getProject, saveProject, deleteProject, getProjectHandle, saveProjectHandle, deleteProjectHandle, deleteProjectDatabase
 } from "@/lib/db";
 import {
   NotebookMetadata, EMPTY_METADATA, EntryMetadata, EntryWrapper,
@@ -401,6 +401,21 @@ export default function App() {
         });
     }
   }, []);
+  // ── Dynamic Paths ──────────────────────────────────────────────────────────
+  const currentEntriesDir = useMemo(() => (workspaceMode === "github" && config) ? config.entriesDir : ENTRIES_DIR, [workspaceMode, config]);
+  const currentAssetsDir = useMemo(() => (workspaceMode === "github" && config) ? config.resourcesDir : ASSETS_DIR, [workspaceMode, config]);
+  
+  const getGitBasePrefix = useCallback(() => {
+    if (workspaceMode === "github" && config?.baseDir) {
+      return config.baseDir.endsWith('/') ? config.baseDir : config.baseDir + '/';
+    }
+    return "";
+  }, [workspaceMode, config]);
+
+  const currentIndexPath = useMemo(() => `${getGitBasePrefix()}${INDEX_PATH}`, [getGitBasePrefix]);
+  const currentLatexDir = useMemo(() => `${getGitBasePrefix()}${LATEX_DIR}`, [getGitBasePrefix]);
+  const currentAllEntriesPath = useMemo(() => `${getGitBasePrefix()}${ALL_ENTRIES_PATH}`, [getGitBasePrefix]);
+
   const isDarkMode = resolvedTheme === "dark";
 
   // Theme effect handled by next-themes via layout.tsx
@@ -622,7 +637,7 @@ export default function App() {
         });
 
         // Save LaTeX
-        const latexPath = `${LATEX_DIR}/${entryId}.tex`;
+        const latexPath = `${currentLatexDir}/${entryId}.tex`;
         await stageChange(dbName, {
           path: latexPath, operation: "upsert", content: latex,
           label: `Generate LaTeX: ${info.title}`, stagedAt: isoTimestamp()
@@ -634,13 +649,13 @@ export default function App() {
         const metaStr = JSON.stringify(updatedMeta, null, 2);
 
         await stageChange(dbName, {
-          path: INDEX_PATH, operation: "upsert", content: metaStr,
+          path: currentIndexPath, operation: "upsert", content: metaStr,
           label: "Auto-save metadata", stagedAt: isoTimestamp()
         });
 
         const allEntriesTex = generateAllEntriesLatex(updatedMeta, "data/");
         await stageChange(dbName, {
-          path: ALL_ENTRIES_PATH, operation: "upsert", content: allEntriesTex,
+          path: currentAllEntriesPath, operation: "upsert", content: allEntriesTex,
           label: "Update entry list", stagedAt: isoTimestamp()
         });
 
@@ -741,8 +756,8 @@ export default function App() {
     setIsLoading(true);
     try {
       const [entryItems, resourceItems] = await Promise.all([
-        fetchDirectoryTree(config, ENTRIES_DIR, false).catch(() => [] as GitHubFile[]),
-        fetchDirectoryTree(config, ASSETS_DIR, false).catch(() => [] as GitHubFile[]),
+        fetchDirectoryTree(config, currentEntriesDir, false).catch(() => [] as GitHubFile[]),
+        fetchDirectoryTree(config, currentAssetsDir, false).catch(() => [] as GitHubFile[]),
       ]);
 
       const entryFiles = entryItems
@@ -755,7 +770,7 @@ export default function App() {
       // Load notebook.json from pending or GitHub
       const dbName = getDBName();
       const pending = await getAllPending(dbName);
-      const pendingMeta = pending.find(p => p.path === INDEX_PATH && p.operation === "upsert");
+      const pendingMeta = pending.find(p => p.path === currentIndexPath && p.operation === "upsert");
       if (pendingMeta?.content) {
         try {
           const parsed = JSON.parse(pendingMeta.content);
@@ -763,7 +778,7 @@ export default function App() {
         } catch { /* ignore */ }
       } else {
         try {
-          const metaStr = await fetchFileContent(config, INDEX_PATH);
+          const metaStr = await fetchFileContent(config, currentIndexPath);
           const parsed = JSON.parse(metaStr);
           setNotebookMetadata(parsed);
         } catch { /* not found yet */ }
@@ -827,7 +842,7 @@ export default function App() {
     const createdAt = isoTimestamp();
     const entryId = generateUUID();
     const filename = `${entryId}.json`;
-    const path = `${ENTRIES_DIR}/${filename}`;
+    const path = `${currentEntriesDir}/${filename}`;
 
     const defaultTitle = "";
     const defaultAuthor = localStorage.getItem("nb-last-author") || "";
@@ -892,10 +907,10 @@ export default function App() {
           });
         } else if (workspaceMode === "github" || workspaceMode === "temporary") {
           await stage({ path, content: jsonStr, operation: "upsert", label: "New entry" });
-          await stage({ path: INDEX_PATH, content: metaStr, operation: "upsert", label: "Update index" });
+          await stage({ path: currentIndexPath, content: metaStr, operation: "upsert", label: "Update index" });
           const allEntriesTex = generateAllEntriesLatex(newMetadata, "data/");
-          await stage({ path: ALL_ENTRIES_PATH, content: allEntriesTex, operation: "upsert", label: "Update entry list" });
-          await stage({ path: `${LATEX_DIR}/${entryId}.tex`, content: initialLatex, operation: "upsert", label: "Init LaTeX" });
+          await stage({ path: currentAllEntriesPath, content: allEntriesTex, operation: "upsert", label: "Update entry list" });
+          await stage({ path: `${currentLatexDir}/${entryId}.tex`, content: initialLatex, operation: "upsert", label: "Init LaTeX" });
         }
       } finally {
         setSavingPaths(prev => {
@@ -1190,7 +1205,7 @@ export default function App() {
             // Generate a new UUID for the imported entry to avoid collisions
             const newId = generateUUID();
             const filename = `${newId}.json`;
-            const path = `${ENTRIES_DIR}/${filename}`;
+            const path = `${currentEntriesDir}/${filename}`;
 
             // Remap IDs within the document to prevent collisions and update internal links
             const remappedContent = remapContentIds(wrapper.content);
@@ -1238,12 +1253,12 @@ export default function App() {
               }
               await stage({ path, content: jsonStr, operation: "upsert", label: "Import entry" });
               const latex = generateEntryLatex(JSON.stringify(cleanDoc), newEntryMeta.title, newEntryMeta.author, newEntryMeta.phase, newEntryMeta.createdAt, newId);
-              await stage({ path: `${LATEX_DIR}/${newId}.tex`, content: latex, operation: "upsert", label: "Import LaTeX" });
+              await stage({ path: `${currentLatexDir}/${newId}.tex`, content: latex, operation: "upsert", label: "Import LaTeX" });
 
               const updatedMeta = updateEntryInIndex(notebookMetadata, newId, newEntryMeta);
               const allEntriesTex = generateAllEntriesLatex(updatedMeta, "data/");
-              await stage({ path: INDEX_PATH, content: JSON.stringify(updatedMeta, null, 2), operation: "upsert", label: "Update index" });
-              await stage({ path: ALL_ENTRIES_PATH, content: allEntriesTex, operation: "upsert", label: "Update entry list" });
+              await stage({ path: currentIndexPath, content: JSON.stringify(updatedMeta, null, 2), operation: "upsert", label: "Update index" });
+              await stage({ path: currentAllEntriesPath, content: allEntriesTex, operation: "upsert", label: "Update entry list" });
 
               setNotebookMetadata(updatedMeta);
             }
@@ -1299,7 +1314,7 @@ export default function App() {
         const base64 = dataUrl.split(",")[1];
         const ext = file.name.split(".").pop() || "png";
         const ts = getFilenameTimestamp();
-        const imgPath = `${ASSETS_DIR}/${ts}.${ext}`;
+        const imgPath = `${currentAssetsDir}/${ts}.${ext}`;
         await handleImageUploaded(imgPath, base64);
       };
       reader.readAsDataURL(file);
@@ -1332,11 +1347,11 @@ export default function App() {
       await removeStaged(dbName, file.path);
       await stage({ path: file.path, content: undefined, operation: "delete", label: "Entry deleted" });
       const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
-      await stage({ path: `${LATEX_DIR}/${entryId}.tex`, content: undefined, operation: "delete", label: "LaTeX deleted" });
-      await stage({ path: INDEX_PATH, content: metaStr, operation: "upsert", label: "Metadata update" });
+      await stage({ path: `${currentLatexDir}/${entryId}.tex`, content: undefined, operation: "delete", label: "LaTeX deleted" });
+      await stage({ path: currentIndexPath, content: metaStr, operation: "upsert", label: "Metadata update" });
 
       const allEntriesTex = generateAllEntriesLatex(updatedMeta, "data/");
-      await stage({ path: ALL_ENTRIES_PATH, content: allEntriesTex, operation: "upsert", label: "Update entry list" });
+      await stage({ path: currentAllEntriesPath, content: allEntriesTex, operation: "upsert", label: "Update entry list" });
 
       setEntries(prev => prev.filter(e => e.path !== file.path));
     }
@@ -1366,7 +1381,7 @@ export default function App() {
       const dbName = getDBName();
       await removeStaged(dbName, file.path);
       await stage({ path: file.path, operation: "delete", label: "Resource deleted" });
-      await stage({ path: INDEX_PATH, content: metaStr, operation: "upsert", label: "Metadata update" });
+      await stage({ path: currentIndexPath, content: metaStr, operation: "upsert", label: "Metadata update" });
       setResources(prev => prev.filter(r => r.path !== file.path));
     } else {
       setResources(prev => prev.filter(r => r.path !== file.path));
@@ -1502,8 +1517,33 @@ export default function App() {
   };
 
   const handleDeleteProject = async (id: string) => {
+    const p = await getProject(id);
+    if (!p) return;
+
+    const confirmed = window.confirm(`Are you sure you want to delete "${p.name}"? This will permanently remove all local staged changes and cached data for this project.`);
+    if (!confirmed) return;
+
+    // Resolve DB name before deleting project metadata
+    let dbName = "notebook-volatile";
+    if (p.type === "github" && p.githubConfig) {
+      dbName = `notebook-${p.githubConfig.owner}-${p.githubConfig.repo}`;
+    } else if (p.type === "local") {
+      dbName = `notebook-local-${p.folderName || 'unknown'}`;
+    }
+
     await deleteProject(id);
     await deleteProjectHandle(id);
+    await deleteProjectDatabase(dbName);
+
+    // Clear project-specific localStorage if it matches
+    if (p.type === "github" && p.githubConfig) {
+      if (localStorage.getItem("nb-github-repo-url")?.includes(p.githubConfig.repo)) {
+        localStorage.removeItem("nb-github-repo-url");
+        localStorage.removeItem("nb-github-folder");
+      }
+    }
+    localStorage.removeItem("nb-last-author");
+
     setProjects(await getProjects());
     if (currentProjectId === id) {
       handleDisconnect();
