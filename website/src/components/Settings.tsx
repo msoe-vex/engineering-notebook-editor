@@ -68,7 +68,7 @@ export default function Settings({
     localStorage.setItem("nb-github-folder", folderPath);
     localStorage.setItem("nb-create-type", "github");
 
-    const redirectUri = window.location.origin + "/engineering-notebook-editor/";
+    const redirectUri = window.location.origin;
     const scope = "repo";
     const url = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${redirectUri}&scope=${scope}`;
     window.location.href = url;

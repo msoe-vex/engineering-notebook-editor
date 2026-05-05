@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   title: "Engineering Notebook Editor",
   description: "A professional engineering notebook editor for VEX robotics teams.",
   icons: {
-    icon: "/engineering-notebook-editor/rr.svg",
+    icon: "/rr.svg",
   },
 };
 
