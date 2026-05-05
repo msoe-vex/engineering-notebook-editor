@@ -209,7 +209,10 @@ export default function Settings({
                           try {
                             // Fetch repo info to get the default branch
                             const res = await fetch(`https://api.github.com/repos/${parsed.owner}/${parsed.repo}`, {
-                              headers: { "Authorization": `Bearer ${githubToken}` }
+                              headers: { 
+                                "Authorization": `Bearer ${githubToken}`,
+                                "X-GitHub-Api-Version": "2026-03-10"
+                              }
                             });
                             
                             if (!res.ok) {

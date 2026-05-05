@@ -371,7 +371,10 @@ export default function App() {
             
             // Fetch user info to show who is signed in
             fetch("https://api.github.com/user", {
-              headers: { "Authorization": `token ${data.access_token}` }
+              headers: { 
+                "Authorization": `Bearer ${data.access_token}`,
+                "X-GitHub-Api-Version": "2026-03-10"
+              }
             })
             .then(res => res.json())
             .then(user => {

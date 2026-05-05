@@ -16,8 +16,39 @@ export interface GitChange {
   isBinary?: boolean;
 }
 
+let octokitInstance: Octokit | null = null;
+let lastToken: string | null = null;
+
 export const getOctokit = (token: string) => {
-  return new Octokit({ auth: token });
+  if (octokitInstance && lastToken === token) {
+    return octokitInstance;
+  }
+
+  lastToken = token;
+  const octokit = new Octokit({
+    auth: token,
+    log: {
+      debug: () => { },
+      info: () => { },
+      warn: (message: string) => {
+        // Filter out the noisy "is deprecated" warnings for the contents API 
+        // since we are explicitly using the latest 2026-03-10 version.
+        // if (message.includes("is deprecated") && message.includes("/contents/")) return;
+        console.warn(message);
+      },
+      error: console.error,
+    }
+  });
+
+  // Force the version and Bearer headers on EVERY request using a hook
+  octokit.hook.before("request", (options) => {
+    options.headers["Authorization"] = `Bearer ${token}`;
+    options.headers["X-GitHub-Api-Version"] = "2026-03-10";
+    options.headers["Accept"] = "application/vnd.github+json";
+  });
+
+  octokitInstance = octokit;
+  return octokitInstance;
 };
 
 // Properly encode and decode base64 including UTF-8 characters
@@ -181,12 +212,12 @@ export const deleteFile = async (
         sha = existing.data.sha;
       }
     } catch {
-       throw new Error("File not found or unable to fetch SHA");
+      throw new Error("File not found or unable to fetch SHA");
     }
   }
 
   if (!sha) {
-     throw new Error("Cannot delete file without SHA");
+    throw new Error("Cannot delete file without SHA");
   }
 
   await octokit.rest.repos.deleteFile({
@@ -215,7 +246,7 @@ export const createBlob = async (config: GitHubConfig, content: string, encoding
  */
 export const commitChanges = async (config: GitHubConfig, changes: GitChange[], message: string) => {
   const octokit = getOctokit(config.token);
-  
+
   // 1. Get the latest commit SHA
   const { data: refData } = await octokit.rest.git.getRef({
     owner: config.owner,
@@ -235,7 +266,7 @@ export const commitChanges = async (config: GitHubConfig, changes: GitChange[], 
   // 3. Process changes into tree items
   const treeItems = await Promise.all(changes.map(async (change) => {
     if (change.content === null) {
-      return null; 
+      return null;
     }
 
     const item: any = {
