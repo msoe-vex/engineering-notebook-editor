@@ -26,7 +26,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { GitBranch, HardDrive, ArrowLeftRight, GitCommitVertical, Loader2, Menu, Sun, Moon, X, BookOpen, Check, AlertTriangle } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { saveAs } from "file-saver";
-import { generateUUID } from "@/lib/utils";
+import { generateUUID, hashContent } from "@/lib/utils";
 import { generateEntryLatex, generateAllEntriesLatex } from "@/lib/latex";
 import { extractImagePaths, extractResources } from "@/lib/metadata";
 import { ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, INDEX_PATH, ALL_ENTRIES_PATH } from "@/lib/constants";
@@ -1456,7 +1456,8 @@ export default function App() {
   };
 
   const handleCreateGithub = async (githubConfig: GitHubConfig) => {
-    const id = generateUUID();
+    const fullHash = await hashContent(`github:${githubConfig.owner.toLowerCase()}/${githubConfig.repo.toLowerCase()}`);
+    const id = fullHash.slice(0, 32);
     const p: Project = {
       id,
       name: `${githubConfig.owner}/${githubConfig.repo}`,
@@ -1501,7 +1502,8 @@ export default function App() {
         return handleSelectProject(id);
       }
     } else {
-      id = generateUUID();
+      const fullHash = await hashContent(`local:${handle.name}`);
+      id = fullHash.slice(0, 32);
     }
 
     const p: Project = {
