@@ -438,6 +438,9 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [styContent, setStyContent] = useState("");
 
+  const lastRemoteMetadataRef = useRef<string>("");
+  const lastRemoteAllEntriesRef = useRef<string>("");
+
   // ── Computed display lists ───────────────────────────────────────────────────
 
   const displayEntries = useMemo(() => {
@@ -648,16 +651,24 @@ export default function App() {
         const updatedMeta = updateEntryInIndex(meta, entryId, entryMeta);
         const metaStr = JSON.stringify(updatedMeta, null, 2);
 
-        await stageChange(dbName, {
-          path: currentIndexPath, operation: "upsert", content: metaStr,
-          label: "Auto-save metadata", stagedAt: isoTimestamp()
-        });
+        if (metaStr === lastRemoteMetadataRef.current) {
+          await removeStaged(dbName, currentIndexPath);
+        } else {
+          await stageChange(dbName, {
+            path: currentIndexPath, operation: "upsert", content: metaStr,
+            label: "Auto-save metadata", stagedAt: isoTimestamp()
+          });
+        }
 
         const allEntriesTex = generateAllEntriesLatex(updatedMeta, "data/");
-        await stageChange(dbName, {
-          path: currentAllEntriesPath, operation: "upsert", content: allEntriesTex,
-          label: "Update entry list", stagedAt: isoTimestamp()
-        });
+        if (allEntriesTex === lastRemoteAllEntriesRef.current) {
+          await removeStaged(dbName, currentAllEntriesPath);
+        } else {
+          await stageChange(dbName, {
+            path: currentAllEntriesPath, operation: "upsert", content: allEntriesTex,
+            label: "Update entry list", stagedAt: isoTimestamp()
+          });
+        }
 
         notebookMetadataRef.current = updatedMeta;
 
@@ -779,10 +790,17 @@ export default function App() {
       } else {
         try {
           const metaStr = await fetchFileContent(config, currentIndexPath);
+          lastRemoteMetadataRef.current = metaStr;
           const parsed = JSON.parse(metaStr);
           setNotebookMetadata(parsed);
         } catch { /* not found yet */ }
       }
+
+      // Also load all_entries.tex for comparison
+      try {
+        const allEntries = await fetchFileContent(config, currentAllEntriesPath);
+        lastRemoteAllEntriesRef.current = allEntries;
+      } catch { /* not found */ }
 
       // Load sty
       try {
@@ -898,6 +916,7 @@ export default function App() {
     // Background save
     const saveOp = async () => {
       try {
+        const dbName = getDBName();
         if (workspaceMode === "local" && dirHandle) {
           await queueLocalOp(async () => {
             await writeLocalFile(dirHandle, path, jsonStr);
@@ -907,9 +926,17 @@ export default function App() {
           });
         } else if (workspaceMode === "github" || workspaceMode === "temporary") {
           await stage({ path, content: jsonStr, operation: "upsert", label: "New entry" });
-          await stage({ path: currentIndexPath, content: metaStr, operation: "upsert", label: "Update index" });
+          if (metaStr === lastRemoteMetadataRef.current) {
+            await removeStaged(dbName, currentIndexPath);
+          } else {
+            await stage({ path: currentIndexPath, content: metaStr, operation: "upsert", label: "Update index" });
+          }
           const allEntriesTex = generateAllEntriesLatex(newMetadata, "data/");
-          await stage({ path: currentAllEntriesPath, content: allEntriesTex, operation: "upsert", label: "Update entry list" });
+          if (allEntriesTex === lastRemoteAllEntriesRef.current) {
+            await removeStaged(dbName, currentAllEntriesPath);
+          } else {
+            await stage({ path: currentAllEntriesPath, content: allEntriesTex, operation: "upsert", label: "Update entry list" });
+          }
           await stage({ path: `${currentLatexDir}/${entryId}.tex`, content: initialLatex, operation: "upsert", label: "Init LaTeX" });
         }
       } finally {
@@ -1342,18 +1369,38 @@ export default function App() {
         await loadLocalExplorer();
       });
     } else if (workspaceMode === "github" || workspaceMode === "temporary") {
-      // Remove any staged upsert for this path, then stage delete
       const dbName = getDBName();
-      await removeStaged(dbName, file.path);
-      await stage({ path: file.path, content: undefined, operation: "delete", label: "Entry deleted" });
       const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
-      await stage({ path: `${currentLatexDir}/${entryId}.tex`, content: undefined, operation: "delete", label: "LaTeX deleted" });
-      await stage({ path: currentIndexPath, content: metaStr, operation: "upsert", label: "Metadata update" });
+      const latexPath = `${currentLatexDir}/${entryId}.tex`;
+
+      // Check if it was brand new (not on GitHub yet)
+      const allPending = await getAllPending(dbName);
+      const stagedEntry = allPending.find(p => p.path === file.path && p.operation === "upsert");
+      const isNew = stagedEntry?.label?.includes("New") || stagedEntry?.label?.includes("Import");
+
+      await removeStaged(dbName, file.path);
+      await removeStaged(dbName, latexPath);
+
+      if (!isNew) {
+        await stage({ path: file.path, content: undefined, operation: "delete", label: "Entry deleted" });
+        await stage({ path: latexPath, content: undefined, operation: "delete", label: "LaTeX deleted" });
+      }
+
+      if (metaStr === lastRemoteMetadataRef.current) {
+        await removeStaged(dbName, currentIndexPath);
+      } else {
+        await stage({ path: currentIndexPath, content: metaStr, operation: "upsert", label: "Metadata update" });
+      }
 
       const allEntriesTex = generateAllEntriesLatex(updatedMeta, "data/");
-      await stage({ path: currentAllEntriesPath, content: allEntriesTex, operation: "upsert", label: "Update entry list" });
+      if (allEntriesTex === lastRemoteAllEntriesRef.current) {
+        await removeStaged(dbName, currentAllEntriesPath);
+      } else {
+        await stage({ path: currentAllEntriesPath, content: allEntriesTex, operation: "upsert", label: "Update entry list" });
+      }
 
       setEntries(prev => prev.filter(e => e.path !== file.path));
+      refreshPending();
     }
 
     if (openFile?.path === file.path) {
@@ -1379,10 +1426,21 @@ export default function App() {
       });
     } else if (workspaceMode === "github") {
       const dbName = getDBName();
+      const allPending = await getAllPending(dbName);
+      const staged = allPending.find(p => p.path === file.path && p.operation === "upsert");
+      const isNew = !!staged; // For resources, if it's staged as upsert, it's likely new or updated
+
       await removeStaged(dbName, file.path);
-      await stage({ path: file.path, operation: "delete", label: "Resource deleted" });
+      
+      // Only stage delete if it wasn't just a new upload
+      // Note: This is simpler than entries because resources aren't "updated" in place as often
+      if (!isNew) {
+        await stage({ path: file.path, operation: "delete", label: "Resource deleted" });
+      }
+
       await stage({ path: currentIndexPath, content: metaStr, operation: "upsert", label: "Metadata update" });
       setResources(prev => prev.filter(r => r.path !== file.path));
+      refreshPending();
     } else {
       setResources(prev => prev.filter(r => r.path !== file.path));
     }
@@ -1466,10 +1524,18 @@ export default function App() {
         };
       });
 
-      const message = `Update notebook — ${total} file${total !== 1 ? "s" : ""} changed`;
+      const fileList = all.map(p => {
+        const op = p.operation === "delete" ? "Deleted" : "Updated";
+        return `- ${op}: ${p.path}`;
+      }).join("\n");
+      const message = `Update notebook: ${total} file${total !== 1 ? "s" : ""} changed\n\nSummary:\n${fileList}`;
+      
       await commitChanges(config, gitChanges, message);
 
       await clearAllPending(dbName);
+      lastRemoteMetadataRef.current = all.find(p => p.path === currentIndexPath)?.content || lastRemoteMetadataRef.current;
+      lastRemoteAllEntriesRef.current = all.find(p => p.path === currentAllEntriesPath)?.content || lastRemoteAllEntriesRef.current;
+      
       await refreshPending();
       await loadGitHubExplorer();
       notify("Successfully committed all changes to GitHub.", "success");
@@ -1795,9 +1861,24 @@ export default function App() {
       <div className="p-4 bg-nb-surface border-t border-nb-outline-variant">
         {workspaceMode === "github" && (pendingChanges.length > 0 || isCommitting) && (
           <div className="mb-4">
-            <div className="bg-nb-tertiary/10 rounded-xl p-3 border border-nb-tertiary/20 mb-3 flex items-center gap-3">
-              <div className="w-2 h-2 rounded-full bg-nb-tertiary animate-pulse" />
-              <span className="text-[10px] font-bold text-nb-tertiary tracking-widest uppercase">Uncommitted Changes</span>
+            <div className="bg-nb-tertiary/5 rounded-xl p-3 border border-nb-tertiary/10 mb-3 space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="w-1.5 h-1.5 rounded-full bg-nb-tertiary animate-pulse" />
+                <span className="text-[9px] font-black tracking-widest text-nb-tertiary uppercase">Pending Changes ({pendingChanges.length})</span>
+              </div>
+              <div className="max-h-24 overflow-y-auto scrollbar-hide space-y-1.5 pl-4.5 border-l border-nb-tertiary/10 ml-0.5">
+                {pendingChanges.slice(0, 5).map(p => (
+                  <div key={p.path} className="text-[8px] font-mono text-nb-on-surface-variant/60 truncate flex gap-2">
+                    <span className={`uppercase font-bold ${p.operation === 'delete' ? 'text-red-500/60' : 'text-nb-tertiary/60'}`}>
+                      {p.operation === 'delete' ? 'del' : 'upd'}
+                    </span>
+                    <span className="truncate">{p.path.split('/').pop()}</span>
+                  </div>
+                ))}
+                {pendingChanges.length > 5 && (
+                  <div className="text-[8px] italic opacity-40 pl-2">+{pendingChanges.length - 5} more files...</div>
+                )}
+              </div>
             </div>
             <button
               onClick={handleCommitAll}
