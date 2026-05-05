@@ -22,6 +22,7 @@ import Preview from "./Preview";
 import WelcomePage from "./WelcomePage";
 import FileExplorer, { ExplorerFile } from "./FileExplorer";
 import ImagePreview from "./ImagePreview";
+import ConfirmationDialog from "./ConfirmationDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { GitBranch, HardDrive, ArrowLeftRight, GitCommitVertical, Loader2, Menu, Sun, Moon, X, BookOpen, Check, AlertTriangle, ChevronDown } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
@@ -226,6 +227,24 @@ export default function App() {
 
   // URL-based navigation state
   const [targetResourceId, setTargetResourceId] = useState<string | null>(null);
+
+  // Confirmation Dialog
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    variant?: "danger" | "warning" | "info";
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: () => { },
+  });
+
+  const showConfirm = (title: string, message: string, onConfirm: () => void, variant: "danger" | "warning" | "info" = "danger") => {
+    setConfirmDialog({ isOpen: true, title, message, onConfirm, variant });
+  };
 
   /** Get a unique DB name for the current workspace to isolate changes. */
   const getDBName = useCallback(() => {
@@ -847,7 +866,12 @@ export default function App() {
   useEffect(() => {
     if (workspaceMode === "local" && dirHandle) loadLocalExplorer();
     else if (workspaceMode === "github" && config) loadGitHubExplorer();
-    else if (workspaceMode === "temporary") { setEntries([]); setResources([]); }
+    else if (workspaceMode === "temporary") {
+      setEntries([]);
+      setResources([]);
+      setNotebookMetadata({ ...EMPTY_METADATA });
+      setIsLoading(false);
+    }
   }, [workspaceMode, dirHandle, config, loadLocalExplorer, loadGitHubExplorer]);
 
   const handleValidationChange = useCallback((isValid: boolean) => {
@@ -1231,38 +1255,40 @@ export default function App() {
 
   const handleDiscardAll = async () => {
     const dbName = getDBName();
-    const confirmed = window.confirm("Are you sure you want to discard all uncommitted changes? This cannot be undone.");
-    if (!confirmed) return;
+    showConfirm(
+      "Discard Changes?",
+      "Are you sure you want to discard all uncommitted changes? This cannot be undone.",
+      async () => {
+        await clearAllPending(dbName);
+        await refreshPending();
+        notify("All pending changes discarded.", "success");
 
-    await clearAllPending(dbName);
-    await refreshPending();
-    notify("All pending changes discarded.", "success");
+        // Reset any open file state if it was a pending new file
+        if (openFile) {
+          const allPending = await getAllPending(dbName);
+          const isNew = allPending.some(p => p.path === openFile.path && p.operation === "upsert");
+          if (isNew) setOpenFile(null);
+        }
 
-    // Reset any open file state if it was a pending new file
-    if (openFile) {
-      const isNew = pendingChanges.some(p => p.path === openFile.path && p.operation === "upsert");
-      // Note: If it was an update to an existing file, we'll refresh it below.
-      // If it was a purely new file, it's gone from local cache, so close it.
-      if (isNew) setOpenFile(null);
-    }
+        // Refresh the explorer to show current remote state
+        if (workspaceMode === "github") await loadGitHubExplorer();
+        else if (workspaceMode === "local") await loadLocalExplorer();
 
-    // Refresh the explorer to show current remote state
-    if (workspaceMode === "github") await loadGitHubExplorer();
-    else if (workspaceMode === "local") await loadLocalExplorer();
-
-    // Re-select current entry if it's still open to revert to remote version
-    if (openFile) {
-      const params = new URLSearchParams(window.location.search);
-      const entryId = params.get('entry');
-      if (entryId && openFile.id === entryId) {
-        // Check if this entry exists in the remote entries we just fetched
-        const filename = `${currentEntriesDir}/${entryId}.json`;
-        handleSelectEntry({ name: `${entryId}.json`, path: filename }, true).catch(() => {
-          // If it fails silently (e.g. 404 because it was a new entry), just close it
-          setOpenFile(null);
-        });
-      }
-    }
+        // Re-select current entry if it's still open to revert to remote version
+        if (openFile) {
+          const params = new URLSearchParams(window.location.search);
+          const entryId = params.get('entry');
+          if (entryId && openFile.id === entryId) {
+            const filename = `${currentEntriesDir}/${entryId}.json`;
+            handleSelectEntry({ name: `${entryId}.json`, path: filename }, true).catch(() => {
+              setOpenFile(null);
+            });
+          }
+        }
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+      },
+      "danger"
+    );
   };
 
   // Sync Project to URL
@@ -1678,33 +1704,37 @@ export default function App() {
     const p = await getProject(id);
     if (!p) return;
 
-    const confirmed = window.confirm(`Are you sure you want to delete "${p.name}"? This will permanently remove all local staged changes and cached data for this project.`);
-    if (!confirmed) return;
+    showConfirm(
+      "Delete Project?",
+      `Are you sure you want to delete "${p.name}"? This will permanently remove all local staged changes and cached data for this project.`,
+      async () => {
+        // Resolve DB name before deleting project metadata
+        let dbName = "notebook-volatile";
+        if (p.type === "github" && p.githubConfig) {
+          dbName = `notebook-${p.githubConfig.owner}-${p.githubConfig.repo}`;
+        } else if (p.type === "local") {
+          dbName = `notebook-local-${p.folderName || 'unknown'}`;
+        }
 
-    // Resolve DB name before deleting project metadata
-    let dbName = "notebook-volatile";
-    if (p.type === "github" && p.githubConfig) {
-      dbName = `notebook-${p.githubConfig.owner}-${p.githubConfig.repo}`;
-    } else if (p.type === "local") {
-      dbName = `notebook-local-${p.folderName || 'unknown'}`;
-    }
+        await deleteProject(id);
+        await deleteProjectHandle(id);
+        await deleteProjectDatabase(dbName);
 
-    await deleteProject(id);
-    await deleteProjectHandle(id);
-    await deleteProjectDatabase(dbName);
+        // Clear project-specific localStorage if it matches
+        if (p.type === "github" && p.githubConfig) {
+          if (localStorage.getItem("nb-github-repo-url")?.includes(p.githubConfig.repo)) {
+            localStorage.removeItem("nb-github-repo-url");
+            localStorage.removeItem("nb-github-folder");
+          }
+        }
 
-    // Clear project-specific localStorage if it matches
-    if (p.type === "github" && p.githubConfig) {
-      if (localStorage.getItem("nb-github-repo-url")?.includes(p.githubConfig.repo)) {
-        localStorage.removeItem("nb-github-repo-url");
-        localStorage.removeItem("nb-github-folder");
+        setProjects(await getProjects());
+        if (currentProjectId === id) {
+          handleDisconnect();
+        }
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
       }
-    }
-
-    setProjects(await getProjects());
-    if (currentProjectId === id) {
-      handleDisconnect();
-    }
+    );
   };
 
   const handleRenameProject = async (id: string, name: string) => {
@@ -1731,7 +1761,7 @@ export default function App() {
     await saveProject(p);
     setProjects(await getProjects());
     setCurrentProjectId(id);
-    
+
     // Update URL immediately so handleUrlChange doesn't settle early
     const params = new URLSearchParams(window.location.search);
     params.set('project', id);
@@ -1800,7 +1830,7 @@ export default function App() {
     setProjects(await getProjects());
     setCurrentProjectId(id);
 
-    // Update URL immediately
+    // Update URL immediately so handleUrlChange doesn't settle early
     const params = new URLSearchParams(window.location.search);
     params.set('project', id);
     window.history.pushState({}, '', `?${params.toString()}`);
@@ -1827,36 +1857,46 @@ export default function App() {
   // ── Disconnect ────────────────────────────────────────────────────────────────
 
   const handleDisconnect = () => {
+    const performDisconnect = () => {
+      const params = new URLSearchParams(window.location.search);
+      params.delete('project');
+      params.delete('entry');
+      params.delete('resource');
+      window.history.pushState({}, '', `?${params.toString()}`);
+      window.dispatchEvent(new Event('locationchange'));
+
+      setCurrentProjectId(null);
+      setWorkspaceMode(null);
+      setConfig(null);
+      setDirHandle(null);
+      setEntries([]);
+      setResources([]);
+      setOpenFile(null);
+      setLatexContent("");
+      setContentCache(new Map());
+      setNotebookMetadata(EMPTY_METADATA);
+    };
+
     if (workspaceMode === "temporary") {
-      const confirmLeave = window.confirm("You are in a Temporary Workspace. All unsaved changes will be lost. Are you sure you want to leave?");
-      if (!confirmLeave) return;
+      showConfirm(
+        "Leave Temporary Workspace?",
+        "You are in a Temporary Workspace. All unsaved changes will be lost. Are you sure you want to leave?",
+        () => {
+          performDisconnect();
+          setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        },
+        "warning"
+      );
+    } else {
+      performDisconnect();
     }
-
-    // Clear URL params explicitly to prevent re-sync loop
-    const params = new URLSearchParams(window.location.search);
-    params.delete('project');
-    params.delete('entry');
-    params.delete('resource');
-    window.history.pushState({}, '', `?${params.toString()}`);
-    window.dispatchEvent(new Event('locationchange'));
-
-    setCurrentProjectId(null);
-    setWorkspaceMode(null);
-    setConfig(null);
-    setDirHandle(null);
-    setEntries([]);
-    setResources([]);
-    setOpenFile(null);
-    setLatexContent("");
-    setContentCache(new Map());
-    setNotebookMetadata(EMPTY_METADATA);
   };
 
-
   // ── Workspace setup ───────────────────────────────────────────────────────────
+  let pageContent: React.ReactNode = null;
 
   if (isInitializing) {
-    return (
+    pageContent = (
       <div className="min-h-screen bg-nb-bg flex flex-col items-center justify-center font-sans animate-in fade-in duration-500">
         <div className="flex flex-col items-center gap-6">
           <div className="w-20 h-20 rounded-[2.5rem] bg-nb-primary flex items-center justify-center shadow-2xl shadow-nb-primary/30 animate-pulse">
@@ -1874,10 +1914,8 @@ export default function App() {
         </div>
       </div>
     );
-  }
-
-  if (!workspaceMode) {
-    return (
+  } else if (!workspaceMode) {
+    pageContent = (
       <Settings
         projects={projects}
         onSelectProject={handleSelectProject}
@@ -2032,7 +2070,8 @@ export default function App() {
     </div>
   );
 
-  const mainContent = (
+  const mainContent = pageContent || (
+
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 h-14 bg-nb-surface border-b border-nb-outline-variant shrink-0">
@@ -2163,7 +2202,7 @@ export default function App() {
         {openFile === null ? (
           !isConnectingLocal && (
             <WelcomePage
-              workspace={{ mode: workspaceMode, label: workspaceLabel }}
+              workspace={{ mode: workspaceMode as any, label: workspaceLabel }}
               onNewEntry={handleNewEntry}
               onImportEntry={handleImportEntry}
               onDisconnect={handleDisconnect}
@@ -2383,46 +2422,48 @@ export default function App() {
   );
 
   return (
-    <div className="flex h-screen bg-nb-bg overflow-hidden font-sans">
-      {isMobile ? (
-        <div className="flex w-full h-full relative">
-          <div className={`fixed inset-0 z-[150] transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-            <div
-              className="absolute inset-0 bg-black/40"
-              onClick={() => setIsSidebarOpen(false)}
-            />
-            <div className={`absolute top-0 bottom-0 left-0 w-[85%] max-w-[300px] bg-nb-surface-low border-r border-nb-outline-variant flex flex-col shadow-2xl transition-transform duration-300 ease-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-              {sidebarContent}
+    <div className="flex flex-col h-screen w-full bg-nb-bg overflow-hidden font-sans">
+      {pageContent ? pageContent : (
+        isMobile ? (
+          <div className="flex w-full h-full relative">
+            <div className={`fixed inset-0 z-[150] transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+              <div
+                className="absolute inset-0 bg-black/40"
+                onClick={() => setIsSidebarOpen(false)}
+              />
+              <div className={`absolute top-0 bottom-0 left-0 w-[85%] max-w-[300px] bg-nb-surface-low border-r border-nb-outline-variant flex flex-col shadow-2xl transition-transform duration-300 ease-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                {sidebarContent}
+              </div>
+            </div>
+            <div className="flex-1 w-full h-full">
+              {mainContent}
             </div>
           </div>
-          <div className="flex-1 w-full h-full">
-            {mainContent}
-          </div>
-        </div>
-      ) : (
-        <PanelGroup direction="horizontal" className="w-full h-full" id="main-layout-group">
-          <Panel
-            id="sidebar-panel"
-            order={1}
-            ref={sidebarPanelRef}
-            defaultSize={20}
-            minSize={15}
-            maxSize={40}
-            collapsible={true}
-            onCollapse={() => setIsSidebarOpen(false)}
-            onExpand={() => setIsSidebarOpen(true)}
-            className="flex flex-col transition-all duration-300 ease-out"
-          >
-            <div className={`flex-1 flex flex-col transition-all duration-300 ease-out ${!isSidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-              {sidebarContent}
-            </div>
-          </Panel>
-          <PanelResizeHandle id="sidebar-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${!isSidebarOpen ? 'hidden' : ''}`} />
-          <Panel id="main-panel" order={2} defaultSize={isSidebarOpen ? 80 : 100} minSize={30} className="flex flex-col">
-            {mainContent}
-          </Panel>
-        </PanelGroup>
-      )}
+        ) : (
+          <PanelGroup direction="horizontal" className="w-full h-full" id="main-layout-group">
+            <Panel
+              id="sidebar-panel"
+              order={1}
+              ref={sidebarPanelRef}
+              defaultSize={20}
+              minSize={15}
+              maxSize={40}
+              collapsible={true}
+              onCollapse={() => setIsSidebarOpen(false)}
+              onExpand={() => setIsSidebarOpen(true)}
+              className="flex flex-col transition-all duration-300 ease-out"
+            >
+              <div className={`flex-1 flex flex-col transition-all duration-300 ease-out ${!isSidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                {sidebarContent}
+              </div>
+            </Panel>
+            <PanelResizeHandle id="sidebar-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${!isSidebarOpen ? 'hidden' : ''}`} />
+            <Panel id="main-panel" order={2} defaultSize={isSidebarOpen ? 80 : 100} minSize={30} className="flex flex-col">
+              {mainContent}
+            </Panel>
+          </PanelGroup>
+        ))}
+
 
       {/* Notifications */}
       {notification && (
@@ -2439,6 +2480,16 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        variant={confirmDialog.variant}
+      />
     </div>
   );
 }

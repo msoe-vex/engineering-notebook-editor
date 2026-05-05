@@ -16,6 +16,7 @@ import AutocompleteInput from "./AutocompleteInput";
 import { extractResources, extractReferences } from "@/lib/metadata";
 import { ASSETS_DIR } from "@/lib/constants";
 import { NodeSelection } from "@tiptap/pm/state";
+import ConfirmationDialog from "./ConfirmationDialog";
 
 const PHASE_CONFIG: Record<string, { icon: any, color: string, bg: string, border: string, text: string }> = {
   "Define Problem": { icon: Goal, color: "text-blue-500", bg: "bg-blue-500/10", border: "border-blue-500/20", text: "text-blue-600 dark:text-blue-400" },
@@ -856,41 +857,15 @@ const Editor = React.memo(function Editor({
           </div>
         </div>
 
-        {/* ── Delete confirmation ───────────────────────────────────── */}
-        {showDeleteConfirm && (
-          <div className="fixed inset-0 z-[500] flex items-center justify-center bg-nb-secondary/60 backdrop-blur-md px-4" onClick={() => setShowDeleteConfirm(false)}>
-            <div
-              className="bg-nb-surface rounded-2xl p-7 shadow-nb-lg max-w-sm w-full border border-nb-outline-variant animate-in zoom-in-95 duration-200"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0">
-                  <Trash2 size={20} className="text-nb-primary" />
-                </div>
-                <h3 className="font-bold text-sm uppercase tracking-widest text-nb-secondary">Delete Entry?</h3>
-              </div>
-              <p className="text-sm text-nb-on-surface-variant leading-relaxed mb-8">
-                This will permanently remove the entry from your notebook. This action cannot be undone once committed.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteConfirm(false)}
-                  className="flex-1 px-4 py-2.5 rounded-xl border border-nb-outline-variant text-xs font-bold uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-surface-low transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setShowDeleteConfirm(false); onDeleted(filename); }}
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-nb-primary text-white text-xs font-bold uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <ConfirmationDialog
+          isOpen={showDeleteConfirm}
+          title="Delete Entry?"
+          message="This will permanently remove the entry from your notebook. This action cannot be undone once committed."
+          confirmLabel="Delete"
+          onConfirm={() => { setShowDeleteConfirm(false); onDeleted(filename); }}
+          onCancel={() => setShowDeleteConfirm(false)}
+          variant="danger"
+        />
       </div>
     </div>
   );

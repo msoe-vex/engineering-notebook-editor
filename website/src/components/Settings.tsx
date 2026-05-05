@@ -286,7 +286,7 @@ export default function Settings({
                   {!renamingId && (
                     <button
                       onClick={(e) => { e.stopPropagation(); setRenamingId(project.id); setRenameValue(project.name); }}
-                      className="p-2.5 rounded-xl text-nb-on-surface-variant hover:text-nb-primary hover:bg-nb-primary/5 transition-all"
+                      className="p-2.5 rounded-xl text-nb-on-surface-variant hover:text-nb-primary hover:bg-nb-primary/5 transition-all cursor-pointer"
                       title="Rename Project"
                     >
                       <Edit2 size={16} />
@@ -294,14 +294,14 @@ export default function Settings({
                   )}
                   <button
                     onClick={(e) => { e.stopPropagation(); onDeleteProject(project.id); }}
-                    className="p-2.5 rounded-xl text-nb-on-surface-variant hover:text-red-500 hover:bg-red-50 transition-all"
+                    className="p-2.5 rounded-xl text-nb-on-surface-variant hover:text-red-500 hover:bg-red-50 transition-all cursor-pointer"
                     title="Remove Project"
                   >
                     <Trash2 size={16} />
                   </button>
                   <button
                     onClick={() => onSelectProject(project.id)}
-                    className="p-2.5 rounded-xl bg-nb-surface-low text-nb-primary border border-nb-outline-variant/30 hover:bg-nb-primary hover:text-white transition-all shadow-sm"
+                    className="p-2.5 rounded-xl bg-nb-surface-low text-nb-primary border border-nb-outline-variant/30 hover:bg-nb-primary hover:text-white transition-all shadow-sm cursor-pointer"
                   >
                     <ArrowRight size={16} />
                   </button>
