@@ -1305,7 +1305,11 @@ export default function UnifiedEditor({
               return false; // No Ctrl: move cursor
             }
             if (event.ctrlKey || event.metaKey) {
-              window.open(anchor.href, '_blank');
+              const url = anchor.href;
+              setTimeout(() => {
+                const win = window.open(url, '_blank');
+                if (win) win.focus();
+              }, 0);
               return true;
             }
           }
