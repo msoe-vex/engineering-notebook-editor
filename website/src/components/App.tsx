@@ -359,7 +359,7 @@ export default function App() {
     if (code && !isExchangingCode.current) {
       isExchangingCode.current = true;
       setIsInitializing(true);
-      fetch("/api/auth/github", {
+      fetch("/engineering-notebook-editor/api/auth/github", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code }),
