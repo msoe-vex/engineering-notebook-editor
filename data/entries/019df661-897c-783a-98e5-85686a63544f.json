@@ -1,0 +1,40 @@
+{
+  "version": 3,
+  "content": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "Hello world 2!"
+          }
+        ]
+      },
+      {
+        "type": "image",
+        "attrs": {
+          "src": "data/assets/48652ef6f91a27f43dbfa079ed8f0920d11c7200e28c68e2ec15bc190435a5a3.png",
+          "alt": "",
+          "title": "Image title",
+          "width": "27%",
+          "height": null,
+          "id": "019df662-7553-7c11-864e-ff05855f7833",
+          "initials": "",
+          "filePath": "data/assets/48652ef6f91a27f43dbfa079ed8f0920d11c7200e28c68e2ec15bc190435a5a3.png",
+          "caption": "Description"
+        }
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "More text"
+          }
+        ]
+      }
+    ]
+  }
+}
