@@ -23,7 +23,7 @@ import WelcomePage from "./WelcomePage";
 import FileExplorer, { ExplorerFile } from "./FileExplorer";
 import ImagePreview from "./ImagePreview";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { GitBranch, HardDrive, ArrowLeftRight, GitCommitVertical, Loader2, Menu, Sun, Moon, X, BookOpen, Check, AlertTriangle } from "lucide-react";
+import { GitBranch, HardDrive, ArrowLeftRight, GitCommitVertical, Loader2, Menu, Sun, Moon, X, BookOpen, Check, AlertTriangle, ChevronDown } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { saveAs } from "file-saver";
 import { generateUUID, hashContent } from "@/lib/utils";
@@ -213,6 +213,7 @@ export default function App() {
   const [needsPermission, setNeedsPermission] = useState(false);
   const [isConnectingLocal, setIsConnectingLocal] = useState(false);
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
+  const [isPendingCollapsed, setIsPendingCollapsed] = useState(false);
 
   // metadata.json contents
   const [notebookMetadata, setNotebookMetadata] = useState<NotebookMetadata>(EMPTY_METADATA);
@@ -514,11 +515,17 @@ export default function App() {
 
   const stage = useCallback(async (change: Omit<PendingChange, "stagedAt">) => {
     const dbName = getDBName();
+    console.log(`[STAGING] ${change.path} (${change.label}) in ${dbName}`);
+    // If you see many changes, check the caller:
+    // console.trace();
     await stageChange(dbName, { ...change, stagedAt: new Date().toISOString() });
     await refreshPending();
   }, [refreshPending, getDBName]);
 
-  useEffect(() => { refreshPending(); }, [refreshPending]);
+  useEffect(() => { 
+    setPendingChanges([]); // Reset UI during DB switch
+    refreshPending(); 
+  }, [refreshPending]);
 
   // Auto-save effect
   const handleContentChange = useCallback(async (changedPath: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string }) => {
@@ -629,6 +636,7 @@ export default function App() {
 
         // Save assets
         for (const asset of assetsToSave) {
+          console.log(`[STAGING ASSET] ${asset.path} in ${dbName}`);
           await stageChange(dbName, {
             path: asset.path, operation: "upsert", content: asset.base64,
             label: `Asset: ${asset.path.split('/').pop()}`, stagedAt: isoTimestamp()
@@ -637,6 +645,7 @@ export default function App() {
         }
 
         // Save Entry JSON
+        console.log(`[STAGING ENTRY] ${changedPath} in ${dbName}`);
         await stageChange(dbName, {
           path: changedPath, operation: "upsert", content: entryJsonStr,
           label: `Auto-save: ${info.title}`, stagedAt: isoTimestamp()
@@ -644,6 +653,7 @@ export default function App() {
 
         // Save LaTeX
         const latexPath = `${currentLatexDir}/${entryId}.tex`;
+        console.log(`[STAGING LATEX] ${latexPath} in ${dbName}`);
         await stageChange(dbName, {
           path: latexPath, operation: "upsert", content: latex,
           label: `Generate LaTeX: ${info.title}`, stagedAt: isoTimestamp()
@@ -657,6 +667,7 @@ export default function App() {
         if (metaStr === lastRemoteMetadataRef.current) {
           await removeStaged(dbName, currentIndexPath);
         } else {
+          console.log(`[STAGING METADATA] ${currentIndexPath} in ${dbName}`);
           await stageChange(dbName, {
             path: currentIndexPath, operation: "upsert", content: metaStr,
             label: "Auto-save metadata", stagedAt: isoTimestamp()
@@ -667,6 +678,7 @@ export default function App() {
         if (allEntriesTex === lastRemoteAllEntriesRef.current) {
           await removeStaged(dbName, currentAllEntriesPath);
         } else {
+          console.log(`[STAGING ALL_ENTRIES] ${currentAllEntriesPath} in ${dbName}`);
           await stageChange(dbName, {
             path: currentAllEntriesPath, operation: "upsert", content: allEntriesTex,
             label: "Update entry list", stagedAt: isoTimestamp()
@@ -956,7 +968,7 @@ export default function App() {
 
   // ── Select entry ─────────────────────────────────────────────────────────────
 
-  const handleSelectEntry = useCallback(async (file: ExplorerFile) => {
+  const handleSelectEntry = useCallback(async (file: ExplorerFile, silent: boolean = false) => {
     setIsLoading(true);
     if (isMobile) setIsSidebarOpen(false);
     setMobileTab("editor");
@@ -1050,12 +1062,15 @@ export default function App() {
       });
       setLatexContent(latexStr);
     } catch (e) {
-      console.error("Failed to open entry", e);
-      notify("Failed to open entry.", "error");
+      if (!silent) {
+        console.error("Failed to open entry", e);
+        notify("Failed to open entry.", "error");
+      }
+      throw e;
     } finally {
       setIsLoading(false);
     }
-  }, [workspaceMode, dirHandle, config, getDBName]);
+  }, [workspaceMode, dirHandle, config, getDBName, isMobile]);
 
   // ── Select resource ───────────────────────────────────────────────────────────
 
@@ -1120,7 +1135,9 @@ export default function App() {
       const projectId = params.get('project');
 
       // 1. Sync Project
-      if (projectId && !currentProjectId) {
+      if (projectId && projectId !== currentProjectId) {
+        setIsInitializing(true);
+        setIsLoading(true);
         const p = await getProject(projectId);
         if (!active) return;
         if (p) {
@@ -1128,12 +1145,16 @@ export default function App() {
           if (p.type === "github" && p.githubConfig) {
             setConfig(p.githubConfig);
             setWorkspaceMode("github");
+            // Clear volatile DB when switching to a real project
+            deleteProjectDatabase("notebook-volatile").catch(() => {});
           } else if (p.type === "local") {
             const handle = await getProjectHandle(p.id);
             if (handle) {
               setDirHandle(handle);
               setWorkspaceMode("local");
               await checkPermission(handle);
+              // Clear volatile DB when switching to a real project
+              deleteProjectDatabase("notebook-volatile").catch(() => {});
             } else {
               setWorkspaceMode(null);
               setCurrentProjectId(null);
@@ -1162,7 +1183,9 @@ export default function App() {
 
         if (notebookMetadata.entries[entryId]) {
           const filename = `${currentEntriesDir}/${entryId}.json`;
-          await handleSelectEntry({ name: `${entryId}.json`, path: filename });
+          handleSelectEntry({ name: `${entryId}.json`, path: filename }, true).catch(() => {
+            setOpenFile(null);
+          });
           if (!active) return;
         }
       } else if (!entryId && openFile) {
@@ -1171,6 +1194,12 @@ export default function App() {
 
       // 4. Settle initialization
       if (active) {
+        // If we are currently loading or waiting for project mode to set, don't settle yet
+        const isSettleable = projectId && !isLoading && workspaceMode && notebookMetadata !== EMPTY_METADATA;
+        if (projectId && !isSettleable) {
+          return;
+        }
+
         setIsInitializing(false);
       }
     };
@@ -1185,6 +1214,42 @@ export default function App() {
       window.removeEventListener('locationchange', handleUrlChange);
     };
   }, [workspaceMode, currentProjectId, dirHandle, handleSelectEntry, targetResourceId, openFile?.id, notebookMetadata, needsPermission, isLoading]);
+
+  const handleDiscardAll = async () => {
+    const dbName = getDBName();
+    const confirmed = window.confirm("Are you sure you want to discard all uncommitted changes? This cannot be undone.");
+    if (!confirmed) return;
+    
+    await clearAllPending(dbName);
+    await refreshPending();
+    notify("All pending changes discarded.", "success");
+    
+    // Reset any open file state if it was a pending new file
+    if (openFile) {
+      const isNew = pendingChanges.some(p => p.path === openFile.path && p.operation === "upsert");
+      // Note: If it was an update to an existing file, we'll refresh it below.
+      // If it was a purely new file, it's gone from local cache, so close it.
+      if (isNew) setOpenFile(null);
+    }
+
+    // Refresh the explorer to show current remote state
+    if (workspaceMode === "github") await loadGitHubExplorer();
+    else if (workspaceMode === "local") await loadLocalExplorer();
+
+    // Re-select current entry if it's still open to revert to remote version
+    if (openFile) {
+      const params = new URLSearchParams(window.location.search);
+      const entryId = params.get('entry');
+      if (entryId && openFile.id === entryId) {
+        // Check if this entry exists in the remote entries we just fetched
+        const filename = `${currentEntriesDir}/${entryId}.json`;
+        handleSelectEntry({ name: `${entryId}.json`, path: filename }, true).catch(() => {
+          // If it fails silently (e.g. 404 because it was a new entry), just close it
+          setOpenFile(null);
+        });
+      }
+    }
+  };
 
   // Sync Project to URL
   useEffect(() => {
@@ -1554,6 +1619,8 @@ export default function App() {
   // ── Project Actions ─────────────────────────────────────────────────────────
 
   const handleSelectProject = async (id: string) => {
+    setIsInitializing(true);
+    setIsLoading(true);
     const p = await getProject(id);
     if (p) {
       p.lastOpened = isoTimestamp();
@@ -1628,6 +1695,8 @@ export default function App() {
   };
 
   const handleCreateGithub = async (githubConfig: GitHubConfig) => {
+    setIsInitializing(true);
+    setIsLoading(true);
     const fullHash = await hashContent(`github:${githubConfig.owner.toLowerCase()}/${githubConfig.repo.toLowerCase()}`);
     const id = fullHash.slice(0, 32);
     const p: Project = {
@@ -1866,12 +1935,27 @@ export default function App() {
           <div className="mb-4">
             <div className="bg-nb-tertiary/5 rounded-xl p-3 border border-nb-tertiary/10 mb-3 space-y-2">
               <div className="flex items-center gap-3">
-                <div className="w-1.5 h-1.5 rounded-full bg-nb-tertiary animate-pulse" />
-                <span className="text-[9px] font-black tracking-widest text-nb-tertiary uppercase">Pending Changes ({pendingChanges.length})</span>
+                <button 
+                  onClick={() => setIsPendingCollapsed(!isPendingCollapsed)}
+                  className="flex items-center gap-2 flex-1 group"
+                >
+                  <div className="w-1.5 h-1.5 rounded-full bg-nb-tertiary animate-pulse" />
+                  <span className="text-[9px] font-black tracking-widest text-nb-tertiary uppercase flex-1 text-left">Pending Changes ({pendingChanges.length})</span>
+                  <ChevronDown size={12} className={`text-nb-tertiary transition-transform duration-200 ${isPendingCollapsed ? "-rotate-90" : ""}`} />
+                </button>
+                {!isCommitting && (
+                  <button 
+                    onClick={handleDiscardAll}
+                    className="text-[8px] font-bold text-nb-on-surface-variant hover:text-red-500 transition-colors uppercase tracking-widest px-2 py-1 rounded hover:bg-red-50"
+                  >
+                    Discard
+                  </button>
+                )}
               </div>
-              <div className="max-h-24 overflow-y-auto scrollbar-hide space-y-1.5 pl-4.5 border-l border-nb-tertiary/10 ml-0.5">
-                {pendingChanges.slice(0, 5).map(p => (
-                  <div key={p.path} className="text-[8px] font-mono text-nb-on-surface-variant/60 truncate flex gap-2">
+              {!isPendingCollapsed && (
+                <div className="max-h-24 overflow-y-auto scrollbar-hide space-y-1.5 pl-4.5 border-l border-nb-tertiary/10 ml-0.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                  {pendingChanges.slice(0, 5).map(p => (
+                    <div key={p.path} className="text-[8px] font-mono text-nb-on-surface-variant/60 truncate flex gap-2">
                     <span className={`uppercase font-bold ${p.operation === 'delete' ? 'text-red-500/60' : 'text-nb-tertiary/60'}`}>
                       {p.operation === 'delete' ? 'del' : 'upd'}
                     </span>
@@ -1882,14 +1966,15 @@ export default function App() {
                   <div className="text-[8px] italic opacity-40 pl-2">+{pendingChanges.length - 5} more files...</div>
                 )}
               </div>
-            </div>
-            <button
-              onClick={handleCommitAll}
-              disabled={isCommitting || (upserted.length === 0 && deleted.length === 0)}
-              className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[9px] font-bold tracking-widest py-3 rounded-lg transition-all active:scale-[0.98] shadow-lg shadow-nb-tertiary/20 disabled:opacity-30"
-            >
-              {isCommitting ? "Syncing..." : "Sync to GitHub"}
-            </button>
+            )}
+          </div>
+          <button
+            onClick={handleCommitAll}
+            disabled={isCommitting || (upserted.length === 0 && deleted.length === 0)}
+            className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[9px] font-bold tracking-widest py-3 rounded-lg transition-all active:scale-[0.98] shadow-lg shadow-nb-tertiary/20 disabled:opacity-30"
+          >
+            {isCommitting ? "Syncing..." : "Sync to GitHub"}
+          </button>
           </div>
         )}
         <div className="flex items-center justify-between">

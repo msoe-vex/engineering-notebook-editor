@@ -292,7 +292,7 @@ export default function Settings({
                 className="group relative flex items-center gap-4 p-4 rounded-2xl bg-nb-surface border border-nb-outline-variant/30 hover:border-nb-primary/30 hover:shadow-nb-lg transition-all"
               >
                 <div
-                  className="flex-1 cursor-pointer flex items-center gap-4"
+                  className="flex-1 min-w-0 cursor-pointer flex items-center gap-4"
                   onClick={() => onSelectProject(project.id)}
                 >
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105 ${project.type === "github" ? "bg-nb-primary/10 text-nb-primary" :
