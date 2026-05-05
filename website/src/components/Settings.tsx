@@ -33,27 +33,21 @@ export default function Settings({
   const [createType, setCreateType] = useState<"github" | "local" | "memory" | null>(null);
 
   // Form states for GitHub
-  const [githubUrl, setGithubUrl] = useState("");
+  const [repoUrl, setRepoUrl] = useState("");
+  const [folderPath, setFolderPath] = useState("");
 
-  const parseGitHubUrl = (url: string) => {
+  const parseRepoUrl = (url: string) => {
     try {
       const u = new URL(url);
       if (u.hostname !== "github.com") return null;
       const parts = u.pathname.split("/").filter(Boolean);
       if (parts.length < 2) return null;
-
       const owner = parts[0];
-      const repo = parts[1];
-
-      let branch = "main";
-      let path = "";
-
-      if (parts[2] === "tree" && parts.length >= 4) {
-        branch = parts[3];
-        path = parts.slice(4).join("/");
+      let repo = parts[1];
+      if (repo.endsWith(".git")) {
+        repo = repo.slice(0, -4);
       }
-
-      return { owner, repo, branch, path };
+      return { owner, repo };
     } catch {
       return null;
     }
@@ -70,7 +64,8 @@ export default function Settings({
       return;
     }
     // Save current state so we can return to it after redirect
-    localStorage.setItem("nb-github-url", githubUrl);
+    localStorage.setItem("nb-github-repo-url", repoUrl);
+    localStorage.setItem("nb-github-folder", folderPath);
     localStorage.setItem("nb-create-type", "github");
 
     const redirectUri = window.location.origin;
@@ -81,7 +76,8 @@ export default function Settings({
 
   useEffect(() => {
     setMounted(true);
-    setGithubUrl(localStorage.getItem("nb-github-url") || "");
+    setRepoUrl(localStorage.getItem("nb-github-repo-url") || "");
+    setFolderPath(localStorage.getItem("nb-github-folder") || "");
 
     const savedType = localStorage.getItem("nb-create-type");
     if (savedType) {
@@ -165,15 +161,27 @@ export default function Settings({
                     </div>
                   ) : (
                     <>
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black tracking-widest text-nb-on-surface-variant uppercase ml-1">Notebook Folder URL</label>
-                        <input
-                          type="text"
-                          className="w-full bg-nb-surface-low border border-nb-outline-variant/30 p-2.5 rounded-xl text-xs outline-none focus:ring-2 focus:ring-nb-primary/30 transition-all"
-                          value={githubUrl}
-                          onChange={(e) => setGithubUrl(e.target.value)}
-                          placeholder="https://github.com/owner/repo/tree/main/notebook"
-                        />
+                      <div className="space-y-4">
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black tracking-widest text-nb-on-surface-variant uppercase ml-1">Repository URL</label>
+                          <input
+                            type="text"
+                            className="w-full bg-nb-surface-low border border-nb-outline-variant/30 p-2.5 rounded-xl text-xs outline-none focus:ring-2 focus:ring-nb-primary/30 transition-all"
+                            value={repoUrl}
+                            onChange={(e) => setRepoUrl(e.target.value)}
+                            placeholder="https://github.com/owner/repo"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black tracking-widest text-nb-on-surface-variant uppercase ml-1">Project Folder (Optional)</label>
+                          <input
+                            type="text"
+                            className="w-full bg-nb-surface-low border border-nb-outline-variant/30 p-2.5 rounded-xl text-xs outline-none focus:ring-2 focus:ring-nb-primary/30 transition-all"
+                            value={folderPath}
+                            onChange={(e) => setFolderPath(e.target.value)}
+                            placeholder="e.g. notebook (leave empty for root)"
+                          />
+                        </div>
                       </div>
                       <div className="flex items-center justify-between px-1">
                         <div className="flex items-center gap-2 text-[10px] text-nb-primary font-bold">
@@ -188,23 +196,38 @@ export default function Settings({
                         </button>
                       </div>
                       <button
-                        onClick={() => {
-                          const parsed = parseGitHubUrl(githubUrl);
+                        onClick={async () => {
+                          const parsed = parseRepoUrl(repoUrl);
                           if (!parsed) {
-                            alert("Invalid GitHub URL. Please use the format: https://github.com/owner/repo/tree/branch/path");
+                            alert("Invalid Repository URL. Please use the format: https://github.com/owner/repo");
                             return;
                           }
-                          localStorage.setItem("nb-github-url", githubUrl);
                           
-                          const base = parsed.path ? (parsed.path.endsWith('/') ? parsed.path : parsed.path + '/') : "";
-                          onCreateGithub({ 
-                            token: githubToken!, 
-                            owner: parsed.owner, 
-                            repo: parsed.repo, 
-                            branch: parsed.branch,
-                            entriesDir: `${base}entries`, 
-                            resourcesDir: `${base}resources` 
-                          });
+                          try {
+                            // Fetch repo info to get the default branch
+                            const res = await fetch(`https://api.github.com/repos/${parsed.owner}/${parsed.repo}`, {
+                              headers: { "Authorization": `token ${githubToken}` }
+                            });
+                            if (!res.ok) throw new Error("Repository not found");
+                            const repoInfo = await res.json();
+                            const branch = repoInfo.default_branch || "main";
+
+                            localStorage.setItem("nb-github-repo-url", repoUrl);
+                            localStorage.setItem("nb-github-folder", folderPath);
+                            
+                            const base = folderPath.trim() ? (folderPath.trim().endsWith('/') ? folderPath.trim() : folderPath.trim() + '/') : "";
+                            onCreateGithub({ 
+                              token: githubToken!, 
+                              owner: parsed.owner, 
+                              repo: parsed.repo, 
+                              branch,
+                              entriesDir: `${base}entries`, 
+                              resourcesDir: `${base}resources` 
+                            });
+                          } catch (e) {
+                            console.error(e);
+                            alert("Failed to connect: Make sure the repository exists and you have access.");
+                          }
                         }}
                         className="w-full bg-nb-primary hover:bg-nb-primary-dim text-white py-3 rounded-xl font-bold text-xs transition-all active:scale-95 shadow-lg shadow-nb-primary/20"
                       >
