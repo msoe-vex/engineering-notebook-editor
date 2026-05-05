@@ -199,7 +199,8 @@ export default function Settings({
                       </div>
                       <button
                         onClick={async () => {
-                          const parsed = parseRepoUrl(repoUrl);
+                          const trimmedUrl = repoUrl.trim();
+                          const parsed = parseRepoUrl(trimmedUrl);
                           if (!parsed) {
                             alert("Invalid Repository URL. Please use the format: https://github.com/owner/repo");
                             return;
@@ -208,13 +209,18 @@ export default function Settings({
                           try {
                             // Fetch repo info to get the default branch
                             const res = await fetch(`https://api.github.com/repos/${parsed.owner}/${parsed.repo}`, {
-                              headers: { "Authorization": `token ${githubToken}` }
+                              headers: { "Authorization": `Bearer ${githubToken}` }
                             });
-                            if (!res.ok) throw new Error("Repository not found");
+                            
+                            if (!res.ok) {
+                              const errorData = await res.json().catch(() => ({}));
+                              throw new Error(`GitHub API Error (${res.status}): ${errorData.message || "Repository not found or access denied"}`);
+                            }
+
                             const repoInfo = await res.json();
                             const branch = repoInfo.default_branch || "main";
 
-                            localStorage.setItem("nb-github-repo-url", repoUrl);
+                            localStorage.setItem("nb-github-repo-url", trimmedUrl);
                             localStorage.setItem("nb-github-folder", folderPath);
                             
                             const base = folderPath.trim();
@@ -229,9 +235,9 @@ export default function Settings({
                               entriesDir: `${prefix}data/entries`, 
                               resourcesDir: `${prefix}data/assets` 
                             });
-                          } catch (e) {
+                          } catch (e: any) {
                             console.error(e);
-                            alert("Failed to connect: Make sure the repository exists and you have access.");
+                            alert(`Failed to connect: ${e.message}`);
                           }
                         }}
                         className="w-full bg-nb-primary hover:bg-nb-primary-dim text-white py-3 rounded-xl font-bold text-xs transition-all active:scale-95 shadow-lg shadow-nb-primary/20"
