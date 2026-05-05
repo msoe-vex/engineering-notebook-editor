@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTheme } from "next-themes";
 import {
   GitHubConfig, fetchDirectoryTree, fetchFileContent, GitHubFile,
-  saveFile, deleteFile as githubDeleteFile,
+  saveFile, deleteFile as githubDeleteFile, commitChanges, GitChange
 } from "@/lib/github";
 import {
   stageChange, getAllPending, clearAllPending, removeStaged, PendingChange,
@@ -651,6 +651,8 @@ export default function App() {
         metadataSyncTimeoutRef.current = setTimeout(() => {
           setNotebookMetadata(updatedMeta);
         }, 500);
+
+        await refreshPending();
       }
 
       if (assetsToSave.length > 0) {
@@ -1437,16 +1439,20 @@ export default function App() {
       const deletes = all.filter(p => p.operation === "delete");
       const total = all.length;
 
-      for (const change of upserts) {
-        if (!change.content) continue;
+      const gitChanges: GitChange[] = all.map(change => {
         let content = change.content;
-        // base64 data URL -> raw base64 for images
-        if (content.startsWith("data:")) content = content.split(",")[1];
-        await saveFile(config, change.path, content, `Update notebook — ${total} file${total !== 1 ? "s" : ""} changed`);
-      }
-      for (const change of deletes) {
-        try { await githubDeleteFile(config, change.path, `Update notebook — ${total} files changed`); } catch { /* may already not exist */ }
-      }
+        if (content && content.startsWith("data:")) {
+          content = content.split(",")[1];
+        }
+        return {
+          path: change.path,
+          content: change.operation === "delete" ? null : (content ?? ""),
+          isBinary: change.path.includes("resources/") || /\.(png|jpg|jpeg|gif|webp|pdf)$/i.test(change.path)
+        };
+      });
+
+      const message = `Update notebook — ${total} file${total !== 1 ? "s" : ""} changed`;
+      await commitChanges(config, gitChanges, message);
 
       await clearAllPending(dbName);
       await refreshPending();
@@ -1456,6 +1462,7 @@ export default function App() {
       console.error("Commit failed", e);
       notify("Commit failed. Check console for details.", "error");
     } finally {
+      setIsCommitting(false);
       setIsLoading(false);
     }
   }, [config, isCommitting, refreshPending, loadGitHubExplorer, notify]);
@@ -1749,22 +1756,16 @@ export default function App() {
       <div className="p-4 bg-nb-surface border-t border-nb-outline-variant">
         {workspaceMode === "github" && (pendingChanges.length > 0 || isCommitting) && (
           <div className="mb-4">
-            <div className="grid grid-cols-2 gap-2 mb-3">
-              <div className="bg-nb-surface-low rounded-lg p-2.5 border border-nb-outline-variant/30">
-                <span className="block text-[8px] font-bold text-nb-on-surface-variant/80 tracking-widest mb-1">Staged</span>
-                <span className="text-xs font-bold text-nb-on-surface leading-none">{upserted.length}</span>
-              </div>
-              <div className="bg-nb-surface-low rounded-lg p-2.5 border border-nb-outline-variant/30">
-                <span className="block text-[8px] font-bold text-nb-on-surface-variant/80 tracking-widest mb-1">Removed</span>
-                <span className="text-xs font-bold text-nb-on-surface leading-none">{deleted.length}</span>
-              </div>
+            <div className="bg-nb-tertiary/10 rounded-xl p-3 border border-nb-tertiary/20 mb-3 flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-nb-tertiary animate-pulse" />
+              <span className="text-[10px] font-bold text-nb-tertiary tracking-widest uppercase">Uncommitted Changes</span>
             </div>
             <button
               onClick={handleCommitAll}
               disabled={isCommitting || (upserted.length === 0 && deleted.length === 0)}
               className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[9px] font-bold tracking-widest py-3 rounded-lg transition-all active:scale-[0.98] shadow-lg shadow-nb-tertiary/20 disabled:opacity-30"
             >
-              {isCommitting ? "Syncing..." : "Commit Changes"}
+              {isCommitting ? "Syncing..." : "Sync to GitHub"}
             </button>
           </div>
         )}
