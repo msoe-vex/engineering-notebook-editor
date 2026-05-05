@@ -12,6 +12,9 @@ export default function Settings({
   onCreateGithub,
   onCreateLocal,
   onCreateTemporary,
+  githubToken,
+  githubUser,
+  onSignOutGithub,
 }: {
   projects: Project[];
   onSelectProject: (id: string) => void;
@@ -20,6 +23,9 @@ export default function Settings({
   onCreateGithub: (config: GitHubConfig) => void;
   onCreateLocal: (handle: any) => void;
   onCreateTemporary: () => void;
+  githubToken: string | null;
+  githubUser: string | null;
+  onSignOutGithub: () => void;
 }) {
   const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -27,18 +33,61 @@ export default function Settings({
   const [createType, setCreateType] = useState<"github" | "local" | "memory" | null>(null);
 
   // Form states for GitHub
-  const [token, setToken] = useState("");
-  const [owner, setOwner] = useState("");
-  const [repo, setRepo] = useState("");
+  const [githubUrl, setGithubUrl] = useState("");
+
+  const parseGitHubUrl = (url: string) => {
+    try {
+      const u = new URL(url);
+      if (u.hostname !== "github.com") return null;
+      const parts = u.pathname.split("/").filter(Boolean);
+      if (parts.length < 2) return null;
+
+      const owner = parts[0];
+      const repo = parts[1];
+
+      let branch = "main";
+      let path = "";
+
+      if (parts[2] === "tree" && parts.length >= 4) {
+        branch = parts[3];
+        path = parts.slice(4).join("/");
+      }
+
+      return { owner, repo, branch, path };
+    } catch {
+      return null;
+    }
+  };
 
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
+  const GITHUB_CLIENT_ID = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID;
+
+  const handleGithubLogin = () => {
+    if (!GITHUB_CLIENT_ID) {
+      alert("GitHub Client ID not configured in .env.local");
+      return;
+    }
+    // Save current state so we can return to it after redirect
+    localStorage.setItem("nb-github-url", githubUrl);
+    localStorage.setItem("nb-create-type", "github");
+
+    const redirectUri = window.location.origin;
+    const scope = "repo";
+    const url = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${redirectUri}&scope=${scope}`;
+    window.location.href = url;
+  };
+
   useEffect(() => {
     setMounted(true);
-    setToken(localStorage.getItem("nb-github-token") || "");
-    setOwner(localStorage.getItem("nb-github-owner") || "");
-    setRepo(localStorage.getItem("nb-github-repo") || "");
+    setGithubUrl(localStorage.getItem("nb-github-url") || "");
+
+    const savedType = localStorage.getItem("nb-create-type");
+    if (savedType) {
+      setCreateType(savedType as any);
+      localStorage.removeItem("nb-create-type");
+    }
   }, []);
 
   const isDarkMode = resolvedTheme === "dark";
@@ -55,7 +104,7 @@ export default function Settings({
   return (
     <div className="min-h-screen bg-nb-bg p-6 flex flex-col items-center justify-center font-sans">
       <div className="w-full max-w-4xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        
+
         {/* Left Side: Brand & Actions */}
         <div className="lg:col-span-5 flex flex-col gap-8">
           <div className="flex items-center gap-4">
@@ -101,31 +150,68 @@ export default function Settings({
 
               {createType === "github" && (
                 <div className="p-5 rounded-2xl bg-nb-surface border border-nb-primary/20 flex flex-col gap-4 animate-in slide-in-from-top-4 duration-300">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-black tracking-widest text-nb-on-surface-variant uppercase ml-1">Owner</label>
-                      <input type="text" className="w-full bg-nb-surface-low border border-nb-outline-variant/30 p-2.5 rounded-xl text-xs outline-none focus:ring-2 focus:ring-nb-primary/30 transition-all" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="username" />
+                  {!githubToken ? (
+                    <div className="text-center py-4 flex flex-col gap-4">
+                      <p className="text-xs text-nb-on-surface-variant leading-relaxed">
+                        To connect a repository, you first need to sign in with GitHub.
+                      </p>
+                      <button
+                        onClick={handleGithubLogin}
+                        className="w-full bg-nb-primary hover:bg-nb-primary-dim text-white py-3 rounded-xl font-bold text-xs transition-all active:scale-95 shadow-lg shadow-nb-primary/20 flex items-center justify-center gap-2"
+                      >
+                        <GitBranch size={16} />
+                        Sign in with GitHub
+                      </button>
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-black tracking-widest text-nb-on-surface-variant uppercase ml-1">Repo</label>
-                      <input type="text" className="w-full bg-nb-surface-low border border-nb-outline-variant/30 p-2.5 rounded-xl text-xs outline-none focus:ring-2 focus:ring-nb-primary/30 transition-all" value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="notebook" />
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-black tracking-widest text-nb-on-surface-variant uppercase ml-1">Access Token</label>
-                    <input type="password" className="w-full bg-nb-surface-low border border-nb-outline-variant/30 p-2.5 rounded-xl text-xs outline-none focus:ring-2 focus:ring-nb-primary/30 transition-all" value={token} onChange={(e) => setToken(e.target.value)} placeholder="ghp_..." />
-                  </div>
-                  <button
-                    onClick={() => {
-                      localStorage.setItem("nb-github-token", token);
-                      localStorage.setItem("nb-github-owner", owner);
-                      localStorage.setItem("nb-github-repo", repo);
-                      onCreateGithub({ token, owner, repo, entriesDir: "entries", resourcesDir: "resources" });
-                    }}
-                    className="w-full bg-nb-primary hover:bg-nb-primary-dim text-white py-3 rounded-xl font-bold text-xs transition-all active:scale-95 shadow-lg shadow-nb-primary/20"
-                  >
-                    Connect Repository
-                  </button>
+                  ) : (
+                    <>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black tracking-widest text-nb-on-surface-variant uppercase ml-1">Notebook Folder URL</label>
+                        <input
+                          type="text"
+                          className="w-full bg-nb-surface-low border border-nb-outline-variant/30 p-2.5 rounded-xl text-xs outline-none focus:ring-2 focus:ring-nb-primary/30 transition-all"
+                          value={githubUrl}
+                          onChange={(e) => setGithubUrl(e.target.value)}
+                          placeholder="https://github.com/owner/repo/tree/main/notebook"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between px-1">
+                        <div className="flex items-center gap-2 text-[10px] text-nb-primary font-bold">
+                          <Check size={12} />
+                          Signed in as {githubUser || "GitHub User"}
+                        </div>
+                        <button
+                          onClick={onSignOutGithub}
+                          className="text-[9px] font-bold text-nb-on-surface-variant hover:text-red-500 transition-colors uppercase tracking-widest"
+                        >
+                          Sign Out
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const parsed = parseGitHubUrl(githubUrl);
+                          if (!parsed) {
+                            alert("Invalid GitHub URL. Please use the format: https://github.com/owner/repo/tree/branch/path");
+                            return;
+                          }
+                          localStorage.setItem("nb-github-url", githubUrl);
+                          
+                          const base = parsed.path ? (parsed.path.endsWith('/') ? parsed.path : parsed.path + '/') : "";
+                          onCreateGithub({ 
+                            token: githubToken!, 
+                            owner: parsed.owner, 
+                            repo: parsed.repo, 
+                            branch: parsed.branch,
+                            entriesDir: `${base}entries`, 
+                            resourcesDir: `${base}resources` 
+                          });
+                        }}
+                        className="w-full bg-nb-primary hover:bg-nb-primary-dim text-white py-3 rounded-xl font-bold text-xs transition-all active:scale-95 shadow-lg shadow-nb-primary/20"
+                      >
+                        Connect Repository
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -138,7 +224,7 @@ export default function Settings({
                 </div>
                 <div className="flex-1">
                   <h3 className="text-sm font-bold text-nb-on-surface">Temporary Workspace</h3>
-                  <p className="text-[10px] text-nb-on-surface-variant">In-memory only. Lost on reload.</p>
+                  <p className="text-[10px] text-nb-on-surface-variant">In browser only. Lost on reload.</p>
                 </div>
                 <Plus size={16} className="text-nb-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity" />
               </button>
@@ -168,18 +254,17 @@ export default function Settings({
                 key={project.id}
                 className="group relative flex items-center gap-4 p-4 rounded-2xl bg-nb-surface border border-nb-outline-variant/30 hover:border-nb-primary/30 hover:shadow-nb-lg transition-all"
               >
-                <div 
+                <div
                   className="flex-1 cursor-pointer flex items-center gap-4"
                   onClick={() => onSelectProject(project.id)}
                 >
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105 ${
-                    project.type === "github" ? "bg-nb-primary/10 text-nb-primary" : 
-                    project.type === "local" ? "bg-nb-secondary/10 text-nb-secondary" : 
-                    "bg-nb-tertiary/10 text-nb-tertiary"
-                  }`}>
-                    {project.type === "github" ? <GitBranch size={22} /> : 
-                     project.type === "local" ? <Folder size={22} /> : 
-                     <HardDrive size={22} />}
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105 ${project.type === "github" ? "bg-nb-primary/10 text-nb-primary" :
+                      project.type === "local" ? "bg-nb-secondary/10 text-nb-secondary" :
+                        "bg-nb-tertiary/10 text-nb-tertiary"
+                    }`}>
+                    {project.type === "github" ? <GitBranch size={22} /> :
+                      project.type === "local" ? <Folder size={22} /> :
+                        <HardDrive size={22} />}
                   </div>
                   <div className="flex-1 min-w-0">
                     {renamingId === project.id ? (

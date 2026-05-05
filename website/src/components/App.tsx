@@ -176,6 +176,8 @@ export default function App() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [dirHandle, setDirHandle] = useState<any>(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [githubToken, setGithubToken] = useState<string | null>(null);
+  const [githubUser, setGithubUser] = useState<string | null>(null);
 
   // Explorer file lists
   const [entries, setEntries] = useState<ExplorerFile[]>([]);
@@ -343,7 +345,62 @@ export default function App() {
 
   const showPreview = desktopViewMode === "split" || desktopViewMode === "preview";
 
-  useEffect(() => setMounted(true), []);
+  const isExchangingCode = useRef(false);
+
+  useEffect(() => {
+    setMounted(true);
+    setGithubToken(localStorage.getItem("nb-github-token"));
+    setGithubUser(localStorage.getItem("nb-github-user"));
+
+    // Handle GitHub OAuth callback
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    if (code && !isExchangingCode.current) {
+      isExchangingCode.current = true;
+      setIsInitializing(true);
+      fetch("/api/auth/github", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.access_token) {
+            localStorage.setItem("nb-github-token", data.access_token);
+            setGithubToken(data.access_token);
+            
+            // Fetch user info to show who is signed in
+            fetch("https://api.github.com/user", {
+              headers: { "Authorization": `token ${data.access_token}` }
+            })
+            .then(res => res.json())
+            .then(user => {
+              if (user.login) {
+                localStorage.setItem("nb-github-user", user.login);
+                setGithubUser(user.login);
+                notify(`Signed in as ${user.login}`, "success");
+              }
+            })
+            .catch(e => console.error("Failed to fetch GitHub user info", e));
+
+            // Clean up URL
+            const newUrl = new URL(window.location.href);
+            newUrl.searchParams.delete("code");
+            window.history.replaceState({}, "", newUrl.toString());
+          } else if (data.error) {
+            notify(`GitHub sign-in error: ${data.error}`, "error");
+          }
+        })
+        .catch(err => {
+          console.error(err);
+          notify("GitHub sign-in failed connection.", "error");
+        })
+        .finally(() => {
+          setIsInitializing(false);
+          isExchangingCode.current = false;
+        });
+    }
+  }, []);
   const isDarkMode = resolvedTheme === "dark";
 
   // Theme effect handled by next-themes via layout.tsx
@@ -1601,6 +1658,14 @@ export default function App() {
         onCreateGithub={handleCreateGithub}
         onCreateLocal={handleCreateLocal}
         onCreateTemporary={handleCreateTemporary}
+        githubToken={githubToken}
+        githubUser={githubUser}
+        onSignOutGithub={() => {
+          setGithubToken(null);
+          setGithubUser(null);
+          localStorage.removeItem("nb-github-token");
+          localStorage.removeItem("nb-github-user");
+        }}
       />
     );
   }

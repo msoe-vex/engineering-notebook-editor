@@ -4,6 +4,7 @@ export interface GitHubConfig {
   token: string;
   owner: string;
   repo: string;
+  branch: string;
   entriesDir: string;
   resourcesDir: string;
 }
@@ -50,6 +51,7 @@ export const fetchEntries = async (config: GitHubConfig): Promise<GitHubFile[]> 
       owner: config.owner,
       repo: config.repo,
       path: config.entriesDir,
+      ref: config.branch,
     });
 
     if (Array.isArray(response.data)) {
@@ -72,6 +74,7 @@ export const fetchDirectoryTree = async (config: GitHubConfig, path: string = "n
       owner: config.owner,
       repo: config.repo,
       path: path,
+      ref: config.branch,
     });
 
     if (Array.isArray(response.data)) {
@@ -101,6 +104,7 @@ export const fetchFileContent = async (config: GitHubConfig, path: string) => {
     owner: config.owner,
     repo: config.repo,
     path,
+    ref: config.branch,
   });
 
   if (!Array.isArray(response.data) && response.data.type === "file") {
@@ -129,6 +133,7 @@ export const saveFile = async (
         owner: config.owner,
         repo: config.repo,
         path,
+        ref: config.branch,
       });
       if (!Array.isArray(existing.data) && existing.data.type === "file") {
         sha = existing.data.sha;
@@ -145,6 +150,7 @@ export const saveFile = async (
     message,
     content: encodeBase64(content),
     sha,
+    branch: config.branch,
   });
 };
 
@@ -162,6 +168,7 @@ export const deleteFile = async (
         owner: config.owner,
         repo: config.repo,
         path,
+        ref: config.branch,
       });
       if (!Array.isArray(existing.data) && existing.data.type === "file") {
         sha = existing.data.sha;
@@ -181,5 +188,6 @@ export const deleteFile = async (
     path,
     message,
     sha,
+    branch: config.branch,
   });
 };
