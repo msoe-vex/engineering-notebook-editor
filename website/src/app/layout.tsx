@@ -11,6 +11,9 @@ const workSans = Work_Sans({
 export const metadata: Metadata = {
   title: "Engineering Notebook Editor",
   description: "A professional engineering notebook editor for VEX robotics teams.",
+  icons: {
+    icon: "/rr.svg",
+  },
 };
 
 import { ThemeProvider } from "@/components/theme-provider";
