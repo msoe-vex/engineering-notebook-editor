@@ -11,6 +11,17 @@
       "filename": "data/entries/019df657-212d-7ec7-beed-7fd6dba1c088.json",
       "resources": {},
       "isValid": true
+    },
+    "019df661-897c-783a-98e5-85686a63544f": {
+      "id": "019df661-897c-783a-98e5-85686a63544f",
+      "title": "Entry 2",
+      "author": "Andrew Needham",
+      "phase": "Generate Concepts",
+      "createdAt": "2026-05-05T04:24:40.572Z",
+      "updatedAt": "2026-05-05T04:24:57.741Z",
+      "filename": "data/entries/019df661-897c-783a-98e5-85686a63544f.json",
+      "resources": {},
+      "isValid": true
     }
   }
 }
