@@ -568,7 +568,7 @@ export default function Settings({
                               <div className="flex flex-col min-w-0">
                                  <span className="text-[8px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant/60">Target Workspace</span>
                                  <span className="text-[11px] font-mono font-bold text-nb-on-surface truncate">
-                                    {selectedRepo.owner}/{selectedRepo.repo}<span className="text-nb-primary/40">/</span>{folderPath || <span className="opacity-30">root</span>}
+                                    {selectedRepo.owner}/{selectedRepo.repo}<span className="text-nb-primary/40">/</span>{folderPath}
                                  </span>
                               </div>
                            </div>
