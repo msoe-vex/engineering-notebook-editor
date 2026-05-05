@@ -970,7 +970,7 @@ export default function App() {
       const updatedAt = meta?.updatedAt || createdAt;
 
       // 2. Load LaTeX for preview
-      const latexPath = `${LATEX_DIR}/${entryId}.tex`;
+      const latexPath = `${currentLatexDir}/${entryId}.tex`;
       const stagedLatex = (await getAllPending(dbName)).find(p => p.path === latexPath && p.operation === "upsert");
       if (stagedLatex?.content) {
         latexStr = stagedLatex.content;
@@ -1131,7 +1131,7 @@ export default function App() {
         if (notebookMetadata === EMPTY_METADATA) return;
 
         if (notebookMetadata.entries[entryId]) {
-          const filename = `${ENTRIES_DIR}/${entryId}.json`;
+          const filename = `${currentEntriesDir}/${entryId}.json`;
           await handleSelectEntry({ name: `${entryId}.json`, path: filename });
           if (!active) return;
         }
@@ -1542,7 +1542,6 @@ export default function App() {
         localStorage.removeItem("nb-github-folder");
       }
     }
-    localStorage.removeItem("nb-last-author");
 
     setProjects(await getProjects());
     if (currentProjectId === id) {
@@ -1736,7 +1735,7 @@ export default function App() {
   const pendingPathSet = new Set(pendingChanges.filter(p => p.operation === "upsert").map(p => p.path));
   const deletedPathSet = new Set(pendingChanges.filter(p => p.operation === "delete").map(p => p.path));
 
-  const appConfig = config ?? { owner: "Local", repo: "Workspace", token: "", entriesDir: ENTRIES_DIR, resourcesDir: ASSETS_DIR };
+  const appConfig = config ?? { owner: "Local", repo: "Workspace", token: "", entriesDir: currentEntriesDir, resourcesDir: currentAssetsDir };
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
