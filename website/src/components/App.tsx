@@ -8,7 +8,8 @@ import {
 } from "@/lib/github";
 import {
   stageChange, getAllPending, clearAllPending, removeStaged, PendingChange,
-  putResource, getResource, saveWorkspaceHandle, getWorkspaceHandle, clearWorkspaceHandle
+  putResource, getResource, saveWorkspaceHandle, getWorkspaceHandle, clearWorkspaceHandle,
+  Project, getProjects, getProject, saveProject, deleteProject, getProjectHandle, saveProjectHandle, deleteProjectHandle
 } from "@/lib/db";
 import {
   NotebookMetadata, EMPTY_METADATA, EntryMetadata, EntryWrapper,
@@ -169,6 +170,8 @@ const deleteLocalFileAtPath = async (rootHandle: any, path: string) => {
 export default function App() {
   // Workspace state
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [config, setConfig] = useState<GitHubConfig | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [dirHandle, setDirHandle] = useState<any>(null);
@@ -187,6 +190,9 @@ export default function App() {
 
   // Background saving state
   const [savingPaths, setSavingPaths] = useState<Set<string>>(new Set());
+
+  const [isRenamingProject, setIsRenamingProject] = useState(false);
+  const [projectRenameValue, setProjectRenameValue] = useState("");
 
   // Serialized queue for local file system operations to prevent InvalidStateError
   const localWriteQueueRef = useRef<Promise<any>>(Promise.resolve());
@@ -233,28 +239,30 @@ export default function App() {
       const resourceId = params.get('resource');
       const mode = params.get('mode') as WorkspaceMode;
 
-      // 1. Sync Mode (initial load)
-      if (mode && !workspaceMode && (mode === "local" || mode === "github" || mode === "memory")) {
-        if (mode === "github") {
-          const t = localStorage.getItem("nb-github-token");
-          const o = localStorage.getItem("nb-github-owner");
-          const r = localStorage.getItem("nb-github-repo");
-          if (t && o && r) {
-            setConfig({ token: t, owner: o, repo: r, entriesDir: "entries", resourcesDir: "resources" });
-            setWorkspaceMode("github");
-          }
-        } else if (mode === "local") {
-          // Attempt to restore last handle from IndexedDB
-          getWorkspaceHandle().then(handle => {
-            if (handle) {
-              // Note: The browser will still prompt for permission on first interaction
-              setDirHandle(handle);
-              setWorkspaceMode("local");
+      // 1. Sync Project (initial load)
+      const projectId = params.get('project');
+      if (projectId && !currentProjectId) {
+        getProject(projectId).then(async p => {
+          if (p) {
+            setCurrentProjectId(p.id);
+            if (p.type === "github" && p.githubConfig) {
+              setConfig(p.githubConfig);
+              setWorkspaceMode("github");
+            } else if (p.type === "local") {
+              const handle = await getProjectHandle(p.id);
+              if (handle) {
+                setDirHandle(handle);
+                setWorkspaceMode("local");
+              } else {
+                // If handle lost, we might need to go to settings
+                setWorkspaceMode(null);
+                setCurrentProjectId(null);
+              }
+            } else if (p.type === "memory") {
+              setWorkspaceMode("memory");
             }
-          });
-        } else {
-          setWorkspaceMode(mode);
-        }
+          }
+        });
       }
 
       // 2. Sync Resources
@@ -281,25 +289,30 @@ export default function App() {
     };
   }, [workspaceMode, targetResourceId, openFile?.id, notebookMetadata]);
 
-  // Sync Workspace Mode to URL
+  // Sync Project to URL
   useEffect(() => {
-    if (workspaceMode) {
-      const params = new URLSearchParams(window.location.search);
-      let changed = false;
-      if (params.get('mode') !== workspaceMode) {
-        params.set('mode', workspaceMode);
-        changed = true;
+    const params = new URLSearchParams(window.location.search);
+    if (currentProjectId) {
+      if (params.get('project') !== currentProjectId) {
+        params.set('project', currentProjectId);
+        window.history.replaceState({}, '', `?${params.toString()}`);
+        window.dispatchEvent(new Event('locationchange'));
       }
-      if (workspaceMode === "local" && dirHandle && params.get('folder') !== dirHandle.name) {
-        params.set('folder', dirHandle.name);
-        changed = true;
-      }
-      if (changed) {
+    } else {
+      if (params.has('project')) {
+        params.delete('project');
+        params.delete('entry');
+        params.delete('resource');
         window.history.replaceState({}, '', `?${params.toString()}`);
         window.dispatchEvent(new Event('locationchange'));
       }
     }
-  }, [workspaceMode, dirHandle]);
+  }, [currentProjectId]);
+
+  // Load projects on mount
+  useEffect(() => {
+    getProjects().then(setProjects);
+  }, []);
 
   // Load initial author from localStorage
   useEffect(() => {
@@ -1302,19 +1315,110 @@ export default function App() {
     }
   }, [config, isCommitting, refreshPending, loadGitHubExplorer, notify]);
 
+  // ── Project Actions ─────────────────────────────────────────────────────────
+
+  const handleSelectProject = async (id: string) => {
+    const p = await getProject(id);
+    if (p) {
+      p.lastOpened = isoTimestamp();
+      await saveProject(p);
+      setProjects(await getProjects());
+      
+      setCurrentProjectId(p.id);
+      if (p.type === "github" && p.githubConfig) {
+        setConfig(p.githubConfig);
+        setWorkspaceMode("github");
+      } else if (p.type === "local") {
+        const handle = await getProjectHandle(p.id);
+        if (handle) {
+          setDirHandle(handle);
+          setWorkspaceMode("local");
+        } else {
+          notify("Local folder handle not found. Please re-open.", "error");
+        }
+      } else if (p.type === "memory") {
+        setWorkspaceMode("memory");
+      }
+    }
+  };
+
+  const handleDeleteProject = async (id: string) => {
+    await deleteProject(id);
+    await deleteProjectHandle(id);
+    setProjects(await getProjects());
+    if (currentProjectId === id) {
+      handleDisconnect();
+    }
+  };
+
+  const handleRenameProject = async (id: string, name: string) => {
+    const p = await getProject(id);
+    if (p) {
+      p.name = name;
+      await saveProject(p);
+      setProjects(await getProjects());
+    }
+  };
+
+  const handleCreateGithub = async (githubConfig: GitHubConfig) => {
+    const id = generateUUID();
+    const p: Project = {
+      id,
+      name: `${githubConfig.owner}/${githubConfig.repo}`,
+      type: "github",
+      lastOpened: isoTimestamp(),
+      githubConfig
+    };
+    await saveProject(p);
+    setProjects(await getProjects());
+    setCurrentProjectId(id);
+    setConfig(githubConfig);
+    setWorkspaceMode("github");
+  };
+
+  const handleCreateLocal = async (handle: FileSystemDirectoryHandle) => {
+    const id = generateUUID();
+    const p: Project = {
+      id,
+      name: handle.name,
+      type: "local",
+      lastOpened: isoTimestamp(),
+      folderName: handle.name
+    };
+    await saveProject(p);
+    await saveProjectHandle(id, handle);
+    setProjects(await getProjects());
+    setCurrentProjectId(id);
+    setDirHandle(handle);
+    setWorkspaceMode("local");
+  };
+
+  const handleCreateMemory = async () => {
+    const id = generateUUID();
+    const p: Project = {
+      id,
+      name: "Temporary Workspace",
+      type: "memory",
+      lastOpened: isoTimestamp()
+    };
+    await saveProject(p);
+    setProjects(await getProjects());
+    setCurrentProjectId(id);
+    setWorkspaceMode("memory");
+  };
+
   // ── Disconnect ────────────────────────────────────────────────────────────────
 
   const handleDisconnect = () => {
-    // Clear URL params
+    // Clear URL params explicitly to prevent re-sync loop
     const params = new URLSearchParams(window.location.search);
-    params.delete('mode');
+    params.delete('project');
     params.delete('entry');
     params.delete('resource');
-    params.delete('folder');
     window.history.pushState({}, '', `?${params.toString()}`);
     window.dispatchEvent(new Event('locationchange'));
 
-    clearWorkspaceHandle();
+    setCurrentProjectId(null);
     setWorkspaceMode(null);
     setConfig(null);
     setDirHandle(null);
@@ -1332,13 +1436,13 @@ export default function App() {
   if (!workspaceMode) {
     return (
       <Settings
-        onSave={(cfg) => { setConfig(cfg); setWorkspaceMode("github"); }}
-        onWorkOffline={() => setWorkspaceMode("memory")}
-        onOpenLocalFolder={(handle) => { 
-          saveWorkspaceHandle(handle);
-          setDirHandle(handle); 
-          setWorkspaceMode("local"); 
-        }}
+        projects={projects}
+        onSelectProject={handleSelectProject}
+        onDeleteProject={handleDeleteProject}
+        onRenameProject={handleRenameProject}
+        onCreateGithub={handleCreateGithub}
+        onCreateLocal={handleCreateLocal}
+        onCreateMemory={handleCreateMemory}
       />
     );
   }
@@ -1479,9 +1583,39 @@ export default function App() {
             </button>
           </div>
         ) : (
-          <span className="text-sm font-semibold text-nb-on-surface truncate max-w-[200px]">
-            {openFile?.viewMode === "entry" ? (openFile.title || "Untitled Entry") : (openFile ? openFile.name : 'Engineering Notebook')}
-          </span>
+          <div className="flex-1 flex justify-center min-w-0 px-4">
+            {isRenamingProject ? (
+              <input
+                autoFocus
+                type="text"
+                value={projectRenameValue}
+                onChange={(e) => setProjectRenameValue(e.target.value)}
+                onBlur={() => setIsRenamingProject(false)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    if (currentProjectId) handleRenameProject(currentProjectId, projectRenameValue);
+                    setIsRenamingProject(false);
+                  }
+                  if (e.key === 'Escape') setIsRenamingProject(false);
+                }}
+                className="bg-nb-surface-low border border-nb-primary/30 px-3 py-1 rounded-lg text-sm font-bold text-nb-on-surface outline-none focus:ring-2 focus:ring-nb-primary/30 w-full max-w-[300px]"
+              />
+            ) : (
+              <span 
+                onClick={() => {
+                  const p = projects.find(p => p.id === currentProjectId);
+                  if (p) {
+                    setProjectRenameValue(p.name);
+                    setIsRenamingProject(true);
+                  }
+                }}
+                className="text-sm font-bold text-nb-on-surface truncate max-w-[300px] cursor-pointer hover:text-nb-primary transition-colors px-2 py-1 rounded-md hover:bg-nb-surface-low"
+                title="Click to rename project"
+              >
+                {projects.find(p => p.id === currentProjectId)?.name || "Engineering Notebook"}
+              </span>
+            )}
+          </div>
         )}
 
         <div className="flex items-center gap-2">
@@ -1598,6 +1732,14 @@ export default function App() {
                 }}
                 onImageUpload={handleImageUploaded}
                 onDownloadPortable={handleDownloadPortable}
+                onClose={() => {
+                  const params = new URLSearchParams(window.location.search);
+                  params.delete('entry');
+                  params.delete('resource');
+                  window.history.pushState({}, '', `?${params.toString()}`);
+                  window.dispatchEvent(new Event('locationchange'));
+                  setOpenFile(null);
+                }}
                 dbName={getDBName()}
                 isSaving={savingPaths.has(openFile.path)}
                 notebookMetadata={notebookMetadata}
@@ -1682,7 +1824,14 @@ export default function App() {
                 }}
                 onImageUpload={handleImageUploaded}
                 onDownloadPortable={handleDownloadPortable}
-                onClose={() => setOpenFile(null)}
+                onClose={() => {
+                  const params = new URLSearchParams(window.location.search);
+                  params.delete('entry');
+                  params.delete('resource');
+                  window.history.pushState({}, '', `?${params.toString()}`);
+                  window.dispatchEvent(new Event('locationchange'));
+                  setOpenFile(null);
+                }}
                 dbName={getDBName()}
                 isSaving={savingPaths.has(openFile.path)}
                 notebookMetadata={notebookMetadata}
