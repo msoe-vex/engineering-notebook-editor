@@ -28,7 +28,7 @@ import { ImperativePanelHandle } from "react-resizable-panels";
 import { saveAs } from "file-saver";
 import { generateUUID, hashContent } from "@/lib/utils";
 import { generateEntryLatex, generateAllEntriesLatex } from "@/lib/latex";
-import { extractImagePaths, extractResources } from "@/lib/metadata";
+import { extractImagePaths, extractResources, extractReferences, validateNotebookIntegrity } from "@/lib/metadata";
 import { ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, INDEX_PATH, ALL_ENTRIES_PATH } from "@/lib/constants";
 import ReferenceSearch from "./ReferenceSearch";
 
@@ -369,23 +369,23 @@ export default function App() {
           if (data.access_token) {
             localStorage.setItem("nb-github-token", data.access_token);
             setGithubToken(data.access_token);
-            
+
             // Fetch user info to show who is signed in
             fetch("https://api.github.com/user", {
-              headers: { 
+              headers: {
                 "Authorization": `Bearer ${data.access_token}`,
                 "X-GitHub-Api-Version": "2026-03-10"
               }
             })
-            .then(res => res.json())
-            .then(user => {
-              if (user.login) {
-                localStorage.setItem("nb-github-user", user.login);
-                setGithubUser(user.login);
-                notify(`Signed in as ${user.login}`, "success");
-              }
-            })
-            .catch(e => console.error("Failed to fetch GitHub user info", e));
+              .then(res => res.json())
+              .then(user => {
+                if (user.login) {
+                  localStorage.setItem("nb-github-user", user.login);
+                  setGithubUser(user.login);
+                  notify(`Signed in as ${user.login}`, "success");
+                }
+              })
+              .catch(e => console.error("Failed to fetch GitHub user info", e));
 
             // Clean up URL
             const newUrl = new URL(window.location.href);
@@ -407,7 +407,7 @@ export default function App() {
   // ── Dynamic Paths ──────────────────────────────────────────────────────────
   const currentEntriesDir = useMemo(() => (workspaceMode === "github" && config) ? config.entriesDir : ENTRIES_DIR, [workspaceMode, config]);
   const currentAssetsDir = useMemo(() => (workspaceMode === "github" && config) ? config.resourcesDir : ASSETS_DIR, [workspaceMode, config]);
-  
+
   const getGitBasePrefix = useCallback(() => {
     if (workspaceMode === "github" && config?.baseDir) {
       return config.baseDir.endsWith('/') ? config.baseDir : config.baseDir + '/';
@@ -458,7 +458,8 @@ export default function App() {
         updatedAt: meta?.updatedAt || meta?.createdAt || "",
         id,
         isSaving: savingPaths.has(e.path),
-        isValid: meta?.isValid !== false // Default to true if not present, but check if explicitly false
+        isValid: meta?.isValid !== false, // Default to true if not present, but check if explicitly false
+        validationErrors: meta?.validationErrors
       };
     });
 
@@ -521,9 +522,9 @@ export default function App() {
     await refreshPending();
   }, [refreshPending, getDBName]);
 
-  useEffect(() => { 
+  useEffect(() => {
     setPendingChanges([]); // Reset UI during DB switch
-    refreshPending(); 
+    refreshPending();
   }, [refreshPending]);
 
   // Auto-save effect
@@ -556,6 +557,7 @@ export default function App() {
 
     const contentObj = parseContent(tiptapContent);
     const resources = contentObj ? extractResources(contentObj) : {};
+    const references = contentObj ? extractReferences(contentObj) : [];
 
     const entryMeta: EntryMetadata = {
       id: entryId,
@@ -563,7 +565,8 @@ export default function App() {
       createdAt: openFile?.path === changedPath ? openFile.createdAt : (notebookMetadataRef.current.entries?.[entryId]?.createdAt || isoTimestamp()),
       updatedAt: isoTimestamp(),
       filename: changedPath,
-      resources
+      resources,
+      references
     };
 
     if (info.author) {
@@ -1146,7 +1149,7 @@ export default function App() {
             setConfig(p.githubConfig);
             setWorkspaceMode("github");
             // Clear volatile DB when switching to a real project
-            deleteProjectDatabase("notebook-volatile").catch(() => {});
+            deleteProjectDatabase("notebook-volatile").catch(() => { });
           } else if (p.type === "local") {
             const handle = await getProjectHandle(p.id);
             if (handle) {
@@ -1154,7 +1157,7 @@ export default function App() {
               setWorkspaceMode("local");
               await checkPermission(handle);
               // Clear volatile DB when switching to a real project
-              deleteProjectDatabase("notebook-volatile").catch(() => {});
+              deleteProjectDatabase("notebook-volatile").catch(() => { });
             } else {
               setWorkspaceMode(null);
               setCurrentProjectId(null);
@@ -1203,8 +1206,8 @@ export default function App() {
         const projectMatches = projectId === currentProjectId;
         const configReady = workspaceMode === "github" ? !!config : (workspaceMode === "local" ? !!dirHandle : true);
         const metaReady = notebookMetadata !== EMPTY_METADATA;
-        
-        const isSettleable = projectId 
+
+        const isSettleable = projectId
           ? (projectMatches && !isLoading && !!workspaceMode && configReady && metaReady)
           : (!isLoading && !currentProjectId); // If no project in URL, we can only settle if we aren't loading one and have no current project
 
@@ -1236,11 +1239,11 @@ export default function App() {
     const dbName = getDBName();
     const confirmed = window.confirm("Are you sure you want to discard all uncommitted changes? This cannot be undone.");
     if (!confirmed) return;
-    
+
     await clearAllPending(dbName);
     await refreshPending();
     notify("All pending changes discarded.", "success");
-    
+
     // Reset any open file state if it was a pending new file
     if (openFile) {
       const isNew = pendingChanges.some(p => p.path === openFile.path && p.operation === "upsert");
@@ -1498,8 +1501,9 @@ export default function App() {
   // ── Resource delete (cascades to entries) ────────────────────────────────────
 
   const handleDeleteResource = useCallback(async (file: ExplorerFile) => {
-    // Update metadata
-    const updatedMeta = removeEntryFromMetadata(notebookMetadata, file.path); // Use same helper or just remove from list
+    // When a resource is deleted, we just need to re-validate everything
+    // because entries might have been pointing to it.
+    const updatedMeta = validateNotebookIntegrity(notebookMetadata);
     setNotebookMetadata(updatedMeta);
     const metaStr = JSON.stringify(updatedMeta, null, 2);
 
@@ -1516,7 +1520,7 @@ export default function App() {
       const isNew = !!staged; // For resources, if it's staged as upsert, it's likely new or updated
 
       await removeStaged(dbName, file.path);
-      
+
       // Only stage delete if it wasn't just a new upload
       // Note: This is simpler than entries because resources aren't "updated" in place as often
       if (!isNew) {
@@ -1614,13 +1618,13 @@ export default function App() {
         return `- ${op}: ${p.path}`;
       }).join("\n");
       const message = `Update notebook: ${total} file${total !== 1 ? "s" : ""} changed\n\nSummary:\n${fileList}`;
-      
+
       await commitChanges(config, gitChanges, message);
 
       await clearAllPending(dbName);
       lastRemoteMetadataRef.current = all.find(p => p.path === currentIndexPath)?.content || lastRemoteMetadataRef.current;
       lastRemoteAllEntriesRef.current = all.find(p => p.path === currentAllEntriesPath)?.content || lastRemoteAllEntriesRef.current;
-      
+
       await refreshPending();
       await loadGitHubExplorer();
       notify("Successfully committed all changes to GitHub.", "success");
@@ -1959,7 +1963,7 @@ export default function App() {
           <div className="mb-4">
             <div className="bg-nb-tertiary/5 rounded-xl p-3 border border-nb-tertiary/10 mb-3 space-y-2">
               <div className="flex items-center gap-3">
-                <button 
+                <button
                   onClick={() => setIsPendingCollapsed(!isPendingCollapsed)}
                   className="flex items-center gap-2 flex-1 group"
                 >
@@ -1968,7 +1972,7 @@ export default function App() {
                   <ChevronDown size={12} className={`text-nb-tertiary transition-transform duration-200 ${isPendingCollapsed ? "-rotate-90" : ""}`} />
                 </button>
                 {!isCommitting && (
-                  <button 
+                  <button
                     onClick={handleDiscardAll}
                     className="text-[8px] font-bold text-nb-on-surface-variant hover:text-red-500 transition-colors uppercase tracking-widest px-2 py-1 rounded hover:bg-red-50"
                   >
@@ -1980,25 +1984,25 @@ export default function App() {
                 <div className="max-h-24 overflow-y-auto scrollbar-hide space-y-1.5 pl-4.5 border-l border-nb-tertiary/10 ml-0.5 animate-in fade-in slide-in-from-top-1 duration-200">
                   {pendingChanges.slice(0, 5).map(p => (
                     <div key={p.path} className="text-[8px] font-mono text-nb-on-surface-variant/60 truncate flex gap-2">
-                    <span className={`uppercase font-bold ${p.operation === 'delete' ? 'text-red-500/60' : 'text-nb-tertiary/60'}`}>
-                      {p.operation === 'delete' ? 'del' : 'upd'}
-                    </span>
-                    <span className="truncate">{p.path.split('/').pop()}</span>
-                  </div>
-                ))}
-                {pendingChanges.length > 5 && (
-                  <div className="text-[8px] italic opacity-40 pl-2">+{pendingChanges.length - 5} more files...</div>
-                )}
-              </div>
-            )}
-          </div>
-          <button
-            onClick={handleCommitAll}
-            disabled={isCommitting || (upserted.length === 0 && deleted.length === 0)}
-            className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[9px] font-bold tracking-widest py-3 rounded-lg transition-all active:scale-[0.98] shadow-lg shadow-nb-tertiary/20 disabled:opacity-30"
-          >
-            {isCommitting ? "Syncing..." : "Sync to GitHub"}
-          </button>
+                      <span className={`uppercase font-bold ${p.operation === 'delete' ? 'text-red-500/60' : 'text-nb-tertiary/60'}`}>
+                        {p.operation === 'delete' ? 'del' : 'upd'}
+                      </span>
+                      <span className="truncate">{p.path.split('/').pop()}</span>
+                    </div>
+                  ))}
+                  {pendingChanges.length > 5 && (
+                    <div className="text-[8px] italic opacity-40 pl-2">+{pendingChanges.length - 5} more files...</div>
+                  )}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={handleCommitAll}
+              disabled={isCommitting || (upserted.length === 0 && deleted.length === 0)}
+              className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[9px] font-bold tracking-widest py-3 rounded-lg transition-all active:scale-[0.98] shadow-lg shadow-nb-tertiary/20 disabled:opacity-30"
+            >
+              {isCommitting ? "Syncing..." : "Sync to GitHub"}
+            </button>
           </div>
         )}
         <div className="flex items-center justify-between">

@@ -168,6 +168,20 @@ body {
   opacity: 1;
 }
 
+.nb-broken-link {
+  text-decoration: underline wavy #f59e0b !important;
+  text-decoration-thickness: 1.5px !important;
+  text-underline-offset: 4px !important;
+  color: #d97706 !important;
+}
+
+.nb-broken-link::after {
+  content: " \26a0"; /* Warning symbol */
+  font-size: 1.1em;
+  color: #f59e0b;
+  vertical-align: middle;
+}
+
 .ProseMirror-selectednode {
   outline: none !important;
   box-shadow: none !important;

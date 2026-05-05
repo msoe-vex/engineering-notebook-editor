@@ -30,6 +30,8 @@ export interface EntryMetadata {
   filename: string; // Path to the entry file (e.g. "entries/uuid.json")
   resources?: Record<string, { title: string, caption: string, type: string }>; // block uuid -> metadata
   isValid?: boolean;
+  references?: string[]; // List of target UUIDs this entry points to
+  validationErrors?: string[]; // Detailed messages for the UI
 }
 
 export interface EntryWrapper {
@@ -97,6 +99,36 @@ export function extractResources(doc: TipTapDoc): Record<string, { title: string
   
   walk(doc);
   return resources;
+}
+
+/** Walk every node and extract internal references (link resourceIds and #uuid fragments). */
+export function extractReferences(doc: TipTapDoc): string[] {
+  const refs = new Set<string>();
+
+  function walk(node: any) {
+    if (!node) return;
+
+    // Check marks for links
+    if (Array.isArray(node.marks)) {
+      for (const mark of node.marks) {
+        if (mark.type === "link") {
+          const { href, resourceId } = mark.attrs || {};
+          if (resourceId) {
+            refs.add(resourceId);
+          } else if (href?.startsWith("#")) {
+            refs.add(href.substring(1));
+          }
+        }
+      }
+    }
+
+    if (Array.isArray(node.content)) {
+      node.content.forEach(walk);
+    }
+  }
+
+  walk(doc);
+  return Array.from(refs);
 }
 
 /**
@@ -217,22 +249,80 @@ export function hydrateAssets(doc: any, assetCache: Map<string, string>): any {
   return walk(doc);
 }
 
-// ─── notebook.json helpers ────────────────────────────────────────────────────/** Rebuild the index for a single entry. */
+// ─── notebook.json helpers ────────────────────────────────────────────────────
+
+/** Rebuild the index for a single entry. */
 export function updateEntryInIndex(
   metadata: NotebookMetadata,
   entryId: string,
   info: EntryMetadata
 ): NotebookMetadata {
-
-  return {
+  const next = {
     ...metadata,
     entries: { 
       ...metadata.entries, 
-      [entryId]: {
-        ...info,
-        isValid: isEntryValid(info)
-      } 
+      [entryId]: info
     }
+  };
+
+  // Run global integrity check to update isValid/validationErrors for all affected entries
+  return validateNotebookIntegrity(next);
+}
+
+/** 
+ * Scans the entire notebook metadata and evaluates the integrity of every entry.
+ * Checks for missing required fields, empty resource metadata, and dead internal links.
+ */
+export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookMetadata {
+  const newEntries = { ...metadata.entries };
+  
+  // 1. Build a global set of all existing IDs (entries and resources)
+  const existingIds = new Set<string>();
+  for (const entry of Object.values(metadata.entries)) {
+    existingIds.add(entry.id);
+    if (entry.resources) {
+      for (const resId of Object.keys(entry.resources)) {
+        existingIds.add(resId);
+      }
+    }
+  }
+
+  // 2. Validate each entry
+  for (const [id, entry] of Object.entries(newEntries)) {
+    const errors: string[] = [];
+
+    // Check basic metadata
+    if (!entry.title?.trim()) errors.push("Missing title");
+    if (!entry.author?.trim()) errors.push("Missing author");
+    if (!entry.phase?.trim()) errors.push("Missing phase");
+
+    // Check local resources
+    if (entry.resources) {
+      for (const [resId, res] of Object.entries(entry.resources)) {
+        if (!res.title?.trim()) errors.push(`Resource "${resId}" missing title`);
+        if (!res.caption?.trim()) errors.push(`Resource "${resId}" missing caption`);
+      }
+    }
+
+    // Check internal references
+    if (entry.references) {
+      for (const refId of entry.references) {
+        if (!existingIds.has(refId)) {
+          errors.push(`Broken reference to "${refId}"`);
+        }
+      }
+    }
+
+    newEntries[id] = {
+      ...entry,
+      isValid: errors.length === 0,
+      validationErrors: errors
+    };
+  }
+
+  return {
+    ...metadata,
+    entries: newEntries
   };
 }
 
@@ -258,7 +348,9 @@ export function removeEntryFromMetadata(
 ): NotebookMetadata {
   const newEntries = { ...metadata.entries };
   delete newEntries[entryId];
-  return { ...metadata, entries: newEntries };
+  
+  const next = { ...metadata, entries: newEntries };
+  return validateNotebookIntegrity(next);
 }
 
 /** Rename an entry in the metadata index. */
@@ -272,7 +364,9 @@ export function renameEntryInMetadata(
     newEntries[newId] = newEntries[oldId];
     delete newEntries[oldId];
   }
-  return { ...metadata, entries: newEntries };
+  
+  const next = { ...metadata, entries: newEntries };
+  return validateNotebookIntegrity(next);
 }
 
 /**

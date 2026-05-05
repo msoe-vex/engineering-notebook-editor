@@ -13,7 +13,7 @@ import {
 import { generateUUID, hashContent, getExtensionFromDataUrl } from "@/lib/utils";
 import { generateEntryLatex } from "@/lib/latex";
 import AutocompleteInput from "./AutocompleteInput";
-import { extractResources } from "@/lib/metadata";
+import { extractResources, extractReferences } from "@/lib/metadata";
 import { ASSETS_DIR } from "@/lib/constants";
 import { NodeSelection } from "@tiptap/pm/state";
 
@@ -126,12 +126,36 @@ const Editor = React.memo(function Editor({
     if (!title?.trim() || !author?.trim() || !phase?.trim()) return false;
     if (!editor) return true;
 
-    const resources = extractResources(editor.getJSON());
+    const doc = editor.getJSON();
+    
+    // Check resources
+    const resources = extractResources(doc);
     for (const res of Object.values(resources)) {
       if (!res.title?.trim() || !res.caption?.trim()) return false;
     }
+
+    // Check references
+    const refs = extractReferences(doc);
+    if (refs.length > 0 && notebookMetadata?.entries) {
+      // Build set of all existing IDs
+      const existingIds = new Set<string>();
+      for (const entry of Object.values(notebookMetadata.entries)) {
+        const e = entry as any;
+        existingIds.add(e.id);
+        if (e.resources) {
+          for (const resId of Object.keys(e.resources)) {
+            existingIds.add(resId);
+          }
+        }
+      }
+
+      for (const refId of refs) {
+        if (!existingIds.has(refId)) return false;
+      }
+    }
+
     return true;
-  }, [title, author, phase, editor]);
+  }, [title, author, phase, editor, notebookMetadata]);
 
   // Immediate validation effect
   useEffect(() => {
@@ -532,8 +556,13 @@ const Editor = React.memo(function Editor({
               />
             </div>
 
-            {!localIsValid && (
-              <div className="shrink-0 text-amber-500 animate-pulse mr-4" title="Incomplete metadata or resource captions">
+            {(!localIsValid || (notebookMetadata?.entries?.[entryId]?.isValid === false)) && (
+              <div 
+                className="shrink-0 text-amber-500 animate-pulse mr-4" 
+                title={notebookMetadata?.entries?.[entryId]?.validationErrors?.length > 0 
+                  ? `Validation errors:\n- ${notebookMetadata.entries[entryId].validationErrors.join('\n- ')}`
+                  : "Incomplete metadata or resource captions"}
+              >
                 <AlertTriangle size={20} />
               </div>
             )}

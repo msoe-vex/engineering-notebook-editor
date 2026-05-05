@@ -15,6 +15,7 @@ export interface ExplorerFile {
   timestamp?: string;
   updatedAt?: string;
   isValid?: boolean;
+  validationErrors?: string[];
 }
 
 interface FileExplorerProps {
@@ -100,7 +101,9 @@ function FileRow({ file, isSelected, isPending, isDeleted, icon, isValid = true,
       {!isValid && !isDeleted && (
         <div
           className={`shrink-0 w-6 h-6 rounded-lg flex items-center justify-center animate-pulse ${isSelected ? 'bg-white/20 text-white' : 'bg-amber-500/10 text-amber-500'}`}
-          title="Incomplete entry metadata or resource captions"
+          title={file.validationErrors && file.validationErrors.length > 0 
+            ? `Validation errors:\n- ${file.validationErrors.join('\n- ')}` 
+            : "Incomplete entry metadata or resource captions"}
         >
           <AlertTriangle size={12} />
         </div>

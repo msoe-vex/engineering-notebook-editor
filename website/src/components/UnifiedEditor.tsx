@@ -159,6 +159,60 @@ const PrismHighlightPlugin = new Plugin({
   },
 });
 
+function getIntegrityDecorations(doc: any, metadata: any) {
+  const decorations: Decoration[] = [];
+  if (!metadata?.entries) return DecorationSet.create(doc, []);
+
+  const validIds = new Set<string>();
+  for (const entry of Object.values(metadata.entries)) {
+    const e = entry as any;
+    validIds.add(e.id);
+    if (e.resources) {
+      for (const resId of Object.keys(e.resources)) {
+        validIds.add(resId);
+      }
+    }
+  }
+
+  doc.descendants((node: any, pos: number) => {
+    if (node.marks) {
+      for (const mark of node.marks) {
+        if (mark.type.name === 'link') {
+          const { resourceId, href } = mark.attrs || {};
+          const targetId = resourceId || (href?.startsWith('#') ? href.slice(1) : null);
+          
+          if (targetId && !validIds.has(targetId)) {
+            decorations.push(Decoration.inline(pos, pos + node.nodeSize, {
+              class: 'nb-broken-link',
+              title: `Broken reference to ${targetId}`
+            }));
+          }
+        }
+      }
+    }
+  });
+
+  return DecorationSet.create(doc, decorations);
+}
+
+const IntegrityPlugin = (metadata: any) => new Plugin({
+  key: new PluginKey('link-integrity'),
+  state: {
+    init: (_, { doc }) => getIntegrityDecorations(doc, metadata),
+    apply: (tr, set) => {
+      if (tr.docChanged) {
+        return getIntegrityDecorations(tr.doc, metadata);
+      }
+      return set.map(tr.mapping, tr.doc);
+    },
+  },
+  props: {
+    decorations(state) {
+      return this.getState(state);
+    },
+  },
+});
+
 const PrismHighlightExtension = Extension.create({
   name: 'prismHighlight',
   addProseMirrorPlugins() {
@@ -1103,10 +1157,10 @@ function LinkReferencePopup({
           {(selectedResource || link.trim()) && (
             <div className="mt-3 p-3 bg-nb-surface-low border border-nb-outline-variant/20 rounded-xl flex items-center justify-between gap-3 animate-in slide-in-from-top-1 duration-200">
               <div className="flex-1 min-w-0">
-                <div className="text-[9px] font-black text-nb-primary mb-0.5 tracking-tighter">
-                  {selectedResource ? "Linked Resource" : "External Link"}
+                <div className={`text-[9px] font-black mb-0.5 tracking-tighter ${link.startsWith('#') && !selectedResource ? "text-amber-500" : "text-nb-primary"}`}>
+                  {selectedResource ? "Linked Resource" : (link.startsWith('#') ? "Broken Resource" : "External Link")}
                 </div>
-                <div className="text-sm font-bold text-nb-on-surface truncate">
+                <div className={`text-sm font-bold truncate ${link.startsWith('#') && !selectedResource ? "text-amber-600" : "text-nb-on-surface"}`}>
                   {selectedResource ? selectedResource.title : link}
                 </div>
                 {selectedResource && (
@@ -1117,6 +1171,7 @@ function LinkReferencePopup({
               </div>
               <button
                 onClick={() => {
+                  if (link.startsWith('#') && !selectedResource) return;
                   let url = selectedResource ? `#${selectedResource.id}` : link.trim();
                   if (!selectedResource && url && !url.startsWith('#')) {
                     const hasProtocol = /^[a-z]+:/i.test(url);
@@ -1125,8 +1180,13 @@ function LinkReferencePopup({
                   }
                   window.open(url, '_blank');
                 }}
-                title="Go to Link"
-                className="p-2 bg-nb-surface text-nb-primary rounded-lg hover:bg-nb-primary/10 transition-colors shrink-0 border border-nb-outline-variant/30 shadow-sm"
+                disabled={link.startsWith('#') && !selectedResource}
+                title={link.startsWith('#') && !selectedResource ? "Broken Reference" : "Go to Link"}
+                className={`p-2 rounded-lg transition-colors shrink-0 border border-nb-outline-variant/30 shadow-sm ${
+                  link.startsWith('#') && !selectedResource 
+                    ? "bg-nb-surface-low text-nb-on-surface-variant/20 cursor-not-allowed" 
+                    : "bg-nb-surface text-nb-primary hover:bg-nb-primary/10"
+                }`}
               >
                 <ExternalLink size={14} />
               </button>
@@ -1246,6 +1306,10 @@ export default function UnifiedEditor({
       CustomCodeBlock,
       CustomRawLatex,
       PrismHighlightExtension,
+      Extension.create({
+        name: 'integrityExtension',
+        addProseMirrorPlugins: () => [IntegrityPlugin(notebookMetadata)]
+      }),
       Underline,
       CustomLink.configure({
         openOnClick: false,
