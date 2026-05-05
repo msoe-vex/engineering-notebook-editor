@@ -112,6 +112,13 @@ const validateEntry = (tiptapJson: string, title: string, author: string, phase:
   return { valid: errors.length === 0, errors };
 };
 
+const getProjectDBName = (p: Project) => {
+  if (p.id) {
+    return `notebook-project-${p.id}`;
+  }
+  return "notebook-volatile";
+};
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getLocalFileContent = async (rootHandle: any, path: string): Promise<{ text?: string; base64?: string; isImage: boolean }> => {
   try {
@@ -247,16 +254,37 @@ export default function App() {
     setConfirmDialog({ isOpen: true, title, message, onConfirm, variant });
   };
 
+  const refreshProjectList = useCallback(async () => {
+    const p = await getProjects();
+    setProjects(p);
+
+    const counts: Record<string, number> = {};
+    for (const proj of p) {
+      const dbName = getProjectDBName(proj);
+      const pending = await getAllPending(dbName);
+      counts[proj.id] = pending.length;
+      if (pending.length > 0) {
+        console.log(`[DASHBOARD] Found ${pending.length} pending changes for ${proj.name} in DB: ${dbName}`);
+      }
+    }
+    setProjectPendingCounts(counts);
+  }, []);
+
   /** Get a unique DB name for the current workspace to isolate changes. */
   const getDBName = useCallback(() => {
+    if (currentProjectId) {
+      console.log(`[DB] Using project ID: ${currentProjectId}`);
+      return `notebook-project-${currentProjectId}`;
+    }
+    
+    // Fallback for before project ID is set
     if (workspaceMode === "github" && config) {
-      return `notebook-${config.owner}-${config.repo}`;
+      const name = `notebook-project-github-${config.owner.toLowerCase()}-${config.repo.toLowerCase()}`;
+      return name;
     }
-    if (workspaceMode === "local" && dirHandle) {
-      return `notebook-local-${dirHandle.name}`;
-    }
+    
     return "notebook-volatile";
-  }, [workspaceMode, config, dirHandle]);
+  }, [workspaceMode, config, dirHandle, currentProjectId, projects]);
 
   const checkPermission = async (handle: any) => {
     if (!handle) return false;
@@ -299,34 +327,6 @@ export default function App() {
   };
 
   // URL Sync Effect
-
-
-  const getProjectDBName = (p: Project) => {
-    if (p.type === "github" && p.githubConfig) {
-      return `notebook-${p.githubConfig.owner}-${p.githubConfig.repo}`;
-    }
-    if (p.type === "local") {
-      return `notebook-local-${p.name}`;
-    }
-    return "notebook-volatile";
-  };
-
-  const refreshProjectList = useCallback(async () => {
-    const p = await getProjects();
-    setProjects(p);
-
-    const counts: Record<string, number> = {};
-    for (const proj of p) {
-      if (proj.type === "github") {
-        const dbName = getProjectDBName(proj);
-        const pending = await getAllPending(dbName);
-        counts[proj.id] = pending.length;
-      } else {
-        counts[proj.id] = 0;
-      }
-    }
-    setProjectPendingCounts(counts);
-  }, []);
 
   // Load projects on mount
   useEffect(() => {
@@ -506,6 +506,11 @@ export default function App() {
 
     // Merge pending upserts that aren't in the list yet
     const existingPaths = new Set(list.map(e => e.path));
+    const deletedPaths = new Set(pendingChanges.filter(p => p.operation === "delete").map(p => p.path));
+    
+    // Filter out deleted items from the main list first
+    list = list.filter(e => !deletedPaths.has(e.path));
+
     pendingChanges.forEach(p => {
       if (p.operation === "upsert" && p.path.startsWith(currentEntriesDir) && p.path.endsWith(".json") && !existingPaths.has(p.path)) {
         const id = p.path.split('/').pop()?.replace('.json', '') || "";
@@ -566,6 +571,11 @@ export default function App() {
 
   const displayResources = useMemo(() => {
     let list = [...resources];
+    const deletedPaths = new Set(pendingChanges.filter(p => p.operation === "delete").map(p => p.path));
+    
+    // Filter out deleted items from the main list first
+    list = list.filter(e => !deletedPaths.has(e.path));
+
     const existingPaths = new Set(list.map(e => e.path));
     pendingChanges.forEach(p => {
       if (p.operation === "upsert" && p.path.startsWith(currentAssetsDir) && isImage(p.path) && !existingPaths.has(p.path)) {
@@ -1703,12 +1713,15 @@ export default function App() {
 
       await commitChanges(config, gitChanges, message);
 
+      // Load from GitHub first so new entries appear in the real list
+      await loadGitHubExplorer();
+
+      // Then clear the staged changes
       await clearAllPending(dbName);
       lastRemoteMetadataRef.current = all.find(p => p.path === currentIndexPath)?.content || lastRemoteMetadataRef.current;
       lastRemoteAllEntriesRef.current = all.find(p => p.path === currentAllEntriesPath)?.content || lastRemoteAllEntriesRef.current;
-
       await refreshPending();
-      await loadGitHubExplorer();
+      
       notify("Successfully committed all changes to GitHub.", "success");
     } catch (e: any) {
       console.error("Commit failed", e);
@@ -1863,10 +1876,13 @@ export default function App() {
     // 2. Check if we already have this project in DB
     if (id) {
       const p = await getProject(id);
-      if (p) {
-        // Just select it
+      if (p && p.type === "local") {
+        // Just select it if it matches the type
         return handleSelectProject(id);
       }
+      // If it's a different type (e.g. GitHub project backup), ignore the ID and generate a new local one
+      const fullHash = await hashContent(`local:${handle.name}`);
+      id = fullHash.slice(0, 32);
     } else {
       const fullHash = await hashContent(`local:${handle.name}`);
       id = fullHash.slice(0, 32);
@@ -1941,6 +1957,7 @@ export default function App() {
       setLatexContent("");
       setContentCache(new Map());
       setNotebookMetadata(EMPTY_METADATA);
+      refreshProjectList();
     };
 
     if (workspaceMode === "temporary") {

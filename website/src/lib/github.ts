@@ -105,7 +105,8 @@ export const fetchDirectoryTree = async (config: GitHubConfig, path: string = "n
       repo: config.repo,
       path: path,
       ref: config.branch,
-    });
+      t: Date.now()
+    } as any);
 
     if (Array.isArray(response.data)) {
       for (const item of response.data) {
@@ -135,7 +136,8 @@ export const fetchFileContent = async (config: GitHubConfig, path: string) => {
     repo: config.repo,
     path,
     ref: config.branch,
-  });
+    t: Date.now()
+  } as any);
 
   if (!Array.isArray(response.data) && response.data.type === "file") {
     try {
@@ -244,7 +246,8 @@ export const commitChanges = async (config: GitHubConfig, changes: GitChange[], 
     owner: config.owner,
     repo: config.repo,
     ref: `heads/${config.branch}`,
-  });
+    t: Date.now()
+  } as any);
   const latestCommitSha = refData.object.sha;
 
   // 2. Get the tree SHA of the latest commit
@@ -287,7 +290,8 @@ export const commitChanges = async (config: GitHubConfig, changes: GitChange[], 
       repo: config.repo,
       tree_sha: baseTreeSha,
       recursive: "true",
-    });
+      t: Date.now()
+    } as any);
 
     const deletePaths = new Set(changes.filter(c => c.content === null).map(c => c.path));
     const newTreeItems = fullTree.tree
@@ -338,6 +342,7 @@ export const commitChanges = async (config: GitHubConfig, changes: GitChange[], 
     repo: config.repo,
     ref: `heads/${config.branch}`,
     sha: newCommit.sha,
+    force: true,
   });
 };
 
