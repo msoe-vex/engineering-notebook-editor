@@ -1731,6 +1731,13 @@ export default function App() {
     await saveProject(p);
     setProjects(await getProjects());
     setCurrentProjectId(id);
+    
+    // Update URL immediately so handleUrlChange doesn't settle early
+    const params = new URLSearchParams(window.location.search);
+    params.set('project', id);
+    window.history.pushState({}, '', `?${params.toString()}`);
+    window.dispatchEvent(new Event('locationchange'));
+
     setConfig(githubConfig);
     setWorkspaceMode("github");
   };
@@ -1792,13 +1799,28 @@ export default function App() {
 
     setProjects(await getProjects());
     setCurrentProjectId(id);
+
+    // Update URL immediately
+    const params = new URLSearchParams(window.location.search);
+    params.set('project', id);
+    window.history.pushState({}, '', `?${params.toString()}`);
+    window.dispatchEvent(new Event('locationchange'));
+
     setDirHandle(handle);
     setWorkspaceMode("local");
     checkPermission(handle);
   };
 
   const handleCreateTemporary = async () => {
+    setIsInitializing(true);
     setCurrentProjectId("temporary");
+
+    // Update URL
+    const params = new URLSearchParams(window.location.search);
+    params.set('project', 'temporary');
+    window.history.pushState({}, '', `?${params.toString()}`);
+    window.dispatchEvent(new Event('locationchange'));
+
     setWorkspaceMode("temporary");
   };
 
@@ -2366,7 +2388,7 @@ export default function App() {
         <div className="flex w-full h-full relative">
           <div className={`fixed inset-0 z-[150] transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
             <div
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/40"
               onClick={() => setIsSidebarOpen(false)}
             />
             <div className={`absolute top-0 bottom-0 left-0 w-[85%] max-w-[300px] bg-nb-surface-low border-r border-nb-outline-variant flex flex-col shadow-2xl transition-transform duration-300 ease-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>

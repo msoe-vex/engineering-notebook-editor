@@ -1,4 +1,4 @@
-import { GitHubConfig, fetchUserRepositories, fetchUserInstallations, getOctokit, fetchRepoFolders } from "@/lib/github";
+import { GitHubConfig, fetchUserRepositories, getOctokit, fetchRepoFolders } from "@/lib/github";
 import { Project } from "@/lib/db";
 import React, { useState, useEffect, useMemo } from "react";
 import { BookOpen, Moon, Sun, GitBranch, Folder, HardDrive, Trash2, Clock, Plus, ArrowRight, History, Edit2, Check, X, Search, ExternalLink, AlertCircle, Loader2 } from "lucide-react";
@@ -37,7 +37,6 @@ export default function Settings({
   const [folderPath, setFolderPath] = useState("");
   const [isGithubModalOpen, setIsGithubModalOpen] = useState(false);
   const [userRepos, setUserRepos] = useState<any[]>([]);
-  const [installations, setInstallations] = useState<any[]>([]);
   const [isLoadingRepos, setIsLoadingRepos] = useState(false);
   const [isLoadingFolders, setIsLoadingFolders] = useState(false);
   const [availableFolders, setAvailableFolders] = useState<any[]>([]);
@@ -103,13 +102,9 @@ export default function Settings({
   useEffect(() => {
     if (githubToken && isGithubModalOpen) {
       setIsLoadingRepos(true);
-      Promise.all([
-        fetchUserRepositories(githubToken),
-        fetchUserInstallations(githubToken)
-      ]).then(([repos, installs]) => {
+      fetchUserRepositories(githubToken).then(repos => {
         setUserRepos(repos);
-        setInstallations(installs);
-        
+
         // If repoUrl was saved, try to find it in the fetched repos
         const savedUrl = localStorage.getItem("nb-github-repo-url");
         if (savedUrl) {
@@ -280,7 +275,7 @@ export default function Settings({
                             {new Date(project.lastOpened).toLocaleDateString()}
                           </div>
                           <div className="w-1 h-1 rounded-full bg-nb-outline-variant/50" />
-                          <span className="text-[9px] font-black text-nb-on-surface-variant/40 uppercase tracking-widest italic">{project.type}</span>
+                          <span className="text-[9px] font-black text-nb-on-surface-variant/40 tracking-widest italic">{project.type === "github" ? "GitHub" : project.type === "local" ? "Local" : "Temporary"}</span>
                         </div>
                       </>
                     )}
@@ -398,28 +393,7 @@ export default function Settings({
                     </div>
                   </div>
 
-                  {/* App Installation Check */}
-                  {installations.length === 0 && !isLoadingRepos && (
-                    <div className="p-4 rounded-2xl bg-nb-tertiary/5 border border-nb-tertiary/20 flex gap-4 items-start">
-                      <div className="w-8 h-8 rounded-lg bg-nb-tertiary/10 text-nb-tertiary flex items-center justify-center shrink-0">
-                        <AlertCircle size={18} />
-                      </div>
-                      <div className="flex-1 space-y-2">
-                        <h4 className="text-xs font-bold text-nb-on-surface leading-tight">Install GitHub App</h4>
-                        <p className="text-[10px] text-nb-on-surface-variant leading-relaxed">
-                          To access your private repositories, you need to install the Notebook app on your account.
-                        </p>
-                        <a
-                          href="https://github.com/settings/installations"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-[10px] font-black text-nb-tertiary hover:underline uppercase tracking-wider"
-                        >
-                          Go to App Settings <ExternalLink size={10} />
-                        </a>
-                      </div>
-                    </div>
-                  )}
+
 
                   {/* Form */}
                   <div className="space-y-5">
@@ -478,23 +452,23 @@ export default function Settings({
                         <div className="space-y-1.5">
                           <label className="text-[10px] font-black tracking-[0.15em] text-nb-on-surface-variant uppercase ml-1">Project Folder</label>
                           <div className="flex gap-2">
-                             <div className="relative flex-1">
-                                <Folder size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-nb-on-surface-variant/40" />
-                                <input
-                                  type="text"
-                                  value={folderPath}
-                                  onChange={(e) => setFolderPath(e.target.value)}
-                                  placeholder="e.g. notebook (leave empty for root)"
-                                  className="w-full bg-nb-surface-low border border-nb-outline-variant/30 pl-10 pr-4 py-3 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-nb-primary/30 transition-all"
-                                />
-                             </div>
-                             <button
-                               onClick={() => setShowExplorer(!showExplorer)}
-                               className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${showExplorer ? "bg-nb-primary text-white" : "bg-nb-surface-low border border-nb-outline-variant/30 text-nb-on-surface-variant hover:border-nb-primary/50"}`}
-                               title="Browse Repository"
-                             >
-                                <Search size={18} />
-                             </button>
+                            <div className="relative flex-1">
+                              <Folder size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-nb-on-surface-variant/40" />
+                              <input
+                                type="text"
+                                value={folderPath}
+                                onChange={(e) => setFolderPath(e.target.value)}
+                                placeholder="e.g. notebook (leave empty for root)"
+                                className="w-full bg-nb-surface-low border border-nb-outline-variant/30 pl-10 pr-4 py-3 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-nb-primary/30 transition-all"
+                              />
+                            </div>
+                            <button
+                              onClick={() => setShowExplorer(!showExplorer)}
+                              className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${showExplorer ? "bg-nb-primary text-white" : "bg-nb-surface-low border border-nb-outline-variant/30 text-nb-on-surface-variant hover:border-nb-primary/50"}`}
+                              title="Browse Repository"
+                            >
+                              <Search size={18} />
+                            </button>
                           </div>
                         </div>
 
@@ -520,7 +494,7 @@ export default function Settings({
                                 </React.Fragment>
                               ))}
                             </div>
-                            
+
                             {/* Folder List */}
                             <div className="max-h-[140px] overflow-y-auto custom-scrollbar p-1">
                               {isLoadingFolders ? (
@@ -561,18 +535,18 @@ export default function Settings({
 
                         {/* Summary */}
                         <div className="p-3.5 rounded-2xl bg-nb-surface-low border border-nb-outline-variant/10 flex items-center justify-between">
-                           <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-8 h-8 rounded-xl bg-nb-primary/10 text-nb-primary flex items-center justify-center shrink-0">
-                                 <HardDrive size={16} />
-                              </div>
-                              <div className="flex flex-col min-w-0">
-                                 <span className="text-[8px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant/60">Target Workspace</span>
-                                 <span className="text-[11px] font-mono font-bold text-nb-on-surface truncate">
-                                    {selectedRepo.owner}/{selectedRepo.repo}<span className="text-nb-primary/40">/</span>{folderPath}
-                                 </span>
-                              </div>
-                           </div>
-                           <Check size={16} className={folderPath ? "text-nb-primary" : "text-nb-on-surface-variant/20"} />
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-8 h-8 rounded-xl bg-nb-primary/10 text-nb-primary flex items-center justify-center shrink-0">
+                              <HardDrive size={16} />
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-[8px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant/60">Target Workspace</span>
+                              <span className="text-[11px] font-mono font-bold text-nb-on-surface truncate">
+                                {selectedRepo.owner}/{selectedRepo.repo}<span className="text-nb-primary/40">/</span>{folderPath}
+                              </span>
+                            </div>
+                          </div>
+                          <Check size={16} className={folderPath ? "text-nb-primary" : "text-nb-on-surface-variant/20"} />
                         </div>
                       </div>
                     )}
@@ -582,26 +556,26 @@ export default function Settings({
                     disabled={!selectedRepo}
                     onClick={async () => {
                       if (!selectedRepo) return;
-                      
+
                       const fullUrl = `https://github.com/${selectedRepo.owner}/${selectedRepo.repo}`;
-                      
+
                       try {
                         setIsLoadingRepos(true);
 
                         localStorage.setItem("nb-github-repo-url", fullUrl);
                         localStorage.setItem("nb-github-folder", folderPath);
-                        
+
                         const base = folderPath.trim();
                         const prefix = base ? (base.endsWith('/') ? base : base + '/') : "";
 
-                        onCreateGithub({ 
-                          token: githubToken!, 
-                          owner: selectedRepo.owner, 
-                          repo: selectedRepo.repo, 
+                        onCreateGithub({
+                          token: githubToken!,
+                          owner: selectedRepo.owner,
+                          repo: selectedRepo.repo,
                           branch: selectedRepo.default_branch,
                           baseDir: base,
-                          entriesDir: `${prefix}data/entries`, 
-                          resourcesDir: `${prefix}data/assets` 
+                          entriesDir: `${prefix}data/entries`,
+                          resourcesDir: `${prefix}data/assets`
                         });
                         setIsGithubModalOpen(false);
                       } catch (e: any) {

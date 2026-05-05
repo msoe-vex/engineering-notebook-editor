@@ -350,17 +350,7 @@ export const fetchUserRepositories = async (token: string) => {
   return response.data;
 };
 
-export const fetchUserInstallations = async (token: string) => {
-  const octokit = getOctokit(token);
-  try {
-    const response = await octokit.rest.apps.listInstallationsForAuthenticatedUser();
-    return response.data.installations;
-  } catch (e) {
-    // Fail silently - this might be an OAuth app that doesn't support installations
-    return [];
-  }
 
-};
 
 export const fetchRepoFolders = async (token: string, owner: string, repo: string, path: string = "") => {
   const octokit = getOctokit(token);
