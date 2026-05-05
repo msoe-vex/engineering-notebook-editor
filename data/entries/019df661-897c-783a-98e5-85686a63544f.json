@@ -27,7 +27,13 @@
         }
       },
       {
-        "type": "paragraph"
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "More text"
+          }
+        ]
       }
     ]
   }
