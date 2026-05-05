@@ -214,7 +214,7 @@ export default function App() {
   const [needsPermission, setNeedsPermission] = useState(false);
   const [isConnectingLocal, setIsConnectingLocal] = useState(false);
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
-  const [isPendingCollapsed, setIsPendingCollapsed] = useState(false);
+  const [isPendingCollapsed, setIsPendingCollapsed] = useState(true);
 
   // metadata.json contents
   const [notebookMetadata, setNotebookMetadata] = useState<NotebookMetadata>(EMPTY_METADATA);
@@ -2019,7 +2019,7 @@ export default function App() {
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setIsPendingCollapsed(!isPendingCollapsed)}
-                  className="flex items-center gap-2 flex-1 group"
+                  className="flex items-center gap-2 flex-1 group cursor-pointer"
                 >
                   <div className="w-1.5 h-1.5 rounded-full bg-nb-tertiary animate-pulse" />
                   <span className="text-[9px] font-black tracking-widest text-nb-tertiary uppercase flex-1 text-left">Pending Changes ({pendingChanges.length})</span>
@@ -2028,7 +2028,7 @@ export default function App() {
                 {!isCommitting && (
                   <button
                     onClick={handleDiscardAll}
-                    className="text-[8px] font-bold text-nb-on-surface-variant hover:text-red-500 transition-colors uppercase tracking-widest px-2 py-1 rounded hover:bg-red-50"
+                    className="text-[8px] font-bold text-nb-on-surface-variant hover:text-red-500 transition-colors uppercase tracking-widest px-2 py-1 rounded hover:bg-red-50 cursor-pointer"
                   >
                     Discard
                   </button>
