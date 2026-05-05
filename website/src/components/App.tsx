@@ -400,7 +400,6 @@ export default function App() {
           notify("GitHub sign-in failed connection.", "error");
         })
         .finally(() => {
-          setIsInitializing(false);
           isExchangingCode.current = false;
         });
     }
@@ -1138,6 +1137,7 @@ export default function App() {
       if (projectId && projectId !== currentProjectId) {
         setIsInitializing(true);
         setIsLoading(true);
+        setNotebookMetadata(EMPTY_METADATA); // Clear old metadata to ensure loader stays up
         const p = await getProject(projectId);
         if (!active) return;
         if (p) {
@@ -1194,9 +1194,26 @@ export default function App() {
 
       // 4. Settle initialization
       if (active) {
-        // If we are currently loading or waiting for project mode to set, don't settle yet
-        const isSettleable = projectId && !isLoading && workspaceMode && notebookMetadata !== EMPTY_METADATA;
+        // Requirements for a project to be considered "ready":
+        // 1. URL project matches current state project
+        // 2. Not currently loading network data
+        // 3. Workspace mode is established (github/local/temporary)
+        // 4. Necessary config (github) or handle (local) is present
+        // 5. Metadata index is loaded
+        const projectMatches = projectId === currentProjectId;
+        const configReady = workspaceMode === "github" ? !!config : (workspaceMode === "local" ? !!dirHandle : true);
+        const metaReady = notebookMetadata !== EMPTY_METADATA;
+        
+        const isSettleable = projectId 
+          ? (projectMatches && !isLoading && !!workspaceMode && configReady && metaReady)
+          : (!isLoading && !currentProjectId); // If no project in URL, we can only settle if we aren't loading one and have no current project
+
         if (projectId && !isSettleable) {
+          return;
+        }
+
+        // If we have a project in state but not in URL yet, wait for sync
+        if (!projectId && currentProjectId) {
           return;
         }
 
@@ -1626,8 +1643,15 @@ export default function App() {
       p.lastOpened = isoTimestamp();
       await saveProject(p);
       setProjects(await getProjects());
-
+      setNotebookMetadata(EMPTY_METADATA);
       setCurrentProjectId(p.id);
+
+      // Update URL immediately so handleUrlChange doesn't settle early
+      const params = new URLSearchParams(window.location.search);
+      params.set('project', p.id);
+      window.history.pushState({}, '', `?${params.toString()}`);
+      window.dispatchEvent(new Event('locationchange'));
+
       if (p.type === "github" && p.githubConfig) {
         setConfig(p.githubConfig);
         setWorkspaceMode("github");
