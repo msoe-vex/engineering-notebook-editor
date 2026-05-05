@@ -24,7 +24,18 @@ export default function Settings({
   const [owner, setOwner] = useState("");
   const [repo, setRepo]   = useState("");
 
+  useEffect(() => {
+    if (mounted) {
+      setToken(localStorage.getItem("nb-github-token") || "");
+      setOwner(localStorage.getItem("nb-github-owner") || "");
+      setRepo(localStorage.getItem("nb-github-repo") || "");
+    }
+  }, [mounted]);
+
   const handleSave = () => {
+    localStorage.setItem("nb-github-token", token);
+    localStorage.setItem("nb-github-owner", owner);
+    localStorage.setItem("nb-github-repo", repo);
     onSave({
       token, owner, repo,
       entriesDir: "entries",

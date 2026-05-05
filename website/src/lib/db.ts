@@ -9,9 +9,10 @@
  */
 
 const DEFAULT_DB_NAME = "notebook-pending";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_NAME = "changes";
 const RESOURCE_STORE = "resources";
+const WORKSPACE_STORE = "workspace";
 
 export type PendingOperation = "upsert" | "delete";
 
@@ -44,8 +45,41 @@ function openDB(dbName: string = DEFAULT_DB_NAME): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(RESOURCE_STORE)) {
         db.createObjectStore(RESOURCE_STORE, { keyPath: "path" });
       }
+      if (!db.objectStoreNames.contains(WORKSPACE_STORE)) {
+        db.createObjectStore(WORKSPACE_STORE);
+      }
     };
     req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function saveWorkspaceHandle(handle: FileSystemDirectoryHandle): Promise<void> {
+  const db = await openDB(DEFAULT_DB_NAME);
+  return new Promise((resolve, reject) => {
+    const store = tx(db, WORKSPACE_STORE, "readwrite");
+    const req = store.put(handle, "last-handle");
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function getWorkspaceHandle(): Promise<FileSystemDirectoryHandle | undefined> {
+  const db = await openDB(DEFAULT_DB_NAME);
+  return new Promise((resolve, reject) => {
+    const store = tx(db, WORKSPACE_STORE, "readonly");
+    const req = store.get("last-handle");
+    req.onsuccess = () => resolve(req.result as FileSystemDirectoryHandle | undefined);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function clearWorkspaceHandle(): Promise<void> {
+  const db = await openDB(DEFAULT_DB_NAME);
+  return new Promise((resolve, reject) => {
+    const store = tx(db, WORKSPACE_STORE, "readwrite");
+    const req = store.delete("last-handle");
+    req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });
 }

@@ -8,7 +8,7 @@ import {
 } from "@/lib/github";
 import {
   stageChange, getAllPending, clearAllPending, removeStaged, PendingChange,
-  putResource, getResource
+  putResource, getResource, saveWorkspaceHandle, getWorkspaceHandle, clearWorkspaceHandle
 } from "@/lib/db";
 import {
   NotebookMetadata, EMPTY_METADATA, EntryMetadata, EntryWrapper,
@@ -235,7 +235,26 @@ export default function App() {
 
       // 1. Sync Mode (initial load)
       if (mode && !workspaceMode && (mode === "local" || mode === "github" || mode === "memory")) {
-        setWorkspaceMode(mode);
+        if (mode === "github") {
+          const t = localStorage.getItem("nb-github-token");
+          const o = localStorage.getItem("nb-github-owner");
+          const r = localStorage.getItem("nb-github-repo");
+          if (t && o && r) {
+            setConfig({ token: t, owner: o, repo: r, entriesDir: "entries", resourcesDir: "resources" });
+            setWorkspaceMode("github");
+          }
+        } else if (mode === "local") {
+          // Attempt to restore last handle from IndexedDB
+          getWorkspaceHandle().then(handle => {
+            if (handle) {
+              // Note: The browser will still prompt for permission on first interaction
+              setDirHandle(handle);
+              setWorkspaceMode("local");
+            }
+          });
+        } else {
+          setWorkspaceMode(mode);
+        }
       }
 
       // 2. Sync Resources
@@ -266,13 +285,21 @@ export default function App() {
   useEffect(() => {
     if (workspaceMode) {
       const params = new URLSearchParams(window.location.search);
+      let changed = false;
       if (params.get('mode') !== workspaceMode) {
         params.set('mode', workspaceMode);
+        changed = true;
+      }
+      if (workspaceMode === "local" && dirHandle && params.get('folder') !== dirHandle.name) {
+        params.set('folder', dirHandle.name);
+        changed = true;
+      }
+      if (changed) {
         window.history.replaceState({}, '', `?${params.toString()}`);
         window.dispatchEvent(new Event('locationchange'));
       }
     }
-  }, [workspaceMode]);
+  }, [workspaceMode, dirHandle]);
 
   // Load initial author from localStorage
   useEffect(() => {
@@ -1278,6 +1305,16 @@ export default function App() {
   // ── Disconnect ────────────────────────────────────────────────────────────────
 
   const handleDisconnect = () => {
+    // Clear URL params
+    const params = new URLSearchParams(window.location.search);
+    params.delete('mode');
+    params.delete('entry');
+    params.delete('resource');
+    params.delete('folder');
+    window.history.pushState({}, '', `?${params.toString()}`);
+    window.dispatchEvent(new Event('locationchange'));
+
+    clearWorkspaceHandle();
     setWorkspaceMode(null);
     setConfig(null);
     setDirHandle(null);
@@ -1297,7 +1334,11 @@ export default function App() {
       <Settings
         onSave={(cfg) => { setConfig(cfg); setWorkspaceMode("github"); }}
         onWorkOffline={() => setWorkspaceMode("memory")}
-        onOpenLocalFolder={(handle) => { setDirHandle(handle); setWorkspaceMode("local"); }}
+        onOpenLocalFolder={(handle) => { 
+          saveWorkspaceHandle(handle);
+          setDirHandle(handle); 
+          setWorkspaceMode("local"); 
+        }}
       />
     );
   }
