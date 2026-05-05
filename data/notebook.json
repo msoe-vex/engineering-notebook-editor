@@ -18,9 +18,15 @@
       "author": "Andrew Needham",
       "phase": "Generate Concepts",
       "createdAt": "2026-05-05T04:24:40.572Z",
-      "updatedAt": "2026-05-05T04:24:57.741Z",
+      "updatedAt": "2026-05-05T04:25:58.578Z",
       "filename": "data/entries/019df661-897c-783a-98e5-85686a63544f.json",
-      "resources": {},
+      "resources": {
+        "019df662-7553-7c11-864e-ff05855f7833": {
+          "title": "Image title",
+          "caption": "Description",
+          "type": "image"
+        }
+      },
       "isValid": true
     }
   }
