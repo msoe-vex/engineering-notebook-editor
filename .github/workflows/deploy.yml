@@ -35,6 +35,9 @@ jobs:
         run: npm ci
       - name: Build with Next.js
         run: npm run build
+        env:
+          NEXT_PUBLIC_GITHUB_CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          GITHUB_CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
