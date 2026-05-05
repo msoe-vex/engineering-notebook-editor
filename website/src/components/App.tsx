@@ -207,6 +207,9 @@ export default function App() {
   // Current open file
   const [openFile, setOpenFile] = useState<OpenFileState | null>(null);
   const [showReferenceSearch, setShowReferenceSearch] = useState(false);
+  const [needsPermission, setNeedsPermission] = useState(false);
+  const [isConnectingLocal, setIsConnectingLocal] = useState(false);
+  const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
 
   // metadata.json contents
   const [notebookMetadata, setNotebookMetadata] = useState<NotebookMetadata>(EMPTY_METADATA);
@@ -231,6 +234,46 @@ export default function App() {
     return "notebook-volatile";
   }, [workspaceMode, config, dirHandle]);
 
+  const checkPermission = async (handle: any) => {
+    if (!handle) return false;
+    try {
+      const status = await (handle as any).queryPermission({ mode: 'readwrite' });
+      if (status === 'granted') {
+        setNeedsPermission(false);
+        return true;
+      } else {
+        setNeedsPermission(true);
+        return false;
+      }
+    } catch (e) {
+      console.error("Permission check failed", e);
+      setNeedsPermission(true);
+      return false;
+    }
+  };
+
+  const requestPermission = async () => {
+    const handle = dirHandle || (pendingProjectId ? await getProjectHandle(pendingProjectId) : null);
+    if (!handle) return;
+    try {
+      const status = await (handle as any).requestPermission({ mode: 'readwrite' });
+      if (status === 'granted') {
+        setNeedsPermission(false);
+        setIsConnectingLocal(false);
+        if (pendingProjectId) {
+          const id = pendingProjectId;
+          setPendingProjectId(null);
+          handleSelectProject(id);
+        } else if (workspaceMode === "local") {
+          loadLocalExplorer();
+        }
+      }
+    } catch (e) {
+      console.error("Permission request failed", e);
+      notify("Failed to get folder access", "error");
+    }
+  };
+
   // URL Sync Effect
   useEffect(() => {
     const handleUrlChange = () => {
@@ -253,6 +296,7 @@ export default function App() {
               if (handle) {
                 setDirHandle(handle);
                 setWorkspaceMode("local");
+                checkPermission(handle);
               } else {
                 // If handle lost, we might need to go to settings
                 setWorkspaceMode(null);
@@ -562,6 +606,14 @@ export default function App() {
           // Update notebook.json
           const meta = notebookMetadataRef.current;
           const updatedMeta = updateEntryInIndex(meta, entryId, entryMeta);
+          
+          // Ensure projectId/Name are in meta
+          if (currentProjectId && !updatedMeta.projectId) {
+            updatedMeta.projectId = currentProjectId;
+            const p = projects.find(pr => pr.id === currentProjectId);
+            if (p) updatedMeta.projectName = p.name;
+          }
+
           await writeLocalFile(dirHandle, INDEX_PATH, JSON.stringify(updatedMeta, null, 2));
 
           notebookMetadataRef.current = updatedMeta;
@@ -1347,6 +1399,13 @@ export default function App() {
       } else if (p.type === "local") {
         const handle = await getProjectHandle(p.id);
         if (handle) {
+          const hasPermission = await checkPermission(handle);
+          if (!hasPermission) {
+            setPendingProjectId(p.id);
+            setIsConnectingLocal(true);
+            setDirHandle(handle);
+            return;
+          }
           setDirHandle(handle);
           setWorkspaceMode("local");
         } else {
@@ -1393,20 +1452,64 @@ export default function App() {
   };
 
   const handleCreateLocal = async (handle: FileSystemDirectoryHandle) => {
-    const id = generateUUID();
+    // Explicitly request readwrite permission to trigger the browser's persistent permission prompt if available
+    try {
+      await (handle as any).requestPermission({ mode: "readwrite" });
+    } catch (e) {
+      console.error("Initial permission request failed", e);
+    }
+
+    // 1. Check for existing notebook.json
+    let existingMeta: NotebookMetadata | null = null;
+    try {
+      const data = await getLocalFileContent(handle, INDEX_PATH);
+      if (data && !data.isImage && data.text) {
+        existingMeta = JSON.parse(data.text);
+      }
+    } catch (e) {
+      // Doesn't exist or failed, ignore
+    }
+
+    let id = existingMeta?.projectId;
+    let name = existingMeta?.projectName || handle.name;
+
+    // 2. Check if we already have this project in DB
+    if (id) {
+      const p = await getProject(id);
+      if (p) {
+        // Just select it
+        return handleSelectProject(id);
+      }
+    } else {
+      id = generateUUID();
+    }
+
     const p: Project = {
       id,
-      name: handle.name,
+      name,
       type: "local",
       lastOpened: isoTimestamp(),
       folderName: handle.name
     };
+
+    // 3. Save to DB
     await saveProject(p);
     await saveProjectHandle(id, handle);
+    
+    // 4. Update notebook.json if needed
+    const meta = existingMeta || { ...EMPTY_METADATA };
+    if (!meta.projectId || !meta.projectName) {
+      meta.projectId = id;
+      meta.projectName = name;
+      const metaStr = JSON.stringify(meta, null, 2);
+      await writeLocalFile(handle, INDEX_PATH, metaStr);
+    }
+
     setProjects(await getProjects());
     setCurrentProjectId(id);
     setDirHandle(handle);
     setWorkspaceMode("local");
+    checkPermission(handle);
   };
 
   const handleCreateTemporary = async () => {
@@ -1665,14 +1768,46 @@ export default function App() {
 
       {/* Content */}
       <div className="flex-1 overflow-hidden relative bg-nb-bg">
+        {/* Permission / Connection Modals */}
+        {(isConnectingLocal || (needsPermission && workspaceMode === "local")) && (
+          <div className="absolute inset-0 z-[200] bg-nb-bg/80 backdrop-blur-md flex items-center justify-center p-8">
+            <div className="max-w-md w-full bg-nb-surface border border-nb-outline-variant rounded-3xl p-8 shadow-2xl text-center animate-in fade-in zoom-in duration-300">
+              <div className="w-20 h-20 rounded-2xl bg-nb-primary/10 text-nb-primary flex items-center justify-center mx-auto mb-8">
+                <HardDrive size={40} />
+              </div>
+              <h2 className="text-2xl font-bold text-nb-on-surface mb-4">Connect to Workspace</h2>
+              <p className="text-sm text-nb-on-surface-variant mb-10 leading-relaxed px-4">
+                The browser needs your permission to access <strong>{dirHandle?.name || "the local folder"}</strong>.
+                This is a standard security requirement for local file access.
+              </p>
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={requestPermission}
+                  className="w-full bg-nb-primary hover:bg-nb-primary-dim text-white font-bold py-4 rounded-xl shadow-lg shadow-nb-primary/20 transition-all active:scale-[0.98]"
+                >
+                  Grant Folder Access
+                </button>
+                <button
+                  onClick={() => { setIsConnectingLocal(false); setPendingProjectId(null); }}
+                  className="w-full bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface font-bold py-4 rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {openFile === null ? (
-          <WelcomePage
-            workspace={{ mode: workspaceMode, label: workspaceLabel }}
-            onNewEntry={handleNewEntry}
-            onImportEntry={handleImportEntry}
-            onDisconnect={handleDisconnect}
-            onOpenSidebar={() => setIsSidebarOpen(true)}
-          />
+          !isConnectingLocal && (
+            <WelcomePage
+              workspace={{ mode: workspaceMode, label: workspaceLabel }}
+              onNewEntry={handleNewEntry}
+              onImportEntry={handleImportEntry}
+              onDisconnect={handleDisconnect}
+              onOpenSidebar={() => setIsSidebarOpen(true)}
+            />
+          )
         ) : openFile.viewMode === "image" ? (
           <ImagePreview
             filename={openFile.name}
@@ -1705,11 +1840,13 @@ export default function App() {
                 onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
                 onContentChange={handleContentChange}
                 onTitleChange={(title) => {
+                  if (!openFile) return;
+                  const entryId = openFile.id;
                   setOpenFile(prev => prev ? { ...prev, title } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, {
-                    ...prev.entries[openFile.id],
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, entryId, {
+                    ...prev.entries[entryId],
                     title,
-                    id: openFile.id,
+                    id: entryId,
                     author: openFile.author,
                     phase: openFile.phase,
                     createdAt: openFile.createdAt,
@@ -1718,11 +1855,13 @@ export default function App() {
                   }));
                 }}
                 onAuthorChange={(author) => {
+                  if (!openFile) return;
+                  const entryId = openFile.id;
                   setOpenFile(prev => prev ? { ...prev, author } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, {
-                    ...prev.entries[openFile.id],
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, entryId, {
+                    ...prev.entries[entryId],
                     author,
-                    id: openFile.id,
+                    id: entryId,
                     title: openFile.title,
                     phase: openFile.phase,
                     createdAt: openFile.createdAt,
@@ -1731,11 +1870,13 @@ export default function App() {
                   }));
                 }}
                 onPhaseChange={(phase) => {
+                  if (!openFile) return;
+                  const entryId = openFile.id;
                   setOpenFile(prev => prev ? { ...prev, phase } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, {
-                    ...prev.entries[openFile.id],
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, entryId, {
+                    ...prev.entries[entryId],
                     phase,
-                    id: openFile.id,
+                    id: entryId,
                     title: openFile.title,
                     author: openFile.author,
                     createdAt: openFile.createdAt,
@@ -1797,11 +1938,13 @@ export default function App() {
                 onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
                 onContentChange={handleContentChange}
                 onTitleChange={(title) => {
+                  if (!openFile) return;
+                  const entryId = openFile.id;
                   setOpenFile(prev => prev ? { ...prev, title } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, {
-                    ...prev.entries[openFile.id],
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, entryId, {
+                    ...prev.entries[entryId],
                     title,
-                    id: openFile.id,
+                    id: entryId,
                     author: openFile.author,
                     phase: openFile.phase,
                     createdAt: openFile.createdAt,
@@ -1810,11 +1953,13 @@ export default function App() {
                   }));
                 }}
                 onAuthorChange={(author) => {
+                  if (!openFile) return;
+                  const entryId = openFile.id;
                   setOpenFile(prev => prev ? { ...prev, author } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, {
-                    ...prev.entries[openFile.id],
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, entryId, {
+                    ...prev.entries[entryId],
                     author,
-                    id: openFile.id,
+                    id: entryId,
                     title: openFile.title,
                     phase: openFile.phase,
                     createdAt: openFile.createdAt,
@@ -1823,11 +1968,13 @@ export default function App() {
                   }));
                 }}
                 onPhaseChange={(phase) => {
+                  if (!openFile) return;
+                  const entryId = openFile.id;
                   setOpenFile(prev => prev ? { ...prev, phase } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, openFile.id, {
-                    ...prev.entries[openFile.id],
+                  setNotebookMetadata(prev => updateEntryInIndex(prev, entryId, {
+                    ...prev.entries[entryId],
                     phase,
-                    id: openFile.id,
+                    id: entryId,
                     title: openFile.title,
                     author: openFile.author,
                     createdAt: openFile.createdAt,

@@ -40,6 +40,8 @@ export interface EntryWrapper {
 
 export interface NotebookMetadata {
   version: number;
+  projectId?: string;
+  projectName?: string;
   entries: Record<string, EntryMetadata>; // uuid -> metadata
 }
 
