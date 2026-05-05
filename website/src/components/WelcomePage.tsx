@@ -18,7 +18,7 @@ interface WelcomePageProps {
 export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDisconnect, onOpenSidebar }: WelcomePageProps) {
   const ModeIcon =
     workspace.mode === "github" ? GitBranch :
-    workspace.mode === "local"  ? HardDrive : ArrowLeftRight;
+      workspace.mode === "local" ? HardDrive : ArrowLeftRight;
 
   return (
     <div className="flex flex-col h-full items-center justify-center bg-nb-bg p-8">
@@ -77,8 +77,8 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
             <Upload size={24} className="text-nb-tertiary" />
           </div>
           <div>
-            <div className="font-bold text-xs tracking-widest text-nb-on-surface">Import Portable</div>
-            <div className="text-nb-on-surface-variant text-sm font-normal mt-0.5">Import a .json entry bundle</div>
+            <div className="font-bold text-xs tracking-widest text-nb-on-surface">Import Entry</div>
+            <div className="text-nb-on-surface-variant text-sm font-normal mt-0.5">Import an entry from a JSON file</div>
           </div>
         </button>
       </div>

@@ -528,7 +528,7 @@ export default function App() {
           // Update notebook.json
           const meta = notebookMetadataRef.current;
           const updatedMeta = updateEntryInIndex(meta, entryId, entryMeta);
-          
+
           // Ensure projectId/Name are in meta
           if (currentProjectId && !updatedMeta.projectId) {
             updatedMeta.projectId = currentProjectId;
@@ -1517,7 +1517,7 @@ export default function App() {
     // 3. Save to DB
     await saveProject(p);
     await saveProjectHandle(id, handle);
-    
+
     // 4. Update notebook.json if needed
     const meta = existingMeta || { ...EMPTY_METADATA };
     if (!meta.projectId || !meta.projectName) {
@@ -1612,9 +1612,10 @@ export default function App() {
 
   // ── Workspace label ───────────────────────────────────────────────────────────
 
+  const currentProject = projects.find(p => p.id === currentProjectId);
   const workspaceLabel =
     workspaceMode === "github" ? `${config?.owner}/${config?.repo}` :
-      workspaceMode === "local" ? (dirHandle?.name ?? "Local Folder") : "Memory";
+      workspaceMode === "local" ? (currentProject?.name ?? "Local Folder") : "Temporary";
 
   const ModeIcon = ArrowLeftRight;
 

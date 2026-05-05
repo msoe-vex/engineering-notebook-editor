@@ -93,7 +93,7 @@ const Editor = React.memo(function Editor({
     if (!raw) return raw;
     if (typeof raw === 'object') return raw;
     if (typeof raw !== 'string') return raw;
-    
+
     const trimmed = raw.trim();
     if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
       try {
@@ -125,7 +125,7 @@ const Editor = React.memo(function Editor({
   const checkValidity = useCallback(() => {
     if (!title?.trim() || !author?.trim() || !phase?.trim()) return false;
     if (!editor) return true;
-    
+
     const resources = extractResources(editor.getJSON());
     for (const res of Object.values(resources)) {
       if (!res.title?.trim() || !res.caption?.trim()) return false;
@@ -215,11 +215,11 @@ const Editor = React.memo(function Editor({
 
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const lastSyncedRef = useRef({ 
-    title: initialTitle, 
-    author: initialAuthor, 
-    phase: initialPhase, 
-    contentStr: initialContent 
+  const lastSyncedRef = useRef({
+    title: initialTitle,
+    author: initialAuthor,
+    phase: initialPhase,
+    contentStr: initialContent
   });
 
   // Notify parent of content changes with debounce to prevent lag
@@ -245,7 +245,7 @@ const Editor = React.memo(function Editor({
     autoSaveTimerRef.current = setTimeout(() => {
       const latex = generateLatex(content, title, author, phase);
       if (onContentChange) onContentChange(filename, latex, contentStr, { title, author, phase });
-      
+
       lastSyncedRef.current = { title, author, phase, contentStr };
       setIsAutoSaving(false);
       autoSaveTimerRef.current = null;
@@ -261,7 +261,7 @@ const Editor = React.memo(function Editor({
     return () => {
       const content = latestContentRef.current;
       const { title, author, phase } = latestMetadataRef.current;
-      
+
       // Only flush if there's something to flush
       const contentStr = JSON.stringify(content);
       const isChanged =
@@ -361,7 +361,7 @@ const Editor = React.memo(function Editor({
       type="button"
       onClick={() => { onClick(); setActiveMenu(null); }}
       disabled={disabled}
-      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-primary/10 hover:text-nb-primary transition-all disabled:opacity-30 disabled:hover:bg-transparent text-left"
+      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[10px] font-bold tracking-widest text-nb-on-surface-variant hover:bg-nb-primary/10 hover:text-nb-primary transition-all disabled:opacity-30 disabled:hover:bg-transparent text-left"
     >
       <div className="opacity-60">{icon}</div>
       <span className="flex-1">{label}</span>
@@ -427,14 +427,14 @@ const Editor = React.memo(function Editor({
               <MenuAction icon={<Download size={14} />} label="Download LaTeX" onClick={handleDownload} />
               <MenuAction
                 icon={<FileCode size={14} />}
-                label="Download Portable (.json)"
+                label="Download Entry JSON"
                 onClick={() => {
                   const latestMeta = notebookMetadata?.entries?.[entryId];
                   const currentUpdatedAt = latestMeta?.updatedAt || initialUpdatedAt || initialCreatedAt;
-                  onDownloadPortable?.(filename, JSON.stringify(content), { 
-                    title, author, phase, 
-                    createdAt: initialCreatedAt, 
-                    updatedAt: currentUpdatedAt 
+                  onDownloadPortable?.(filename, JSON.stringify(content), {
+                    title, author, phase,
+                    createdAt: initialCreatedAt,
+                    updatedAt: currentUpdatedAt
                   });
                 }}
               />
@@ -594,9 +594,9 @@ const Editor = React.memo(function Editor({
 
                 <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
 
-                <ToolbarButton 
-                  onClick={() => toggleLinkFn.current?.()} 
-                  active={editor.isActive("link")} 
+                <ToolbarButton
+                  onClick={() => toggleLinkFn.current?.()}
+                  active={editor.isActive("link")}
                   title="Insert Link/Reference"
                 >
                   <LinkIcon size={16} />
@@ -728,13 +728,13 @@ const Editor = React.memo(function Editor({
 
                 <div className="relative" ref={tableButtonRef}>
                   <ToolbarButton
-                    onClick={(e) => { 
-                      e?.stopPropagation(); 
+                    onClick={(e) => {
+                      e?.stopPropagation();
                       if (!showTableGrid && tableButtonRef.current) {
                         const rect = tableButtonRef.current.getBoundingClientRect();
                         setGridPos({ top: rect.bottom + 8, left: rect.right });
                       }
-                      setShowTableGrid(!showTableGrid); 
+                      setShowTableGrid(!showTableGrid);
                     }}
                     active={showTableGrid}
                     title="Insert Table"
@@ -743,11 +743,11 @@ const Editor = React.memo(function Editor({
                   </ToolbarButton>
                   {showTableGrid && createPortal(
                     <div
-                      style={{ 
-                        position: 'fixed', 
-                        top: gridPos.top, 
+                      style={{
+                        position: 'fixed',
+                        top: gridPos.top,
                         left: gridPos.left - 204, // Grid width (180) + padding/shadow room
-                        zIndex: 9999 
+                        zIndex: 9999
                       }}
                       className="shadow-2xl rounded-xl animate-in fade-in zoom-in-95 duration-200"
                       onMouseDown={(e) => e.stopPropagation()}
