@@ -7,16 +7,7 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface ExplorerFile {
-  name: string;
-  path: string;
-  title?: string;
-  author?: string;
-  timestamp?: string;
-  updatedAt?: string;
-  isValid?: boolean;
-  validationErrors?: string[];
-}
+import { ExplorerFile } from "@/lib/types";
 
 interface FileExplorerProps {
   entries: ExplorerFile[];
