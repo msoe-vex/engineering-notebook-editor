@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import {
-  FileText, Image as ImageIcon, Pencil, Trash2, Plus, Upload, Check, X,
+  FileText, Plus, X,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -20,14 +20,11 @@ export interface ExplorerFile {
 
 interface FileExplorerProps {
   entries: ExplorerFile[];
-  resources: ExplorerFile[];
   activePath: string | null;
-  pendingPaths: Set<string>;   // paths with staged (unsaved) changes — shown with dot badge
-  deletedPaths: Set<string>;   // paths staged for deletion — shown with strikethrough
+  pendingPaths: Set<string>;
+  deletedPaths: Set<string>;
   onSelectEntry: (file: ExplorerFile) => void;
-  onSelectResource: (file: ExplorerFile) => void;
   onNewEntry: () => void;
-  onUploadResource: () => void;
   search: string;
   onSearchChange: (val: string) => void;
   sortBy: "created" | "updated" | "title";
@@ -39,16 +36,6 @@ interface FileExplorerProps {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"]);
-
-function extOf(name: string) {
-  return name.split(".").pop()?.toLowerCase() ?? "";
-}
-
-function isImageFile(name: string) {
-  return IMAGE_EXTS.has(extOf(name));
-}
 
 // ─── Single file row ──────────────────────────────────────────────────────────
 
@@ -87,12 +74,13 @@ function FileRow({ file, isSelected, isPending, isDeleted, icon, isValid = true,
         <span className={`text-[9px] font-mono truncate mt-0.5 ${isSelected ? 'text-white/70' : 'opacity-40'}`}>
           {(() => {
             const ts = (sortBy === "updated")
-              ? (file.updatedAt || file.timestamp || Date.now())
-              : (file.timestamp || Date.now());
+              ? (file.updatedAt || file.timestamp)
+              : file.timestamp;
+            const prefix = sortBy === "updated" ? "Modified: " : "Created: ";
+            if (!ts) return prefix + "Unknown";
             const d = new Date(ts);
             const valid = !isNaN(d.getTime());
-            const prefix = sortBy === "updated" ? "Modified: " : "Created: ";
-            return prefix + (valid ? d : new Date()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+            return prefix + (valid ? d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : "Invalid Date");
           })()}
         </span>
       </div>
@@ -159,20 +147,17 @@ function Pane({ id, title, actionLabel, actionIcon, onAction, children, empty, h
 
 // ── Icons for pane ────────────────────────────────────────────────────────────
 
-import { AlertTriangle, Search, SortAsc, SortDesc, Clock, Calendar, Filter, ChevronDown, CalendarDays } from "lucide-react";
+import { AlertTriangle, Search, SortAsc, SortDesc, Clock, Calendar, ChevronDown, CalendarDays } from "lucide-react";
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function FileExplorer({
   entries,
-  resources,
   activePath,
   pendingPaths,
   deletedPaths,
   onSelectEntry,
-  onSelectResource,
   onNewEntry,
-  onUploadResource,
   search,
   onSearchChange,
   sortBy,

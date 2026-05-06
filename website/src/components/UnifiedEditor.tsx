@@ -17,7 +17,7 @@ import { Table } from "@tiptap/extension-table";
 import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
-import { CodeBlock } from "@tiptap/extension-code-block";
+import { CodeBlock, type CodeBlockOptions } from "@tiptap/extension-code-block";
 import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
 import { ASSETS_DIR } from "@/lib/constants";
@@ -247,15 +247,7 @@ export const ToolbarButton = ({
   </button>
 );
 
-const ContextMenuItem = ({ label, icon, onClick, danger }: { label: string, icon: React.ReactNode, onClick: () => void, danger?: boolean }) => (
-  <button
-    onClick={(e) => { e.stopPropagation(); onClick(); }}
-    className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-[10px] font-bold tracking-widest transition-all ${danger ? "text-red-500 hover:bg-red-50" : "text-nb-on-surface-variant hover:bg-nb-primary/10 hover:text-nb-primary"} text-left`}
-  >
-    <div className="opacity-60">{icon}</div>
-    <span>{label}</span>
-  </button>
-);
+
 
 /* ─────────────────────────────────────────────────────────────────
    Image Node View  — caption/initials are editable inline
@@ -291,7 +283,7 @@ export const TableGridSelector = ({ onSelect, initialRows = 0, initialCols = 0 }
 interface NodeViewProps {
   node: import("@tiptap/pm/model").Node;
   selected: boolean;
-  updateAttributes: (attrs: Record<string, any>) => void;
+  updateAttributes: (attrs: Record<string, unknown>) => void;
   deleteNode: () => void;
   editor: import("@tiptap/react").Editor;
   getPos: () => number | undefined;
@@ -333,7 +325,7 @@ interface ImageNodeViewProps extends NodeViewProps {
 const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName, editor }: ImageNodeViewProps) => {
   const [resolvedSrc, setResolvedSrc] = useState(node.attrs.src);
   const [dragEnabled, setDragEnabled] = useState(false);
-  const [isResizing, setIsResizing] = useState(false);
+  const [, setIsResizing] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -428,6 +420,7 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName, e
         </div>
 
         <div className="relative flex justify-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={resolvedSrc}
             alt={node.attrs.caption || node.attrs.alt || ""}
@@ -506,7 +499,7 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
         if (typeof pos !== 'number' || pos < 0) return;
         const { from, to } = editor.state.selection;
         setIsCursorInside(from >= pos && to <= pos + node.nodeSize);
-      } catch (e) { }
+      } catch { }
     };
     check();
     editor.on('selectionUpdate', check);
@@ -625,7 +618,7 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
         </div>
 
         <div className="w-full overflow-x-auto">
-          <NodeViewContent as={"table" as any} className="border-collapse min-w-full table-auto" />
+          <NodeViewContent as={"table" as unknown as "div"} className="border-collapse min-w-full table-auto" />
         </div>
 
         <div contentEditable={false} className="bg-nb-surface-low/30 border-t border-nb-outline-variant/10 px-4 py-2 flex items-center justify-center gap-2 group/caption">
@@ -657,7 +650,7 @@ const CustomCodeBlock = CodeBlock.extend({
       exitOnTripleEnter: true,
       exitOnArrowDown: true,
       HTMLAttributes: {},
-    } as any;
+    } as unknown as CodeBlockOptions;
   },
 
   addAttributes() {
@@ -724,7 +717,7 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
         if (typeof pos !== 'number' || pos < 0) return;
         const { from, to } = editor.state.selection;
         setIsCursorInside(from >= pos && to <= pos + node.nodeSize);
-      } catch (e) { }
+      } catch { }
     };
     check();
     editor.on('selectionUpdate', check);
@@ -812,7 +805,7 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
    Raw LaTeX Node View
    ───────────────────────────────────────────────────────────────── */
 
-const RawLatexBlock = StarterKit.options.codeBlock === false ? null : ({} as any); // placeholder if needed
+
 
 const CustomRawLatex = CodeBlock.extend({
   name: "rawLatex",
@@ -996,30 +989,33 @@ function LinkReferencePopup({
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   useEffect(() => {
-    const { from, to } = editor.state.selection;
-    const selectedText = editor.state.doc.textBetween(from, to, " ");
-    setText(selectedText);
+    const init = async () => {
+      const { from, to } = editor.state.selection;
+      const selectedText = editor.state.doc.textBetween(from, to, " ");
+      setText(selectedText);
 
-    if (editor.isActive('link')) {
-      const attrs = editor.getAttributes('link');
-      setLink(attrs.href || "");
-      if (attrs.resourceId) {
-        // Find resource in metadata
-        let found = null;
-        for (const entry of Object.values(metadata?.entries || {})) {
-          const e = entry as any;
-          if (e.id === attrs.resourceId) {
-            found = { id: e.id, title: e.title, type: 'entry' };
-            break;
+      if (editor.isActive('link')) {
+        const attrs = editor.getAttributes('link');
+        setLink(attrs.href || "");
+        if (attrs.resourceId) {
+          // Find resource in metadata
+          let found = null;
+          for (const entry of Object.values(metadata?.entries || {})) {
+            const e = entry as import("@/lib/metadata").EntryMetadata;
+            if (e.id === attrs.resourceId) {
+              found = { id: e.id, title: e.title, type: 'entry' };
+              break;
+            }
+            if (e.resources?.[attrs.resourceId]) {
+              found = { id: attrs.resourceId, entryId: e.id, ...e.resources[attrs.resourceId] };
+              break;
+            }
           }
-          if (e.resources?.[attrs.resourceId]) {
-            found = { id: attrs.resourceId, entryId: e.id, ...e.resources[attrs.resourceId] };
-            break;
-          }
+          if (found) setSelectedResource(found);
         }
-        if (found) setSelectedResource(found);
       }
-    }
+    };
+    init();
   }, [editor, metadata]);
 
   const allResources = useMemo(() => {
@@ -1027,14 +1023,14 @@ function LinkReferencePopup({
     if (!metadata || !metadata.entries) return list;
 
     // 1. Get resources from the current editor state (most up-to-date for active entry)
-    const currentEntryId = (editor as any).options.element.closest('[data-filename]')?.dataset.filename?.split('/').pop()?.replace('.json', '')
+    const currentEntryId = (editor.options.element as HTMLElement).closest('[data-filename]')?.getAttribute('data-filename')?.split('/').pop()?.replace('.json', '')
       || filename?.split('/').pop()?.replace('.json', '');
 
     // We can also just extract directly from the editor JSON
     const localResources = extractResources(editor.getJSON());
 
     for (const [entryId, entry] of Object.entries(metadata.entries)) {
-      const e = entry as any;
+      const e = entry as import("@/lib/metadata").EntryMetadata;
       const entryTitle = e.title?.trim() || "Untitled Entry";
       const entryDate = e.createdAt?.split('T')[0];
 
@@ -1042,11 +1038,11 @@ function LinkReferencePopup({
 
       const resources = (e.id === currentEntryId) ? { ...e.resources, ...localResources } : (e.resources || {});
 
-      for (const [resId, res] of Object.entries(resources)) {
-        const r = res as any;
-        const resTitle = r.title?.trim() || `Untitled ${r.type?.charAt(0).toUpperCase() + r.type?.slice(1) || 'Block'}`;
-        list.push({ id: resId, title: resTitle, type: r.type, entryTitle, entryDate, entryId: e.id });
-      }
+    for (const [, res] of Object.entries(resources)) {
+      const r = res as { title: string, caption: string, type: string };
+      const resTitle = r.title?.trim() || `Untitled ${r.type?.charAt(0).toUpperCase() + r.type?.slice(1) || 'Block'}`;
+      list.push({ id: entryId, title: resTitle, type: r.type, entryTitle, entryDate, entryId: e.id });
+    }
     }
     return list;
   }, [metadata, editor, filename]);
@@ -1414,7 +1410,7 @@ export default function UnifiedEditor({
         }
         return false;
       },
-      handleDrop: (view, event, slice, moved) => {
+      handleDrop: (_view, event) => {
         setIsDragging(false);
         const files = event.dataTransfer?.files;
         if (files && files.length > 0) {
@@ -1486,21 +1482,9 @@ export default function UnifiedEditor({
 
   const isInTable = editor?.isActive("tableCell") || editor?.isActive("tableHeader") || false;
 
-  const insertImage = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) handleImageFile(file);
-      // Clear for potential re-upload of same file name
-      input.value = "";
-    };
-    input.click();
-  };
+
 
   const [showTableGrid, setShowTableGrid] = useState(false);
-  const [hoveredGrid, setHoveredGrid] = useState({ r: 0, c: 0 });
 
   // Dismiss table grid on click away
   React.useEffect(() => {
@@ -1547,8 +1531,4 @@ export default function UnifiedEditor({
   );
 }
 
-/* ── Shared UI Components ────────────────────────────────────── */
 
-function Sep({ light }: { light?: boolean }) {
-  return <div className={`w-px h-6 self-center mx-2 shrink-0 ${light ? "bg-white/20" : "bg-nb-outline-variant/30"}`} />;
-}

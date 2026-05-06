@@ -95,7 +95,7 @@ const Editor = React.memo(function Editor({
   notebookMetadata,
   targetResourceId,
 }: EditorProps) {
-  const parseInitialContent = (raw: unknown): TipTapNode | string => {
+  const parseInitialContent = useCallback((raw: unknown): TipTapNode | string => {
     if (!raw) return "";
     if (typeof raw === 'object' && raw !== null) return raw as TipTapNode;
     if (typeof raw !== 'string') return String(raw);
@@ -108,11 +108,11 @@ const Editor = React.memo(function Editor({
         if (typeof parsed === 'string') return parseInitialContent(parsed);
         return parsed as TipTapNode | string;
       } catch {
-        return raw;
+        return trimmed;
       }
     }
-    return raw;
-  };
+    return trimmed;
+  }, []);
 
   const [title, setTitle] = useState(initialTitle);
   const [author, setAuthor] = useState(initialAuthor);
@@ -225,20 +225,19 @@ const Editor = React.memo(function Editor({
     setAuthor(initialAuthor);
     setPhase(initialPhase);
     setContent(parseInitialContent(initialContent));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filename]);
+  }, [filename, initialTitle, initialAuthor, initialPhase, initialContent, parseInitialContent]);
 
-  const generateLatex = (cnt: TipTapNode | string, t: string, a: string, p: string) => {
-    const entryId = filename.split('/').pop()?.replace('.json', '') || "";
-    return generateEntryLatex(cnt, t, a, p, initialCreatedAt, entryId);
-  };
+  const generateLatex = useCallback((cnt: TipTapNode | string, t: string, a: string, p: string) => {
+    const id = filename.split('/').pop()?.replace('.json', '') || "";
+    return generateEntryLatex(cnt, t, a, p, initialCreatedAt, id);
+  }, [filename, initialCreatedAt]);
 
-  const validate = () => {
+  const validate = useCallback(() => {
     const errors: string[] = [];
     if (!title.trim()) errors.push("Project title is required.");
     if (!author.trim()) errors.push("Author name is required.");
     return { valid: errors.length === 0, errors };
-  };
+  }, [title, author]);
 
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
@@ -282,8 +281,7 @@ const Editor = React.memo(function Editor({
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [content, title, author, phase, filename, onContentChange]);
+  }, [content, title, author, phase, filename, onContentChange, generateLatex]);
 
   // Flush pending changes on unmount to prevent data loss on fast entry switch
   useEffect(() => {
@@ -304,10 +302,9 @@ const Editor = React.memo(function Editor({
         onContentChange(filename, latex, contentStr, { title, author, phase });
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filename]);
+  }, [filename, initialTitle, initialAuthor, initialPhase, initialContent, onContentChange, generateLatex]);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     const { valid, errors } = validate();
     if (!valid) {
       setValidationErrors(errors);
@@ -333,7 +330,7 @@ const Editor = React.memo(function Editor({
     }
 
     setIsSaving(false);
-  };
+  }, [content, title, author, phase, filename, onContentChange, generateLatex, validate]);
 
   const handleDownload = () => {
     const latex = generateLatex(content, title, author, phase);

@@ -46,7 +46,7 @@ export default function Settings({
   const [mounted, setMounted] = useState(false);
 
   // Form states for GitHub
-  const [repoUrl, setRepoUrl] = useState(() => (typeof window !== "undefined" ? localStorage.getItem("nb-github-repo-url") : "") || "");
+  const [repoUrl] = useState(() => (typeof window !== "undefined" ? localStorage.getItem("nb-github-repo-url") : "") || "");
   const [folderPath, setFolderPath] = useState(() => (typeof window !== "undefined" ? localStorage.getItem("nb-github-folder") : "") || "");
   const [isGithubModalOpen, setIsGithubModalOpen] = useState(false);
   const [userRepos, setUserRepos] = useState<GitHubRepo[]>([]);
@@ -97,49 +97,65 @@ export default function Settings({
   };
 
   useEffect(() => {
-    setMounted(true);
+    const init = async () => {
+      setMounted(true);
 
-    const savedType = localStorage.getItem("nb-create-type");
-    if (savedType) {
-      if (savedType === "github") {
-        setIsGithubModalOpen(true);
+      const savedType = localStorage.getItem("nb-create-type");
+      if (savedType) {
+        if (savedType === "github") {
+          setIsGithubModalOpen(true);
+        }
+        localStorage.removeItem("nb-create-type");
       }
-      localStorage.removeItem("nb-create-type");
-    }
+    };
+    init();
   }, []);
 
   useEffect(() => {
-    if (githubToken && isGithubModalOpen) {
-      setIsLoadingRepos(true);
-      fetchUserRepositories(githubToken).then(repos => {
-        setUserRepos(repos);
+    const init = async () => {
+      if (githubToken && isGithubModalOpen) {
+        setIsLoadingRepos(true);
+        try {
+          const repos = await fetchUserRepositories(githubToken);
+          setUserRepos(repos);
 
-        // If repoUrl was saved, try to find it in the fetched repos
-        const savedUrl = localStorage.getItem("nb-github-repo-url");
-        if (savedUrl) {
-          const parsed = parseRepoUrl(savedUrl);
-          if (parsed) {
-            const found = repos.find((r: GitHubRepo) => r.owner.login === parsed.owner && r.name === parsed.repo);
-            if (found) {
-              setSelectedRepo({ owner: found.owner.login, repo: found.name, default_branch: found.default_branch });
+          const savedUrl = localStorage.getItem("nb-github-repo-url");
+          if (savedUrl) {
+            const parsed = parseRepoUrl(savedUrl);
+            if (parsed) {
+              const found = repos.find((r: GitHubRepo) => r.owner.login === parsed.owner && r.name === parsed.repo);
+              if (found) {
+                setSelectedRepo({ owner: found.owner.login, repo: found.name, default_branch: found.default_branch });
+              }
             }
           }
+        } catch (e) {
+          console.error("Failed to fetch GitHub data", e);
+        } finally {
+          setIsLoadingRepos(false);
         }
-      }).catch(e => console.error("Failed to fetch GitHub data", e))
-        .finally(() => setIsLoadingRepos(false));
-    }
+      }
+    };
+    init();
   }, [githubToken, isGithubModalOpen]); // Removed parseRepoUrl from deps as it is stable
 
   useEffect(() => {
-    if (githubToken && selectedRepo) {
-      setIsLoadingFolders(true);
-      fetchRepoFolders(githubToken, selectedRepo.owner, selectedRepo.repo, browsingPath)
-        .then(folders => setAvailableFolders(folders))
-        .catch(e => console.error("Failed to fetch folders", e))
-        .finally(() => setIsLoadingFolders(false));
-    } else {
-      setAvailableFolders([]);
-    }
+    const fetchFolders = async () => {
+      if (githubToken && selectedRepo) {
+        setIsLoadingFolders(true);
+        try {
+          const folders = await fetchRepoFolders(githubToken, selectedRepo.owner, selectedRepo.repo, browsingPath);
+          setAvailableFolders(folders);
+        } catch (e) {
+          console.error("Failed to fetch folders", e);
+        } finally {
+          setIsLoadingFolders(false);
+        }
+      } else {
+        setAvailableFolders([]);
+      }
+    };
+    fetchFolders();
   }, [githubToken, selectedRepo, browsingPath]);
 
   const filteredRepos = useMemo(() => {
