@@ -2164,48 +2164,15 @@ export default function App() {
                 onContentChange={handleContentChange}
                 onTitleChange={(title) => {
                   if (!openFile) return;
-                  const entryId = openFile.id;
                   setOpenFile(prev => prev ? { ...prev, title } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, entryId, {
-                    ...prev.entries[entryId],
-                    title,
-                    id: entryId,
-                    author: openFile.author,
-                    phase: openFile.phase,
-                    createdAt: openFile.createdAt,
-                    updatedAt: isoTimestamp(),
-                    filename: openFile.path
-                  }));
                 }}
                 onAuthorChange={(author) => {
                   if (!openFile) return;
-                  const entryId = openFile.id;
                   setOpenFile(prev => prev ? { ...prev, author } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, entryId, {
-                    ...prev.entries[entryId],
-                    author,
-                    id: entryId,
-                    title: openFile.title,
-                    phase: openFile.phase,
-                    createdAt: openFile.createdAt,
-                    updatedAt: isoTimestamp(),
-                    filename: openFile.path
-                  }));
                 }}
                 onPhaseChange={(phase) => {
                   if (!openFile) return;
-                  const entryId = openFile.id;
                   setOpenFile(prev => prev ? { ...prev, phase } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, entryId, {
-                    ...prev.entries[entryId],
-                    phase,
-                    id: entryId,
-                    title: openFile.title,
-                    author: openFile.author,
-                    createdAt: openFile.createdAt,
-                    updatedAt: isoTimestamp(),
-                    filename: openFile.path
-                  }));
                 }}
                 onImageUpload={handleImageUploaded}
                 onDownloadPortable={handleDownloadPortable}
@@ -2262,48 +2229,15 @@ export default function App() {
                 onContentChange={handleContentChange}
                 onTitleChange={(title) => {
                   if (!openFile) return;
-                  const entryId = openFile.id;
                   setOpenFile(prev => prev ? { ...prev, title } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, entryId, {
-                    ...prev.entries[entryId],
-                    title,
-                    id: entryId,
-                    author: openFile.author,
-                    phase: openFile.phase,
-                    createdAt: openFile.createdAt,
-                    updatedAt: isoTimestamp(),
-                    filename: openFile.path
-                  }));
                 }}
                 onAuthorChange={(author) => {
                   if (!openFile) return;
-                  const entryId = openFile.id;
                   setOpenFile(prev => prev ? { ...prev, author } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, entryId, {
-                    ...prev.entries[entryId],
-                    author,
-                    id: entryId,
-                    title: openFile.title,
-                    phase: openFile.phase,
-                    createdAt: openFile.createdAt,
-                    updatedAt: isoTimestamp(),
-                    filename: openFile.path
-                  }));
                 }}
                 onPhaseChange={(phase) => {
                   if (!openFile) return;
-                  const entryId = openFile.id;
                   setOpenFile(prev => prev ? { ...prev, phase } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, entryId, {
-                    ...prev.entries[entryId],
-                    phase,
-                    id: entryId,
-                    title: openFile.title,
-                    author: openFile.author,
-                    createdAt: openFile.createdAt,
-                    updatedAt: isoTimestamp(),
-                    filename: openFile.path
-                  }));
                 }}
                 onImageUpload={handleImageUploaded}
                 onDownloadPortable={handleDownloadPortable}

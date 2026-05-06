@@ -49,3 +49,16 @@ export function getExtensionFromDataUrl(dataUrl: string): string {
   const match = dataUrl.match(/^data:image\/(\w+);base64,/);
   return match ? match[1] : "png";
 }
+/**
+ * Simple debounce utility.
+ */
+export function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): (...args: Parameters<T>) => void {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  return (...args: Parameters<T>) => {
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+}

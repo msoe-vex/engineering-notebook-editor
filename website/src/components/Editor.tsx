@@ -10,7 +10,7 @@ import {
   Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
   Brain, PencilRuler, Hammer, SearchCheck, Goal, Terminal, Link as LinkIcon, Underline as UnderlineIcon
 } from "lucide-react";
-import { generateUUID, hashContent, getExtensionFromDataUrl } from "@/lib/utils";
+import { generateUUID, hashContent, getExtensionFromDataUrl, debounce } from "@/lib/utils";
 import { generateEntryLatex } from "@/lib/latex";
 import AutocompleteInput from "./AutocompleteInput";
 import { extractResources, extractReferences, TipTapNode, NotebookMetadata } from "@/lib/metadata";
@@ -171,6 +171,12 @@ const Editor = React.memo(function Editor({
     }
   }, [title, author, phase, editor?.state.doc.content, checkValidity, localIsValid, onValidationChange]);
 
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Debounced callbacks to prevent App-level re-renders on every keystroke
+  const debouncedTitleChange = useRef(debounce((val: string) => onTitleChange?.(val), 150)).current;
+  const debouncedAuthorChange = useRef(debounce((val: string) => onAuthorChange?.(val), 150)).current;
+
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [showTableGrid, setShowTableGrid] = useState(false);
@@ -219,13 +225,15 @@ const Editor = React.memo(function Editor({
     };
   }, [editor]);
 
-  // Update content when filename changes (new entry loaded)
-  useEffect(() => {
+  // Derived state pattern: reset state when filename changes (switching entries)
+  const prevFilename = useRef(filename);
+  if (filename !== prevFilename.current) {
+    prevFilename.current = filename;
     setTitle(initialTitle);
     setAuthor(initialAuthor);
     setPhase(initialPhase);
     setContent(parseInitialContent(initialContent));
-  }, [filename, initialTitle, initialAuthor, initialPhase, initialContent, parseInitialContent]);
+  }
 
   const generateLatex = useCallback((cnt: TipTapNode | string, t: string, a: string, p: string) => {
     const id = filename.split('/').pop()?.replace('.json', '') || "";
@@ -551,8 +559,14 @@ const Editor = React.memo(function Editor({
                 type="text"
                 value={title}
                 options={otherTitles}
-                onSelectOption={(val) => { setTitle(val); onTitleChange?.(val); }}
-                onChange={(e) => { setTitle(e.target.value); onTitleChange?.(e.target.value); }}
+                onChange={(e) => { 
+                  setTitle(e.target.value); 
+                  debouncedTitleChange(e.target.value); 
+                }}
+                onSelectOption={(val) => { 
+                  setTitle(val); 
+                  onTitleChange?.(val); 
+                }}
                 placeholder="Project Title..."
                 className="w-full text-xl font-bold bg-transparent text-nb-on-surface outline-none placeholder:text-nb-outline-variant"
               />
@@ -579,8 +593,14 @@ const Editor = React.memo(function Editor({
                   autoComplete="off"
                   value={author}
                   options={otherAuthors}
-                  onSelectOption={(val) => { setAuthor(val); onAuthorChange?.(val); }}
-                  onChange={(e) => { setAuthor(e.target.value); onAuthorChange?.(e.target.value); }}
+                  onChange={(e) => { 
+                    setAuthor(e.target.value); 
+                    debouncedAuthorChange(e.target.value); 
+                  }}
+                  onSelectOption={(val) => { 
+                    setAuthor(val); 
+                    onAuthorChange?.(val); 
+                  }}
                   placeholder="Author"
                   className="text-xs font-semibold text-nb-on-surface-variant bg-transparent outline-none w-36"
                 />
