@@ -28,8 +28,6 @@ interface PhaseInfo {
   text: string;
 }
 
-const unused_var = "unused";
-
 const PHASE_CONFIG: Record<string, PhaseInfo> = {
   "Define Problem": { icon: Goal, color: "text-blue-500", bg: "bg-blue-500/10", border: "border-blue-500/20", text: "text-blue-600 dark:text-blue-400" },
   "Generate Concepts": { icon: Brain, color: "text-purple-500", bg: "bg-purple-500/10", border: "border-purple-500/20", text: "text-purple-600 dark:text-purple-400" },
