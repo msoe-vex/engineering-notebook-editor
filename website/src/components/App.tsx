@@ -30,7 +30,7 @@ import { ImperativePanelHandle } from "react-resizable-panels";
 import { saveAs } from "file-saver";
 import { generateUUID, hashContent } from "@/lib/utils";
 import { generateEntryLatex, generateAllEntriesLatex } from "@/lib/latex";
-import { extractImagePaths, extractResources, extractReferences, validateNotebookIntegrity } from "@/lib/metadata";
+import { extractImagePaths, extractResources, extractReferences, validateNotebookIntegrity, TipTapNode } from "@/lib/metadata";
 import { ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, INDEX_PATH, ALL_ENTRIES_PATH } from "@/lib/constants";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -89,37 +89,11 @@ const getFilenameTimestamp = () =>
 const isImage = (name: string) =>
   /\.(png|jpg|jpeg|gif|webp|svg|bmp|ico)$/i.test(name);
 
-/** Validate that all header fields and all component captions are filled. */
-const validateEntry = (tiptapJson: string, title: string, author: string, phase: string): { valid: boolean; errors: string[] } => {
-  const errors: string[] = [];
-  if (!title.trim()) errors.push("Project Title is required.");
-  if (!author.trim()) errors.push("Author is required.");
-  if (!phase || phase === "Select Phase") errors.push("Project Phase is required.");
 
-  try {
-    const doc = JSON.parse(tiptapJson);
-    const checkCaptions = (node: any) => {
-      if (node.type === "image" && !node.attrs?.alt?.trim()) errors.push("All images must have a caption.");
-      if (node.type === "table" && !node.attrs?.caption?.trim()) errors.push("All tables must have a caption.");
-      if (node.type === "codeBlock" && !node.attrs?.caption?.trim()) errors.push("All code blocks must have a caption.");
-      (node.content ?? []).forEach(checkCaptions);
-    };
-    checkCaptions(doc);
-  } catch {
-    // Ignore parse errors here
-  }
-
-  return { valid: errors.length === 0, errors };
-};
-
-
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const getLocalFileContent = async (rootHandle: any, path: string): Promise<{ text?: string; base64?: string; isImage: boolean }> => {
+const getLocalFileContent = async (rootHandle: FileSystemDirectoryHandle, path: string): Promise<{ text?: string; base64?: string; isImage: boolean }> => {
   try {
     const parts = path.split('/');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let currentHandle: any = rootHandle;
+    let currentHandle: FileSystemDirectoryHandle = rootHandle;
     for (let i = 0; i < parts.length - 1; i++) {
       currentHandle = await currentHandle.getDirectoryHandle(parts[i]);
     }
@@ -135,33 +109,29 @@ const getLocalFileContent = async (rootHandle: any, path: string): Promise<{ tex
     }
     const text = await file.text();
     return { text, isImage: false };
-  } catch (e: any) {
-    if (e.name !== 'NotFoundError') {
+  } catch (e: unknown) {
+    if (e instanceof Error && e.name !== 'NotFoundError') {
       console.error(`Local read failed for ${path}`, e);
     }
     throw e;
   }
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const writeLocalFile = async (rootHandle: any, path: string, content: string | Uint8Array) => {
+const writeLocalFile = async (rootHandle: FileSystemDirectoryHandle, path: string, content: string | Uint8Array) => {
   const parts = path.split('/');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let currentHandle: any = rootHandle;
+  let currentHandle: FileSystemDirectoryHandle = rootHandle;
   for (let i = 0; i < parts.length - 1; i++) {
     currentHandle = await currentHandle.getDirectoryHandle(parts[i], { create: true });
   }
   const fileHandle = await currentHandle.getFileHandle(parts[parts.length - 1], { create: true });
   const writable = await fileHandle.createWritable();
-  await writable.write(content);
+  await writable.write(content as FileSystemWriteChunkType);
   await writable.close();
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const deleteLocalFileAtPath = async (rootHandle: any, path: string) => {
+const deleteLocalFileAtPath = async (rootHandle: FileSystemDirectoryHandle, path: string) => {
   const parts = path.split('/');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let currentHandle: any = rootHandle;
+  let currentHandle: FileSystemDirectoryHandle = rootHandle;
   for (let i = 0; i < parts.length - 1; i++) {
     currentHandle = await currentHandle.getDirectoryHandle(parts[i]);
   }
@@ -176,12 +146,19 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectPendingCounts, setProjectPendingCounts] = useState<Record<string, number>>({});
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
-  const [config, setConfig] = useState<GitHubConfig | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [dirHandle, setDirHandle] = useState<any>(null);
+  const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [githubToken, setGithubToken] = useState<string | null>(null);
   const [githubUser, setGithubUser] = useState<string | null>(null);
+  const [config, setConfig] = useState<GitHubConfig | null>(null);
+
+  // Notifications
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const notify = useCallback((message: string, type: "error" | "success" = "success") => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4000);
+  }, []);
 
   // Explorer file lists
   const [entries, setEntries] = useState<ExplorerFile[]>([]);
@@ -201,9 +178,8 @@ export default function App() {
   const [isRenamingProject, setIsRenamingProject] = useState(false);
   const [projectRenameValue, setProjectRenameValue] = useState("");
 
-  // Serialized queue for local file system operations to prevent InvalidStateError
-  const localWriteQueueRef = useRef<Promise<any>>(Promise.resolve());
-  const queueLocalOp = useCallback(async (op: () => Promise<any>) => {
+  const localWriteQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const queueLocalOp = useCallback(async (op: () => Promise<void>) => {
     const next = localWriteQueueRef.current.then(op).catch(e => {
       console.error("Local FS operation failed in queue", e);
     });
@@ -213,7 +189,6 @@ export default function App() {
 
   // Current open file
   const [openFile, setOpenFile] = useState<OpenFileState | null>(null);
-  const [showReferenceSearch, setShowReferenceSearch] = useState(false);
   const [needsPermission, setNeedsPermission] = useState(false);
   const [isConnectingLocal, setIsConnectingLocal] = useState(false);
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
@@ -222,11 +197,10 @@ export default function App() {
   // metadata.json contents
   const [notebookMetadata, setNotebookMetadata] = useState<NotebookMetadata>(EMPTY_METADATA);
   const notebookMetadataRef = useRef(notebookMetadata);
-  const metadataSyncTimeoutRef = useRef<any>(null);
+  const metadataSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { notebookMetadataRef.current = notebookMetadata; }, [notebookMetadata]);
 
-  // Notifications
-  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
 
   // URL-based navigation state
   const [targetResourceId, setTargetResourceId] = useState<string | null>(null);
@@ -273,10 +247,10 @@ export default function App() {
     return "notebook-volatile";
   }, [currentProjectId]);
 
-  const checkPermission = async (handle: any) => {
+  const checkPermission = async (handle: FileSystemDirectoryHandle) => {
     if (!handle) return false;
     try {
-      const status = await (handle as any).queryPermission({ mode: 'readwrite' });
+      const status = await handle.queryPermission({ mode: 'readwrite' });
       if (status === 'granted') {
         setNeedsPermission(false);
         return true;
@@ -295,7 +269,7 @@ export default function App() {
     const handle = dirHandle || (pendingProjectId ? await getProjectHandle(pendingProjectId) : null);
     if (!handle) return;
     try {
-      const status = await (handle as any).requestPermission({ mode: 'readwrite' });
+      const status = await handle.requestPermission({ mode: 'readwrite' });
       if (status === 'granted') {
         setNeedsPermission(false);
         setIsConnectingLocal(false);
@@ -338,15 +312,7 @@ export default function App() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [workspaceMode]);
 
-  // Load initial author from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem("nb-last-author");
-    if (saved && openFile && !openFile.author) {
-      setOpenFile(prev => prev ? { ...prev, author: saved } : null);
-    }
-  }, [!!openFile]);
-
-  const { theme, setTheme, resolvedTheme } = useTheme();
+  const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [entrySearch, setEntrySearch] = useState("");
@@ -359,6 +325,15 @@ export default function App() {
   const editorPanelRef = useRef<ImperativePanelHandle>(null);
   const previewPanelRef = useRef<ImperativePanelHandle>(null);
   const sidebarPanelRef = useRef<ImperativePanelHandle>(null);
+
+  // Load initial author from localStorage
+  useEffect(() => {
+    if (!mounted) return;
+    const saved = localStorage.getItem("nb-last-author");
+    if (saved && openFile && !openFile.author) {
+      setOpenFile(prev => prev ? { ...prev, author: saved } : null);
+    }
+  }, [mounted, openFile]); // Depend on path to re-run when switching files
 
   useEffect(() => {
     if (!sidebarPanelRef.current) return;
@@ -383,14 +358,15 @@ export default function App() {
   }, [desktopViewMode]);
   const isMobile = useIsMobile();
 
-  const showPreview = desktopViewMode === "split" || desktopViewMode === "preview";
-
   const isExchangingCode = useRef(false);
 
   useEffect(() => {
     setMounted(true);
-    setGithubToken(localStorage.getItem("nb-github-token"));
-    setGithubUser(localStorage.getItem("nb-github-user"));
+
+    const token = localStorage.getItem("nb-github-token");
+    const user = localStorage.getItem("nb-github-user");
+    setGithubToken(token);
+    setGithubUser(user);
 
     // Handle GitHub OAuth callback
     const params = new URLSearchParams(window.location.search);
@@ -411,11 +387,11 @@ export default function App() {
 
             // Fetch user info to show who is signed in
             fetchGitHubUser(data.access_token)
-              .then(user => {
-                if (user.login) {
-                  localStorage.setItem("nb-github-user", user.login);
-                  setGithubUser(user.login);
-                  notify(`Signed in as ${user.login}`, "success");
+              .then(userResult => {
+                if (userResult.login) {
+                  localStorage.setItem("nb-github-user", userResult.login);
+                  setGithubUser(userResult.login);
+                  notify(`Signed in as ${userResult.login}`, "success");
                 }
               })
               .catch(e => console.error("Failed to fetch GitHub user info", e));
@@ -436,7 +412,7 @@ export default function App() {
           isExchangingCode.current = false;
         });
     }
-  }, []);
+  }, [notify]);
   // ── Dynamic Paths ──────────────────────────────────────────────────────────
   const currentEntriesDir = useMemo(() => (workspaceMode === "github" && config) ? config.entriesDir : ENTRIES_DIR, [workspaceMode, config]);
   const currentAssetsDir = useMemo(() => (workspaceMode === "github" && config) ? config.resourcesDir : ASSETS_DIR, [workspaceMode, config]);
@@ -463,16 +439,10 @@ export default function App() {
     else setIsSidebarOpen(true);
   }, [isMobile]);
 
-  const notify = (message: string, type: "error" | "success" = "success") => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 4000);
-  };
-
   // Latex preview content (kept in sync by Editor)
   const [latexContent, setLatexContent] = useState("");
 
   const [isLoading, setIsLoading] = useState(false);
-  const [styContent, setStyContent] = useState("");
 
   const lastRemoteMetadataRef = useRef<string>("");
   const lastRemoteAllEntriesRef = useRef<string>("");
@@ -559,10 +529,14 @@ export default function App() {
     });
 
     return list;
-  }, [entries, notebookMetadata, entrySearch, entrySort, entrySortDirection, dateRange, openFile, savingPaths, pendingChanges, currentEntriesDir]);
+  }, [entries, notebookMetadata, entrySearch, entrySort, entrySortDirection, dateRange, savingPaths, pendingChanges, currentEntriesDir]);
 
   const displayResources = useMemo(() => {
-    let list = [...resources];
+    let list: { name: string; path: string; timestamp: string }[] = resources.map(r => ({
+      name: r.name,
+      path: r.path,
+      timestamp: r.timestamp || new Date().toISOString()
+    }));
     const deletedPaths = new Set(pendingChanges.filter(p => p.operation === "delete").map(p => p.path));
 
     // Filter out deleted items from the main list first
@@ -619,10 +593,10 @@ export default function App() {
 
     setSavingPaths(prev => new Set(prev).add(changedPath));
 
-    const parseContent = (raw: any): any => {
-      if (!raw) return raw;
-      if (typeof raw === 'object') return raw;
-      if (typeof raw !== 'string') return raw;
+    const parseContent = (raw: unknown): TipTapNode | string => {
+      if (!raw) return "";
+      if (typeof raw === 'object') return (raw as unknown) as TipTapNode;
+      if (typeof raw !== 'string') return raw as string;
       try {
         const parsed = JSON.parse(raw);
         if (typeof parsed === 'string') return parseContent(parsed);
@@ -633,8 +607,8 @@ export default function App() {
     };
 
     const contentObj = parseContent(tiptapContent);
-    const resources = contentObj ? extractResources(contentObj) : {};
-    const references = contentObj ? extractReferences(contentObj) : [];
+    const resources = (contentObj && typeof contentObj === 'object') ? extractResources(contentObj) : {};
+    const references = (contentObj && typeof contentObj === 'object') ? extractReferences(contentObj) : [];
 
     const entryMeta: EntryMetadata = {
       id: entryId,
@@ -656,7 +630,7 @@ export default function App() {
 
     if (contentObj) {
       try {
-        const { cleanDoc, newAssets } = await dehydrateAssets(contentObj);
+        const { cleanDoc, newAssets } = await dehydrateAssets(contentObj as TipTapNode);
         assetsToSave = newAssets;
         finalDoc = cleanDoc;
       } catch (e) {
@@ -811,7 +785,7 @@ export default function App() {
       const resourceFiles: ExplorerFile[] = [];
 
       try {
-        let entriesDir: any = dirHandle;
+        let entriesDir: FileSystemDirectoryHandle = dirHandle;
         for (const part of ENTRIES_DIR.split('/')) {
           entriesDir = await entriesDir.getDirectoryHandle(part, { create: true });
         }
@@ -823,7 +797,7 @@ export default function App() {
       } catch { /* entries dir missing */ }
 
       try {
-        let assetsDir: any = dirHandle;
+        let assetsDir: FileSystemDirectoryHandle = dirHandle;
         for (const part of ASSETS_DIR.split('/')) {
           assetsDir = await assetsDir.getDirectoryHandle(part, { create: true });
         }
@@ -841,12 +815,6 @@ export default function App() {
           const parsed = JSON.parse(result.text);
           setNotebookMetadata(parsed);
         }
-      } catch { /* not found */ }
-
-      // Load sty
-      try {
-        const result = await getLocalFileContent(dirHandle, "vex_notebook.sty");
-        if (result.text) setStyContent(result.text);
       } catch { /* not found */ }
 
       setEntries(entryFiles);
@@ -896,18 +864,12 @@ export default function App() {
         lastRemoteAllEntriesRef.current = allEntries;
       } catch { /* not found */ }
 
-      // Load sty
-      try {
-        const styStr = await fetchFileContent(config, "vex_notebook.sty");
-        setStyContent(styStr);
-      } catch { /* not found */ }
-
       setEntries(entryFiles);
       setResources(resourceFiles);
     } finally {
       setIsLoading(false);
     }
-  }, [config, getDBName]);
+  }, [config, currentEntriesDir, currentAssetsDir, getDBName, currentIndexPath, currentAllEntriesPath]);
 
   useEffect(() => {
     if (workspaceMode === "local" && dirHandle && notebookMetadata !== EMPTY_METADATA) {
@@ -1228,7 +1190,15 @@ export default function App() {
         if (p) {
           setCurrentProjectId(p.id);
           if (p.type === "github" && p.githubConfig) {
-            setConfig(p.githubConfig);
+            setConfig({
+              token: githubToken || "",
+              owner: p.githubConfig.owner,
+              repo: p.githubConfig.repo,
+              branch: p.githubConfig.branch,
+              baseDir: p.githubConfig.folderPath,
+              entriesDir: p.githubConfig.folderPath ? `${p.githubConfig.folderPath}/${ENTRIES_DIR}` : ENTRIES_DIR,
+              resourcesDir: p.githubConfig.folderPath ? `${p.githubConfig.folderPath}/${ASSETS_DIR}` : ASSETS_DIR,
+            });
             setWorkspaceMode("github");
             // Clear volatile DB when switching to a real project
             deleteProjectDatabase("notebook-volatile").catch(() => { });
@@ -1472,7 +1442,7 @@ export default function App() {
       }
     };
     input.click();
-  }, [workspaceMode, dirHandle, stage, getDBName]);
+  }, [workspaceMode, dirHandle, stage, getDBName, currentEntriesDir, loadLocalExplorer, notebookMetadata, currentIndexPath, currentAllEntriesPath, currentLatexDir, queueLocalOp, notify]);
 
   // ── Image upload from editor ─────────────────────────────────────────────────
 
@@ -1495,8 +1465,7 @@ export default function App() {
       const imgName = imagePath.split("/").pop()!;
       setResources(prev => [...prev, { name: imgName, path: imagePath }].sort((a, b) => a.name.localeCompare(b.name)));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceMode, dirHandle, loadLocalExplorer, stage, getDBName]);
+  }, [workspaceMode, dirHandle, loadLocalExplorer, stage, getDBName, cacheContent, queueLocalOp]);
 
   // ── Upload resource from FileExplorer ────────────────────────────────────────
 
@@ -1534,16 +1503,16 @@ export default function App() {
       await queueLocalOp(async () => {
         await writeLocalFile(dirHandle, INDEX_PATH, metaStr);
         await deleteLocalFileAtPath(dirHandle, file.path);
-        const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
+        const entryIdToDelete = file.path.split('/').pop()?.replace('.json', '') || "";
         try {
-          await deleteLocalFileAtPath(dirHandle, `${LATEX_DIR}/${entryId}.tex`);
+          await deleteLocalFileAtPath(dirHandle, `${LATEX_DIR}/${entryIdToDelete}.tex`);
         } catch { /* ignore if not found */ }
         await loadLocalExplorer();
       });
     } else if (workspaceMode === "github" || workspaceMode === "temporary") {
       const dbName = getDBName();
-      const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
-      const latexPath = `${currentLatexDir}/${entryId}.tex`;
+      const entryIdToDelete = file.path.split('/').pop()?.replace('.json', '') || "";
+      const latexPath = `${currentLatexDir}/${entryIdToDelete}.tex`;
 
       // Check if it was brand new (not on GitHub yet)
       const allPending = await getAllPending(dbName);
@@ -1579,8 +1548,7 @@ export default function App() {
       setOpenFile(null);
       setLatexContent("");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceMode, dirHandle, loadLocalExplorer, stage, openFile, notebookMetadata]);
+  }, [workspaceMode, dirHandle, loadLocalExplorer, stage, openFile?.path, notebookMetadata, getDBName, currentLatexDir, currentIndexPath, currentAllEntriesPath, queueLocalOp, refreshPending]);
 
   // ── Resource delete (cascades to entries) ────────────────────────────────────
 
@@ -1621,8 +1589,7 @@ export default function App() {
     if (openFile?.path === file.path) {
       setOpenFile(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceMode, dirHandle, loadLocalExplorer, stage, entries, contentCache, notebookMetadata, openFile]);
+  }, [workspaceMode, dirHandle, loadLocalExplorer, stage, notebookMetadata, openFile?.path, getDBName, currentIndexPath, queueLocalOp, refreshPending, getAllPending, removeStaged, setNotebookMetadata, setOpenFile, setResources]);
 
   const handleDownloadPortable = useCallback(async (filename: string, content: string, info: { title: string; author: string; phase: string, createdAt: string, updatedAt?: string }) => {
     try {
@@ -1669,9 +1636,7 @@ export default function App() {
       console.error("Failed to download portable entry", e);
       notify("Failed to export entry.", "error");
     }
-  }, [workspaceMode, dirHandle, getDBName, openFile?.id]);
-
-
+  }, [workspaceMode, dirHandle, getDBName, openFile?.id, getAllPending, getResource, notify]);
 
   // ── GitHub commit all ─────────────────────────────────────────────────────────
 
@@ -1681,8 +1646,6 @@ export default function App() {
     try {
       const dbName = getDBName();
       const all = await getAllPending(dbName);
-      const upserts = all.filter(p => p.operation === "upsert");
-      const deletes = all.filter(p => p.operation === "delete");
       const total = all.length;
 
       const gitChanges: GitChange[] = all.map(change => {
@@ -1715,12 +1678,13 @@ export default function App() {
       await refreshPending();
 
       notify("Successfully committed all changes to GitHub.", "success");
-    } catch (e: any) {
-      console.error("Commit failed", e);
-      if (e.message?.includes("Resource not accessible by integration")) {
+    } catch (e) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      console.error("Commit failed", err);
+      if (err.message?.includes("Resource not accessible by integration")) {
         notify("Commit failed: The GitHub App may not be installed on this repository or lacks 'Contents' permissions. Please check your GitHub App settings.", "error");
       } else {
-        notify(`Commit failed: ${e.message || "Check console for details."}`, "error");
+        notify(`Commit failed: ${err.message || "Check console for details."}`, "error");
       }
     } finally {
       setIsCommitting(false);
@@ -1748,7 +1712,15 @@ export default function App() {
       window.dispatchEvent(new Event('locationchange'));
 
       if (p.type === "github" && p.githubConfig) {
-        setConfig(p.githubConfig);
+        setConfig({
+          token: githubToken || "",
+          owner: p.githubConfig.owner,
+          repo: p.githubConfig.repo,
+          branch: p.githubConfig.branch,
+          baseDir: p.githubConfig.folderPath,
+          entriesDir: p.githubConfig.folderPath ? `${p.githubConfig.folderPath}/${ENTRIES_DIR}` : ENTRIES_DIR,
+          resourcesDir: p.githubConfig.folderPath ? `${p.githubConfig.folderPath}/${ASSETS_DIR}` : ASSETS_DIR,
+        });
         setWorkspaceMode("github");
       } else if (p.type === "local") {
         const handle = await getProjectHandle(p.id);
@@ -1822,7 +1794,12 @@ export default function App() {
       name: `${githubConfig.owner}/${githubConfig.repo}`,
       type: "github",
       lastOpened: isoTimestamp(),
-      githubConfig
+      githubConfig: {
+        owner: githubConfig.owner,
+        repo: githubConfig.repo,
+        branch: githubConfig.branch,
+        folderPath: githubConfig.baseDir,
+      }
     };
     await saveProject(p);
     await refreshProjectList();
@@ -1841,7 +1818,7 @@ export default function App() {
   const handleCreateLocal = async (handle: FileSystemDirectoryHandle) => {
     // Explicitly request readwrite permission to trigger the browser's persistent permission prompt if available
     try {
-      await (handle as any).requestPermission({ mode: "readwrite" });
+      await (handle as unknown as { requestPermission: (options: { mode: string }) => Promise<void> }).requestPermission({ mode: "readwrite" });
     } catch (e) {
       console.error("Initial permission request failed", e);
     }
@@ -2273,7 +2250,7 @@ export default function App() {
         {openFile === null ? (
           !isConnectingLocal && (
             <WelcomePage
-              workspace={{ mode: workspaceMode as any, label: workspaceLabel }}
+              workspace={{ mode: workspaceMode as WorkspaceMode, label: workspaceLabel }}
               onNewEntry={handleNewEntry}
               onImportEntry={handleImportEntry}
               onDisconnect={handleDisconnect}

@@ -229,14 +229,14 @@ export default function FileExplorer({
                 <div className="fixed inset-0 z-40" onClick={() => setIsSortOpen(false)} />
                 <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-nb-surface border border-nb-outline-variant rounded-xl shadow-nb-lg py-1.5 animate-in fade-in zoom-in-95 duration-200">
                   {[
-                    { id: 'updated', label: 'Updated', icon: <Clock size={12} /> },
-                    { id: 'created', label: 'Created', icon: <Calendar size={12} /> },
-                    { id: 'title', label: 'Title', icon: <SortAsc size={12} /> }
+                    { id: 'updated' as const, label: 'Updated', icon: <Clock size={12} /> },
+                    { id: 'created' as const, label: 'Created', icon: <Calendar size={12} /> },
+                    { id: 'title' as const, label: 'Title', icon: <SortAsc size={12} /> }
                   ].map((s) => (
                     <button
                       key={s.id}
                       onClick={() => {
-                        onSortChange(s.id as any);
+                        onSortChange(s.id);
                         setIsSortOpen(false);
                       }}
                       className={`w-full flex items-center gap-3 px-3 py-2 text-[10px] font-bold tracking-wider transition-colors ${sortBy === s.id ? 'text-nb-primary bg-nb-primary/5' : 'text-nb-on-surface-variant/70 hover:bg-nb-surface-low'}`}

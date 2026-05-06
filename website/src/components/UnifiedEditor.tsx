@@ -12,7 +12,7 @@ import { Slice, Fragment } from "@tiptap/pm/model";
 import { getResource } from "@/lib/db";
 import { remapContentIds, extractResources } from "@/lib/metadata";
 import StarterKit from "@tiptap/starter-kit";
-import { Image as TiptapImage } from "@tiptap/extension-image";
+import { Image as TiptapImage, type ImageOptions } from "@tiptap/extension-image";
 import { Table } from "@tiptap/extension-table";
 import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
@@ -97,10 +97,10 @@ const CustomLink = Link.extend({
   },
 });
 
-function getPrismDecorations(doc: any) {
+function getPrismDecorations(doc: import("@tiptap/pm/model").Node) {
   const decorations: Decoration[] = [];
 
-  doc.descendants((node: any, pos: number) => {
+  doc.descendants((node, pos) => {
     if (node.type.name === 'codeBlock' || node.type.name === 'rawLatex') {
       const language = node.attrs.language || (node.type.name === 'rawLatex' ? 'latex' : 'plaintext');
       const text = node.textContent;
@@ -110,21 +110,21 @@ function getPrismDecorations(doc: any) {
 
       let currentPos = pos + 1;
 
-      const addDecorations = (tokenList: any[]) => {
+      const addDecorations = (tokenList: (string | Prism.Token)[]) => {
         tokenList.forEach(token => {
           if (typeof token === 'string') {
             currentPos += token.length;
           } else {
             const length = Array.isArray(token.content)
-              ? token.content.reduce((acc: number, t: any) => acc + (typeof t === 'string' ? t.length : (t.length || 0)), 0)
-              : token.length || token.content.length;
+              ? (token.content as (string | Prism.Token)[]).reduce((acc: number, t) => acc + (typeof t === 'string' ? t.length : (t instanceof Prism.Token ? t.length : 0)), 0)
+              : token.length;
 
             decorations.push(Decoration.inline(currentPos, currentPos + length, {
               class: `token ${token.type} ${token.alias || ''}`.trim()
             }));
 
             if (Array.isArray(token.content)) {
-              addDecorations(token.content);
+              addDecorations(token.content as (string | Prism.Token)[]);
             } else {
               currentPos += length;
             }
@@ -158,22 +158,21 @@ const PrismHighlightPlugin = new Plugin({
   },
 });
 
-function getIntegrityDecorations(doc: any, metadata: any) {
+function getIntegrityDecorations(doc: import("@tiptap/pm/model").Node, metadata: import("@/lib/metadata").NotebookMetadata) {
   const decorations: Decoration[] = [];
   if (!metadata?.entries) return DecorationSet.create(doc, []);
 
   const validIds = new Set<string>();
   for (const entry of Object.values(metadata.entries)) {
-    const e = entry as any;
-    validIds.add(e.id);
-    if (e.resources) {
-      for (const resId of Object.keys(e.resources)) {
+    validIds.add(entry.id);
+    if (entry.resources) {
+      for (const resId of Object.keys(entry.resources)) {
         validIds.add(resId);
       }
     }
   }
 
-  doc.descendants((node: any, pos: number) => {
+  doc.descendants((node, pos) => {
     if (node.marks) {
       for (const mark of node.marks) {
         if (mark.type.name === 'link') {
@@ -194,7 +193,7 @@ function getIntegrityDecorations(doc: any, metadata: any) {
   return DecorationSet.create(doc, decorations);
 }
 
-const IntegrityPlugin = (metadata: any) => new Plugin({
+const IntegrityPlugin = (metadata: import("@/lib/metadata").NotebookMetadata) => new Plugin({
   key: new PluginKey('link-integrity'),
   state: {
     init: (_, { doc }) => getIntegrityDecorations(doc, metadata),
@@ -289,16 +288,25 @@ export const TableGridSelector = ({ onSelect, initialRows = 0, initialCols = 0 }
   );
 };
 
-const ImageWithCaption = TiptapImage.extend({
+interface NodeViewProps {
+  node: import("@tiptap/pm/model").Node;
+  selected: boolean;
+  updateAttributes: (attrs: Record<string, any>) => void;
+  deleteNode: () => void;
+  editor: import("@tiptap/react").Editor;
+  getPos: () => number | undefined;
+}
+
+const ImageWithCaption = TiptapImage.extend<ImageOptions & { dbName: string }>({
   addOptions() {
     return {
-      ...this.parent?.(),
+      ...this.parent!(),
       dbName: 'notebook-pending',
-    } as any;
+    };
   },
   addAttributes() {
     return {
-      ...this.parent?.(),
+      ...this.parent!(),
       id: {
         default: null,
         parseHTML: element => element.getAttribute('data-id'),
@@ -314,11 +322,15 @@ const ImageWithCaption = TiptapImage.extend({
   },
   draggable: true,
   addNodeView() {
-    return ReactNodeViewRenderer((props) => <ImageNodeView {...props} dbName={(this.options as any).dbName} />);
+    return ReactNodeViewRenderer((props) => <ImageNodeView {...props} dbName={(this.options as unknown as { dbName: string }).dbName} />);
   },
 });
 
-const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName, editor }: any) => {
+interface ImageNodeViewProps extends NodeViewProps {
+  dbName: string;
+}
+
+const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName, editor }: ImageNodeViewProps) => {
   const [resolvedSrc, setResolvedSrc] = useState(node.attrs.src);
   const [dragEnabled, setDragEnabled] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -381,14 +393,13 @@ const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName, e
         </div>
         <div className="flex flex-col gap-1 items-center">
           <button
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); (editor as any)?.commands.focus(); }}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); editor.commands.focus(); }}
             title="Delete Image"
             className="w-8 h-8 rounded-full bg-nb-surface text-red-500 flex items-center justify-center hover:bg-red-50 transition border border-nb-outline-variant/30 shadow-sm"
           >
             <Trash2 size={14} />
           </button>
         </div>
-
       </div>
 
       <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${selected ? 'ring-2 ring-nb-primary/50' : ''}`}>
@@ -482,7 +493,7 @@ const RestrictedTableHeader = TableHeader.extend({
   content: 'paragraph+',
 });
 
-function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: any) {
+function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: NodeViewProps) {
   const [isCursorInside, setIsCursorInside] = useState(false);
   const [isHoveringToolbar, setIsHoveringToolbar] = useState(false);
   const [dragEnabled, setDragEnabled] = useState(false);
@@ -521,13 +532,12 @@ function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, g
           <GripVertical size={14} />
         </div>
         <button
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); (editor as any)?.commands.focus(); }}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); editor.commands.focus(); }}
           title="Delete Table"
           className="w-8 h-8 rounded-full bg-nb-surface text-red-500 flex items-center justify-center hover:bg-red-50 transition border border-nb-outline-variant/30 shadow-sm"
         >
           <Trash2 size={14} />
         </button>
-
       </div>
 
       <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${active ? 'ring-2 ring-nb-primary/50' : ''}`}>
@@ -703,7 +713,7 @@ const CustomCodeBlock = CodeBlock.extend({
 
 
 
-function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: any) {
+function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: NodeViewProps) {
   const [isCursorInside, setIsCursorInside] = useState(false);
   const [dragEnabled, setDragEnabled] = useState(false);
 
@@ -740,13 +750,12 @@ function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selecte
           <GripVertical size={14} />
         </div>
         <button
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); (editor as any)?.commands.focus(); }}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); editor.commands.focus(); }}
           title="Delete Snippet"
           className="w-8 h-8 rounded-full bg-nb-surface text-red-500 flex items-center justify-center hover:bg-red-50 transition border border-nb-outline-variant/30 shadow-sm"
         >
           <Trash2 size={14} />
         </button>
-
       </div>
 
       <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${active ? 'ring-2 ring-nb-primary/50' : ''}`}>
@@ -809,13 +818,13 @@ const CustomRawLatex = CodeBlock.extend({
   name: "rawLatex",
   addOptions() {
     return {
-      ...this.parent?.(),
+      ...this.parent!(),
       languageClassPrefix: 'language-',
       defaultLanguage: null,
       exitOnTripleEnter: true,
       exitOnArrowDown: true,
       HTMLAttributes: {},
-    } as any;
+    };
   },
 
   addAttributes() {
@@ -900,7 +909,7 @@ const IdRemapper = Extension.create({
   }
 });
 
-function RawLatexNodeView({ node, deleteNode, selected, editor, updateAttributes }: any) {
+function RawLatexNodeView({ node, deleteNode, selected, editor, updateAttributes }: NodeViewProps) {
 
   const [dragEnabled, setDragEnabled] = useState(false);
 
@@ -921,13 +930,12 @@ function RawLatexNodeView({ node, deleteNode, selected, editor, updateAttributes
           <GripVertical size={14} />
         </div>
         <button
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); (editor as any)?.commands.focus(); }}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); editor.commands.focus(); }}
           title="Delete Block"
           className="w-8 h-8 rounded-full bg-nb-surface text-red-500 flex items-center justify-center hover:bg-red-50 transition border border-nb-outline-variant/30 shadow-sm"
         >
           <Trash2 size={14} />
         </button>
-
       </div>
 
       <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${selected ? 'ring-2 ring-nb-primary/50' : ''}`}>
@@ -958,15 +966,15 @@ function RawLatexNodeView({ node, deleteNode, selected, editor, updateAttributes
    ───────────────────────────────────────────────────────────────── */
 
 interface UnifiedEditorProps {
-  content: string;
+  content: string | import("@/lib/metadata").TipTapNode;
   onChange: (content: string) => void;
   onImageUpload?: (path: string, base64: string) => void;
   author?: string;
   filename: string;
   dbName?: string;
-  onEditorInit?: (editor: any) => void;
+  onEditorInit?: (editor: import("@tiptap/react").Editor) => void;
   onToggleLink?: (fn: () => void) => void;
-  notebookMetadata: any;
+  notebookMetadata?: import("@/lib/metadata").NotebookMetadata;
   targetResourceId?: string | null;
 }
 
@@ -976,9 +984,9 @@ function LinkReferencePopup({
   metadata,
   filename
 }: {
-  editor: any,
+  editor: import("@tiptap/react").Editor,
   onClose: () => void,
-  metadata: any,
+  metadata?: import("@/lib/metadata").NotebookMetadata,
   filename?: string
 }) {
   const [query, setQuery] = useState("");
@@ -1015,7 +1023,7 @@ function LinkReferencePopup({
   }, [editor, metadata]);
 
   const allResources = useMemo(() => {
-    const list: any[] = [];
+    const list: { id: string, title: string, type: string, entryTitle?: string, entryDate?: string, entryId?: string }[] = [];
     if (!metadata || !metadata.entries) return list;
 
     // 1. Get resources from the current editor state (most up-to-date for active entry)
@@ -1068,9 +1076,9 @@ function LinkReferencePopup({
     }
 
     if (finalLink || trimmedText) {
-      const marks: any[] = [{ type: 'underline' }];
+      const marks: import("@tiptap/pm/model").Mark[] = [editor.schema.marks.underline.create()];
       if (finalLink) {
-        marks.push({ type: 'link', attrs: { href: finalLink, resourceId, entryId } });
+        marks.push(editor.schema.marks.link.create({ href: finalLink, resourceId, entryId }));
       }
 
       editor.chain()
@@ -1078,7 +1086,7 @@ function LinkReferencePopup({
         .insertContent({
           type: 'text',
           text: trimmedText || finalLink,
-          marks: marks
+          marks: marks.map(m => m.toJSON())
         })
         .run();
     } else {
@@ -1218,7 +1226,7 @@ function LinkReferencePopup({
 export default function UnifiedEditor({
   content, onChange, onImageUpload, author, filename, dbName = "notebook-pending", onEditorInit, notebookMetadata, onToggleLink, targetResourceId
 }: UnifiedEditorProps) {
-  const parseContent = (raw: string) => {
+  const parseContent = (raw: string | import("@/lib/metadata").TipTapNode) => {
     if (!raw) return "";
     try {
       return typeof raw === "string" ? JSON.parse(raw) : raw;
@@ -1296,7 +1304,7 @@ export default function UnifiedEditor({
           width: 3,
         }
       }),
-      ImageWithCaption.configure({ inline: false, allowBase64: true, dbName } as any),
+      ImageWithCaption.configure({ inline: false, allowBase64: true, dbName }),
       TableWithCaption.configure({ resizable: true }),
       TableRow,
       RestrictedTableHeader,
@@ -1306,7 +1314,7 @@ export default function UnifiedEditor({
       PrismHighlightExtension,
       Extension.create({
         name: 'integrityExtension',
-        addProseMirrorPlugins: () => [IntegrityPlugin(notebookMetadata)]
+        addProseMirrorPlugins: () => notebookMetadata ? [IntegrityPlugin(notebookMetadata)] : []
       }),
       Underline,
       CustomLink.configure({

@@ -13,12 +13,20 @@ import {
 import { generateUUID, hashContent, getExtensionFromDataUrl } from "@/lib/utils";
 import { generateEntryLatex } from "@/lib/latex";
 import AutocompleteInput from "./AutocompleteInput";
-import { extractResources, extractReferences } from "@/lib/metadata";
+import { extractResources, extractReferences, TipTapNode, NotebookMetadata } from "@/lib/metadata";
 import { ASSETS_DIR } from "@/lib/constants";
 import { NodeSelection } from "@tiptap/pm/state";
 import ConfirmationDialog from "./ConfirmationDialog";
 
-const PHASE_CONFIG: Record<string, { icon: any, color: string, bg: string, border: string, text: string }> = {
+interface PhaseInfo {
+  icon: typeof Goal;
+  color: string;
+  bg: string;
+  border: string;
+  text: string;
+}
+
+const PHASE_CONFIG: Record<string, PhaseInfo> = {
   "Define Problem": { icon: Goal, color: "text-blue-500", bg: "bg-blue-500/10", border: "border-blue-500/20", text: "text-blue-600 dark:text-blue-400" },
   "Generate Concepts": { icon: Brain, color: "text-purple-500", bg: "bg-purple-500/10", border: "border-purple-500/20", text: "text-purple-600 dark:text-purple-400" },
   "Develop Solution": { icon: PencilRuler, color: "text-indigo-500", bg: "bg-indigo-500/10", border: "border-indigo-500/20", text: "text-indigo-600 dark:text-indigo-400" },
@@ -55,26 +63,23 @@ interface EditorProps {
   onAuthorChange: (author: string) => void;
   onPhaseChange: (phase: string) => void;
   onImageUpload?: (path: string, base64: string) => void;
-  onDownloadPortable?: (path: string, content: any, info: { title: string; author: string; phase: string; createdAt: string; updatedAt: string }) => void;
+  onDownloadPortable?: (path: string, content: string, info: { title: string; author: string; phase: string; createdAt: string; updatedAt: string }) => void;
   onClose?: () => void;
   dbName?: string;
   isSaving?: boolean;
-  notebookMetadata?: any;
+  notebookMetadata?: NotebookMetadata;
   onValidationChange?: (isValid: boolean) => void;
   targetResourceId?: string | null;
 }
 
 const Editor = React.memo(function Editor({
-  config,
   filename,
-  isLocalMode,
   initialTitle = "",
   initialAuthor = "",
   initialPhase = "",
   initialContent = "",
   initialCreatedAt = "",
   initialUpdatedAt = "",
-  metadataMissing = false,
   isValid = true,
   onDeleted,
   onContentChange,
@@ -90,10 +95,10 @@ const Editor = React.memo(function Editor({
   notebookMetadata,
   targetResourceId,
 }: EditorProps) {
-  const parseInitialContent = (raw: any): any => {
-    if (!raw) return raw;
-    if (typeof raw === 'object') return raw;
-    if (typeof raw !== 'string') return raw;
+  const parseInitialContent = (raw: unknown): TipTapNode | string => {
+    if (!raw) return "";
+    if (typeof raw === 'object' && raw !== null) return raw as TipTapNode;
+    if (typeof raw !== 'string') return String(raw);
 
     const trimmed = raw.trim();
     if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
@@ -101,8 +106,8 @@ const Editor = React.memo(function Editor({
         const parsed = JSON.parse(trimmed);
         // If we got another string, try parsing it again (recursive unwrap)
         if (typeof parsed === 'string') return parseInitialContent(parsed);
-        return parsed;
-      } catch (e) {
+        return parsed as TipTapNode | string;
+      } catch {
         return raw;
       }
     }
@@ -112,8 +117,8 @@ const Editor = React.memo(function Editor({
   const [title, setTitle] = useState(initialTitle);
   const [author, setAuthor] = useState(initialAuthor);
   const [phase, setPhase] = useState(initialPhase);
-  const [content, setContent] = useState(() => parseInitialContent(initialContent));
-  const [editor, setEditor] = useState<any>(null);
+  const [content, setContent] = useState<TipTapNode | string>(() => parseInitialContent(initialContent));
+  const [editor, setEditor] = useState<import("@tiptap/react").Editor | null>(null);
 
   // Local validation state for immediate UI feedback
   const [localIsValid, setLocalIsValid] = useState(isValid);
@@ -141,10 +146,9 @@ const Editor = React.memo(function Editor({
       // Build set of all existing IDs
       const existingIds = new Set<string>();
       for (const entry of Object.values(notebookMetadata.entries)) {
-        const e = entry as any;
-        existingIds.add(e.id);
-        if (e.resources) {
-          for (const resId of Object.keys(e.resources)) {
+        existingIds.add(entry.id);
+        if (entry.resources) {
+          for (const resId of Object.keys(entry.resources)) {
             existingIds.add(resId);
           }
         }
@@ -182,7 +186,7 @@ const Editor = React.memo(function Editor({
 
   const otherAuthors = React.useMemo(() => {
     const authors = new Set<string>();
-    Object.entries(notebookMetadata?.entries || {}).forEach(([id, e]: [string, any]) => {
+    Object.entries(notebookMetadata?.entries || {}).forEach(([id, e]) => {
       if (id !== entryId && e.author?.trim()) authors.add(e.author.trim());
     });
     return Array.from(authors).sort();
@@ -190,7 +194,7 @@ const Editor = React.memo(function Editor({
 
   const otherTitles = React.useMemo(() => {
     const titles = new Set<string>();
-    Object.entries(notebookMetadata?.entries || {}).forEach(([id, e]: [string, any]) => {
+    Object.entries(notebookMetadata?.entries || {}).forEach(([id, e]) => {
       if (id !== entryId && e.title?.trim() && !e.title.endsWith(".tex")) titles.add(e.title.trim());
     });
     return Array.from(titles).sort();
@@ -224,7 +228,7 @@ const Editor = React.memo(function Editor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filename]);
 
-  const generateLatex = (cnt: string, t: string, a: string, p: string) => {
+  const generateLatex = (cnt: TipTapNode | string, t: string, a: string, p: string) => {
     const entryId = filename.split('/').pop()?.replace('.json', '') || "";
     return generateEntryLatex(cnt, t, a, p, initialCreatedAt, entryId);
   };
@@ -357,7 +361,7 @@ const Editor = React.memo(function Editor({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [content, title, author, phase, filename]);
+  }, [handleSave]);
 
   const MenuItem = ({ label, children }: { label: string, children: React.ReactNode }) => (
     <div className="relative h-full flex items-center">
@@ -560,8 +564,8 @@ const Editor = React.memo(function Editor({
             {(!localIsValid || (notebookMetadata?.entries?.[entryId]?.isValid === false)) && (
               <div
                 className="shrink-0 text-amber-500 animate-pulse mr-4"
-                title={notebookMetadata?.entries?.[entryId]?.validationErrors?.length > 0
-                  ? `Validation errors:\n- ${notebookMetadata.entries[entryId].validationErrors.join('\n- ')}`
+                title={(notebookMetadata?.entries?.[entryId]?.validationErrors?.length ?? 0) > 0
+                  ? `Validation errors:\n- ${notebookMetadata?.entries?.[entryId]?.validationErrors?.join('\n- ')}`
                   : "Incomplete metadata or resource captions"}
               >
                 <AlertTriangle size={20} />
