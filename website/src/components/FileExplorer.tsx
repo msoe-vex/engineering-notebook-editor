@@ -393,19 +393,19 @@ export default function FileExplorer({
                 <div className="h-px bg-nb-outline-variant/30 my-1" />
 
                 <button
-                  onClick={() => { onDownloadLatex(contextMenu.file); setContextMenu(null); }}
-                  className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-nb-on-surface hover:bg-nb-surface-low transition-colors cursor-pointer"
-                >
-                  <FileCode size={14} className="text-nb-tertiary" />
-                  Download LaTeX
-                </button>
-
-                <button
                   onClick={() => { onDownloadJson(contextMenu.file); setContextMenu(null); }}
                   className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-nb-on-surface hover:bg-nb-surface-low transition-colors cursor-pointer"
                 >
                   <FileJson size={14} className="text-nb-tertiary" />
                   Download JSON
+                </button>
+
+                <button
+                  onClick={() => { onDownloadLatex(contextMenu.file); setContextMenu(null); }}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-nb-on-surface hover:bg-nb-surface-low transition-colors cursor-pointer"
+                >
+                  <FileCode size={14} className="text-nb-tertiary" />
+                  Download LaTeX
                 </button>
 
                 <div className="h-px bg-nb-outline-variant/30 my-1" />
