@@ -392,7 +392,7 @@ const Editor = React.memo(function Editor({
         type="button"
         onMouseDown={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === label ? null : label); }}
         onMouseEnter={() => { if (activeMenu) setActiveMenu(label); }}
-        className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-widest transition-colors ${activeMenu === label ? "bg-nb-primary text-white" : "text-nb-on-surface-variant hover:bg-nb-surface-mid"
+        className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-widest transition-colors cursor-pointer ${activeMenu === label ? "bg-nb-primary text-white" : "text-nb-on-surface-variant hover:bg-nb-surface-mid"
           }`}
       >
         {label}
@@ -413,7 +413,7 @@ const Editor = React.memo(function Editor({
       type="button"
       onClick={() => { onClick(); setActiveMenu(null); }}
       disabled={disabled}
-      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[10px] font-bold tracking-widest text-nb-on-surface-variant hover:bg-nb-primary/10 hover:text-nb-primary transition-all disabled:opacity-30 disabled:hover:bg-transparent text-left"
+      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[10px] font-bold tracking-widest text-nb-on-surface-variant hover:bg-nb-primary/10 hover:text-nb-primary transition-all disabled:opacity-30 disabled:hover:bg-transparent text-left cursor-pointer"
     >
       <div className="opacity-60">{icon}</div>
       <span className="flex-1">{label}</span>

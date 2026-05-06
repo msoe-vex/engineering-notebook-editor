@@ -45,7 +45,7 @@ export default function ProjectHeader({
     <div className="flex items-center justify-between px-4 h-14 bg-nb-surface border-b border-nb-outline-variant shrink-0">
       <button
         onClick={onToggleSidebar}
-        className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors"
+        className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors cursor-pointer"
         title={isSidebarOpen ? "Close Sidebar" : "Open Sidebar"}
       >
         <Menu size={18} />
@@ -55,13 +55,13 @@ export default function ProjectHeader({
         <div className="flex bg-nb-surface-low rounded-lg p-0.5 border border-nb-outline-variant/30">
           <button
             onClick={() => onSetMobileTab("editor")}
-            className={`px-3 py-1 rounded-md text-[9px] font-bold tracking-widest transition-all ${mobileTab === 'editor' ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60'}`}
+            className={`px-3 py-1 rounded-md text-[9px] font-bold tracking-widest transition-all cursor-pointer ${mobileTab === 'editor' ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60'}`}
           >
             Editor
           </button>
           <button
             onClick={() => onSetMobileTab("preview")}
-            className={`px-3 py-1 rounded-md text-[9px] font-bold tracking-widest transition-all ${mobileTab === 'preview' ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60'}`}
+            className={`px-3 py-1 rounded-md text-[9px] font-bold tracking-widest transition-all cursor-pointer ${mobileTab === 'preview' ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60'}`}
           >
             Preview
           </button>
@@ -101,19 +101,19 @@ export default function ProjectHeader({
           <div className="flex bg-nb-surface-low rounded-lg p-0.5 border border-nb-outline-variant/30 mr-2 shadow-sm">
             <button
               onClick={() => onSetDesktopViewMode("editor")}
-              className={`px-3 py-1.5 rounded-md text-[9px] font-bold tracking-widest transition-all ${desktopViewMode === "editor" ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60 hover:text-nb-primary'}`}
+              className={`px-3 py-1.5 rounded-md text-[9px] font-bold tracking-widest transition-all cursor-pointer ${desktopViewMode === "editor" ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60 hover:text-nb-primary'}`}
             >
               Editor
             </button>
             <button
               onClick={() => onSetDesktopViewMode("split")}
-              className={`px-3 py-1.5 rounded-md text-[9px] font-bold tracking-widest transition-all ${desktopViewMode === "split" ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60 hover:text-nb-primary'}`}
+              className={`px-3 py-1.5 rounded-md text-[9px] font-bold tracking-widest transition-all cursor-pointer ${desktopViewMode === "split" ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60 hover:text-nb-primary'}`}
             >
               Split
             </button>
             <button
               onClick={() => onSetDesktopViewMode("preview")}
-              className={`px-3 py-1.5 rounded-md text-[9px] font-bold tracking-widest transition-all ${desktopViewMode === "preview" ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60 hover:text-nb-primary'}`}
+              className={`px-3 py-1.5 rounded-md text-[9px] font-bold tracking-widest transition-all cursor-pointer ${desktopViewMode === "preview" ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60 hover:text-nb-primary'}`}
             >
               LaTeX
             </button>
@@ -121,7 +121,7 @@ export default function ProjectHeader({
         )}
         <button
           onClick={onToggleTheme}
-          className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors"
+          className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer"
         >
           {!mounted ? <div className="w-4 h-4" /> : isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
         </button>

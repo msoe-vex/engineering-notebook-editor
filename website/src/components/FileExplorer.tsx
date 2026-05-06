@@ -120,7 +120,7 @@ function Pane({ id, title, actionLabel, actionIcon, onAction, children, empty, h
         <button
           onClick={onAction}
           title={actionLabel}
-          className="flex items-center gap-1.5 text-xs font-semibold text-nb-tertiary hover:text-nb-tertiary-dim transition-colors"
+          className="flex items-center gap-1.5 text-xs font-semibold text-nb-tertiary hover:text-nb-tertiary-dim transition-colors cursor-pointer"
         >
           {actionIcon}
           {actionLabel}
@@ -191,7 +191,7 @@ export default function FileExplorer({
           <div className="relative flex-1">
             <button
               onClick={() => setIsSortOpen(!isSortOpen)}
-              className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-nb-surface-low border border-nb-outline-variant rounded-xl text-[10px] font-bold tracking-wider text-nb-on-surface-variant hover:border-nb-primary transition-all"
+              className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-nb-surface-low border border-nb-outline-variant rounded-xl text-[10px] font-bold tracking-wider text-nb-on-surface-variant hover:border-nb-primary transition-all cursor-pointer"
             >
               <div className="flex items-center gap-2">
                 {sortBy === 'updated' ? <Clock size={12} /> : sortBy === 'created' ? <Calendar size={12} /> : <SortAsc size={12} />}
@@ -215,7 +215,7 @@ export default function FileExplorer({
                         onSortChange(s.id);
                         setIsSortOpen(false);
                       }}
-                      className={`w-full flex items-center gap-3 px-3 py-2 text-[10px] font-bold tracking-wider transition-colors ${sortBy === s.id ? 'text-nb-primary bg-nb-primary/5' : 'text-nb-on-surface-variant/70 hover:bg-nb-surface-low'}`}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-[10px] font-bold tracking-wider transition-colors cursor-pointer ${sortBy === s.id ? 'text-nb-primary bg-nb-primary/5' : 'text-nb-on-surface-variant/70 hover:bg-nb-surface-low'}`}
                     >
                       {s.icon}
                       {s.label}
@@ -229,7 +229,7 @@ export default function FileExplorer({
           {/* Direction Toggle */}
           <button
             onClick={onSortDirectionToggle}
-            className="p-2 bg-nb-surface-low border border-nb-outline-variant rounded-xl text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary transition-all shadow-sm active:scale-95"
+            className="p-2 bg-nb-surface-low border border-nb-outline-variant rounded-xl text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary transition-all shadow-sm active:scale-95 cursor-pointer"
             title={sortDirection === 'asc' ? "Ascending" : "Descending"}
           >
             {sortDirection === 'asc' ? <SortAsc size={14} /> : <SortDesc size={14} />}
@@ -239,7 +239,7 @@ export default function FileExplorer({
           <div className="relative">
             <button
               onClick={() => setIsFilterOpen(!isFilterOpen)}
-              className={`p-2 border rounded-xl transition-all shadow-sm active:scale-95 ${dateRange ? 'bg-nb-tertiary text-white border-nb-tertiary shadow-nb-tertiary/20' : 'bg-nb-surface-low border-nb-outline-variant text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary'}`}
+              className={`p-2 cursor-pointer border rounded-xl transition-all shadow-sm active:scale-95 ${dateRange ? 'bg-nb-tertiary text-white border-nb-tertiary shadow-nb-tertiary/20' : 'bg-nb-surface-low border-nb-outline-variant text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary'}`}
               title="Filter by Date"
             >
               <CalendarDays size={14} />
@@ -284,7 +284,7 @@ export default function FileExplorer({
 
                   <button
                     onClick={() => setIsFilterOpen(false)}
-                    className="w-full mt-4 py-2 bg-nb-primary text-white rounded-xl text-[10px] font-bold tracking-widest hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20"
+                    className="w-full cursor-pointer mt-4 py-2 bg-nb-primary text-white rounded-xl text-[10px] font-bold tracking-widest hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20"
                   >
                     Apply Filter
                   </button>
