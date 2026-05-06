@@ -173,9 +173,9 @@ export default function Settings({
             <div className="grid grid-cols-1 gap-3">
               <button
                 onClick={handleOpenFolder}
-                className="group flex items-center gap-4 p-4 rounded-2xl bg-nb-surface border border-nb-outline-variant/30 hover:border-nb-secondary/50 hover:bg-nb-secondary/5 transition-all text-left shadow-nb-sm cursor-pointer"
+                className="group flex items-center gap-4 p-4 rounded-2xl bg-nb-surface border border-nb-outline-variant/30 hover:border-nb-primary/50 hover:bg-nb-primary/5 transition-all text-left shadow-nb-sm cursor-pointer"
               >
-                <div className="w-10 h-10 rounded-xl bg-nb-secondary/10 text-nb-secondary flex items-center justify-center group-hover:scale-110 transition-transform">
+                <div className="w-10 h-10 rounded-xl bg-nb-primary/10 text-nb-primary flex items-center justify-center group-hover:scale-110 transition-transform">
                   <Folder size={20} />
                 </div>
                 <div className="flex-1">
@@ -187,9 +187,9 @@ export default function Settings({
 
               <button
                 onClick={() => setIsGithubModalOpen(true)}
-                className={`group flex items-center gap-4 p-4 rounded-2xl border transition-all text-left shadow-nb-sm bg-nb-surface border-nb-outline-variant/30 hover:border-nb-primary/50 hover:bg-nb-primary/5 cursor-pointer`}
+                className="group flex items-center gap-4 p-4 rounded-2xl border transition-all text-left shadow-nb-sm bg-nb-surface border-nb-outline-variant/30 hover:border-nb-tertiary/50 hover:bg-nb-tertiary/5 cursor-pointer"
               >
-                <div className="w-10 h-10 rounded-xl bg-nb-primary/10 text-nb-primary flex items-center justify-center group-hover:scale-110 transition-transform">
+                <div className="w-10 h-10 rounded-xl bg-nb-tertiary/10 text-nb-tertiary flex items-center justify-center group-hover:scale-110 transition-transform">
                   <GitBranch size={20} />
                 </div>
                 <div className="flex-1">
@@ -203,9 +203,9 @@ export default function Settings({
 
               <button
                 onClick={onCreateTemporary}
-                className="group flex items-center gap-4 p-4 rounded-2xl bg-nb-surface border border-nb-outline-variant/30 hover:border-nb-tertiary/50 hover:bg-nb-tertiary/5 transition-all text-left shadow-nb-sm cursor-pointer"
+                className="group flex items-center gap-4 p-4 rounded-2xl bg-nb-surface border border-nb-outline-variant/30 hover:border-nb-on-surface-variant/30 hover:bg-nb-on-surface-variant/5 transition-all text-left shadow-nb-sm cursor-pointer"
               >
-                <div className="w-10 h-10 rounded-xl bg-nb-tertiary/10 text-nb-tertiary flex items-center justify-center group-hover:scale-110 transition-transform">
+                <div className="w-10 h-10 rounded-xl bg-nb-on-surface-variant/10 text-nb-on-surface-variant flex items-center justify-center group-hover:scale-110 transition-transform">
                   <HardDrive size={20} />
                 </div>
                 <div className="flex-1">
@@ -245,9 +245,9 @@ export default function Settings({
                   className="flex-1 min-w-0 cursor-pointer flex items-center gap-4"
                   onClick={() => onSelectProject(project.id)}
                 >
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105 ${project.type === "github" ? "bg-nb-primary/10 text-nb-primary" :
-                    project.type === "local" ? "bg-nb-secondary/10 text-nb-secondary" :
-                      "bg-nb-tertiary/10 text-nb-tertiary"
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105 ${project.type === "local" ? "bg-nb-primary/10 text-nb-primary" :
+                    project.type === "github" ? "bg-nb-tertiary/10 text-nb-tertiary" :
+                      "bg-nb-on-surface-variant/10 text-nb-on-surface-variant"
                     }`}>
                     {project.type === "github" ? <GitBranch size={22} /> :
                       project.type === "local" ? <Folder size={22} /> :
