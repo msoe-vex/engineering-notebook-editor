@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Search, X, FileText, ImageIcon, Table as TableIcon, Code } from "lucide-react";
 import { NotebookMetadata } from "@/lib/metadata";
 
@@ -15,7 +15,7 @@ export default function ReferenceSearch({ metadata, onClose, onSelect }: Referen
 
   const allResources = useMemo(() => {
     const list: any[] = [];
-    
+
     if (!metadata || !metadata.entries) return list;
 
     for (const [entryId, entry] of Object.entries(metadata.entries)) {
@@ -27,7 +27,7 @@ export default function ReferenceSearch({ metadata, onClose, onSelect }: Referen
         entryTitle: entry.title,
         entryDate: entry.createdAt ? entry.createdAt.split('T')[0] : "No Date",
       });
-      
+
       // Add blocks
       if (entry.resources) {
         for (const [resId, res] of Object.entries(entry.resources)) {
@@ -41,15 +41,15 @@ export default function ReferenceSearch({ metadata, onClose, onSelect }: Referen
         }
       }
     }
-    
+
     return list;
   }, [metadata]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return allResources;
     const q = query.toLowerCase();
-    return allResources.filter(r => 
-      (r.title || "").toLowerCase().includes(q) || 
+    return allResources.filter(r =>
+      (r.title || "").toLowerCase().includes(q) ||
       (r.entryTitle || "").toLowerCase().includes(q) ||
       (r.type || "").toLowerCase().includes(q)
     );
@@ -67,7 +67,7 @@ export default function ReferenceSearch({ metadata, onClose, onSelect }: Referen
 
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 backdrop-blur-md px-4 py-8" onClick={onClose}>
-      <div 
+      <div
         className="w-full max-w-2xl bg-nb-surface rounded-3xl shadow-nb-xl border border-nb-outline-variant flex flex-col max-h-full animate-in zoom-in-95 duration-200"
         onClick={e => e.stopPropagation()}
       >
@@ -90,7 +90,7 @@ export default function ReferenceSearch({ metadata, onClose, onSelect }: Referen
             />
           </div>
         </div>
-        
+
         <div className="flex-1 overflow-y-auto p-2 scrollbar-hide">
           {filtered.length === 0 ? (
             <div className="py-12 text-center text-nb-on-surface-variant/40">

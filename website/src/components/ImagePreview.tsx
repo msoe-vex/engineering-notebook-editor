@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ImageIcon, Pencil, Trash2, X, Check, AlertTriangle } from "lucide-react";
+import { ImageIcon, Trash2 } from "lucide-react";
 
 interface ImagePreviewProps {
   filename: string;
@@ -33,8 +33,8 @@ export default function ImagePreview({ filename, src, onDelete }: ImagePreviewPr
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex flex-col">
-              <span className="text-xs font-semibold text-nb-on-surface-variant/80 leading-none mb-1">Resource Image</span>
-              <span className="text-[11px] font-mono text-nb-on-surface truncate tracking-tight">{filename}</span>
+            <span className="text-xs font-semibold text-nb-on-surface-variant/80 leading-none mb-1">Resource Image</span>
+            <span className="text-[11px] font-mono text-nb-on-surface truncate tracking-tight">{filename}</span>
           </div>
         </div>
         <div className="flex gap-2 shrink-0">
@@ -50,7 +50,7 @@ export default function ImagePreview({ filename, src, onDelete }: ImagePreviewPr
 
       {/* Image Display Area */}
       <div className="flex-1 flex items-center justify-center p-4 overflow-auto bg-nb-surface-low relative transition-colors">
-        
+
         <div className="relative group max-w-full max-h-full flex items-center justify-center">
           <img
             ref={imgRef}
@@ -59,11 +59,11 @@ export default function ImagePreview({ filename, src, onDelete }: ImagePreviewPr
             onLoad={handleImageLoad}
             className="max-w-full max-h-[85vh] rounded-lg shadow-nb-lg border border-nb-outline-variant/30 object-contain transition-transform duration-500"
           />
-            {dimensions && (
-               <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-nb-surface/90 backdrop-blur-md px-3 py-1 rounded-full border border-nb-outline-variant/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  <span className="text-[9px] font-mono font-bold tracking-widest text-nb-on-surface-variant">{dimensions.w} × {dimensions.h} PX</span>
-               </div>
-            )}
+          {dimensions && (
+            <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-nb-surface/90 backdrop-blur-md px-3 py-1 rounded-full border border-nb-outline-variant/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              <span className="text-[9px] font-mono font-bold tracking-widest text-nb-on-surface-variant">{dimensions.w} × {dimensions.h} PX</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -80,7 +80,7 @@ export default function ImagePreview({ filename, src, onDelete }: ImagePreviewPr
               </div>
               <h3 className="font-semibold text-sm tracking-widest text-nb-on-surface">Delete Resource?</h3>
             </div>
-            
+
             <div className="space-y-4 mb-8">
               <p className="text-sm text-nb-on-surface-variant leading-relaxed">
                 Are you sure you want to delete this resource? All references in your entries will be removed.

@@ -5,8 +5,8 @@ import UnifiedEditor, { ToolbarButton, TableGridSelector } from "./UnifiedEditor
 import { createPortal } from "react-dom";
 import { saveAs } from "file-saver";
 import {
-  Save, Trash2, Download, AlertCircle, AlertTriangle, Loader2, User, Target, X, FileCode,
-  Undo2, Redo2, ImagePlus, Plus, ChevronDown, FileText, Type, List, ListOrdered,
+  Save, Trash2, Download, AlertCircle, AlertTriangle, Loader2, User, X, FileCode,
+  Undo2, Redo2, ImagePlus, ChevronDown, List, ListOrdered,
   Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
   Brain, PencilRuler, Hammer, SearchCheck, Goal, Terminal, Link as LinkIcon, Underline as UnderlineIcon
 } from "lucide-react";
@@ -128,7 +128,7 @@ const Editor = React.memo(function Editor({
     if (!editor) return true;
 
     const doc = editor.getJSON();
-    
+
     // Check resources
     const resources = extractResources(doc);
     for (const res of Object.values(resources)) {
@@ -558,9 +558,9 @@ const Editor = React.memo(function Editor({
             </div>
 
             {(!localIsValid || (notebookMetadata?.entries?.[entryId]?.isValid === false)) && (
-              <div 
-                className="shrink-0 text-amber-500 animate-pulse mr-4" 
-                title={notebookMetadata?.entries?.[entryId]?.validationErrors?.length > 0 
+              <div
+                className="shrink-0 text-amber-500 animate-pulse mr-4"
+                title={notebookMetadata?.entries?.[entryId]?.validationErrors?.length > 0
                   ? `Validation errors:\n- ${notebookMetadata.entries[entryId].validationErrors.join('\n- ')}`
                   : "Incomplete metadata or resource captions"}
               >

@@ -4,17 +4,17 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTheme } from "next-themes";
 import {
   GitHubConfig, fetchDirectoryTree, fetchFileContent, GitHubFile,
-  saveFile, deleteFile as githubDeleteFile, commitChanges, GitChange, fetchGitHubUser
+  commitChanges, GitChange, fetchGitHubUser
 } from "@/lib/github";
 import {
   stageChange, getAllPending, clearAllPending, removeStaged, PendingChange,
-  putResource, getResource, saveWorkspaceHandle, getWorkspaceHandle, clearWorkspaceHandle,
+  putResource, getResource,
   Project, getProjects, getProject, saveProject, deleteProject, getProjectHandle, saveProjectHandle, deleteProjectHandle, deleteProjectDatabase,
   getProjectDBName
 } from "@/lib/db";
 import {
   NotebookMetadata, EMPTY_METADATA, EntryMetadata, EntryWrapper,
-  updateEntryInIndex, renameEntryInMetadata, removeEntryFromMetadata,
+  updateEntryInIndex, removeEntryFromMetadata,
   dehydrateAssets, hydrateAssets, remapContentIds, isEntryValid,
 } from "@/lib/metadata";
 import Settings from "./Settings";
@@ -25,14 +25,13 @@ import FileExplorer, { ExplorerFile } from "./FileExplorer";
 import ImagePreview from "./ImagePreview";
 import ConfirmationDialog from "./ConfirmationDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { GitBranch, HardDrive, ArrowLeftRight, GitCommitVertical, Loader2, Menu, Sun, Moon, X, BookOpen, Check, AlertTriangle, ChevronDown } from "lucide-react";
+import { HardDrive, ArrowLeftRight, Menu, Sun, Moon, X, BookOpen, ChevronDown } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { saveAs } from "file-saver";
 import { generateUUID, hashContent } from "@/lib/utils";
 import { generateEntryLatex, generateAllEntriesLatex } from "@/lib/latex";
 import { extractImagePaths, extractResources, extractReferences, validateNotebookIntegrity } from "@/lib/metadata";
 import { ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, INDEX_PATH, ALL_ENTRIES_PATH } from "@/lib/constants";
-import ReferenceSearch from "./ReferenceSearch";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -500,7 +499,7 @@ export default function App() {
     // Merge pending upserts that aren't in the list yet
     const existingPaths = new Set(list.map(e => e.path));
     const deletedPaths = new Set(pendingChanges.filter(p => p.operation === "delete").map(p => p.path));
-    
+
     // Filter out deleted items from the main list first
     list = list.filter(e => !deletedPaths.has(e.path));
 
@@ -565,7 +564,7 @@ export default function App() {
   const displayResources = useMemo(() => {
     let list = [...resources];
     const deletedPaths = new Set(pendingChanges.filter(p => p.operation === "delete").map(p => p.path));
-    
+
     // Filter out deleted items from the main list first
     list = list.filter(e => !deletedPaths.has(e.path));
 
@@ -1714,7 +1713,7 @@ export default function App() {
       lastRemoteMetadataRef.current = all.find(p => p.path === currentIndexPath)?.content || lastRemoteMetadataRef.current;
       lastRemoteAllEntriesRef.current = all.find(p => p.path === currentAllEntriesPath)?.content || lastRemoteAllEntriesRef.current;
       await refreshPending();
-      
+
       notify("Successfully committed all changes to GitHub.", "success");
     } catch (e: any) {
       console.error("Commit failed", e);

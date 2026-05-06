@@ -1,8 +1,11 @@
-import { GitHubConfig, fetchUserRepositories, getOctokit, fetchRepoFolders } from "@/lib/github";
+import { GitHubConfig, fetchUserRepositories, fetchRepoFolders } from "@/lib/github";
 import { Project } from "@/lib/db";
-import { DATA_DIR, ENTRIES_DIR, ASSETS_DIR, INDEX_PATH, GITHUB_APP_INSTALL_URL, GITHUB_ISSUES_URL } from "@/lib/constants";
+import { GITHUB_APP_INSTALL_URL, GITHUB_ISSUES_URL } from "@/lib/constants";
 import React, { useState, useEffect, useMemo } from "react";
-import { BookOpen, Moon, Sun, GitBranch, Folder, HardDrive, Trash2, Clock, Plus, ArrowRight, History, Edit2, Check, X, Search, ExternalLink, AlertCircle, Loader2 } from "lucide-react";
+import {
+  BookOpen, Moon, Sun, GitBranch, Folder, HardDrive, Trash2, Clock, Plus,
+  ArrowRight, History, Edit2, Check, X, Search, ExternalLink, AlertCircle, Loader2
+} from "lucide-react";
 import { useTheme } from "next-themes";
 
 export default function Settings({

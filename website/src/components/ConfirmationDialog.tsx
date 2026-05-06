@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { AlertTriangle, X } from "lucide-react";
 
 interface ConfirmationDialogProps {
@@ -47,11 +46,11 @@ export default function ConfirmationDialog({
   const style = variantStyles[variant];
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-in fade-in duration-300"
       onClick={onCancel}
     >
-      <div 
+      <div
         className="relative w-full max-w-sm bg-nb-surface border border-nb-outline-variant/30 rounded-[24px] shadow-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-300"
         onClick={e => e.stopPropagation()}
       >
@@ -64,7 +63,7 @@ export default function ConfirmationDialog({
               <h3 className="text-sm font-black text-nb-on-surface uppercase tracking-widest">{title}</h3>
               <div className="h-0.5 w-8 bg-nb-outline-variant/30 mt-1" />
             </div>
-            <button 
+            <button
               onClick={onCancel}
               className="p-2 rounded-xl hover:bg-nb-surface-low text-nb-on-surface-variant/40 hover:text-nb-on-surface transition-colors"
             >

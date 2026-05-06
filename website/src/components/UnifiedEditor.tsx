@@ -47,12 +47,11 @@ if (Prism.languages.latex) {
 
 
 import {
-  Bold, Italic, List, ListOrdered, Code,
-  Heading1, Heading2, Image as ImageIcon,
-  Table as TableIcon, Undo, Redo, Trash2,
+  Image as ImageIcon,
+  Table as TableIcon, Trash2,
   ChevronUp, ChevronDown, ChevronLeft, ChevronRight,
-  Pencil, AlertTriangle, FileCode, Check, Code2, MoreVertical, Settings, UserCircle, Grid3X3, GripVertical,
-  Scissors as Scissor, Copy, Clipboard, Terminal, X, Underline as UnderlineIcon, Link2Off, ExternalLink
+  Code2, UserCircle, GripVertical,
+  Terminal, X, Link2Off, ExternalLink
 } from "lucide-react";
 import { generateUUID, hashContent, getExtensionFromDataUrl } from "@/lib/utils";
 
@@ -180,7 +179,7 @@ function getIntegrityDecorations(doc: any, metadata: any) {
         if (mark.type.name === 'link') {
           const { resourceId, href } = mark.attrs || {};
           const targetId = resourceId || (href?.startsWith('#') ? href.slice(1) : null);
-          
+
           if (targetId && !validIds.has(targetId)) {
             decorations.push(Decoration.inline(pos, pos + node.nodeSize, {
               class: 'nb-broken-link',
@@ -1182,11 +1181,10 @@ function LinkReferencePopup({
                 }}
                 disabled={link.startsWith('#') && !selectedResource}
                 title={link.startsWith('#') && !selectedResource ? "Broken Reference" : "Go to Link"}
-                className={`p-2 rounded-lg transition-colors shrink-0 border border-nb-outline-variant/30 shadow-sm ${
-                  link.startsWith('#') && !selectedResource 
-                    ? "bg-nb-surface-low text-nb-on-surface-variant/20 cursor-not-allowed" 
-                    : "bg-nb-surface text-nb-primary hover:bg-nb-primary/10"
-                }`}
+                className={`p-2 rounded-lg transition-colors shrink-0 border border-nb-outline-variant/30 shadow-sm ${link.startsWith('#') && !selectedResource
+                  ? "bg-nb-surface-low text-nb-on-surface-variant/20 cursor-not-allowed"
+                  : "bg-nb-surface text-nb-primary hover:bg-nb-primary/10"
+                  }`}
               >
                 <ExternalLink size={14} />
               </button>
@@ -1348,13 +1346,13 @@ export default function UnifiedEditor({
                 const resId = href.slice(1);
                 const linkEntryId = anchor.getAttribute('data-entry-id');
                 const params = new URLSearchParams(window.location.search);
-                
+
                 let changed = false;
                 if (linkEntryId && linkEntryId !== params.get('entry')) {
                   params.set('entry', linkEntryId);
                   changed = true;
                 }
-                
+
                 if (resId !== params.get('resource')) {
                   params.set('resource', resId);
                   changed = true;
