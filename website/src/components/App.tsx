@@ -144,16 +144,23 @@ export default function App() {
   const [activeWorkspaceMode, setActiveWorkspaceMode] = useState<WorkspaceMode>("none");
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [prevSync, setPrevSync] = useState({ mode: workspaceMode, init: isInitializing });
+  
+  // Refs for state that callbacks/effects read but should NOT trigger re-runs
+  const openFileRef = useRef(openFile);
+  const notebookMetadataRef = useRef(notebookMetadata);
+  const targetResourceRef = useRef<string | null>(null);
+  const [targetResourceId, setTargetResourceId] = useState<string | null>(null);
+
+  useEffect(() => { openFileRef.current = openFile; }, [openFile]);
+  useEffect(() => { notebookMetadataRef.current = notebookMetadata; }, [notebookMetadata]);
+  useEffect(() => { targetResourceRef.current = targetResourceId; }, [targetResourceId]);
+
   if (prevSync.mode !== workspaceMode || prevSync.init !== isInitializing) {
     setPrevSync({ mode: workspaceMode, init: isInitializing });
     if (!isInitializing) setActiveWorkspaceMode(workspaceMode);
   }
 
-  const notebookMetadataRef = useRef(notebookMetadata);
-  useEffect(() => { notebookMetadataRef.current = notebookMetadata; }, [notebookMetadata]);
-
   const lastSavedContentsRef = useRef<Map<string, string>>(new Map());
-  const [targetResourceId, setTargetResourceId] = useState<string | null>(null);
 
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -516,67 +523,12 @@ export default function App() {
     });
   }, [openFile, setNotebookMetadata]);
 
-  const handleNewEntry = useCallback(async () => {
-    const createdAt = isoTimestamp();
-    const entryId = generateUUID();
-    const filename = `${entryId}.json`;
-    const entriesDir = (workspaceMode === "github" && config) ? config.entriesDir : ENTRIES_DIR;
-    const path = `${entriesDir}/${filename}`;
-
-    const defaultTitle = "";
-    const defaultAuthor = localStorage.getItem("nb-last-author") || "";
-
-    const entryMeta: EntryMetadata = {
-      id: entryId, title: defaultTitle, author: defaultAuthor, phase: "",
-      createdAt, updatedAt: createdAt, filename: path, resources: {}
-    };
-
-    const wrapper = { version: 3, content: { type: "doc", content: [{ type: "paragraph" }] } };
-    const jsonStr = JSON.stringify(wrapper, null, 2);
-    const initialLatex = `\\notebookentry{${defaultTitle}}{${createdAt.split('T')[0]}}{${defaultAuthor}}{}\n\\label{${entryId}}\n\n`;
-
-    const newMetadata = updateEntryInIndex(notebookMetadata, entryId, entryMeta);
-
-    setOpenFile({
-      path, name: filename, id: entryId, viewMode: "entry",
-      rawLatex: initialLatex, tiptapContent: JSON.stringify(wrapper.content),
-      title: defaultTitle, author: defaultAuthor, phase: "",
-      metadataMissing: false, createdAt, updatedAt: createdAt, lastOpenedAt: createdAt, isLegacyRaw: false,
-    });
-    setLatexContent(initialLatex);
-    setEntries(prev => [{ name: filename, path }, ...prev]);
-    setNotebookMetadata(newMetadata);
-
-    const params = new URLSearchParams(window.location.search);
-    params.set('entry', entryId);
-    params.delete('resource');
-    window.history.pushState({}, '', `?${params.toString()}`);
-    window.dispatchEvent(new Event('locationchange'));
-
-    setSavingPaths(prev => new Set(prev).add(path));
-    try {
-      await saveEntry(path, jsonStr, "New entry");
-      await saveEntry(`${currentLatexDir}/${entryId}.tex`, initialLatex, "Init LaTeX");
-      await saveMetadata(newMetadata, "Update index for new entry");
-      const allEntriesLatex = generateAllEntriesLatex(newMetadata);
-      await saveEntry(currentAllEntriesPath, allEntriesLatex, "Update all_entries.tex");
-      if (workspaceMode === "github") refreshPending();
-    } finally {
-      setSavingPaths(prev => {
-        const next = new Set(prev);
-        next.delete(path);
-        return next;
-      });
-    }
-  }, [workspaceMode, config, saveEntry, saveMetadata, notebookMetadata, setEntries, setNotebookMetadata, currentLatexDir, currentAllEntriesPath, refreshPending]);
-
   const [lastSelectedPath, setLastSelectedPath] = useState<string | null>(null);
 
   const handleSelectEntry = useCallback((file: ExplorerFile, multi: boolean, range: boolean, visiblePaths: string[]) => {
     setSelectedPaths(prev => {
       const next = new Set(prev);
       if (range && lastSelectedPath && visiblePaths.includes(lastSelectedPath)) {
-        // Find current order from visible paths
         const startIdx = visiblePaths.indexOf(lastSelectedPath);
         const endIdx = visiblePaths.indexOf(file.path);
         const min = Math.min(startIdx, endIdx);
@@ -597,7 +549,7 @@ export default function App() {
     });
   }, [lastSelectedPath]);
 
-  const handleOpenEntry = useCallback(async (file: ExplorerFile, silent: boolean = false) => {
+  const handleOpenEntry = useCallback(async (file: ExplorerFile, silent: boolean = false, initialContent?: string, initialLatex?: string) => {
     setIsLoading(true);
     setIsInitializing(true);
     if (isMobile) setUserSidebarPreference(false);
@@ -617,10 +569,15 @@ export default function App() {
         window.dispatchEvent(new Event('locationchange'));
       }
 
-      const stagedEntry = (await getAllPending(dbName)).find(p => p.path === file.path && p.operation === "upsert");
-      if (stagedEntry?.content) entryJsonStr = stagedEntry.content;
-      else if (workspaceMode === "local" && dirHandle) entryJsonStr = (await getLocalFileContent(dirHandle, file.path)).text || "";
-      else if (workspaceMode === "github" && config) entryJsonStr = await fetchFileContent(config, file.path);
+      if (initialContent !== undefined) {
+        entryJsonStr = initialContent;
+        latexStr = initialLatex || "";
+      } else {
+        const stagedEntry = (await getAllPending(dbName)).find(p => p.path === file.path && p.operation === "upsert");
+        if (stagedEntry?.content) entryJsonStr = stagedEntry.content;
+        else if (workspaceMode === "local" && dirHandle) entryJsonStr = (await getLocalFileContent(dirHandle, file.path)).text || "";
+        else if (workspaceMode === "github" && config) entryJsonStr = await fetchFileContent(config, file.path);
+      }
 
       if (!entryJsonStr) throw new Error("Entry not found");
       const rawData = JSON.parse(entryJsonStr);
@@ -633,19 +590,20 @@ export default function App() {
       const createdAt = meta?.createdAt || isoTimestamp();
       const updatedAt = meta?.updatedAt || createdAt;
 
-      const latexPath = `${currentLatexDir}/${entryId}.tex`;
-      const stagedLatex = (await getAllPending(dbName)).find(p => p.path === latexPath && p.operation === "upsert");
-      if (stagedLatex?.content) latexStr = stagedLatex.content;
-      else if (workspaceMode === "local" && dirHandle) {
-        try { latexStr = (await getLocalFileContent(dirHandle, latexPath)).text || ""; } catch { /* ignore */ }
-      } else if (workspaceMode === "github" && config) {
-        try { latexStr = await fetchFileContent(config, latexPath); } catch { /* ignore */ }
+      if (initialContent === undefined) {
+        const latexPath = `${currentLatexDir}/${entryId}.tex`;
+        const stagedLatex = (await getAllPending(dbName)).find(p => p.path === latexPath && p.operation === "upsert");
+        if (stagedLatex?.content) latexStr = stagedLatex.content;
+        else if (workspaceMode === "local" && dirHandle) {
+          try { latexStr = (await getLocalFileContent(dirHandle, latexPath)).text || ""; } catch { /* ignore */ }
+        } else if (workspaceMode === "github" && config) {
+          try { latexStr = await fetchFileContent(config, latexPath); } catch { /* ignore */ }
+        }
       }
 
-      // Seed the save cache with loaded values to prevent redundant auto-saves on mount
       const normalizedJson = JSON.stringify({ version: 3, content }, null, 2);
       lastSavedContentsRef.current.set(file.path, normalizedJson);
-      lastSavedContentsRef.current.set(latexPath, latexStr);
+      lastSavedContentsRef.current.set(`${currentLatexDir}/${entryId}.tex`, latexStr);
 
       const assetCache = new Map<string, string>();
       const images = extractImagePaths(content);
@@ -680,7 +638,6 @@ export default function App() {
         createdAt, updatedAt, lastOpenedAt: updatedAt, isLegacyRaw: false,
       });
       setLatexContent(latexStr);
-      // Auto-select the opened entry exclusively
       setSelectedPaths(new Set([file.path]));
       setLastSelectedPath(file.path);
     } catch (e) {
@@ -688,8 +645,54 @@ export default function App() {
       throw e;
     } finally {
       setIsLoading(false);
+      setIsInitializing(false);
     }
   }, [getDBName, workspaceMode, dirHandle, config, getGitBasePrefix, currentLatexDir, isMobile, notify, setIsLoading, setUserSidebarPreference, setMobileTab, setLatexContent]);
+
+  const handleNewEntry = useCallback(async () => {
+    setIsLoading(true);
+    setIsInitializing(true);
+    const createdAt = isoTimestamp();
+    const entryId = generateUUID();
+    const filename = `${entryId}.json`;
+    const entriesDir = (workspaceMode === "github" && config) ? config.entriesDir : ENTRIES_DIR;
+    const path = `${entriesDir}/${filename}`;
+
+    const defaultTitle = "";
+    const defaultAuthor = localStorage.getItem("nb-last-author") || "";
+
+    const entryMeta: EntryMetadata = {
+      id: entryId, title: defaultTitle, author: defaultAuthor, phase: "",
+      createdAt, updatedAt: createdAt, filename: path, resources: {}
+    };
+
+    const wrapper = { version: 3, content: { type: "doc", content: [{ type: "paragraph" }] } };
+    const jsonStr = JSON.stringify(wrapper, null, 2);
+    const initialLatex = `\\notebookentry{${defaultTitle}}{${createdAt.split('T')[0]}}{${defaultAuthor}}{}\n\\label{${entryId}}\n\n`;
+
+    const newMetadata = updateEntryInIndex(notebookMetadata, entryId, entryMeta);
+
+    setEntries(prev => [{ name: filename, path }, ...prev]);
+    setNotebookMetadata(newMetadata);
+
+    try {
+      await saveEntry(path, jsonStr, "New entry");
+      await saveEntry(`${currentLatexDir}/${entryId}.tex`, initialLatex, "Init LaTeX");
+      await saveMetadata(newMetadata, "Update index for new entry");
+      const allEntriesLatex = generateAllEntriesLatex(newMetadata);
+      await saveEntry(currentAllEntriesPath, allEntriesLatex, "Update all_entries.tex");
+
+      await handleOpenEntry({ name: filename, path }, true, jsonStr, initialLatex);
+      
+      if (workspaceMode === "github") refreshPending();
+    } catch {
+      notify("Failed to create entry.", "error");
+    } finally {
+      setIsLoading(false);
+      setIsInitializing(false);
+    }
+  }, [workspaceMode, config, saveEntry, saveMetadata, notebookMetadata, setEntries, setNotebookMetadata, currentLatexDir, currentAllEntriesPath, refreshPending, handleOpenEntry, notify]);
+
 
   const handleCloseEntry = useCallback((path?: string) => {
     if (path && openFile?.path !== path) return;
@@ -830,6 +833,9 @@ export default function App() {
           await saveEntry(currentAllEntriesPath, allEntriesLatex, "Update all_entries.tex");
 
           const deletedPaths = new Set(files.map(f => f.path));
+          if (openFileRef.current && deletedPaths.has(openFileRef.current.path)) {
+            handleCloseEntry();
+          }
           setEntries(prev => prev.filter(e => !deletedPaths.has(e.path)));
           setSelectedPaths(prev => {
             const next = new Set(prev);
@@ -846,14 +852,10 @@ export default function App() {
         }
       }
     });
-  }, [currentAllEntriesPath, currentLatexDir, saveEntry, saveMetadata, workspaceMode, notify, setEntries, refreshPending, deleteFile, setIsLoading, setNotebookMetadata]);
+  }, [currentAllEntriesPath, currentLatexDir, saveEntry, saveMetadata, workspaceMode, notify, setEntries, refreshPending, deleteFile, setIsLoading, setNotebookMetadata, handleCloseEntry]);
 
 
-  // Refs for state that handleUrlChange reads but should NOT trigger re-runs
-  const openFileRef = useRef(openFile);
-  const targetResourceRef = useRef(targetResourceId);
-  useEffect(() => { openFileRef.current = openFile; }, [openFile]);
-  useEffect(() => { targetResourceRef.current = targetResourceId; }, [targetResourceId]);
+  // handleUrlChange logic moved to useEffect below
 
   useEffect(() => {
     let active = true;
