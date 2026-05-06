@@ -87,9 +87,20 @@ export const listLocalFiles = async (rootHandle: FileSystemDirectoryHandle, dirP
       }
     }
     return files;
-  } catch (e) {
+  } catch (e: any) {
+    if (e.name === 'NotFoundError') {
+      return [];
+    }
     console.error(`Failed to list files in ${dirPath}`, e);
     return [];
+  }
+};
+
+export const ensureLocalDirectory = async (rootHandle: FileSystemDirectoryHandle, dirPath: string) => {
+  const parts = dirPath.split('/').filter(Boolean);
+  let currentHandle: FileSystemDirectoryHandle = rootHandle;
+  for (const part of parts) {
+    currentHandle = await currentHandle.getDirectoryHandle(part, { create: true });
   }
 };
 
