@@ -53,11 +53,16 @@ export function useWorkspace() {
     setIsLoading(true);
     try {
       const dbName = getDBName();
-      const files = await fetchDirectoryTree(config, ENTRIES_DIR);
+      const actualEntriesDir = config.entriesDir || ENTRIES_DIR;
+      const basePrefix = config.baseDir ? (config.baseDir.endsWith('/') ? config.baseDir : config.baseDir + '/') : '';
+      const actualIndexPath = `${basePrefix}${INDEX_PATH}`;
+      const actualAllEntriesPath = `${basePrefix}${ALL_ENTRIES_PATH}`;
+
+      const files = await fetchDirectoryTree(config, actualEntriesDir);
       const entryFiles = Array.isArray(files) ? files.map((f: GitHubFile) => ({ name: f.name, path: f.path })) : [];
 
       const pending = await getAllPending(dbName);
-      const pendingMeta = pending.find(p => p.path === INDEX_PATH && p.operation === "upsert");
+      const pendingMeta = pending.find(p => p.path === actualIndexPath && p.operation === "upsert");
 
       if (pendingMeta?.content) {
         try {
@@ -66,7 +71,7 @@ export function useWorkspace() {
         } catch { }
       } else if (!skipMetadata) {
         try {
-          const metaStr = await fetchFileContent(config, INDEX_PATH);
+          const metaStr = await fetchFileContent(config, actualIndexPath);
           lastRemoteMetadataRef.current = metaStr;
           const parsed = JSON.parse(metaStr);
           setMetadata(prev => ({ ...parsed, projectId: prev.projectId || parsed.projectId, projectName: prev.projectName || parsed.projectName }));
@@ -74,11 +79,24 @@ export function useWorkspace() {
       }
 
       try {
-        const allEntries = await fetchFileContent(config, ALL_ENTRIES_PATH);
+        const allEntries = await fetchFileContent(config, actualAllEntriesPath);
         lastRemoteAllEntriesRef.current = allEntries;
       } catch { }
 
-      setEntries(entryFiles);
+      let mergedEntries = [...entryFiles];
+      for (const p of pending) {
+        if (p.path.startsWith(actualEntriesDir) && p.path.endsWith('.json')) {
+          if (p.operation === "upsert") {
+            if (!mergedEntries.some(e => e.path === p.path)) {
+              mergedEntries.push({ name: p.path.split('/').pop() || '', path: p.path });
+            }
+          } else if (p.operation === "delete") {
+            mergedEntries = mergedEntries.filter(e => e.path !== p.path);
+          }
+        }
+      }
+
+      setEntries(mergedEntries);
     } finally {
       setIsLoading(false);
     }

@@ -171,6 +171,16 @@ export default function UnifiedEditor({
     editorProps: {
       attributes: { class: "focus:outline-none min-h-[800px] h-full max-w-5xl mx-auto p-4 lg:p-6 cursor-text" },
       handleDOMEvents: {
+        mousedown: (view, event) => {
+          if (event.ctrlKey || event.metaKey) {
+            const target = event.target as HTMLElement;
+            if (target.closest('a')) {
+              event.preventDefault();
+              return true;
+            }
+          }
+          return false;
+        },
         click: (view, event) => {
           const target = event.target as HTMLElement;
           const anchor = target.closest('a');

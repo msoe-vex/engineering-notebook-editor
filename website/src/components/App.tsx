@@ -31,9 +31,9 @@ import { HardDrive, ArrowLeftRight, X, BookOpen } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { saveAs } from "file-saver";
 import { generateUUID, hashContent } from "@/lib/utils";
-import { generateEntryLatex } from "@/lib/latex";
+import { generateEntryLatex, generateAllEntriesLatex } from "@/lib/latex";
 import { extractImagePaths, extractResources, extractReferences, TipTapNode } from "@/lib/metadata";
-import { ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, INDEX_PATH } from "@/lib/constants";
+import { ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, INDEX_PATH, ALL_ENTRIES_PATH } from "@/lib/constants";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { usePersistence } from "@/hooks/usePersistence";
 import { getLocalFileContent, writeLocalFile, ensureLocalDirectory } from "@/lib/fs";
@@ -336,6 +336,7 @@ export default function App() {
 
   const currentIndexPath = useMemo(() => `${getGitBasePrefix()}${INDEX_PATH}`, [getGitBasePrefix]);
   const currentLatexDir = useMemo(() => `${getGitBasePrefix()}${LATEX_DIR}`, [getGitBasePrefix]);
+  const currentAllEntriesPath = useMemo(() => `${getGitBasePrefix()}${ALL_ENTRIES_PATH}`, [getGitBasePrefix]);
 
   const isDarkMode = resolvedTheme === "dark";
 
@@ -396,14 +397,15 @@ export default function App() {
       const entryJsonStr = JSON.stringify(entryJsonObj, null, 2);
 
       for (const asset of assetsToSave) {
-        await uploadResource(asset.path, asset.base64, `Asset: ${asset.path.split('/').pop()}`);
+        const assetPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${asset.path}` : asset.path;
+        await uploadResource(assetPath, asset.base64, `Asset: ${asset.path.split('/').pop()}`);
         if (workspaceMode === "github") {
-          await putResource(getDBName(), { path: asset.path, dataUrl: `data:image/*;base64,${asset.base64}` });
+          await putResource(getDBName(), { path: assetPath, dataUrl: `data:image/*;base64,${asset.base64}` });
         }
       }
 
       await saveEntry(changedPath, entryJsonStr, `Auto-save: ${info.title}`);
-      await saveEntry(`${LATEX_DIR}/${entryId}.tex`, latex, `Generate LaTeX: ${info.title}`);
+      await saveEntry(`${currentLatexDir}/${entryId}.tex`, latex, `Generate LaTeX: ${info.title}`);
 
       // Merge content-derived fields into the current browser state.
       // The Editor owns title/author/phase/isValid via immediate sync —
@@ -504,8 +506,11 @@ export default function App() {
     setSavingPaths(prev => new Set(prev).add(path));
     try {
       await saveEntry(path, jsonStr, "New entry");
-      await saveEntry(`${LATEX_DIR}/${entryId}.tex`, initialLatex, "Init LaTeX");
+      await saveEntry(`${currentLatexDir}/${entryId}.tex`, initialLatex, "Init LaTeX");
       await saveMetadata(newMetadata, "Update index for new entry");
+      const allEntriesLatex = generateAllEntriesLatex(newMetadata);
+      await saveEntry(currentAllEntriesPath, allEntriesLatex, "Update all_entries.tex");
+      if (workspaceMode === "github") refreshPending();
     } finally {
       setSavingPaths(prev => {
         const next = new Set(prev);
@@ -513,7 +518,7 @@ export default function App() {
         return next;
       });
     }
-  }, [workspaceMode, config, saveEntry, saveMetadata, notebookMetadata, setEntries, setNotebookMetadata]);
+  }, [workspaceMode, config, saveEntry, saveMetadata, notebookMetadata, setEntries, setNotebookMetadata, currentLatexDir, currentAllEntriesPath, refreshPending]);
 
   const handleSelectEntry = useCallback(async (file: ExplorerFile, silent: boolean = false) => {
     setIsLoading(true);
@@ -562,10 +567,11 @@ export default function App() {
       const assetCache = new Map<string, string>();
       const images = extractImagePaths(content);
       for (const imgPath of images) {
-        const staged = (await getAllPending(dbName)).find(p => p.path === imgPath && p.operation === "upsert");
+        const actualImgPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${imgPath}` : imgPath;
+        const staged = (await getAllPending(dbName)).find(p => p.path === actualImgPath && p.operation === "upsert");
         if (staged?.content) assetCache.set(imgPath, staged.content.startsWith('data:') ? staged.content : `data:image/*;base64,${staged.content}`);
         else {
-          const cached = await getResource(dbName, imgPath);
+          const cached = await getResource(dbName, actualImgPath);
           if (cached) assetCache.set(imgPath, cached);
           else if (workspaceMode === "local" && dirHandle) {
             try {
@@ -669,7 +675,21 @@ export default function App() {
         if (currentMeta === EMPTY_METADATA) return;
         if (currentMeta.entries[entryId]) {
           const entriesDir = (workspaceMode === "github" && config) ? config.entriesDir : ENTRIES_DIR;
-          handleSelectEntry({ name: `${entryId}.json`, path: `${entriesDir}/${entryId}.json` }, true).catch(() => setOpenFile(null));
+          handleSelectEntry({ name: `${entryId}.json`, path: `${entriesDir}/${entryId}.json` }, true).catch(() => {
+            setOpenFile(null);
+            const params = new URLSearchParams(window.location.search);
+            params.delete('entry');
+            params.delete('resource');
+            window.history.replaceState({}, '', `?${params.toString()}`);
+            window.dispatchEvent(new Event('locationchange'));
+          });
+        } else if (!isLoading) {
+          setOpenFile(null);
+          const params = new URLSearchParams(window.location.search);
+          params.delete('entry');
+          params.delete('resource');
+          window.history.replaceState({}, '', `?${params.toString()}`);
+          window.dispatchEvent(new Event('locationchange'));
         }
       } else if (!entryId && currentOpenFile) setOpenFile(null);
 
@@ -739,7 +759,10 @@ export default function App() {
           await writeLocalFile(dirHandle, path, jsonStr);
           const latex = generateEntryLatex(JSON.stringify(cleanDoc), newEntryMeta.title, newEntryMeta.author, newEntryMeta.phase, newEntryMeta.createdAt, newId);
           await writeLocalFile(dirHandle, `${LATEX_DIR}/${newId}.tex`, latex);
-          setNotebookMetadata(prev => updateEntryInIndex(prev, newId, newEntryMeta));
+          const updatedMeta = updateEntryInIndex(notebookMetadata, newId, newEntryMeta);
+          setNotebookMetadata(prev => updatedMeta);
+          const allEntriesLatex = generateAllEntriesLatex(updatedMeta);
+          await writeLocalFile(dirHandle, ALL_ENTRIES_PATH, allEntriesLatex);
           await loadLocalExplorer();
         } else {
           const dbName = getDBName();
@@ -749,6 +772,8 @@ export default function App() {
           await stage({ path: `${currentLatexDir}/${newId}.tex`, content: latex, operation: "upsert", label: "Import LaTeX" });
           const updatedMeta = updateEntryInIndex(notebookMetadata, newId, newEntryMeta);
           await stage({ path: currentIndexPath, content: JSON.stringify(updatedMeta, null, 2), operation: "upsert", label: "Update index" });
+          const allEntriesLatex = generateAllEntriesLatex(updatedMeta);
+          await stage({ path: currentAllEntriesPath, content: allEntriesLatex, operation: "upsert", label: "Update all_entries.tex" });
           setNotebookMetadata(updatedMeta);
           refreshPending();
         }
@@ -760,8 +785,9 @@ export default function App() {
 
   const handleImageUploaded = async (imagePath: string, base64: string) => {
     const dbName = getDBName();
-    await putResource(dbName, { path: imagePath, dataUrl: `data:image/*;base64,${base64}` });
-    await uploadResource(imagePath, base64, "Image upload");
+    const actualImgPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${imagePath}` : imagePath;
+    await putResource(dbName, { path: actualImgPath, dataUrl: `data:image/*;base64,${base64}` });
+    await uploadResource(actualImgPath, base64, "Image upload");
     if (workspaceMode === "github") refreshPending();
   };
 
@@ -770,11 +796,21 @@ export default function App() {
     const updatedMeta = removeEntryFromMetadata(notebookMetadata, entryId);
     setNotebookMetadata(updatedMeta);
     await deleteFile(file.path, "Entry deleted");
-    await deleteFile(`${LATEX_DIR}/${entryId}.tex`, "LaTeX deleted");
+    await deleteFile(`${currentLatexDir}/${entryId}.tex`, "LaTeX deleted");
     await saveMetadata(updatedMeta, "Metadata update (entry deleted)");
+    const allEntriesLatex = generateAllEntriesLatex(updatedMeta);
+    await saveEntry(currentAllEntriesPath, allEntriesLatex, "Update all_entries.tex");
     setEntries(prev => prev.filter(e => e.path !== file.path));
     if (workspaceMode === "github") refreshPending();
-    if (openFile?.path === file.path) { setOpenFile(null); setLatexContent(""); }
+    if (openFile?.path === file.path) {
+      setOpenFile(null);
+      setLatexContent("");
+      const params = new URLSearchParams(window.location.search);
+      params.delete('entry');
+      params.delete('resource');
+      window.history.pushState({}, '', `?${params.toString()}`);
+      window.dispatchEvent(new Event('locationchange'));
+    }
   };
 
 
@@ -1110,7 +1146,7 @@ export default function App() {
           githubToken={githubToken}
           githubUser={githubUser}
           isExchangingGithubCode={isExchangingGithubCode}
-          autoOpenGithubModal={isExchangingGithubCode || !!githubToken}
+          autoOpenGithubModal={isExchangingGithubCode}
           onSignOutGithub={() => { setGithubToken(null); setGithubUser(null); localStorage.removeItem("nb-github-token"); localStorage.removeItem("nb-github-user"); }}
         />
       ) : (

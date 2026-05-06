@@ -80,8 +80,8 @@ function FileRow({ file, isSelected, isPending, isDeleted, icon, isValid = true,
       {!isValid && !isDeleted && (
         <div
           className={`shrink-0 w-6 h-6 rounded-lg flex items-center justify-center animate-pulse ${isSelected ? 'bg-white/20 text-white' : 'bg-amber-500/10 text-amber-500'}`}
-          title={file.validationErrors && file.validationErrors.length > 0 
-            ? `Validation errors:\n- ${file.validationErrors.join('\n- ')}` 
+          title={file.validationErrors && file.validationErrors.length > 0
+            ? `Validation errors:\n- ${file.validationErrors.join('\n- ')}`
             : "Incomplete entry metadata or resource captions"}
         >
           <AlertTriangle size={12} />
@@ -205,8 +205,8 @@ export default function FileExplorer({
                 <div className="fixed inset-0 z-40" onClick={() => setIsSortOpen(false)} />
                 <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-nb-surface border border-nb-outline-variant rounded-xl shadow-nb-lg py-1.5 animate-in fade-in zoom-in-95 duration-200">
                   {[
-                    { id: 'updated' as const, label: 'Updated', icon: <Clock size={12} /> },
                     { id: 'created' as const, label: 'Created', icon: <Calendar size={12} /> },
+                    { id: 'updated' as const, label: 'Updated', icon: <Clock size={12} /> },
                     { id: 'title' as const, label: 'Title', icon: <SortAsc size={12} /> }
                   ].map((s) => (
                     <button

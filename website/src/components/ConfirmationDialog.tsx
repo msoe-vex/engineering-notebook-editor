@@ -65,7 +65,7 @@ export default function ConfirmationDialog({
             </div>
             <button
               onClick={onCancel}
-              className="p-2 rounded-xl hover:bg-nb-surface-low text-nb-on-surface-variant/40 hover:text-nb-on-surface transition-colors"
+              className="p-2 rounded-xl hover:bg-nb-surface-low text-nb-on-surface-variant/40 hover:text-nb-on-surface transition-colors cursor-pointer"
             >
               <X size={18} />
             </button>
@@ -78,13 +78,13 @@ export default function ConfirmationDialog({
           <div className="flex gap-3">
             <button
               onClick={onCancel}
-              className="flex-1 px-4 py-3 rounded-2xl border border-nb-outline-variant/30 text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-surface-low transition-all active:scale-95"
+              className="flex-1 px-4 py-3 rounded-2xl border border-nb-outline-variant/30 text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-surface-low transition-all active:scale-95 cursor-pointer"
             >
               {cancelLabel}
             </button>
             <button
               onClick={onConfirm}
-              className={`flex-1 px-4 py-3 rounded-2xl ${style.confirmBg} text-white text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg`}
+              className={`flex-1 px-4 py-3 rounded-2xl ${style.confirmBg} text-white text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg cursor-pointer`}
             >
               {confirmLabel}
             </button>

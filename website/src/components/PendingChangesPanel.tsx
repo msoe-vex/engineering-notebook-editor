@@ -40,11 +40,11 @@ export default function PendingChangesPanel({
             </span>
             <ChevronDown size={12} className={`text-nb-tertiary transition-transform ${isCollapsed ? "" : "rotate-180"}`} />
           </button>
-          
+
           {!isCommitting && (
             <button
               onClick={onDiscard}
-              className="text-[8px] font-black tracking-widest text-nb-on-surface-variant hover:text-red-500 uppercase transition-colors"
+              className="text-[8px] font-black tracking-widest text-nb-on-surface-variant hover:text-red-500 uppercase transition-colors cursor-pointer"
             >
               Discard
             </button>
@@ -71,7 +71,7 @@ export default function PendingChangesPanel({
       <button
         onClick={onCommit}
         disabled={isCommitting || (upserted.length === 0 && deleted.length === 0)}
-        className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[9px] font-bold tracking-widest py-3 rounded-lg transition-all active:scale-[0.98] shadow-lg shadow-nb-tertiary/20 disabled:opacity-30"
+        className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[9px] font-bold tracking-widest py-3 rounded-lg transition-all active:scale-[0.98] shadow-lg shadow-nb-tertiary/20 disabled:opacity-30 cursor-pointer"
       >
         {isCommitting ? "Syncing..." : "Sync to GitHub"}
       </button>

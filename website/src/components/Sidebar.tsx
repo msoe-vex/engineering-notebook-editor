@@ -22,7 +22,7 @@ export default function Sidebar({
   onNewEntry
 }: SidebarProps) {
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState<"created" | "updated" | "title">("updated");
+  const [sortBy, setSortBy] = useState<"created" | "updated" | "title">("created");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
 
