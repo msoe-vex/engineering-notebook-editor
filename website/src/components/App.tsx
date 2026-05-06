@@ -502,7 +502,7 @@ export default function App() {
       await saveMetadata(finalMeta);
       if (workspaceMode === "github") refreshPending();
     }
-  }, [saveMetadata, workspaceMode, refreshPending]);
+  }, [saveMetadata, workspaceMode, refreshPending, setNotebookMetadata, setOpenFile]);
 
   const handleValidationChange = useCallback((isValid: boolean) => {
     if (!openFile) return;
@@ -700,7 +700,7 @@ export default function App() {
     params.delete('resource');
     window.history.pushState({}, '', `?${params.toString()}`);
     window.dispatchEvent(new Event('locationchange'));
-  }, [openFile]);
+  }, [openFile, setOpenFile, setLatexContent]);
 
   const handleDownloadLatex = useCallback(async (file: ExplorerFile) => {
     try {
@@ -718,7 +718,7 @@ export default function App() {
       if (!latex) throw new Error("No LaTeX content found");
       const blob = new Blob([latex], { type: "application/x-latex" });
       saveAs(blob, `${entryId}.tex`);
-    } catch (e) {
+    } catch {
       notify("Failed to download LaTeX.", "error");
     }
   }, [config, currentLatexDir, dirHandle, getDBName, workspaceMode, notify]);
@@ -750,14 +750,14 @@ export default function App() {
         }
       }
 
-      const portable = { 
-        version: 3, 
+      const portable = {
+        version: 3,
         entries: { [entryId]: { ...meta, content } },
         assets
       };
       const blob = new Blob([JSON.stringify(portable, null, 2)], { type: "application/json" });
       saveAs(blob, `${entryId}.json`);
-    } catch (e) {
+    } catch {
       notify("Failed to download JSON.", "error");
     }
   }, [config, dirHandle, getDBName, getGitBasePrefix, notebookMetadata, workspaceMode, notify]);
@@ -767,7 +767,7 @@ export default function App() {
       setIsLoading(true);
       setIsInitializing(true);
       const dbName = getDBName();
-      const entriesMap: Record<string, any> = {};
+      const entriesMap: Record<string, EntryMetadata & { content: TipTapNode }> = {};
       const allAssets: Record<string, string> = {};
 
       for (const file of files) {
@@ -800,12 +800,12 @@ export default function App() {
       const blob = new Blob([JSON.stringify(portable, null, 2)], { type: "application/json" });
       saveAs(blob, `notebook_export_${isoTimestamp().replace(/[:.]/g, '-')}.json`);
       notify(`Exported ${Object.keys(entriesMap).length} entries.`, "success");
-    } catch (e) {
+    } catch {
       notify("Failed to export entries.", "error");
     } finally {
       setIsLoading(false);
     }
-  }, [config, dirHandle, getDBName, getGitBasePrefix, notebookMetadata, workspaceMode, notify]);
+  }, [config, dirHandle, getDBName, getGitBasePrefix, notebookMetadata, workspaceMode, notify, setIsLoading]);
 
   const handleDeleteMulti = useCallback(async (files: ExplorerFile[]) => {
     setConfirmDialog({
@@ -828,7 +828,7 @@ export default function App() {
           await saveMetadata(currentMeta, "Metadata update (bulk deletion)");
           const allEntriesLatex = generateAllEntriesLatex(currentMeta);
           await saveEntry(currentAllEntriesPath, allEntriesLatex, "Update all_entries.tex");
-          
+
           const deletedPaths = new Set(files.map(f => f.path));
           setEntries(prev => prev.filter(e => !deletedPaths.has(e.path)));
           setSelectedPaths(prev => {
@@ -838,7 +838,7 @@ export default function App() {
           });
           if (workspaceMode === "github") refreshPending();
           notify(`Deleted ${files.length} entries.`, "success");
-        } catch (e) {
+        } catch {
           notify("Failed to delete entries.", "error");
         } finally {
           setIsLoading(false);
@@ -846,7 +846,7 @@ export default function App() {
         }
       }
     });
-  }, [currentAllEntriesPath, currentLatexDir, notebookMetadata, saveEntry, saveMetadata, workspaceMode, notify, setEntries, refreshPending]);
+  }, [currentAllEntriesPath, currentLatexDir, saveEntry, saveMetadata, workspaceMode, notify, setEntries, refreshPending, deleteFile, setIsLoading, setNotebookMetadata]);
 
 
   // Refs for state that handleUrlChange reads but should NOT trigger re-runs
@@ -994,28 +994,28 @@ export default function App() {
 
       const entriesToImport = rawData.entries || {};
       const assetsToImport = rawData.assets || {};
-      const entryList = Object.values(entriesToImport);
+      const entryList = Object.values(entriesToImport) as (EntryMetadata & { content: TipTapNode })[];
 
       const globalIdMap = new Map<string, string>();
       // Pre-populate global map with new IDs for all entries being imported
       for (const item of entryList) {
-        const oldId = (item as any).id;
+        const oldId = (item as { id?: string }).id;
         if (oldId) globalIdMap.set(oldId, generateUUID());
       }
 
-      const importSingle = async (data: any, globalAssets: Record<string, string> = {}) => {
+      const importSingle = async (data: EntryMetadata & { content: TipTapNode }, globalAssets: Record<string, string> = {}) => {
         if (data.content === undefined) return;
-        const info = data;
-        const oldEntryId = (info as any).id;
+        const { content: originalContent, ...info } = data;
+        const oldEntryId = info.id;
         const newId = globalIdMap.get(oldEntryId) || generateUUID();
         const path = (workspaceMode === "github" && config) ? `${config.entriesDir}/${newId}.json` : `${ENTRIES_DIR}/${newId}.json`;
 
         // 1. Remap all internal IDs and references
-        const { doc: remappedDoc } = remapContentIds(data.content, globalIdMap);
+        const { doc: remappedDoc } = remapContentIds(originalContent, globalIdMap);
 
         // 2. Dehydrate assets (images)
         const { cleanDoc, newAssets } = await dehydrateAssets(remappedDoc);
-        
+
         // Match images from the document to provided assets in the export
         const images = extractImagePaths(cleanDoc);
         for (const imgPath of images) {
@@ -1034,8 +1034,6 @@ export default function App() {
           // Extract new resources map from remapped doc
           resources: extractResources(cleanDoc)
         };
-        // Clean up fields that shouldn't be in metadata
-        delete (newEntryMeta as any).content;
         newEntryMeta.isValid = isEntryValid(newEntryMeta);
 
         if (workspaceMode === "local" && dirHandle) {
