@@ -691,7 +691,7 @@ export default function App() {
       setIsLoading(false);
       setIsInitializing(false);
     }
-  }, [workspaceMode, config, saveEntry, saveMetadata, notebookMetadata, setEntries, setNotebookMetadata, currentLatexDir, currentAllEntriesPath, refreshPending, handleOpenEntry, notify]);
+  }, [workspaceMode, config, saveEntry, saveMetadata, notebookMetadata, setEntries, setNotebookMetadata, currentLatexDir, currentAllEntriesPath, refreshPending, handleOpenEntry, notify, setIsLoading, setIsInitializing]);
 
 
   const handleCloseEntry = useCallback((path?: string) => {
