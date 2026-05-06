@@ -34,7 +34,7 @@ import { generateUUID, hashContent } from "@/lib/utils";
 import { generateEntryLatex, generateAllEntriesLatex } from "@/lib/latex";
 import { extractImagePaths, extractResources, extractReferences, TipTapNode } from "@/lib/metadata";
 import { ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, INDEX_PATH, ALL_ENTRIES_PATH } from "@/lib/constants";
-import { useWorkspace } from "@/hooks/useWorkspace";
+import { useWorkspace, WorkspaceMode } from "@/hooks/useWorkspace";
 import { usePersistence } from "@/hooks/usePersistence";
 import { getLocalFileContent, writeLocalFile, ensureLocalDirectory } from "@/lib/fs";
 
@@ -141,6 +141,13 @@ export default function App() {
   const [needsPermission, setNeedsPermission] = useState(false);
   const [isConnectingLocal, setIsConnectingLocal] = useState(false);
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
+  const [activeWorkspaceMode, setActiveWorkspaceMode] = useState<WorkspaceMode>("none");
+
+  useEffect(() => {
+    if (!isInitializing) {
+      setActiveWorkspaceMode(workspaceMode);
+    }
+  }, [isInitializing, workspaceMode]);
 
   const notebookMetadataRef = useRef(notebookMetadata);
   useEffect(() => { notebookMetadataRef.current = notebookMetadata; }, [notebookMetadata]);
@@ -991,39 +998,7 @@ export default function App() {
     } else run();
   };
 
-  if (isInitializing) {
-    return (
-      <div className="flex flex-col h-screen w-full bg-nb-bg font-sans overflow-hidden">
-        <div className="min-h-screen bg-nb-bg flex flex-col items-center justify-center font-sans animate-in fade-in duration-500">
-          <div className="flex flex-col items-center gap-6">
-            <div className="w-20 h-20 rounded-[2.5rem] bg-nb-primary flex items-center justify-center shadow-2xl shadow-nb-primary/30 animate-pulse">
-              <BookOpen size={40} className="text-white" />
-            </div>
-            <div className="text-center space-y-2">
-              <h1 className="text-xl font-black tracking-tight text-nb-on-surface">Notebook</h1>
-              <p className="text-[10px] font-black tracking-[0.2em] text-nb-on-surface-variant uppercase opacity-40">Engineering Editor</p>
-            </div>
-            <div className="flex items-center gap-1 mt-4">
-              <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce [animation-delay:-0.3s]" />
-              <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce [animation-delay:-0.15s]" />
-              <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce" />
-            </div>
-          </div>
-        </div>
-        {notification && (
-          <div className="fixed bottom-6 right-6 z-[200] animate-in slide-in-from-right-10 duration-300">
-            <div className={`px-5 py-4 rounded-2xl shadow-nb-lg border flex items-center gap-4 ${notification.type === 'error' ? 'bg-nb-primary/5 border-nb-primary/30 text-nb-primary' : 'bg-nb-tertiary/5 border-nb-tertiary/30 text-nb-tertiary'} backdrop-blur-xl bg-white/80 dark:bg-nb-dark-surface/80`}>
-              <div className="flex-1">
-                <p className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">{notification.type === 'error' ? 'Error' : 'Success'}</p>
-                <p className="text-xs font-medium">{notification.message}</p>
-              </div>
-              <button onClick={() => setNotification(null)} className="p-1 hover:bg-black/5 rounded transition-colors"><X size={14} /></button>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
+  // Removed early return for isInitializing to use as overlay instead
 
   const currentProject = projects.find(p => p.id === currentProjectId);
   const workspaceLabel = workspaceMode === "github" ? `${config?.owner}/${config?.repo}` : (workspaceMode === "local" ? (currentProject?.name ?? "Local Folder") : "Memory");
@@ -1149,7 +1124,7 @@ export default function App() {
     <div className="flex flex-col h-screen w-full bg-nb-bg font-sans overflow-hidden">
       <input type="file" ref={importEntryInputRef} accept=".json" style={{ display: "none" }} onChange={(e) => { const file = e.target.files?.[0]; if (file) processImportFile(file); e.target.value = ""; }} />
 
-      {workspaceMode === "none" ? (
+      {activeWorkspaceMode === "none" ? (
         <Settings
           projects={projects}
           pendingCounts={projectPendingCounts}
@@ -1213,6 +1188,25 @@ export default function App() {
         onConfirm={confirmDialog.onConfirm} onCancel={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
         variant={confirmDialog.variant}
       />
+
+      {isInitializing && (
+        <div className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center font-sans animate-in fade-in duration-300">
+          <div className="flex flex-col items-center gap-6">
+            <div className="w-20 h-20 rounded-[2.5rem] bg-nb-primary flex items-center justify-center shadow-2xl shadow-nb-primary/30 animate-pulse">
+              <BookOpen size={40} className="text-white" />
+            </div>
+            <div className="text-center space-y-2">
+              <h1 className="text-xl font-black tracking-tight text-white">Notebook</h1>
+              <p className="text-[10px] font-black tracking-[0.2em] text-white/40 uppercase">Engineering Editor</p>
+            </div>
+            <div className="flex items-center gap-1 mt-4">
+              <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce [animation-delay:-0.3s]" />
+              <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce [animation-delay:-0.15s]" />
+              <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
