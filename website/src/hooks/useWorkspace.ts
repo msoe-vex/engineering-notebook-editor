@@ -37,9 +37,10 @@ export function useWorkspace() {
       if (!skipMetadata) {
         try {
           const metaStr = await readLocalFile(dirHandle, INDEX_PATH);
-          setMetadata(JSON.parse(metaStr));
+          const parsed = JSON.parse(metaStr);
+          setMetadata(prev => ({ ...parsed, projectId: prev.projectId || parsed.projectId, projectName: prev.projectName || parsed.projectName }));
         } catch {
-          setMetadata({ ...EMPTY_METADATA });
+          setMetadata(prev => ({ ...EMPTY_METADATA, projectId: prev.projectId, projectName: prev.projectName }));
         }
       }
     } finally {
@@ -60,13 +61,15 @@ export function useWorkspace() {
 
       if (pendingMeta?.content) {
         try {
-          setMetadata(JSON.parse(pendingMeta.content));
+          const parsed = JSON.parse(pendingMeta.content);
+          setMetadata(prev => ({ ...parsed, projectId: prev.projectId || parsed.projectId, projectName: prev.projectName || parsed.projectName }));
         } catch { }
       } else if (!skipMetadata) {
         try {
           const metaStr = await fetchFileContent(config, INDEX_PATH);
           lastRemoteMetadataRef.current = metaStr;
-          setMetadata(JSON.parse(metaStr));
+          const parsed = JSON.parse(metaStr);
+          setMetadata(prev => ({ ...parsed, projectId: prev.projectId || parsed.projectId, projectName: prev.projectName || parsed.projectName }));
         } catch { }
       }
 

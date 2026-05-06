@@ -87,8 +87,8 @@ export const listLocalFiles = async (rootHandle: FileSystemDirectoryHandle, dirP
       }
     }
     return files;
-  } catch (e: any) {
-    if (e.name === 'NotFoundError') {
+  } catch (e: unknown) {
+    if (e instanceof Error && e.name === 'NotFoundError') {
       return [];
     }
     console.error(`Failed to list files in ${dirPath}`, e);
