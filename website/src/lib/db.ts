@@ -115,6 +115,13 @@ export interface Project {
   folderName?: string;
 }
 
+export function getProjectDBName(project: Project): string {
+  if (project.id) {
+    return `notebook-project-${project.id}`;
+  }
+  return "notebook-volatile";
+}
+
 export async function saveProject(project: Project): Promise<void> {
   const db = await openDB(DEFAULT_DB_NAME);
   return new Promise((resolve, reject) => {

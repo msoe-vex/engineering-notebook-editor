@@ -9,7 +9,8 @@ import {
 import {
   stageChange, getAllPending, clearAllPending, removeStaged, PendingChange,
   putResource, getResource, saveWorkspaceHandle, getWorkspaceHandle, clearWorkspaceHandle,
-  Project, getProjects, getProject, saveProject, deleteProject, getProjectHandle, saveProjectHandle, deleteProjectHandle, deleteProjectDatabase
+  Project, getProjects, getProject, saveProject, deleteProject, getProjectHandle, saveProjectHandle, deleteProjectHandle, deleteProjectDatabase,
+  getProjectDBName
 } from "@/lib/db";
 import {
   NotebookMetadata, EMPTY_METADATA, EntryMetadata, EntryWrapper,
@@ -112,12 +113,7 @@ const validateEntry = (tiptapJson: string, title: string, author: string, phase:
   return { valid: errors.length === 0, errors };
 };
 
-const getProjectDBName = (p: Project) => {
-  if (p.id) {
-    return `notebook-project-${p.id}`;
-  }
-  return "notebook-volatile";
-};
+
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getLocalFileContent = async (rootHandle: any, path: string): Promise<{ text?: string; base64?: string; isImage: boolean }> => {
@@ -273,18 +269,10 @@ export default function App() {
   /** Get a unique DB name for the current workspace to isolate changes. */
   const getDBName = useCallback(() => {
     if (currentProjectId) {
-      console.log(`[DB] Using project ID: ${currentProjectId}`);
       return `notebook-project-${currentProjectId}`;
     }
-    
-    // Fallback for before project ID is set
-    if (workspaceMode === "github" && config) {
-      const name = `notebook-project-github-${config.owner.toLowerCase()}-${config.repo.toLowerCase()}`;
-      return name;
-    }
-    
     return "notebook-volatile";
-  }, [workspaceMode, config, dirHandle, currentProjectId, projects]);
+  }, [currentProjectId]);
 
   const checkPermission = async (handle: any) => {
     if (!handle) return false;
@@ -328,10 +316,15 @@ export default function App() {
 
   // URL Sync Effect
 
-  // Load projects on mount
+  // Refresh project list (including pending counts) whenever the homepage
+  // becomes visible — i.e. every time isInitializing settles to false.
+  // This replaces the old on-mount-only call and eliminates the race where
+  // stale counts were left over after project switches.
   useEffect(() => {
-    refreshProjectList();
-  }, [refreshProjectList]);
+    if (!isInitializing) {
+      refreshProjectList();
+    }
+  }, [isInitializing, refreshProjectList]);
 
   // Warning for Temporary Workspace
   useEffect(() => {
@@ -1745,7 +1738,7 @@ export default function App() {
     if (p) {
       p.lastOpened = isoTimestamp();
       await saveProject(p);
-      setProjects(await getProjects());
+      await refreshProjectList();
       setNotebookMetadata(EMPTY_METADATA);
       setCurrentProjectId(p.id);
 
@@ -1787,13 +1780,8 @@ export default function App() {
       "Delete Project?",
       `Are you sure you want to delete "${p.name}"? This will permanently remove all local staged changes and cached data for this project.`,
       async () => {
-        // Resolve DB name before deleting project metadata
-        let dbName = "notebook-volatile";
-        if (p.type === "github" && p.githubConfig) {
-          dbName = `notebook-${p.githubConfig.owner}-${p.githubConfig.repo}`;
-        } else if (p.type === "local") {
-          dbName = `notebook-local-${p.folderName || 'unknown'}`;
-        }
+        // Resolve DB name using standard helper
+        const dbName = getProjectDBName(p);
 
         await deleteProject(id);
         await deleteProjectHandle(id);
@@ -1807,7 +1795,7 @@ export default function App() {
           }
         }
 
-        setProjects(await getProjects());
+        await refreshProjectList();
         if (currentProjectId === id) {
           handleDisconnect();
         }
@@ -1821,7 +1809,7 @@ export default function App() {
     if (p) {
       p.name = name;
       await saveProject(p);
-      setProjects(await getProjects());
+      await refreshProjectList();
     }
   };
 
@@ -1838,7 +1826,7 @@ export default function App() {
       githubConfig
     };
     await saveProject(p);
-    setProjects(await getProjects());
+    await refreshProjectList();
     setCurrentProjectId(id);
 
     // Update URL immediately so handleUrlChange doesn't settle early
@@ -1909,7 +1897,7 @@ export default function App() {
       await writeLocalFile(handle, INDEX_PATH, metaStr);
     }
 
-    setProjects(await getProjects());
+    await refreshProjectList();
     setCurrentProjectId(id);
 
     // Update URL immediately so handleUrlChange doesn't settle early
@@ -1957,7 +1945,7 @@ export default function App() {
       setLatexContent("");
       setContentCache(new Map());
       setNotebookMetadata(EMPTY_METADATA);
-      refreshProjectList();
+      // refreshProjectList is triggered by the isInitializing effect once settled
     };
 
     if (workspaceMode === "temporary") {
