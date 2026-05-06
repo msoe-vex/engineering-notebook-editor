@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTheme } from "next-themes";
 import {
-  GitHubConfig, fetchFileContent,
+  GitHubConfig, fetchFileContent, fetchRawFileContent,
   commitChanges, GitChange, fetchGitHubUser
 } from "@/lib/github";
 import { ExplorerFile } from "@/lib/types";
@@ -592,6 +592,13 @@ export default function App() {
             try {
               const res = await getLocalFileContent(dirHandle, imgPath);
               if (res.base64) assetCache.set(imgPath, res.base64);
+            } catch { /* ignore */ }
+          } else if (workspaceMode === "github" && config) {
+            try {
+              const base64 = await fetchRawFileContent(config, actualImgPath);
+              const dataUrl = `data:image/*;base64,${base64}`;
+              assetCache.set(imgPath, dataUrl);
+              await putResource(dbName, { path: actualImgPath, dataUrl });
             } catch { /* ignore */ }
           }
         }
