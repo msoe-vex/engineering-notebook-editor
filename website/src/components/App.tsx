@@ -537,6 +537,7 @@ export default function App() {
 
   const handleSelectEntry = useCallback(async (file: ExplorerFile, silent: boolean = false) => {
     setIsLoading(true);
+    setIsInitializing(true);
     if (isMobile) setUserSidebarPreference(false);
     setMobileTab("editor");
 
