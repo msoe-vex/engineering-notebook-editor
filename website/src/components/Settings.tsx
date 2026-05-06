@@ -19,6 +19,8 @@ interface SettingsProps {
   githubToken: string | null;
   githubUser: string | null;
   onSignOutGithub: () => void;
+  isExchangingGithubCode?: boolean;
+  autoOpenGithubModal?: boolean;
   pendingCounts?: Record<string, number>;
 }
 
@@ -40,6 +42,8 @@ export default function Settings({
   githubToken,
   githubUser,
   onSignOutGithub,
+  isExchangingGithubCode = false,
+  autoOpenGithubModal = false,
   pendingCounts = {},
 }: SettingsProps) {
   const { setTheme, resolvedTheme } = useTheme();
@@ -48,7 +52,7 @@ export default function Settings({
   // Form states for GitHub
   const [repoUrl] = useState(() => (typeof window !== "undefined" ? localStorage.getItem("nb-github-repo-url") : "") || "");
   const [folderPath, setFolderPath] = useState(() => (typeof window !== "undefined" ? localStorage.getItem("nb-github-folder") : "") || "");
-  const [isGithubModalOpen, setIsGithubModalOpen] = useState(false);
+  const [isGithubModalOpen, setIsGithubModalOpen] = useState(autoOpenGithubModal);
   const [userRepos, setUserRepos] = useState<GitHubRepo[]>([]);
   const [isLoadingRepos, setIsLoadingRepos] = useState(false);
   const [isLoadingFolders, setIsLoadingFolders] = useState(false);
@@ -289,8 +293,8 @@ export default function Settings({
                           }}
                           className="flex-1 bg-nb-surface-low border border-nb-primary/30 px-3 py-1 rounded-lg text-sm font-bold text-nb-on-surface outline-none focus:ring-2 focus:ring-nb-primary/30"
                         />
-                        <button onClick={() => { onRenameProject(project.id, renameValue); setRenamingId(null); }} className="p-1.5 rounded-lg bg-nb-primary text-white hover:bg-nb-primary-dim transition-colors"><Check size={14} /></button>
-                        <button onClick={() => setRenamingId(null)} className="p-1.5 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:bg-nb-surface-high transition-colors"><X size={14} /></button>
+                        <button onClick={() => { onRenameProject(project.id, renameValue); setRenamingId(null); }} className="p-1.5 rounded-lg bg-nb-primary text-white hover:bg-nb-primary-dim transition-colors cursor-pointer"><Check size={14} /></button>
+                        <button onClick={() => setRenamingId(null)} className="p-1.5 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:bg-nb-surface-high transition-colors cursor-pointer"><X size={14} /></button>
                       </div>
                     ) : (
                       <>
@@ -379,6 +383,19 @@ export default function Settings({
 
             <div className="px-8 flex-1 overflow-y-auto custom-scrollbar space-y-6 pb-8">
               {!githubToken ? (
+                isExchangingGithubCode ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center gap-6">
+                    <div className="w-16 h-16 rounded-3xl bg-nb-surface-low border border-nb-outline-variant/30 flex items-center justify-center">
+                      <Loader2 size={32} className="text-nb-primary animate-spin" />
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="font-bold text-nb-on-surface">Signing in…</h3>
+                      <p className="text-xs text-nb-on-surface-variant max-w-[280px]">
+                        Completing GitHub authentication. This will only take a moment.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
                 <div className="flex flex-col items-center justify-center py-12 text-center gap-6">
                   <div className="w-16 h-16 rounded-3xl bg-nb-surface-low border border-nb-outline-variant/30 flex items-center justify-center text-nb-on-surface-variant/40">
                     <GitBranch size={32} />
@@ -397,6 +414,7 @@ export default function Settings({
                     Sign in with GitHub
                   </button>
                 </div>
+                )
               ) : (
                 <>
                   {/* Status Bar */}

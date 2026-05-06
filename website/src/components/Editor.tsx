@@ -1,14 +1,16 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import UnifiedEditor, { ToolbarButton, TableGridSelector } from "./UnifiedEditor";
+import UnifiedEditor from "./UnifiedEditor";
+import { ToolbarButton, TableGridSelector } from "./editor/EditorUI";
 import { createPortal } from "react-dom";
 import { saveAs } from "file-saver";
 import {
-  Save, Trash2, Download, AlertCircle, AlertTriangle, Loader2, User, X, FileCode,
+  Save, Trash2, AlertCircle, AlertTriangle, Loader2, User, X, FileCode,
   Undo2, Redo2, ImagePlus, ChevronDown, List, ListOrdered,
   Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
-  Brain, PencilRuler, Hammer, SearchCheck, Goal, Terminal, Link as LinkIcon, Underline as UnderlineIcon
+  Brain, PencilRuler, Hammer, SearchCheck, Goal, Terminal, Link as LinkIcon, Underline as UnderlineIcon,
+  FileJson
 } from "lucide-react";
 import { generateUUID, hashContent, getExtensionFromDataUrl } from "@/lib/utils";
 import { generateEntryLatex } from "@/lib/latex";
@@ -120,13 +122,10 @@ const Editor = React.memo(function Editor({
   const [content, setContent] = useState<TipTapNode | string>(() => parseInitialContent(initialContent));
   const [editor, setEditor] = useState<import("@tiptap/react").Editor | null>(null);
 
-  // Local validation state for immediate UI feedback
+  // Local validation state for immediate UI feedback.
+  // Editor is the sole authority on validity while open — parent isValid is only used for initial value.
+  // This prevents flickering caused by stale metadata flowing back down during debounced saves.
   const [localIsValid, setLocalIsValid] = useState(isValid);
-
-  // Sync external validity if it changes
-  useEffect(() => {
-    setLocalIsValid(isValid);
-  }, [isValid]);
 
   const checkValidity = useCallback(() => {
     if (!title?.trim() || !author?.trim() || !phase?.trim()) return false;
@@ -162,14 +161,15 @@ const Editor = React.memo(function Editor({
     return true;
   }, [title, author, phase, editor, notebookMetadata]);
 
-  // Immediate validation effect
+  // Local metadata validation (immediate for UI)
+  const lastValidRef = useRef(localIsValid);
   useEffect(() => {
     const valid = checkValidity();
     if (valid !== localIsValid) {
       setLocalIsValid(valid);
-      onValidationChange?.(valid);
+      // We'll notify the parent in the debounced effect below to avoid flicker
     }
-  }, [title, author, phase, editor?.state.doc.content, checkValidity, localIsValid, onValidationChange]);
+  }, [title, author, phase, editor?.state.doc.content, checkValidity, localIsValid]);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -219,16 +219,6 @@ const Editor = React.memo(function Editor({
     };
   }, [editor]);
 
-  // Derived state pattern: reset state when filename changes (switching entries)
-  const prevFilename = useRef(filename);
-  if (filename !== prevFilename.current) {
-    prevFilename.current = filename;
-    setTitle(initialTitle);
-    setAuthor(initialAuthor);
-    setPhase(initialPhase);
-    setContent(parseInitialContent(initialContent));
-  }
-
   const generateLatex = useCallback((cnt: TipTapNode | string, t: string, a: string, p: string) => {
     const id = filename.split('/').pop()?.replace('.json', '') || "";
     return generateEntryLatex(cnt, t, a, p, initialCreatedAt, id);
@@ -252,38 +242,88 @@ const Editor = React.memo(function Editor({
     contentStr: initialContent
   });
 
-  // Notify parent of content changes with debounce to prevent lag
+  const lastAutoSavedRef = useRef({
+    title: initialTitle,
+    author: initialAuthor,
+    phase: initialPhase,
+    contentStr: initialContent
+  });
+
+  // ── Callback refs (stable references to avoid resetting timers on re-render) ──
+  const onContentChangeRef = useRef(onContentChange);
+  const generateLatexRef = useRef(generateLatex);
+  const onTitleChangeRef = useRef(onTitleChange);
+  const onAuthorChangeRef = useRef(onAuthorChange);
+  const onPhaseChangeRef = useRef(onPhaseChange);
+  const onValidationChangeRef = useRef(onValidationChange);
   useEffect(() => {
-    // Clear any existing timer
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current);
+    onContentChangeRef.current = onContentChange;
+    generateLatexRef.current = generateLatex;
+    onTitleChangeRef.current = onTitleChange;
+    onAuthorChangeRef.current = onAuthorChange;
+    onPhaseChangeRef.current = onPhaseChange;
+    onValidationChangeRef.current = onValidationChange;
+  }, [onContentChange, generateLatex, onTitleChange, onAuthorChange, onPhaseChange, onValidationChange]);
+
+  // ── Immediate metadata sync ──────────────────────────────────────────────────
+  // Title, author, and phase are synced to the parent instantly (no debounce)
+  // so the Sidebar always reflects exactly what the user is typing.
+  useEffect(() => {
+    if (title !== lastSyncedRef.current.title) {
+      onTitleChangeRef.current?.(title);
+      lastSyncedRef.current.title = title;
     }
+    if (author !== lastSyncedRef.current.author) {
+      onAuthorChangeRef.current?.(author);
+      lastSyncedRef.current.author = author;
+    }
+    if (phase !== lastSyncedRef.current.phase) {
+      onPhaseChangeRef.current?.(phase);
+      lastSyncedRef.current.phase = phase;
+    }
+  }, [title, author, phase]);
+
+  // ── Immediate validation sync ────────────────────────────────────────────────
+  useEffect(() => {
+    if (localIsValid !== lastValidRef.current) {
+      onValidationChangeRef.current?.(localIsValid);
+      lastValidRef.current = localIsValid;
+    }
+  }, [localIsValid]);
+
+  // ── Debounced content auto-save ──────────────────────────────────────────────
+  // Only content changes are debounced (800ms) since they trigger disk/GitHub I/O.
+  // Uses refs for metadata so title/author/phase keystrokes don't reset the timer.
+  useEffect(() => {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
 
     const contentStr = JSON.stringify(content);
-    const isChanged =
-      title !== lastSyncedRef.current.title ||
-      author !== lastSyncedRef.current.author ||
-      phase !== lastSyncedRef.current.phase ||
-      contentStr !== lastSyncedRef.current.contentStr;
+    const isContentChanged = contentStr !== lastAutoSavedRef.current.contentStr;
+    const isMetadataChanged = title !== lastAutoSavedRef.current.title ||
+      author !== lastAutoSavedRef.current.author ||
+      phase !== lastAutoSavedRef.current.phase;
 
-    if (!isChanged) {
-      setIsAutoSaving(false);
-      return;
+    if (isContentChanged || isMetadataChanged) {
+      setIsAutoSaving(true);
+      autoSaveTimerRef.current = setTimeout(() => {
+        const { title, author, phase } = latestMetadataRef.current;
+        const latex = generateLatexRef.current(content, title, author, phase);
+        if (onContentChangeRef.current) onContentChangeRef.current(filename, latex, contentStr, { title, author, phase });
+
+        lastAutoSavedRef.current.contentStr = contentStr;
+        lastAutoSavedRef.current.title = title;
+        lastAutoSavedRef.current.author = author;
+        lastAutoSavedRef.current.phase = phase;
+
+        setIsAutoSaving(false);
+        autoSaveTimerRef.current = null;
+      }, 800);
     }
 
-    setIsAutoSaving(true);
-    autoSaveTimerRef.current = setTimeout(() => {
-      const latex = generateLatex(content, title, author, phase);
-      if (onContentChange) onContentChange(filename, latex, contentStr, { title, author, phase });
-
-      lastSyncedRef.current = { title, author, phase, contentStr };
-      setIsAutoSaving(false);
-      autoSaveTimerRef.current = null;
-    }, 500);
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
-  }, [content, title, author, phase, filename, onContentChange, generateLatex]);
+  }, [content, filename, title, author, phase]);
 
   // Flush pending changes on unmount to prevent data loss on fast entry switch
   useEffect(() => {
@@ -299,12 +339,12 @@ const Editor = React.memo(function Editor({
         phase !== initialPhase ||
         contentStr !== initialContent;
 
-      if (isChanged && onContentChange) {
-        const latex = generateLatex(content, title, author, phase);
-        onContentChange(filename, latex, contentStr, { title, author, phase });
+      if (isChanged && onContentChangeRef.current) {
+        const latex = generateLatexRef.current(content, title, author, phase);
+        onContentChangeRef.current(filename, latex, contentStr, { title, author, phase });
       }
     };
-  }, [filename, initialTitle, initialAuthor, initialPhase, initialContent, onContentChange, generateLatex]);
+  }, [filename, initialTitle, initialAuthor, initialPhase, initialContent]);
 
   const handleSave = useCallback(async () => {
     const { valid, errors } = validate();
@@ -368,7 +408,7 @@ const Editor = React.memo(function Editor({
         type="button"
         onMouseDown={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === label ? null : label); }}
         onMouseEnter={() => { if (activeMenu) setActiveMenu(label); }}
-        className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-widest transition-colors ${activeMenu === label ? "bg-nb-primary text-white" : "text-nb-on-surface-variant hover:bg-nb-surface-mid"
+        className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-widest transition-colors cursor-pointer ${activeMenu === label ? "bg-nb-primary text-white" : "text-nb-on-surface-variant hover:bg-nb-surface-mid"
           }`}
       >
         {label}
@@ -389,7 +429,7 @@ const Editor = React.memo(function Editor({
       type="button"
       onClick={() => { onClick(); setActiveMenu(null); }}
       disabled={disabled}
-      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[10px] font-bold tracking-widest text-nb-on-surface-variant hover:bg-nb-primary/10 hover:text-nb-primary transition-all disabled:opacity-30 disabled:hover:bg-transparent text-left"
+      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[10px] font-bold tracking-widest text-nb-on-surface-variant hover:bg-nb-primary/10 hover:text-nb-primary transition-all disabled:opacity-30 disabled:hover:bg-transparent text-left cursor-pointer"
     >
       <div className="opacity-60">{icon}</div>
       <span className="flex-1">{label}</span>
@@ -452,10 +492,9 @@ const Editor = React.memo(function Editor({
 
             <MenuItem label="File">
               <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} />
-              <MenuAction icon={<Download size={14} />} label="Download LaTeX" onClick={handleDownload} />
               <MenuAction
-                icon={<FileCode size={14} />}
-                label="Download Entry JSON"
+                icon={<FileJson size={14} />}
+                label="Download JSON"
                 onClick={() => {
                   const latestMeta = notebookMetadata?.entries?.[entryId];
                   const currentUpdatedAt = latestMeta?.updatedAt || initialUpdatedAt || initialCreatedAt;
@@ -466,6 +505,7 @@ const Editor = React.memo(function Editor({
                   });
                 }}
               />
+              <MenuAction icon={<FileCode size={14} />} label="Download LaTeX" onClick={handleDownload} />
               <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
               <MenuAction icon={<X size={14} />} label="Close" onClick={onClose || (() => { })} />
               <MenuAction icon={<Trash2 size={14} />} label="Delete" onClick={() => setShowDeleteConfirm(true)} />
@@ -555,23 +595,19 @@ const Editor = React.memo(function Editor({
                 options={otherTitles}
                 onChange={(e) => {
                   setTitle(e.target.value);
-                  onTitleChange?.(e.target.value);
                 }}
                 onSelectOption={(val) => {
                   setTitle(val);
-                  onTitleChange?.(val);
                 }}
                 placeholder="Project Title..."
                 className="w-full text-xl font-bold bg-transparent text-nb-on-surface outline-none placeholder:text-nb-outline-variant"
               />
             </div>
 
-            {(!localIsValid || (notebookMetadata?.entries?.[entryId]?.isValid === false)) && (
+            {!localIsValid && (
               <div
                 className="shrink-0 text-amber-500 animate-pulse mr-4"
-                title={(notebookMetadata?.entries?.[entryId]?.validationErrors?.length ?? 0) > 0
-                  ? `Validation errors:\n- ${notebookMetadata?.entries?.[entryId]?.validationErrors?.join('\n- ')}`
-                  : "Incomplete metadata or resource captions"}
+                title="Incomplete metadata or resource captions"
               >
                 <AlertTriangle size={20} />
               </div>
@@ -587,14 +623,8 @@ const Editor = React.memo(function Editor({
                   autoComplete="off"
                   value={author}
                   options={otherAuthors}
-                  onChange={(e) => {
-                    setAuthor(e.target.value);
-                    onAuthorChange?.(e.target.value);
-                  }}
-                  onSelectOption={(val) => {
-                    setAuthor(val);
-                    onAuthorChange?.(val);
-                  }}
+                  onChange={(e) => { setAuthor(e.target.value); }}
+                  onSelectOption={(val) => { setAuthor(val); }}
                   placeholder="Author"
                   className="text-xs font-semibold text-nb-on-surface-variant bg-transparent outline-none w-36"
                 />
@@ -606,7 +636,7 @@ const Editor = React.memo(function Editor({
                 )}
                 <select
                   value={phase}
-                  onChange={(e) => { setPhase(e.target.value); onPhaseChange?.(e.target.value); }}
+                  onChange={(e) => { setPhase(e.target.value); }}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                 >
                   {!phase && <option value="" disabled>Phase</option>}

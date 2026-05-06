@@ -9,15 +9,8 @@ export interface GitHubRepo {
   updated_at?: string | null;
 }
 
-export interface GitHubConfig {
-  token: string;
-  owner: string;
-  repo: string;
-  branch: string;
-  baseDir: string;
-  entriesDir: string;
-  resourcesDir: string;
-}
+import { GitHubConfig } from "./types";
+export type { GitHubConfig };
 
 export interface GitChange {
   path: string;
@@ -154,6 +147,22 @@ export const fetchFileContent = async (config: GitHubConfig, path: string) => {
     } catch {
       throw new Error("Failed to decode file content. It may not be a valid UTF-8 encoded text file.");
     }
+  }
+  throw new Error("Not a file");
+};
+
+export const fetchRawFileContent = async (config: GitHubConfig, path: string) => {
+  const octokit = getOctokit(config.token);
+  const response = await octokit.rest.repos.getContent({
+    owner: config.owner,
+    repo: config.repo,
+    path,
+    ref: config.branch,
+    headers: { 'If-None-Match': '' } // Cache busting
+  });
+
+  if (!Array.isArray(response.data) && response.data.type === "file") {
+    return response.data.content.replace(/\s/g, '');
   }
   throw new Error("Not a file");
 };
