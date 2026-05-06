@@ -171,8 +171,6 @@ const Editor = React.memo(function Editor({
     }
   }, [title, author, phase, editor?.state.doc.content, checkValidity, localIsValid, onValidationChange]);
 
-  const [isDeleting, setIsDeleting] = useState(false);
-
   // Debounced callbacks to prevent App-level re-renders on every keystroke
   const debouncedTitleChange = useRef(debounce((val: string) => onTitleChange?.(val), 150)).current;
   const debouncedAuthorChange = useRef(debounce((val: string) => onAuthorChange?.(val), 150)).current;
@@ -559,13 +557,13 @@ const Editor = React.memo(function Editor({
                 type="text"
                 value={title}
                 options={otherTitles}
-                onChange={(e) => { 
-                  setTitle(e.target.value); 
-                  debouncedTitleChange(e.target.value); 
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  debouncedTitleChange(e.target.value);
                 }}
-                onSelectOption={(val) => { 
-                  setTitle(val); 
-                  onTitleChange?.(val); 
+                onSelectOption={(val) => {
+                  setTitle(val);
+                  onTitleChange?.(val);
                 }}
                 placeholder="Project Title..."
                 className="w-full text-xl font-bold bg-transparent text-nb-on-surface outline-none placeholder:text-nb-outline-variant"
@@ -593,13 +591,13 @@ const Editor = React.memo(function Editor({
                   autoComplete="off"
                   value={author}
                   options={otherAuthors}
-                  onChange={(e) => { 
-                    setAuthor(e.target.value); 
-                    debouncedAuthorChange(e.target.value); 
+                  onChange={(e) => {
+                    setAuthor(e.target.value);
+                    debouncedAuthorChange(e.target.value);
                   }}
-                  onSelectOption={(val) => { 
-                    setAuthor(val); 
-                    onAuthorChange?.(val); 
+                  onSelectOption={(val) => {
+                    setAuthor(val);
+                    onAuthorChange?.(val);
                   }}
                   placeholder="Author"
                   className="text-xs font-semibold text-nb-on-surface-variant bg-transparent outline-none w-36"
