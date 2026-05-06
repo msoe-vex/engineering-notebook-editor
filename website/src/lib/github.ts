@@ -151,6 +151,22 @@ export const fetchFileContent = async (config: GitHubConfig, path: string) => {
   throw new Error("Not a file");
 };
 
+export const fetchRawFileContent = async (config: GitHubConfig, path: string) => {
+  const octokit = getOctokit(config.token);
+  const response = await octokit.rest.repos.getContent({
+    owner: config.owner,
+    repo: config.repo,
+    path,
+    ref: config.branch,
+    headers: { 'If-None-Match': '' } // Cache busting
+  });
+
+  if (!Array.isArray(response.data) && response.data.type === "file") {
+    return response.data.content.replace(/\s/g, '');
+  }
+  throw new Error("Not a file");
+};
+
 export const saveFile = async (
   config: GitHubConfig,
   path: string,
