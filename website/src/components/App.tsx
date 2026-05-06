@@ -266,6 +266,10 @@ export default function App() {
   }, [desktopViewMode]);
 
   const isExchangingCode = useRef(false);
+  const [isExchangingGithubCode, setIsExchangingGithubCode] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return !!new URLSearchParams(window.location.search).get('code');
+  });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -278,6 +282,7 @@ export default function App() {
 
       const code = params.get("code");
       if (code && !isExchangingCode.current) {
+      setIsExchangingGithubCode(true);
         isExchangingCode.current = true;
         setIsInitializing(true);
         try {
@@ -311,6 +316,7 @@ export default function App() {
           notify("GitHub sign-in failed connection.", "error");
         } finally {
           setIsInitializing(false);
+          setIsExchangingGithubCode(false);
           isExchangingCode.current = false;
         }
       }
@@ -1103,6 +1109,8 @@ export default function App() {
           onCreateTemporary={handleCreateTemporary}
           githubToken={githubToken}
           githubUser={githubUser}
+          isExchangingGithubCode={isExchangingGithubCode}
+          autoOpenGithubModal={isExchangingGithubCode || !!githubToken}
           onSignOutGithub={() => { setGithubToken(null); setGithubUser(null); localStorage.removeItem("nb-github-token"); localStorage.removeItem("nb-github-user"); }}
         />
       ) : (
