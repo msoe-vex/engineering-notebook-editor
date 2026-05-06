@@ -43,7 +43,7 @@ export default function Preview({ latexContent }: PreviewProps) {
         </div>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-nb-surface-low border border-nb-outline-variant text-xs font-bold text-nb-on-surface-variant hover:bg-nb-surface-mid transition-all active:scale-[0.98]"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-nb-surface-low border border-nb-outline-variant text-xs font-bold text-nb-on-surface-variant hover:bg-nb-surface-mid transition-all active:scale-[0.98] cursor-pointer"
         >
           {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
           {copied ? "Copied!" : "Copy Latex"}

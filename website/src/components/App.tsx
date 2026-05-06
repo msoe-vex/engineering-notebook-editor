@@ -161,7 +161,16 @@ export default function App() {
   });
 
   const showConfirm = (title: string, message: string, onConfirm: () => void, variant: "danger" | "warning" | "info" = "danger") => {
-    setConfirmDialog({ isOpen: true, title, message, onConfirm, variant });
+    setConfirmDialog({
+      isOpen: true,
+      title,
+      message,
+      onConfirm: () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        onConfirm();
+      },
+      variant
+    });
   };
 
   const refreshProjectList = useCallback(async () => {
@@ -282,7 +291,7 @@ export default function App() {
 
       const code = params.get("code");
       if (code && !isExchangingCode.current) {
-      setIsExchangingGithubCode(true);
+        setIsExchangingGithubCode(true);
         isExchangingCode.current = true;
         setIsInitializing(true);
         try {
@@ -697,9 +706,9 @@ export default function App() {
         const projectMatches = projectId === currentProjectId;
         const configReady = workspaceMode === "github" ? !!config : (workspaceMode === "local" ? !!dirHandle : true);
         const metaReady = workspaceMode === "temporary" ? true : (currentMeta.projectId === projectId || Object.keys(currentMeta.entries).length > 0);
-        
-        const isSettleable = projectId 
-          ? (projectMatches && !isLoading && !!workspaceMode && configReady && metaReady) 
+
+        const isSettleable = projectId
+          ? (projectMatches && !isLoading && !!workspaceMode && configReady && metaReady)
           : (!isLoading && !currentProjectId);
 
         if (isSettleable) {
@@ -718,6 +727,8 @@ export default function App() {
   const handleDiscardAll = async () => {
     const dbName = getDBName();
     showConfirm("Discard Changes?", "Are you sure? This cannot be undone.", async () => {
+      setIsInitializing(true);
+      setIsLoading(true);
       await clearAllPending(dbName);
       await refreshPending();
       notify("Discarded.", "success");
@@ -727,7 +738,6 @@ export default function App() {
       }
       if (workspaceMode === "github") await loadGitHubExplorer();
       else if (workspaceMode === "local") await loadLocalExplorer();
-      setConfirmDialog(prev => ({ ...prev, isOpen: false }));
     });
   };
 
@@ -792,24 +802,30 @@ export default function App() {
   };
 
   const handleDeleteEntry = async (file: ExplorerFile) => {
-    const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
-    const updatedMeta = removeEntryFromMetadata(notebookMetadata, entryId);
-    setNotebookMetadata(updatedMeta);
-    await deleteFile(file.path, "Entry deleted");
-    await deleteFile(`${currentLatexDir}/${entryId}.tex`, "LaTeX deleted");
-    await saveMetadata(updatedMeta, "Metadata update (entry deleted)");
-    const allEntriesLatex = generateAllEntriesLatex(updatedMeta);
-    await saveEntry(currentAllEntriesPath, allEntriesLatex, "Update all_entries.tex");
-    setEntries(prev => prev.filter(e => e.path !== file.path));
-    if (workspaceMode === "github") refreshPending();
-    if (openFile?.path === file.path) {
-      setOpenFile(null);
-      setLatexContent("");
-      const params = new URLSearchParams(window.location.search);
-      params.delete('entry');
-      params.delete('resource');
-      window.history.pushState({}, '', `?${params.toString()}`);
-      window.dispatchEvent(new Event('locationchange'));
+    setIsInitializing(true);
+    setIsLoading(true);
+    try {
+      const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
+      const updatedMeta = removeEntryFromMetadata(notebookMetadata, entryId);
+      setNotebookMetadata(updatedMeta);
+      await deleteFile(file.path, "Entry deleted");
+      await deleteFile(`${currentLatexDir}/${entryId}.tex`, "LaTeX deleted");
+      await saveMetadata(updatedMeta, "Metadata update (entry deleted)");
+      const allEntriesLatex = generateAllEntriesLatex(updatedMeta);
+      await saveEntry(currentAllEntriesPath, allEntriesLatex, "Update all_entries.tex");
+      setEntries(prev => prev.filter(e => e.path !== file.path));
+      if (workspaceMode === "github") refreshPending();
+      if (openFile?.path === file.path) {
+        setOpenFile(null);
+        setLatexContent("");
+        const params = new URLSearchParams(window.location.search);
+        params.delete('entry');
+        params.delete('resource');
+        window.history.pushState({}, '', `?${params.toString()}`);
+        window.dispatchEvent(new Event('locationchange'));
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -848,6 +864,7 @@ export default function App() {
   const handleCommitAll = useCallback(async () => {
     if (!config || isCommitting) return;
     setIsCommitting(true);
+    setIsInitializing(true);
     try {
       const dbName = getDBName();
       const all = await getAllPending(dbName);
@@ -890,7 +907,6 @@ export default function App() {
       await deleteProjectDatabase(getProjectDBName(p));
       await refreshProjectList();
       if (currentProjectId === id) handleDisconnect();
-      setConfirmDialog(prev => ({ ...prev, isOpen: false }));
     });
   };
 
@@ -971,7 +987,7 @@ export default function App() {
       refreshProjectList();
     };
     if (workspaceMode === "temporary") {
-      showConfirm("Leave?", "Lose unsaved changes?", () => { run(); setConfirmDialog(prev => ({ ...prev, isOpen: false })); }, "warning");
+      showConfirm("Leave?", "Lose unsaved changes?", () => run(), "warning");
     } else run();
   };
 
@@ -1021,8 +1037,8 @@ export default function App() {
         </div>
         <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-nb-on-surface truncate">Notebook</p></div>
         <div className="flex items-center gap-1">
-          <button onClick={handleDisconnect} title="Switch Workspace" className="p-1.5 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors"><ArrowLeftRight size={16} /></button>
-          {isMobile && <button onClick={() => setUserSidebarPreference(false)} className="p-1.5 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant transition-colors"><X size={18} /></button>}
+          <button onClick={handleDisconnect} title="Switch Workspace" className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors"><ArrowLeftRight size={16} /></button>
+          {isMobile && <button onClick={() => setUserSidebarPreference(false)} className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant transition-colors"><X size={18} /></button>}
         </div>
       </div>
       <div className="flex-1 overflow-y-auto">

@@ -43,7 +43,7 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
         <button
           id="welcome-new-entry"
           onClick={onNewEntry}
-          className="flex items-center gap-4 w-full bg-nb-primary hover:bg-nb-primary-dim text-white px-6 py-5 rounded-2xl text-left font-bold shadow-nb-lg transition-all active:scale-[0.98] group"
+          className="flex items-center gap-4 w-full bg-nb-primary hover:bg-nb-primary-dim text-white px-6 py-5 rounded-2xl text-left font-bold shadow-nb-lg transition-all active:scale-[0.98] group cursor-pointer"
         >
           <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/20 transition-colors">
             <Plus size={24} />
@@ -56,7 +56,7 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
 
         <button
           id="welcome-open-entry"
-          className="flex items-center gap-4 w-full bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant px-6 py-5 rounded-2xl text-left transition-all active:scale-[0.98] group"
+          className="flex items-center gap-4 w-full bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant px-6 py-5 rounded-2xl text-left transition-all active:scale-[0.98] group cursor-pointer"
           onClick={onOpenSidebar}
         >
           <div className="w-12 h-12 rounded-xl bg-nb-surface-mid flex items-center justify-center shrink-0 group-hover:bg-nb-surface-high transition-colors">
@@ -70,7 +70,7 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
 
         <button
           id="welcome-import-entry"
-          className="flex items-center gap-4 w-full bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant px-6 py-5 rounded-2xl text-left transition-all active:scale-[0.98] group"
+          className="flex items-center gap-4 w-full bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant px-6 py-5 rounded-2xl text-left transition-all active:scale-[0.98] group cursor-pointer"
           onClick={onImportEntry}
         >
           <div className="w-12 h-12 rounded-xl bg-nb-surface-mid flex items-center justify-center shrink-0 group-hover:bg-nb-surface-high transition-colors">
@@ -88,7 +88,7 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
         <button
           id="welcome-disconnect"
           onClick={onDisconnect}
-          className="text-xs font-bold tracking-widest text-nb-on-surface-variant hover:text-nb-primary transition-colors border-b border-transparent hover:border-nb-primary pb-0.5"
+          className="text-xs font-bold tracking-widest text-nb-on-surface-variant hover:text-nb-primary transition-colors border-b border-transparent hover:border-nb-primary pb-0.5 cursor-pointer"
         >
           Change workspace
         </button>

@@ -78,6 +78,14 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    CUSTOM SCROLLBARS  (webkit + firefox)
    ═══════════════════════════════════════════════════════════════ */

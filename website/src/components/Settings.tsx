@@ -293,8 +293,8 @@ export default function Settings({
                           }}
                           className="flex-1 bg-nb-surface-low border border-nb-primary/30 px-3 py-1 rounded-lg text-sm font-bold text-nb-on-surface outline-none focus:ring-2 focus:ring-nb-primary/30"
                         />
-                        <button onClick={() => { onRenameProject(project.id, renameValue); setRenamingId(null); }} className="p-1.5 rounded-lg bg-nb-primary text-white hover:bg-nb-primary-dim transition-colors"><Check size={14} /></button>
-                        <button onClick={() => setRenamingId(null)} className="p-1.5 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:bg-nb-surface-high transition-colors"><X size={14} /></button>
+                        <button onClick={() => { onRenameProject(project.id, renameValue); setRenamingId(null); }} className="p-1.5 rounded-lg bg-nb-primary text-white hover:bg-nb-primary-dim transition-colors cursor-pointer"><Check size={14} /></button>
+                        <button onClick={() => setRenamingId(null)} className="p-1.5 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:bg-nb-surface-high transition-colors cursor-pointer"><X size={14} /></button>
                       </div>
                     ) : (
                       <>
