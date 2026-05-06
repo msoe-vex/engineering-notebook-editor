@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import UnifiedEditor, { ToolbarButton, TableGridSelector } from "./UnifiedEditor";
+import UnifiedEditor from "./UnifiedEditor";
+import { ToolbarButton, TableGridSelector } from "./editor/EditorUI";
 import { createPortal } from "react-dom";
 import { saveAs } from "file-saver";
 import {

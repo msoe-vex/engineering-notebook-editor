@@ -36,12 +36,12 @@ import { extractImagePaths, extractResources, extractReferences, TipTapNode } fr
 import { ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, INDEX_PATH } from "@/lib/constants";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { usePersistence } from "@/hooks/usePersistence";
-import { getLocalFileContent, writeLocalFile } from "@/lib/fs";
+import { getLocalFileContent, writeLocalFile, ensureLocalDirectory } from "@/lib/fs";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type ViewMode = "entry";
-type WorkspaceMode = "local" | "github" | "temporary";
+type WorkspaceMode = "local" | "github" | "temporary" | "none";
 
 export interface FileMetadata {
   content: string;
@@ -243,6 +243,29 @@ export default function App() {
   const previewPanelRef = useRef<ImperativePanelHandle>(null);
   const sidebarPanelRef = useRef<ImperativePanelHandle>(null);
   const importEntryInputRef = useRef<HTMLInputElement>(null);
+ 
+  useEffect(() => {
+    if (!sidebarPanelRef.current || isMobile) return;
+    if (isSidebarOpen) {
+      sidebarPanelRef.current.expand();
+    } else {
+      sidebarPanelRef.current.collapse();
+    }
+  }, [isSidebarOpen, isMobile]);
+
+  useEffect(() => {
+    if (!editorPanelRef.current || !previewPanelRef.current) return;
+    if (desktopViewMode === "editor") {
+      editorPanelRef.current.expand();
+      previewPanelRef.current.collapse();
+    } else if (desktopViewMode === "preview") {
+      editorPanelRef.current.collapse();
+      previewPanelRef.current.expand();
+    } else {
+      editorPanelRef.current.resize(50);
+      previewPanelRef.current.resize(50);
+    }
+  }, [desktopViewMode]);
 
   const isExchangingCode = useRef(false);
 
@@ -573,6 +596,7 @@ export default function App() {
               resourcesDir: p.githubConfig.folderPath ? `${p.githubConfig.folderPath}/${ASSETS_DIR}` : ASSETS_DIR,
             });
             setWorkspaceMode("github");
+            void loadGitHubExplorer();
             deleteProjectDatabase("notebook-volatile").catch(() => { });
           } else if (p.type === "local") {
             const handle = await getProjectHandle(p.id);
@@ -580,6 +604,7 @@ export default function App() {
               setDirHandle(handle);
               setWorkspaceMode("local");
               await checkPermission(handle);
+              void loadLocalExplorer();
               deleteProjectDatabase("notebook-volatile").catch(() => { });
             } else {
               setWorkspaceMode("none");
@@ -609,7 +634,7 @@ export default function App() {
       if (active) {
         const projectMatches = projectId === currentProjectId;
         const configReady = workspaceMode === "github" ? !!config : (workspaceMode === "local" ? !!dirHandle : true);
-        const metaReady = notebookMetadata !== EMPTY_METADATA;
+        const metaReady = workspaceMode === "temporary" ? true : (notebookMetadata !== EMPTY_METADATA);
         const isSettleable = projectId ? (projectMatches && !isLoading && !!workspaceMode && configReady && metaReady) : (!isLoading && !currentProjectId);
         if (projectId && !isSettleable) return;
         if (!projectId && currentProjectId) return;
@@ -767,26 +792,11 @@ export default function App() {
       await saveProject(p);
       await refreshProjectList();
       setNotebookMetadata(EMPTY_METADATA);
-      setCurrentProjectId(p.id);
       const params = new URLSearchParams(window.location.search);
       params.set('project', p.id);
       window.history.pushState({}, '', `?${params.toString()}`);
       window.dispatchEvent(new Event('locationchange'));
-      if (p.type === "github" && p.githubConfig) {
-        setConfig({
-          token: githubToken || "", owner: p.githubConfig.owner, repo: p.githubConfig.repo, branch: p.githubConfig.branch, baseDir: p.githubConfig.folderPath,
-          entriesDir: p.githubConfig.folderPath ? `${p.githubConfig.folderPath}/${ENTRIES_DIR}` : ENTRIES_DIR,
-          resourcesDir: p.githubConfig.folderPath ? `${p.githubConfig.folderPath}/${ASSETS_DIR}` : ASSETS_DIR,
-        });
-        setWorkspaceMode("github");
-      } else if (p.type === "local") {
-        const handle = await getProjectHandle(p.id);
-        if (handle) {
-          if (await checkPermission(handle)) { setDirHandle(handle); setWorkspaceMode("local"); }
-          else { setPendingProjectId(p.id); setIsConnectingLocal(true); setDirHandle(handle); }
-        } else notify("Folder not found.", "error");
-      } else if (p.type === "temporary") setWorkspaceMode("temporary");
-    }
+    } else notify("Project not found.", "error");
   };
 
   const handleDeleteProject = async (id: string) => {
@@ -818,16 +828,14 @@ export default function App() {
     };
     await saveProject(p);
     await refreshProjectList();
-    setCurrentProjectId(id);
     const params = new URLSearchParams(window.location.search);
     params.set('project', id);
     window.history.pushState({}, '', `?${params.toString()}`);
     window.dispatchEvent(new Event('locationchange'));
-    setConfig(githubConfig);
-    setWorkspaceMode("github");
   };
 
   const handleCreateLocal = async (handle: FileSystemDirectoryHandle) => {
+    setIsInitializing(true);
     try { await handle.requestPermission({ mode: "readwrite" }); } catch { }
     let existingMeta: NotebookMetadata | null = null;
     try {
@@ -850,22 +858,23 @@ export default function App() {
       meta.projectId = id; meta.projectName = name;
       await writeLocalFile(handle, INDEX_PATH, JSON.stringify(meta, null, 2));
     }
+    // Ensure base directories exist
+    await ensureLocalDirectory(handle, ENTRIES_DIR);
+    await ensureLocalDirectory(handle, ASSETS_DIR);
+    await ensureLocalDirectory(handle, LATEX_DIR);
+
     await refreshProjectList();
-    setCurrentProjectId(id);
     const params = new URLSearchParams(window.location.search);
     params.set('project', id);
     window.history.pushState({}, '', `?${params.toString()}`);
     window.dispatchEvent(new Event('locationchange'));
   };
-
   const handleCreateTemporary = async () => {
     setIsInitializing(true);
-    setCurrentProjectId("temporary");
     const params = new URLSearchParams(window.location.search);
     params.set('project', 'temporary');
     window.history.pushState({}, '', `?${params.toString()}`);
     window.dispatchEvent(new Event('locationchange'));
-    setWorkspaceMode("temporary");
   };
 
   const handleDisconnect = () => {
@@ -884,49 +893,42 @@ export default function App() {
     } else run();
   };
 
-  // ── Render Helpers ──────────────────────────────────────────────────────────
-
   if (isInitializing) {
     return (
-      <div className="min-h-screen bg-nb-bg flex flex-col items-center justify-center font-sans animate-in fade-in duration-500">
-        <div className="flex flex-col items-center gap-6">
-          <div className="w-20 h-20 rounded-[2.5rem] bg-nb-primary flex items-center justify-center shadow-2xl shadow-nb-primary/30 animate-pulse">
-            <BookOpen size={40} className="text-white" />
-          </div>
-          <div className="text-center space-y-2">
-            <h1 className="text-xl font-black tracking-tight text-nb-on-surface">Notebook</h1>
-            <p className="text-[10px] font-black tracking-[0.2em] text-nb-on-surface-variant uppercase opacity-40">Engineering Editor</p>
-          </div>
-          <div className="flex items-center gap-1 mt-4">
-            <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce [animation-delay:-0.3s]" />
-            <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce [animation-delay:-0.15s]" />
-            <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce" />
+      <div className="flex flex-col h-screen w-full bg-nb-bg font-sans overflow-hidden">
+        <div className="min-h-screen bg-nb-bg flex flex-col items-center justify-center font-sans animate-in fade-in duration-500">
+          <div className="flex flex-col items-center gap-6">
+            <div className="w-20 h-20 rounded-[2.5rem] bg-nb-primary flex items-center justify-center shadow-2xl shadow-nb-primary/30 animate-pulse">
+              <BookOpen size={40} className="text-white" />
+            </div>
+            <div className="text-center space-y-2">
+              <h1 className="text-xl font-black tracking-tight text-nb-on-surface">Notebook</h1>
+              <p className="text-[10px] font-black tracking-[0.2em] text-nb-on-surface-variant uppercase opacity-40">Engineering Editor</p>
+            </div>
+            <div className="flex items-center gap-1 mt-4">
+              <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce [animation-delay:-0.3s]" />
+              <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce [animation-delay:-0.15s]" />
+              <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce" />
+            </div>
           </div>
         </div>
+        {notification && (
+          <div className="fixed bottom-6 right-6 z-[200] animate-in slide-in-from-right-10 duration-300">
+            <div className={`px-5 py-4 rounded-2xl shadow-nb-lg border flex items-center gap-4 ${notification.type === 'error' ? 'bg-nb-primary/5 border-nb-primary/30 text-nb-primary' : 'bg-nb-tertiary/5 border-nb-tertiary/30 text-nb-tertiary'} backdrop-blur-xl bg-white/80 dark:bg-nb-dark-surface/80`}>
+              <div className="flex-1">
+                <p className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">{notification.type === 'error' ? 'Error' : 'Success'}</p>
+                <p className="text-xs font-medium">{notification.message}</p>
+              </div>
+              <button onClick={() => setNotification(null)} className="p-1 hover:bg-black/5 rounded transition-colors"><X size={14} /></button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
-  if (!workspaceMode) {
-    return (
-      <Settings
-        projects={projects}
-        pendingCounts={projectPendingCounts}
-        onSelectProject={handleSelectProject}
-        onDeleteProject={handleDeleteProject}
-        onRenameProject={handleRenameProject}
-        onCreateGithub={handleCreateGithub}
-        onCreateLocal={handleCreateLocal}
-        onCreateTemporary={handleCreateTemporary}
-        githubToken={githubToken}
-        githubUser={githubUser}
-        onSignOutGithub={() => { setGithubToken(null); setGithubUser(null); localStorage.removeItem("nb-github-token"); localStorage.removeItem("nb-github-user"); }}
-      />
-    );
-  }
-
   const currentProject = projects.find(p => p.id === currentProjectId);
-  const workspaceLabel = workspaceMode === "github" ? `${config?.owner}/${config?.repo}` : (workspaceMode === "local" ? (currentProject?.name ?? "Local Folder") : "Temporary");
+  const workspaceLabel = workspaceMode === "github" ? `${config?.owner}/${config?.repo}` : (workspaceMode === "local" ? (currentProject?.name ?? "Local Folder") : "Memory");
   const appConfig = config ?? { owner: "Local", repo: "Workspace", token: "", entriesDir: ENTRIES_DIR, resourcesDir: ASSETS_DIR };
 
   const sidebar = (
@@ -996,7 +998,7 @@ export default function App() {
 
         {openFile === null ? (
           !isConnectingLocal && (
-            <WelcomePage workspace={{ mode: workspaceMode as WorkspaceMode, label: workspaceLabel }} onNewEntry={handleNewEntry} onImportEntry={() => importEntryInputRef.current?.click()} onDisconnect={handleDisconnect} onOpenSidebar={() => setUserSidebarPreference(true)} />
+            <WelcomePage workspace={{ mode: workspaceMode as "local" | "github" | "temporary", label: workspaceLabel }} onNewEntry={handleNewEntry} onImportEntry={() => importEntryInputRef.current?.click()} onDisconnect={handleDisconnect} onOpenSidebar={() => setUserSidebarPreference(true)} />
           )
         ) : (
           <PanelGroup direction="horizontal" className="h-full" id="editor-preview-group">
@@ -1049,32 +1051,48 @@ export default function App() {
     <div className="flex flex-col h-screen w-full bg-nb-bg font-sans overflow-hidden">
       <input type="file" ref={importEntryInputRef} accept=".json" style={{ display: "none" }} onChange={(e) => { const file = e.target.files?.[0]; if (file) processImportFile(file); e.target.value = ""; }} />
 
-      {isMobile ? (
-        <div className="flex w-full h-full relative">
-          <div className={`fixed inset-0 z-[150] transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-            <div className="absolute inset-0 bg-black/40" onClick={() => setUserSidebarPreference(false)} />
-            <div className={`absolute top-0 bottom-0 left-0 w-[85%] max-w-[300px] bg-nb-surface-low border-r border-nb-outline-variant flex flex-col shadow-2xl transition-transform duration-300 ease-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-              {sidebar}
-            </div>
-          </div>
-          <div className="flex-1 w-full h-full">{main}</div>
-        </div>
+      {workspaceMode === "none" ? (
+        <Settings
+          projects={projects}
+          pendingCounts={projectPendingCounts}
+          onSelectProject={handleSelectProject}
+          onDeleteProject={handleDeleteProject}
+          onRenameProject={handleRenameProject}
+          onCreateGithub={handleCreateGithub}
+          onCreateLocal={handleCreateLocal}
+          onCreateTemporary={handleCreateTemporary}
+          githubToken={githubToken}
+          githubUser={githubUser}
+          onSignOutGithub={() => { setGithubToken(null); setGithubUser(null); localStorage.removeItem("nb-github-token"); localStorage.removeItem("nb-github-user"); }}
+        />
       ) : (
-        <PanelGroup direction="horizontal" className="w-full h-full" id="main-layout-group">
-          <Panel
-            id="sidebar-panel" order={1} ref={sidebarPanelRef} defaultSize={20} minSize={15} maxSize={40} collapsible={true}
-            onCollapse={() => setUserSidebarPreference(false)} onExpand={() => setUserSidebarPreference(true)}
-            className="flex flex-col transition-all duration-300 ease-out"
-          >
-            <div className={`flex-1 flex flex-col transition-all duration-300 ease-out ${!isSidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-              {sidebar}
+        isMobile ? (
+          <div className="flex w-full h-full relative">
+            <div className={`fixed inset-0 z-[150] transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+              <div className="absolute inset-0 bg-black/40" onClick={() => setUserSidebarPreference(false)} />
+              <div className={`absolute top-0 bottom-0 left-0 w-[85%] max-w-[300px] bg-nb-surface-low border-r border-nb-outline-variant flex flex-col shadow-2xl transition-transform duration-300 ease-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                {sidebar}
+              </div>
             </div>
-          </Panel>
-          <PanelResizeHandle id="sidebar-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${!isSidebarOpen ? 'hidden' : ''}`} />
-          <Panel id="main-panel" order={2} defaultSize={isSidebarOpen ? 80 : 100} minSize={30} className="flex flex-col">
-            {main}
-          </Panel>
-        </PanelGroup>
+            <div className="flex-1 w-full h-full">{main}</div>
+          </div>
+        ) : (
+          <PanelGroup direction="horizontal" className="w-full h-full" id="main-layout-group">
+            <Panel
+              id="sidebar-panel" order={1} ref={sidebarPanelRef} defaultSize={20} minSize={15} maxSize={40} collapsible={true}
+              onCollapse={() => setUserSidebarPreference(false)} onExpand={() => setUserSidebarPreference(true)}
+              className="flex flex-col transition-all duration-300 ease-out"
+            >
+              <div className={`flex-1 flex flex-col transition-all duration-300 ease-out ${!isSidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                {sidebar}
+              </div>
+            </Panel>
+            <PanelResizeHandle id="sidebar-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${!isSidebarOpen ? 'hidden' : ''}`} />
+            <Panel id="main-panel" order={2} defaultSize={isSidebarOpen ? 80 : 100} minSize={30} className="flex flex-col">
+              {main}
+            </Panel>
+          </PanelGroup>
+        )
       )}
 
       {/* Notifications */}
