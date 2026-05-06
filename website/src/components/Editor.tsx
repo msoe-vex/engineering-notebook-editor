@@ -9,7 +9,8 @@ import {
   Save, Trash2, Download, AlertCircle, AlertTriangle, Loader2, User, X, FileCode,
   Undo2, Redo2, ImagePlus, ChevronDown, List, ListOrdered,
   Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
-  Brain, PencilRuler, Hammer, SearchCheck, Goal, Terminal, Link as LinkIcon, Underline as UnderlineIcon
+  Brain, PencilRuler, Hammer, SearchCheck, Goal, Terminal, Link as LinkIcon, Underline as UnderlineIcon,
+  FileJson
 } from "lucide-react";
 import { generateUUID, hashContent, getExtensionFromDataUrl } from "@/lib/utils";
 import { generateEntryLatex } from "@/lib/latex";
@@ -476,10 +477,9 @@ const Editor = React.memo(function Editor({
 
             <MenuItem label="File">
               <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} />
-              <MenuAction icon={<Download size={14} />} label="Download LaTeX" onClick={handleDownload} />
               <MenuAction
-                icon={<FileCode size={14} />}
-                label="Download Entry JSON"
+                icon={<FileJson size={14} />}
+                label="Download JSON"
                 onClick={() => {
                   const latestMeta = notebookMetadata?.entries?.[entryId];
                   const currentUpdatedAt = latestMeta?.updatedAt || initialUpdatedAt || initialCreatedAt;
@@ -490,6 +490,7 @@ const Editor = React.memo(function Editor({
                   });
                 }}
               />
+              <MenuAction icon={<FileCode size={14} />} label="Download LaTeX" onClick={handleDownload} />
               <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
               <MenuAction icon={<X size={14} />} label="Close" onClick={onClose || (() => { })} />
               <MenuAction icon={<Trash2 size={14} />} label="Delete" onClick={() => setShowDeleteConfirm(true)} />
