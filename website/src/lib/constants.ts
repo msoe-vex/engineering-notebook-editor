@@ -11,4 +11,4 @@ export const ALL_ENTRIES_PATH = `${DATA_DIR}/all_entries.tex`;
 
 // GitHub Integration
 export const GITHUB_APP_INSTALL_URL = "https://github.com/apps/engineering-notebook-editor/installations/select_target";
-export const GITHUB_ISSUES_URL = "https://github.com/msoe-vex/engineering-notebook-editor/issues";
+export const GITHUB_ISSUES_URL = "https://github.com/msoe-vex/engineering-notebook-editor/issues/new";
