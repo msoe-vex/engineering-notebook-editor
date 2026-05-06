@@ -41,8 +41,6 @@ import { getLocalFileContent, writeLocalFile, ensureLocalDirectory } from "@/lib
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type ViewMode = "entry";
-type WorkspaceMode = "local" | "github" | "temporary" | "none";
-
 export interface FileMetadata {
   content: string;
   title?: string;
@@ -243,7 +241,7 @@ export default function App() {
   const previewPanelRef = useRef<ImperativePanelHandle>(null);
   const sidebarPanelRef = useRef<ImperativePanelHandle>(null);
   const importEntryInputRef = useRef<HTMLInputElement>(null);
- 
+
   useEffect(() => {
     if (!sidebarPanelRef.current || isMobile) return;
     if (isSidebarOpen) {
@@ -372,16 +370,6 @@ export default function App() {
     const resources = (contentObj && typeof contentObj === 'object') ? extractResources(contentObj) : {};
     const references = (contentObj && typeof contentObj === 'object') ? extractReferences(contentObj) : [];
 
-    const entryMeta: EntryMetadata = {
-      id: entryId,
-      ...info,
-      createdAt: openFile?.path === changedPath ? openFile.createdAt : (notebookMetadata.entries?.[entryId]?.createdAt || isoTimestamp()),
-      updatedAt: isoTimestamp(),
-      filename: changedPath,
-      resources,
-      references
-    };
-
     if (info.author) localStorage.setItem("nb-last-author", info.author);
 
     let assetsToSave: { path: string; base64: string }[] = [];
@@ -411,15 +399,43 @@ export default function App() {
       await saveEntry(changedPath, entryJsonStr, `Auto-save: ${info.title}`);
       await saveEntry(`${LATEX_DIR}/${entryId}.tex`, latex, `Generate LaTeX: ${info.title}`);
 
-      const updatedMeta = updateEntryInIndex(notebookMetadata, entryId, entryMeta);
-      if (currentProjectId && !updatedMeta.projectId) {
-        updatedMeta.projectId = currentProjectId;
-        const p = projects.find(pr => pr.id === currentProjectId);
-        if (p) updatedMeta.projectName = p.name;
-      }
+      // Merge content-derived fields into the current browser state.
+      // The Editor owns title/author/phase/isValid via immediate sync —
+      // auto-save only updates resources, references, and timestamps.
+      // No re-validation here; validateNotebookIntegrity runs on load/create/delete/commit.
+      let finalMeta: NotebookMetadata | null = null;
+      setNotebookMetadata(prev => {
+        const existingEntry = prev.entries[entryId];
+        const mergedEntry: EntryMetadata = {
+          // Start with whatever the browser state already has (from immediate sync)
+          ...existingEntry,
+          // Ensure core identity fields exist
+          id: entryId,
+          filename: changedPath,
+          createdAt: existingEntry?.createdAt || isoTimestamp(),
+          // Fall back to save callback values only if entry doesn't exist yet
+          title: existingEntry?.title ?? info.title,
+          author: existingEntry?.author ?? info.author,
+          phase: existingEntry?.phase ?? info.phase,
+          // Content-derived fields from this save
+          updatedAt: isoTimestamp(),
+          resources,
+          references,
+        };
+        const updated = {
+          ...prev,
+          entries: { ...prev.entries, [entryId]: mergedEntry }
+        };
+        if (currentProjectId && !updated.projectId) {
+          updated.projectId = currentProjectId;
+          const p = projects.find(pr => pr.id === currentProjectId);
+          if (p) updated.projectName = p.name;
+        }
+        finalMeta = updated;
+        return updated;
+      });
 
-      await saveMetadata(updatedMeta, "Auto-save metadata");
-      setNotebookMetadata(updatedMeta);
+      if (finalMeta) await saveMetadata(finalMeta, "Auto-save metadata");
       if (workspaceMode === "github") refreshPending();
     } finally {
       setSavingPaths(prev => {
@@ -428,7 +444,7 @@ export default function App() {
         return next;
       });
     }
-  }, [workspaceMode, openFile?.path, openFile?.createdAt, notebookMetadata, currentProjectId, projects, saveEntry, saveMetadata, uploadResource, getDBName, refreshPending, setNotebookMetadata]);
+  }, [workspaceMode, currentProjectId, projects, saveEntry, saveMetadata, uploadResource, refreshPending, setNotebookMetadata, getDBName]);
 
   const handleValidationChange = useCallback((isValid: boolean) => {
     if (!openFile) return;
@@ -570,6 +586,13 @@ export default function App() {
     }
   }, [getDBName, workspaceMode, dirHandle, config, currentLatexDir, isMobile, notify, setIsLoading, setUserSidebarPreference, setMobileTab, setLatexContent]);
 
+
+  // Refs for state that handleUrlChange reads but should NOT trigger re-runs
+  const openFileRef = useRef(openFile);
+  const targetResourceRef = useRef(targetResourceId);
+  useEffect(() => { openFileRef.current = openFile; }, [openFile]);
+  useEffect(() => { targetResourceRef.current = targetResourceId; }, [targetResourceId]);
+
   useEffect(() => {
     let active = true;
     const handleUrlChange = async () => {
@@ -581,12 +604,12 @@ export default function App() {
       if (projectId && projectId !== currentProjectId) {
         setIsInitializing(true);
         setIsLoading(true);
-        setNotebookMetadata(EMPTY_METADATA);
         const p = await getProject(projectId);
         if (!active) return;
         if (p) {
           const dbName = `notebook-project-${p.id}`;
           setCurrentProjectId(p.id);
+          setNotebookMetadata({ ...EMPTY_METADATA, projectId: p.id, projectName: p.name });
           void refreshPending(dbName);
           if (p.type === "github" && p.githubConfig) {
             setConfig({
@@ -616,30 +639,47 @@ export default function App() {
         } else if (projectId === "temporary") {
           setCurrentProjectId("temporary");
           setWorkspaceMode("temporary");
+          setNotebookMetadata({ ...EMPTY_METADATA, projectId: "temporary", projectName: "Temporary Workspace" });
           void refreshPending("notebook-project-temporary");
+        } else {
+          notify("Project not found.", "error");
+          setCurrentProjectId(null);
+          setWorkspaceMode("none");
+          const params = new URLSearchParams(window.location.search);
+          params.delete('project');
+          window.history.pushState({}, '', `?${params.toString()}`);
         }
       }
 
-      if (projectId && !workspaceMode) return;
-      if (resourceId !== targetResourceId) setTargetResourceId(resourceId);
+      // Read volatile state from refs to avoid stale closures without adding deps
+      const currentOpenFile = openFileRef.current;
+      const currentMeta = notebookMetadataRef.current;
+      const currentTargetResource = targetResourceRef.current;
 
-      if (entryId && entryId !== openFile?.id) {
-        if (notebookMetadata === EMPTY_METADATA) return;
-        if (notebookMetadata.entries[entryId]) {
+      if (projectId && !workspaceMode) return;
+      if (resourceId !== currentTargetResource) setTargetResourceId(resourceId);
+
+      if (entryId && entryId !== currentOpenFile?.id) {
+        if (currentMeta === EMPTY_METADATA) return;
+        if (currentMeta.entries[entryId]) {
           const entriesDir = (workspaceMode === "github" && config) ? config.entriesDir : ENTRIES_DIR;
           handleSelectEntry({ name: `${entryId}.json`, path: `${entriesDir}/${entryId}.json` }, true).catch(() => setOpenFile(null));
         }
-      } else if (!entryId && openFile) setOpenFile(null);
+      } else if (!entryId && currentOpenFile) setOpenFile(null);
 
       if (active) {
         const projectMatches = projectId === currentProjectId;
         const configReady = workspaceMode === "github" ? !!config : (workspaceMode === "local" ? !!dirHandle : true);
-        const metaReady = workspaceMode === "temporary" ? true : (notebookMetadata !== EMPTY_METADATA);
-        const isSettleable = projectId ? (projectMatches && !isLoading && !!workspaceMode && configReady && metaReady) : (!isLoading && !currentProjectId);
-        if (projectId && !isSettleable) return;
-        if (!projectId && currentProjectId) return;
-        setIsInitializing(false);
-        void refreshProjectList();
+        const metaReady = workspaceMode === "temporary" ? true : (currentMeta.projectId === projectId || Object.keys(currentMeta.entries).length > 0);
+        
+        const isSettleable = projectId 
+          ? (projectMatches && !isLoading && !!workspaceMode && configReady && metaReady) 
+          : (!isLoading && !currentProjectId);
+
+        if (isSettleable) {
+          setIsInitializing(false);
+          void refreshProjectList();
+        }
       }
     };
 
@@ -647,7 +687,7 @@ export default function App() {
     window.addEventListener('locationchange', handleUrlChange);
     handleUrlChange();
     return () => { active = false; window.removeEventListener('popstate', handleUrlChange); window.removeEventListener('locationchange', handleUrlChange); };
-  }, [workspaceMode, currentProjectId, dirHandle, handleSelectEntry, targetResourceId, openFile, notebookMetadata, isLoading, config, githubToken, setConfig, setDirHandle, setWorkspaceMode, refreshPending, refreshProjectList, setCurrentProjectId, setIsLoading, setNotebookMetadata]);
+  }, [handleSelectEntry, githubToken, setConfig, setDirHandle, setWorkspaceMode, refreshPending, refreshProjectList, setCurrentProjectId, setIsLoading, setNotebookMetadata, loadGitHubExplorer, loadLocalExplorer, currentProjectId, workspaceMode, dirHandle, config, isLoading]);
 
   const handleDiscardAll = async () => {
     const dbName = getDBName();
@@ -791,7 +831,7 @@ export default function App() {
       p.lastOpened = isoTimestamp();
       await saveProject(p);
       await refreshProjectList();
-      setNotebookMetadata(EMPTY_METADATA);
+      setNotebookMetadata({ ...EMPTY_METADATA, projectId: p.id, projectName: p.name });
       const params = new URLSearchParams(window.location.search);
       params.set('project', p.id);
       window.history.pushState({}, '', `?${params.toString()}`);
@@ -1017,9 +1057,9 @@ export default function App() {
                 onValidationChange={handleValidationChange} filename={openFile.path}
                 onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
                 onContentChange={handleContentChange}
-                onTitleChange={(title) => { if (!openFile) return; const id = openFile.id; setOpenFile(prev => prev ? { ...prev, title } : null); setNotebookMetadata(prev => updateEntryInIndex(prev, id, { ...prev.entries[id], title, updatedAt: isoTimestamp() })); }}
-                onAuthorChange={(author) => { if (!openFile) return; const id = openFile.id; setOpenFile(prev => prev ? { ...prev, author } : null); setNotebookMetadata(prev => updateEntryInIndex(prev, id, { ...prev.entries[id], author, updatedAt: isoTimestamp() })); }}
-                onPhaseChange={(phase) => { if (!openFile) return; const id = openFile.id; setOpenFile(prev => prev ? { ...prev, phase } : null); setNotebookMetadata(prev => updateEntryInIndex(prev, id, { ...prev.entries[id], phase, updatedAt: isoTimestamp() })); }}
+                onTitleChange={(title) => { if (!openFile) return; const id = openFile.id; setOpenFile(prev => prev ? { ...prev, title } : null); setNotebookMetadata(prev => ({ ...prev, entries: { ...prev.entries, [id]: { ...prev.entries[id], title, updatedAt: isoTimestamp() } } })); }}
+                onAuthorChange={(author) => { if (!openFile) return; const id = openFile.id; setOpenFile(prev => prev ? { ...prev, author } : null); setNotebookMetadata(prev => ({ ...prev, entries: { ...prev.entries, [id]: { ...prev.entries[id], author, updatedAt: isoTimestamp() } } })); }}
+                onPhaseChange={(phase) => { if (!openFile) return; const id = openFile.id; setOpenFile(prev => prev ? { ...prev, phase } : null); setNotebookMetadata(prev => ({ ...prev, entries: { ...prev.entries, [id]: { ...prev.entries[id], phase, updatedAt: isoTimestamp() } } })); }}
                 onImageUpload={handleImageUploaded} onDownloadPortable={handleDownloadPortable}
                 onClose={() => {
                   const params = new URLSearchParams(window.location.search);

@@ -121,13 +121,10 @@ const Editor = React.memo(function Editor({
   const [content, setContent] = useState<TipTapNode | string>(() => parseInitialContent(initialContent));
   const [editor, setEditor] = useState<import("@tiptap/react").Editor | null>(null);
 
-  // Local validation state for immediate UI feedback
+  // Local validation state for immediate UI feedback.
+  // Editor is the sole authority on validity while open — parent isValid is only used for initial value.
+  // This prevents flickering caused by stale metadata flowing back down during debounced saves.
   const [localIsValid, setLocalIsValid] = useState(isValid);
-
-  // Sync external validity if it changes
-  useEffect(() => {
-    setLocalIsValid(isValid);
-  }, [isValid]);
 
   const checkValidity = useCallback(() => {
     if (!title?.trim() || !author?.trim() || !phase?.trim()) return false;
@@ -163,14 +160,15 @@ const Editor = React.memo(function Editor({
     return true;
   }, [title, author, phase, editor, notebookMetadata]);
 
-  // Immediate validation effect
+  // Local metadata validation (immediate for UI)
+  const lastValidRef = useRef(localIsValid);
   useEffect(() => {
     const valid = checkValidity();
     if (valid !== localIsValid) {
       setLocalIsValid(valid);
-      onValidationChange?.(valid);
+      // We'll notify the parent in the debounced effect below to avoid flicker
     }
-  }, [title, author, phase, editor?.state.doc.content, checkValidity, localIsValid, onValidationChange]);
+  }, [title, author, phase, editor?.state.doc.content, checkValidity, localIsValid]);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -220,16 +218,6 @@ const Editor = React.memo(function Editor({
     };
   }, [editor]);
 
-  // Derived state pattern: reset state when filename changes (switching entries)
-  const prevFilename = useRef(filename);
-  if (filename !== prevFilename.current) {
-    prevFilename.current = filename;
-    setTitle(initialTitle);
-    setAuthor(initialAuthor);
-    setPhase(initialPhase);
-    setContent(parseInitialContent(initialContent));
-  }
-
   const generateLatex = useCallback((cnt: TipTapNode | string, t: string, a: string, p: string) => {
     const id = filename.split('/').pop()?.replace('.json', '') || "";
     return generateEntryLatex(cnt, t, a, p, initialCreatedAt, id);
@@ -253,38 +241,73 @@ const Editor = React.memo(function Editor({
     contentStr: initialContent
   });
 
-  // Notify parent of content changes with debounce to prevent lag
+  // ── Callback refs (stable references to avoid resetting timers on re-render) ──
+  const onContentChangeRef = useRef(onContentChange);
+  const generateLatexRef = useRef(generateLatex);
+  const onTitleChangeRef = useRef(onTitleChange);
+  const onAuthorChangeRef = useRef(onAuthorChange);
+  const onPhaseChangeRef = useRef(onPhaseChange);
+  const onValidationChangeRef = useRef(onValidationChange);
   useEffect(() => {
-    // Clear any existing timer
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current);
+    onContentChangeRef.current = onContentChange;
+    generateLatexRef.current = generateLatex;
+    onTitleChangeRef.current = onTitleChange;
+    onAuthorChangeRef.current = onAuthorChange;
+    onPhaseChangeRef.current = onPhaseChange;
+    onValidationChangeRef.current = onValidationChange;
+  }, [onContentChange, generateLatex, onTitleChange, onAuthorChange, onPhaseChange, onValidationChange]);
+
+  // ── Immediate metadata sync ──────────────────────────────────────────────────
+  // Title, author, and phase are synced to the parent instantly (no debounce)
+  // so the Sidebar always reflects exactly what the user is typing.
+  useEffect(() => {
+    if (title !== lastSyncedRef.current.title) {
+      onTitleChangeRef.current?.(title);
+      lastSyncedRef.current.title = title;
     }
+    if (author !== lastSyncedRef.current.author) {
+      onAuthorChangeRef.current?.(author);
+      lastSyncedRef.current.author = author;
+    }
+    if (phase !== lastSyncedRef.current.phase) {
+      onPhaseChangeRef.current?.(phase);
+      lastSyncedRef.current.phase = phase;
+    }
+  }, [title, author, phase]);
+
+  // ── Immediate validation sync ────────────────────────────────────────────────
+  useEffect(() => {
+    if (localIsValid !== lastValidRef.current) {
+      onValidationChangeRef.current?.(localIsValid);
+      lastValidRef.current = localIsValid;
+    }
+  }, [localIsValid]);
+
+  // ── Debounced content auto-save ──────────────────────────────────────────────
+  // Only content changes are debounced (800ms) since they trigger disk/GitHub I/O.
+  // Uses refs for metadata so title/author/phase keystrokes don't reset the timer.
+  useEffect(() => {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
 
     const contentStr = JSON.stringify(content);
-    const isChanged =
-      title !== lastSyncedRef.current.title ||
-      author !== lastSyncedRef.current.author ||
-      phase !== lastSyncedRef.current.phase ||
-      contentStr !== lastSyncedRef.current.contentStr;
+    const isContentChanged = contentStr !== lastSyncedRef.current.contentStr;
 
-    if (!isChanged) {
-      setIsAutoSaving(false);
-      return;
+    if (isContentChanged) {
+      setIsAutoSaving(true);
+      autoSaveTimerRef.current = setTimeout(() => {
+        const { title, author, phase } = latestMetadataRef.current;
+        const latex = generateLatexRef.current(content, title, author, phase);
+        if (onContentChangeRef.current) onContentChangeRef.current(filename, latex, contentStr, { title, author, phase });
+        lastSyncedRef.current.contentStr = contentStr;
+        setIsAutoSaving(false);
+        autoSaveTimerRef.current = null;
+      }, 800);
     }
 
-    setIsAutoSaving(true);
-    autoSaveTimerRef.current = setTimeout(() => {
-      const latex = generateLatex(content, title, author, phase);
-      if (onContentChange) onContentChange(filename, latex, contentStr, { title, author, phase });
-
-      lastSyncedRef.current = { title, author, phase, contentStr };
-      setIsAutoSaving(false);
-      autoSaveTimerRef.current = null;
-    }, 500);
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
-  }, [content, title, author, phase, filename, onContentChange, generateLatex]);
+  }, [content, filename]);
 
   // Flush pending changes on unmount to prevent data loss on fast entry switch
   useEffect(() => {
@@ -300,12 +323,12 @@ const Editor = React.memo(function Editor({
         phase !== initialPhase ||
         contentStr !== initialContent;
 
-      if (isChanged && onContentChange) {
-        const latex = generateLatex(content, title, author, phase);
-        onContentChange(filename, latex, contentStr, { title, author, phase });
+      if (isChanged && onContentChangeRef.current) {
+        const latex = generateLatexRef.current(content, title, author, phase);
+        onContentChangeRef.current(filename, latex, contentStr, { title, author, phase });
       }
     };
-  }, [filename, initialTitle, initialAuthor, initialPhase, initialContent, onContentChange, generateLatex]);
+  }, [filename, initialTitle, initialAuthor, initialPhase, initialContent]);
 
   const handleSave = useCallback(async () => {
     const { valid, errors } = validate();
@@ -556,23 +579,19 @@ const Editor = React.memo(function Editor({
                 options={otherTitles}
                 onChange={(e) => {
                   setTitle(e.target.value);
-                  onTitleChange?.(e.target.value);
                 }}
                 onSelectOption={(val) => {
                   setTitle(val);
-                  onTitleChange?.(val);
                 }}
                 placeholder="Project Title..."
                 className="w-full text-xl font-bold bg-transparent text-nb-on-surface outline-none placeholder:text-nb-outline-variant"
               />
             </div>
 
-            {(!localIsValid || (notebookMetadata?.entries?.[entryId]?.isValid === false)) && (
+            {!localIsValid && (
               <div
                 className="shrink-0 text-amber-500 animate-pulse mr-4"
-                title={(notebookMetadata?.entries?.[entryId]?.validationErrors?.length ?? 0) > 0
-                  ? `Validation errors:\n- ${notebookMetadata?.entries?.[entryId]?.validationErrors?.join('\n- ')}`
-                  : "Incomplete metadata or resource captions"}
+                title="Incomplete metadata or resource captions"
               >
                 <AlertTriangle size={20} />
               </div>
@@ -588,14 +607,8 @@ const Editor = React.memo(function Editor({
                   autoComplete="off"
                   value={author}
                   options={otherAuthors}
-                  onChange={(e) => {
-                    setAuthor(e.target.value);
-                    onAuthorChange?.(e.target.value);
-                  }}
-                  onSelectOption={(val) => {
-                    setAuthor(val);
-                    onAuthorChange?.(val);
-                  }}
+                  onChange={(e) => { setAuthor(e.target.value); }}
+                  onSelectOption={(val) => { setAuthor(val); }}
                   placeholder="Author"
                   className="text-xs font-semibold text-nb-on-surface-variant bg-transparent outline-none w-36"
                 />
@@ -607,7 +620,7 @@ const Editor = React.memo(function Editor({
                 )}
                 <select
                   value={phase}
-                  onChange={(e) => { setPhase(e.target.value); onPhaseChange?.(e.target.value); }}
+                  onChange={(e) => { setPhase(e.target.value); }}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                 >
                   {!phase && <option value="" disabled>Phase</option>}
