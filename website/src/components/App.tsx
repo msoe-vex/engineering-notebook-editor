@@ -216,17 +216,16 @@ export default function App() {
 
   const refreshProjectList = useCallback(async () => {
     const p = await getProjects();
-    setProjects(p);
-
     const counts: Record<string, number> = {};
-    for (const proj of p) {
+    
+    // Process all counts in parallel to avoid partial state renders and sequential lag
+    await Promise.all(p.map(async (proj) => {
       const dbName = getProjectDBName(proj);
       const pending = await getAllPending(dbName);
       counts[proj.id] = pending.length;
-      if (pending.length > 0) {
-        console.log(`[DASHBOARD] Found ${pending.length} pending changes for ${proj.name} in DB: ${dbName}`);
-      }
-    }
+    }));
+
+    setProjects(p);
     setProjectPendingCounts(counts);
   }, []);
 
@@ -1798,7 +1797,7 @@ export default function App() {
       setOpenFile(null);
       setLatexContent("");
       setNotebookMetadata(EMPTY_METADATA);
-      // refreshProjectList is triggered by the isInitializing effect once settled
+      refreshProjectList(); // Refresh immediately on disconnect
     };
 
     if (workspaceMode === "temporary") {
