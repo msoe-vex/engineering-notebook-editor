@@ -142,12 +142,11 @@ export default function App() {
   const [isConnectingLocal, setIsConnectingLocal] = useState(false);
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
   const [activeWorkspaceMode, setActiveWorkspaceMode] = useState<WorkspaceMode>("none");
-
-  useEffect(() => {
-    if (!isInitializing) {
-      setActiveWorkspaceMode(workspaceMode);
-    }
-  }, [isInitializing, workspaceMode]);
+  const [prevSync, setPrevSync] = useState({ mode: workspaceMode, init: isInitializing });
+  if (prevSync.mode !== workspaceMode || prevSync.init !== isInitializing) {
+    setPrevSync({ mode: workspaceMode, init: isInitializing });
+    if (!isInitializing) setActiveWorkspaceMode(workspaceMode);
+  }
 
   const notebookMetadataRef = useRef(notebookMetadata);
   useEffect(() => { notebookMetadataRef.current = notebookMetadata; }, [notebookMetadata]);
@@ -468,7 +467,7 @@ export default function App() {
         return next;
       });
     }
-  }, [workspaceMode, currentProjectId, projects, saveEntry, saveMetadata, uploadResource, refreshPending, setNotebookMetadata, getDBName]);
+  }, [workspaceMode, currentProjectId, projects, config, getGitBasePrefix, currentLatexDir, saveEntry, saveMetadata, uploadResource, refreshPending, setNotebookMetadata, getDBName]);
 
   const handleValidationChange = useCallback((isValid: boolean) => {
     if (!openFile) return;
@@ -612,7 +611,7 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
-  }, [getDBName, workspaceMode, dirHandle, config, currentLatexDir, isMobile, notify, setIsLoading, setUserSidebarPreference, setMobileTab, setLatexContent]);
+  }, [getDBName, workspaceMode, dirHandle, config, getGitBasePrefix, currentLatexDir, isMobile, notify, setIsLoading, setUserSidebarPreference, setMobileTab, setLatexContent]);
 
 
   // Refs for state that handleUrlChange reads but should NOT trigger re-runs
@@ -729,7 +728,7 @@ export default function App() {
     window.addEventListener('locationchange', handleUrlChange);
     handleUrlChange();
     return () => { active = false; window.removeEventListener('popstate', handleUrlChange); window.removeEventListener('locationchange', handleUrlChange); };
-  }, [handleSelectEntry, githubToken, setConfig, setDirHandle, setWorkspaceMode, refreshPending, refreshProjectList, setCurrentProjectId, setIsLoading, setNotebookMetadata, loadGitHubExplorer, loadLocalExplorer, currentProjectId, workspaceMode, dirHandle, config, isLoading]);
+  }, [handleSelectEntry, githubToken, setConfig, setDirHandle, setWorkspaceMode, refreshPending, refreshProjectList, setCurrentProjectId, setIsLoading, setNotebookMetadata, loadGitHubExplorer, loadLocalExplorer, currentProjectId, workspaceMode, dirHandle, config, isLoading, notify]);
 
   const handleDiscardAll = async () => {
     const dbName = getDBName();
@@ -777,7 +776,7 @@ export default function App() {
           const latex = generateEntryLatex(JSON.stringify(cleanDoc), newEntryMeta.title, newEntryMeta.author, newEntryMeta.phase, newEntryMeta.createdAt, newId);
           await writeLocalFile(dirHandle, `${LATEX_DIR}/${newId}.tex`, latex);
           const updatedMeta = updateEntryInIndex(notebookMetadata, newId, newEntryMeta);
-          setNotebookMetadata(prev => updatedMeta);
+          setNotebookMetadata(updatedMeta);
           const allEntriesLatex = generateAllEntriesLatex(updatedMeta);
           await writeLocalFile(dirHandle, ALL_ENTRIES_PATH, allEntriesLatex);
           await loadLocalExplorer();
