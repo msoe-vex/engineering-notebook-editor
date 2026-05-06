@@ -106,12 +106,19 @@ export async function clearWorkspaceHandle(): Promise<void> {
 
 // ── Project Management ────────────────────────────────────────────────────────
 
+export interface GitHubProjectConfig {
+  owner: string;
+  repo: string;
+  branch: string;
+  folderPath: string;
+}
+
 export interface Project {
   id: string;
   name: string;
   type: "github" | "local" | "temporary";
   lastOpened: string;
-  githubConfig?: any;
+  githubConfig?: GitHubProjectConfig;
   folderName?: string;
 }
 

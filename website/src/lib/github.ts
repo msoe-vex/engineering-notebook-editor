@@ -1,5 +1,14 @@
 import { Octokit } from "octokit";
 
+export interface GitHubRepo {
+  id: number;
+  name: string;
+  full_name: string;
+  owner: { login: string };
+  default_branch: string;
+  updated_at?: string | null;
+}
+
 export interface GitHubConfig {
   token: string;
   owner: string;
@@ -105,8 +114,8 @@ export const fetchDirectoryTree = async (config: GitHubConfig, path: string = "n
       repo: config.repo,
       path: path,
       ref: config.branch,
-      t: Date.now()
-    } as any);
+      headers: { 'If-None-Match': '' } // Cache busting
+    });
 
     if (Array.isArray(response.data)) {
       for (const item of response.data) {
@@ -136,13 +145,13 @@ export const fetchFileContent = async (config: GitHubConfig, path: string) => {
     repo: config.repo,
     path,
     ref: config.branch,
-    t: Date.now()
-  } as any);
+    headers: { 'If-None-Match': '' } // Cache busting
+  });
 
   if (!Array.isArray(response.data) && response.data.type === "file") {
     try {
       return decodeBase64(response.data.content);
-    } catch (error) {
+    } catch {
       throw new Error("Failed to decode file content. It may not be a valid UTF-8 encoded text file.");
     }
   }
@@ -246,8 +255,7 @@ export const commitChanges = async (config: GitHubConfig, changes: GitChange[], 
     owner: config.owner,
     repo: config.repo,
     ref: `heads/${config.branch}`,
-    t: Date.now()
-  } as any);
+  });
   const latestCommitSha = refData.object.sha;
 
   // 2. Get the tree SHA of the latest commit
@@ -264,7 +272,7 @@ export const commitChanges = async (config: GitHubConfig, changes: GitChange[], 
       return null;
     }
 
-    const item: any = {
+    const item: { path: string; mode: "100644" | "100755" | "040000" | "160000" | "120000"; type: "blob" | "tree" | "commit"; sha?: string; content?: string } = {
       path: change.path,
       mode: "100644",
       type: "blob",
@@ -290,24 +298,32 @@ export const commitChanges = async (config: GitHubConfig, changes: GitChange[], 
       repo: config.repo,
       tree_sha: baseTreeSha,
       recursive: "true",
-      t: Date.now()
-    } as any);
+    });
 
     const deletePaths = new Set(changes.filter(c => c.content === null).map(c => c.path));
-    const newTreeItems = fullTree.tree
+    type TreeItem = {
+      path: string;
+      mode: "100644" | "100755" | "040000" | "160000" | "120000";
+      type: "blob" | "tree" | "commit";
+      sha?: string;
+      content?: string;
+    };
+
+    const newTreeItems: TreeItem[] = fullTree.tree
       .filter(item => !deletePaths.has(item.path!) && item.type === "blob")
       .map(item => ({
-        path: item.path,
-        mode: item.mode as any,
-        type: item.type as any,
-        sha: item.sha
+        path: item.path!,
+        mode: item.mode as "100644" | "100755" | "040000" | "160000" | "120000",
+        type: item.type as "blob" | "tree" | "commit",
+        sha: item.sha!
       }));
 
     // Add/Update upserts
     for (const upsert of upserts) {
-      const idx = newTreeItems.findIndex(it => it.path === (upsert as any).path);
-      if (idx >= 0) newTreeItems[idx] = upsert as any;
-      else newTreeItems.push(upsert as any);
+      if (!upsert) continue;
+      const idx = newTreeItems.findIndex(it => it.path === upsert.path);
+      if (idx >= 0) newTreeItems[idx] = upsert;
+      else newTreeItems.push(upsert);
     }
 
     const { data: newTree } = await octokit.rest.git.createTree({
@@ -322,7 +338,7 @@ export const commitChanges = async (config: GitHubConfig, changes: GitChange[], 
       owner: config.owner,
       repo: config.repo,
       base_tree: baseTreeSha,
-      tree: upserts as any[],
+      tree: upserts.filter((i): i is NonNullable<typeof i> => i !== null),
     });
     finalTreeSha = newTree.sha;
   }
@@ -352,9 +368,7 @@ export const fetchUserRepositories = async (token: string) => {
     // 1. Get all installations that the user can access for this app
     const { data } = await octokit.rest.apps.listInstallationsForAuthenticatedUser({
       per_page: 100,
-      // Manual cache buster in case headers are ignored
-      t: Date.now()
-    } as any);
+    });
 
     const installations = data.installations;
     if (!installations || installations.length === 0) {
@@ -363,15 +377,21 @@ export const fetchUserRepositories = async (token: string) => {
     }
 
     // 2. Fetch repositories for each installation explicitly
-    const allRepos: any[] = [];
+    const allRepos: GitHubRepo[] = [];
     for (const inst of installations) {
       try {
         const { data: repoData } = await octokit.rest.apps.listInstallationReposForAuthenticatedUser({
           installation_id: inst.id,
           per_page: 100,
-          t: Date.now()
-        } as any);
-        allRepos.push(...repoData.repositories);
+        });
+        allRepos.push(...repoData.repositories.map(r => ({
+          id: r.id,
+          name: r.name,
+          full_name: r.full_name,
+          owner: { login: r.owner.login },
+          default_branch: r.default_branch,
+          updated_at: r.updated_at
+        })));
       } catch (err) {
         console.error(`Failed to fetch repos for installation ${inst.id}:`, err);
       }

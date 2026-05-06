@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { ImageIcon, Trash2 } from "lucide-react";
 
 interface ImagePreviewProps {
@@ -15,9 +15,7 @@ export default function ImagePreview({ filename, src, onDelete }: ImagePreviewPr
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
 
-  useEffect(() => {
-    setDimensions(null);
-  }, [filename]);
+
 
   const handleImageLoad = () => {
     const img = imgRef.current;
@@ -52,6 +50,7 @@ export default function ImagePreview({ filename, src, onDelete }: ImagePreviewPr
       <div className="flex-1 flex items-center justify-center p-4 overflow-auto bg-nb-surface-low relative transition-colors">
 
         <div className="relative group max-w-full max-h-full flex items-center justify-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             ref={imgRef}
             src={src}

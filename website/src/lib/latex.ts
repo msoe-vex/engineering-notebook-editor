@@ -1,4 +1,5 @@
 import { ASSETS_DIR, DATA_DIR } from "./constants";
+import { TipTapNode } from "./metadata";
 
 export const escapeLaTeX = (text: string) =>
   text
@@ -32,8 +33,7 @@ export const mapLanguageToLatex = (lang: string): string => {
   return mapping[lang] || lang;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const convertNodeToLatex = (node: any): string => {
+export const convertNodeToLatex = (node: TipTapNode): string => {
   if (!node) return "";
   const children = () => (node.content || []).map(convertNodeToLatex).join("");
 
@@ -82,7 +82,7 @@ export const convertNodeToLatex = (node: any): string => {
 
     case "listItem": {
       // listItem wraps content in a paragraph; extract raw text
-      const parts = (node.content || []).map((child: any) => {
+      const parts = (node.content || []).map((child) => {
         if (child.type === "paragraph") {
           return (child.content || []).map(convertNodeToLatex).join("");
         }
@@ -92,17 +92,19 @@ export const convertNodeToLatex = (node: any): string => {
     }
 
     case "codeBlock": {
-      const lang = mapLanguageToLatex(node.attrs?.language ?? "plaintext");
-      const code = (node.content || []).map((n: any) => n.text ?? "").join("");
-      const title = node.attrs?.title ? `${node.attrs.title}: ` : "";
-      const escapedCaption = escapeLaTeX(title + (node.attrs?.caption ?? ""));
-      const labelId = node.attrs?.id || "";
+      const attrs = (node.attrs || {}) as Record<string, string | undefined>;
+      const lang = mapLanguageToLatex(attrs.language ?? "plaintext");
+      const code = (node.content || []).map((n) => n.text ?? "").join("");
+      const title = attrs.title ? `${attrs.title}: ` : "";
+      const escapedCaption = escapeLaTeX(title + (attrs.caption ?? ""));
+      const labelId = attrs.id || "";
       return `\\begin{notebookcodeblock}{${lang}}{${escapedCaption}}{${labelId}}\n${code}\n\\end{notebookcodeblock}\n\n`;
     }
 
     case "image": {
-      const filePath = node.attrs?.filePath;
-      const src = node.attrs?.src ?? "";
+      const attrs = (node.attrs || {}) as Record<string, string | undefined>;
+      const filePath = attrs.filePath;
+      const src = attrs.src ?? "";
       let imgSrc = filePath
         ? filePath
         : src.startsWith("data:") ? `${ASSETS_DIR}/embedded_image.png` : src;
@@ -115,17 +117,17 @@ export const convertNodeToLatex = (node: any): string => {
         imgSrc = imgSrc.replace(`${ASSETS_DIR}/`, "");
       }
 
-      const title = node.attrs?.title ? `${node.attrs.title}: ` : "";
-      const escapedCaption = escapeLaTeX(title + (node.attrs?.caption || node.attrs?.alt || "Figure"));
+      const title = attrs.title ? `${attrs.title}: ` : "";
+      const escapedCaption = escapeLaTeX(title + (attrs.caption || attrs.alt || "Figure"));
 
-      const escapedInitials = escapeLaTeX(node.attrs?.initials ?? "");
+      const escapedInitials = escapeLaTeX(attrs.initials ?? "");
 
       // Convert "55%" to "0.55\textwidth"
-      const rawWidth = (node.attrs?.width ?? "100%").toString().replace("%", "");
+      const rawWidth = (attrs.width ?? "100%").toString().replace("%", "");
       const widthNum = parseFloat(rawWidth);
       const latexWidth = isNaN(widthNum) ? "1" : (widthNum / 100).toFixed(2);
 
-      const labelId = node.attrs?.id || "";
+      const labelId = attrs.id || "";
       return `\\notebookimage{${imgSrc}}{${escapedCaption}}{${escapedInitials}}{${latexWidth}\\textwidth}{${labelId}}\n\n`;
     }
 
@@ -137,15 +139,15 @@ export const convertNodeToLatex = (node: any): string => {
       const title = node.attrs?.title ? `${node.attrs.title}: ` : "";
       const caption = title + (node.attrs?.caption ?? "Design Data");
 
-      const body = rows.map((row: any) => {
-        const cells = (row.content ?? []).map((cell: any) =>
+      const body = rows.map((row) => {
+        const cells = (row.content ?? []).map((cell) =>
           (cell.content ?? []).map(convertNodeToLatex).join("").replace(/\n+$/, "").trim()
         );
         return cells.join(" & ") + " \\\\ \\hline";
       }).join("\n");
 
       const escapedCaption = escapeLaTeX(caption);
-      const labelId = node.attrs?.id || "";
+      const labelId = (node.attrs?.id as string) || "";
 
       return `\\notebooktable{${colSpec}}{${body}}{${escapedCaption}}{${labelId}}\n\n`;
     }
@@ -160,7 +162,7 @@ export const convertNodeToLatex = (node: any): string => {
       return `\\begin{quote}\n${children()}\\end{quote}\n\n`;
 
     case "rawLatex": {
-      const code = (node.content || []).map((n: any) => n.text ?? "").join("");
+      const code = (node.content || []).map((n) => n.text ?? "").join("");
       return code + "\n\n";
     }
 
@@ -172,7 +174,7 @@ export const convertNodeToLatex = (node: any): string => {
   }
 };
 
-export const convertJsonToLatex = (input: any): string => {
+export const convertJsonToLatex = (input: TipTapNode | string): string => {
   if (!input) return "";
   
   let doc = input;
@@ -185,10 +187,10 @@ export const convertJsonToLatex = (input: any): string => {
     }
   }
 
-  return convertNodeToLatex(doc).replace(/\n{3,}/g, "\n\n").trim() + "\n";
+  return convertNodeToLatex(doc as TipTapNode).replace(/\n{3,}/g, "\n\n").trim() + "\n";
 };
 
-export const generateEntryLatex = (cnt: string, t: string, a: string, p: string, initialCreatedAt: string | undefined, id?: string): string => {
+export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: string, p: string, initialCreatedAt: string | undefined, id?: string): string => {
   let dateObj = initialCreatedAt ? new Date(initialCreatedAt) : new Date();
 
   // Fallback for mangled timestamps (e.g. 2026-04-28T17-36-32)
@@ -212,7 +214,7 @@ export const generateEntryLatex = (cnt: string, t: string, a: string, p: string,
   return latex;
 };
 
-export const generateAllEntriesLatex = (metadata: { entries: Record<string, any> }, prefix: string = `${DATA_DIR}/`): string => {
+export const generateAllEntriesLatex = (metadata: { entries: Record<string, { id: string, createdAt: string }> }, prefix: string = `${DATA_DIR}/`): string => {
   const entries = Object.values(metadata.entries)
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
