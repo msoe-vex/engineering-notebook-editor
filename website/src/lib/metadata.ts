@@ -386,14 +386,14 @@ export function renameEntryInMetadata(
 /**
  * Recursively walks a TipTap document and generates new UUIDs for all nodes with an 'id' attribute.
  * Also updates any internal links (#uuid) that point to the newly remapped IDs.
+ * If globalIdMap is provided, it will use and update it for cross-entry consistency.
  */
-export function remapContentIds(doc: TipTapDoc): TipTapDoc {
-  if (!doc) return doc;
+export function remapContentIds(doc: TipTapDoc, globalIdMap: Map<string, string> = new Map()): { doc: TipTapDoc, idMap: Map<string, string> } {
+  if (!doc) return { doc, idMap: globalIdMap };
 
-  const idMap = new Map<string, string>();
   const resourceTypes = new Set(["image", "table", "codeBlock", "rawLatex"]);
 
-  // Pass 1: Collect and remap IDs
+  // Pass 1: Collect and remap IDs for this doc specifically
   function collect(node: TipTapNode | TipTapNode[]) {
     if (!node || typeof node !== "object") return;
     
@@ -403,8 +403,10 @@ export function remapContentIds(doc: TipTapDoc): TipTapDoc {
     }
 
     if (node.attrs?.id) {
-      const newId = generateUUID();
-      idMap.set(node.attrs.id as string, newId);
+      const oldId = node.attrs.id as string;
+      if (!globalIdMap.has(oldId)) {
+        globalIdMap.set(oldId, generateUUID());
+      }
     }
     
     if (Array.isArray(node.content)) {
@@ -413,7 +415,7 @@ export function remapContentIds(doc: TipTapDoc): TipTapDoc {
   }
   collect(doc);
 
-  // Pass 2: Apply remapping
+  // Pass 2: Apply remapping using the map
   function apply(node: TipTapNode | TipTapNode[]): TipTapNode | TipTapNode[] {
     if (!node || typeof node !== "object") return node;
 
@@ -426,8 +428,8 @@ export function remapContentIds(doc: TipTapDoc): TipTapDoc {
     // Update ID attribute
     if (resourceTypes.has(node.type)) {
       const oldId = node.attrs?.id as string | undefined;
-      if (oldId && idMap.has(oldId)) {
-        newNode.attrs = { ...node.attrs, id: idMap.get(oldId) };
+      if (oldId && globalIdMap.has(oldId)) {
+        newNode.attrs = { ...node.attrs, id: globalIdMap.get(oldId) };
       } else if (!oldId) {
         // Assign fresh ID if missing
         newNode.attrs = { ...node.attrs, id: generateUUID() };
@@ -442,22 +444,22 @@ export function remapContentIds(doc: TipTapDoc): TipTapDoc {
 
           if (href.startsWith('#')) {
             const oldId = href.substring(1);
-            if (idMap.has(oldId)) {
+            if (globalIdMap.has(oldId)) {
               return { 
                 ...mark, 
                 attrs: { 
                   ...mark.attrs, 
-                  href: `#${idMap.get(oldId)}`,
-                  resourceId: idMap.get(oldId) 
+                  href: `#${globalIdMap.get(oldId)}`,
+                  resourceId: globalIdMap.get(oldId) 
                 } 
               };
             }
-          } else if (resourceId && idMap.has(resourceId)) {
+          } else if (resourceId && globalIdMap.has(resourceId)) {
             return { 
               ...mark, 
               attrs: { 
                 ...mark.attrs, 
-                resourceId: idMap.get(resourceId) 
+                resourceId: globalIdMap.get(resourceId) 
               } 
             };
           }
@@ -474,7 +476,7 @@ export function remapContentIds(doc: TipTapDoc): TipTapDoc {
     return newNode;
   }
 
-  return apply(doc) as TipTapNode;
+  return { doc: apply(doc) as TipTapNode, idMap: globalIdMap };
 }
 
 

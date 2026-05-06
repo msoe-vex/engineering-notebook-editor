@@ -2,7 +2,9 @@
 
 import React, { useState } from "react";
 import {
-  FileText, Plus, X,
+  FileText, Plus, X, Clock, Calendar, SortAsc, SortDesc, CalendarDays,
+  Search, ChevronDown, AlertTriangle, ExternalLink, Trash2, FileJson, FileCode,
+  Download
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -12,9 +14,17 @@ import { ExplorerFile } from "@/lib/types";
 interface FileExplorerProps {
   entries: ExplorerFile[];
   activePath: string | null;
+  selectedPaths: Set<string>;
   pendingPaths: Set<string>;
   deletedPaths: Set<string>;
-  onSelectEntry: (file: ExplorerFile) => void;
+  onSelectEntry: (file: ExplorerFile, multi: boolean, range: boolean) => void;
+  onOpenEntry: (file: ExplorerFile) => void;
+  onCloseEntry: (path: string) => void;
+  onDownloadLatex: (file: ExplorerFile) => void;
+  onDownloadJson: (file: ExplorerFile) => void;
+  onDeleteEntry: (file: ExplorerFile) => void;
+  onDownloadMulti: (files: ExplorerFile[]) => void;
+  onDeleteMulti: (files: ExplorerFile[]) => void;
   onNewEntry: () => void;
   search: string;
   onSearchChange: (val: string) => void;
@@ -26,43 +36,51 @@ interface FileExplorerProps {
   onDateRangeChange: (range: { start: string; end: string } | null) => void;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 // ─── Single file row ──────────────────────────────────────────────────────────
 
 interface FileRowProps {
   file: ExplorerFile;
+  isOpened: boolean;
   isSelected: boolean;
   isPending: boolean;
   isDeleted: boolean;
   icon: React.ReactNode;
   isValid?: boolean;
   sortBy: "created" | "updated" | "title";
-  onSelect: () => void;
+  onSelect: (e: React.MouseEvent) => void;
+  onDoubleClick: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
 }
 
-function FileRow({ file, isSelected, isPending, isDeleted, icon, isValid = true, sortBy, onSelect }: FileRowProps) {
+function FileRow({
+  file, isOpened, isSelected, isPending, isDeleted, icon, isValid = true,
+  sortBy, onSelect, onDoubleClick, onContextMenu
+}: FileRowProps) {
   return (
     <div
       onClick={isDeleted ? undefined : onSelect}
+      onDoubleClick={isDeleted ? undefined : onDoubleClick}
+      onContextMenu={isDeleted ? undefined : onContextMenu}
       className={`
-        group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer select-none
-        ${isSelected
-          ? 'bg-nb-tertiary text-white shadow-lg shadow-nb-tertiary/20'
-          : 'hover:bg-nb-surface-mid text-nb-on-surface'
+        group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer select-none border-2
+        ${isOpened
+          ? 'bg-nb-tertiary text-white shadow-lg shadow-nb-tertiary/20 border-nb-tertiary'
+          : isSelected
+            ? 'bg-nb-surface-mid border-nb-tertiary/50 text-nb-on-surface'
+            : 'bg-transparent border-transparent hover:bg-nb-surface-mid text-nb-on-surface'
         }
         ${isDeleted ? 'opacity-30 grayscale' : ''}
       `}
     >
-      <div className={`shrink-0 ${isSelected ? 'text-white' : 'text-nb-tertiary'}`}>
+      <div className={`shrink-0 ${isOpened ? 'text-white' : 'text-nb-tertiary'}`}>
         {icon}
       </div>
 
       <div className="flex flex-col flex-1 min-w-0">
-        <span className={`truncate font-bold tracking-tight leading-tight ${isSelected ? 'text-white' : 'text-nb-on-surface'}`}>
+        <span className={`truncate font-bold tracking-tight leading-tight ${isOpened ? 'text-white' : 'text-nb-on-surface'}`}>
           {file.title || "Untitled Entry"}
         </span>
-        <span className={`text-[9px] font-mono truncate mt-0.5 ${isSelected ? 'text-white/70' : 'opacity-40'}`}>
+        <span className={`text-[9px] font-mono truncate mt-0.5 ${isOpened ? 'text-white/70' : 'opacity-40'}`}>
           {(() => {
             const ts = (sortBy === "updated")
               ? (file.updatedAt || file.timestamp)
@@ -79,7 +97,7 @@ function FileRow({ file, isSelected, isPending, isDeleted, icon, isValid = true,
       {/* Validation Warning */}
       {!isValid && !isDeleted && (
         <div
-          className={`shrink-0 w-6 h-6 rounded-lg flex items-center justify-center animate-pulse ${isSelected ? 'bg-white/20 text-white' : 'bg-amber-500/10 text-amber-500'}`}
+          className={`shrink-0 w-6 h-6 rounded-lg flex items-center justify-center animate-pulse ${isOpened ? 'bg-white/20 text-white' : 'bg-amber-500/10 text-amber-500'}`}
           title={file.validationErrors && file.validationErrors.length > 0
             ? `Validation errors:\n- ${file.validationErrors.join('\n- ')}`
             : "Incomplete entry metadata or resource captions"}
@@ -90,9 +108,8 @@ function FileRow({ file, isSelected, isPending, isDeleted, icon, isValid = true,
 
       {/* Pending dot */}
       {isPending && !isDeleted && (
-        <span className={`w-1.5 h-1.5 rounded-full shrink-0 animate-pulse shadow-sm ${isSelected ? 'bg-white' : 'bg-nb-tertiary shadow-nb-tertiary/50'}`} title="Staged change" />
+        <span className={`w-1.5 h-1.5 rounded-full shrink-0 animate-pulse shadow-sm ${isOpened ? 'bg-white' : 'bg-nb-tertiary shadow-nb-tertiary/50'}`} title="Staged change" />
       )}
-
     </div>
   );
 }
@@ -135,19 +152,20 @@ function Pane({ id, title, actionLabel, actionIcon, onAction, children, empty, h
   );
 }
 
-
-// ── Icons for pane ────────────────────────────────────────────────────────────
-
-import { AlertTriangle, Search, SortAsc, SortDesc, Clock, Calendar, ChevronDown, CalendarDays } from "lucide-react";
-
-// ─── Main component ───────────────────────────────────────────────────────────
-
 export default function FileExplorer({
   entries,
   activePath,
+  selectedPaths,
   pendingPaths,
   deletedPaths,
   onSelectEntry,
+  onOpenEntry,
+  onCloseEntry,
+  onDownloadLatex,
+  onDownloadJson,
+  onDeleteEntry,
+  onDownloadMulti,
+  onDeleteMulti,
   onNewEntry,
   search,
   onSearchChange,
@@ -160,9 +178,21 @@ export default function FileExplorer({
 }: FileExplorerProps) {
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, file: ExplorerFile } | null>(null);
+
+  const handleContextMenu = (e: React.MouseEvent, file: ExplorerFile) => {
+    e.preventDefault();
+    // If clicking a file not in selection, select it exclusively first
+    if (!selectedPaths.has(file.path)) {
+      onSelectEntry(file, false, false);
+    }
+    setContextMenu({ x: e.clientX, y: e.clientY, file });
+  };
+
+  const selectedEntries = entries.filter(e => selectedPaths.has(e.path));
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden" onClick={() => setContextMenu(null)}>
       {/* Search and Sort Header */}
       <div className="px-3 py-3 bg-nb-surface border-b border-nb-outline-variant space-y-3 shrink-0">
         <div className="relative group">
@@ -190,7 +220,7 @@ export default function FileExplorer({
           {/* Sort Dropdown */}
           <div className="relative flex-1">
             <button
-              onClick={() => setIsSortOpen(!isSortOpen)}
+              onClick={(e) => { e.stopPropagation(); setIsSortOpen(!isSortOpen); }}
               className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-nb-surface-low border border-nb-outline-variant rounded-xl text-[10px] font-bold tracking-wider text-nb-on-surface-variant hover:border-nb-primary transition-all cursor-pointer"
             >
               <div className="flex items-center gap-2">
@@ -238,7 +268,7 @@ export default function FileExplorer({
           {/* Date Filter */}
           <div className="relative">
             <button
-              onClick={() => setIsFilterOpen(!isFilterOpen)}
+              onClick={(e) => { e.stopPropagation(); setIsFilterOpen(!isFilterOpen); }}
               className={`p-2 cursor-pointer border rounded-xl transition-all shadow-sm active:scale-95 ${dateRange ? 'bg-nb-tertiary text-white border-nb-tertiary shadow-nb-tertiary/20' : 'bg-nb-surface-low border-nb-outline-variant text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary'}`}
               title="Filter by Date"
             >
@@ -305,22 +335,113 @@ export default function FileExplorer({
         empty={search ? "No matches found." : "No entries yet."}
         hasItems={entries.length > 0}
       >
-        {entries.map((f) => (
-          <FileRow
-            key={f.path}
-            file={f}
-            isSelected={activePath === f.path}
-            isPending={pendingPaths.has(f.path)}
-            isDeleted={deletedPaths.has(f.path)}
-            icon={<FileText size={13} />}
-            isValid={f.isValid}
-            sortBy={sortBy}
-            onSelect={() => onSelectEntry(f)}
-          />
-        ))}
+        <div className="space-y-1">
+          {entries.map((f) => (
+            <FileRow
+              key={f.path}
+              file={f}
+              isOpened={activePath === f.path}
+              isSelected={selectedPaths.has(f.path)}
+              isPending={pendingPaths.has(f.path)}
+              isDeleted={deletedPaths.has(f.path)}
+              icon={<FileText size={13} />}
+              isValid={f.isValid}
+              sortBy={sortBy}
+              onSelect={(e) => onSelectEntry(f, e.ctrlKey || e.metaKey, e.shiftKey)}
+              onDoubleClick={() => onOpenEntry(f)}
+              onContextMenu={(e) => handleContextMenu(e, f)}
+            />
+          ))}
+        </div>
       </Pane>
 
-      {/* Resources pane hidden to simplify UI */}
+      {/* Context Menu */}
+      {contextMenu && (
+        <>
+          <div className="fixed inset-0 z-[1100]" onClick={() => setContextMenu(null)} onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }} />
+          <div
+            className="fixed z-[1200] w-48 bg-nb-surface border border-nb-outline-variant rounded-2xl shadow-2xl py-2 animate-in fade-in zoom-in-95 duration-200"
+            style={{ left: Math.min(contextMenu.x, window.innerWidth - 200), top: Math.min(contextMenu.y, window.innerHeight - 250) }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-3 py-2 border-b border-nb-outline-variant/30 mb-1">
+              <p className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant truncate">
+                {selectedPaths.size > 1 ? `${selectedPaths.size} Items Selected` : (contextMenu.file.title || "Untitled Entry")}
+              </p>
+            </div>
+
+            {selectedPaths.size <= 1 ? (
+              <>
+                <button
+                  onClick={() => { onOpenEntry(contextMenu.file); setContextMenu(null); }}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-nb-on-surface hover:bg-nb-surface-low transition-colors cursor-pointer"
+                >
+                  <ExternalLink size={14} className="text-nb-primary" />
+                  Open Entry
+                </button>
+
+                {activePath === contextMenu.file.path && (
+                  <button
+                    onClick={() => { onCloseEntry(contextMenu.file.path); setContextMenu(null); }}
+                    className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-nb-on-surface hover:bg-nb-surface-low transition-colors cursor-pointer"
+                  >
+                    <X size={14} className="text-nb-on-surface-variant" />
+                    Close Entry
+                  </button>
+                )}
+
+                <div className="h-px bg-nb-outline-variant/30 my-1" />
+
+                <button
+                  onClick={() => { onDownloadLatex(contextMenu.file); setContextMenu(null); }}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-nb-on-surface hover:bg-nb-surface-low transition-colors cursor-pointer"
+                >
+                  <FileCode size={14} className="text-nb-tertiary" />
+                  Download LaTeX
+                </button>
+
+                <button
+                  onClick={() => { onDownloadJson(contextMenu.file); setContextMenu(null); }}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-nb-on-surface hover:bg-nb-surface-low transition-colors cursor-pointer"
+                >
+                  <FileJson size={14} className="text-nb-tertiary" />
+                  Download JSON
+                </button>
+
+                <div className="h-px bg-nb-outline-variant/30 my-1" />
+
+                <button
+                  onClick={() => { onDeleteEntry(contextMenu.file); setContextMenu(null); }}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-500/5 transition-colors cursor-pointer"
+                >
+                  <Trash2 size={14} />
+                  Delete Entry
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => { onDownloadMulti(selectedEntries); setContextMenu(null); }}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-nb-on-surface hover:bg-nb-surface-low transition-colors cursor-pointer"
+                >
+                  <Download size={14} className="text-nb-tertiary" />
+                  Export Entries ({selectedPaths.size})
+                </button>
+
+                <div className="h-px bg-nb-outline-variant/30 my-1" />
+
+                <button
+                  onClick={() => { onDeleteMulti(selectedEntries); setContextMenu(null); }}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-500/5 transition-colors cursor-pointer"
+                >
+                  <Trash2 size={14} />
+                  Delete {selectedPaths.size} Entries
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -142,6 +142,7 @@ export default function App() {
   const [isConnectingLocal, setIsConnectingLocal] = useState(false);
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
   const [activeWorkspaceMode, setActiveWorkspaceMode] = useState<WorkspaceMode>("none");
+  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [prevSync, setPrevSync] = useState({ mode: workspaceMode, init: isInitializing });
   if (prevSync.mode !== workspaceMode || prevSync.init !== isInitializing) {
     setPrevSync({ mode: workspaceMode, init: isInitializing });
@@ -535,7 +536,34 @@ export default function App() {
     }
   }, [workspaceMode, config, saveEntry, saveMetadata, notebookMetadata, setEntries, setNotebookMetadata, currentLatexDir, currentAllEntriesPath, refreshPending]);
 
-  const handleSelectEntry = useCallback(async (file: ExplorerFile, silent: boolean = false) => {
+  const [lastSelectedPath, setLastSelectedPath] = useState<string | null>(null);
+
+  const handleSelectEntry = useCallback((file: ExplorerFile, multi: boolean, range: boolean, visiblePaths: string[]) => {
+    setSelectedPaths(prev => {
+      const next = new Set(prev);
+      if (range && lastSelectedPath && visiblePaths.includes(lastSelectedPath)) {
+        // Find current order from visible paths
+        const startIdx = visiblePaths.indexOf(lastSelectedPath);
+        const endIdx = visiblePaths.indexOf(file.path);
+        const min = Math.min(startIdx, endIdx);
+        const max = Math.max(startIdx, endIdx);
+        if (min !== -1 && max !== -1) {
+          const rangePaths = visiblePaths.slice(min, max + 1);
+          rangePaths.forEach(p => next.add(p));
+        }
+      } else if (multi) {
+        if (next.has(file.path)) next.delete(file.path);
+        else next.add(file.path);
+      } else {
+        next.clear();
+        next.add(file.path);
+      }
+      setLastSelectedPath(file.path);
+      return next;
+    });
+  }, [lastSelectedPath]);
+
+  const handleOpenEntry = useCallback(async (file: ExplorerFile, silent: boolean = false) => {
     setIsLoading(true);
     setIsInitializing(true);
     if (isMobile) setUserSidebarPreference(false);
@@ -613,6 +641,9 @@ export default function App() {
         createdAt, updatedAt, lastOpenedAt: updatedAt, isLegacyRaw: false,
       });
       setLatexContent(latexStr);
+      // Auto-select the opened entry exclusively
+      setSelectedPaths(new Set([file.path]));
+      setLastSelectedPath(file.path);
     } catch (e) {
       if (!silent) notify("Failed to open entry.", "error");
       throw e;
@@ -620,6 +651,163 @@ export default function App() {
       setIsLoading(false);
     }
   }, [getDBName, workspaceMode, dirHandle, config, getGitBasePrefix, currentLatexDir, isMobile, notify, setIsLoading, setUserSidebarPreference, setMobileTab, setLatexContent]);
+
+  const handleCloseEntry = useCallback((path?: string) => {
+    if (path && openFile?.path !== path) return;
+    setOpenFile(null);
+    setLatexContent("");
+    const params = new URLSearchParams(window.location.search);
+    params.delete('entry');
+    params.delete('resource');
+    window.history.pushState({}, '', `?${params.toString()}`);
+    window.dispatchEvent(new Event('locationchange'));
+  }, [openFile]);
+
+  const handleDownloadLatex = useCallback(async (file: ExplorerFile) => {
+    try {
+      const entryId = file.name.replace('.json', '');
+      const latexPath = `${currentLatexDir}/${entryId}.tex`;
+      let latex = "";
+      const dbName = getDBName();
+      const staged = (await getAllPending(dbName)).find(p => p.path === latexPath && p.operation === "upsert");
+      if (staged?.content) latex = staged.content;
+      else if (workspaceMode === "local" && dirHandle) {
+        latex = (await getLocalFileContent(dirHandle, latexPath)).text || "";
+      } else if (workspaceMode === "github" && config) {
+        latex = await fetchFileContent(config, latexPath);
+      }
+      if (!latex) throw new Error("No LaTeX content found");
+      const blob = new Blob([latex], { type: "application/x-latex" });
+      saveAs(blob, `${entryId}.tex`);
+    } catch (e) {
+      notify("Failed to download LaTeX.", "error");
+    }
+  }, [config, currentLatexDir, dirHandle, getDBName, workspaceMode, notify]);
+
+  const handleDownloadJson = useCallback(async (file: ExplorerFile) => {
+    try {
+      const dbName = getDBName();
+      const entryId = file.name.replace('.json', '');
+      let contentStr = "";
+      const staged = (await getAllPending(dbName)).find(p => p.path === file.path && p.operation === "upsert");
+      if (staged?.content) contentStr = staged.content;
+      else if (workspaceMode === "local" && dirHandle) contentStr = (await getLocalFileContent(dirHandle, file.path)).text || "";
+      else if (workspaceMode === "github" && config) contentStr = await fetchFileContent(config, file.path);
+      if (!contentStr) throw new Error("Entry content not found");
+
+      const rawData = JSON.parse(contentStr);
+      const meta = notebookMetadata.entries[entryId];
+      const content = rawData.content || rawData;
+
+      const assets: Record<string, string> = {};
+      const images = extractImagePaths(content);
+      for (const imgPath of images) {
+        const actualPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${imgPath}` : imgPath;
+        const stagedRes = (await getAllPending(dbName)).find(p => p.path === actualPath && p.operation === "upsert");
+        if (stagedRes?.content) assets[imgPath] = stagedRes.content;
+        else {
+          const cached = await getResource(dbName, actualPath);
+          if (cached) assets[imgPath] = cached;
+        }
+      }
+
+      const portable = { 
+        version: 3, 
+        entries: { [entryId]: { ...meta, content } },
+        assets
+      };
+      const blob = new Blob([JSON.stringify(portable, null, 2)], { type: "application/json" });
+      saveAs(blob, `${entryId}.json`);
+    } catch (e) {
+      notify("Failed to download JSON.", "error");
+    }
+  }, [config, dirHandle, getDBName, getGitBasePrefix, notebookMetadata, workspaceMode, notify]);
+
+  const handleDownloadMulti = useCallback(async (files: ExplorerFile[]) => {
+    try {
+      setIsLoading(true);
+      setIsInitializing(true);
+      const dbName = getDBName();
+      const entriesMap: Record<string, any> = {};
+      const allAssets: Record<string, string> = {};
+
+      for (const file of files) {
+        const entryId = file.name.replace('.json', '');
+        let contentStr = "";
+        const staged = (await getAllPending(dbName)).find(p => p.path === file.path && p.operation === "upsert");
+        if (staged?.content) contentStr = staged.content;
+        else if (workspaceMode === "local" && dirHandle) contentStr = (await getLocalFileContent(dirHandle, file.path)).text || "";
+        else if (workspaceMode === "github" && config) contentStr = await fetchFileContent(config, file.path);
+        if (!contentStr) continue;
+
+        const rawData = JSON.parse(contentStr);
+        const meta = notebookMetadata.entries[entryId];
+        const content = rawData.content || rawData;
+
+        const images = extractImagePaths(content);
+        for (const imgPath of images) {
+          const actualPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${imgPath}` : imgPath;
+          const stagedRes = (await getAllPending(dbName)).find(p => p.path === actualPath && p.operation === "upsert");
+          if (stagedRes?.content) allAssets[imgPath] = stagedRes.content;
+          else {
+            const cached = await getResource(dbName, actualPath);
+            if (cached) allAssets[imgPath] = cached;
+          }
+        }
+        entriesMap[entryId] = { ...meta, content };
+      }
+
+      const portable = { version: 3, entries: entriesMap, assets: allAssets };
+      const blob = new Blob([JSON.stringify(portable, null, 2)], { type: "application/json" });
+      saveAs(blob, `notebook_export_${isoTimestamp().replace(/[:.]/g, '-')}.json`);
+      notify(`Exported ${Object.keys(entriesMap).length} entries.`, "success");
+    } catch (e) {
+      notify("Failed to export entries.", "error");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [config, dirHandle, getDBName, getGitBasePrefix, notebookMetadata, workspaceMode, notify]);
+
+  const handleDeleteMulti = useCallback(async (files: ExplorerFile[]) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: "Delete Multiple Entries",
+      message: `Are you sure you want to delete ${files.length} entries? This action cannot be undone.`,
+      variant: "danger",
+      onConfirm: async () => {
+        setIsLoading(true);
+        setIsInitializing(true);
+        try {
+          let currentMeta = notebookMetadataRef.current;
+          for (const file of files) {
+            const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
+            currentMeta = removeEntryFromMetadata(currentMeta, entryId);
+            await deleteFile(file.path, "Entry deleted (bulk)");
+            await deleteFile(`${currentLatexDir}/${entryId}.tex`, "LaTeX deleted (bulk)");
+          }
+          setNotebookMetadata(currentMeta);
+          await saveMetadata(currentMeta, "Metadata update (bulk deletion)");
+          const allEntriesLatex = generateAllEntriesLatex(currentMeta);
+          await saveEntry(currentAllEntriesPath, allEntriesLatex, "Update all_entries.tex");
+          
+          const deletedPaths = new Set(files.map(f => f.path));
+          setEntries(prev => prev.filter(e => !deletedPaths.has(e.path)));
+          setSelectedPaths(prev => {
+            const next = new Set(prev);
+            deletedPaths.forEach(p => next.delete(p));
+            return next;
+          });
+          if (workspaceMode === "github") refreshPending();
+          notify(`Deleted ${files.length} entries.`, "success");
+        } catch (e) {
+          notify("Failed to delete entries.", "error");
+        } finally {
+          setIsLoading(false);
+          setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        }
+      }
+    });
+  }, [currentAllEntriesPath, currentLatexDir, notebookMetadata, saveEntry, saveMetadata, workspaceMode, notify, setEntries, refreshPending]);
 
 
   // Refs for state that handleUrlChange reads but should NOT trigger re-runs
@@ -698,7 +886,7 @@ export default function App() {
         if (currentMeta === EMPTY_METADATA) return;
         if (currentMeta.entries[entryId]) {
           const entriesDir = (workspaceMode === "github" && config) ? config.entriesDir : ENTRIES_DIR;
-          handleSelectEntry({ name: `${entryId}.json`, path: `${entriesDir}/${entryId}.json` }, true).catch(() => {
+          handleOpenEntry({ name: `${entryId}.json`, path: `${entriesDir}/${entryId}.json` }, true).catch(() => {
             setOpenFile(null);
             const params = new URLSearchParams(window.location.search);
             params.delete('entry');
@@ -736,7 +924,7 @@ export default function App() {
     window.addEventListener('locationchange', handleUrlChange);
     handleUrlChange();
     return () => { active = false; window.removeEventListener('popstate', handleUrlChange); window.removeEventListener('locationchange', handleUrlChange); };
-  }, [handleSelectEntry, githubToken, setConfig, setDirHandle, setWorkspaceMode, refreshPending, refreshProjectList, setCurrentProjectId, setIsLoading, setNotebookMetadata, loadGitHubExplorer, loadLocalExplorer, currentProjectId, workspaceMode, dirHandle, config, isLoading, notify]);
+  }, [handleOpenEntry, githubToken, setConfig, setDirHandle, setWorkspaceMode, refreshPending, refreshProjectList, setCurrentProjectId, setIsLoading, setNotebookMetadata, loadGitHubExplorer, loadLocalExplorer, currentProjectId, workspaceMode, dirHandle, config, isLoading, notify]);
 
   const handleDiscardAll = async () => {
     const dbName = getDBName();
@@ -748,7 +936,7 @@ export default function App() {
       notify("Discarded.", "success");
       if (openFile) {
         const entriesDir = (workspaceMode === "github" && config) ? config.entriesDir : ENTRIES_DIR;
-        handleSelectEntry({ name: `${openFile.id}.json`, path: `${entriesDir}/${openFile.id}.json` }, true).catch(() => setOpenFile(null));
+        handleOpenEntry({ name: `${openFile.id}.json`, path: `${entriesDir}/${openFile.id}.json` }, true).catch(() => setOpenFile(null));
       }
       if (workspaceMode === "github") await loadGitHubExplorer();
       else if (workspaceMode === "local") await loadLocalExplorer();
@@ -756,26 +944,57 @@ export default function App() {
   };
 
   const processImportFile = async (file: File) => {
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const content = reader.result as string;
-        const rawData = JSON.parse(content);
-        if (rawData.content === undefined || rawData.metadata === undefined) {
-          notify("Invalid portable entry format.", "error");
-          return;
+    try {
+      const text = await file.text();
+      const rawData = JSON.parse(text);
+
+      setIsLoading(true);
+      setIsInitializing(true);
+
+      const entriesToImport = rawData.entries || {};
+      const assetsToImport = rawData.assets || {};
+      const entryList = Object.values(entriesToImport);
+
+      const globalIdMap = new Map<string, string>();
+      // Pre-populate global map with new IDs for all entries being imported
+      for (const item of entryList) {
+        const oldId = (item as any).id;
+        if (oldId) globalIdMap.set(oldId, generateUUID());
+      }
+
+      const importSingle = async (data: any, globalAssets: Record<string, string> = {}) => {
+        if (data.content === undefined) return;
+        const info = data;
+        const oldEntryId = (info as any).id;
+        const newId = globalIdMap.get(oldEntryId) || generateUUID();
+        const path = (workspaceMode === "github" && config) ? `${config.entriesDir}/${newId}.json` : `${ENTRIES_DIR}/${newId}.json`;
+
+        // 1. Remap all internal IDs and references
+        const { doc: remappedDoc } = remapContentIds(data.content, globalIdMap);
+
+        // 2. Dehydrate assets (images)
+        const { cleanDoc, newAssets } = await dehydrateAssets(remappedDoc);
+        
+        // Match images from the document to provided assets in the export
+        const images = extractImagePaths(cleanDoc);
+        for (const imgPath of images) {
+          if (globalAssets[imgPath]) {
+            newAssets.push({ path: imgPath, base64: globalAssets[imgPath] });
+          }
         }
-        const wrapper = rawData as EntryWrapper;
-        const newId = generateUUID();
-        const entriesDir = (workspaceMode === "github" && config) ? config.entriesDir : ENTRIES_DIR;
-        const path = `${entriesDir}/${newId}.json`;
-        const remappedContent = remapContentIds(wrapper.content);
-        const { cleanDoc, newAssets } = await dehydrateAssets(remappedContent);
+
         const jsonStr = JSON.stringify({ version: 3, content: cleanDoc }, null, 2);
         const newEntryMeta: EntryMetadata = {
-          id: newId, title: wrapper.metadata.title, author: wrapper.metadata.author, phase: wrapper.metadata.phase,
-          createdAt: wrapper.metadata.createdAt || isoTimestamp(), updatedAt: isoTimestamp(), filename: path, resources: extractResources(cleanDoc)
+          ...info,
+          id: newId,
+          filename: path,
+          // Remap references array
+          references: (info.references || []).map((rId: string) => globalIdMap.get(rId) || rId),
+          // Extract new resources map from remapped doc
+          resources: extractResources(cleanDoc)
         };
+        // Clean up fields that shouldn't be in metadata
+        delete (newEntryMeta as any).content;
         newEntryMeta.isValid = isEntryValid(newEntryMeta);
 
         if (workspaceMode === "local" && dirHandle) {
@@ -783,28 +1002,46 @@ export default function App() {
           await writeLocalFile(dirHandle, path, jsonStr);
           const latex = generateEntryLatex(JSON.stringify(cleanDoc), newEntryMeta.title, newEntryMeta.author, newEntryMeta.phase, newEntryMeta.createdAt, newId);
           await writeLocalFile(dirHandle, `${LATEX_DIR}/${newId}.tex`, latex);
-          const updatedMeta = updateEntryInIndex(notebookMetadata, newId, newEntryMeta);
+          const updatedMeta = updateEntryInIndex(notebookMetadataRef.current, newId, newEntryMeta);
           setNotebookMetadata(updatedMeta);
           const allEntriesLatex = generateAllEntriesLatex(updatedMeta);
           await writeLocalFile(dirHandle, ALL_ENTRIES_PATH, allEntriesLatex);
-          await loadLocalExplorer();
         } else {
           const dbName = getDBName();
-          for (const asset of newAssets) await stageChange(dbName, { path: asset.path, operation: "upsert", content: asset.base64, label: `Import asset`, stagedAt: isoTimestamp() });
+          for (const asset of newAssets) {
+            const actualPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${asset.path}` : asset.path;
+            await stageChange(dbName, { path: actualPath, operation: "upsert", content: asset.base64, label: `Import asset`, stagedAt: isoTimestamp() });
+            await putResource(dbName, { path: actualPath, dataUrl: asset.base64.startsWith('data:') ? asset.base64 : `data:image/*;base64,${asset.base64}` });
+          }
           await stage({ path, content: jsonStr, operation: "upsert", label: "Import entry" });
           const latex = generateEntryLatex(JSON.stringify(cleanDoc), newEntryMeta.title, newEntryMeta.author, newEntryMeta.phase, newEntryMeta.createdAt, newId);
           await stage({ path: `${currentLatexDir}/${newId}.tex`, content: latex, operation: "upsert", label: "Import LaTeX" });
-          const updatedMeta = updateEntryInIndex(notebookMetadata, newId, newEntryMeta);
+          const updatedMeta = updateEntryInIndex(notebookMetadataRef.current, newId, newEntryMeta);
           await stage({ path: currentIndexPath, content: JSON.stringify(updatedMeta, null, 2), operation: "upsert", label: "Update index" });
           const allEntriesLatex = generateAllEntriesLatex(updatedMeta);
           await stage({ path: currentAllEntriesPath, content: allEntriesLatex, operation: "upsert", label: "Update all_entries.tex" });
           setNotebookMetadata(updatedMeta);
-          refreshPending();
         }
-        notify("Imported successfully.", "success");
-      } catch (e) { console.error(e); notify("Import failed.", "error"); }
-    };
-    reader.readAsText(file);
+      };
+
+      if (entryList.length > 0) {
+        for (const item of entryList) await importSingle(item, assetsToImport);
+        notify(`Imported ${entryList.length} entries.`, "success");
+      } else {
+        notify("No entries found in file.", "error");
+      }
+
+      if (workspaceMode === "local") await loadLocalExplorer();
+      else {
+        await refreshPending();
+        if (workspaceMode === "github") await loadGitHubExplorer();
+      }
+    } catch (e) {
+      console.error(e);
+      notify("Import failed.", "error");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleImageUploaded = async (imagePath: string, base64: string) => {
@@ -828,6 +1065,11 @@ export default function App() {
       const allEntriesLatex = generateAllEntriesLatex(updatedMeta);
       await saveEntry(currentAllEntriesPath, allEntriesLatex, "Update all_entries.tex");
       setEntries(prev => prev.filter(e => e.path !== file.path));
+      setSelectedPaths(prev => {
+        const next = new Set(prev);
+        next.delete(file.path);
+        return next;
+      });
       if (workspaceMode === "github") refreshPending();
       if (openFile?.path === file.path) {
         setOpenFile(null);
@@ -1024,7 +1266,22 @@ export default function App() {
         </div>
       </div>
       <div className="flex-1 overflow-y-auto">
-        <Sidebar entries={entries} openFile={openFile} notebookMetadata={notebookMetadata} pendingChanges={pendingChanges} onSelectEntry={handleSelectEntry} onNewEntry={handleNewEntry} />
+        <Sidebar
+          entries={entries}
+          openFile={openFile}
+          selectedPaths={selectedPaths}
+          notebookMetadata={notebookMetadata}
+          pendingChanges={pendingChanges}
+          onSelectEntry={handleSelectEntry}
+          onOpenEntry={handleOpenEntry}
+          onCloseEntry={handleCloseEntry}
+          onDownloadLatex={handleDownloadLatex}
+          onDownloadJson={handleDownloadJson}
+          onDeleteEntry={handleDeleteEntry}
+          onDownloadMulti={handleDownloadMulti}
+          onDeleteMulti={handleDeleteMulti}
+          onNewEntry={handleNewEntry}
+        />
       </div>
       <div className="p-4 bg-nb-surface border-t border-nb-outline-variant">
         <PendingChangesPanel pendingChanges={pendingChanges} isCommitting={isCommitting} onCommit={handleCommitAll} onDiscard={handleDiscardAll} workspaceMode={workspaceMode} />
