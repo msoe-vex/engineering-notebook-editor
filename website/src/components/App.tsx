@@ -25,7 +25,6 @@ import WelcomePage from "./WelcomePage";
 import Sidebar from "./Sidebar";
 import ProjectHeader from "./ProjectHeader";
 import PendingChangesPanel from "./PendingChangesPanel";
-import ImagePreview from "./ImagePreview";
 import ConfirmationDialog from "./ConfirmationDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { HardDrive, ArrowLeftRight, X, BookOpen } from "lucide-react";
@@ -33,7 +32,7 @@ import { ImperativePanelHandle } from "react-resizable-panels";
 import { saveAs } from "file-saver";
 import { generateUUID, hashContent } from "@/lib/utils";
 import { generateEntryLatex } from "@/lib/latex";
-import { extractImagePaths, extractResources, extractReferences, validateNotebookIntegrity, TipTapNode } from "@/lib/metadata";
+import { extractImagePaths, extractResources, extractReferences, TipTapNode } from "@/lib/metadata";
 import { ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, INDEX_PATH } from "@/lib/constants";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { usePersistence } from "@/hooks/usePersistence";
@@ -41,7 +40,7 @@ import { getLocalFileContent, writeLocalFile } from "@/lib/fs";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ViewMode = "entry" | "image" | "raw-latex";
+type ViewMode = "entry";
 type WorkspaceMode = "local" | "github" | "temporary";
 
 export interface FileMetadata {
@@ -63,7 +62,6 @@ interface OpenFileState {
   author: string;
   phase: string;
   metadataMissing: boolean;
-  imageSrc: string;
   createdAt: string;
   updatedAt: string;
   lastOpenedAt: string;
@@ -446,7 +444,7 @@ export default function App() {
       path, name: filename, id: entryId, viewMode: "entry",
       rawLatex: initialLatex, tiptapContent: JSON.stringify(wrapper.content),
       title: defaultTitle, author: defaultAuthor, phase: "",
-      metadataMissing: false, imageSrc: "", createdAt, updatedAt: createdAt, lastOpenedAt: createdAt, isLegacyRaw: false,
+      metadataMissing: false, createdAt, updatedAt: createdAt, lastOpenedAt: createdAt, isLegacyRaw: false,
     });
     setLatexContent(initialLatex);
     setEntries(prev => [{ name: filename, path }, ...prev]);
@@ -537,7 +535,7 @@ export default function App() {
       setOpenFile({
         path: file.path, name: file.name, id: entryId, viewMode: "entry",
         rawLatex: latexStr, tiptapContent: JSON.stringify(hydratedContent),
-        title, author, phase, metadataMissing: false, imageSrc: "",
+        title, author, phase, metadataMissing: false,
         createdAt, updatedAt, lastOpenedAt: updatedAt, isLegacyRaw: false,
       });
       setLatexContent(latexStr);
@@ -708,14 +706,6 @@ export default function App() {
     if (openFile?.path === file.path) { setOpenFile(null); setLatexContent(""); }
   };
 
-  const handleDeleteResource = async (file: ExplorerFile) => {
-    const updatedMeta = validateNotebookIntegrity(notebookMetadata);
-    setNotebookMetadata(updatedMeta);
-    await deleteFile(file.path, "Resource deleted");
-    await saveMetadata(updatedMeta, "Metadata update (resource deleted)");
-    if (workspaceMode === "github") refreshPending();
-    if (openFile?.path === file.path) setOpenFile(null);
-  };
 
   const handleDownloadPortable = async (filename: string, content: string, info: { title: string; author: string; phase: string, createdAt: string, updatedAt?: string }) => {
     try {
@@ -1008,10 +998,6 @@ export default function App() {
           !isConnectingLocal && (
             <WelcomePage workspace={{ mode: workspaceMode as WorkspaceMode, label: workspaceLabel }} onNewEntry={handleNewEntry} onImportEntry={() => importEntryInputRef.current?.click()} onDisconnect={handleDisconnect} onOpenSidebar={() => setUserSidebarPreference(true)} />
           )
-        ) : openFile.viewMode === "image" ? (
-          <ImagePreview key={openFile.path} filename={openFile.name} src={openFile.imageSrc} onDelete={() => handleDeleteResource({ name: openFile.name, path: openFile.path })} />
-        ) : openFile.viewMode === "raw-latex" ? (
-          <Preview latexContent={openFile.rawLatex} />
         ) : (
           <PanelGroup direction="horizontal" className="h-full" id="editor-preview-group">
             <Panel
