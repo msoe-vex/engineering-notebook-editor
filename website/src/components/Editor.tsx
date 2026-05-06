@@ -242,6 +242,13 @@ const Editor = React.memo(function Editor({
     contentStr: initialContent
   });
 
+  const lastAutoSavedRef = useRef({
+    title: initialTitle,
+    author: initialAuthor,
+    phase: initialPhase,
+    contentStr: initialContent
+  });
+
   // ── Callback refs (stable references to avoid resetting timers on re-render) ──
   const onContentChangeRef = useRef(onContentChange);
   const generateLatexRef = useRef(generateLatex);
@@ -291,15 +298,23 @@ const Editor = React.memo(function Editor({
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
 
     const contentStr = JSON.stringify(content);
-    const isContentChanged = contentStr !== lastSyncedRef.current.contentStr;
+    const isContentChanged = contentStr !== lastAutoSavedRef.current.contentStr;
+    const isMetadataChanged = title !== lastAutoSavedRef.current.title || 
+                              author !== lastAutoSavedRef.current.author || 
+                              phase !== lastAutoSavedRef.current.phase;
 
-    if (isContentChanged) {
+    if (isContentChanged || isMetadataChanged) {
       setIsAutoSaving(true);
       autoSaveTimerRef.current = setTimeout(() => {
         const { title, author, phase } = latestMetadataRef.current;
         const latex = generateLatexRef.current(content, title, author, phase);
         if (onContentChangeRef.current) onContentChangeRef.current(filename, latex, contentStr, { title, author, phase });
-        lastSyncedRef.current.contentStr = contentStr;
+        
+        lastAutoSavedRef.current.contentStr = contentStr;
+        lastAutoSavedRef.current.title = title;
+        lastAutoSavedRef.current.author = author;
+        lastAutoSavedRef.current.phase = phase;
+        
         setIsAutoSaving(false);
         autoSaveTimerRef.current = null;
       }, 800);
@@ -308,7 +323,7 @@ const Editor = React.memo(function Editor({
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
-  }, [content, filename]);
+  }, [content, filename, title, author, phase]);
 
   // Flush pending changes on unmount to prevent data loss on fast entry switch
   useEffect(() => {

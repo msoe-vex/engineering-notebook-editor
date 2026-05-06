@@ -16,7 +16,7 @@ import {
 import {
   NotebookMetadata, EMPTY_METADATA, EntryMetadata, EntryWrapper,
   updateEntryInIndex, removeEntryFromMetadata,
-  dehydrateAssets, hydrateAssets, remapContentIds, isEntryValid,
+  dehydrateAssets, hydrateAssets, remapContentIds, isEntryValid, validateNotebookIntegrity
 } from "@/lib/metadata";
 import Settings from "./Settings";
 import Editor from "./Editor";
@@ -152,6 +152,7 @@ export default function App() {
   const notebookMetadataRef = useRef(notebookMetadata);
   useEffect(() => { notebookMetadataRef.current = notebookMetadata; }, [notebookMetadata]);
 
+  const lastSavedContentsRef = useRef<Map<string, string>>(new Map());
   const [targetResourceId, setTargetResourceId] = useState<string | null>(null);
 
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -420,8 +421,16 @@ export default function App() {
         }
       }
 
-      await saveEntry(changedPath, entryJsonStr, `Auto-save: ${info.title}`);
-      await saveEntry(`${currentLatexDir}/${entryId}.tex`, latex, `Generate LaTeX: ${info.title}`);
+      if (lastSavedContentsRef.current.get(changedPath) !== entryJsonStr) {
+        await saveEntry(changedPath, entryJsonStr, `Auto-save: ${info.title}`);
+        lastSavedContentsRef.current.set(changedPath, entryJsonStr);
+      }
+
+      const latexPath = `${currentLatexDir}/${entryId}.tex`;
+      if (lastSavedContentsRef.current.get(latexPath) !== latex) {
+        await saveEntry(latexPath, latex, `Generate LaTeX: ${info.title}`);
+        lastSavedContentsRef.current.set(latexPath, latex);
+      }
 
       // Merge content-derived fields into the current browser state.
       // The Editor owns title/author/phase/isValid via immediate sync —
@@ -469,6 +478,31 @@ export default function App() {
       });
     }
   }, [workspaceMode, currentProjectId, projects, config, getGitBasePrefix, currentLatexDir, saveEntry, saveMetadata, uploadResource, refreshPending, setNotebookMetadata, getDBName]);
+
+  const handleMetadataChange = useCallback(async (entryId: string, updates: Partial<EntryMetadata>) => {
+    let finalMeta: NotebookMetadata | null = null;
+    setNotebookMetadata(prev => {
+      const existing = prev.entries[entryId];
+      if (!existing) return prev;
+      const updatedEntry = { ...existing, ...updates, updatedAt: isoTimestamp() };
+      const next = { ...prev, entries: { ...prev.entries, [entryId]: updatedEntry } };
+      const validated = validateNotebookIntegrity(next);
+      finalMeta = validated;
+      return validated;
+    });
+
+    setOpenFile(prev => {
+      if (prev?.id === entryId) {
+        return { ...prev, ...updates, updatedAt: isoTimestamp() };
+      }
+      return prev;
+    });
+
+    if (finalMeta) {
+      await saveMetadata(finalMeta);
+      if (workspaceMode === "github") refreshPending();
+    }
+  }, [saveMetadata, workspaceMode, refreshPending]);
 
   const handleValidationChange = useCallback((isValid: boolean) => {
     if (!openFile) return;
@@ -607,6 +641,11 @@ export default function App() {
       } else if (workspaceMode === "github" && config) {
         try { latexStr = await fetchFileContent(config, latexPath); } catch { /* ignore */ }
       }
+
+      // Seed the save cache with loaded values to prevent redundant auto-saves on mount
+      const normalizedJson = JSON.stringify({ version: 3, content }, null, 2);
+      lastSavedContentsRef.current.set(file.path, normalizedJson);
+      lastSavedContentsRef.current.set(latexPath, latexStr);
 
       const assetCache = new Map<string, string>();
       const images = extractImagePaths(content);
@@ -1356,9 +1395,9 @@ export default function App() {
                 onValidationChange={handleValidationChange} filename={openFile.path}
                 onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
                 onContentChange={handleContentChange}
-                onTitleChange={(title) => { if (!openFile) return; const id = openFile.id; setOpenFile(prev => prev ? { ...prev, title } : null); setNotebookMetadata(prev => ({ ...prev, entries: { ...prev.entries, [id]: { ...prev.entries[id], title, updatedAt: isoTimestamp() } } })); }}
-                onAuthorChange={(author) => { if (!openFile) return; const id = openFile.id; setOpenFile(prev => prev ? { ...prev, author } : null); setNotebookMetadata(prev => ({ ...prev, entries: { ...prev.entries, [id]: { ...prev.entries[id], author, updatedAt: isoTimestamp() } } })); }}
-                onPhaseChange={(phase) => { if (!openFile) return; const id = openFile.id; setOpenFile(prev => prev ? { ...prev, phase } : null); setNotebookMetadata(prev => ({ ...prev, entries: { ...prev.entries, [id]: { ...prev.entries[id], phase, updatedAt: isoTimestamp() } } })); }}
+                onTitleChange={(title) => handleMetadataChange(openFile.id, { title })}
+                onAuthorChange={(author) => handleMetadataChange(openFile.id, { author })}
+                onPhaseChange={(phase) => handleMetadataChange(openFile.id, { phase })}
                 onImageUpload={handleImageUploaded} onDownloadPortable={handleDownloadPortable}
                 onClose={() => {
                   const params = new URLSearchParams(window.location.search);
