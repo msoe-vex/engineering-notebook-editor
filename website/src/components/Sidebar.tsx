@@ -7,18 +7,34 @@ import { PendingChange } from "@/lib/db";
 interface SidebarProps {
   entries: ExplorerFile[];
   openFile: { path: string } | null;
+  selectedPaths: Set<string>;
   notebookMetadata: NotebookMetadata;
   pendingChanges: PendingChange[];
-  onSelectEntry: (file: ExplorerFile) => void;
+  onSelectEntry: (file: ExplorerFile, multi: boolean, range: boolean, visiblePaths: string[]) => void;
+  onOpenEntry: (file: ExplorerFile) => void;
+  onCloseEntry: (path: string) => void;
+  onDownloadLatex: (file: ExplorerFile) => void;
+  onDownloadJson: (file: ExplorerFile) => void;
+  onDeleteEntry: (file: ExplorerFile) => void;
+  onDownloadMulti: (files: ExplorerFile[]) => void;
+  onDeleteMulti: (files: ExplorerFile[]) => void;
   onNewEntry: () => void;
 }
 
 export default function Sidebar({
   entries,
   openFile,
+  selectedPaths,
   notebookMetadata,
   pendingChanges,
   onSelectEntry,
+  onOpenEntry,
+  onCloseEntry,
+  onDownloadLatex,
+  onDownloadJson,
+  onDeleteEntry,
+  onDownloadMulti,
+  onDeleteMulti,
   onNewEntry
 }: SidebarProps) {
   const [search, setSearch] = useState("");
@@ -87,9 +103,17 @@ export default function Sidebar({
     <FileExplorer
       entries={filteredEntries}
       activePath={openFile?.path || null}
+      selectedPaths={selectedPaths}
       pendingPaths={pendingPaths}
       deletedPaths={deletedPaths}
-      onSelectEntry={onSelectEntry}
+      onSelectEntry={(file, multi, range) => onSelectEntry(file, multi, range, filteredEntries.map(e => e.path))}
+      onOpenEntry={onOpenEntry}
+      onCloseEntry={onCloseEntry}
+      onDownloadLatex={onDownloadLatex}
+      onDownloadJson={onDownloadJson}
+      onDeleteEntry={onDeleteEntry}
+      onDownloadMulti={onDownloadMulti}
+      onDeleteMulti={onDeleteMulti}
       onNewEntry={onNewEntry}
       search={search}
       onSearchChange={setSearch}
