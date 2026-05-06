@@ -34,8 +34,9 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ access_token: data.access_token });
-  } catch (error: any) {
+  } catch (error) {
     console.error('GitHub OAuth Exchange Exception:', error);
-    return NextResponse.json({ error: error.message || 'Failed to exchange code for token' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Failed to exchange code for token';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -1,5 +1,4 @@
 import { GitHubFile } from "@/lib/github";
-import { useState } from "react";
 
 interface LocalFile extends Partial<GitHubFile> {
   name: string;

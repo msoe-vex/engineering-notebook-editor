@@ -30,7 +30,7 @@ import { ImperativePanelHandle } from "react-resizable-panels";
 import { saveAs } from "file-saver";
 import { generateUUID, hashContent } from "@/lib/utils";
 import { generateEntryLatex, generateAllEntriesLatex } from "@/lib/latex";
-import { extractImagePaths, extractResources, extractReferences, validateNotebookIntegrity } from "@/lib/metadata";
+import { extractImagePaths, extractResources, extractReferences, validateNotebookIntegrity, TipTapNode } from "@/lib/metadata";
 import { ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, INDEX_PATH, ALL_ENTRIES_PATH } from "@/lib/constants";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -83,43 +83,10 @@ interface OpenFileState {
 
 const isoTimestamp = () => new Date().toISOString();
 
-const getFilenameTimestamp = () =>
-  new Date().toISOString().replace(/:/g, "-").replace(/\..+/, "");
-
-const isImage = (name: string) =>
-  /\.(png|jpg|jpeg|gif|webp|svg|bmp|ico)$/i.test(name);
-
-/** Validate that all header fields and all component captions are filled. */
-const validateEntry = (tiptapJson: string, title: string, author: string, phase: string): { valid: boolean; errors: string[] } => {
-  const errors: string[] = [];
-  if (!title.trim()) errors.push("Project Title is required.");
-  if (!author.trim()) errors.push("Author is required.");
-  if (!phase || phase === "Select Phase") errors.push("Project Phase is required.");
-
-  try {
-    const doc = JSON.parse(tiptapJson);
-    const checkCaptions = (node: any) => {
-      if (node.type === "image" && !node.attrs?.alt?.trim()) errors.push("All images must have a caption.");
-      if (node.type === "table" && !node.attrs?.caption?.trim()) errors.push("All tables must have a caption.");
-      if (node.type === "codeBlock" && !node.attrs?.caption?.trim()) errors.push("All code blocks must have a caption.");
-      (node.content ?? []).forEach(checkCaptions);
-    };
-    checkCaptions(doc);
-  } catch {
-    // Ignore parse errors here
-  }
-
-  return { valid: errors.length === 0, errors };
-};
-
-
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const getLocalFileContent = async (rootHandle: any, path: string): Promise<{ text?: string; base64?: string; isImage: boolean }> => {
+const getLocalFileContent = async (rootHandle: FileSystemDirectoryHandle, path: string): Promise<{ text?: string; base64?: string; isImage: boolean }> => {
   try {
     const parts = path.split('/');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let currentHandle: any = rootHandle;
+    let currentHandle: FileSystemDirectoryHandle = rootHandle;
     for (let i = 0; i < parts.length - 1; i++) {
       currentHandle = await currentHandle.getDirectoryHandle(parts[i]);
     }
@@ -135,33 +102,29 @@ const getLocalFileContent = async (rootHandle: any, path: string): Promise<{ tex
     }
     const text = await file.text();
     return { text, isImage: false };
-  } catch (e: any) {
-    if (e.name !== 'NotFoundError') {
+  } catch (e: unknown) {
+    if (e instanceof Error && e.name !== 'NotFoundError') {
       console.error(`Local read failed for ${path}`, e);
     }
     throw e;
   }
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const writeLocalFile = async (rootHandle: any, path: string, content: string | Uint8Array) => {
+const writeLocalFile = async (rootHandle: FileSystemDirectoryHandle, path: string, content: string | Uint8Array) => {
   const parts = path.split('/');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let currentHandle: any = rootHandle;
+  let currentHandle: FileSystemDirectoryHandle = rootHandle;
   for (let i = 0; i < parts.length - 1; i++) {
     currentHandle = await currentHandle.getDirectoryHandle(parts[i], { create: true });
   }
   const fileHandle = await currentHandle.getFileHandle(parts[parts.length - 1], { create: true });
   const writable = await fileHandle.createWritable();
-  await writable.write(content);
+  await writable.write(content as FileSystemWriteChunkType);
   await writable.close();
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const deleteLocalFileAtPath = async (rootHandle: any, path: string) => {
+const deleteLocalFileAtPath = async (rootHandle: FileSystemDirectoryHandle, path: string) => {
   const parts = path.split('/');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let currentHandle: any = rootHandle;
+  let currentHandle: FileSystemDirectoryHandle = rootHandle;
   for (let i = 0; i < parts.length - 1; i++) {
     currentHandle = await currentHandle.getDirectoryHandle(parts[i]);
   }
@@ -176,19 +139,24 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectPendingCounts, setProjectPendingCounts] = useState<Record<string, number>>({});
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
-  const [config, setConfig] = useState<GitHubConfig | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [dirHandle, setDirHandle] = useState<any>(null);
+  const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [githubToken, setGithubToken] = useState<string | null>(null);
   const [githubUser, setGithubUser] = useState<string | null>(null);
+  const [config, setConfig] = useState<GitHubConfig | null>(null);
+
+  // Notifications
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const notify = useCallback((message: string, type: "error" | "success" = "success") => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4000);
+  }, []);
 
   // Explorer file lists
   const [entries, setEntries] = useState<ExplorerFile[]>([]);
-  const [resources, setResources] = useState<ExplorerFile[]>([]);
 
-  // In-memory content cache: path -> content string (for GitHub mode, content loaded on open)
-  const [contentCache, setContentCache] = useState<Map<string, string>>(new Map());
+
 
 
   // Pending changes (GitHub mode) — summary driven from IndexedDB
@@ -201,9 +169,8 @@ export default function App() {
   const [isRenamingProject, setIsRenamingProject] = useState(false);
   const [projectRenameValue, setProjectRenameValue] = useState("");
 
-  // Serialized queue for local file system operations to prevent InvalidStateError
-  const localWriteQueueRef = useRef<Promise<any>>(Promise.resolve());
-  const queueLocalOp = useCallback(async (op: () => Promise<any>) => {
+  const localWriteQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const queueLocalOp = useCallback(async (op: () => Promise<void>) => {
     const next = localWriteQueueRef.current.then(op).catch(e => {
       console.error("Local FS operation failed in queue", e);
     });
@@ -213,7 +180,6 @@ export default function App() {
 
   // Current open file
   const [openFile, setOpenFile] = useState<OpenFileState | null>(null);
-  const [showReferenceSearch, setShowReferenceSearch] = useState(false);
   const [needsPermission, setNeedsPermission] = useState(false);
   const [isConnectingLocal, setIsConnectingLocal] = useState(false);
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
@@ -222,11 +188,10 @@ export default function App() {
   // metadata.json contents
   const [notebookMetadata, setNotebookMetadata] = useState<NotebookMetadata>(EMPTY_METADATA);
   const notebookMetadataRef = useRef(notebookMetadata);
-  const metadataSyncTimeoutRef = useRef<any>(null);
+  const metadataSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { notebookMetadataRef.current = notebookMetadata; }, [notebookMetadata]);
 
-  // Notifications
-  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
 
   // URL-based navigation state
   const [targetResourceId, setTargetResourceId] = useState<string | null>(null);
@@ -251,17 +216,16 @@ export default function App() {
 
   const refreshProjectList = useCallback(async () => {
     const p = await getProjects();
-    setProjects(p);
-
     const counts: Record<string, number> = {};
-    for (const proj of p) {
+    
+    // Process all counts in parallel to avoid partial state renders and sequential lag
+    await Promise.all(p.map(async (proj) => {
       const dbName = getProjectDBName(proj);
       const pending = await getAllPending(dbName);
       counts[proj.id] = pending.length;
-      if (pending.length > 0) {
-        console.log(`[DASHBOARD] Found ${pending.length} pending changes for ${proj.name} in DB: ${dbName}`);
-      }
-    }
+    }));
+
+    setProjects(p);
     setProjectPendingCounts(counts);
   }, []);
 
@@ -273,10 +237,10 @@ export default function App() {
     return "notebook-volatile";
   }, [currentProjectId]);
 
-  const checkPermission = async (handle: any) => {
+  const checkPermission = async (handle: FileSystemDirectoryHandle) => {
     if (!handle) return false;
     try {
-      const status = await (handle as any).queryPermission({ mode: 'readwrite' });
+      const status = await handle.queryPermission({ mode: 'readwrite' });
       if (status === 'granted') {
         setNeedsPermission(false);
         return true;
@@ -295,7 +259,7 @@ export default function App() {
     const handle = dirHandle || (pendingProjectId ? await getProjectHandle(pendingProjectId) : null);
     if (!handle) return;
     try {
-      const status = await (handle as any).requestPermission({ mode: 'readwrite' });
+      const status = await handle.requestPermission({ mode: 'readwrite' });
       if (status === 'granted') {
         setNeedsPermission(false);
         setIsConnectingLocal(false);
@@ -320,9 +284,12 @@ export default function App() {
   // This replaces the old on-mount-only call and eliminates the race where
   // stale counts were left over after project switches.
   useEffect(() => {
-    if (!isInitializing) {
-      refreshProjectList();
-    }
+    const run = async () => {
+      if (!isInitializing) {
+        await refreshProjectList();
+      }
+    };
+    run();
   }, [isInitializing, refreshProjectList]);
 
   // Warning for Temporary Workspace
@@ -338,15 +305,7 @@ export default function App() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [workspaceMode]);
 
-  // Load initial author from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem("nb-last-author");
-    if (saved && openFile && !openFile.author) {
-      setOpenFile(prev => prev ? { ...prev, author: saved } : null);
-    }
-  }, [!!openFile]);
-
-  const { theme, setTheme, resolvedTheme } = useTheme();
+  const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [entrySearch, setEntrySearch] = useState("");
@@ -359,6 +318,10 @@ export default function App() {
   const editorPanelRef = useRef<ImperativePanelHandle>(null);
   const previewPanelRef = useRef<ImperativePanelHandle>(null);
   const sidebarPanelRef = useRef<ImperativePanelHandle>(null);
+  const importEntryInputRef = useRef<HTMLInputElement>(null);
+
+  // Load initial author from localStorage
+
 
   useEffect(() => {
     if (!sidebarPanelRef.current) return;
@@ -383,42 +346,47 @@ export default function App() {
   }, [desktopViewMode]);
   const isMobile = useIsMobile();
 
-  const showPreview = desktopViewMode === "split" || desktopViewMode === "preview";
-
   const isExchangingCode = useRef(false);
 
   useEffect(() => {
-    setMounted(true);
-    setGithubToken(localStorage.getItem("nb-github-token"));
-    setGithubUser(localStorage.getItem("nb-github-user"));
+    const init = async () => {
+      setMounted(true);
 
-    // Handle GitHub OAuth callback
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get("code");
-    if (code && !isExchangingCode.current) {
-      isExchangingCode.current = true;
-      setIsInitializing(true);
-      fetch("/api/auth/github", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
-      })
-        .then(res => res.json())
-        .then(data => {
+      const token = localStorage.getItem("nb-github-token");
+      const user = localStorage.getItem("nb-github-user");
+      setGithubToken(token);
+      setGithubUser(user);
+
+      // Handle GitHub OAuth callback
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("code");
+      if (code && !isExchangingCode.current) {
+        isExchangingCode.current = true;
+        setIsInitializing(true);
+
+        try {
+          const res = await fetch("/api/auth/github", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code }),
+          });
+          const data = await res.json();
+
           if (data.access_token) {
             localStorage.setItem("nb-github-token", data.access_token);
             setGithubToken(data.access_token);
 
             // Fetch user info to show who is signed in
-            fetchGitHubUser(data.access_token)
-              .then(user => {
-                if (user.login) {
-                  localStorage.setItem("nb-github-user", user.login);
-                  setGithubUser(user.login);
-                  notify(`Signed in as ${user.login}`, "success");
-                }
-              })
-              .catch(e => console.error("Failed to fetch GitHub user info", e));
+            try {
+              const userResult = await fetchGitHubUser(data.access_token);
+              if (userResult.login) {
+                localStorage.setItem("nb-github-user", userResult.login);
+                setGithubUser(userResult.login);
+                notify(`Signed in as ${userResult.login}`, "success");
+              }
+            } catch (e) {
+              console.error("Failed to fetch GitHub user info", e);
+            }
 
             // Clean up URL
             const newUrl = new URL(window.location.href);
@@ -427,16 +395,17 @@ export default function App() {
           } else if (data.error) {
             notify(`GitHub sign-in error: ${data.error}`, "error");
           }
-        })
-        .catch(err => {
+        } catch (err) {
           console.error(err);
           notify("GitHub sign-in failed connection.", "error");
-        })
-        .finally(() => {
+        } finally {
+          setIsInitializing(false);
           isExchangingCode.current = false;
-        });
-    }
-  }, []);
+        }
+      }
+    };
+    init();
+  }, [notify, isInitializing]);
   // ── Dynamic Paths ──────────────────────────────────────────────────────────
   const currentEntriesDir = useMemo(() => (workspaceMode === "github" && config) ? config.entriesDir : ENTRIES_DIR, [workspaceMode, config]);
   const currentAssetsDir = useMemo(() => (workspaceMode === "github" && config) ? config.resourcesDir : ASSETS_DIR, [workspaceMode, config]);
@@ -459,20 +428,17 @@ export default function App() {
 
   // Auto-close sidebar on mobile initial load
   useEffect(() => {
-    if (isMobile) setIsSidebarOpen(false);
-    else setIsSidebarOpen(true);
+    const run = async () => {
+      if (isMobile) setIsSidebarOpen(false);
+      else setIsSidebarOpen(true);
+    };
+    run();
   }, [isMobile]);
-
-  const notify = (message: string, type: "error" | "success" = "success") => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 4000);
-  };
 
   // Latex preview content (kept in sync by Editor)
   const [latexContent, setLatexContent] = useState("");
 
   const [isLoading, setIsLoading] = useState(false);
-  const [styContent, setStyContent] = useState("");
 
   const lastRemoteMetadataRef = useRef<string>("");
   const lastRemoteAllEntriesRef = useRef<string>("");
@@ -559,28 +525,9 @@ export default function App() {
     });
 
     return list;
-  }, [entries, notebookMetadata, entrySearch, entrySort, entrySortDirection, dateRange, openFile, savingPaths, pendingChanges, currentEntriesDir]);
+  }, [entries, notebookMetadata, entrySearch, entrySort, entrySortDirection, dateRange, savingPaths, pendingChanges, currentEntriesDir]);
 
-  const displayResources = useMemo(() => {
-    let list = [...resources];
-    const deletedPaths = new Set(pendingChanges.filter(p => p.operation === "delete").map(p => p.path));
 
-    // Filter out deleted items from the main list first
-    list = list.filter(e => !deletedPaths.has(e.path));
-
-    const existingPaths = new Set(list.map(e => e.path));
-    pendingChanges.forEach(p => {
-      if (p.operation === "upsert" && p.path.startsWith(currentAssetsDir) && isImage(p.path) && !existingPaths.has(p.path)) {
-        list.push({
-          name: p.path.split('/').pop() || "",
-          path: p.path,
-          timestamp: new Date().toISOString()
-        });
-        existingPaths.add(p.path);
-      }
-    });
-    return list.sort((a, b) => a.name.localeCompare(b.name));
-  }, [resources, pendingChanges, currentAssetsDir]);
 
   // ── Pending helpers ──────────────────────────────────────────────────────────
 
@@ -600,8 +547,11 @@ export default function App() {
   }, [refreshPending, getDBName]);
 
   useEffect(() => {
-    setPendingChanges([]); // Reset UI during DB switch
-    refreshPending();
+    const run = async () => {
+      setPendingChanges([]); // Reset UI during DB switch
+      await refreshPending();
+    };
+    run();
   }, [refreshPending]);
 
   // Auto-save effect
@@ -619,10 +569,10 @@ export default function App() {
 
     setSavingPaths(prev => new Set(prev).add(changedPath));
 
-    const parseContent = (raw: any): any => {
-      if (!raw) return raw;
-      if (typeof raw === 'object') return raw;
-      if (typeof raw !== 'string') return raw;
+    const parseContent = (raw: unknown): TipTapNode | string => {
+      if (!raw) return "";
+      if (typeof raw === 'object') return (raw as unknown) as TipTapNode;
+      if (typeof raw !== 'string') return raw as string;
       try {
         const parsed = JSON.parse(raw);
         if (typeof parsed === 'string') return parseContent(parsed);
@@ -633,8 +583,8 @@ export default function App() {
     };
 
     const contentObj = parseContent(tiptapContent);
-    const resources = contentObj ? extractResources(contentObj) : {};
-    const references = contentObj ? extractReferences(contentObj) : [];
+    const resources = (contentObj && typeof contentObj === 'object') ? extractResources(contentObj) : {};
+    const references = (contentObj && typeof contentObj === 'object') ? extractReferences(contentObj) : [];
 
     const entryMeta: EntryMetadata = {
       id: entryId,
@@ -656,7 +606,7 @@ export default function App() {
 
     if (contentObj) {
       try {
-        const { cleanDoc, newAssets } = await dehydrateAssets(contentObj);
+        const { cleanDoc, newAssets } = await dehydrateAssets(contentObj as TipTapNode);
         assetsToSave = newAssets;
         finalDoc = cleanDoc;
       } catch (e) {
@@ -775,16 +725,7 @@ export default function App() {
         await refreshPending();
       }
 
-      if (assetsToSave.length > 0) {
-        // Refresh resources list if new assets were added
-        setResources(prev => {
-          const existingPaths = new Set(prev.map(r => r.path));
-          const newResources = assetsToSave
-            .filter(a => !existingPaths.has(a.path))
-            .map(a => ({ name: a.path.split('/').pop() || "", path: a.path }));
-          return [...prev, ...newResources];
-        });
-      }
+
     } finally {
       // Cleanup saving status
       setSavingPaths(prev => {
@@ -793,13 +734,9 @@ export default function App() {
         return next;
       });
     }
-  }, [workspaceMode, dirHandle, getDBName, openFile?.path, openFile?.createdAt, openFile?.id, notebookMetadata]);
+  }, [workspaceMode, dirHandle, getDBName, openFile?.path, openFile?.createdAt, currentAllEntriesPath, currentIndexPath, currentLatexDir, currentProjectId, projects, queueLocalOp, refreshPending]);
 
-  // ── Content cache helpers ────────────────────────────────────────────────────
 
-  const cacheContent = (path: string, content: string) => {
-    setContentCache(prev => new Map(prev).set(path, content));
-  };
 
   // ── Explorer loaders ─────────────────────────────────────────────────────────
 
@@ -808,10 +745,9 @@ export default function App() {
     setIsLoading(true);
     try {
       const entryFiles: ExplorerFile[] = [];
-      const resourceFiles: ExplorerFile[] = [];
 
       try {
-        let entriesDir: any = dirHandle;
+        let entriesDir: FileSystemDirectoryHandle = dirHandle;
         for (const part of ENTRIES_DIR.split('/')) {
           entriesDir = await entriesDir.getDirectoryHandle(part, { create: true });
         }
@@ -822,17 +758,7 @@ export default function App() {
         }
       } catch { /* entries dir missing */ }
 
-      try {
-        let assetsDir: any = dirHandle;
-        for (const part of ASSETS_DIR.split('/')) {
-          assetsDir = await assetsDir.getDirectoryHandle(part, { create: true });
-        }
-        for await (const entry of assetsDir.values()) {
-          if (entry.kind === "file" && isImage(entry.name)) {
-            resourceFiles.push({ name: entry.name, path: `${ASSETS_DIR}/${entry.name}` });
-          }
-        }
-      } catch { /* assets dir missing */ }
+
 
       // Load notebook.json independently
       try {
@@ -843,34 +769,24 @@ export default function App() {
         }
       } catch { /* not found */ }
 
-      // Load sty
-      try {
-        const result = await getLocalFileContent(dirHandle, "vex_notebook.sty");
-        if (result.text) setStyContent(result.text);
-      } catch { /* not found */ }
-
       setEntries(entryFiles);
-      setResources(resourceFiles);
     } finally {
       setIsLoading(false);
     }
-  }, [dirHandle]);
+  }, [dirHandle, setIsLoading, setNotebookMetadata, setEntries]);
 
   const loadGitHubExplorer = useCallback(async () => {
     if (!config) return;
     setIsLoading(true);
     try {
-      const [entryItems, resourceItems] = await Promise.all([
+      const [entryItems] = await Promise.all([
         fetchDirectoryTree(config, currentEntriesDir, false).catch(() => [] as GitHubFile[]),
-        fetchDirectoryTree(config, currentAssetsDir, false).catch(() => [] as GitHubFile[]),
       ]);
 
       const entryFiles = entryItems
         .filter(f => f.type === "file" && f.name.endsWith(".json"))
         .map(f => ({ name: f.name, path: f.path }));
-      const resourceFiles = resourceItems
-        .filter(f => f.type === "file" && isImage(f.name))
-        .map(f => ({ name: f.name, path: f.path }));
+
 
       // Load notebook.json from pending or GitHub
       const dbName = getDBName();
@@ -896,18 +812,26 @@ export default function App() {
         lastRemoteAllEntriesRef.current = allEntries;
       } catch { /* not found */ }
 
-      // Load sty
-      try {
-        const styStr = await fetchFileContent(config, "vex_notebook.sty");
-        setStyContent(styStr);
-      } catch { /* not found */ }
-
       setEntries(entryFiles);
-      setResources(resourceFiles);
     } finally {
       setIsLoading(false);
     }
-  }, [config, getDBName]);
+  }, [config, currentEntriesDir, getDBName, currentIndexPath, currentAllEntriesPath, setIsLoading, setNotebookMetadata, setEntries]);
+
+  useEffect(() => {
+    const run = async () => {
+      if (workspaceMode === "local" && dirHandle) {
+        await loadLocalExplorer();
+      } else if (workspaceMode === "github" && config) {
+        await loadGitHubExplorer();
+      } else if (workspaceMode === "temporary") {
+        setEntries([]);
+        setNotebookMetadata({ ...EMPTY_METADATA });
+        setIsLoading(false);
+      }
+    };
+    run();
+  }, [workspaceMode, dirHandle, config, currentEntriesDir, githubToken, openFile, loadLocalExplorer, loadGitHubExplorer]);
 
   useEffect(() => {
     if (workspaceMode === "local" && dirHandle && notebookMetadata !== EMPTY_METADATA) {
@@ -927,16 +851,7 @@ export default function App() {
     }
   }, [notebookMetadata, workspaceMode, dirHandle, queueLocalOp]);
 
-  useEffect(() => {
-    if (workspaceMode === "local" && dirHandle) loadLocalExplorer();
-    else if (workspaceMode === "github" && config) loadGitHubExplorer();
-    else if (workspaceMode === "temporary") {
-      setEntries([]);
-      setResources([]);
-      setNotebookMetadata({ ...EMPTY_METADATA });
-      setIsLoading(false);
-    }
-  }, [workspaceMode, dirHandle, config, loadLocalExplorer, loadGitHubExplorer]);
+
 
   const handleValidationChange = useCallback((isValid: boolean) => {
     if (!openFile) return;
@@ -1048,7 +963,7 @@ export default function App() {
     };
 
     saveOp();
-  }, [workspaceMode, dirHandle, stage, notebookMetadata]);
+  }, [workspaceMode, dirHandle, stage, notebookMetadata, currentAllEntriesPath, currentEntriesDir, currentIndexPath, currentLatexDir, getDBName, queueLocalOp]);
 
   // ── Select entry ─────────────────────────────────────────────────────────────
 
@@ -1135,7 +1050,7 @@ export default function App() {
         rawLatex: latexStr,
         tiptapContent: JSON.stringify(hydratedContent),
         title: title,
-        author: author,
+        author: author || (typeof window !== "undefined" ? localStorage.getItem("nb-last-author") || "" : ""),
         phase: phase,
         metadataMissing: false,
         imageSrc: "",
@@ -1154,58 +1069,9 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
-  }, [workspaceMode, dirHandle, config, getDBName, isMobile]);
+  }, [workspaceMode, dirHandle, config, getDBName, isMobile, currentLatexDir, notify, setIsLoading, setIsSidebarOpen, setMobileTab, setOpenFile, setLatexContent]);
 
-  // ── Select resource ───────────────────────────────────────────────────────────
 
-  const handleSelectResource = useCallback(async (file: ExplorerFile) => {
-    setIsLoading(true);
-    setIsSidebarOpen(false); // Hide sidebar on selection
-    try {
-      let imageSrc = "";
-
-      // Check pending IndexedDB
-      const dbName = getDBName();
-      const allPending = await getAllPending(dbName);
-      const staged = allPending.find(p => p.path === file.path && p.operation === "upsert");
-      if (staged?.content) {
-        // content is base64 data URL
-        imageSrc = staged.content.startsWith("data:") ? staged.content : `data:image/*;base64,${staged.content}`;
-      } else {
-        // Check persistent resource cache
-        const cached = await getResource(dbName, file.path);
-        if (cached) {
-          imageSrc = cached;
-        } else if (contentCache.has(file.path)) {
-          imageSrc = contentCache.get(file.path)!;
-        } else if (workspaceMode === "local" && dirHandle) {
-          const result = await getLocalFileContent(dirHandle, file.path);
-          imageSrc = result.base64 ?? "";
-          cacheContent(file.path, imageSrc);
-        } else if (workspaceMode === "github" && config) {
-          // For images on GitHub, construct raw URL as fallback or fetch base64
-          imageSrc = `https://raw.githubusercontent.com/${config.owner}/${config.repo}/HEAD/${file.path}`;
-        }
-      }
-
-      setOpenFile({
-        path: file.path, name: file.name, id: file.name,
-        viewMode: "image",
-        rawLatex: "", tiptapContent: "",
-        title: file.name, author: "", phase: "",
-        metadataMissing: false,
-        imageSrc,
-        createdAt: file.timestamp || new Date().toISOString(),
-        updatedAt: file.updatedAt || file.timestamp || new Date().toISOString(),
-        lastOpenedAt: file.updatedAt || file.timestamp || new Date().toISOString(),
-        isLegacyRaw: false,
-      });
-      setMobileTab("editor");
-    } finally {
-      setIsLoading(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceMode, dirHandle, config, contentCache, getDBName]);
 
   // ── URL synchronization ──────────────────────────────────────────────────────
 
@@ -1228,7 +1094,15 @@ export default function App() {
         if (p) {
           setCurrentProjectId(p.id);
           if (p.type === "github" && p.githubConfig) {
-            setConfig(p.githubConfig);
+            setConfig({
+              token: githubToken || "",
+              owner: p.githubConfig.owner,
+              repo: p.githubConfig.repo,
+              branch: p.githubConfig.branch,
+              baseDir: p.githubConfig.folderPath,
+              entriesDir: p.githubConfig.folderPath ? `${p.githubConfig.folderPath}/${ENTRIES_DIR}` : ENTRIES_DIR,
+              resourcesDir: p.githubConfig.folderPath ? `${p.githubConfig.folderPath}/${ASSETS_DIR}` : ASSETS_DIR,
+            });
             setWorkspaceMode("github");
             // Clear volatile DB when switching to a real project
             deleteProjectDatabase("notebook-volatile").catch(() => { });
@@ -1315,7 +1189,7 @@ export default function App() {
       window.removeEventListener('popstate', handleUrlChange);
       window.removeEventListener('locationchange', handleUrlChange);
     };
-  }, [workspaceMode, currentProjectId, dirHandle, handleSelectEntry, targetResourceId, openFile?.id, notebookMetadata, needsPermission, isLoading]);
+  }, [workspaceMode, currentProjectId, dirHandle, handleSelectEntry, targetResourceId, openFile, notebookMetadata, needsPermission, isLoading, config, currentEntriesDir, githubToken]);
 
   const handleDiscardAll = async () => {
     const dbName = getDBName();
@@ -1373,112 +1247,110 @@ export default function App() {
         window.dispatchEvent(new Event('locationchange'));
       }
     }
-  }, [currentProjectId]);
+  }, [currentProjectId, isInitializing]);
 
   // ── Save entry ───────────────────────────────────────────────────────────────
 
   // ── Metadata rebuild (called after entry save) ───────────────────────────────
 
-  const handleImportEntry = useCallback(() => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json";
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = async () => {
-          try {
-            const content = reader.result as string;
-            const rawData = JSON.parse(content);
+  const processImportFile = async (file: File) => {
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const content = reader.result as string;
+          const rawData = JSON.parse(content);
 
-            // Portable entries MUST have metadata to be imported correctly
-            const isWrapper = (rawData.content !== undefined && rawData.metadata !== undefined);
-            if (!isWrapper) {
-              notify("Import failed: Selected file is not a portable entry (missing metadata).", "error");
-              return;
-            }
-
-            const wrapper = rawData as EntryWrapper;
-
-            // Generate a new UUID for the imported entry to avoid collisions
-            const newId = generateUUID();
-            const filename = `${newId}.json`;
-            const path = `${currentEntriesDir}/${filename}`;
-
-            // Remap IDs within the document to prevent collisions and update internal links
-            const remappedContent = remapContentIds(wrapper.content);
-            const { cleanDoc, newAssets } = await dehydrateAssets(remappedContent);
-
-            // New entries are saved in the simplified format (content-only)
-            const newEntryFileObj = {
-              version: 3,
-              content: cleanDoc
-            };
-            const jsonStr = JSON.stringify(newEntryFileObj, null, 2);
-
-            const newEntryMeta: EntryMetadata = {
-              id: newId,
-              title: wrapper.metadata.title,
-              author: wrapper.metadata.author,
-              phase: wrapper.metadata.phase,
-              createdAt: wrapper.metadata.createdAt || isoTimestamp(),
-              updatedAt: isoTimestamp(),
-              filename: path,
-              resources: extractResources(cleanDoc)
-            };
-            newEntryMeta.isValid = isEntryValid(newEntryMeta);
-
-            // Save everything
-            if (workspaceMode === "local" && dirHandle) {
-              await queueLocalOp(async () => {
-                for (const asset of newAssets) {
-                  const binary = atob(asset.base64);
-                  const bytes = new Uint8Array(binary.length);
-                  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                  await writeLocalFile(dirHandle, asset.path, bytes);
-                }
-                await writeLocalFile(dirHandle, path, jsonStr);
-                const latex = generateEntryLatex(JSON.stringify(cleanDoc), newEntryMeta.title, newEntryMeta.author, newEntryMeta.phase, newEntryMeta.createdAt, newId);
-                await writeLocalFile(dirHandle, `${LATEX_DIR}/${newId}.tex`, latex);
-
-                setNotebookMetadata(prev => updateEntryInIndex(prev, newId, newEntryMeta));
-                await loadLocalExplorer();
-              });
-            } else if (workspaceMode === "github" || workspaceMode === "temporary") {
-              const dbName = getDBName();
-              for (const asset of newAssets) {
-                await stageChange(dbName, { path: asset.path, operation: "upsert", content: asset.base64, label: `Import asset`, stagedAt: isoTimestamp() });
-              }
-              await stage({ path, content: jsonStr, operation: "upsert", label: "Import entry" });
-              const latex = generateEntryLatex(JSON.stringify(cleanDoc), newEntryMeta.title, newEntryMeta.author, newEntryMeta.phase, newEntryMeta.createdAt, newId);
-              await stage({ path: `${currentLatexDir}/${newId}.tex`, content: latex, operation: "upsert", label: "Import LaTeX" });
-
-              const updatedMeta = updateEntryInIndex(notebookMetadata, newId, newEntryMeta);
-              const allEntriesTex = generateAllEntriesLatex(updatedMeta, "data/");
-              await stage({ path: currentIndexPath, content: JSON.stringify(updatedMeta, null, 2), operation: "upsert", label: "Update index" });
-              await stage({ path: currentAllEntriesPath, content: allEntriesTex, operation: "upsert", label: "Update entry list" });
-
-              setNotebookMetadata(updatedMeta);
-            }
-
-            notify("Entry imported successfully.", "success");
-          } catch (e) {
-            console.error("Import failed", e);
-            notify("Import failed. Invalid format.", "error");
+          // Portable entries MUST have metadata to be imported correctly
+          const isWrapper = (rawData.content !== undefined && rawData.metadata !== undefined);
+          if (!isWrapper) {
+            notify("Import failed: Selected file is not a portable entry (missing metadata).", "error");
+            return;
           }
-        };
-        reader.readAsText(file);
-      }
-    };
-    input.click();
-  }, [workspaceMode, dirHandle, stage, getDBName]);
+
+          const wrapper = rawData as EntryWrapper;
+
+          // Generate a new UUID for the imported entry to avoid collisions
+          const newId = generateUUID();
+          const filename = `${newId}.json`;
+          const path = `${currentEntriesDir}/${filename}`;
+
+          // Remap IDs within the document to prevent collisions and update internal links
+          const remappedContent = remapContentIds(wrapper.content);
+          const { cleanDoc, newAssets } = await dehydrateAssets(remappedContent);
+
+          // New entries are saved in the simplified format (content-only)
+          const newEntryFileObj = {
+            version: 3,
+            content: cleanDoc
+          };
+          const jsonStr = JSON.stringify(newEntryFileObj, null, 2);
+
+          const newEntryMeta: EntryMetadata = {
+            id: newId,
+            title: wrapper.metadata.title,
+            author: wrapper.metadata.author,
+            phase: wrapper.metadata.phase,
+            createdAt: wrapper.metadata.createdAt || isoTimestamp(),
+            updatedAt: isoTimestamp(),
+            filename: path,
+            resources: extractResources(cleanDoc)
+          };
+          newEntryMeta.isValid = isEntryValid(newEntryMeta);
+
+          // Save everything
+          if (workspaceMode === "local" && dirHandle) {
+            await queueLocalOp(async () => {
+              for (const asset of newAssets) {
+                const binary = atob(asset.base64);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                await writeLocalFile(dirHandle, asset.path, bytes);
+              }
+              await writeLocalFile(dirHandle, path, jsonStr);
+              const latex = generateEntryLatex(JSON.stringify(cleanDoc), newEntryMeta.title, newEntryMeta.author, newEntryMeta.phase, newEntryMeta.createdAt, newId);
+              await writeLocalFile(dirHandle, `${LATEX_DIR}/${newId}.tex`, latex);
+
+              setNotebookMetadata(prev => updateEntryInIndex(prev, newId, newEntryMeta));
+              await loadLocalExplorer();
+            });
+          } else if (workspaceMode === "github" || workspaceMode === "temporary") {
+            const dbName = getDBName();
+            for (const asset of newAssets) {
+              await stageChange(dbName, { path: asset.path, operation: "upsert", content: asset.base64, label: `Import asset`, stagedAt: isoTimestamp() });
+            }
+            await stage({ path, content: jsonStr, operation: "upsert", label: "Import entry" });
+            const latex = generateEntryLatex(JSON.stringify(cleanDoc), newEntryMeta.title, newEntryMeta.author, newEntryMeta.phase, newEntryMeta.createdAt, newId);
+            await stage({ path: `${currentLatexDir}/${newId}.tex`, content: latex, operation: "upsert", label: "Import LaTeX" });
+
+            const updatedMeta = updateEntryInIndex(notebookMetadata, newId, newEntryMeta);
+            const allEntriesTex = generateAllEntriesLatex(updatedMeta, "data/");
+            await stage({ path: currentIndexPath, content: JSON.stringify(updatedMeta, null, 2), operation: "upsert", label: "Update index" });
+            await stage({ path: currentAllEntriesPath, content: allEntriesTex, operation: "upsert", label: "Update entry list" });
+
+            setNotebookMetadata(updatedMeta);
+          }
+
+          notify("Entry imported successfully.", "success");
+        } catch (e) {
+          console.error("Import failed", e);
+          notify("Import failed. Invalid format.", "error");
+        }
+      };
+      reader.readAsText(file);
+    } catch (e) {
+      console.error("Import failed", e);
+    }
+  };
+
+  const handleImportEntry = useCallback(() => {
+    importEntryInputRef.current?.click();
+  }, []);
 
   // ── Image upload from editor ─────────────────────────────────────────────────
 
-  const handleImageUploaded = useCallback(async (imagePath: string, base64: string) => {
+  const handleImageUploaded = async (imagePath: string, base64: string) => {
     const dataUrl = `data:image/*;base64,${base64}`;
-    cacheContent(imagePath, dataUrl);
 
     // Save to persistent resource cache
     const dbName = getDBName();
@@ -1492,38 +1364,14 @@ export default function App() {
       });
     } else if (workspaceMode === "github" || workspaceMode === "temporary") {
       await stage({ path: imagePath, content: dataUrl, operation: "upsert", label: "Image upload" });
-      const imgName = imagePath.split("/").pop()!;
-      setResources(prev => [...prev, { name: imgName, path: imagePath }].sort((a, b) => a.name.localeCompare(b.name)));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceMode, dirHandle, loadLocalExplorer, stage, getDBName]);
+  };
 
-  // ── Upload resource from FileExplorer ────────────────────────────────────────
 
-  const handleUploadResource = useCallback(() => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const dataUrl = reader.result as string;
-        const base64 = dataUrl.split(",")[1];
-        const ext = file.name.split(".").pop() || "png";
-        const ts = getFilenameTimestamp();
-        const imgPath = `${currentAssetsDir}/${ts}.${ext}`;
-        await handleImageUploaded(imgPath, base64);
-      };
-      reader.readAsDataURL(file);
-    };
-    input.click();
-  }, [handleImageUploaded]);
 
   // ── Entry delete ─────────────────────────────────────────────────────────────
 
-  const handleDeleteEntry = useCallback(async (file: ExplorerFile) => {
+  const handleDeleteEntry = async (file: ExplorerFile) => {
     // Update metadata
     const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
     const updatedMeta = removeEntryFromMetadata(notebookMetadata, entryId);
@@ -1534,16 +1382,16 @@ export default function App() {
       await queueLocalOp(async () => {
         await writeLocalFile(dirHandle, INDEX_PATH, metaStr);
         await deleteLocalFileAtPath(dirHandle, file.path);
-        const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
+        const entryIdToDelete = file.path.split('/').pop()?.replace('.json', '') || "";
         try {
-          await deleteLocalFileAtPath(dirHandle, `${LATEX_DIR}/${entryId}.tex`);
+          await deleteLocalFileAtPath(dirHandle, `${LATEX_DIR}/${entryIdToDelete}.tex`);
         } catch { /* ignore if not found */ }
         await loadLocalExplorer();
       });
     } else if (workspaceMode === "github" || workspaceMode === "temporary") {
       const dbName = getDBName();
-      const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
-      const latexPath = `${currentLatexDir}/${entryId}.tex`;
+      const entryIdToDelete = file.path.split('/').pop()?.replace('.json', '') || "";
+      const latexPath = `${currentLatexDir}/${entryIdToDelete}.tex`;
 
       // Check if it was brand new (not on GitHub yet)
       const allPending = await getAllPending(dbName);
@@ -1579,12 +1427,11 @@ export default function App() {
       setOpenFile(null);
       setLatexContent("");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceMode, dirHandle, loadLocalExplorer, stage, openFile, notebookMetadata]);
+  };
 
   // ── Resource delete (cascades to entries) ────────────────────────────────────
 
-  const handleDeleteResource = useCallback(async (file: ExplorerFile) => {
+  const handleDeleteResource = async (file: ExplorerFile) => {
     // When a resource is deleted, we just need to re-validate everything
     // because entries might have been pointing to it.
     const updatedMeta = validateNotebookIntegrity(notebookMetadata);
@@ -1612,19 +1459,17 @@ export default function App() {
       }
 
       await stage({ path: currentIndexPath, content: metaStr, operation: "upsert", label: "Metadata update" });
-      setResources(prev => prev.filter(r => r.path !== file.path));
       refreshPending();
     } else {
-      setResources(prev => prev.filter(r => r.path !== file.path));
+      // No-op for resources state as it's been removed
     }
 
     if (openFile?.path === file.path) {
       setOpenFile(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceMode, dirHandle, loadLocalExplorer, stage, entries, contentCache, notebookMetadata, openFile]);
+  };
 
-  const handleDownloadPortable = useCallback(async (filename: string, content: string, info: { title: string; author: string; phase: string, createdAt: string, updatedAt?: string }) => {
+  const handleDownloadPortable = async (filename: string, content: string, info: { title: string; author: string; phase: string, createdAt: string, updatedAt?: string }) => {
     try {
       const parsed = JSON.parse(content);
       // Hydrate all assets into Base64 for the export
@@ -1669,9 +1514,7 @@ export default function App() {
       console.error("Failed to download portable entry", e);
       notify("Failed to export entry.", "error");
     }
-  }, [workspaceMode, dirHandle, getDBName, openFile?.id]);
-
-
+  };
 
   // ── GitHub commit all ─────────────────────────────────────────────────────────
 
@@ -1681,8 +1524,6 @@ export default function App() {
     try {
       const dbName = getDBName();
       const all = await getAllPending(dbName);
-      const upserts = all.filter(p => p.operation === "upsert");
-      const deletes = all.filter(p => p.operation === "delete");
       const total = all.length;
 
       const gitChanges: GitChange[] = all.map(change => {
@@ -1715,18 +1556,19 @@ export default function App() {
       await refreshPending();
 
       notify("Successfully committed all changes to GitHub.", "success");
-    } catch (e: any) {
-      console.error("Commit failed", e);
-      if (e.message?.includes("Resource not accessible by integration")) {
+    } catch (e) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      console.error("Commit failed", err);
+      if (err.message?.includes("Resource not accessible by integration")) {
         notify("Commit failed: The GitHub App may not be installed on this repository or lacks 'Contents' permissions. Please check your GitHub App settings.", "error");
       } else {
-        notify(`Commit failed: ${e.message || "Check console for details."}`, "error");
+        notify(`Commit failed: ${err.message || "Check console for details."}`, "error");
       }
     } finally {
       setIsCommitting(false);
       setIsLoading(false);
     }
-  }, [config, isCommitting, refreshPending, loadGitHubExplorer, notify]);
+  }, [config, isCommitting, refreshPending, loadGitHubExplorer, notify, currentAllEntriesPath, currentIndexPath, getDBName]);
 
   // ── Project Actions ─────────────────────────────────────────────────────────
 
@@ -1748,7 +1590,15 @@ export default function App() {
       window.dispatchEvent(new Event('locationchange'));
 
       if (p.type === "github" && p.githubConfig) {
-        setConfig(p.githubConfig);
+        setConfig({
+          token: githubToken || "",
+          owner: p.githubConfig.owner,
+          repo: p.githubConfig.repo,
+          branch: p.githubConfig.branch,
+          baseDir: p.githubConfig.folderPath,
+          entriesDir: p.githubConfig.folderPath ? `${p.githubConfig.folderPath}/${ENTRIES_DIR}` : ENTRIES_DIR,
+          resourcesDir: p.githubConfig.folderPath ? `${p.githubConfig.folderPath}/${ASSETS_DIR}` : ASSETS_DIR,
+        });
         setWorkspaceMode("github");
       } else if (p.type === "local") {
         const handle = await getProjectHandle(p.id);
@@ -1822,7 +1672,12 @@ export default function App() {
       name: `${githubConfig.owner}/${githubConfig.repo}`,
       type: "github",
       lastOpened: isoTimestamp(),
-      githubConfig
+      githubConfig: {
+        owner: githubConfig.owner,
+        repo: githubConfig.repo,
+        branch: githubConfig.branch,
+        folderPath: githubConfig.baseDir,
+      }
     };
     await saveProject(p);
     await refreshProjectList();
@@ -1841,7 +1696,7 @@ export default function App() {
   const handleCreateLocal = async (handle: FileSystemDirectoryHandle) => {
     // Explicitly request readwrite permission to trigger the browser's persistent permission prompt if available
     try {
-      await (handle as any).requestPermission({ mode: "readwrite" });
+      await (handle as unknown as { requestPermission: (options: { mode: string }) => Promise<void> }).requestPermission({ mode: "readwrite" });
     } catch (e) {
       console.error("Initial permission request failed", e);
     }
@@ -1853,12 +1708,12 @@ export default function App() {
       if (data && !data.isImage && data.text) {
         existingMeta = JSON.parse(data.text);
       }
-    } catch (e) {
+    } catch {
       // Doesn't exist or failed, ignore
     }
 
     let id = existingMeta?.projectId;
-    let name = existingMeta?.projectName || handle.name;
+    const name = existingMeta?.projectName || handle.name;
 
     // 2. Check if we already have this project in DB
     if (id) {
@@ -1939,12 +1794,10 @@ export default function App() {
       setConfig(null);
       setDirHandle(null);
       setEntries([]);
-      setResources([]);
       setOpenFile(null);
       setLatexContent("");
-      setContentCache(new Map());
       setNotebookMetadata(EMPTY_METADATA);
-      // refreshProjectList is triggered by the isInitializing effect once settled
+      refreshProjectList(); // Refresh immediately on disconnect
     };
 
     if (workspaceMode === "temporary") {
@@ -2063,14 +1916,11 @@ export default function App() {
       <div className="flex-1 overflow-y-auto">
         <FileExplorer
           entries={displayEntries}
-          resources={displayResources}
           onSelectEntry={handleSelectEntry}
-          onSelectResource={handleSelectResource}
           activePath={openFile?.path ?? null}
           pendingPaths={pendingPathSet}
           deletedPaths={deletedPathSet}
           onNewEntry={handleNewEntry}
-          onUploadResource={handleUploadResource}
           search={entrySearch}
           onSearchChange={setEntrySearch}
           sortBy={entrySort}
@@ -2273,7 +2123,7 @@ export default function App() {
         {openFile === null ? (
           !isConnectingLocal && (
             <WelcomePage
-              workspace={{ mode: workspaceMode as any, label: workspaceLabel }}
+              workspace={{ mode: workspaceMode as WorkspaceMode, label: workspaceLabel }}
               onNewEntry={handleNewEntry}
               onImportEntry={handleImportEntry}
               onDisconnect={handleDisconnect}
@@ -2282,6 +2132,7 @@ export default function App() {
           )
         ) : openFile.viewMode === "image" ? (
           <ImagePreview
+            key={openFile.path}
             filename={openFile.name}
             src={openFile.imageSrc}
             onDelete={() => handleDeleteResource({ name: openFile.name, path: openFile.path })}
@@ -2313,48 +2164,15 @@ export default function App() {
                 onContentChange={handleContentChange}
                 onTitleChange={(title) => {
                   if (!openFile) return;
-                  const entryId = openFile.id;
                   setOpenFile(prev => prev ? { ...prev, title } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, entryId, {
-                    ...prev.entries[entryId],
-                    title,
-                    id: entryId,
-                    author: openFile.author,
-                    phase: openFile.phase,
-                    createdAt: openFile.createdAt,
-                    updatedAt: isoTimestamp(),
-                    filename: openFile.path
-                  }));
                 }}
                 onAuthorChange={(author) => {
                   if (!openFile) return;
-                  const entryId = openFile.id;
                   setOpenFile(prev => prev ? { ...prev, author } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, entryId, {
-                    ...prev.entries[entryId],
-                    author,
-                    id: entryId,
-                    title: openFile.title,
-                    phase: openFile.phase,
-                    createdAt: openFile.createdAt,
-                    updatedAt: isoTimestamp(),
-                    filename: openFile.path
-                  }));
                 }}
                 onPhaseChange={(phase) => {
                   if (!openFile) return;
-                  const entryId = openFile.id;
                   setOpenFile(prev => prev ? { ...prev, phase } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, entryId, {
-                    ...prev.entries[entryId],
-                    phase,
-                    id: entryId,
-                    title: openFile.title,
-                    author: openFile.author,
-                    createdAt: openFile.createdAt,
-                    updatedAt: isoTimestamp(),
-                    filename: openFile.path
-                  }));
                 }}
                 onImageUpload={handleImageUploaded}
                 onDownloadPortable={handleDownloadPortable}
@@ -2411,48 +2229,15 @@ export default function App() {
                 onContentChange={handleContentChange}
                 onTitleChange={(title) => {
                   if (!openFile) return;
-                  const entryId = openFile.id;
                   setOpenFile(prev => prev ? { ...prev, title } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, entryId, {
-                    ...prev.entries[entryId],
-                    title,
-                    id: entryId,
-                    author: openFile.author,
-                    phase: openFile.phase,
-                    createdAt: openFile.createdAt,
-                    updatedAt: isoTimestamp(),
-                    filename: openFile.path
-                  }));
                 }}
                 onAuthorChange={(author) => {
                   if (!openFile) return;
-                  const entryId = openFile.id;
                   setOpenFile(prev => prev ? { ...prev, author } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, entryId, {
-                    ...prev.entries[entryId],
-                    author,
-                    id: entryId,
-                    title: openFile.title,
-                    phase: openFile.phase,
-                    createdAt: openFile.createdAt,
-                    updatedAt: isoTimestamp(),
-                    filename: openFile.path
-                  }));
                 }}
                 onPhaseChange={(phase) => {
                   if (!openFile) return;
-                  const entryId = openFile.id;
                   setOpenFile(prev => prev ? { ...prev, phase } : null);
-                  setNotebookMetadata(prev => updateEntryInIndex(prev, entryId, {
-                    ...prev.entries[entryId],
-                    phase,
-                    id: entryId,
-                    title: openFile.title,
-                    author: openFile.author,
-                    createdAt: openFile.createdAt,
-                    updatedAt: isoTimestamp(),
-                    filename: openFile.path
-                  }));
                 }}
                 onImageUpload={handleImageUploaded}
                 onDownloadPortable={handleDownloadPortable}
@@ -2494,6 +2279,18 @@ export default function App() {
 
   return (
     <div className={`flex flex-col h-screen w-full bg-nb-bg font-sans ${pageContent ? "overflow-y-auto" : "overflow-hidden"}`}>
+      <input
+        type="file"
+        ref={importEntryInputRef}
+        accept=".json"
+        style={{ display: "none" }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) processImportFile(file);
+          // Reset value so same file can be imported again
+          e.target.value = "";
+        }}
+      />
       {pageContent ? pageContent : (
         isMobile ? (
           <div className="flex w-full h-full relative">

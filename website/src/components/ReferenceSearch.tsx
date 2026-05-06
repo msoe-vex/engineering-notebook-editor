@@ -10,15 +10,23 @@ interface ReferenceSearchProps {
   onSelect: (uuid: string, title: string, type: string) => void;
 }
 
+interface Resource {
+  id: string;
+  title: string;
+  type: string;
+  entryTitle: string;
+  entryDate: string;
+}
+
 export default function ReferenceSearch({ metadata, onClose, onSelect }: ReferenceSearchProps) {
   const [query, setQuery] = useState("");
 
   const allResources = useMemo(() => {
-    const list: any[] = [];
+    const list: Resource[] = [];
 
     if (!metadata || !metadata.entries) return list;
 
-    for (const [entryId, entry] of Object.entries(metadata.entries)) {
+    for (const entry of Object.values(metadata.entries)) {
       // Add the entry itself as a resource
       list.push({
         id: entry.id,

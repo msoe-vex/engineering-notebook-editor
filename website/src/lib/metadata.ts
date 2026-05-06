@@ -1,5 +1,4 @@
-import { generateEntryLatex } from "./latex";
-import { ASSETS_DIR, DATA_DIR } from "./constants";
+import { ASSETS_DIR } from "./constants";
 import { generateUUID } from "./utils";
 
 /**
@@ -34,10 +33,23 @@ export interface EntryMetadata {
   validationErrors?: string[]; // Detailed messages for the UI
 }
 
+export interface TipTapMark {
+  type: string;
+  attrs?: Record<string, unknown>;
+}
+
+export interface TipTapNode {
+  type: string;
+  attrs?: Record<string, unknown>;
+  content?: TipTapNode[];
+  marks?: TipTapMark[];
+  text?: string;
+}
+
 export interface EntryWrapper {
   version: number;
   metadata: EntryMetadata;
-  content: any; // TipTap JSON
+  content: TipTapNode; // TipTap JSON
 }
 
 export interface NotebookMetadata {
@@ -55,17 +67,15 @@ export const EMPTY_METADATA: NotebookMetadata = {
 // ─── TipTap JSON helpers ──────────────────────────────────────────────────────
 // ... (omitting unchanged TipTap helpers for brevity in thought, but tool will replace the block)
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type TipTapDoc = any;
+type TipTapDoc = TipTapNode;
 
 /** Walk every node in a ProseMirror doc and collect image filePaths. */
 export function extractImagePaths(doc: TipTapDoc): string[] {
   const paths: string[] = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function walk(node: any) {
+  function walk(node: TipTapNode | undefined) {
     if (!node) return;
     if (node.type === "image" && node.attrs?.filePath) {
-      paths.push(node.attrs.filePath);
+      paths.push(node.attrs.filePath as string);
     }
     (node.content ?? []).forEach(walk);
   }
@@ -77,15 +87,15 @@ export function extractImagePaths(doc: TipTapDoc): string[] {
 export function extractResources(doc: TipTapDoc): Record<string, { title: string, caption: string, type: string }> {
   const resources: Record<string, { title: string, caption: string, type: string }> = {};
   
-  function walk(node: any) {
+  function walk(node: TipTapNode | undefined) {
     if (!node) return;
     
     // Include any node that has a UUID id
     if (node.attrs?.id) {
-      const title = node.attrs.title || "";
-      const caption = node.attrs.caption || "";
+      const title = (node.attrs.title as string) || "";
+      const caption = (node.attrs.caption as string) || "";
 
-      resources[node.attrs.id] = {
+      resources[node.attrs.id as string] = {
         title,
         caption,
         type: node.type
@@ -105,14 +115,14 @@ export function extractResources(doc: TipTapDoc): Record<string, { title: string
 export function extractReferences(doc: TipTapDoc): string[] {
   const refs = new Set<string>();
 
-  function walk(node: any) {
+  function walk(node: TipTapNode | undefined) {
     if (!node) return;
 
     // Check marks for links
     if (Array.isArray(node.marks)) {
       for (const mark of node.marks) {
         if (mark.type === "link") {
-          const { href, resourceId } = mark.attrs || {};
+          const { href, resourceId } = (mark.attrs || {}) as { href?: string, resourceId?: string };
           if (resourceId) {
             refs.add(resourceId);
           } else if (href?.startsWith("#")) {
@@ -135,12 +145,11 @@ export function extractReferences(doc: TipTapDoc): string[] {
  * Strips large binary data (base64) from image nodes in TipTap JSON.
  * Replaces 'src' data URLs with 'filePath' or a placeholder to keep metadata small.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function dehydrateTipTapJson(json: any): any {
+export function dehydrateTipTapJson(json: TipTapNode): TipTapNode {
   if (!json || typeof json !== "object") return json;
 
   if (json.type === "image") {
-    const newAttrs = { ...json.attrs };
+    const newAttrs = { ...(json.attrs || {}) } as Record<string, string | undefined>;
     // If we have a filePath, we don't need the base64 src in metadata
     if (newAttrs.src?.startsWith("data:")) {
       newAttrs.src = newAttrs.filePath || `${ASSETS_DIR}/placeholder.png`;
@@ -164,8 +173,7 @@ export function renameImageInDoc(
   oldPath: string,
   newPath: string
 ): TipTapDoc {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function walk(node: any): any {
+  function walk(node: TipTapNode): TipTapNode {
     if (!node) return node;
     if (node.type === "image" && node.attrs?.filePath === oldPath) {
       return { ...node, attrs: { ...node.attrs, filePath: newPath } };
@@ -183,19 +191,19 @@ export function renameImageInDoc(
  * Returns a new doc.
  */
 export function removeImageFromDoc(doc: TipTapDoc, deletedPath: string): TipTapDoc {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function walk(node: any): any | null {
+  function walk(node: TipTapNode): TipTapNode | null {
     if (!node) return node;
     if (node.type === "image" && node.attrs?.filePath === deletedPath) {
       return null; // Mark for removal
     }
     if (node.content) {
-      const filtered = node.content.map(walk).filter(Boolean);
+      const filtered = node.content.map(walk).filter((n): n is TipTapNode => n !== null);
       return { ...node, content: filtered };
     }
     return node;
   }
-  return walk(doc);
+  const result = walk(doc);
+  return result || doc;
 }
 
 /**
@@ -203,20 +211,23 @@ export function removeImageFromDoc(doc: TipTapDoc, deletedPath: string): TipTapD
  * Returns { cleanDoc, newAssets }.
  * newAssets is a list of { path, base64 } to be saved.
  */
-export async function dehydrateAssets(doc: any): Promise<{ cleanDoc: any; newAssets: { path: string; base64: string }[] }> {
+export async function dehydrateAssets(doc: TipTapDoc): Promise<{ cleanDoc: TipTapDoc; newAssets: { path: string; base64: string }[] }> {
   const { hashContent, getExtensionFromDataUrl } = await import("./utils");
   const assets: { path: string; base64: string }[] = [];
 
-  async function walk(node: any): Promise<any> {
+  async function walk(node: TipTapNode): Promise<TipTapNode> {
     if (!node) return node;
-    if (node.type === "image" && node.attrs?.src?.startsWith("data:")) {
-      const base64 = node.attrs.src.split(",")[1];
-      const hash = await hashContent(base64);
-      const ext = getExtensionFromDataUrl(node.attrs.src);
-      const assetPath = `${ASSETS_DIR}/${hash}.${ext}`;
-      
-      assets.push({ path: assetPath, base64 });
-      return { ...node, attrs: { ...node.attrs, src: assetPath, filePath: assetPath } };
+    if (node.type === "image") {
+      const attrs = (node.attrs || {}) as Record<string, string | undefined>;
+      if (attrs.src?.startsWith("data:")) {
+        const base64 = attrs.src.split(",")[1];
+        const hash = await hashContent(base64);
+        const ext = getExtensionFromDataUrl(attrs.src);
+        const assetPath = `${ASSETS_DIR}/${hash}.${ext}`;
+
+        assets.push({ path: assetPath, base64 });
+        return { ...node, attrs: { ...node.attrs, src: assetPath, filePath: assetPath } };
+      }
     }
     if (node.content) {
       const newContent = await Promise.all(node.content.map(walk));
@@ -232,13 +243,16 @@ export async function dehydrateAssets(doc: any): Promise<{ cleanDoc: any; newAss
 /**
  * Replaces asset paths with data URLs from the provided cache.
  */
-export function hydrateAssets(doc: any, assetCache: Map<string, string>): any {
-  function walk(node: any): any {
+export function hydrateAssets(doc: TipTapDoc, assetCache: Map<string, string>): TipTapDoc {
+  function walk(node: TipTapNode): TipTapNode {
     if (!node) return node;
-    if (node.type === "image" && node.attrs?.src?.startsWith(`${ASSETS_DIR}/`)) {
-      const dataUrl = assetCache.get(node.attrs.src);
-      if (dataUrl) {
-        return { ...node, attrs: { ...node.attrs, src: dataUrl } };
+    if (node.type === "image") {
+      const attrs = (node.attrs || {}) as Record<string, string | undefined>;
+      if (attrs.src?.startsWith(`${ASSETS_DIR}/`)) {
+        const dataUrl = assetCache.get(attrs.src);
+        if (dataUrl) {
+          return { ...node, attrs: { ...node.attrs, src: dataUrl } };
+        }
       }
     }
     if (node.content) {
@@ -373,14 +387,14 @@ export function renameEntryInMetadata(
  * Recursively walks a TipTap document and generates new UUIDs for all nodes with an 'id' attribute.
  * Also updates any internal links (#uuid) that point to the newly remapped IDs.
  */
-export function remapContentIds(doc: any): any {
+export function remapContentIds(doc: TipTapDoc): TipTapDoc {
   if (!doc) return doc;
 
   const idMap = new Map<string, string>();
   const resourceTypes = new Set(["image", "table", "codeBlock", "rawLatex"]);
 
   // Pass 1: Collect and remap IDs
-  function collect(node: any) {
+  function collect(node: TipTapNode | TipTapNode[]) {
     if (!node || typeof node !== "object") return;
     
     if (Array.isArray(node)) {
@@ -390,9 +404,7 @@ export function remapContentIds(doc: any): any {
 
     if (node.attrs?.id) {
       const newId = generateUUID();
-      idMap.set(node.attrs.id, newId);
-    } else if (resourceTypes.has(node.type)) {
-      // If it's a resource type but has no ID, we'll give it one in Pass 2
+      idMap.set(node.attrs.id as string, newId);
     }
     
     if (Array.isArray(node.content)) {
@@ -402,18 +414,18 @@ export function remapContentIds(doc: any): any {
   collect(doc);
 
   // Pass 2: Apply remapping
-  function apply(node: any): any {
+  function apply(node: TipTapNode | TipTapNode[]): TipTapNode | TipTapNode[] {
     if (!node || typeof node !== "object") return node;
 
     if (Array.isArray(node)) {
-      return node.map(apply);
+      return node.map((n) => apply(n) as TipTapNode);
     }
 
     const newNode = { ...node };
 
     // Update ID attribute
     if (resourceTypes.has(node.type)) {
-      const oldId = node.attrs?.id;
+      const oldId = node.attrs?.id as string | undefined;
       if (oldId && idMap.has(oldId)) {
         newNode.attrs = { ...node.attrs, id: idMap.get(oldId) };
       } else if (!oldId) {
@@ -424,10 +436,9 @@ export function remapContentIds(doc: any): any {
 
     // Update marks (for links)
     if (Array.isArray(node.marks)) {
-      newNode.marks = node.marks.map((mark: any) => {
+      newNode.marks = node.marks.map((mark: TipTapMark) => {
         if (mark.type === 'link') {
-          const href = mark.attrs?.href || "";
-          const resourceId = mark.attrs?.resourceId;
+          const { href = "", resourceId } = (mark.attrs || {}) as { href?: string, resourceId?: string };
 
           if (href.startsWith('#')) {
             const oldId = href.substring(1);
@@ -457,13 +468,13 @@ export function remapContentIds(doc: any): any {
 
     // Recurse content
     if (Array.isArray(node.content)) {
-      newNode.content = node.content.map(apply);
+      newNode.content = node.content.map((n) => apply(n) as TipTapNode);
     }
 
     return newNode;
   }
 
-  return apply(doc);
+  return apply(doc) as TipTapNode;
 }
 
 

@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import {
-  FileText, Image as ImageIcon, Pencil, Trash2, Plus, Upload, Check, X,
+  FileText, Plus, X,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -20,14 +20,11 @@ export interface ExplorerFile {
 
 interface FileExplorerProps {
   entries: ExplorerFile[];
-  resources: ExplorerFile[];
   activePath: string | null;
-  pendingPaths: Set<string>;   // paths with staged (unsaved) changes — shown with dot badge
-  deletedPaths: Set<string>;   // paths staged for deletion — shown with strikethrough
+  pendingPaths: Set<string>;
+  deletedPaths: Set<string>;
   onSelectEntry: (file: ExplorerFile) => void;
-  onSelectResource: (file: ExplorerFile) => void;
   onNewEntry: () => void;
-  onUploadResource: () => void;
   search: string;
   onSearchChange: (val: string) => void;
   sortBy: "created" | "updated" | "title";
@@ -39,16 +36,6 @@ interface FileExplorerProps {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"]);
-
-function extOf(name: string) {
-  return name.split(".").pop()?.toLowerCase() ?? "";
-}
-
-function isImageFile(name: string) {
-  return IMAGE_EXTS.has(extOf(name));
-}
 
 // ─── Single file row ──────────────────────────────────────────────────────────
 
@@ -87,12 +74,13 @@ function FileRow({ file, isSelected, isPending, isDeleted, icon, isValid = true,
         <span className={`text-[9px] font-mono truncate mt-0.5 ${isSelected ? 'text-white/70' : 'opacity-40'}`}>
           {(() => {
             const ts = (sortBy === "updated")
-              ? (file.updatedAt || file.timestamp || Date.now())
-              : (file.timestamp || Date.now());
+              ? (file.updatedAt || file.timestamp)
+              : file.timestamp;
+            const prefix = sortBy === "updated" ? "Modified: " : "Created: ";
+            if (!ts) return prefix + "Unknown";
             const d = new Date(ts);
             const valid = !isNaN(d.getTime());
-            const prefix = sortBy === "updated" ? "Modified: " : "Created: ";
-            return prefix + (valid ? d : new Date()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+            return prefix + (valid ? d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : "Invalid Date");
           })()}
         </span>
       </div>
@@ -159,20 +147,17 @@ function Pane({ id, title, actionLabel, actionIcon, onAction, children, empty, h
 
 // ── Icons for pane ────────────────────────────────────────────────────────────
 
-import { AlertTriangle, Search, SortAsc, SortDesc, Clock, Calendar, Filter, ChevronDown, CalendarDays } from "lucide-react";
+import { AlertTriangle, Search, SortAsc, SortDesc, Clock, Calendar, ChevronDown, CalendarDays } from "lucide-react";
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function FileExplorer({
   entries,
-  resources,
   activePath,
   pendingPaths,
   deletedPaths,
   onSelectEntry,
-  onSelectResource,
   onNewEntry,
-  onUploadResource,
   search,
   onSearchChange,
   sortBy,
@@ -229,14 +214,14 @@ export default function FileExplorer({
                 <div className="fixed inset-0 z-40" onClick={() => setIsSortOpen(false)} />
                 <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-nb-surface border border-nb-outline-variant rounded-xl shadow-nb-lg py-1.5 animate-in fade-in zoom-in-95 duration-200">
                   {[
-                    { id: 'updated', label: 'Updated', icon: <Clock size={12} /> },
-                    { id: 'created', label: 'Created', icon: <Calendar size={12} /> },
-                    { id: 'title', label: 'Title', icon: <SortAsc size={12} /> }
+                    { id: 'updated' as const, label: 'Updated', icon: <Clock size={12} /> },
+                    { id: 'created' as const, label: 'Created', icon: <Calendar size={12} /> },
+                    { id: 'title' as const, label: 'Title', icon: <SortAsc size={12} /> }
                   ].map((s) => (
                     <button
                       key={s.id}
                       onClick={() => {
-                        onSortChange(s.id as any);
+                        onSortChange(s.id);
                         setIsSortOpen(false);
                       }}
                       className={`w-full flex items-center gap-3 px-3 py-2 text-[10px] font-bold tracking-wider transition-colors ${sortBy === s.id ? 'text-nb-primary bg-nb-primary/5' : 'text-nb-on-surface-variant/70 hover:bg-nb-surface-low'}`}

@@ -1,4 +1,4 @@
-import { GitHubConfig, fetchUserRepositories, fetchRepoFolders } from "@/lib/github";
+import { GitHubConfig, GitHubRepo, fetchUserRepositories, fetchRepoFolders } from "@/lib/github";
 import { Project } from "@/lib/db";
 import { GITHUB_APP_INSTALL_URL, GITHUB_ISSUES_URL } from "@/lib/constants";
 import React, { useState, useEffect, useMemo } from "react";
@@ -7,6 +7,27 @@ import {
   ArrowRight, History, Edit2, Check, X, Search, ExternalLink, AlertCircle, Loader2
 } from "lucide-react";
 import { useTheme } from "next-themes";
+
+interface SettingsProps {
+  projects: Project[];
+  onSelectProject: (id: string) => void;
+  onDeleteProject: (id: string) => void;
+  onRenameProject: (id: string, name: string) => void;
+  onCreateGithub: (config: GitHubConfig) => void;
+  onCreateLocal: (handle: FileSystemDirectoryHandle) => void;
+  onCreateTemporary: () => void;
+  githubToken: string | null;
+  githubUser: string | null;
+  onSignOutGithub: () => void;
+  pendingCounts?: Record<string, number>;
+}
+
+
+
+interface GitHubFolder {
+  name: string;
+  path: string;
+}
 
 export default function Settings({
   projects,
@@ -20,32 +41,18 @@ export default function Settings({
   githubUser,
   onSignOutGithub,
   pendingCounts = {},
-}: {
-  projects: Project[];
-  onSelectProject: (id: string) => void;
-  onDeleteProject: (id: string) => void;
-  onRenameProject: (id: string, name: string) => void;
-  onCreateGithub: (config: GitHubConfig) => void;
-  onCreateLocal: (handle: any) => void;
-  onCreateTemporary: () => void;
-  githubToken: string | null;
-  githubUser: string | null;
-  onSignOutGithub: () => void;
-  pendingCounts?: Record<string, number>;
-}) {
+}: SettingsProps) {
   const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const [showCreate, setShowCreate] = useState(projects.length === 0);
-  const [createType, setCreateType] = useState<"github" | "local" | "memory" | null>(null);
 
   // Form states for GitHub
-  const [repoUrl, setRepoUrl] = useState("");
-  const [folderPath, setFolderPath] = useState("");
+  const [repoUrl] = useState(() => (typeof window !== "undefined" ? localStorage.getItem("nb-github-repo-url") : "") || "");
+  const [folderPath, setFolderPath] = useState(() => (typeof window !== "undefined" ? localStorage.getItem("nb-github-folder") : "") || "");
   const [isGithubModalOpen, setIsGithubModalOpen] = useState(false);
-  const [userRepos, setUserRepos] = useState<any[]>([]);
+  const [userRepos, setUserRepos] = useState<GitHubRepo[]>([]);
   const [isLoadingRepos, setIsLoadingRepos] = useState(false);
   const [isLoadingFolders, setIsLoadingFolders] = useState(false);
-  const [availableFolders, setAvailableFolders] = useState<any[]>([]);
+  const [availableFolders, setAvailableFolders] = useState<GitHubFolder[]>([]);
   const [browsingPath, setBrowsingPath] = useState("");
   const [repoSearch, setRepoSearch] = useState("");
   const [showExplorer, setShowExplorer] = useState(false);
@@ -90,53 +97,65 @@ export default function Settings({
   };
 
   useEffect(() => {
-    setMounted(true);
-    setRepoUrl(localStorage.getItem("nb-github-repo-url") || "");
-    setFolderPath(localStorage.getItem("nb-github-folder") || "");
+    const init = async () => {
+      setMounted(true);
 
-    const savedType = localStorage.getItem("nb-create-type");
-    if (savedType) {
-      if (savedType === "github") {
-        setIsGithubModalOpen(true);
-      } else {
-        setCreateType(savedType as any);
+      const savedType = localStorage.getItem("nb-create-type");
+      if (savedType) {
+        if (savedType === "github") {
+          setIsGithubModalOpen(true);
+        }
+        localStorage.removeItem("nb-create-type");
       }
-      localStorage.removeItem("nb-create-type");
-    }
+    };
+    init();
   }, []);
 
   useEffect(() => {
-    if (githubToken && isGithubModalOpen) {
-      setIsLoadingRepos(true);
-      fetchUserRepositories(githubToken).then(repos => {
-        setUserRepos(repos);
+    const init = async () => {
+      if (githubToken && isGithubModalOpen) {
+        setIsLoadingRepos(true);
+        try {
+          const repos = await fetchUserRepositories(githubToken);
+          setUserRepos(repos);
 
-        // If repoUrl was saved, try to find it in the fetched repos
-        const savedUrl = localStorage.getItem("nb-github-repo-url");
-        if (savedUrl) {
-          const parsed = parseRepoUrl(savedUrl);
-          if (parsed) {
-            const found = repos.find((r: any) => r.owner.login === parsed.owner && r.name === parsed.repo);
-            if (found) {
-              setSelectedRepo({ owner: found.owner.login, repo: found.name, default_branch: found.default_branch });
+          const savedUrl = localStorage.getItem("nb-github-repo-url");
+          if (savedUrl) {
+            const parsed = parseRepoUrl(savedUrl);
+            if (parsed) {
+              const found = repos.find((r: GitHubRepo) => r.owner.login === parsed.owner && r.name === parsed.repo);
+              if (found) {
+                setSelectedRepo({ owner: found.owner.login, repo: found.name, default_branch: found.default_branch });
+              }
             }
           }
+        } catch (e) {
+          console.error("Failed to fetch GitHub data", e);
+        } finally {
+          setIsLoadingRepos(false);
         }
-      }).catch(e => console.error("Failed to fetch GitHub data", e))
-        .finally(() => setIsLoadingRepos(false));
-    }
-  }, [githubToken, isGithubModalOpen]);
+      }
+    };
+    init();
+  }, [githubToken, isGithubModalOpen]); // Removed parseRepoUrl from deps as it is stable
 
   useEffect(() => {
-    if (githubToken && selectedRepo) {
-      setIsLoadingFolders(true);
-      fetchRepoFolders(githubToken, selectedRepo.owner, selectedRepo.repo, browsingPath)
-        .then(folders => setAvailableFolders(folders))
-        .catch(e => console.error("Failed to fetch folders", e))
-        .finally(() => setIsLoadingFolders(false));
-    } else {
-      setAvailableFolders([]);
-    }
+    const fetchFolders = async () => {
+      if (githubToken && selectedRepo) {
+        setIsLoadingFolders(true);
+        try {
+          const folders = await fetchRepoFolders(githubToken, selectedRepo.owner, selectedRepo.repo, browsingPath);
+          setAvailableFolders(folders);
+        } catch (e) {
+          console.error("Failed to fetch folders", e);
+        } finally {
+          setIsLoadingFolders(false);
+        }
+      } else {
+        setAvailableFolders([]);
+      }
+    };
+    fetchFolders();
   }, [githubToken, selectedRepo, browsingPath]);
 
   const filteredRepos = useMemo(() => {
@@ -148,7 +167,7 @@ export default function Settings({
 
   const handleOpenFolder = async () => {
     try {
-      const handle = await (window as any).showDirectoryPicker({ mode: "readwrite" });
+      const handle = await window.showDirectoryPicker({ mode: "readwrite" });
       onCreateLocal(handle);
     } catch (e) { console.error(e); }
   };
@@ -610,9 +629,10 @@ export default function Settings({
                           resourcesDir: `${prefix}data/assets`
                         });
                         setIsGithubModalOpen(false);
-                      } catch (e: any) {
-                        console.error(e);
-                        alert(`Failed to connect: ${e.message}`);
+                      } catch (e) {
+                        const err = e instanceof Error ? e : new Error(String(e));
+                        console.error(err);
+                        alert(`Failed to connect: ${err.message}`);
                       } finally {
                         setIsLoadingRepos(false);
                       }
