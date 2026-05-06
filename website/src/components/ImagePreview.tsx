@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { ImageIcon, Trash2 } from "lucide-react";
+import Image from "next/image";
 
 interface ImagePreviewProps {
   filename: string;
@@ -13,14 +14,6 @@ interface ImagePreviewProps {
 export default function ImagePreview({ filename, src, onDelete }: ImagePreviewProps) {
   const [dimensions, setDimensions] = useState<{ w: number; h: number } | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const imgRef = useRef<HTMLImageElement>(null);
-
-
-
-  const handleImageLoad = () => {
-    const img = imgRef.current;
-    if (img) setDimensions({ w: img.naturalWidth, h: img.naturalHeight });
-  };
 
   return (
     <div className="flex flex-col h-full bg-nb-bg text-nb-on-surface transition-colors duration-300">
@@ -50,13 +43,19 @@ export default function ImagePreview({ filename, src, onDelete }: ImagePreviewPr
       <div className="flex-1 flex items-center justify-center p-4 overflow-auto bg-nb-surface-low relative transition-colors">
 
         <div className="relative group max-w-full max-h-full flex items-center justify-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            ref={imgRef}
+          <Image
             src={src}
             alt={filename}
-            onLoad={handleImageLoad}
-            className="max-w-full max-h-[85vh] rounded-lg shadow-nb-lg border border-nb-outline-variant/30 object-contain transition-transform duration-500"
+            width={0}
+            height={0}
+            sizes="100vw"
+            style={{ width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: '85vh' }}
+            onLoad={(e) => {
+              const img = e.target as HTMLImageElement;
+              setDimensions({ w: img.naturalWidth, h: img.naturalHeight });
+            }}
+            className="rounded-lg shadow-nb-lg border border-nb-outline-variant/30 object-contain transition-transform duration-500"
+            unoptimized
           />
           {dimensions && (
             <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-nb-surface/90 backdrop-blur-md px-3 py-1 rounded-full border border-nb-outline-variant/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300">

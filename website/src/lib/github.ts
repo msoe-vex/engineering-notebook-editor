@@ -9,15 +9,8 @@ export interface GitHubRepo {
   updated_at?: string | null;
 }
 
-export interface GitHubConfig {
-  token: string;
-  owner: string;
-  repo: string;
-  branch: string;
-  baseDir: string;
-  entriesDir: string;
-  resourcesDir: string;
-}
+import { GitHubConfig } from "./types";
+export type { GitHubConfig };
 
 export interface GitChange {
   path: string;
