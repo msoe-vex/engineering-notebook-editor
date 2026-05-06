@@ -10,7 +10,7 @@ import {
   Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
   Brain, PencilRuler, Hammer, SearchCheck, Goal, Terminal, Link as LinkIcon, Underline as UnderlineIcon
 } from "lucide-react";
-import { generateUUID, hashContent, getExtensionFromDataUrl, debounce } from "@/lib/utils";
+import { generateUUID, hashContent, getExtensionFromDataUrl } from "@/lib/utils";
 import { generateEntryLatex } from "@/lib/latex";
 import AutocompleteInput from "./AutocompleteInput";
 import { extractResources, extractReferences, TipTapNode, NotebookMetadata } from "@/lib/metadata";
@@ -170,10 +170,6 @@ const Editor = React.memo(function Editor({
       onValidationChange?.(valid);
     }
   }, [title, author, phase, editor?.state.doc.content, checkValidity, localIsValid, onValidationChange]);
-
-  // Debounced callbacks to prevent App-level re-renders on every keystroke
-  const debouncedTitleChange = useRef(debounce((val: string) => onTitleChange?.(val), 150)).current;
-  const debouncedAuthorChange = useRef(debounce((val: string) => onAuthorChange?.(val), 150)).current;
 
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -559,7 +555,7 @@ const Editor = React.memo(function Editor({
                 options={otherTitles}
                 onChange={(e) => {
                   setTitle(e.target.value);
-                  debouncedTitleChange(e.target.value);
+                  onTitleChange?.(e.target.value);
                 }}
                 onSelectOption={(val) => {
                   setTitle(val);
@@ -593,7 +589,7 @@ const Editor = React.memo(function Editor({
                   options={otherAuthors}
                   onChange={(e) => {
                     setAuthor(e.target.value);
-                    debouncedAuthorChange(e.target.value);
+                    onAuthorChange?.(e.target.value);
                   }}
                   onSelectOption={(val) => {
                     setAuthor(val);
@@ -872,6 +868,7 @@ const Editor = React.memo(function Editor({
               onToggleLink={(fn) => { toggleLinkFn.current = fn; }}
               notebookMetadata={notebookMetadata}
               targetResourceId={targetResourceId}
+              entryId={entryId}
             />
           </div>
         </div>

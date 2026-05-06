@@ -969,18 +969,21 @@ interface UnifiedEditorProps {
   onToggleLink?: (fn: () => void) => void;
   notebookMetadata?: import("@/lib/metadata").NotebookMetadata;
   targetResourceId?: string | null;
+  entryId?: string;
 }
 
 function LinkReferencePopup({
   editor,
   onClose,
   metadata,
-  filename
+  filename,
+  showLinkPopup
 }: {
   editor: import("@tiptap/react").Editor,
   onClose: () => void,
   metadata?: import("@/lib/metadata").NotebookMetadata,
-  filename?: string
+  filename?: string,
+  showLinkPopup: boolean
 }) {
   const [query, setQuery] = useState("");
   const [text, setText] = useState("");
@@ -1002,12 +1005,14 @@ function LinkReferencePopup({
           let found = null;
           for (const entry of Object.values(metadata?.entries || {})) {
             const e = entry as import("@/lib/metadata").EntryMetadata;
+            const entryTitle = e.title?.trim() || "Untitled Entry";
+            const entryDate = e.createdAt?.split('T')[0];
             if (e.id === attrs.resourceId) {
-              found = { id: e.id, title: e.title, type: 'entry' };
+              found = { id: e.id, title: e.title, type: 'entry', entryTitle, entryDate };
               break;
             }
             if (e.resources?.[attrs.resourceId]) {
-              found = { id: attrs.resourceId, entryId: e.id, ...e.resources[attrs.resourceId] };
+              found = { id: attrs.resourceId, entryId: e.id, ...e.resources[attrs.resourceId], entryTitle, entryDate };
               break;
             }
           }
@@ -1015,8 +1020,8 @@ function LinkReferencePopup({
         }
       }
     };
-    init();
-  }, [editor, metadata]);
+    if (showLinkPopup) init();
+  }, [editor, metadata, showLinkPopup]);
 
   const allResources = useMemo(() => {
     const list: { id: string, title: string, type: string, entryTitle?: string, entryDate?: string, entryId?: string }[] = [];
@@ -1038,10 +1043,10 @@ function LinkReferencePopup({
 
       const resources = (e.id === currentEntryId) ? { ...e.resources, ...localResources } : (e.resources || {});
 
-    for (const [, res] of Object.entries(resources)) {
+    for (const [resourceId, res] of Object.entries(resources)) {
       const r = res as { title: string, caption: string, type: string };
       const resTitle = r.title?.trim() || `Untitled ${r.type?.charAt(0).toUpperCase() + r.type?.slice(1) || 'Block'}`;
-      list.push({ id: entryId, title: resTitle, type: r.type, entryTitle, entryDate, entryId: e.id });
+      list.push({ id: resourceId, title: resTitle, type: r.type, entryTitle, entryDate, entryId: e.id });
     }
     }
     return list;
@@ -1175,11 +1180,20 @@ function LinkReferencePopup({
               <button
                 onClick={() => {
                   if (link.startsWith('#') && !selectedResource) return;
-                  let url = selectedResource ? `#${selectedResource.id}` : link.trim();
-                  if (!selectedResource && url && !url.startsWith('#')) {
-                    const hasProtocol = /^[a-z]+:/i.test(url);
-                    const isDomain = url.includes('.') && !url.includes(' ');
-                    if (!hasProtocol && isDomain) url = `https://${url}`;
+                  let url = "";
+                  if (selectedResource) {
+                    // For linked resources, navigate to the entry and set resource param
+                    const params = new URLSearchParams(window.location.search);
+                    params.set('entry', selectedResource.entryId!);
+                    params.set('resource', selectedResource.id);
+                    url = `?${params.toString()}`;
+                  } else {
+                    url = link.trim();
+                    if (url && !url.startsWith('#')) {
+                      const hasProtocol = /^[a-z]+:/i.test(url);
+                      const isDomain = url.includes('.') && !url.includes(' ');
+                      if (!hasProtocol && isDomain) url = `https://${url}`;
+                    }
                   }
                   window.open(url, '_blank');
                 }}
@@ -1220,7 +1234,7 @@ function LinkReferencePopup({
 }
 
 export default function UnifiedEditor({
-  content, onChange, onImageUpload, author, filename, dbName = "notebook-pending", onEditorInit, notebookMetadata, onToggleLink, targetResourceId
+  content, onChange, onImageUpload, author, filename, dbName = "notebook-pending", onEditorInit, notebookMetadata, onToggleLink, targetResourceId, entryId
 }: UnifiedEditorProps) {
   const parseContent = (raw: string | import("@/lib/metadata").TipTapNode) => {
     if (!raw) return "";
@@ -1343,9 +1357,13 @@ export default function UnifiedEditor({
           const target = event.target as HTMLElement;
           const anchor = target.closest('a');
           if (anchor) {
-            event.preventDefault(); // Stop browser from navigating
             const href = anchor.getAttribute('href');
+            // Allow right-click for native browser context menu
+            if (event.button === 2) {
+              return false;
+            }
             if (href?.startsWith('#')) {
+              event.preventDefault(); // Stop browser from navigating
               if (event.ctrlKey || event.metaKey) {
                 const resId = href.slice(1);
                 const linkEntryId = anchor.getAttribute('data-entry-id');
@@ -1371,6 +1389,7 @@ export default function UnifiedEditor({
               return false; // No Ctrl: move cursor
             }
             if (event.ctrlKey || event.metaKey) {
+              event.preventDefault();
               const url = anchor.href;
               setTimeout(() => {
                 const win = window.open(url, '_blank');
@@ -1438,21 +1457,70 @@ export default function UnifiedEditor({
     if (editor && targetResourceId) {
       const isNewEntry = lastFilenameRef.current !== filename;
       lastFilenameRef.current = filename;
-      const delay = isNewEntry ? 100 : 0;
+      
+      let attempts = 0;
+      const maxAttempts = 20; // Try for 2 seconds (100ms intervals)
+      
+      const tryScroll = () => {
+        // Special case: if target is the entry itself, scroll to top
+        if (targetResourceId === entryId) {
+          editor.view.dom.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          return true;
+        }
 
-      const timeout = setTimeout(() => {
-        const element = document.querySelector(`[data-id="${targetResourceId}"]`);
+        // Find node position in Tiptap doc
+        let foundPos = -1;
+        editor.state.doc.descendants((node, pos) => {
+          if (node.attrs.id === targetResourceId) {
+            foundPos = pos;
+            return false;
+          }
+        });
+
+        if (foundPos >= 0) {
+          const dom = editor.view.nodeDOM(foundPos) as HTMLElement;
+          if (dom) {
+            dom.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // Highlight
+            dom.classList.add('ring-4', 'ring-nb-primary', 'ring-offset-2', 'transition-all', 'duration-1000');
+            setTimeout(() => {
+              dom.classList.remove('ring-4', 'ring-nb-primary', 'ring-offset-2');
+            }, 3000);
+            return true;
+          }
+        }
+        
+        // Fallback to DOM selector if nodeDOM fails
+        const element = document.querySelector(`[data-id="${targetResourceId}"]`) as HTMLElement;
         if (element) {
           element.scrollIntoView({ behavior: 'smooth', block: 'center' });
           element.classList.add('ring-4', 'ring-nb-primary', 'ring-offset-2', 'transition-all', 'duration-1000');
           setTimeout(() => {
             element.classList.remove('ring-4', 'ring-nb-primary', 'ring-offset-2');
-          }, 2000);
+          }, 3000);
+          return true;
         }
-      }, delay);
+
+        return false;
+      };
+
+      // Initial try with appropriate delay
+      const initialDelay = isNewEntry ? 400 : 100;
+      const timeout = setTimeout(() => {
+        if (!tryScroll()) {
+          const interval = setInterval(() => {
+            attempts++;
+            if (tryScroll() || attempts >= maxAttempts) {
+              clearInterval(interval);
+            }
+          }, 100);
+        }
+      }, initialDelay);
+      
       return () => clearTimeout(timeout);
     }
-  }, [editor, targetResourceId, content, filename]);
+  }, [editor, targetResourceId, filename, entryId]);
 
   useEffect(() => {
     if (onToggleLink && editor) {
@@ -1523,6 +1591,7 @@ export default function UnifiedEditor({
               metadata={notebookMetadata}
               onClose={() => setShowLinkPopup(false)}
               filename={filename}
+              showLinkPopup={showLinkPopup}
             />
           )}
         </div>
