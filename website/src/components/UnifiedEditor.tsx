@@ -1039,14 +1039,14 @@ function LinkReferencePopup({
       const entryTitle = e.title?.trim() || "Untitled Entry";
       const entryDate = e.createdAt?.split('T')[0];
 
-      list.push({ id: e.id, title: entryTitle, type: "entry", entryTitle, entryDate, entryId: e.id });
+      list.push({ id: entryId, title: entryTitle, type: "entry", entryTitle, entryDate, entryId });
 
-      const resources = (e.id === currentEntryId) ? { ...e.resources, ...localResources } : (e.resources || {});
+      const resources = (entryId === currentEntryId) ? { ...e.resources, ...localResources } : (e.resources || {});
 
     for (const [resourceId, res] of Object.entries(resources)) {
       const r = res as { title: string, caption: string, type: string };
       const resTitle = r.title?.trim() || `Untitled ${r.type?.charAt(0).toUpperCase() + r.type?.slice(1) || 'Block'}`;
-      list.push({ id: resourceId, title: resTitle, type: r.type, entryTitle, entryDate, entryId: e.id });
+      list.push({ id: resourceId, title: resTitle, type: r.type, entryTitle, entryDate, entryId });
     }
     }
     return list;
