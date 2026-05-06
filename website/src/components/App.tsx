@@ -909,8 +909,10 @@ export default function App() {
         const configReady = workspaceMode === "github" ? !!config : (workspaceMode === "local" ? !!dirHandle : true);
         const metaReady = workspaceMode === "temporary" ? true : (currentMeta.projectId === projectId || Object.keys(currentMeta.entries).length > 0);
 
+        const isOpeningEntry = entryId && entryId !== currentOpenFile?.id && !!currentMeta.entries[entryId];
+
         const isSettleable = projectId
-          ? (projectMatches && !isLoading && !!workspaceMode && configReady && metaReady)
+          ? (projectMatches && !isLoading && !!workspaceMode && configReady && metaReady && !isOpeningEntry)
           : (!isLoading && !currentProjectId);
 
         if (isSettleable) {
