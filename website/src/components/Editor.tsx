@@ -6,7 +6,7 @@ import { ToolbarButton, TableGridSelector } from "./editor/EditorUI";
 import { createPortal } from "react-dom";
 import { saveAs } from "file-saver";
 import {
-  Save, Trash2, Download, AlertCircle, AlertTriangle, Loader2, User, X, FileCode,
+  Save, Trash2, AlertCircle, AlertTriangle, Loader2, User, X, FileCode,
   Undo2, Redo2, ImagePlus, ChevronDown, List, ListOrdered,
   Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
   Brain, PencilRuler, Hammer, SearchCheck, Goal, Terminal, Link as LinkIcon, Underline as UnderlineIcon,
@@ -299,9 +299,9 @@ const Editor = React.memo(function Editor({
 
     const contentStr = JSON.stringify(content);
     const isContentChanged = contentStr !== lastAutoSavedRef.current.contentStr;
-    const isMetadataChanged = title !== lastAutoSavedRef.current.title || 
-                              author !== lastAutoSavedRef.current.author || 
-                              phase !== lastAutoSavedRef.current.phase;
+    const isMetadataChanged = title !== lastAutoSavedRef.current.title ||
+      author !== lastAutoSavedRef.current.author ||
+      phase !== lastAutoSavedRef.current.phase;
 
     if (isContentChanged || isMetadataChanged) {
       setIsAutoSaving(true);
@@ -309,12 +309,12 @@ const Editor = React.memo(function Editor({
         const { title, author, phase } = latestMetadataRef.current;
         const latex = generateLatexRef.current(content, title, author, phase);
         if (onContentChangeRef.current) onContentChangeRef.current(filename, latex, contentStr, { title, author, phase });
-        
+
         lastAutoSavedRef.current.contentStr = contentStr;
         lastAutoSavedRef.current.title = title;
         lastAutoSavedRef.current.author = author;
         lastAutoSavedRef.current.phase = phase;
-        
+
         setIsAutoSaving(false);
         autoSaveTimerRef.current = null;
       }, 800);
