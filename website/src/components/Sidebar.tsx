@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import FileExplorer from "./FileExplorer";
+import PendingChangesPanel from "./PendingChangesPanel";
 import { ExplorerFile } from "@/lib/types";
 import { NotebookMetadata } from "@/lib/metadata";
 import { PendingChange } from "@/lib/db";
@@ -21,6 +22,10 @@ interface SidebarProps {
   onDeleteMulti: (files: ExplorerFile[]) => void;
   onNewEntry: () => void;
   onOpenTeam: () => void;
+  isCommitting: boolean;
+  onCommit: () => void;
+  onDiscard: () => void;
+  workspaceMode: string;
 }
 
 export default function Sidebar({
@@ -38,7 +43,11 @@ export default function Sidebar({
   onDownloadMulti,
   onDeleteMulti,
   onNewEntry,
-  onOpenTeam
+  onOpenTeam,
+  isCommitting,
+  onCommit,
+  onDiscard,
+  workspaceMode,
 }: SidebarProps) {
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"created" | "updated" | "title">("created");
@@ -139,6 +148,18 @@ export default function Sidebar({
           onDateRangeChange={setDateRange}
         />
       </div>
+
+      {pendingChanges.length > 0 && (
+        <div className="p-4 bg-nb-surface border-t border-nb-outline-variant animate-in slide-in-from-bottom-2 duration-300">
+          <PendingChangesPanel 
+            pendingChanges={pendingChanges} 
+            isCommitting={isCommitting} 
+            onCommit={onCommit} 
+            onDiscard={onDiscard} 
+            workspaceMode={workspaceMode as "github" | "local" | "temporary"} 
+          />
+        </div>
+      )}
     </div>
   );
 }
