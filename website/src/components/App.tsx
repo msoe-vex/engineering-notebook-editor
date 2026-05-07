@@ -1631,7 +1631,7 @@ export default function App() {
           )
         ) : showTeamEditor && hydratedTeam ? (
           <TeamEditor 
-            initialData={notebookMetadata.team || EMPTY_METADATA.team!}
+            initialData={hydratedTeam}
             initialPhases={notebookMetadata.phases || []}
             onSave={handleSaveTeam}
             onClose={() => setShowTeamEditor(false)}
