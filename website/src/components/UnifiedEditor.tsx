@@ -142,11 +142,13 @@ export default function UnifiedEditor({
         codeBlock: false,
         link: false,
         underline: false,
+        listItem: false,
         dropcursor: {
           color: '#d9282f',
           width: 3,
         }
       }),
+      RestrictedListItem,
       ImageWithCaption.configure({ inline: false, allowBase64: true, dbName }),
       TableWithCaption.configure({ resizable: true }),
       TableRow,
