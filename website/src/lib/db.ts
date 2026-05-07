@@ -227,6 +227,16 @@ export async function getResource(dbName: string, path: string): Promise<string 
   });
 }
 
+export async function removeResource(dbName: string, path: string): Promise<void> {
+  const db = await openDB(dbName);
+  return new Promise((resolve, reject) => {
+    const store = tx(db, RESOURCE_STORE, "readwrite");
+    const req = store.delete(path);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
 export async function stageChange(dbName: string, change: PendingChange): Promise<void> {
   const db = await openDB(dbName);
   return new Promise((resolve, reject) => {

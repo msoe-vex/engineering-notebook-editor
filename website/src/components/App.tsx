@@ -9,7 +9,7 @@ import {
 import { ExplorerFile } from "@/lib/types";
 import {
   stageChange, getAllPending, clearAllPending, PendingChange,
-  putResource, getResource,
+  putResource, getResource, removeResource,
   Project, getProjects, getProject, saveProject, deleteProject, getProjectHandle, saveProjectHandle, deleteProjectHandle, deleteProjectDatabase,
   getProjectDBName
 } from "@/lib/db";
@@ -418,6 +418,7 @@ export default function App() {
     const contentObj = parseContent(tiptapContent);
     const resources = (contentObj && typeof contentObj === 'object') ? extractResources(contentObj) : {};
     const references = (contentObj && typeof contentObj === 'object') ? extractReferences(contentObj) : [];
+    const assets = (contentObj && typeof contentObj === 'object') ? extractImagePaths(contentObj as TipTapNode) : [];
 
     if (info.author) localStorage.setItem("nb-last-author", info.author);
 
@@ -475,10 +476,11 @@ export default function App() {
           title: existingEntry?.title ?? info.title,
           author: existingEntry?.author ?? info.author,
           phase: existingEntry?.phase ?? info.phase,
-          // Content-derived fields from this save
+           // Content-derived fields from this save
           updatedAt: isoTimestamp(),
           resources,
           references,
+          assets,
         };
         const updated = {
           ...prev,
@@ -489,12 +491,15 @@ export default function App() {
           const p = projects.find(pr => pr.id === currentProjectId);
           if (p) updated.projectName = p.name;
         }
-        finalMeta = updated;
-        return updated;
+        finalMeta = validateNotebookIntegrity(updated);
+        return finalMeta;
       });
 
-      if (finalMeta) await saveMetadata(finalMeta, "Auto-save metadata");
-      if (workspaceMode === "github") refreshPending();
+      if (finalMeta) {
+        await performGarbageCollection(notebookMetadataRef.current, finalMeta);
+        await saveMetadata(finalMeta, "Auto-save metadata");
+        if (workspaceMode === "github") refreshPending();
+      }
     } finally {
       setSavingPaths(prev => {
         const next = new Set(prev);
@@ -1269,7 +1274,8 @@ export default function App() {
 
       // 3. Update notebook.json
       const metaToUse = baseMetadata || notebookMetadata;
-      const updatedMeta = { ...metaToUse, team: cleanTeam };
+      const updatedMeta = validateNotebookIntegrity({ ...metaToUse, team: cleanTeam });
+      await performGarbageCollection(metaToUse, updatedMeta);
       setNotebookMetadata(updatedMeta);
       await saveMetadata(updatedMeta, "Update team metadata");
 
@@ -1301,12 +1307,25 @@ export default function App() {
     if (workspaceMode === "github") refreshPending();
   };
 
+  const performGarbageCollection = async (oldMeta: NotebookMetadata, newMeta: NotebookMetadata) => {
+    const oldRefs = oldMeta.assetRefs || {};
+    const newRefs = newMeta.assetRefs || {};
+    
+    for (const assetPath of Object.keys(oldRefs)) {
+      if (!newRefs[assetPath]) {
+        await deleteFile(assetPath, "Garbage collection (orphaned asset)");
+        await removeResource(getDBName(), assetPath);
+      }
+    }
+  };
+
   const handleDeleteEntry = async (file: ExplorerFile) => {
     setIsInitializing(true);
     setIsLoading(true);
     try {
       const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
-      const updatedMeta = removeEntryFromMetadata(notebookMetadata, entryId);
+      const updatedMeta = validateNotebookIntegrity(removeEntryFromMetadata(notebookMetadata, entryId));
+      await performGarbageCollection(notebookMetadata, updatedMeta);
       setNotebookMetadata(updatedMeta);
       await deleteFile(file.path, "Entry deleted");
       await deleteFile(`${currentLatexDir}/${entryId}.tex`, "LaTeX deleted");

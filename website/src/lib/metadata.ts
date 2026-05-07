@@ -30,6 +30,7 @@ export interface EntryMetadata {
   resources?: Record<string, { title: string, caption: string, type: string }>; // block uuid -> metadata
   isValid?: boolean;
   references?: string[]; // List of target UUIDs this entry points to
+  assets?: string[]; // List of asset paths used in this entry
   validationErrors?: string[]; // Detailed messages for the UI
 }
 
@@ -74,6 +75,7 @@ export interface NotebookMetadata {
   projectName?: string;
   entries: Record<string, EntryMetadata>; // uuid -> metadata
   team?: TeamMetadata;
+  assetRefs?: Record<string, string[]>; // asset path -> [entry id or "team"]
 }
 
 export const EMPTY_METADATA: NotebookMetadata = { 
@@ -315,19 +317,36 @@ export function updateEntryInIndex(
  */
 export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookMetadata {
   const newEntries = { ...metadata.entries };
+  const assetRefs: Record<string, string[]> = {};
   
-  // 1. Build a global set of all existing IDs (entries and resources)
+  const trackAsset = (path: string, owner: string) => {
+    if (!assetRefs[path]) assetRefs[path] = [];
+    if (!assetRefs[path].includes(owner)) assetRefs[path].push(owner);
+  };
+
+  // 1. Collect assets from team
+  if (metadata.team) {
+    if (metadata.team.logo) trackAsset(metadata.team.logo, "team");
+    metadata.team.members.forEach(m => {
+      if (m.image) trackAsset(m.image, "team");
+    });
+  }
+
+  // 2. Build global set of all IDs and collect assets from entries
   const existingIds = new Set<string>();
-  for (const entry of Object.values(metadata.entries)) {
+  for (const [entryId, entry] of Object.entries(metadata.entries)) {
     existingIds.add(entry.id);
     if (entry.resources) {
       for (const resId of Object.keys(entry.resources)) {
         existingIds.add(resId);
       }
     }
+    if (entry.assets) {
+      entry.assets.forEach(a => trackAsset(a, entryId));
+    }
   }
 
-  // 2. Validate each entry
+  // 3. Validate each entry
   for (const [id, entry] of Object.entries(newEntries)) {
     const errors: string[] = [];
 
@@ -362,7 +381,8 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
 
   return {
     ...metadata,
-    entries: newEntries
+    entries: newEntries,
+    assetRefs
   };
 }
 
