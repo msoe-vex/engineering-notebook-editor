@@ -838,7 +838,6 @@ export default function App() {
         if (notebookMetadata.team.logo) teamImages.push(notebookMetadata.team.logo);
         notebookMetadata.team.members.forEach(m => { if (m.image) teamImages.push(m.image); });
         for (const imgPath of teamImages) await fetchAsset(imgPath);
-        portable.assetRefs = notebookMetadata.assetRefs;
       }
 
       const blob = new Blob([JSON.stringify(portable, null, 2)], { type: "application/json" });
