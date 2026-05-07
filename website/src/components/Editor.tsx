@@ -26,61 +26,37 @@ import ConfirmationDialog from "./ConfirmationDialog";
    Component
    ───────────────────────────────────────────────────────────────── */
 
+import { useWorkspace } from "@/hooks/useWorkspace";
+
 interface EditorProps {
-  config: {
-    owner: string;
-    repo: string;
-    token: string;
-    entriesDir: string;
-  };
-  filename: string;
-  isLocalMode?: boolean;
-  initialTitle?: string;
-  initialAuthor?: string;
-  initialPhase?: number | null;
-  initialContent: string;
-  initialCreatedAt?: string;
-  initialUpdatedAt?: string;
-  metadataMissing?: boolean;
-  isValid?: boolean;
-  onDeleted: (path: string) => void;
-  onContentChange?: (filename: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null }) => void;
-  onTitleChange: (title: string) => void;
-  onAuthorChange: (author: string) => void;
-  onPhaseChange: (phase: number | null) => void;
-  onImageUpload?: (path: string, base64: string) => void;
-  onDownloadPortable?: (path: string, content: string, info: { title: string; author: string; phase: number | null; createdAt: string; updatedAt: string }) => void;
   onClose?: () => void;
-  dbName?: string;
-  isSaving?: boolean;
-  notebookMetadata?: NotebookMetadata;
-  onValidationChange?: (isValid: boolean) => void;
   targetResourceId?: string | null;
 }
 
 const Editor = React.memo(function Editor({
-  filename,
-  initialTitle = "",
-  initialAuthor = "",
-  initialPhase = null,
-  initialContent = "",
-  initialCreatedAt = "",
-  initialUpdatedAt = "",
-  isValid = true,
-  onDeleted,
-  onContentChange,
-  onValidationChange,
-  onImageUpload,
-  onTitleChange,
-  onAuthorChange,
-  onPhaseChange,
-  onDownloadPortable,
   onClose,
-  dbName,
-  isSaving: isExternalSaving = false,
-  notebookMetadata,
   targetResourceId,
 }: EditorProps) {
+  const {
+    openFile,
+    metadata,
+    updateEntry,
+    deleteEntry,
+    currentProjectId
+  } = useWorkspace();
+
+  if (!openFile) return null;
+
+  const {
+    path: filename,
+    title: initialTitle,
+    author: initialAuthor,
+    phase: initialPhase,
+    tiptapContent: initialContent,
+    createdAt: initialCreatedAt,
+    updatedAt: initialUpdatedAt,
+    id: entryId
+  } = openFile;
   const parseInitialContent = useCallback((raw: unknown): TipTapNode | string => {
     if (!raw) return "";
     if (typeof raw === 'object' && raw !== null) return raw as TipTapNode;
@@ -115,7 +91,7 @@ const Editor = React.memo(function Editor({
   // Local validation state for immediate UI feedback.
   // Editor is the sole authority on validity while open — parent isValid is only used for initial value.
   // This prevents flickering caused by stale metadata flowing back down during debounced saves.
-  const [localIsValid, setLocalIsValid] = useState(isValid);
+  const [localIsValid, setLocalIsValid] = useState(metadata.entries[entryId]?.isValid !== false);
 
   const checkValidity = useCallback(() => {
     if (!title?.trim() || !author?.trim() || phase === null) return false;
@@ -131,10 +107,10 @@ const Editor = React.memo(function Editor({
 
     // Check references
     const refs = extractReferences(doc);
-    if (refs.length > 0 && notebookMetadata?.entries) {
+    if (refs.length > 0 && metadata?.entries) {
       // Build set of all existing IDs
       const existingIds = new Set<string>();
-      for (const entry of Object.values(notebookMetadata.entries)) {
+      for (const entry of Object.values(metadata.entries)) {
         existingIds.add(entry.id);
         if (entry.resources) {
           for (const resId of Object.keys(entry.resources)) {
@@ -149,7 +125,7 @@ const Editor = React.memo(function Editor({
     }
 
     return true;
-  }, [title, author, phase, editor, notebookMetadata]);
+  }, [title, author, phase, editor, metadata]);
 
   // Local metadata validation (immediate for UI)
   const lastValidRef = useRef(localIsValid);
@@ -172,29 +148,27 @@ const Editor = React.memo(function Editor({
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
   // Dynamic Phase Logic
-  const availablePhases = getPhases(notebookMetadata?.phases);
+  const availablePhases = getPhases(metadata?.phases);
   const phaseConfig = getPhaseConfig(availablePhases);
   const activePhaseCfg = phase && phaseConfig[phase] ? phaseConfig[phase] : null;
 
   const [, setSelectionUpdate] = useState(0);
 
-  const entryId = filename.split('/').pop()?.replace('.json', '') || "";
-
   const otherAuthors = React.useMemo(() => {
     const authors = new Set<string>();
-    Object.entries(notebookMetadata?.entries || {}).forEach(([id, e]) => {
+    Object.entries(metadata?.entries || {}).forEach(([id, e]) => {
       if (id !== entryId && e.author?.trim()) authors.add(e.author.trim());
     });
     return Array.from(authors).sort();
-  }, [notebookMetadata?.entries, entryId]);
+  }, [metadata?.entries, entryId]);
 
   const otherTitles = React.useMemo(() => {
     const titles = new Set<string>();
-    Object.entries(notebookMetadata?.entries || {}).forEach(([id, e]) => {
+    Object.entries(metadata?.entries || {}).forEach(([id, e]) => {
       if (id !== entryId && e.title?.trim() && !e.title.endsWith(".tex")) titles.add(e.title.trim());
     });
     return Array.from(titles).sort();
-  }, [notebookMetadata?.entries, entryId]);
+  }, [metadata?.entries, entryId]);
 
   const latestContentRef = useRef(content);
   const latestMetadataRef = useRef({ title, author, phase });
@@ -246,46 +220,23 @@ const Editor = React.memo(function Editor({
   });
 
   // ── Callback refs (stable references to avoid resetting timers on re-render) ──
-  const onContentChangeRef = useRef(onContentChange);
   const generateLatexRef = useRef(generateLatex);
-  const onTitleChangeRef = useRef(onTitleChange);
-  const onAuthorChangeRef = useRef(onAuthorChange);
-  const onPhaseChangeRef = useRef(onPhaseChange);
-  const onValidationChangeRef = useRef(onValidationChange);
   useEffect(() => {
-    onContentChangeRef.current = onContentChange;
     generateLatexRef.current = generateLatex;
-    onTitleChangeRef.current = onTitleChange;
-    onAuthorChangeRef.current = onAuthorChange;
-    onPhaseChangeRef.current = onPhaseChange;
-    onValidationChangeRef.current = onValidationChange;
-  }, [onContentChange, generateLatex, onTitleChange, onAuthorChange, onPhaseChange, onValidationChange]);
+  }, [generateLatex]);
 
   // ── Immediate metadata sync ──────────────────────────────────────────────────
   // Title, author, and phase are synced to the parent instantly (no debounce)
-  // so the Sidebar always reflects exactly what the user is typing.
+  // via the Store's updateEntry method.
   useEffect(() => {
-    if (title !== lastSyncedRef.current.title) {
-      onTitleChangeRef.current?.(title);
-      lastSyncedRef.current.title = title;
+    if (title !== lastSyncedRef.current.title || author !== lastSyncedRef.current.author || phase !== lastSyncedRef.current.phase) {
+       const contentStr = JSON.stringify(content);
+       const latex = generateLatex(content, title, author, phase);
+       updateEntry(entryId, latex, contentStr, { title, author, phase });
+       lastSyncedRef.current = { title, author, phase, contentStr };
     }
-    if (author !== lastSyncedRef.current.author) {
-      onAuthorChangeRef.current?.(author);
-      lastSyncedRef.current.author = author;
-    }
-    if (phase !== lastSyncedRef.current.phase) {
-      onPhaseChangeRef.current?.(phase);
-      lastSyncedRef.current.phase = phase;
-    }
-  }, [title, author, phase]);
+  }, [title, author, phase, entryId]);
 
-  // ── Immediate validation sync ────────────────────────────────────────────────
-  useEffect(() => {
-    if (localIsValid !== lastValidRef.current) {
-      onValidationChangeRef.current?.(localIsValid);
-      lastValidRef.current = localIsValid;
-    }
-  }, [localIsValid]);
 
   // ── Debounced content auto-save ──────────────────────────────────────────────
   // Only content changes are debounced (800ms) since they trigger disk/GitHub I/O.
@@ -304,7 +255,7 @@ const Editor = React.memo(function Editor({
       autoSaveTimerRef.current = setTimeout(() => {
         const { title, author, phase } = latestMetadataRef.current;
         const latex = generateLatexRef.current(content, title, author, phase);
-        if (onContentChangeRef.current) onContentChangeRef.current(filename, latex, contentStr, { title, author, phase });
+        updateEntry(entryId, latex, contentStr, { title, author, phase });
 
         lastAutoSavedRef.current.contentStr = contentStr;
         lastAutoSavedRef.current.title = title;
@@ -335,9 +286,9 @@ const Editor = React.memo(function Editor({
         phase !== initialPhase ||
         contentStr !== initialContent;
 
-      if (isChanged && onContentChangeRef.current) {
+      if (isChanged) {
         const latex = generateLatexRef.current(content, title, author, phase);
-        onContentChangeRef.current(filename, latex, contentStr, { title, author, phase });
+        updateEntry(entryId, latex, contentStr, { title, author, phase });
       }
     };
   }, [filename, initialTitle, initialAuthor, initialPhase, initialContent]);
@@ -361,14 +312,12 @@ const Editor = React.memo(function Editor({
     const latex = generateLatex(content, title, author, phase);
     const contentStr = JSON.stringify(content);
 
-    if (onContentChange) {
-      await onContentChange(filename, latex, contentStr, { title, author, phase });
-      lastSyncedRef.current = { title, author, phase, contentStr };
-      setIsAutoSaving(false);
-    }
+    await updateEntry(entryId, latex, contentStr, { title, author, phase });
+    lastSyncedRef.current = { title, author, phase, contentStr };
+    setIsAutoSaving(false);
 
     setIsSaving(false);
-  }, [content, title, author, phase, filename, onContentChange, generateLatex, validate]);
+  }, [content, title, author, phase, filename, generateLatex, validate, updateEntry, entryId]);
 
   const handleDownload = () => {
     const latex = generateLatex(content, title, author, phase);
@@ -478,7 +427,6 @@ const Editor = React.memo(function Editor({
             }).run();
           }
 
-          onImageUpload?.(newPath, base64);
         };
         reader.readAsDataURL(file);
       }
@@ -502,13 +450,9 @@ const Editor = React.memo(function Editor({
                 icon={<FileJson size={14} />}
                 label="Download JSON"
                 onClick={() => {
-                  const latestMeta = notebookMetadata?.entries?.[entryId];
+                  const latestMeta = metadata?.entries?.[entryId];
                   const currentUpdatedAt = latestMeta?.updatedAt || initialUpdatedAt || initialCreatedAt;
-                  onDownloadPortable?.(filename, JSON.stringify(content), {
-                    title, author, phase,
-                    createdAt: initialCreatedAt,
-                    updatedAt: currentUpdatedAt
-                  });
+                  // TODO: Implement portable download in store or keep logic here
                 }}
               />
               <MenuAction icon={<FileCode size={14} />} label="Download LaTeX" onClick={handleDownload} />
@@ -578,7 +522,7 @@ const Editor = React.memo(function Editor({
             <div className="flex-1" />
 
             <div className="flex items-center gap-2 mr-2">
-              {isAutoSaving || isSaving || isExternalSaving ? (
+              {isAutoSaving || isSaving ? (
                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-primary animate-pulse">
                   <Loader2 size={12} className="animate-spin" />
                   <span>SAVING...</span>
@@ -925,12 +869,9 @@ const Editor = React.memo(function Editor({
               filename={filename}
               content={content}
               onChange={setContent}
-              onImageUpload={onImageUpload}
               author={author}
-              dbName={dbName}
               onEditorInit={setEditor}
               onToggleLink={(fn) => { toggleLinkFn.current = fn; }}
-              notebookMetadata={notebookMetadata}
               targetResourceId={targetResourceId}
               entryId={entryId}
             />
@@ -942,7 +883,11 @@ const Editor = React.memo(function Editor({
           title="Delete Entry?"
           message="This will permanently remove the entry from your notebook. This action cannot be undone once committed."
           confirmLabel="Delete"
-          onConfirm={() => { setShowDeleteConfirm(false); onDeleted(filename); }}
+          onConfirm={() => {
+            setShowDeleteConfirm(false);
+            deleteEntry({ name: filename.split('/').pop() || "", path: filename });
+            onClose?.();
+          }}
           onCancel={() => setShowDeleteConfirm(false)}
           variant="danger"
         />
@@ -951,11 +896,7 @@ const Editor = React.memo(function Editor({
   );
 }, (prev, next) => {
   return (
-    prev.filename === next.filename &&
-    prev.isSaving === next.isSaving &&
-    prev.isLocalMode === next.isLocalMode &&
-    prev.config === next.config &&
-    prev.dbName === next.dbName
+    prev.targetResourceId === next.targetResourceId
   );
 });
 

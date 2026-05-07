@@ -241,56 +241,57 @@ const PhaseRow = memo(({
 
 PhaseRow.displayName = "PhaseRow";
 
+import { useWorkspace } from "@/hooks/useWorkspace";
+
 interface TeamEditorProps {
-  initialData: TeamMetadata;
-  initialPhases: ProjectPhase[];
-  onSave: (data: TeamMetadata, phases: ProjectPhase[]) => Promise<void>;
   onClose: () => void;
-  isSaving?: boolean;
   initialTab?: "identity" | "members" | "phases";
 }
 
 export default function TeamEditor({
-  initialData,
-  initialPhases,
-  onSave,
   onClose,
-  isSaving = false,
   initialTab = "identity"
 }: TeamEditorProps) {
+  const {
+    metadata,
+    saveTeam
+  } = useWorkspace();
+
+  const initialData = metadata.team || { teamName: "", teamNumber: "", organization: "", logo: "", members: [] };
+  const initialPhases = metadata.phases || DEFAULT_PHASES;
+
   const [teamData, setTeamData] = useState<TeamMetadata>(initialData);
-  const [phases, setPhases] = useState<ProjectPhase[]>(initialPhases && initialPhases.length > 0 ? initialPhases : DEFAULT_PHASES);
+  const [phases, setPhases] = useState<ProjectPhase[]>(initialPhases);
   const [activeTab, setActiveTab] = useState<"identity" | "members" | "phases">(initialTab);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 3, // Start dragging after 3 pixels of movement
+        distance: 3,
       },
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
-  const onSaveRef = useRef(onSave);
-  useEffect(() => {
-    onSaveRef.current = onSave;
-  }, [onSave]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       if (hasChanges) {
-        onSaveRef.current(teamData, phases).then(() => {
+        setIsSaving(true);
+        saveTeam(teamData, phases).then(() => {
           setSaveSuccess(true);
           setHasChanges(false);
-        });
+          setIsSaving(false);
+        }).catch(() => setIsSaving(false));
       }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [teamData, phases, hasChanges]);
+  }, [teamData, phases, hasChanges, saveTeam]);
 
   useEffect(() => {
     if (saveSuccess) {

@@ -6,6 +6,7 @@ import {
 } from "@tiptap/react";
 import { NodeSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { TableRow } from "@tiptap/extension-table-row";
 import {
   CustomLink,
@@ -48,18 +49,17 @@ interface UnifiedEditorProps {
   onImageUpload?: (path: string, base64: string) => void;
   author?: string;
   filename: string;
-  dbName?: string;
   onEditorInit?: (editor: import("@tiptap/react").Editor) => void;
   onToggleLink?: (fn: () => void) => void;
-  notebookMetadata?: import("@/lib/metadata").NotebookMetadata;
   targetResourceId?: string | null;
   entryId?: string;
 }
 
-
 export default function UnifiedEditor({
-  content, onChange, onImageUpload, filename, dbName = "notebook-pending", onEditorInit, notebookMetadata, onToggleLink, targetResourceId, entryId
+  content, onChange, onImageUpload, filename, onEditorInit, onToggleLink, targetResourceId, entryId
 }: UnifiedEditorProps) {
+  const { currentProjectId, metadata } = useWorkspace();
+  const dbName = currentProjectId ? `notebook-project-${currentProjectId}` : "notebook-default";
   const parseContent = (raw: string | import("@/lib/metadata").TipTapNode) => {
     if (!raw) return "";
     try {
@@ -159,7 +159,7 @@ export default function UnifiedEditor({
       PrismHighlightExtension,
       Extension.create({
         name: 'integrityExtension',
-        addProseMirrorPlugins: () => notebookMetadata ? [IntegrityPlugin(notebookMetadata)] : []
+        addProseMirrorPlugins: () => metadata ? [IntegrityPlugin(metadata)] : []
       }),
       Underline,
       CustomLink.configure({
@@ -436,7 +436,7 @@ export default function UnifiedEditor({
           {showLinkPopup && (
             <LinkReferencePopup
               editor={editor}
-              metadata={notebookMetadata}
+              metadata={metadata}
               onClose={() => setShowLinkPopup(false)}
               filename={filename}
               showLinkPopup={showLinkPopup}

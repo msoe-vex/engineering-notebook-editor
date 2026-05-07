@@ -2,8 +2,9 @@ import React from "react";
 import { Menu, Sun, Moon } from "lucide-react";
 import { Project } from "@/lib/db";
 
+import { useWorkspace } from "@/hooks/useWorkspace";
+
 interface ProjectHeaderProps {
-  currentProject: Project | { id: string; name: string } | null;
   isSidebarOpen: boolean;
   onToggleSidebar: () => void;
   isMobile: boolean;
@@ -16,14 +17,12 @@ interface ProjectHeaderProps {
   onSetProjectRenameValue: (val: string) => void;
   onStartRename: () => void;
   onEndRename: (save: boolean) => void;
-  isEntryOpen: boolean;
   isDarkMode: boolean;
   onToggleTheme: () => void;
   mounted: boolean;
 }
 
 export default function ProjectHeader({
-  currentProject,
   isSidebarOpen,
   onToggleSidebar,
   isMobile,
@@ -36,11 +35,12 @@ export default function ProjectHeader({
   onSetProjectRenameValue,
   onStartRename,
   onEndRename,
-  isEntryOpen,
   isDarkMode,
   onToggleTheme,
   mounted
 }: ProjectHeaderProps) {
+  const { currentProject, openFile } = useWorkspace();
+  const isEntryOpen = !!openFile;
   return (
     <div className="flex items-center justify-between px-4 h-14 bg-nb-surface border-b border-nb-outline-variant shrink-0">
       <button
