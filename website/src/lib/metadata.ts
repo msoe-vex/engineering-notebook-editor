@@ -392,8 +392,6 @@ export function renameEntryInMetadata(
 export function remapContentIds(doc: TipTapDoc | TipTapNode[], globalIdMap: Map<string, string> = new Map()): { doc: TipTapDoc | TipTapNode[], idMap: Map<string, string> } {
   if (!doc) return { doc: doc as TipTapDoc, idMap: globalIdMap };
 
-  const resourceTypes = new Set(["image", "table", "codeBlock", "rawLatex"]);
-
   // Pass 1: Collect and remap IDs for this doc specifically
   function collect(node: TipTapNode | TipTapNode[]) {
     if (!node || typeof node !== "object") return;
@@ -426,14 +424,16 @@ export function remapContentIds(doc: TipTapDoc | TipTapNode[], globalIdMap: Map<
 
     const newNode = { ...node };
 
-    // Update ID attribute
-    if (resourceTypes.has(node.type)) {
-      const oldId = node.attrs?.id as string | undefined;
-      if (oldId && globalIdMap.has(oldId)) {
+    // Update ID attribute if present
+    if (node.attrs?.id) {
+      const oldId = node.attrs.id as string;
+      if (globalIdMap.has(oldId)) {
         newNode.attrs = { ...node.attrs, id: globalIdMap.get(oldId) };
-      } else if (!oldId) {
-        // Assign fresh ID if missing
-        newNode.attrs = { ...node.attrs, id: generateUUID() };
+      } else {
+        // This shouldn't happen due to Pass 1, but for safety:
+        const newId = generateUUID();
+        globalIdMap.set(oldId, newId);
+        newNode.attrs = { ...node.attrs, id: newId };
       }
     }
 
@@ -441,28 +441,31 @@ export function remapContentIds(doc: TipTapDoc | TipTapNode[], globalIdMap: Map<
     if (Array.isArray(node.marks)) {
       newNode.marks = node.marks.map((mark: TipTapMark) => {
         if (mark.type === 'link') {
-          const { href = "", resourceId } = (mark.attrs || {}) as { href?: string, resourceId?: string };
+          const { href = "", resourceId, entryId } = (mark.attrs || {}) as { href?: string, resourceId?: string, entryId?: string };
+
+          let newAttrs = { ...mark.attrs };
+          let changed = false;
 
           if (href.startsWith('#')) {
             const oldId = href.substring(1);
             if (globalIdMap.has(oldId)) {
-              return { 
-                ...mark, 
-                attrs: { 
-                  ...mark.attrs, 
-                  href: `#${globalIdMap.get(oldId)}`,
-                  resourceId: globalIdMap.get(oldId) 
-                } 
-              };
+              const newId = globalIdMap.get(oldId);
+              newAttrs.href = `#${newId}`;
+              newAttrs.resourceId = newId;
+              changed = true;
             }
           } else if (resourceId && globalIdMap.has(resourceId)) {
-            return { 
-              ...mark, 
-              attrs: { 
-                ...mark.attrs, 
-                resourceId: globalIdMap.get(resourceId) 
-              } 
-            };
+            newAttrs.resourceId = globalIdMap.get(resourceId);
+            changed = true;
+          }
+
+          if (entryId && globalIdMap.has(entryId)) {
+            newAttrs.entryId = globalIdMap.get(entryId);
+            changed = true;
+          }
+
+          if (changed) {
+            return { ...mark, attrs: newAttrs };
           }
         }
         return mark;

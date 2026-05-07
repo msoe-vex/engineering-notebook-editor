@@ -1009,10 +1009,29 @@ export default function App() {
       const entryList = Object.values(entriesToImport) as (EntryMetadata & { content: TipTapNode })[];
 
       const globalIdMap = new Map<string, string>();
-      // Pre-populate global map with new IDs for all entries being imported
+
+      const scanForIds = (node: any) => {
+        if (!node || typeof node !== "object") return;
+        if (Array.isArray(node)) {
+          node.forEach(scanForIds);
+          return;
+        }
+        if (node.attrs?.id) {
+          const oldId = node.attrs.id as string;
+          if (!globalIdMap.has(oldId)) globalIdMap.set(oldId, generateUUID());
+        }
+        if (Array.isArray(node.content)) {
+          node.content.forEach(scanForIds);
+        }
+      };
+
+      // Pre-populate global map with new IDs for all entries AND their internal resources
       for (const item of entryList) {
-        const oldId = (item as { id?: string }).id;
-        if (oldId) globalIdMap.set(oldId, generateUUID());
+        const oldEntryId = (item as { id?: string }).id;
+        if (oldEntryId) {
+          if (!globalIdMap.has(oldEntryId)) globalIdMap.set(oldEntryId, generateUUID());
+        }
+        if (item.content) scanForIds(item.content);
       }
 
       let currentMeta = notebookMetadataRef.current;
