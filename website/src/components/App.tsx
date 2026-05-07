@@ -121,6 +121,7 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectPendingCounts, setProjectPendingCounts] = useState<Record<string, number>>({});
   const [isInitializing, setIsInitializing] = useState(true);
+  const [isColdStart, setIsColdStart] = useState(true);
   const [githubToken, setGithubToken] = useState<string | null>(null);
   const [githubUser, setGithubUser] = useState<string | null>(null);
 
@@ -160,7 +161,7 @@ export default function App() {
   const loadingProjectMetaRef = useRef<NotebookMetadata | null>(null);
 
 
-  const navigate = useCallback((path: string, searchParams?: Record<string, string>) => {
+  const navigate = useCallback((path: string, searchParams?: Record<string, string | null>) => {
     const url = new URL(window.location.href);
     const currentParams = new URLSearchParams(window.location.search);
     const currentProject = currentParams.get('project');
@@ -229,15 +230,20 @@ export default function App() {
   };
 
   const refreshProjectList = useCallback(async () => {
-    const p = await getProjects();
-    const counts: Record<string, number> = {};
-    await Promise.all(p.map(async (proj) => {
-      const dbName = getProjectDBName(proj);
-      const pending = await getAllPending(dbName);
-      counts[proj.id] = pending.length;
-    }));
-    setProjects(p);
-    setProjectPendingCounts(counts);
+    setIsLoading(true);
+    try {
+      const p = await getProjects();
+      const counts: Record<string, number> = {};
+      await Promise.all(p.map(async (proj) => {
+        const dbName = getProjectDBName(proj);
+        const pending = await getAllPending(dbName);
+        counts[proj.id] = pending.length;
+      }));
+      setProjects(p);
+      setProjectPendingCounts(counts);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   const checkPermission = async (handle: FileSystemDirectoryHandle) => {
@@ -396,16 +402,12 @@ export default function App() {
           console.error(err);
           notify("GitHub sign-in failed connection.", "error");
         } finally {
-          setIsInitializing(false);
           setIsExchangingGithubCode(false);
           isExchangingCode.current = false;
         }
       }
     };
     init();
-    if (!params.get("code")) {
-      setIsInitializing(false);
-    }
   }, [notify]);
 
   const getGitBasePrefix = useCallback(() => {
@@ -987,6 +989,7 @@ export default function App() {
     const handleUrlChange = async () => {
       const currentUrl = window.location.pathname + window.location.search;
       if (lastHandledUrlRef.current === currentUrl) {
+        await refreshProjectListRef.current();
         setIsInitializing(false);
         setIsLoading(false);
         return;
@@ -1021,7 +1024,6 @@ export default function App() {
                 resourcesDir: p.githubConfig.folderPath ? `${p.githubConfig.folderPath}/${ASSETS_DIR}` : ASSETS_DIR,
               };
               setConfig(newConfig);
-              setWorkspaceModeInternal("github");
               // Wait for explorer and metadata to load before proceeding
               const res = await loadGitHubExplorerRef.current(newConfig);
               await refreshPendingRef.current(`notebook-project-${p.id}`);
@@ -1031,7 +1033,6 @@ export default function App() {
               const handle = await getProjectHandle(p.id);
               if (handle) {
                 setDirHandle(handle);
-                setWorkspaceModeInternal("local");
                 const hasPermission = await checkPermissionRef.current(handle);
                 if (hasPermission) {
                   const res = await loadLocalExplorerRef.current(handle);
@@ -1041,20 +1042,22 @@ export default function App() {
                 }
               }
             } else if (p.type === "temporary") {
-              setWorkspaceModeInternal("temporary");
               await refreshPendingRef.current("notebook-project-temporary");
             }
             // Commit project state AFTER successful load
             if (active) {
+              setWorkspaceModeInternal(p.type as WorkspaceMode);
               setCurrentProjectIdInternal(p.id);
               setNotebookMetadata(loadedMeta || { ...EMPTY_METADATA, projectId: p.id, projectName: p.name });
               loadingProjectMetaRef.current = loadedMeta;
             }
           } else if (projectId === "temporary") {
-            setCurrentProjectIdInternal("temporary");
-            setWorkspaceModeInternal("temporary");
-            setNotebookMetadata({ ...EMPTY_METADATA, projectId: "temporary", projectName: "Temporary Workspace" });
             await refreshPendingRef.current("notebook-project-temporary");
+            if (active) {
+              setWorkspaceModeInternal("temporary");
+              setCurrentProjectIdInternal("temporary");
+              setNotebookMetadata({ ...EMPTY_METADATA, projectId: "temporary", projectName: "Temporary Workspace" });
+            }
           } else {
             notify("Project not found.", "error");
             navigate('/');
@@ -1067,9 +1070,9 @@ export default function App() {
           loadingProjectMetaRef.current = null;
           setOpenFile(null);
           setShowTeamEditor(false);
+          await refreshProjectListRef.current();
           setIsInitializing(false);
           setIsLoading(false);
-          await refreshProjectListRef.current();
           lastHandledUrlRef.current = currentUrl;
           return;
         }
@@ -1158,9 +1161,10 @@ export default function App() {
         notify("Failed to load workspace.", "error");
       } finally {
         if (active) {
+          await refreshProjectListRef.current();
           setIsInitializing(false);
           setIsLoading(false);
-          await refreshProjectListRef.current();
+          setIsColdStart(false);
         }
       }
     };
@@ -1168,7 +1172,11 @@ export default function App() {
     window.addEventListener('popstate', handleUrlChange);
     window.addEventListener('locationchange', handleUrlChange);
     handleUrlChange();
-    return () => { active = false; window.removeEventListener('popstate', handleUrlChange); window.removeEventListener('locationchange', handleUrlChange); };
+    return () => { 
+      active = false; 
+      window.removeEventListener('popstate', handleUrlChange); 
+      window.removeEventListener('locationchange', handleUrlChange);
+    };
   }, [githubToken, setCurrentProjectIdInternal, setWorkspaceModeInternal, setIsLoading, setNotebookMetadata, notify, navigate]);
 
   const handleDiscardAll = async () => {
@@ -1608,7 +1616,7 @@ export default function App() {
 
   const handleDisconnect = () => {
     const run = () => {
-      navigate('/');
+      navigate('/', { project: null });
       performDisconnect();
       setOpenFile(null);
       setLatexContent("");
@@ -1771,12 +1779,33 @@ export default function App() {
     </div>
   );
 
+  if (isInitializing && isColdStart) {
+    return (
+      <div className="fixed inset-0 z-[1000] bg-nb-bg flex flex-col items-center justify-center font-sans animate-in fade-in duration-300">
+        <div className="flex flex-col items-center gap-6">
+          <div className="w-20 h-20 rounded-[2.5rem] bg-nb-primary flex items-center justify-center shadow-2xl shadow-nb-primary/30 animate-pulse">
+            <BookOpen size={40} className="text-white" />
+          </div>
+          <div className="text-center space-y-2">
+            <h1 className="text-xl font-black tracking-tight text-nb-on-surface">Notebook</h1>
+            <p className="text-[10px] font-black tracking-[0.2em] text-nb-on-surface-variant uppercase">Engineering Editor</p>
+          </div>
+          <div className="flex items-center gap-1 mt-4">
+            <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce [animation-delay:-0.3s]" />
+            <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce [animation-delay:-0.15s]" />
+            <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen w-full bg-nb-bg font-sans overflow-hidden">
       <input type="file" ref={importEntryInputRef} accept=".json" style={{ display: "none" }} onChange={(e) => { const file = e.target.files?.[0]; if (file) processImportFile(file); e.target.value = ""; }} />
 
       {workspaceMode === "none" ? (
-        <Settings
+          <Settings
           projects={projects}
           pendingCounts={projectPendingCounts}
           onSelectProject={handleSelectProject}
@@ -1841,7 +1870,7 @@ export default function App() {
       />
 
       {isInitializing && (
-        <div className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center font-sans animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-md flex flex-col items-center justify-center font-sans animate-in fade-in duration-300">
           <div className="flex flex-col items-center gap-6">
             <div className="w-20 h-20 rounded-[2.5rem] bg-nb-primary flex items-center justify-center shadow-2xl shadow-nb-primary/30 animate-pulse">
               <BookOpen size={40} className="text-white" />
