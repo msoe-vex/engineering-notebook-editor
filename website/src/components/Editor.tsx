@@ -464,12 +464,12 @@ const Editor = React.memo(function Editor({
           if (safePos !== null) {
             editor.chain().focus().insertContentAt(safePos, {
               type: "image",
-              attrs: { id: generateUUID(), src: dataUrl, filePath: newPath, title: author }
+              attrs: { id: generateUUID(), src: dataUrl, filePath: newPath, title: "" }
             }).run();
           } else {
             editor.chain().focus().insertContent({
               type: "image",
-              attrs: { id: generateUUID(), src: dataUrl, filePath: newPath, title: author }
+              attrs: { id: generateUUID(), src: dataUrl, filePath: newPath, title: "" }
             }).run();
           }
 

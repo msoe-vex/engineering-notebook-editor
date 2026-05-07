@@ -120,15 +120,13 @@ export const convertNodeToLatex = (node: TipTapNode): string => {
       const title = attrs.title ? `${attrs.title}: ` : "";
       const escapedCaption = escapeLaTeX(title + (attrs.caption || attrs.alt || "Figure"));
 
-      const escapedInitials = escapeLaTeX(attrs.initials ?? "");
-
       // Convert "55%" to "0.55\textwidth"
       const rawWidth = (attrs.width ?? "100%").toString().replace("%", "");
       const widthNum = parseFloat(rawWidth);
       const latexWidth = isNaN(widthNum) ? "1" : (widthNum / 100).toFixed(2);
 
       const labelId = attrs.id || "";
-      return `\\notebookimage{${imgSrc}}{${escapedCaption}}{${escapedInitials}}{${latexWidth}\\textwidth}{${labelId}}\n\n`;
+      return `\\notebookimage{${imgSrc}}{${escapedCaption}}{${latexWidth}\\textwidth}{${labelId}}\n\n`;
     }
 
     case "table": {
