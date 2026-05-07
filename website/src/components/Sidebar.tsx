@@ -4,7 +4,6 @@ import PendingChangesPanel from "./PendingChangesPanel";
 import { ExplorerFile } from "@/lib/types";
 import { NotebookMetadata } from "@/lib/metadata";
 import { PendingChange } from "@/lib/db";
-import { Users } from "lucide-react";
 
 interface SidebarProps {
   entries: ExplorerFile[];
@@ -43,7 +42,6 @@ export default function Sidebar({
   onDownloadMulti,
   onDeleteMulti,
   onNewEntry,
-  onOpenTeam,
   isCommitting,
   onCommit,
   onDiscard,
@@ -141,12 +139,12 @@ export default function Sidebar({
 
       {pendingChanges.length > 0 && (
         <div className="p-4 bg-nb-surface border-t border-nb-outline-variant animate-in slide-in-from-bottom-2 duration-300">
-          <PendingChangesPanel 
-            pendingChanges={pendingChanges} 
-            isCommitting={isCommitting} 
-            onCommit={onCommit} 
-            onDiscard={onDiscard} 
-            workspaceMode={workspaceMode as "github" | "local" | "temporary"} 
+          <PendingChangesPanel
+            pendingChanges={pendingChanges}
+            isCommitting={isCommitting}
+            onCommit={onCommit}
+            onDiscard={onDiscard}
+            workspaceMode={workspaceMode as "github" | "local" | "temporary"}
           />
         </div>
       )}

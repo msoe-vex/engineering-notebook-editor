@@ -5,6 +5,7 @@ import {
   Hash, User, Briefcase, Image as ImageIcon,
   Loader2, Check, X, Camera, Building2, Plus, Trash2, Users
 } from "lucide-react";
+import Image from "next/image";
 import { TeamMetadata, TeamMember } from "@/lib/metadata";
 
 interface TeamEditorProps {
@@ -198,7 +199,9 @@ export default function TeamEditor({
                 <div className="relative group">
                   <div className="w-48 h-48 rounded-[40px] bg-nb-surface border-4 border-white shadow-nb-lg overflow-hidden flex items-center justify-center">
                     {teamData.logo ? (
-                      <img src={teamData.logo} alt="Logo" className="w-full h-full object-contain" />
+                      <div className="relative w-full h-full">
+                        <Image src={teamData.logo} alt="Logo" fill className="object-contain" unoptimized />
+                      </div>
                     ) : (
                       <ImageIcon size={48} className="text-nb-on-surface-variant/20" />
                     )}
@@ -239,7 +242,9 @@ export default function TeamEditor({
                     <div className="relative">
                       <div className="w-20 h-24 rounded-2xl bg-nb-surface-low border-2 border-nb-outline-variant/30 overflow-hidden flex items-center justify-center">
                         {member.image ? (
-                          <img src={member.image} alt={member.name} className="w-full h-full object-cover" />
+                          <div className="relative w-full h-full">
+                            <Image src={member.image} alt={member.name} fill className="object-cover" unoptimized />
+                          </div>
                         ) : (
                           <User size={24} className="text-nb-on-surface-variant/20" />
                         )}

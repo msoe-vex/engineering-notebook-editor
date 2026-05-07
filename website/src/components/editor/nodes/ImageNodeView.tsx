@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import { Image as TiptapImage, type ImageOptions } from "@tiptap/extension-image";
 import Image from "next/image";
-import { GripVertical, Trash2, Image as ImageIcon, UserCircle } from "lucide-react";
+import { GripVertical, Trash2, Image as ImageIcon } from "lucide-react";
 import { getResource } from "@/lib/db";
 
 import { NodeViewProps } from "./types";
