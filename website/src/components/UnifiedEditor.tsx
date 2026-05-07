@@ -171,7 +171,10 @@ export default function UnifiedEditor({
         },
       }),
       Placeholder.configure({
-        placeholder: "Start writing...",
+        placeholder: ({ node }) => {
+          if (node.type.name === 'codeBlock') return ""; 
+          return "Start writing...";
+        },
       }),
       IdRemapper,
     ],
