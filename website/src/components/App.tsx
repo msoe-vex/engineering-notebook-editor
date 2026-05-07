@@ -159,6 +159,7 @@ export default function App() {
   const workspaceModeRef = useRef<string>("none");
   const currentProjectIdRef = useRef<string | null>(null);
   const loadingProjectMetaRef = useRef<NotebookMetadata | null>(null);
+  const lastCreatedEntryRef = useRef<{ id: string; content: string; latex: string } | null>(null);
 
 
   const navigate = useCallback((path: string, searchParams?: Record<string, string | null>) => {
@@ -771,6 +772,7 @@ export default function App() {
 
     setEntries(prev => [{ name: filename, path }, ...prev]);
     setNotebookMetadata(newMetadata);
+    notebookMetadataRef.current = newMetadata;
 
     try {
       await saveEntry(path, jsonStr, "New entry");
@@ -779,6 +781,7 @@ export default function App() {
       const allEntriesLatex = generateAllEntriesLatex(newMetadata);
       await saveEntry(currentAllEntriesPath, allEntriesLatex, "Update all_entries.tex");
 
+      lastCreatedEntryRef.current = { id: entryId, content: jsonStr, latex: initialLatex };
       const project = new URLSearchParams(window.location.search).get('project') || "";
       navigate('/workspace/editor', { project, entry: entryId });
       
@@ -787,7 +790,8 @@ export default function App() {
       notify("Failed to create entry.", "error");
     } finally {
       setIsLoading(false);
-      setIsInitializing(false);
+      // Don't set isInitializing(false) here because navigate() will trigger handleUrlChange 
+      // which will manage its own loading state.
     }
   }, [workspaceMode, config, saveEntry, saveMetadata, notebookMetadata, setEntries, setNotebookMetadata, currentLatexDir, currentAllEntriesPath, refreshPending, notify, setIsLoading, setIsInitializing]);
 
@@ -1129,16 +1133,23 @@ export default function App() {
           setShowTeamEditor(false);
           if (entryId && entryId !== openFileRef.current?.id) {
             const currentMeta = loadedMeta || loadingProjectMetaRef.current || notebookMetadataRef.current;
-            if (currentMeta.entries[entryId]) {
+            const isNewEntry = lastCreatedEntryRef.current?.id === entryId;
+            if (currentMeta.entries[entryId] || isNewEntry) {
               // Linear load of entry content
               const filename = `${entryId}.json`;
               const entriesDir = (activeMode === "github" && activeConfig) ? activeConfig.entriesDir : ENTRIES_DIR;
-              await _performOpenEntry({ name: filename, path: `${entriesDir}/${filename}` }, undefined, undefined, {
+              const initialContent = (lastCreatedEntryRef.current?.id === entryId) ? lastCreatedEntryRef.current.content : undefined;
+              const initialLatex = (lastCreatedEntryRef.current?.id === entryId) ? lastCreatedEntryRef.current.latex : undefined;
+              
+              await _performOpenEntry({ name: filename, path: `${entriesDir}/${filename}` }, initialContent, initialLatex, {
                 mode: activeMode,
                 handle: activeHandle,
                 config: activeConfig,
                 metadata: currentMeta
               });
+              
+              // Clear cache after successful use or if mismatch
+              lastCreatedEntryRef.current = null;
             } else {
               setOpenFile(null);
               navigate('/workspace');
@@ -1553,7 +1564,6 @@ export default function App() {
     if (p) {
       p.lastOpened = isoTimestamp();
       await saveProject(p);
-      await refreshProjectList();
       navigate('/workspace', { project: p.id });
     } else notify("Project not found.", "error");
   };
@@ -1573,7 +1583,6 @@ export default function App() {
       githubConfig: { owner: githubConfig.owner, repo: githubConfig.repo, branch: githubConfig.branch, folderPath: githubConfig.baseDir }
     };
     await saveProject(p);
-    await refreshProjectList();
     navigate('/workspace', { project: id });
   };
 
@@ -1606,7 +1615,6 @@ export default function App() {
     await ensureLocalDirectory(handle, ASSETS_DIR);
     await ensureLocalDirectory(handle, LATEX_DIR);
 
-    await refreshProjectList();
     navigate('/workspace', { project: id });
   };
   const handleCreateTemporary = async () => {
@@ -1620,7 +1628,6 @@ export default function App() {
       performDisconnect();
       setOpenFile(null);
       setLatexContent("");
-      refreshProjectList();
     };
     if (workspaceMode === "temporary") {
       showConfirm("Leave?", "Lose unsaved changes?", () => run(), "warning");
