@@ -41,6 +41,7 @@ import { getLocalFileContent, writeLocalFile, ensureLocalDirectory } from "@/lib
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type ViewMode = "entry";
+type TeamTab = "identity" | "members" | "phases";
 export interface FileMetadata {
   content: string;
   title?: string;
@@ -142,25 +143,62 @@ export default function App() {
   const [needsPermission, setNeedsPermission] = useState(false);
   const [isConnectingLocal, setIsConnectingLocal] = useState(false);
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
-  const [activeWorkspaceMode, setActiveWorkspaceMode] = useState<WorkspaceMode>("none");
   const [showTeamEditor, setShowTeamEditor] = useState(false);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
-  const [prevSync, setPrevSync] = useState({ mode: workspaceMode, init: isInitializing });
+  const [hydratedTeam, setHydratedTeam] = useState<TeamMetadata | null>(null);
+  const [hydratedPhases, setHydratedPhases] = useState<ProjectPhase[]>([]);
   
   // Refs for state that callbacks/effects read but should NOT trigger re-runs
   const openFileRef = useRef(openFile);
   const notebookMetadataRef = useRef(notebookMetadata);
   const targetResourceRef = useRef<string | null>(null);
   const [targetResourceId, setTargetResourceId] = useState<string | null>(null);
+  const [teamTab, setTeamTab] = useState<TeamTab>("identity");
+  const lastHandledUrlRef = useRef("");
+  const workspaceModeRef = useRef<string>("none");
+  const currentProjectIdRef = useRef<string | null>(null);
+  const loadingProjectMetaRef = useRef<NotebookMetadata | null>(null);
+
+
+  const navigate = useCallback((path: string, searchParams?: Record<string, string>) => {
+    const url = new URL(window.location.href);
+    const currentParams = new URLSearchParams(window.location.search);
+    const currentProject = currentParams.get('project');
+    
+    url.pathname = path;
+    const newParams = new URLSearchParams();
+    
+    // Always preserve project if it exists
+    if (currentProject) newParams.set('project', currentProject);
+    
+    // Apply explicit overrides
+    if (searchParams) {
+      Object.entries(searchParams).forEach(([k, v]) => {
+        if (v === null || v === undefined) newParams.delete(k);
+        else newParams.set(k, v);
+      });
+    }
+    
+    url.search = newParams.toString();
+    window.history.pushState({}, '', url.toString());
+    window.dispatchEvent(new Event('locationchange'));
+  }, []);
+
+  const setCurrentProjectIdInternal = useCallback((id: string | null) => {
+    setCurrentProjectId(id);
+    currentProjectIdRef.current = id;
+  }, [setCurrentProjectId]);
+
+  const setWorkspaceModeInternal = useCallback((mode: WorkspaceMode) => {
+    setWorkspaceMode(mode);
+    workspaceModeRef.current = mode;
+  }, [setWorkspaceMode]);
 
   useEffect(() => { openFileRef.current = openFile; }, [openFile]);
   useEffect(() => { notebookMetadataRef.current = notebookMetadata; }, [notebookMetadata]);
   useEffect(() => { targetResourceRef.current = targetResourceId; }, [targetResourceId]);
-
-  if (prevSync.mode !== workspaceMode || prevSync.init !== isInitializing) {
-    setPrevSync({ mode: workspaceMode, init: isInitializing });
-    if (!isInitializing) setActiveWorkspaceMode(workspaceMode);
-  }
+  useEffect(() => { workspaceModeRef.current = workspaceMode; }, [workspaceMode]);
+  useEffect(() => { currentProjectIdRef.current = currentProjectId; }, [currentProjectId]);
 
   const lastSavedContentsRef = useRef<Map<string, string>>(new Map());
 
@@ -585,7 +623,12 @@ export default function App() {
     });
   }, [lastSelectedPath]);
 
-  const handleOpenEntry = useCallback(async (file: ExplorerFile, silent: boolean = false, initialContent?: string, initialLatex?: string) => {
+  const _performOpenEntry = useCallback(async (
+    file: ExplorerFile, 
+    initialContent?: string, 
+    initialLatex?: string,
+    context?: { mode?: WorkspaceMode; handle?: FileSystemDirectoryHandle | null; config?: GitHubConfig | null; metadata?: NotebookMetadata | null }
+  ) => {
     setIsLoading(true);
     setIsInitializing(true);
     setMobileTab("editor");
@@ -597,13 +640,10 @@ export default function App() {
       let latexStr = "";
 
       const entryId = file.name.replace('.json', '');
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('entry') !== entryId) {
-        params.set('entry', entryId);
-        if (!silent) params.delete('resource');
-        window.history.pushState({}, '', `?${params.toString()}`);
-        window.dispatchEvent(new Event('locationchange'));
-      }
+      const activeMode = context?.mode || workspaceMode;
+      const activeHandle = context?.handle || dirHandle;
+      const activeConfig = context?.config || config;
+      const activeMetadata = context?.metadata || notebookMetadataRef.current;
 
       if (initialContent !== undefined) {
         entryJsonStr = initialContent;
@@ -611,15 +651,15 @@ export default function App() {
       } else {
         const stagedEntry = (await getAllPending(dbName)).find(p => p.path === file.path && p.operation === "upsert");
         if (stagedEntry?.content) entryJsonStr = stagedEntry.content;
-        else if (workspaceMode === "local" && dirHandle) entryJsonStr = (await getLocalFileContent(dirHandle, file.path)).text || "";
-        else if (workspaceMode === "github" && config) entryJsonStr = await fetchFileContent(config, file.path);
+        else if (activeMode === "local" && activeHandle) entryJsonStr = (await getLocalFileContent(activeHandle, file.path)).text || "";
+        else if (activeMode === "github" && activeConfig) entryJsonStr = await fetchFileContent(activeConfig, file.path);
       }
 
       if (!entryJsonStr) throw new Error("Entry not found");
       const rawData = JSON.parse(entryJsonStr);
       const content = rawData.content || rawData;
 
-      const meta = notebookMetadataRef.current.entries[entryId];
+      const meta = activeMetadata.entries[entryId];
       const title = meta?.title || "";
       const author = meta?.author || (typeof window !== "undefined" ? localStorage.getItem("nb-last-author") || "" : "");
       const phase = meta?.phase ?? null;
@@ -630,10 +670,10 @@ export default function App() {
         const latexPath = `${currentLatexDir}/${entryId}.tex`;
         const stagedLatex = (await getAllPending(dbName)).find(p => p.path === latexPath && p.operation === "upsert");
         if (stagedLatex?.content) latexStr = stagedLatex.content;
-        else if (workspaceMode === "local" && dirHandle) {
-          try { latexStr = (await getLocalFileContent(dirHandle, latexPath)).text || ""; } catch { /* ignore */ }
-        } else if (workspaceMode === "github" && config) {
-          try { latexStr = await fetchFileContent(config, latexPath); } catch { /* ignore */ }
+        else if (activeMode === "local" && activeHandle) {
+          try { latexStr = (await getLocalFileContent(activeHandle, latexPath)).text || ""; } catch { /* ignore */ }
+        } else if (activeMode === "github" && activeConfig) {
+          try { latexStr = await fetchFileContent(activeConfig, latexPath); } catch { /* ignore */ }
         }
       }
 
@@ -644,20 +684,20 @@ export default function App() {
       const assetCache = new Map<string, string>();
       const images = extractImagePaths(content);
       for (const imgPath of images) {
-        const actualImgPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${imgPath}` : imgPath;
+        const actualImgPath = activeMode === "github" && activeConfig?.baseDir ? `${getGitBasePrefix()}${imgPath}` : imgPath;
         const staged = (await getAllPending(dbName)).find(p => p.path === actualImgPath && p.operation === "upsert");
         if (staged?.content) assetCache.set(imgPath, staged.content.startsWith('data:') ? staged.content : `data:image/*;base64,${staged.content}`);
         else {
           const cached = await getResource(dbName, actualImgPath);
           if (cached) assetCache.set(imgPath, cached);
-          else if (workspaceMode === "local" && dirHandle) {
+          else if (activeMode === "local" && activeHandle) {
             try {
-              const res = await getLocalFileContent(dirHandle, imgPath);
+              const res = await getLocalFileContent(activeHandle, imgPath);
               if (res.base64) assetCache.set(imgPath, res.base64);
             } catch { /* ignore */ }
-          } else if (workspaceMode === "github" && config) {
+          } else if (activeMode === "github" && activeConfig) {
             try {
-              const base64 = await fetchRawFileContent(config, actualImgPath);
+              const base64 = await fetchRawFileContent(activeConfig, actualImgPath);
               const dataUrl = `data:image/*;base64,${base64}`;
               assetCache.set(imgPath, dataUrl);
               await putResource(dbName, { path: actualImgPath, dataUrl });
@@ -669,7 +709,7 @@ export default function App() {
       const hydratedContent = hydrateAssets(content, assetCache);
       
       let currentPhase = phase as (string | number | null);
-      if (currentPhase !== null && typeof currentPhase !== "number" || !(notebookMetadataRef.current.phases || []).some(p => p.id === currentPhase)) {
+      if (currentPhase !== null && typeof currentPhase !== "number" || !(activeMetadata.phases || []).some(p => p.id === currentPhase)) {
         currentPhase = null;
       }
 
@@ -682,14 +722,27 @@ export default function App() {
       setLatexContent(latexStr);
       setSelectedPaths(new Set([file.path]));
       setLastSelectedPath(file.path);
-    } catch (e) {
-      if (!silent) notify("Failed to open entry.", "error");
-      throw e;
+    } catch (err) {
+      console.error(err);
+      notify("Failed to open entry", "error");
     } finally {
       setIsLoading(false);
       setIsInitializing(false);
     }
-  }, [getDBName, workspaceMode, dirHandle, config, getGitBasePrefix, currentLatexDir, notify, setIsLoading, setMobileTab, setLatexContent]);
+  }, [getDBName, workspaceMode, dirHandle, config, currentLatexDir, getGitBasePrefix, notify]);
+
+  const handleOpenEntry = useCallback(async (file: ExplorerFile) => {
+    const entryId = file.name.replace('.json', '');
+    const project = new URLSearchParams(window.location.search).get('project') || "";
+    navigate('/workspace/editor', { project, entry: entryId });
+  }, [navigate]);
+
+  const handleOpenTeamEditor = useCallback((tab: TeamTab = "identity") => {
+    const activeTab = typeof tab === 'string' ? tab : "identity";
+    const project = new URLSearchParams(window.location.search).get('project') || "";
+    navigate(`/workspace/team/${activeTab}`, { project });
+  }, [navigate]);
+
 
   const handleNewEntry = useCallback(async () => {
     setIsLoading(true);
@@ -701,7 +754,7 @@ export default function App() {
     const path = `${entriesDir}/${filename}`;
 
     const defaultTitle = "";
-    const defaultAuthor = localStorage.getItem("nb-last-author") || "";
+    const defaultAuthor = typeof window !== "undefined" ? localStorage.getItem("nb-last-author") || "" : "";
 
     const entryMeta: EntryMetadata = {
       id: entryId, title: defaultTitle, author: defaultAuthor, phase: null,
@@ -724,7 +777,8 @@ export default function App() {
       const allEntriesLatex = generateAllEntriesLatex(newMetadata);
       await saveEntry(currentAllEntriesPath, allEntriesLatex, "Update all_entries.tex");
 
-      await handleOpenEntry({ name: filename, path }, true, jsonStr, initialLatex);
+      const project = new URLSearchParams(window.location.search).get('project') || "";
+      navigate('/workspace/editor', { project, entry: entryId });
       
       if (workspaceMode === "github") refreshPending();
     } catch {
@@ -733,18 +787,14 @@ export default function App() {
       setIsLoading(false);
       setIsInitializing(false);
     }
-  }, [workspaceMode, config, saveEntry, saveMetadata, notebookMetadata, setEntries, setNotebookMetadata, currentLatexDir, currentAllEntriesPath, refreshPending, handleOpenEntry, notify, setIsLoading, setIsInitializing]);
-
+  }, [workspaceMode, config, saveEntry, saveMetadata, notebookMetadata, setEntries, setNotebookMetadata, currentLatexDir, currentAllEntriesPath, refreshPending, notify, setIsLoading, setIsInitializing]);
 
   const handleCloseEntry = useCallback((path?: string) => {
     if (path && openFile?.path !== path) return;
     setOpenFile(null);
     setLatexContent("");
-    const params = new URLSearchParams(window.location.search);
-    params.delete('entry');
-    params.delete('resource');
-    window.history.pushState({}, '', `?${params.toString()}`);
-    window.dispatchEvent(new Event('locationchange'));
+    const project = new URLSearchParams(window.location.search).get('project') || "";
+    navigate('/workspace', { project });
   }, [openFile, setOpenFile, setLatexContent]);
 
   const handleDownloadLatex = useCallback(async (file: ExplorerFile) => {
@@ -919,111 +969,198 @@ export default function App() {
     });
   }, [currentAllEntriesPath, currentLatexDir, saveEntry, saveMetadata, workspaceMode, notify, setEntries, refreshPending, deleteFile, setIsLoading, setNotebookMetadata, handleCloseEntry]);
 
+  // Function refs to keep the initialization effect stable
+  const loadLocalExplorerRef = useRef(loadLocalExplorer);
+  const loadGitHubExplorerRef = useRef(loadGitHubExplorer);
+  const refreshPendingRef = useRef(refreshPending);
+  const checkPermissionRef = useRef(checkPermission);
+  const refreshProjectListRef = useRef(refreshProjectList);
 
-  // handleUrlChange logic moved to useEffect below
+  useEffect(() => { loadLocalExplorerRef.current = loadLocalExplorer; }, [loadLocalExplorer]);
+  useEffect(() => { loadGitHubExplorerRef.current = loadGitHubExplorer; }, [loadGitHubExplorer]);
+  useEffect(() => { refreshPendingRef.current = refreshPending; }, [refreshPending]);
+  useEffect(() => { checkPermissionRef.current = checkPermission; }, [checkPermission]);
+  useEffect(() => { refreshProjectListRef.current = refreshProjectList; }, [refreshProjectList]);
 
   useEffect(() => {
     let active = true;
     const handleUrlChange = async () => {
+      const currentUrl = window.location.pathname + window.location.search;
+      if (lastHandledUrlRef.current === currentUrl) {
+        setIsInitializing(false);
+        setIsLoading(false);
+        return;
+      }
+
       const params = new URLSearchParams(window.location.search);
+      const path = window.location.pathname;
       const entryId = params.get('entry');
       const resourceId = params.get('resource');
       const projectId = params.get('project');
 
-      if (projectId && projectId !== currentProjectId) {
-        setIsInitializing(true);
-        setIsLoading(true);
-        const p = await getProject(projectId);
-        if (!active) return;
-        if (p) {
-          const dbName = `notebook-project-${p.id}`;
-          setCurrentProjectId(p.id);
-          setNotebookMetadata({ ...EMPTY_METADATA, projectId: p.id, projectName: p.name });
-          void refreshPending(dbName);
-          if (p.type === "github" && p.githubConfig) {
-            setConfig({
-              token: githubToken || "",
-              owner: p.githubConfig.owner, repo: p.githubConfig.repo, branch: p.githubConfig.branch, baseDir: p.githubConfig.folderPath,
-              entriesDir: p.githubConfig.folderPath ? `${p.githubConfig.folderPath}/${ENTRIES_DIR}` : ENTRIES_DIR,
-              resourcesDir: p.githubConfig.folderPath ? `${p.githubConfig.folderPath}/${ASSETS_DIR}` : ASSETS_DIR,
-            });
-            setWorkspaceMode("github");
-            void loadGitHubExplorer();
-            deleteProjectDatabase("notebook-volatile").catch(() => { });
-          } else if (p.type === "local") {
-            const handle = await getProjectHandle(p.id);
-            if (handle) {
-              setDirHandle(handle);
-              setWorkspaceMode("local");
-              await checkPermission(handle);
-              void loadLocalExplorer();
-              deleteProjectDatabase("notebook-volatile").catch(() => { });
-            } else {
-              setWorkspaceMode("none");
-              setCurrentProjectId(null);
+      // Start full initialization
+      setIsInitializing(true);
+      setIsLoading(true);
+
+      let loadedMeta: NotebookMetadata | null = null;
+      let activeProject: Project | null | undefined = null;
+
+      try {
+        // 1. Handle Project Selection
+        const isProjectStale = projectId && (projectId !== currentProjectIdRef.current || workspaceModeRef.current === "none");
+        if (isProjectStale) {
+          activeProject = await getProject(projectId);
+          const p = activeProject;
+          if (!active) return;
+          if (p) {
+            if (p.type === "github" && p.githubConfig) {
+              const newConfig = {
+                token: githubToken || "",
+                owner: p.githubConfig.owner, repo: p.githubConfig.repo, branch: p.githubConfig.branch, baseDir: p.githubConfig.folderPath,
+                entriesDir: p.githubConfig.folderPath ? `${p.githubConfig.folderPath}/${ENTRIES_DIR}` : ENTRIES_DIR,
+                resourcesDir: p.githubConfig.folderPath ? `${p.githubConfig.folderPath}/${ASSETS_DIR}` : ASSETS_DIR,
+              };
+              setConfig(newConfig);
+              setWorkspaceModeInternal("github");
+              // Wait for explorer and metadata to load before proceeding
+              const res = await loadGitHubExplorerRef.current(newConfig);
+              await refreshPendingRef.current(`notebook-project-${p.id}`);
+              loadedMeta = res?.metadata || null;
+              loadingProjectMetaRef.current = loadedMeta;
+            } else if (p.type === "local") {
+              const handle = await getProjectHandle(p.id);
+              if (handle) {
+                setDirHandle(handle);
+                setWorkspaceModeInternal("local");
+                const hasPermission = await checkPermissionRef.current(handle);
+                if (hasPermission) {
+                  const res = await loadLocalExplorerRef.current(handle);
+                  await refreshPendingRef.current(`notebook-project-${p.id}`);
+                  loadedMeta = res?.metadata || null;
+                  loadingProjectMetaRef.current = loadedMeta;
+                }
+              }
+            } else if (p.type === "temporary") {
+              setWorkspaceModeInternal("temporary");
+              await refreshPendingRef.current("notebook-project-temporary");
             }
-          } else if (p.type === "temporary") {
-            setWorkspaceMode("temporary");
+            // Commit project state AFTER successful load
+            if (active) {
+              setCurrentProjectIdInternal(p.id);
+              setNotebookMetadata(loadedMeta || { ...EMPTY_METADATA, projectId: p.id, projectName: p.name });
+              loadingProjectMetaRef.current = loadedMeta;
+            }
+          } else if (projectId === "temporary") {
+            setCurrentProjectIdInternal("temporary");
+            setWorkspaceModeInternal("temporary");
+            setNotebookMetadata({ ...EMPTY_METADATA, projectId: "temporary", projectName: "Temporary Workspace" });
+            await refreshPendingRef.current("notebook-project-temporary");
+          } else {
+            notify("Project not found.", "error");
+            navigate('/');
+            return;
           }
-        } else if (projectId === "temporary") {
-          setCurrentProjectId("temporary");
-          setWorkspaceMode("temporary");
-          setNotebookMetadata({ ...EMPTY_METADATA, projectId: "temporary", projectName: "Temporary Workspace" });
-          void refreshPending("notebook-project-temporary");
-        } else {
-          notify("Project not found.", "error");
-          setCurrentProjectId(null);
-          setWorkspaceMode("none");
-          const params = new URLSearchParams(window.location.search);
-          params.delete('project');
-          window.history.pushState({}, '', `?${params.toString()}`);
-        }
-      }
-
-      // Read volatile state from refs to avoid stale closures without adding deps
-      const currentOpenFile = openFileRef.current;
-      const currentMeta = notebookMetadataRef.current;
-      const currentTargetResource = targetResourceRef.current;
-
-      if (projectId && !workspaceMode) return;
-      if (resourceId !== currentTargetResource) setTargetResourceId(resourceId);
-
-      if (entryId && entryId !== currentOpenFile?.id) {
-        if (currentMeta === EMPTY_METADATA) return;
-        if (currentMeta.entries[entryId]) {
-          const entriesDir = (workspaceMode === "github" && config) ? config.entriesDir : ENTRIES_DIR;
-          handleOpenEntry({ name: `${entryId}.json`, path: `${entriesDir}/${entryId}.json` }, true).catch(() => {
-            setOpenFile(null);
-            const params = new URLSearchParams(window.location.search);
-            params.delete('entry');
-            params.delete('resource');
-            window.history.replaceState({}, '', `?${params.toString()}`);
-            window.dispatchEvent(new Event('locationchange'));
-          });
-        } else if (!isLoading) {
+        } else if (!projectId) {
+          // No project, back to settings
+          setWorkspaceModeInternal("none");
+          setCurrentProjectIdInternal(null);
+          loadingProjectMetaRef.current = null;
           setOpenFile(null);
-          const params = new URLSearchParams(window.location.search);
-          params.delete('entry');
-          params.delete('resource');
-          window.history.replaceState({}, '', `?${params.toString()}`);
-          window.dispatchEvent(new Event('locationchange'));
-        }
-      } else if (!entryId && currentOpenFile) setOpenFile(null);
-
-      if (active) {
-        const projectMatches = projectId === currentProjectId;
-        const configReady = workspaceMode === "github" ? !!config : (workspaceMode === "local" ? !!dirHandle : true);
-        const metaReady = workspaceMode === "temporary" ? true : (currentMeta.projectId === projectId || Object.keys(currentMeta.entries).length > 0);
-
-        const isOpeningEntry = entryId && entryId !== currentOpenFile?.id && !!currentMeta.entries[entryId];
-
-        const isSettleable = projectId
-          ? (projectMatches && !isLoading && !!workspaceMode && configReady && metaReady && !isOpeningEntry)
-          : (!isLoading && !currentProjectId);
-
-        if (isSettleable) {
+          setShowTeamEditor(false);
           setIsInitializing(false);
-          void refreshProjectList();
+          setIsLoading(false);
+          await refreshProjectListRef.current();
+          lastHandledUrlRef.current = currentUrl;
+          return;
+        }
+
+        // 2. Handle Resource ID
+        if (resourceId !== targetResourceRef.current) setTargetResourceId(resourceId);
+
+        if (!activeProject && projectId) {
+          activeProject = await getProject(projectId);
+        }
+
+        const activeMode = activeProject?.type || workspaceMode;
+        const activeHandle = (activeProject?.type === "local") ? await getProjectHandle(activeProject.id) : dirHandle;
+        const activeConfig = (activeProject?.type === "github" && activeProject.githubConfig) ? {
+          token: githubToken || "",
+          owner: activeProject.githubConfig.owner, repo: activeProject.githubConfig.repo, branch: activeProject.githubConfig.branch, baseDir: activeProject.githubConfig.folderPath,
+          entriesDir: activeProject.githubConfig.folderPath ? `${activeProject.githubConfig.folderPath}/${ENTRIES_DIR}` : ENTRIES_DIR,
+          resourcesDir: activeProject.githubConfig.folderPath ? `${activeProject.githubConfig.folderPath}/${ASSETS_DIR}` : ASSETS_DIR,
+        } : config;
+
+          // 3. Handle specific view routes
+          if (path.startsWith('/workspace/team')) {
+          setOpenFile(null);
+          const tab = path.split('/').pop() as TeamTab;
+          setTeamTab(["identity", "members", "phases"].includes(tab) ? tab : "identity");
+          
+          // Wait for team hydration
+          const dbName = `notebook-project-${projectId}`;
+          const assetCache = new Map<string, string>();
+          const currentMeta = loadedMeta || loadingProjectMetaRef.current || notebookMetadataRef.current;
+          if (currentMeta.team) {
+            const images: string[] = [];
+            if (currentMeta.team.logo) images.push(currentMeta.team.logo);
+            currentMeta.team.members.forEach(m => { if (m.image) images.push(m.image); });
+            for (const imgPath of images) {
+              if (imgPath && !imgPath.startsWith("data:")) {
+                const cached = await getResource(dbName, imgPath);
+                if (cached) assetCache.set(imgPath, cached);
+                else if (activeMode === "local" && activeHandle) {
+                  try {
+                    const res = await getLocalFileContent(activeHandle, imgPath);
+                    if (res.base64) assetCache.set(imgPath, res.base64);
+                  } catch {}
+                }
+              }
+            }
+            setHydratedTeam(hydrateTeamAssets(currentMeta.team, assetCache));
+          } else {
+            setHydratedTeam(EMPTY_METADATA.team!);
+          }
+          setHydratedPhases(currentMeta.phases || []);
+          setShowTeamEditor(true);
+        } else if (path.startsWith('/workspace/editor') || (path === '/workspace' && entryId)) {
+          setShowTeamEditor(false);
+          if (entryId && entryId !== openFileRef.current?.id) {
+            const currentMeta = loadedMeta || loadingProjectMetaRef.current || notebookMetadataRef.current;
+            if (currentMeta.entries[entryId]) {
+              // Linear load of entry content
+              const filename = `${entryId}.json`;
+              const entriesDir = (activeMode === "github" && activeConfig) ? activeConfig.entriesDir : ENTRIES_DIR;
+              await _performOpenEntry({ name: filename, path: `${entriesDir}/${filename}` }, undefined, undefined, {
+                mode: activeMode,
+                handle: activeHandle,
+                config: activeConfig,
+                metadata: currentMeta
+              });
+            } else {
+              setOpenFile(null);
+              navigate('/workspace');
+            }
+          } else if (!entryId) {
+             setOpenFile(null);
+             navigate('/workspace');
+          }
+        } else {
+          // Base workspace path
+          setOpenFile(null);
+          setShowTeamEditor(false);
+        }
+
+        if (active) {
+          lastHandledUrlRef.current = currentUrl;
+        }
+      } catch (err) {
+        console.error("Initialization failed", err);
+        notify("Failed to load workspace.", "error");
+      } finally {
+        if (active) {
+          setIsInitializing(false);
+          setIsLoading(false);
+          await refreshProjectListRef.current();
         }
       }
     };
@@ -1032,7 +1169,7 @@ export default function App() {
     window.addEventListener('locationchange', handleUrlChange);
     handleUrlChange();
     return () => { active = false; window.removeEventListener('popstate', handleUrlChange); window.removeEventListener('locationchange', handleUrlChange); };
-  }, [handleOpenEntry, githubToken, setConfig, setDirHandle, setWorkspaceMode, refreshPending, refreshProjectList, setCurrentProjectId, setIsLoading, setNotebookMetadata, loadGitHubExplorer, loadLocalExplorer, currentProjectId, workspaceMode, dirHandle, config, isLoading, notify]);
+  }, [githubToken, setCurrentProjectIdInternal, setWorkspaceModeInternal, setIsLoading, setNotebookMetadata, notify, navigate]);
 
   const handleDiscardAll = async () => {
     const dbName = getDBName();
@@ -1044,7 +1181,7 @@ export default function App() {
       notify("Discarded.", "success");
       if (openFile) {
         const entriesDir = (workspaceMode === "github" && config) ? config.entriesDir : ENTRIES_DIR;
-        handleOpenEntry({ name: `${openFile.id}.json`, path: `${entriesDir}/${openFile.id}.json` }, true).catch(() => setOpenFile(null));
+        handleOpenEntry({ name: `${openFile.id}.json`, path: `${entriesDir}/${openFile.id}.json` }).catch(() => setOpenFile(null));
       }
       if (workspaceMode === "github") await loadGitHubExplorer();
       else if (workspaceMode === "local") await loadLocalExplorer();
@@ -1234,42 +1371,6 @@ export default function App() {
     };
   }, []);
 
-  const [hydratedTeam, setHydratedTeam] = useState<TeamMetadata | null>(null);
-
-  const handleOpenTeamEditor = async () => {
-    if (!notebookMetadata.team) {
-      setHydratedTeam(EMPTY_METADATA.team!);
-    } else {
-      setIsLoading(true);
-      try {
-        const dbName = getDBName();
-        const assetCache = new Map<string, string>();
-        const images: string[] = [];
-        if (notebookMetadata.team.logo) images.push(notebookMetadata.team.logo);
-        notebookMetadata.team.members.forEach(m => { if (m.image) images.push(m.image); });
-
-        for (const imgPath of images) {
-          if (imgPath && !imgPath.startsWith("data:")) {
-            const cached = await getResource(dbName, imgPath);
-            if (cached) assetCache.set(imgPath, cached);
-            else if (workspaceMode === "local" && dirHandle) {
-              try {
-                const res = await getLocalFileContent(dirHandle, imgPath);
-                if (res.base64) {
-                   const dataUrl = res.base64.startsWith('data:') ? res.base64 : `data:${getMimeTypeFromExtension(imgPath)};base64,${res.base64}`;
-                   assetCache.set(imgPath, dataUrl);
-                }
-              } catch (e) { console.error("Failed to load local team asset", imgPath, e); }
-            }
-          }
-        }
-        setHydratedTeam(hydrateTeamAssets(notebookMetadata.team, assetCache));
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    setShowTeamEditor(true);
-  };
 
   const handleSaveTeam = useCallback(async (team: TeamMetadata, phases?: ProjectPhase[], baseMetadata?: NotebookMetadata) => {
     setIsSaving(true);
@@ -1363,11 +1464,8 @@ export default function App() {
       if (openFile?.path === file.path) {
         setOpenFile(null);
         setLatexContent("");
-        const params = new URLSearchParams(window.location.search);
-        params.delete('entry');
-        params.delete('resource');
-        window.history.pushState({}, '', `?${params.toString()}`);
-        window.dispatchEvent(new Event('locationchange'));
+        const project = new URLSearchParams(window.location.search).get('project') || "";
+        navigate('/workspace', { project });
       }
     } finally {
       setIsLoading(false);
@@ -1427,21 +1525,6 @@ export default function App() {
     finally { setIsCommitting(false); setIsLoading(false); }
   }, [config, isCommitting, getDBName, loadGitHubExplorer, refreshPending, notify, setIsLoading]);
 
-  const handleSelectProject = async (id: string) => {
-    setIsInitializing(true);
-    setIsLoading(true);
-    const p = await getProject(id);
-    if (p) {
-      p.lastOpened = isoTimestamp();
-      await saveProject(p);
-      await refreshProjectList();
-      setNotebookMetadata({ ...EMPTY_METADATA, projectId: p.id, projectName: p.name });
-      const params = new URLSearchParams(window.location.search);
-      params.set('project', p.id);
-      window.history.pushState({}, '', `?${params.toString()}`);
-      window.dispatchEvent(new Event('locationchange'));
-    } else notify("Project not found.", "error");
-  };
 
   const handleDeleteProject = async (id: string) => {
     const p = await getProject(id);
@@ -1453,6 +1536,18 @@ export default function App() {
       await refreshProjectList();
       if (currentProjectId === id) handleDisconnect();
     });
+  };
+
+  const handleSelectProject = async (id: string) => {
+    setIsInitializing(true);
+    setIsLoading(true);
+    const p = await getProject(id);
+    if (p) {
+      p.lastOpened = isoTimestamp();
+      await saveProject(p);
+      await refreshProjectList();
+      navigate('/workspace', { project: p.id });
+    } else notify("Project not found.", "error");
   };
 
   const handleRenameProject = async (id: string, name: string) => {
@@ -1471,10 +1566,7 @@ export default function App() {
     };
     await saveProject(p);
     await refreshProjectList();
-    const params = new URLSearchParams(window.location.search);
-    params.set('project', id);
-    window.history.pushState({}, '', `?${params.toString()}`);
-    window.dispatchEvent(new Event('locationchange'));
+    navigate('/workspace', { project: id });
   };
 
   const handleCreateLocal = async (handle: FileSystemDirectoryHandle) => {
@@ -1507,25 +1599,16 @@ export default function App() {
     await ensureLocalDirectory(handle, LATEX_DIR);
 
     await refreshProjectList();
-    const params = new URLSearchParams(window.location.search);
-    params.set('project', id);
-    window.history.pushState({}, '', `?${params.toString()}`);
-    window.dispatchEvent(new Event('locationchange'));
+    navigate('/workspace', { project: id });
   };
   const handleCreateTemporary = async () => {
     setIsInitializing(true);
-    const params = new URLSearchParams(window.location.search);
-    params.set('project', 'temporary');
-    window.history.pushState({}, '', `?${params.toString()}`);
-    window.dispatchEvent(new Event('locationchange'));
+    navigate('/workspace', { project: 'temporary' });
   };
 
   const handleDisconnect = () => {
     const run = () => {
-      const params = new URLSearchParams(window.location.search);
-      params.delete('project'); params.delete('entry'); params.delete('resource');
-      window.history.pushState({}, '', `?${params.toString()}`);
-      window.dispatchEvent(new Event('locationchange'));
+      navigate('/');
       performDisconnect();
       setOpenFile(null);
       setLatexContent("");
@@ -1563,7 +1646,11 @@ export default function App() {
           notebookMetadata={notebookMetadata}
           pendingChanges={pendingChanges}
           onSelectEntry={handleSelectEntry}
-          onOpenEntry={handleOpenEntry}
+          onOpenEntry={(file) => {
+            const entryId = file.name.replace('.json', '');
+            const project = new URLSearchParams(window.location.search).get('project') || "";
+            navigate('/workspace/editor', { project, entry: entryId });
+          }}
           onCloseEntry={handleCloseEntry}
           onDownloadLatex={handleDownloadLatex}
           onDownloadJson={handleDownloadJson}
@@ -1631,11 +1718,13 @@ export default function App() {
           )
         ) : showTeamEditor && hydratedTeam ? (
           <TeamEditor 
+            key={`${currentProjectId}-team`}
             initialData={hydratedTeam}
-            initialPhases={notebookMetadata.phases || []}
+            initialPhases={hydratedPhases}
             onSave={handleSaveTeam}
-            onClose={() => setShowTeamEditor(false)}
+            onClose={() => navigate('/workspace')}
             isSaving={isSaving}
+            initialTab={teamTab}
           />
         ) : (
           <PanelGroup direction="horizontal" className="h-full" id="editor-preview-group">
@@ -1660,11 +1749,7 @@ export default function App() {
                   onPhaseChange={(phase) => handleMetadataChange(openFile.id, { phase })}
                   onImageUpload={handleImageUploaded} onDownloadPortable={handleDownloadPortable}
                   onClose={() => {
-                    const params = new URLSearchParams(window.location.search);
-                    params.delete('entry'); params.delete('resource');
-                    window.history.pushState({}, '', `?${params.toString()}`);
-                    window.dispatchEvent(new Event('locationchange'));
-                    setOpenFile(null);
+                    navigate('/workspace');
                   }}
                   dbName={getDBName()} isSaving={savingPaths.has(openFile.path)} notebookMetadata={notebookMetadata} targetResourceId={targetResourceId}
                 />
@@ -1690,7 +1775,7 @@ export default function App() {
     <div className="flex flex-col h-screen w-full bg-nb-bg font-sans overflow-hidden">
       <input type="file" ref={importEntryInputRef} accept=".json" style={{ display: "none" }} onChange={(e) => { const file = e.target.files?.[0]; if (file) processImportFile(file); e.target.value = ""; }} />
 
-      {activeWorkspaceMode === "none" ? (
+      {workspaceMode === "none" ? (
         <Settings
           projects={projects}
           pendingCounts={projectPendingCounts}

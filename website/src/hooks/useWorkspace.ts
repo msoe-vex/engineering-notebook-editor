@@ -19,6 +19,9 @@ export function useWorkspace() {
 
   const lastRemoteMetadataRef = useRef<string | null>(null);
   const lastRemoteAllEntriesRef = useRef<string | null>(null);
+  const metadataRef = useRef(metadata);
+
+  useEffect(() => { metadataRef.current = metadata; }, [metadata]);
 
   const getDBName = useCallback(() => {
     if (currentProjectId) {
@@ -27,59 +30,71 @@ export function useWorkspace() {
     return "notebook-pending";
   }, [currentProjectId]);
 
-  const loadLocalExplorer = useCallback(async (skipMetadata = false) => {
-    if (!dirHandle) return;
+  const loadLocalExplorer = useCallback(async (explicitHandle?: FileSystemDirectoryHandle, skipMetadata = false) => {
+    const handle = explicitHandle || dirHandle;
+    if (!handle) return;
     setIsLoading(true);
     try {
-      const files = await listLocalFiles(dirHandle, ENTRIES_DIR);
+      const files = await listLocalFiles(handle, ENTRIES_DIR);
       setEntries(files);
 
+      let finalMeta = metadata;
       if (!skipMetadata) {
         try {
-          const metaStr = await readLocalFile(dirHandle, INDEX_PATH);
+          const metaStr = await readLocalFile(handle, INDEX_PATH);
           const parsed = JSON.parse(metaStr);
-          setMetadata(prev => ({ ...parsed, projectId: prev.projectId || parsed.projectId, projectName: prev.projectName || parsed.projectName }));
+          finalMeta = { ...EMPTY_METADATA, ...parsed, projectId: metadataRef.current.projectId || parsed.projectId, projectName: metadataRef.current.projectName || parsed.projectName };
+          setMetadata(finalMeta);
         } catch {
-          setMetadata(prev => ({ ...EMPTY_METADATA, projectId: prev.projectId, projectName: prev.projectName }));
+          finalMeta = { ...EMPTY_METADATA, projectId: metadataRef.current.projectId, projectName: metadataRef.current.projectName };
+          setMetadata(finalMeta);
         }
       }
+      return { entries: files, metadata: finalMeta };
     } finally {
       setIsLoading(false);
     }
   }, [dirHandle]);
 
-  const loadGitHubExplorer = useCallback(async (skipMetadata = false) => {
-    if (!config) return;
+  const loadGitHubExplorer = useCallback(async (explicitConfig?: GitHubConfig, skipMetadata = false) => {
+    const activeConfig = explicitConfig || config;
+    if (!activeConfig) return;
     setIsLoading(true);
     try {
       const dbName = getDBName();
-      const actualEntriesDir = config.entriesDir || ENTRIES_DIR;
-      const basePrefix = config.baseDir ? (config.baseDir.endsWith('/') ? config.baseDir : config.baseDir + '/') : '';
+      const activeConfig = explicitConfig || config;
+      if (!activeConfig) return { entries: [], metadata };
+      
+      const actualEntriesDir = activeConfig.entriesDir || ENTRIES_DIR;
+      const basePrefix = activeConfig.baseDir ? (activeConfig.baseDir.endsWith('/') ? activeConfig.baseDir : activeConfig.baseDir + '/') : '';
       const actualIndexPath = `${basePrefix}${INDEX_PATH}`;
       const actualAllEntriesPath = `${basePrefix}${ALL_ENTRIES_PATH}`;
 
-      const files = await fetchDirectoryTree(config, actualEntriesDir);
+      const files = await fetchDirectoryTree(activeConfig, actualEntriesDir);
       const entryFiles = Array.isArray(files) ? files.map((f: GitHubFile) => ({ name: f.name, path: f.path })) : [];
 
       const pending = await getAllPending(dbName);
       const pendingMeta = pending.find(p => p.path === actualIndexPath && p.operation === "upsert");
 
+      let finalMeta = metadataRef.current;
       if (pendingMeta?.content) {
         try {
           const parsed = JSON.parse(pendingMeta.content);
-          setMetadata(prev => ({ ...parsed, projectId: prev.projectId || parsed.projectId, projectName: prev.projectName || parsed.projectName }));
+          finalMeta = { ...EMPTY_METADATA, ...parsed, projectId: metadataRef.current.projectId || parsed.projectId, projectName: metadataRef.current.projectName || parsed.projectName };
+          setMetadata(finalMeta);
         } catch { }
       } else if (!skipMetadata) {
         try {
-          const metaStr = await fetchFileContent(config, actualIndexPath);
+          const metaStr = await fetchFileContent(activeConfig, actualIndexPath);
           lastRemoteMetadataRef.current = metaStr;
           const parsed = JSON.parse(metaStr);
-          setMetadata(prev => ({ ...parsed, projectId: prev.projectId || parsed.projectId, projectName: prev.projectName || parsed.projectName }));
+          finalMeta = { ...EMPTY_METADATA, ...parsed, projectId: metadataRef.current.projectId || parsed.projectId, projectName: metadataRef.current.projectName || parsed.projectName };
+          setMetadata(finalMeta);
         } catch { }
       }
 
       try {
-        const allEntries = await fetchFileContent(config, actualAllEntriesPath);
+        const allEntries = await fetchFileContent(activeConfig, actualAllEntriesPath);
         lastRemoteAllEntriesRef.current = allEntries;
       } catch { }
 
@@ -97,6 +112,7 @@ export function useWorkspace() {
       }
 
       setEntries(mergedEntries);
+      return { entries: mergedEntries, metadata: finalMeta };
     } finally {
       setIsLoading(false);
     }
@@ -122,20 +138,7 @@ export function useWorkspace() {
     setCurrentProjectId(null);
   }, []);
 
-  useEffect(() => {
-    const run = async () => {
-      if (mode === "local" && dirHandle) {
-        await loadLocalExplorer();
-      } else if (mode === "github" && config) {
-        await loadGitHubExplorer();
-      } else if (mode === "temporary") {
-        setEntries([]);
-        setMetadata({ ...EMPTY_METADATA });
-        setIsLoading(false);
-      }
-    };
-    run();
-  }, [mode, dirHandle, config, loadLocalExplorer, loadGitHubExplorer]);
+  // Automatic initialization removed in favor of explicit orchestration in App.tsx
 
   return {
     mode,
