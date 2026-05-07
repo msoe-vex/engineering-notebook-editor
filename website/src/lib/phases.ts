@@ -1,4 +1,5 @@
 import * as Icons from "lucide-react";
+import { LucideIcon } from "lucide-react";
 import { ProjectPhase } from "./metadata";
 
 export const DEFAULT_PHASES: ProjectPhase[] = [
@@ -19,7 +20,7 @@ export const AVAILABLE_ICONS = [
 ];
 
 export interface PhaseInfo {
-  icon: any;
+  icon: LucideIcon;
   color: string;
   bg: string;
   border: string;
@@ -40,7 +41,7 @@ export function getPhaseConfig(phases: ProjectPhase[]): Record<string, PhaseInfo
   
   phases.forEach(p => {
     // Dynamically get icon component
-    const IconComponent = (Icons as any)[p.iconName] || Icons.HelpCircle;
+    const IconComponent = (Icons as unknown as Record<string, LucideIcon>)[p.iconName] || Icons.HelpCircle;
     
     config[p.id] = {
       icon: IconComponent,

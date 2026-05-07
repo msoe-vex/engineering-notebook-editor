@@ -10,8 +10,7 @@ import {
   Undo2, Redo2, ImagePlus, ChevronDown, List, ListOrdered,
   Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
   Terminal, Link as LinkIcon, Underline as UnderlineIcon,
-  FileJson, Settings, CheckCircle2, ChevronRight, Hash, Quote,
-  Minus, Eye, Link, Unlink, Trash, Check as CheckIcon
+  FileJson
 } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng } from "@/lib/utils";
@@ -585,7 +584,7 @@ const Editor = React.memo(function Editor({
                 </div>
               )}
             </div>
-            
+
             <button
               onClick={onClose}
               title="Close Entry"
@@ -641,15 +640,15 @@ const Editor = React.memo(function Editor({
               </div>
 
               <div className={`h-9 w-[230px] shrink-0 flex items-center gap-2.5 px-3 rounded-xl border transition-all relative ${activePhaseCfg ? `${activePhaseCfg.bg} ${activePhaseCfg.border}` : "bg-nb-surface-low border-nb-outline-variant/30"}`}>
-                <div 
-                  className="absolute inset-0 z-10 cursor-pointer" 
-                  onClick={() => setActiveMenu(activeMenu === "Phase" ? null : "Phase")} 
+                <div
+                  className="absolute inset-0 z-10 cursor-pointer"
+                  onClick={() => setActiveMenu(activeMenu === "Phase" ? null : "Phase")}
                 />
-                
+
                 {activePhaseCfg && (
                   <activePhaseCfg.icon size={14} className="shrink-0" style={{ color: availablePhases.find(p => p.id === phase)?.color }} />
                 )}
-                
+
                 {/* Metadata dropdown */}
                 <div className={`flex-1 w-full min-w-0 text-xs font-bold tracking-widest truncate ${phase !== null && phaseConfig[phase] ? phaseConfig[phase].text : "text-nb-on-surface-variant/60"}`}>
                   {availablePhases.find(p => p.id === phase)?.name || "No Phase Selected"}
@@ -657,7 +656,7 @@ const Editor = React.memo(function Editor({
                 <ChevronDown size={12} className={`text-nb-on-surface-variant/40 shrink-0 transition-transform duration-200 ${activeMenu === "Phase" ? "rotate-180" : ""}`} />
 
                 {activeMenu === "Phase" && (
-                  <div 
+                  <div
                     className="absolute top-full left-0 right-0 mt-1 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl p-1.5 z-[200] animate-in fade-in slide-in-from-top-1 duration-150"
                     onMouseDown={(e) => e.stopPropagation()}
                   >
