@@ -13,6 +13,7 @@ export interface ExplorerFile {
   path: string;
   title?: string;
   author?: string;
+  phase?: string;
   timestamp?: string;
   updatedAt?: string;
   isValid?: boolean;

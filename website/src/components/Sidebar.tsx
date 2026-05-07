@@ -62,6 +62,7 @@ export default function Sidebar({
       return {
         ...f,
         title: meta?.title || "",
+        phase: meta?.phase || "",
         timestamp: meta?.createdAt,
         updatedAt: meta?.updatedAt,
         isValid: meta?.isValid !== false
