@@ -69,12 +69,20 @@ export interface EntryWrapper {
   content: TipTapNode; // TipTap JSON
 }
 
+export interface ProjectPhase {
+  id: string;
+  name: string;
+  iconName: string; // Lucide icon name
+  color: string;    // Hex color
+}
+
 export interface NotebookMetadata {
   version: number;
   projectId?: string;
   projectName?: string;
   entries: Record<string, EntryMetadata>; // uuid -> metadata
   team?: TeamMetadata;
+  phases?: ProjectPhase[];
   assetRefs?: Record<string, string[]>; // asset path -> [entry id or "team"]
 }
 

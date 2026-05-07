@@ -1,5 +1,5 @@
 import { ASSETS_DIR, DATA_DIR } from "./constants";
-import { TipTapNode } from "./metadata";
+import { TipTapNode, ProjectPhase } from "./metadata";
 
 export const escapeLaTeX = (text: string) =>
   text
@@ -250,5 +250,21 @@ export const generateTeamLatex = (team: TeamMetadata): string => {
     latex += `\n`;
   });
   latex += `}\n`;
+  return latex;
+};
+
+export const generatePhasesLatex = (phases: ProjectPhase[]): string => {
+  let latex = "% DESIGN PROCESS PHASES - AUTOMATICALLY GENERATED\n\n";
+  
+  phases.forEach(p => {
+    // Create a color name based on the ID (safe for LaTeX)
+    const colorName = `PhaseCustom${p.id.replace(/[^a-zA-Z0-9]/g, '')}`;
+    const hex = p.color.startsWith("#") ? p.color.substring(1) : p.color;
+    
+    latex += `% Phase: ${p.name}\n`;
+    latex += `\\definecolor{${colorName}}{HTML}{${hex}}\n`;
+    latex += `\\csdef{phasecolor@${p.name}}{${colorName}}\n\n`;
+  });
+  
   return latex;
 };

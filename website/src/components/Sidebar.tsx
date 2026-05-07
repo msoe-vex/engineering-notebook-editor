@@ -136,6 +136,7 @@ export default function Sidebar({
         onSortDirectionToggle={() => setSortDirection(prev => prev === "asc" ? "desc" : "asc")}
         dateRange={dateRange}
         onDateRangeChange={setDateRange}
+        notebookMetadata={notebookMetadata}
       />
 
       {pendingChanges.length > 0 && (

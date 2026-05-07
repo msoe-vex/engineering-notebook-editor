@@ -10,7 +10,8 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 import { ExplorerFile } from "@/lib/types";
-import { PHASE_CONFIG } from "@/lib/phases";
+import { getPhases, getPhaseConfig } from "@/lib/phases";
+import { NotebookMetadata } from "@/lib/metadata";
 
 interface FileExplorerProps {
   entries: ExplorerFile[];
@@ -35,6 +36,7 @@ interface FileExplorerProps {
   onSortDirectionToggle: () => void;
   dateRange: { start: string; end: string } | null;
   onDateRangeChange: (range: { start: string; end: string } | null) => void;
+  notebookMetadata?: NotebookMetadata;
 }
 
 // ─── Single file row ──────────────────────────────────────────────────────────
@@ -73,7 +75,7 @@ function FileRow({
         ${isDeleted ? 'opacity-30 grayscale' : ''}
       `}
     >
-      <div className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all ${isOpened ? 'bg-white/80 text-white' : isSelected ? 'bg-nb-tertiary/10 text-nb-tertiary' : 'bg-nb-surface-low text-nb-tertiary'}`}>
+      <div className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all ${isOpened ? 'bg-white/20 text-white' : isSelected ? 'bg-nb-tertiary/10 text-nb-tertiary' : 'bg-nb-surface-low text-nb-tertiary'}`}>
         {icon}
       </div>
 
@@ -176,10 +178,14 @@ export default function FileExplorer({
   onSortDirectionToggle,
   dateRange,
   onDateRangeChange,
+  notebookMetadata
 }: FileExplorerProps) {
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, file: ExplorerFile } | null>(null);
+
+  const availablePhases = getPhases(notebookMetadata?.phases);
+  const phaseConfig = getPhaseConfig(availablePhases);
 
   const handleContextMenu = (e: React.MouseEvent, file: ExplorerFile) => {
     e.preventDefault();
@@ -338,8 +344,17 @@ export default function FileExplorer({
       >
         <div className="space-y-1">
           {entries.map((f) => {
-            const phaseInfo = f.phase ? PHASE_CONFIG[f.phase] : null;
-            const PhaseIcon = phaseInfo ? phaseInfo.icon : FileText;
+            const pConfig = f.phase && phaseConfig[f.phase] ? phaseConfig[f.phase] : null;
+            const IconComponent = pConfig ? pConfig.icon : FileText;
+            const iconStyle = pConfig ? { color: availablePhases.find(p => p.name === f.phase)?.color } : undefined;
+
+            const icon = (
+              <IconComponent
+                size={16}
+                style={activePath === f.path ? { color: "inherit" } : iconStyle}
+                className={activePath === f.path ? "" : pConfig ? "" : "opacity-40"}
+              />
+            );
 
             return (
               <FileRow
@@ -349,7 +364,7 @@ export default function FileExplorer({
                 isSelected={selectedPaths.has(f.path)}
                 isPending={pendingPaths.has(f.path)}
                 isDeleted={deletedPaths.has(f.path)}
-                icon={<PhaseIcon size={13} className={phaseInfo ? phaseInfo.color : ""} />}
+                icon={icon}
                 isValid={f.isValid}
                 sortBy={sortBy}
                 onSelect={(e) => onSelectEntry(f, e.ctrlKey || e.metaKey, e.shiftKey)}
