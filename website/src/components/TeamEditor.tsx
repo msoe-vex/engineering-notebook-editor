@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, memo, useCallback, useRef } from "
 import {
   Hash, User, Briefcase, Image as ImageIcon,
   Loader2, Check, X, Camera, Building2, Plus, Trash2, Users,
-  Palette, Shapes, Search, GripVertical
+  Palette, Shapes, Search, GripVertical, LucideIcon
 } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import Image from "next/image";
@@ -19,6 +19,7 @@ import {
   DragEndEvent,
   DragStartEvent,
   DragOverlay,
+  DraggableAttributes,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -50,7 +51,7 @@ const IconPicker = ({
     return AVAILABLE_ICONS.filter(i => i.toLowerCase().includes(q));
   }, [search]);
 
-  const IconComp = (LucideIcons as any)[currentIcon] || Shapes;
+  const IconComp = (LucideIcons as unknown as Record<string, LucideIcon>)[currentIcon] || Shapes;
 
   return (
     <div className="relative shrink-0">
@@ -81,7 +82,7 @@ const IconPicker = ({
             </div>
             <div className="grid grid-cols-4 gap-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1">
               {filteredIcons.map(iconName => {
-                const PickerIcon = (LucideIcons as any)[iconName] || Shapes;
+                const PickerIcon = (LucideIcons as unknown as Record<string, LucideIcon>)[iconName] || Shapes;
                 return (
                   <button
                     key={iconName}
@@ -112,15 +113,16 @@ const PhaseCard = memo(({
   phase: ProjectPhase,
   handlePhaseChange?: (id: number, field: keyof ProjectPhase, value: string) => void,
   removePhase?: (id: number) => void,
-  attributes?: any,
-  listeners?: any,
+  attributes?: DraggableAttributes,
+  listeners?: Record<string, unknown>,
   isOverlay?: boolean
 }) => {
   const [localColor, setLocalColor] = useState(phase.color);
-
-  useEffect(() => {
+  const [prevColor, setPrevColor] = useState(phase.color);
+  if (phase.color !== prevColor) {
     setLocalColor(phase.color);
-  }, [phase.color]);
+    setPrevColor(phase.color);
+  }
 
   useEffect(() => {
     if (!handlePhaseChange) return;

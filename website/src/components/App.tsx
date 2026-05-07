@@ -1330,7 +1330,7 @@ export default function App() {
     } finally {
       setIsSaving(false);
     }
-  }, [config, deriveProjectDates, dirHandle, getDBName, getGitBasePrefix, notify, performGarbageCollection, refreshPending, saveMetadata, setNotebookMetadata, stage, stageChange, workspaceMode]);
+  }, [config, deriveProjectDates, dirHandle, getDBName, getGitBasePrefix, notify, performGarbageCollection, refreshPending, saveMetadata, setNotebookMetadata, stage, workspaceMode]);
 
   const handleImageUploaded = async (imagePath: string, base64: string) => {
     const dbName = getDBName();
