@@ -106,6 +106,7 @@ export default function App() {
     disconnect: performDisconnect,
   } = useWorkspace();
 
+
   const {
     saveMetadata,
     saveEntry,
@@ -148,7 +149,7 @@ export default function App() {
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [hydratedTeam, setHydratedTeam] = useState<TeamMetadata | null>(null);
   const [hydratedPhases, setHydratedPhases] = useState<ProjectPhase[]>([]);
-  
+
   // Refs for state that callbacks/effects read but should NOT trigger re-runs
   const openFileRef = useRef(openFile);
   const notebookMetadataRef = useRef(notebookMetadata);
@@ -159,7 +160,6 @@ export default function App() {
   const workspaceModeRef = useRef<string>("none");
   const currentProjectIdRef = useRef<string | null>(null);
   const loadingProjectMetaRef = useRef<NotebookMetadata | null>(null);
-  const lastCreatedEntryRef = useRef<{ id: string; content: string; latex: string } | null>(null);
   const isColdStartRef = useRef(true);
   const hydratedProjectIdRef = useRef<string | null>(null);
   const entriesRef = useRef(entries);
@@ -169,13 +169,13 @@ export default function App() {
     const url = new URL(window.location.href);
     const currentParams = new URLSearchParams(window.location.search);
     const currentProject = currentParams.get('project');
-    
+
     url.pathname = path;
     const newParams = new URLSearchParams();
-    
+
     // Always preserve project if it exists
     if (currentProject) newParams.set('project', currentProject);
-    
+
     // Apply explicit overrides
     if (searchParams) {
       Object.entries(searchParams).forEach(([k, v]) => {
@@ -183,7 +183,7 @@ export default function App() {
         else newParams.set(k, v);
       });
     }
-    
+
     url.search = newParams.toString();
     window.history.pushState({}, '', url.toString());
     window.dispatchEvent(new Event('locationchange'));
@@ -534,7 +534,7 @@ export default function App() {
           title: existingEntry?.title ?? info.title,
           author: existingEntry?.author ?? info.author,
           phase: existingEntry?.phase ?? info.phase,
-           // Content-derived fields from this save
+          // Content-derived fields from this save
           updatedAt: isoTimestamp(),
           resources,
           references,
@@ -631,10 +631,10 @@ export default function App() {
   }, [lastSelectedPath]);
 
   const _performOpenEntry = useCallback(async (
-    file: ExplorerFile, 
-    initialContent?: string, 
+    file: ExplorerFile,
+    initialContent?: string,
     initialLatex?: string,
-    context?: { mode?: WorkspaceMode; handle?: FileSystemDirectoryHandle | null; config?: GitHubConfig | null; metadata?: NotebookMetadata | null },
+    context?: { mode?: WorkspaceMode; handle?: FileSystemDirectoryHandle | null; config?: GitHubConfig | null; metadata?: NotebookMetadata | null; projectId?: string | null },
     skipLoading = false
   ) => {
     if (!skipLoading) {
@@ -645,15 +645,15 @@ export default function App() {
     setShowTeamEditor(false);
 
     try {
-      const dbName = getDBName();
-      let entryJsonStr = "";
-      let latexStr = "";
-
-      const entryId = file.name.replace('.json', '');
       const activeMode = context?.mode || workspaceMode;
       const activeHandle = context?.handle || dirHandle;
       const activeConfig = context?.config || config;
       const activeMetadata = context?.metadata || notebookMetadataRef.current;
+      const dbName = getDBName(context?.projectId || (activeMode === "local" || activeMode === "temporary" ? (context?.metadata?.projectId || currentProjectId) : null));
+      const entryId = file.name.replace('.json', '');
+
+      let entryJsonStr = "";
+      let latexStr = "";
 
       if (initialContent !== undefined) {
         entryJsonStr = initialContent;
@@ -717,7 +717,7 @@ export default function App() {
       }
 
       const hydratedContent = hydrateAssets(content, assetCache);
-      
+
       let currentPhase = phase as (string | number | null);
       if (currentPhase !== null && typeof currentPhase !== "number" || !(activeMetadata.phases || []).some(p => p.id === currentPhase)) {
         currentPhase = null;
@@ -755,67 +755,57 @@ export default function App() {
 
 
   const handleNewEntry = useCallback(async () => {
-    const createdAt = isoTimestamp();
-    const entryId = generateUUID();
-    const filename = `${entryId}.json`;
-    const entriesDir = (workspaceMode === "github" && config) ? config.entriesDir : ENTRIES_DIR;
-    const path = `${entriesDir}/${filename}`;
+    setIsLoading(true);
+    setIsInitializing(true);
+    try {
+      const createdAt = isoTimestamp();
+      const entryId = generateUUID();
+      const filename = `${entryId}.json`;
+      const entriesDir = (workspaceMode === "github" && config) ? config.entriesDir : ENTRIES_DIR;
+      const path = `${entriesDir}/${filename}`;
 
-    const defaultTitle = "";
-    const defaultAuthor = typeof window !== "undefined" ? localStorage.getItem("nb-last-author") || "" : "";
+      const defaultTitle = "";
+      const defaultAuthor = typeof window !== "undefined" ? localStorage.getItem("nb-last-author") || "" : "";
 
-    const entryMeta: EntryMetadata = {
-      id: entryId, title: defaultTitle, author: defaultAuthor, phase: null,
-      createdAt, updatedAt: createdAt, filename: path, resources: {}
-    };
+      const entryMeta: EntryMetadata = {
+        id: entryId, title: defaultTitle, author: defaultAuthor, phase: null,
+        createdAt, updatedAt: createdAt, filename: path, resources: {}
+      };
 
-    const wrapper = { version: 3, content: { type: "doc", content: [{ type: "paragraph" }] } };
-    const jsonStr = JSON.stringify(wrapper, null, 2);
-    const initialLatex = `\\notebookentry{${defaultTitle}}{${createdAt.split('T')[0]}}{${defaultAuthor}}{}\n\\label{${entryId}}\n\n`;
+      const wrapper = { version: 3, content: { type: "doc", content: [{ type: "paragraph" }] } };
+      const jsonStr = JSON.stringify(wrapper, null, 2);
+      const initialLatex = `\\notebookentry{${defaultTitle}}{${createdAt.split('T')[0]}}{${defaultAuthor}}{}\n\\label{${entryId}}\n\n`;
 
-    const newMetadata = updateEntryInIndex(notebookMetadata, entryId, entryMeta);
+      const newMetadata = updateEntryInIndex(notebookMetadata, entryId, entryMeta);
 
-    // Optimistically update local state
-    setEntries(prev => [{ name: filename, path }, ...prev]);
-    setNotebookMetadata(newMetadata);
-    setOpenFile({
-      name: filename,
-      path,
-      id: entryId,
-      viewMode: "entry",
-      rawLatex: initialLatex,
-      tiptapContent: jsonStr,
-      title: defaultTitle,
-      author: defaultAuthor,
-      phase: null,
-      metadataMissing: false,
-      createdAt,
-      updatedAt: createdAt,
-      lastOpenedAt: createdAt,
-      isLegacyRaw: false,
-    });
-    notebookMetadataRef.current = newMetadata;
-    lastCreatedEntryRef.current = { id: entryId, content: jsonStr, latex: initialLatex };
+      // Perform persistence first (Blocking)
+      await saveEntry(path, jsonStr, "New entry");
+      await saveEntry(`${currentLatexDir}/${entryId}.tex`, initialLatex, "Init LaTeX");
+      await saveMetadata(newMetadata, "Create new entry");
 
-    // Navigate immediately to the new entry
-    const project = new URLSearchParams(window.location.search).get('project') || "";
-    navigate('/workspace/editor', { project, entry: entryId });
+      const allEntriesLatex = generateAllEntriesLatex(newMetadata);
+      await saveEntry(currentAllEntriesPath, allEntriesLatex, "Update all_entries.tex");
 
-    // Perform persistence in the background
-    (async () => {
-      try {
-        await saveEntry(path, jsonStr, "New entry");
-        await saveEntry(`${currentLatexDir}/${entryId}.tex`, initialLatex, "Init LaTeX");
-        await saveMetadata(newMetadata, "Update index for new entry");
-        const allEntriesLatex = generateAllEntriesLatex(newMetadata);
-        await saveEntry(currentAllEntriesPath, allEntriesLatex, "Update all_entries.tex");
-        if (workspaceMode === "github") refreshPending();
-      } catch (e) {
-        console.error("Background save failed for new entry", e);
-        notify("Failed to save new entry to disk. Your changes might be lost on refresh.", "error");
-      }
-    })();
-  }, [workspaceMode, config, saveEntry, saveMetadata, notebookMetadata, setEntries, setNotebookMetadata, currentLatexDir, currentAllEntriesPath, refreshPending, notify, navigate]);
+      // Update state only after success
+      setEntries(prev => [{ name: filename, path }, ...prev]);
+      setNotebookMetadata(newMetadata);
+      notebookMetadataRef.current = newMetadata;
+      setSelectedPaths(new Set([path]));
+      setLastSelectedPath(path);
+
+      if (workspaceMode === "github") refreshPending();
+
+      // Navigate
+      const project = new URLSearchParams(window.location.search).get('project') || "";
+      navigate('/workspace/editor', { project, entry: entryId });
+    } catch (e) {
+      console.error(e);
+      notify("Failed to create entry.", "error");
+    } finally {
+      setIsInitializing(false);
+      setIsLoading(false);
+    }
+  }, [workspaceMode, config, notebookMetadata, saveEntry, currentLatexDir, saveMetadata, currentAllEntriesPath, navigate, refreshPending, notify, setEntries, setNotebookMetadata]);
 
   const handleCloseEntry = useCallback((path?: string) => {
     if (path && openFile?.path !== path) return;
@@ -946,6 +936,7 @@ export default function App() {
       notify("Export failed.", "error");
     } finally {
       setIsLoading(false);
+      setIsInitializing(false);
     }
   }, [config, dirHandle, getDBName, getGitBasePrefix, notebookMetadata, workspaceMode, notify, setIsLoading]);
 
@@ -991,6 +982,7 @@ export default function App() {
           notify("Failed to delete entries.", "error");
         } finally {
           setIsLoading(false);
+          setIsInitializing(false);
           setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         }
       }
@@ -1069,8 +1061,6 @@ export default function App() {
                   loadingProjectMetaRef.current = loadedMeta;
                 }
               }
-            } else if (p.type === "temporary") {
-              await refreshPendingRef.current("notebook-project-temporary");
             }
             // Commit project state AFTER successful load
             if (active) {
@@ -1123,7 +1113,7 @@ export default function App() {
 
         // 3. Proactive Team Hydration (if project changed or cold start)
         if (projectId && (isProjectStale || isColdStartRef.current || hydratedProjectIdRef.current !== projectId)) {
-          const dbName = `notebook-project-${projectId}`;
+          const activeDBName = getDBName(projectId);
           const currentMeta = loadedMeta || loadingProjectMetaRef.current || notebookMetadataRef.current;
           
           if (currentMeta.team) {
@@ -1132,14 +1122,14 @@ export default function App() {
             
             await Promise.all(images.map(async (imgPath) => {
               if (imgPath.startsWith("data:")) return;
-              const cached = await getResource(dbName, imgPath);
+              const cached = await getResource(activeDBName, imgPath);
               if (cached) {
                 assetCache.set(imgPath, cached);
               } else if (activeMode === "local" && activeHandle) {
                 try {
                   const res = await getLocalFileContent(activeHandle, imgPath);
                   if (res.base64) assetCache.set(imgPath, res.base64);
-                } catch {}
+                } catch { }
               }
             }));
 
@@ -1161,29 +1151,21 @@ export default function App() {
           setShowTeamEditor(false);
           if (entryId && entryId !== openFileRef.current?.id) {
             const currentMeta = loadedMeta || loadingProjectMetaRef.current || notebookMetadataRef.current;
-            const isNewEntry = lastCreatedEntryRef.current?.id === entryId;
-            
+
             // Linear load of entry content
             const filename = `${entryId}.json`;
             const entriesDir = (activeMode === "github" && activeConfig) ? activeConfig.entriesDir : ENTRIES_DIR;
-            const initialContent = (lastCreatedEntryRef.current?.id === entryId) ? lastCreatedEntryRef.current.content : undefined;
-            const initialLatex = (lastCreatedEntryRef.current?.id === entryId) ? lastCreatedEntryRef.current.latex : undefined;
-            
-            // Skip splash screen if we are already in this project
-            const skipSplash = isNewEntry;
-            
-            await _performOpenEntry({ name: filename, path: `${entriesDir}/${filename}` }, initialContent, initialLatex, {
+
+            await _performOpenEntry({ name: filename, path: `${entriesDir}/${filename}` }, undefined, undefined, {
               mode: activeMode,
               handle: activeHandle,
               config: activeConfig,
-              metadata: currentMeta
-            }, skipSplash);
-            
-            // Clear cache after successful use or if mismatch
-            lastCreatedEntryRef.current = null;
+              metadata: currentMeta,
+              projectId: projectId
+            }, false);
           } else if (!entryId) {
-             setOpenFile(null);
-             navigate('/workspace');
+            setOpenFile(null);
+            navigate('/workspace');
           }
         } else {
           // Base workspace path
@@ -1211,9 +1193,9 @@ export default function App() {
     window.addEventListener('popstate', handleUrlChange);
     window.addEventListener('locationchange', handleUrlChange);
     handleUrlChange();
-    return () => { 
-      active = false; 
-      window.removeEventListener('popstate', handleUrlChange); 
+    return () => {
+      active = false;
+      window.removeEventListener('popstate', handleUrlChange);
       window.removeEventListener('locationchange', handleUrlChange);
     };
   }, [githubToken, setCurrentProjectIdInternal, setWorkspaceModeInternal, setIsLoading, setNotebookMetadata, notify, navigate]);
@@ -1400,18 +1382,18 @@ export default function App() {
   const deriveProjectDates = useCallback((metadata: NotebookMetadata) => {
     const entries = Object.values(metadata.entries);
     if (entries.length === 0) return { startDate: "TBD", endDate: "TBD" };
-    
-    const sorted = [...entries].sort((a, b) => 
+
+    const sorted = [...entries].sort((a, b) =>
       new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     );
-    
+
     const fmt = (iso: string) => {
       const d = new Date(iso);
       if (isNaN(d.getTime())) return "Unknown";
       const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       return `${months[d.getMonth()]} ${d.getFullYear()}`;
     };
-    
+
     return {
       startDate: fmt(sorted[0].createdAt),
       endDate: fmt(sorted[sorted.length - 1].createdAt)
@@ -1423,10 +1405,10 @@ export default function App() {
     setIsSaving(true);
     try {
       const dbName = getDBName();
-      
+
       // 1. Dehydrate assets
       const { cleanTeam, newAssets } = await dehydrateTeamAssets(team);
-      
+
       // 2. Save assets to local/github
       for (const asset of newAssets) {
         const actualPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${asset.path}` : asset.path;
@@ -1439,9 +1421,9 @@ export default function App() {
       }
 
       const metaToUse = baseMetadata || notebookMetadataRef.current;
-      
-      const updatedMeta = validateNotebookIntegrity({ 
-        ...metaToUse, 
+
+      const updatedMeta = validateNotebookIntegrity({
+        ...metaToUse,
         team: cleanTeam,
         phases: phases || metaToUse.phases || []
       });
@@ -1453,7 +1435,7 @@ export default function App() {
       const { startDate, endDate } = deriveProjectDates(updatedMeta);
       const teamLatex = generateTeamLatex({ ...cleanTeam, startDate, endDate });
       const teamPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${TEAM_PATH}` : TEAM_PATH;
-      
+
       if (workspaceMode === "local" && dirHandle) {
         await writeLocalFile(dirHandle, TEAM_PATH, teamLatex);
       } else {
@@ -1489,41 +1471,51 @@ export default function App() {
   };
 
   const handleDeleteEntry = async (file: ExplorerFile) => {
-    const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
-    const updatedMeta = validateNotebookIntegrity(removeEntryFromMetadata(notebookMetadata, entryId));
-    
-    // Optimistically update local state
-    setNotebookMetadata(updatedMeta);
-    notebookMetadataRef.current = updatedMeta;
-    setEntries(prev => prev.filter(e => e.path !== file.path));
-    setSelectedPaths(prev => {
-      const next = new Set(prev);
-      next.delete(file.path);
-      return next;
-    });
+    showConfirm(
+      "Delete Entry?",
+      `Are you sure you want to delete "${file.title || "Untitled Entry"}"? This action cannot be undone.`,
+      async () => {
+        setIsLoading(true);
+        setIsInitializing(true);
+        try {
+          const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
+          const updatedMeta = validateNotebookIntegrity(removeEntryFromMetadata(notebookMetadata, entryId));
 
-    if (openFile?.path === file.path) {
-      setOpenFile(null);
-      setLatexContent("");
-      const project = new URLSearchParams(window.location.search).get('project') || "";
-      navigate('/workspace', { project });
-    }
+          // Perform persistence first (Blocking)
+          await performGarbageCollection(notebookMetadata, updatedMeta);
+          await deleteFile(file.path, "Delete entry");
+          await deleteFile(`${currentLatexDir}/${entryId}.tex`, "Delete LaTeX");
+          await saveMetadata(updatedMeta, "Delete entry (metadata)");
 
-    // Perform persistence in the background
-    (async () => {
-      try {
-        await performGarbageCollection(notebookMetadata, updatedMeta);
-        await deleteFile(file.path, "Entry deleted");
-        await deleteFile(`${currentLatexDir}/${entryId}.tex`, "LaTeX deleted");
-        await saveMetadata(updatedMeta, "Metadata update (entry deleted)");
-        const allEntriesLatex = generateAllEntriesLatex(updatedMeta);
-        await saveEntry(currentAllEntriesPath, allEntriesLatex, "Update all_entries.tex");
-        if (workspaceMode === "github") refreshPending();
-      } catch (e) {
-        console.error("Background delete failed", e);
-        notify("Failed to complete deletion in the background.", "error");
-      }
-    })();
+          const allEntriesLatex = generateAllEntriesLatex(updatedMeta);
+          await saveEntry(currentAllEntriesPath, allEntriesLatex, "Update all_entries.tex");
+
+          // Update state only after success
+          setNotebookMetadata(updatedMeta);
+          notebookMetadataRef.current = updatedMeta;
+          setEntries(prev => prev.filter(e => e.path !== file.path));
+          setSelectedPaths(prev => {
+            const next = new Set(prev);
+            next.delete(file.path);
+            return next;
+          });
+
+          if (openFile?.path === file.path) {
+            handleCloseEntry();
+          }
+
+          if (workspaceMode === "github") refreshPending();
+          notify("Entry deleted.", "success");
+        } catch (e) {
+          console.error(e);
+          notify("Failed to delete entry.", "error");
+        } finally {
+          setIsInitializing(false);
+          setIsLoading(false);
+        }
+      },
+      "danger"
+    );
   };
 
 
@@ -1757,17 +1749,17 @@ export default function App() {
 
         {(!openFile && !showTeamEditor) ? (
           !isConnectingLocal && (
-            <WelcomePage 
-              workspace={{ mode: workspaceMode as "local" | "github" | "temporary", label: workspaceLabel }} 
-              onNewEntry={handleNewEntry} 
-              onImportEntry={() => importEntryInputRef.current?.click()} 
-              onDisconnect={handleDisconnect} 
-              onOpenSidebar={() => { isToggleFromButton.current = true; setUserSidebarPreference(true); }} 
+            <WelcomePage
+              workspace={{ mode: workspaceMode as "local" | "github" | "temporary", label: workspaceLabel }}
+              onNewEntry={handleNewEntry}
+              onImportEntry={() => importEntryInputRef.current?.click()}
+              onDisconnect={handleDisconnect}
+              onOpenSidebar={() => { isToggleFromButton.current = true; setUserSidebarPreference(true); }}
               onOpenTeam={handleOpenTeamEditor}
             />
           )
         ) : showTeamEditor && hydratedTeam ? (
-          <TeamEditor 
+          <TeamEditor
             key={`${currentProjectId}-team`}
             initialData={hydratedTeam}
             initialPhases={hydratedPhases}
@@ -1847,7 +1839,7 @@ export default function App() {
       <input type="file" ref={importEntryInputRef} accept=".json" style={{ display: "none" }} onChange={(e) => { const file = e.target.files?.[0]; if (file) processImportFile(file); e.target.value = ""; }} />
 
       {workspaceMode === "none" ? (
-          <Settings
+        <Settings
           projects={projects}
           pendingCounts={projectPendingCounts}
           onSelectProject={handleSelectProject}
