@@ -45,7 +45,7 @@ export interface FileMetadata {
   content: string;
   title?: string;
   author?: string;
-  phase?: string;
+  phase?: number | null;
   createdAt?: string;
 }
 
@@ -58,7 +58,7 @@ interface OpenFileState {
   tiptapContent: string;
   title: string;
   author: string;
-  phase: string;
+  phase: number | null;
   metadataMissing: boolean;
   createdAt: string;
   updatedAt: string;
@@ -404,7 +404,7 @@ export default function App() {
     }
   }, [deleteFile, getDBName]);
 
-  const handleContentChange = useCallback(async (changedPath: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string }) => {
+  const handleContentChange = useCallback(async (changedPath: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null }) => {
     setLatexContent(latex);
     const entryId = changedPath.split('/').pop()?.replace('.json', '') || "";
 
@@ -667,10 +667,16 @@ export default function App() {
       }
 
       const hydratedContent = hydrateAssets(content, assetCache);
+      
+      let currentPhase = phase as (string | number | null);
+      if (typeof currentPhase !== "number" || !(notebookMetadata.phases || []).some(p => p.id === currentPhase)) {
+        currentPhase = null;
+      }
+
       setOpenFile({
         path: file.path, name: file.name, id: entryId, viewMode: "entry",
         rawLatex: latexStr, tiptapContent: JSON.stringify(hydratedContent),
-        title, author, phase, metadataMissing: false,
+        title, author, phase: currentPhase, metadataMissing: false,
         createdAt, updatedAt, lastOpenedAt: updatedAt, isLegacyRaw: false,
       });
       setLatexContent(latexStr);
@@ -698,7 +704,7 @@ export default function App() {
     const defaultAuthor = localStorage.getItem("nb-last-author") || "";
 
     const entryMeta: EntryMetadata = {
-      id: entryId, title: defaultTitle, author: defaultAuthor, phase: "",
+      id: entryId, title: defaultTitle, author: defaultAuthor, phase: null,
       createdAt, updatedAt: createdAt, filename: path, resources: {}
     };
 
@@ -1285,10 +1291,11 @@ export default function App() {
       }
 
       const metaToUse = baseMetadata || notebookMetadata;
+      
       const updatedMeta = validateNotebookIntegrity({ 
         ...metaToUse, 
         team: cleanTeam,
-        phases: phases || metaToUse.phases
+        phases: phases || metaToUse.phases || []
       });
       await performGarbageCollection(metaToUse, updatedMeta);
       setNotebookMetadata(updatedMeta);
@@ -1368,7 +1375,7 @@ export default function App() {
   };
 
 
-  const handleDownloadPortable = async (filename: string, content: string, info: { title: string; author: string; phase: string, createdAt: string, updatedAt?: string }) => {
+  const handleDownloadPortable = async (filename: string, content: string, info: { title: string; author: string; phase: number | null, createdAt: string, updatedAt?: string }) => {
     try {
       const parsed = JSON.parse(content);
       const dbName = getDBName();

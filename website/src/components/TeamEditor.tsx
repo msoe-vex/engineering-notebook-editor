@@ -83,14 +83,12 @@ const IconPicker = ({
 
 const PhaseRow = memo(({ 
   phase, 
-  index, 
   handlePhaseChange, 
   removePhase
 }: { 
   phase: ProjectPhase, 
-  index: number, 
-  handlePhaseChange: (index: number, field: keyof ProjectPhase, value: string) => void,
-  removePhase: (index: number) => void
+  handlePhaseChange: (id: number, field: keyof ProjectPhase, value: string) => void,
+  removePhase: (id: number) => void
 }) => {
   const [localColor, setLocalColor] = useState(phase.color);
 
@@ -103,11 +101,11 @@ const PhaseRow = memo(({
   useEffect(() => {
     const timer = setTimeout(() => {
       if (localColor !== phase.color) {
-        handlePhaseChange(index, "color", localColor);
+        handlePhaseChange(phase.id, "color", localColor);
       }
     }, 100);
     return () => clearTimeout(timer);
-  }, [localColor, index, phase.color, handlePhaseChange]);
+  }, [localColor, phase.id, phase.color, handlePhaseChange]);
 
   return (
     <div
@@ -116,7 +114,7 @@ const PhaseRow = memo(({
       <IconPicker 
         currentIcon={phase.iconName} 
         color={localColor}
-        onSelect={(name) => handlePhaseChange(index, "iconName", name)} 
+        onSelect={(name) => handlePhaseChange(phase.id, "iconName", name)} 
       />
 
       <div className="relative group/color shrink-0">
@@ -128,19 +126,31 @@ const PhaseRow = memo(({
         />
       </div>
 
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 space-y-2">
         <input
           type="text"
           value={phase.name}
-          onChange={e => handlePhaseChange(index, "name", e.target.value)}
+          onChange={e => handlePhaseChange(phase.id, "name", e.target.value)}
           placeholder="Phase Name"
           className="w-full bg-transparent border-none p-0 text-sm font-bold text-nb-on-surface focus:outline-none placeholder:text-nb-on-surface-variant/30"
+        />
+        <textarea
+          value={phase.description}
+          onChange={e => handlePhaseChange(phase.id, "description", e.target.value)}
+          placeholder="Describe what happens in this phase..."
+          rows={1}
+          className="w-full bg-transparent border-none p-0 text-[10px] font-medium text-nb-on-surface-variant focus:outline-none placeholder:text-nb-on-surface-variant/20 resize-none h-auto overflow-hidden leading-relaxed"
+          onInput={(e) => {
+            const target = e.target as HTMLTextAreaElement;
+            target.style.height = 'auto';
+            target.style.height = target.scrollHeight + 'px';
+          }}
         />
       </div>
 
       <button
         type="button"
-        onClick={() => removePhase(index)}
+        onClick={() => removePhase(phase.id)}
         className="p-2 rounded-lg text-nb-on-surface-variant/40 hover:text-red-500 hover:bg-red-50 transition-all cursor-pointer"
         title="Remove Phase"
       >
@@ -220,8 +230,16 @@ export default function TeamEditor({
     setHasChanges(true);
   };
 
-  const handlePhaseChange = useCallback((index: number, field: keyof ProjectPhase, value: string) => {
+  const handlePhaseChange = useCallback((id: number, field: keyof ProjectPhase, value: string) => {
     setPhases(prev => {
+      const index = prev.findIndex(p => p.id === id);
+      if (index === -1) return prev;
+
+      // Prevent duplicate names
+      if (field === "name" && prev.some((p, i) => i !== index && p.name === value)) {
+        return prev;
+      }
+
       const newPhases = [...prev];
       newPhases[index] = { ...newPhases[index], [field]: value };
       return newPhases;
@@ -230,22 +248,32 @@ export default function TeamEditor({
   }, []);
 
   const addPhase = useCallback(() => {
-    setPhases(prev => [...prev, {
-      id: Math.random().toString(36).substr(2, 9),
-      name: "New Phase",
-      iconName: "Shapes",
-      color: "#94a3b8"
-    }]);
+    setPhases(prev => {
+      const baseName = "New Phase";
+      let name = baseName;
+      let counter = 1;
+      while (prev.some(p => p.name === name)) {
+        name = `${baseName} ${counter++}`;
+      }
+      const maxId = prev.reduce((max, p) => Math.max(max, p.id), 0);
+      return [...prev, {
+        id: maxId + 1,
+        name,
+        description: "",
+        iconName: "Shapes",
+        color: "#94a3b8"
+      }];
+    });
     setHasChanges(true);
   }, []);
 
-  const removePhase = useCallback((index: number) => {
-    setPhases(prev => prev.filter((_, i) => i !== index));
+  const removePhase = useCallback((id: number) => {
+    setPhases(prev => prev.filter(p => p.id !== id));
     setHasChanges(true);
   }, []);
 
   const restoreDefaultPhases = useCallback(() => {
-    setPhases(DEFAULT_PHASES.map(p => ({ ...p, id: Math.random().toString(36).substr(2, 9) })));
+    setPhases(DEFAULT_PHASES.map(p => ({ ...p })));
     setHasChanges(true);
   }, []);
 
@@ -495,11 +523,10 @@ export default function TeamEditor({
           {activeTab === "phases" && (
             <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
               <div className="grid grid-cols-1 gap-6">
-                {phases.map((phase, index) => (
+                {phases.map((phase) => (
                   <PhaseRow 
                     key={phase.id}
                     phase={phase}
-                    index={index}
                     handlePhaseChange={handlePhaseChange}
                     removePhase={removePhase}
                   />

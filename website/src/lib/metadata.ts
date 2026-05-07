@@ -23,7 +23,7 @@ export interface EntryMetadata {
   id: string; // Entry UUID
   title: string;
   author: string;
-  phase: string;
+  phase: number | null; // Phase ID
   createdAt: string;
   updatedAt: string;
   filename: string; // Path to the entry file (e.g. "entries/uuid.json")
@@ -70,8 +70,9 @@ export interface EntryWrapper {
 }
 
 export interface ProjectPhase {
-  id: string;
+  id: number;
   name: string;
+  description: string;
   iconName: string; // Lucide icon name
   color: string;    // Hex color
 }
@@ -361,7 +362,13 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
     // Check basic metadata
     if (!entry.title?.trim()) errors.push("Missing title");
     if (!entry.author?.trim()) errors.push("Missing author");
-    if (!entry.phase?.trim()) errors.push("Missing phase");
+    
+    // Phase validation
+    const phases = metadata.phases || [];
+    if (typeof entry.phase !== "number" || !phases.some(p => p.id === entry.phase)) {
+      entry.phase = null;
+      errors.push("Missing or invalid phase");
+    }
 
     // Check local resources
     if (entry.resources) {
@@ -398,7 +405,7 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
 export function isEntryValid(info: EntryMetadata): boolean {
   if (!info.title?.trim()) return false;
   if (!info.author?.trim()) return false;
-  if (!info.phase?.trim()) return false;
+  if (info.phase === null) return false;
   
   if (info.resources) {
     for (const res of Object.values(info.resources)) {
