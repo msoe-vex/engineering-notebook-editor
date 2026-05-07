@@ -16,7 +16,8 @@ import {
 import {
   NotebookMetadata, EMPTY_METADATA, EntryMetadata, EntryWrapper,
   updateEntryInIndex, removeEntryFromMetadata,
-  dehydrateAssets, hydrateAssets, remapContentIds, isEntryValid, validateNotebookIntegrity
+  dehydrateAssets, hydrateAssets, remapContentIds, isEntryValid, validateNotebookIntegrity,
+  extractImagePaths, extractResources, extractReferences, TipTapNode, dehydrateTeamAssets, hydrateTeamAssets, TeamMetadata, TeamMember
 } from "@/lib/metadata";
 import Settings from "./Settings";
 import Editor from "./Editor";
@@ -32,7 +33,6 @@ import { ImperativePanelHandle } from "react-resizable-panels";
 import { saveAs } from "file-saver";
 import { generateUUID, hashContent, getMimeTypeFromExtension } from "@/lib/utils";
 import { generateEntryLatex, generateAllEntriesLatex, generateTeamLatex } from "@/lib/latex";
-import { extractImagePaths, extractResources, extractReferences, TipTapNode, dehydrateTeamAssets, hydrateTeamAssets, TeamMetadata } from "@/lib/metadata";
 import { ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, INDEX_PATH, ALL_ENTRIES_PATH, TEAM_PATH } from "@/lib/constants";
 import { useWorkspace, WorkspaceMode } from "@/hooks/useWorkspace";
 import { usePersistence } from "@/hooks/usePersistence";
@@ -143,6 +143,7 @@ export default function App() {
   const [isConnectingLocal, setIsConnectingLocal] = useState(false);
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
   const [activeWorkspaceMode, setActiveWorkspaceMode] = useState<WorkspaceMode>("none");
+  const [showTeamEditor, setShowTeamEditor] = useState(false);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [prevSync, setPrevSync] = useState({ mode: workspaceMode, init: isInitializing });
   
@@ -391,6 +392,18 @@ export default function App() {
     setPendingChanges(all);
   }, [getDBName]);
 
+  const performGarbageCollection = useCallback(async (oldMeta: NotebookMetadata, newMeta: NotebookMetadata) => {
+    const oldRefs = oldMeta.assetRefs || {};
+    const newRefs = newMeta.assetRefs || {};
+
+    for (const assetPath of Object.keys(oldRefs)) {
+      if (!newRefs[assetPath]) {
+        await deleteFile(assetPath, "Garbage collection (orphaned asset)");
+        await removeResource(getDBName(), assetPath);
+      }
+    }
+  }, [deleteFile, getDBName]);
+
   const handleContentChange = useCallback(async (changedPath: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string }) => {
     setLatexContent(latex);
     const entryId = changedPath.split('/').pop()?.replace('.json', '') || "";
@@ -507,7 +520,7 @@ export default function App() {
         return next;
       });
     }
-  }, [workspaceMode, currentProjectId, projects, config, getGitBasePrefix, currentLatexDir, saveEntry, saveMetadata, uploadResource, refreshPending, setNotebookMetadata, getDBName]);
+  }, [workspaceMode, currentProjectId, projects, config, getGitBasePrefix, currentLatexDir, saveEntry, saveMetadata, uploadResource, refreshPending, setNotebookMetadata, getDBName, performGarbageCollection]);
 
   const handleMetadataChange = useCallback(async (entryId: string, updates: Partial<EntryMetadata>) => {
     let finalMeta: NotebookMetadata | null = null;
@@ -670,7 +683,7 @@ export default function App() {
       setIsLoading(false);
       setIsInitializing(false);
     }
-  }, [getDBName, workspaceMode, dirHandle, config, getGitBasePrefix, currentLatexDir, isMobile, notify, setIsLoading, setUserSidebarPreference, setMobileTab, setLatexContent]);
+  }, [getDBName, workspaceMode, dirHandle, config, getGitBasePrefix, currentLatexDir, notify, setIsLoading, setMobileTab, setLatexContent]);
 
   const handleNewEntry = useCallback(async () => {
     setIsLoading(true);
@@ -831,7 +844,7 @@ export default function App() {
         entriesMap[entryId] = { ...meta, content };
       }
 
-      const portable: any = { version: 3, entries: entriesMap, assets: allAssets };
+      const portable: Record<string, unknown> = { version: 3, entries: entriesMap, assets: allAssets };
       if (includeTeam && notebookMetadata.team) {
         portable.team = notebookMetadata.team;
         const teamImages: string[] = [];
@@ -1148,7 +1161,7 @@ export default function App() {
         const teamData = rawData.team as TeamMetadata;
         const teamImages: string[] = [];
         if (teamData.logo) teamImages.push(teamData.logo);
-        teamData.members.forEach((m: any) => { if (m.image) teamImages.push(m.image); });
+        teamData.members.forEach((m: TeamMember) => { if (m.image) teamImages.push(m.image); });
 
         const dbName = getDBName();
         for (const imgPath of teamImages) {
@@ -1215,7 +1228,6 @@ export default function App() {
     };
   }, []);
 
-  const [showTeamEditor, setShowTeamEditor] = useState(false);
   const [hydratedTeam, setHydratedTeam] = useState<TeamMetadata | null>(null);
 
   const handleOpenTeamEditor = async () => {
@@ -1305,18 +1317,6 @@ export default function App() {
     await putResource(dbName, { path: actualImgPath, dataUrl: `data:${getMimeTypeFromExtension(actualImgPath)};base64,${base64}` });
     await uploadResource(actualImgPath, base64, "Image upload");
     if (workspaceMode === "github") refreshPending();
-  };
-
-  const performGarbageCollection = async (oldMeta: NotebookMetadata, newMeta: NotebookMetadata) => {
-    const oldRefs = oldMeta.assetRefs || {};
-    const newRefs = newMeta.assetRefs || {};
-    
-    for (const assetPath of Object.keys(oldRefs)) {
-      if (!newRefs[assetPath]) {
-        await deleteFile(assetPath, "Garbage collection (orphaned asset)");
-        await removeResource(getDBName(), assetPath);
-      }
-    }
   };
 
   const handleDeleteEntry = async (file: ExplorerFile) => {

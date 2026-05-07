@@ -52,7 +52,7 @@ interface UnifiedEditorProps {
 
 
 export default function UnifiedEditor({
-  content, onChange, onImageUpload, author, filename, dbName = "notebook-pending", onEditorInit, notebookMetadata, onToggleLink, targetResourceId, entryId
+  content, onChange, onImageUpload, filename, dbName = "notebook-pending", onEditorInit, notebookMetadata, onToggleLink, targetResourceId, entryId
 }: UnifiedEditorProps) {
   const parseContent = (raw: string | import("@/lib/metadata").TipTapNode) => {
     if (!raw) return "";
