@@ -46,8 +46,14 @@ export async function hashContent(content: string | ArrayBuffer): Promise<string
  * Extracts the file extension from a base64 data URL.
  */
 export function getExtensionFromDataUrl(dataUrl: string): string {
-  const match = dataUrl.match(/^data:image\/(\w+);base64,/);
-  return match ? match[1] : "png";
+  const match = dataUrl.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,/);
+  if (match) {
+    const type = match[1].toLowerCase();
+    if (type === "svg+xml") return "svg";
+    if (type === "jpeg") return "jpg";
+    return type;
+  }
+  return "png";
 }
 /**
  * Simple debounce utility.
@@ -61,4 +67,19 @@ export function debounce<Args extends unknown[], R>(
     if (timeout) clearTimeout(timeout);
     timeout = setTimeout(() => func(...args), wait);
   };
+}
+/**
+ * Maps a file path or extension to a proper mime type.
+ */
+export function getMimeTypeFromExtension(path: string): string {
+  const ext = path.split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case "svg": return "image/svg+xml";
+    case "jpg":
+    case "jpeg": return "image/jpeg";
+    case "png": return "image/png";
+    case "gif": return "image/gif";
+    case "webp": return "image/webp";
+    default: return "image/png"; // Fallback
+  }
 }

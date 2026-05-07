@@ -14,7 +14,7 @@ export const IdRemapper = Extension.create({
             const json = slice.content.toJSON();
             const remapped = remapContentIds(json);
             try {
-              const fragment = Fragment.fromJSON(this.editor.schema, remapped);
+              const fragment = Fragment.fromJSON(this.editor.schema, remapped.doc);
               return new Slice(fragment, slice.openStart, slice.openEnd);
             } catch (e) {
               console.error("Failed to remap pasted IDs", e);
