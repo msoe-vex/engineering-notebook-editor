@@ -10,6 +10,7 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 import { ExplorerFile } from "@/lib/types";
+import { PHASE_CONFIG } from "@/lib/phases";
 
 interface FileExplorerProps {
   entries: ExplorerFile[];
@@ -72,7 +73,7 @@ function FileRow({
         ${isDeleted ? 'opacity-30 grayscale' : ''}
       `}
     >
-      <div className={`shrink-0 ${isOpened ? 'text-white' : 'text-nb-tertiary'}`}>
+      <div className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all ${isOpened ? 'bg-white/80 text-white' : isSelected ? 'bg-nb-tertiary/10 text-nb-tertiary' : 'bg-nb-surface-low text-nb-tertiary'}`}>
         {icon}
       </div>
 
@@ -324,7 +325,7 @@ export default function FileExplorer({
           </div>
         </div>
       </div>
-      
+
       {/* Entries pane */}
       <Pane
         id="explorer-entries-pane"
@@ -336,22 +337,27 @@ export default function FileExplorer({
         hasItems={entries.length > 0}
       >
         <div className="space-y-1">
-          {entries.map((f) => (
-            <FileRow
-              key={f.path}
-              file={f}
-              isOpened={activePath === f.path}
-              isSelected={selectedPaths.has(f.path)}
-              isPending={pendingPaths.has(f.path)}
-              isDeleted={deletedPaths.has(f.path)}
-              icon={<FileText size={13} />}
-              isValid={f.isValid}
-              sortBy={sortBy}
-              onSelect={(e) => onSelectEntry(f, e.ctrlKey || e.metaKey, e.shiftKey)}
-              onDoubleClick={() => onOpenEntry(f)}
-              onContextMenu={(e) => handleContextMenu(e, f)}
-            />
-          ))}
+          {entries.map((f) => {
+            const phaseInfo = f.phase ? PHASE_CONFIG[f.phase] : null;
+            const PhaseIcon = phaseInfo ? phaseInfo.icon : FileText;
+
+            return (
+              <FileRow
+                key={f.path}
+                file={f}
+                isOpened={activePath === f.path}
+                isSelected={selectedPaths.has(f.path)}
+                isPending={pendingPaths.has(f.path)}
+                isDeleted={deletedPaths.has(f.path)}
+                icon={<PhaseIcon size={13} className={phaseInfo ? phaseInfo.color : ""} />}
+                isValid={f.isValid}
+                sortBy={sortBy}
+                onSelect={(e) => onSelectEntry(f, e.ctrlKey || e.metaKey, e.shiftKey)}
+                onDoubleClick={() => onOpenEntry(f)}
+                onContextMenu={(e) => handleContextMenu(e, f)}
+              />
+            );
+          })}
         </div>
       </Pane>
 

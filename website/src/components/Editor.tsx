@@ -9,7 +9,7 @@ import {
   Save, Trash2, AlertCircle, AlertTriangle, Loader2, User, X, FileCode,
   Undo2, Redo2, ImagePlus, ChevronDown, List, ListOrdered,
   Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
-  Brain, PencilRuler, Hammer, SearchCheck, Goal, Terminal, Link as LinkIcon, Underline as UnderlineIcon,
+  Terminal, Link as LinkIcon, Underline as UnderlineIcon,
   FileJson
 } from "lucide-react";
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng } from "@/lib/utils";
@@ -19,24 +19,7 @@ import { extractResources, extractReferences, TipTapNode, NotebookMetadata } fro
 import { ASSETS_DIR } from "@/lib/constants";
 import { NodeSelection } from "@tiptap/pm/state";
 import ConfirmationDialog from "./ConfirmationDialog";
-
-interface PhaseInfo {
-  icon: typeof Goal;
-  color: string;
-  bg: string;
-  border: string;
-  text: string;
-}
-
-const PHASE_CONFIG: Record<string, PhaseInfo> = {
-  "Define Problem": { icon: Goal, color: "text-blue-500", bg: "bg-blue-500/10", border: "border-blue-500/20", text: "text-blue-600 dark:text-blue-400" },
-  "Generate Concepts": { icon: Brain, color: "text-purple-500", bg: "bg-purple-500/10", border: "border-purple-500/20", text: "text-purple-600 dark:text-purple-400" },
-  "Develop Solution": { icon: PencilRuler, color: "text-indigo-500", bg: "bg-indigo-500/10", border: "border-indigo-500/20", text: "text-indigo-600 dark:text-indigo-400" },
-  "Construct and Test": { icon: Hammer, color: "text-orange-500", bg: "bg-orange-500/10", border: "border-orange-500/20", text: "text-orange-600 dark:text-orange-400" },
-  "Evaluate Solution": { icon: SearchCheck, color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/20", text: "text-emerald-600 dark:text-emerald-400" },
-};
-
-const PHASES = Object.keys(PHASE_CONFIG);
+import { PHASE_CONFIG, PHASES } from "@/lib/phases";
 
 /* ─────────────────────────────────────────────────────────────────
    Component
@@ -649,26 +632,44 @@ const Editor = React.memo(function Editor({
                 />
               </div>
 
-              <div className={`h-9 w-[230px] shrink-0 flex items-center gap-2.5 px-3 rounded-xl border transition-all relative focus-within:ring-2 focus-within:ring-nb-primary/20 ${phase && PHASE_CONFIG[phase] ? `${PHASE_CONFIG[phase].bg} ${PHASE_CONFIG[phase].border}` : "bg-nb-surface-low border-nb-outline-variant/30"}`}>
+              <div className={`h-9 w-[230px] shrink-0 flex items-center gap-2.5 px-3 rounded-xl border transition-all relative ${phase && PHASE_CONFIG[phase] ? `${PHASE_CONFIG[phase].bg} ${PHASE_CONFIG[phase].border}` : "bg-nb-surface-low border-nb-outline-variant/30"}`}>
+                <div 
+                  className="absolute inset-0 z-10 cursor-pointer" 
+                  onClick={() => setActiveMenu(activeMenu === "Phase" ? null : "Phase")} 
+                />
+                
                 {phase && PHASE_CONFIG[phase] && (
                   React.createElement(PHASE_CONFIG[phase].icon, { size: 14, className: `${PHASE_CONFIG[phase].color} shrink-0` })
                 )}
-                <select
-                  value={phase}
-                  onChange={(e) => { setPhase(e.target.value); }}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                >
-                  {!phase && <option value="" disabled>Phase</option>}
-                  {PHASES.map(p => (
-                    <option key={p} value={p} className="text-nb-on-surface bg-nb-surface">
-                      {p}
-                    </option>
-                  ))}
-                </select>
+                
                 <div className={`flex-1 w-full min-w-0 text-xs font-bold tracking-widest truncate ${phase && PHASE_CONFIG[phase] ? PHASE_CONFIG[phase].text : "text-nb-on-surface-variant/60"}`}>
-                  {phase || "Phase"}
+                  {phase || "Select Phase"}
                 </div>
-                <ChevronDown size={12} className="text-nb-on-surface-variant/40 shrink-0" />
+                <ChevronDown size={12} className={`text-nb-on-surface-variant/40 shrink-0 transition-transform duration-200 ${activeMenu === "Phase" ? "rotate-180" : ""}`} />
+
+                {activeMenu === "Phase" && (
+                  <div 
+                    className="absolute top-full left-0 right-0 mt-1 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl p-1.5 z-[200] animate-in fade-in slide-in-from-top-1 duration-150"
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
+                    {PHASES.map(p => {
+                      const cfg = PHASE_CONFIG[p];
+                      const Icon = cfg.icon;
+                      return (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => { setPhase(p); setActiveMenu(null); }}
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[10px] font-bold tracking-widest transition-all text-left cursor-pointer active:scale-[0.98] ${phase === p ? `${cfg.bg} ${cfg.text} hover:brightness-90` : "text-nb-on-surface-variant hover:bg-nb-surface-mid hover:text-nb-on-surface hover:ring-1 hover:ring-nb-primary/20"}`}
+                        >
+                          <Icon size={14} className={cfg.color} />
+                          <span className="flex-1">{p.toUpperCase()}</span>
+                          {phase === p && <Check size={12} className={cfg.color} />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </div>
