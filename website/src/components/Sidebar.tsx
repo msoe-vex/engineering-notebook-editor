@@ -3,62 +3,45 @@ import FileExplorer from "./FileExplorer";
 import PendingChangesPanel from "./PendingChangesPanel";
 import { ExplorerFile } from "@/lib/types";
 import { NotebookMetadata } from "@/lib/metadata";
-import { PendingChange } from "@/lib/db";
+import { PendingChange, clearAllPending } from "@/lib/db";
+import { useWorkspace } from "@/hooks/useWorkspace";
 
 interface SidebarProps {
-  entries: ExplorerFile[];
-  openFile: { path: string } | null;
   selectedPaths: Set<string>;
-  notebookMetadata: NotebookMetadata;
-  pendingChanges: PendingChange[];
   onSelectEntry: (file: ExplorerFile, multi: boolean, range: boolean, visiblePaths: string[]) => void;
-  onOpenEntry: (file: ExplorerFile) => void;
-  onCloseEntry: (path: string) => void;
-  onDownloadLatex: (file: ExplorerFile) => void;
-  onDownloadJson: (file: ExplorerFile) => void;
-  onDeleteEntry: (file: ExplorerFile) => void;
-  onDownloadMulti: (files: ExplorerFile[]) => void;
-  onDeleteMulti: (files: ExplorerFile[]) => void;
-  onNewEntry: () => void;
-  onOpenTeam: () => void;
-  isCommitting: boolean;
-  onCommit: () => void;
-  onDiscard: () => void;
-  workspaceMode: string;
+  onOpenTeam: (tab?: any) => void;
 }
 
 export default function Sidebar({
-  entries,
-  openFile,
   selectedPaths,
-  notebookMetadata,
-  pendingChanges,
   onSelectEntry,
-  onOpenEntry,
-  onCloseEntry,
-  onDownloadLatex,
-  onDownloadJson,
-  onDeleteEntry,
-  onDownloadMulti,
-  onDeleteMulti,
-  onNewEntry,
-  isCommitting,
-  onCommit,
-  onDiscard,
-  workspaceMode,
+  onOpenTeam,
 }: SidebarProps) {
+  const {
+    entries,
+    openFile,
+    metadata,
+    pendingChanges,
+    mode,
+    createEntry,
+    deleteEntry,
+    commitAll,
+    config,
+    refreshPending,
+    currentProjectId
+  } = useWorkspace();
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"created" | "updated" | "title">("created");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
 
-  const pendingPaths = useMemo(() => new Set(pendingChanges.map(p => p.path)), [pendingChanges]);
-  const deletedPaths = useMemo(() => new Set(pendingChanges.filter(p => p.operation === "delete").map(p => p.path)), [pendingChanges]);
+  const pendingPaths = useMemo(() => new Set((pendingChanges || []).map(p => p.path)), [pendingChanges]);
+  const deletedPaths = useMemo(() => new Set((pendingChanges || []).filter(p => p.operation === "delete").map(p => p.path)), [pendingChanges]);
 
   const augmentedEntries = useMemo(() => {
     return entries.map(f => {
       const entryId = f.name.replace('.json', '');
-      const meta = notebookMetadata.entries[entryId];
+      const meta = metadata.entries[entryId];
       return {
         ...f,
         title: meta?.title || "",
@@ -68,7 +51,7 @@ export default function Sidebar({
         isValid: meta?.isValid !== false
       };
     });
-  }, [entries, notebookMetadata]);
+  }, [entries, metadata]);
 
   const filteredEntries = useMemo(() => {
     const list = augmentedEntries.filter(f => {
@@ -110,9 +93,22 @@ export default function Sidebar({
     return list;
   }, [augmentedEntries, search, sortBy, sortDirection, dateRange]);
 
+  const handleOpenEntry = (file: ExplorerFile) => {
+    const id = file.name.replace('.json', '');
+    const url = new URL(window.location.href);
+    url.searchParams.set('entry', id);
+    window.history.pushState({}, '', url.toString());
+    // Store handles URL changes
+  };
+
+  const handleDiscard = async () => {
+    const dbName = currentProjectId ? `notebook-project-${currentProjectId}` : "notebook-default";
+    await clearAllPending(dbName);
+    await refreshPending();
+  };
+
   return (
     <div className="flex flex-col h-full overflow-hidden min-h-0">
-
       <FileExplorer
         entries={filteredEntries}
         activePath={openFile?.path || null}
@@ -120,14 +116,18 @@ export default function Sidebar({
         pendingPaths={pendingPaths}
         deletedPaths={deletedPaths}
         onSelectEntry={(file, multi, range) => onSelectEntry(file, multi, range, filteredEntries.map(e => e.path))}
-        onOpenEntry={onOpenEntry}
-        onCloseEntry={onCloseEntry}
-        onDownloadLatex={onDownloadLatex}
-        onDownloadJson={onDownloadJson}
-        onDeleteEntry={onDeleteEntry}
-        onDownloadMulti={onDownloadMulti}
-        onDeleteMulti={onDeleteMulti}
-        onNewEntry={onNewEntry}
+        onOpenEntry={handleOpenEntry}
+        onCloseEntry={() => {
+           const url = new URL(window.location.href);
+           url.searchParams.delete('entry');
+           window.history.pushState({}, '', url.toString());
+        }}
+        onDownloadLatex={() => {}} // TODO: implement in store if needed
+        onDownloadJson={() => {}} // TODO: implement in store if needed
+        onDeleteEntry={(file) => deleteEntry(file)}
+        onDownloadMulti={() => {}}
+        onDeleteMulti={(files) => files.forEach(f => deleteEntry(f))}
+        onNewEntry={createEntry}
         search={search}
         onSearchChange={setSearch}
         sortBy={sortBy}
@@ -136,17 +136,17 @@ export default function Sidebar({
         onSortDirectionToggle={() => setSortDirection(prev => prev === "asc" ? "desc" : "asc")}
         dateRange={dateRange}
         onDateRangeChange={setDateRange}
-        notebookMetadata={notebookMetadata}
+        notebookMetadata={metadata}
       />
 
       {pendingChanges.length > 0 && (
         <div className="p-4 bg-nb-surface border-t border-nb-outline-variant animate-in slide-in-from-bottom-2 duration-300">
           <PendingChangesPanel
             pendingChanges={pendingChanges}
-            isCommitting={isCommitting}
-            onCommit={onCommit}
-            onDiscard={onDiscard}
-            workspaceMode={workspaceMode as "github" | "local" | "temporary"}
+            isCommitting={false} // Store handles this now
+            onCommit={() => config && commitAll(config)}
+            onDiscard={handleDiscard}
+            workspaceMode={mode as "github" | "local" | "temporary"}
           />
         </div>
       )}

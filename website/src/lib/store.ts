@@ -1,0 +1,531 @@
+import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, TipTapNode, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets } from "./metadata";
+import { generateAllEntriesLatex } from "./latex";
+import { ExplorerFile, GitHubConfig } from "./types";
+import { getProjects, getProject, Project, getProjectDBName, getAllPending, stageChange, removeResource, getResource, putResource, saveProject, getProjectHandle, saveProjectHandle, PendingChange } from "./db";
+import { fetchFileContent, fetchDirectoryTree, fetchRawFileContent, GitHubFile } from "./github";
+import { listLocalFiles, readLocalFile, writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, ensureLocalDirectory } from "./fs";
+import { INDEX_PATH, ENTRIES_DIR, ALL_ENTRIES_PATH, LATEX_DIR, ASSETS_DIR } from "./constants";
+import { events, EventNames } from "./events";
+import { generateUUID, getMimeTypeFromExtension } from "./utils";
+
+export type WorkspaceMode = "local" | "github" | "temporary" | "none";
+
+interface OpenFileState {
+  path: string;
+  name: string;
+  id: string;
+  tiptapContent: string;
+  title: string;
+  author: string;
+  phase: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+class WorkspaceStore {
+  // ─── State ──────────────────────────────────────────────────────────────────
+  public mode: WorkspaceMode = "none";
+  public config: GitHubConfig | null = null;
+  public dirHandle: FileSystemDirectoryHandle | null = null;
+  public entries: ExplorerFile[] = [];
+  public metadata: NotebookMetadata = EMPTY_METADATA;
+  public currentProjectId: string | null = null;
+  public currentProject: Project | null = null;
+  public openFile: OpenFileState | null = null;
+  public isLoading = false;
+  public isInitialized = false;
+  public projects: Project[] = [];
+  public pendingChanges: PendingChange[] = [];
+
+  // ─── Internal ───────────────────────────────────────────────────────────────
+  #queue = Promise.resolve();
+  #lastSavedContents = new Map<string, string>();
+
+  constructor() {
+    if (typeof window !== "undefined") {
+      window.addEventListener("popstate", () => this.handleUrlChange());
+    }
+  }
+
+  // ─── Initialization ─────────────────────────────────────────────────────────
+  async initialize() {
+    this.setLoading(true);
+    try {
+      await this.refreshProjects();
+      await this.handleUrlChange();
+      this.isInitialized = true;
+    } finally {
+      this.setLoading(false);
+    }
+  }
+
+  private async handleUrlChange() {
+    const params = new URLSearchParams(window.location.search);
+    const projectId = params.get("project");
+    const entryId = params.get("entry");
+
+    if (projectId && projectId !== this.currentProjectId) {
+      await this.selectProject(projectId);
+    } else if (!projectId) {
+      this.disconnect();
+    }
+
+    if (entryId && (!this.openFile || this.openFile.id !== entryId)) {
+      await this.openEntry(entryId);
+    } else if (!entryId) {
+      this.openFile = null;
+    }
+
+    this.notifyStateChange();
+  }
+
+  // ─── Project Management ─────────────────────────────────────────────────────
+  async refreshProjects() {
+    this.projects = await getProjects();
+    this.notifyStateChange();
+  }
+
+  async createGithubProject(config: { owner: string; repo: string; branch: string; folderPath: string; name: string }) {
+    const id = generateUUID();
+    const p: Project = {
+      id,
+      name: config.name,
+      type: "github",
+      githubConfig: {
+        owner: config.owner,
+        repo: config.repo,
+        branch: config.branch,
+        folderPath: config.folderPath
+      },
+      lastOpened: new Date().toISOString()
+    };
+    await saveProject(p);
+    await this.refreshProjects();
+    return id;
+  }
+
+  async createLocalProject(handle: FileSystemDirectoryHandle, name: string) {
+    const id = generateUUID();
+    const p: Project = {
+      id,
+      name,
+      type: "local",
+      lastOpened: new Date().toISOString()
+    };
+    await saveProject(p);
+    await saveProjectHandle(id, handle);
+
+    // Ensure base directories
+    await ensureLocalDirectory(handle, ENTRIES_DIR);
+    await ensureLocalDirectory(handle, ASSETS_DIR);
+    await ensureLocalDirectory(handle, LATEX_DIR);
+
+    await this.refreshProjects();
+    return id;
+  }
+
+  async createTemporaryProject() {
+    // Temporary doesn't need to be "created" in DB, just navigated to
+    return "temporary";
+  }
+
+  async selectProject(id: string) {
+    this.setLoading(true);
+    try {
+      const project = await getProject(id);
+      if (!project) throw new Error("Project not found");
+
+      this.currentProject = project;
+      this.currentProjectId = id;
+      this.mode = project.type as WorkspaceMode;
+
+      if (this.mode === "local") {
+        const handle = await getProjectHandle(id);
+        if (handle) {
+          this.dirHandle = handle;
+          await this.loadLocalWorkspace();
+        } else {
+          // Needs permission
+          this.mode = "none";
+        }
+      } else if (this.mode === "github") {
+        this.config = {
+          token: localStorage.getItem("nb-github-token") || "",
+          owner: project.githubConfig!.owner,
+          repo: project.githubConfig!.repo,
+          branch: project.githubConfig!.branch,
+          baseDir: project.githubConfig!.folderPath,
+          entriesDir: ENTRIES_DIR,
+          resourcesDir: ASSETS_DIR
+        };
+        await this.loadGitHubWorkspace();
+      } else if (this.mode === "temporary") {
+        this.metadata = { ...EMPTY_METADATA, projectId: id, projectName: project.name };
+        this.entries = [];
+      }
+
+      events.emit(EventNames.PROJECT_LOADED, project);
+      await this.refreshPending();
+    } finally {
+      this.setLoading(false);
+    }
+  }
+
+  private async loadLocalWorkspace() {
+    if (!this.dirHandle) return;
+    const files = await listLocalFiles(this.dirHandle, ENTRIES_DIR);
+    this.entries = files;
+    try {
+      const metaStr = await readLocalFile(this.dirHandle, INDEX_PATH);
+      const parsed = JSON.parse(metaStr);
+
+      // Hydrate team assets
+      const assetCache = new Map<string, string>();
+      if (parsed.team?.logo) {
+        try {
+          const res = await getLocalFileContent(this.dirHandle, parsed.team.logo);
+          if (res.base64) assetCache.set(parsed.team.logo, res.base64);
+        } catch { }
+      }
+      if (parsed.team?.members) {
+        for (const m of parsed.team.members) {
+          if (m.image) {
+            try {
+              const res = await getLocalFileContent(this.dirHandle, m.image);
+              if (res.base64) assetCache.set(m.image, res.base64);
+            } catch { }
+          }
+        }
+      }
+
+      const hydratedTeam = hydrateTeamAssets(parsed.team || { teamName: "", teamNumber: "", organization: "", logo: "", members: [] }, assetCache);
+      this.metadata = { ...EMPTY_METADATA, ...parsed, team: hydratedTeam, projectId: this.currentProjectId || undefined, projectName: this.currentProject?.name || undefined };
+    } catch {
+      this.metadata = { ...EMPTY_METADATA, projectId: this.currentProjectId || undefined, projectName: this.currentProject?.name || undefined };
+    }
+  }
+
+  private async loadGitHubWorkspace() {
+    if (!this.config) return;
+    const dbName = this.getDBName();
+    const basePrefix = this.config.baseDir ? (this.config.baseDir.endsWith('/') ? this.config.baseDir : this.config.baseDir + '/') : '';
+    const actualIndexPath = `${basePrefix}${INDEX_PATH}`;
+
+    const files = await fetchDirectoryTree(this.config, ENTRIES_DIR);
+    const entryFiles = Array.isArray(files) ? files.map((f: GitHubFile) => ({ name: f.name, path: f.path })) : [];
+
+    const pending = await getAllPending(dbName);
+    const pendingMeta = pending.find(p => p.path === actualIndexPath && p.operation === "upsert");
+
+    if (pendingMeta?.content) {
+      this.metadata = { ...EMPTY_METADATA, ...JSON.parse(pendingMeta.content), projectId: this.currentProjectId || undefined, projectName: this.currentProject?.name || undefined };
+    } else {
+      try {
+        const metaStr = await fetchFileContent(this.config, actualIndexPath);
+        this.metadata = { ...EMPTY_METADATA, ...JSON.parse(metaStr), projectId: this.currentProjectId || undefined, projectName: this.currentProject?.name || undefined };
+      } catch {
+        this.metadata = { ...EMPTY_METADATA, projectId: this.currentProjectId || undefined, projectName: this.currentProject?.name || undefined };
+      }
+    }
+
+    let mergedEntries = [...entryFiles];
+    for (const p of pending) {
+      if (p.path.startsWith(ENTRIES_DIR) && p.path.endsWith('.json')) {
+        if (p.operation === "upsert" && !mergedEntries.some(e => e.path === p.path)) {
+          mergedEntries.push({ name: p.path.split('/').pop() || '', path: p.path });
+        } else if (p.operation === "delete") {
+          mergedEntries = mergedEntries.filter(e => e.path !== p.path);
+        }
+      }
+    }
+    this.entries = mergedEntries;
+  }
+
+  // ─── Entry Management ───────────────────────────────────────────────────────
+  async openEntry(id: string) {
+    const meta = this.metadata.entries[id];
+    if (!meta) return;
+
+    this.setLoading(true);
+    try {
+      const dbName = this.getDBName();
+      let entryJsonStr = "";
+
+      // Check pending first
+      const pending = await getAllPending(dbName);
+      const stagedEntry = pending.find(p => p.path === meta.filename && p.operation === "upsert");
+
+      if (stagedEntry?.content) {
+        entryJsonStr = stagedEntry.content;
+      } else if (this.mode === "local" && this.dirHandle) {
+        entryJsonStr = (await getLocalFileContent(this.dirHandle, meta.filename)).text || "";
+      } else if (this.mode === "github" && this.config) {
+        entryJsonStr = await fetchFileContent(this.config, meta.filename);
+      }
+
+      if (!entryJsonStr) throw new Error("Entry not found");
+      const rawData = JSON.parse(entryJsonStr);
+      const content = rawData.content || rawData;
+
+      // Hydrate assets
+      const assetCache = new Map<string, string>();
+      const images = extractImagePaths(content);
+      for (const imgPath of images) {
+        const actualImgPath = this.mode === "github" && this.config?.baseDir ? `${this.config.baseDir.endsWith('/') ? this.config.baseDir : this.config.baseDir + '/'}${imgPath}` : imgPath;
+        const staged = pending.find(p => p.path === actualImgPath && p.operation === "upsert");
+        if (staged?.content) {
+          assetCache.set(imgPath, staged.content.startsWith('data:') ? staged.content : `data:image/*;base64,${staged.content}`);
+        } else {
+          const cached = await getResource(dbName, actualImgPath);
+          if (cached) assetCache.set(imgPath, cached);
+          else if (this.mode === "local" && this.dirHandle) {
+            try {
+              const res = await getLocalFileContent(this.dirHandle, imgPath);
+              if (res.base64) assetCache.set(imgPath, res.base64);
+            } catch { }
+          } else if (this.mode === "github" && this.config) {
+            try {
+              const base64 = await fetchRawFileContent(this.config, actualImgPath);
+              const dataUrl = `data:image/*;base64,${base64}`;
+              assetCache.set(imgPath, dataUrl);
+              await putResource(dbName, { path: actualImgPath, dataUrl });
+            } catch { }
+          }
+        }
+      }
+
+      const hydratedContent = hydrateAssets(content, assetCache);
+
+      this.openFile = {
+        path: meta.filename,
+        name: meta.filename.split('/').pop() || "",
+        id: id,
+        tiptapContent: JSON.stringify(hydratedContent),
+        title: meta.title,
+        author: meta.author,
+        phase: meta.phase,
+        createdAt: meta.createdAt,
+        updatedAt: meta.updatedAt
+      };
+
+      this.#lastSavedContents.set(meta.filename, JSON.stringify({ version: 3, content }, null, 2));
+      events.emit(EventNames.ENTRY_LOADED, this.openFile);
+    } finally {
+      this.setLoading(false);
+    }
+  }
+
+  async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null }) {
+    // 1. Update memory immediately (Source of Truth)
+    if (this.openFile && this.openFile.id === id) {
+      this.openFile = { ...this.openFile, ...info, tiptapContent, updatedAt: new Date().toISOString() };
+    }
+
+    const existingEntry = this.metadata.entries[id];
+    if (!existingEntry) return;
+
+    const mergedEntry: EntryMetadata = {
+      ...existingEntry,
+      ...info,
+      updatedAt: new Date().toISOString(),
+      resources: extractResources(JSON.parse(tiptapContent)),
+      references: extractReferences(JSON.parse(tiptapContent)),
+      assets: extractImagePaths(JSON.parse(tiptapContent)),
+    };
+
+    this.metadata = validateNotebookIntegrity({
+      ...this.metadata,
+      entries: { ...this.metadata.entries, [id]: mergedEntry }
+    });
+
+    this.notifyStateChange();
+    events.emit(EventNames.ENTRY_UPDATED, { id, ...info });
+
+    // 2. Queue background persistence
+    this.enqueue(async () => {
+      const contentObj = JSON.parse(tiptapContent);
+      const { cleanDoc, newAssets } = await dehydrateAssets(contentObj);
+      const entryJsonStr = JSON.stringify({ version: 3, content: cleanDoc }, null, 2);
+
+      // Save assets
+      for (const asset of newAssets) {
+        await this.persistFile(asset.path, asset.base64, `Asset: ${asset.path}`, true);
+        if (this.mode === "github") {
+          await putResource(this.getDBName(), { path: asset.path, dataUrl: `data:${getMimeTypeFromExtension(asset.path)};base64,${asset.base64}` });
+        }
+      }
+
+      // Save Entry JSON
+      if (this.#lastSavedContents.get(mergedEntry.filename) !== entryJsonStr) {
+        await this.persistFile(mergedEntry.filename, entryJsonStr, `Auto-save: ${info.title}`);
+        this.#lastSavedContents.set(mergedEntry.filename, entryJsonStr);
+      }
+
+      // Save LaTeX
+      const latexPath = `${LATEX_DIR}/${id}.tex`;
+      if (this.#lastSavedContents.get(latexPath) !== latex) {
+        await this.persistFile(latexPath, latex, `Generate LaTeX: ${info.title}`);
+        this.#lastSavedContents.set(latexPath, latex);
+      }
+
+      // Save Metadata
+      await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Auto-save metadata");
+    });
+  }
+
+  async createEntry() {
+    const id = generateUUID();
+    const createdAt = new Date().toISOString();
+    const path = `${ENTRIES_DIR}/${id}.json`;
+    const latexPath = `${LATEX_DIR}/${id}.tex`;
+
+    const newEntry: EntryMetadata = {
+      id, title: "New Entry", author: localStorage.getItem("nb-last-author") || "", phase: null,
+      createdAt, updatedAt: createdAt, filename: path
+    };
+
+    const wrapper = { version: 3, content: { type: "doc", content: [{ type: "paragraph" }] } };
+    const jsonStr = JSON.stringify(wrapper, null, 2);
+    const initialLatex = `\\notebookentry{New Entry}{${createdAt.split('T')[0]}}{${newEntry.author}}{}\n\\label{${id}}\n\n`;
+
+    this.metadata = validateNotebookIntegrity({
+      ...this.metadata,
+      entries: { ...this.metadata.entries, [id]: newEntry }
+    });
+    this.entries = [{ name: `${id}.json`, path }, ...this.entries];
+
+    this.notifyStateChange();
+
+    this.enqueue(async () => {
+      await this.persistFile(path, jsonStr, "New entry");
+      await this.persistFile(latexPath, initialLatex, "Init LaTeX");
+      await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Create entry metadata");
+
+      const allEntriesLatex = generateAllEntriesLatex(this.metadata);
+      await this.persistFile(ALL_ENTRIES_PATH, allEntriesLatex, "Update all_entries.tex");
+    });
+
+    return id;
+  }
+
+  async refreshPending() {
+    const dbName = this.getDBName();
+    const all = await getAllPending(dbName);
+    events.emit(EventNames.PENDING_CHANGES_UPDATED, all);
+    return all;
+  }
+
+  async deleteEntry(file: ExplorerFile) {
+    const id = file.path.split('/').pop()?.replace('.json', '') || "";
+    const updatedMeta = validateNotebookIntegrity(removeEntryFromMetadata(this.metadata, id));
+
+    // Memory update
+    this.metadata = updatedMeta;
+    this.entries = this.entries.filter(e => e.path !== file.path);
+    if (this.openFile?.id === id) this.openFile = null;
+
+    this.notifyStateChange();
+
+    // Background persistence
+    this.enqueue(async () => {
+      await deleteLocalFileAtPath(this.dirHandle!, file.path);
+      await deleteLocalFileAtPath(this.dirHandle!, `${LATEX_DIR}/${id}.tex`);
+      await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Delete entry");
+
+      const allEntriesLatex = generateAllEntriesLatex(this.metadata);
+      await this.persistFile(ALL_ENTRIES_PATH, allEntriesLatex, "Update all_entries.tex");
+
+      if (this.mode === "github") {
+        const dbName = this.getDBName();
+        await stageChange(dbName, { path: file.path, operation: "delete", label: "Delete entry", stagedAt: new Date().toISOString() });
+        await stageChange(dbName, { path: `${LATEX_DIR}/${id}.tex`, operation: "delete", label: "Delete LaTeX", stagedAt: new Date().toISOString() });
+      }
+    });
+  }
+
+  async saveTeam(team: TeamMetadata, phases?: ProjectPhase[]) {
+    const { cleanTeam, newAssets } = await dehydrateTeamAssets(team);
+
+    // Memory update
+    this.metadata = validateNotebookIntegrity({
+      ...this.metadata,
+      team: cleanTeam,
+      phases: phases || this.metadata.phases || []
+    });
+
+    this.notifyStateChange();
+
+    this.enqueue(async () => {
+      for (const asset of newAssets) {
+        await this.persistFile(asset.path, asset.base64, `Team asset`, true);
+      }
+      await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Update team metadata");
+    });
+  }
+
+  async commitAll(config: GitHubConfig) {
+    const dbName = this.getDBName();
+    const all = await getAllPending(dbName);
+    const { commitChanges } = await import("./github");
+
+    const gitChanges = all.map(change => ({
+      path: change.path,
+      content: change.operation === "delete" ? null : (change.content?.startsWith("data:") ? change.content.split(",")[1] : (change.content ?? "")),
+      isBinary: change.path.includes("resources/") || /\.(png|jpg|jpeg|gif|webp|pdf)$/i.test(change.path)
+    }));
+
+    await commitChanges(config, gitChanges, `Update notebook: ${all.length} changes`);
+    await this.loadGitHubWorkspace();
+    const { clearAllPending } = await import("./db");
+    await clearAllPending(dbName);
+    await this.refreshPending();
+    this.notifyStateChange();
+  }
+
+  // ─── Persistence Helpers ────────────────────────────────────────────────────
+  public getDBName() {
+    if (this.currentProjectId) return `notebook-project-${this.currentProjectId}`;
+    return "notebook-default";
+  }
+
+  private enqueue(op: () => Promise<void>) {
+    this.#queue = this.#queue.then(async () => {
+      try { await op(); } catch (e) { console.error("Background persistence error:", e); }
+      if (this.#queue === Promise.resolve()) events.emit(EventNames.PERSISTENCE_SYNC);
+    });
+  }
+
+  private async persistFile(path: string, content: string, label: string, isBase64 = false) {
+    if (this.mode === "local" && this.dirHandle) {
+      await writeLocalFile(this.dirHandle, path, content, isBase64);
+    } else if (this.mode === "github" || this.mode === "temporary") {
+      await stageChange(this.getDBName(), { path, content, operation: "upsert", label, stagedAt: new Date().toISOString() });
+      await this.refreshPending();
+    }
+  }
+
+  // ─── State Helpers ──────────────────────────────────────────────────────────
+  private setLoading(val: boolean) {
+    this.isLoading = val;
+    this.notifyStateChange();
+    events.emit(EventNames.LOADING_STATUS, val);
+  }
+
+  private notifyStateChange() {
+    events.emit(EventNames.STATE_CHANGED, this);
+  }
+
+  disconnect() {
+    this.mode = "none";
+    this.currentProjectId = null;
+    this.currentProject = null;
+    this.dirHandle = null;
+    this.config = null;
+    this.entries = [];
+    this.metadata = EMPTY_METADATA;
+    this.openFile = null;
+    this.notifyStateChange();
+  }
+}
+
+export const store = new WorkspaceStore();
