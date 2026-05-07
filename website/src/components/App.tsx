@@ -160,6 +160,9 @@ export default function App() {
   const currentProjectIdRef = useRef<string | null>(null);
   const loadingProjectMetaRef = useRef<NotebookMetadata | null>(null);
   const lastCreatedEntryRef = useRef<{ id: string; content: string; latex: string } | null>(null);
+  const isColdStartRef = useRef(true);
+  const hydratedProjectIdRef = useRef<string | null>(null);
+  const entriesRef = useRef(entries);
 
 
   const navigate = useCallback((path: string, searchParams?: Record<string, string | null>) => {
@@ -201,6 +204,7 @@ export default function App() {
   useEffect(() => { targetResourceRef.current = targetResourceId; }, [targetResourceId]);
   useEffect(() => { workspaceModeRef.current = workspaceMode; }, [workspaceMode]);
   useEffect(() => { currentProjectIdRef.current = currentProjectId; }, [currentProjectId]);
+  useEffect(() => { entriesRef.current = entries; }, [entries]);
 
   const lastSavedContentsRef = useRef<Map<string, string>>(new Map());
 
@@ -774,6 +778,22 @@ export default function App() {
     // Optimistically update local state
     setEntries(prev => [{ name: filename, path }, ...prev]);
     setNotebookMetadata(newMetadata);
+    setOpenFile({
+      name: filename,
+      path,
+      id: entryId,
+      viewMode: "entry",
+      rawLatex: initialLatex,
+      tiptapContent: jsonStr,
+      title: defaultTitle,
+      author: defaultAuthor,
+      phase: null,
+      metadataMissing: false,
+      createdAt,
+      updatedAt: createdAt,
+      lastOpenedAt: createdAt,
+      isLegacyRaw: false,
+    });
     notebookMetadataRef.current = newMetadata;
     lastCreatedEntryRef.current = { id: entryId, content: jsonStr, latex: initialLatex };
 
@@ -1006,9 +1026,12 @@ export default function App() {
       const entryId = params.get('entry');
       const resourceId = params.get('resource');
       const projectId = params.get('project');
+      const isProjectStale = projectId && (projectId !== currentProjectIdRef.current || workspaceModeRef.current === "none");
 
-      // Start full initialization
-      setIsInitializing(true);
+      // Start full initialization only on cold start or project switch
+      if (isColdStartRef.current || isProjectStale) {
+        setIsInitializing(true);
+      }
       setIsLoading(true);
 
       let loadedMeta: NotebookMetadata | null = null;
@@ -1016,7 +1039,6 @@ export default function App() {
 
       try {
         // 1. Handle Project Selection
-        const isProjectStale = projectId && (projectId !== currentProjectIdRef.current || workspaceModeRef.current === "none");
         if (isProjectStale) {
           activeProject = await getProject(projectId);
           const p = activeProject;
@@ -1099,63 +1121,66 @@ export default function App() {
           resourcesDir: activeProject.githubConfig.folderPath ? `${activeProject.githubConfig.folderPath}/${ASSETS_DIR}` : ASSETS_DIR,
         } : config;
 
-          // 3. Handle specific view routes
-          if (path.startsWith('/workspace/team')) {
-          setOpenFile(null);
-          const tab = path.split('/').pop() as TeamTab;
-          setTeamTab(["identity", "members", "phases"].includes(tab) ? tab : "identity");
-          
-          // Wait for team hydration
+        // 3. Proactive Team Hydration (if project changed or cold start)
+        if (projectId && (isProjectStale || isColdStartRef.current || hydratedProjectIdRef.current !== projectId)) {
           const dbName = `notebook-project-${projectId}`;
-          const assetCache = new Map<string, string>();
           const currentMeta = loadedMeta || loadingProjectMetaRef.current || notebookMetadataRef.current;
+          
           if (currentMeta.team) {
-            const images: string[] = [];
-            if (currentMeta.team.logo) images.push(currentMeta.team.logo);
-            currentMeta.team.members.forEach(m => { if (m.image) images.push(m.image); });
-            for (const imgPath of images) {
-              if (imgPath && !imgPath.startsWith("data:")) {
-                const cached = await getResource(dbName, imgPath);
-                if (cached) assetCache.set(imgPath, cached);
-                else if (activeMode === "local" && activeHandle) {
-                  try {
-                    const res = await getLocalFileContent(activeHandle, imgPath);
-                    if (res.base64) assetCache.set(imgPath, res.base64);
-                  } catch {}
-                }
+            const assetCache = new Map<string, string>();
+            const images = [currentMeta.team.logo, ...currentMeta.team.members.map(m => m.image)].filter(Boolean) as string[];
+            
+            await Promise.all(images.map(async (imgPath) => {
+              if (imgPath.startsWith("data:")) return;
+              const cached = await getResource(dbName, imgPath);
+              if (cached) {
+                assetCache.set(imgPath, cached);
+              } else if (activeMode === "local" && activeHandle) {
+                try {
+                  const res = await getLocalFileContent(activeHandle, imgPath);
+                  if (res.base64) assetCache.set(imgPath, res.base64);
+                } catch {}
               }
-            }
+            }));
+
             setHydratedTeam(hydrateTeamAssets(currentMeta.team, assetCache));
           } else {
             setHydratedTeam(EMPTY_METADATA.team!);
           }
           setHydratedPhases(currentMeta.phases || []);
+          hydratedProjectIdRef.current = projectId;
+        }
+
+        // 4. Handle specific view routes
+        if (path.startsWith('/workspace/team')) {
+          setOpenFile(null);
+          const tab = path.split('/').pop() as TeamTab;
+          setTeamTab(["identity", "members", "phases"].includes(tab) ? tab : "identity");
           setShowTeamEditor(true);
         } else if (path.startsWith('/workspace/editor') || (path === '/workspace' && entryId)) {
           setShowTeamEditor(false);
           if (entryId && entryId !== openFileRef.current?.id) {
             const currentMeta = loadedMeta || loadingProjectMetaRef.current || notebookMetadataRef.current;
             const isNewEntry = lastCreatedEntryRef.current?.id === entryId;
-            if (currentMeta.entries[entryId] || isNewEntry) {
-              // Linear load of entry content
-              const filename = `${entryId}.json`;
-              const entriesDir = (activeMode === "github" && activeConfig) ? activeConfig.entriesDir : ENTRIES_DIR;
-              const initialContent = (lastCreatedEntryRef.current?.id === entryId) ? lastCreatedEntryRef.current.content : undefined;
-              const initialLatex = (lastCreatedEntryRef.current?.id === entryId) ? lastCreatedEntryRef.current.latex : undefined;
-              
-              await _performOpenEntry({ name: filename, path: `${entriesDir}/${filename}` }, initialContent, initialLatex, {
-                mode: activeMode,
-                handle: activeHandle,
-                config: activeConfig,
-                metadata: currentMeta
-              }, isNewEntry); // Skip loading screen for new entries
-              
-              // Clear cache after successful use or if mismatch
-              lastCreatedEntryRef.current = null;
-            } else {
-              setOpenFile(null);
-              navigate('/workspace');
-            }
+            
+            // Linear load of entry content
+            const filename = `${entryId}.json`;
+            const entriesDir = (activeMode === "github" && activeConfig) ? activeConfig.entriesDir : ENTRIES_DIR;
+            const initialContent = (lastCreatedEntryRef.current?.id === entryId) ? lastCreatedEntryRef.current.content : undefined;
+            const initialLatex = (lastCreatedEntryRef.current?.id === entryId) ? lastCreatedEntryRef.current.latex : undefined;
+            
+            // Skip splash screen if we are already in this project
+            const skipSplash = isNewEntry;
+            
+            await _performOpenEntry({ name: filename, path: `${entriesDir}/${filename}` }, initialContent, initialLatex, {
+              mode: activeMode,
+              handle: activeHandle,
+              config: activeConfig,
+              metadata: currentMeta
+            }, skipSplash);
+            
+            // Clear cache after successful use or if mismatch
+            lastCreatedEntryRef.current = null;
           } else if (!entryId) {
              setOpenFile(null);
              navigate('/workspace');
@@ -1178,6 +1203,7 @@ export default function App() {
           setIsInitializing(false);
           setIsLoading(false);
           setIsColdStart(false);
+          isColdStartRef.current = false;
         }
       }
     };
