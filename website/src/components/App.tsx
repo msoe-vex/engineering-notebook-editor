@@ -27,7 +27,7 @@ import TeamEditor from "./TeamEditor";
 import ProjectHeader from "./ProjectHeader";
 import ConfirmationDialog from "./ConfirmationDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { HardDrive, ArrowLeftRight, X, BookOpen } from "lucide-react";
+import { HardDrive, ArrowLeftRight, X, BookOpen, Download } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { saveAs } from "file-saver";
 import { generateUUID, hashContent, getMimeTypeFromExtension } from "@/lib/utils";
@@ -783,13 +783,30 @@ export default function App() {
     }
   }, [config, dirHandle, getDBName, getGitBasePrefix, notebookMetadata, workspaceMode, notify]);
 
-  const handleDownloadMulti = useCallback(async (files: ExplorerFile[]) => {
+  const handleDownloadMulti = useCallback(async (files: ExplorerFile[], includeTeam = false) => {
     try {
       setIsLoading(true);
       setIsInitializing(true);
       const dbName = getDBName();
       const entriesMap: Record<string, EntryMetadata & { content: TipTapNode }> = {};
       const allAssets: Record<string, string> = {};
+
+      const fetchAsset = async (imgPath: string) => {
+        if (allAssets[imgPath]) return;
+        const actualPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${imgPath}` : imgPath;
+        const stagedRes = (await getAllPending(dbName)).find(p => p.path === actualPath && p.operation === "upsert");
+        if (stagedRes?.content) allAssets[imgPath] = stagedRes.content;
+        else {
+          const cached = await getResource(dbName, actualPath);
+          if (cached) allAssets[imgPath] = cached;
+          else if (workspaceMode === "local" && dirHandle) {
+            try {
+              const res = await getLocalFileContent(dirHandle, imgPath);
+              if (res.base64) allAssets[imgPath] = res.base64;
+            } catch { /* ignore */ }
+          }
+        }
+      };
 
       for (const file of files) {
         const entryId = file.name.replace('.json', '');
@@ -805,28 +822,34 @@ export default function App() {
         const content = rawData.content || rawData;
 
         const images = extractImagePaths(content);
-        for (const imgPath of images) {
-          const actualPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${imgPath}` : imgPath;
-          const stagedRes = (await getAllPending(dbName)).find(p => p.path === actualPath && p.operation === "upsert");
-          if (stagedRes?.content) allAssets[imgPath] = stagedRes.content;
-          else {
-            const cached = await getResource(dbName, actualPath);
-            if (cached) allAssets[imgPath] = cached;
-          }
-        }
+        for (const imgPath of images) await fetchAsset(imgPath);
         entriesMap[entryId] = { ...meta, content };
       }
 
-      const portable = { version: 3, entries: entriesMap, assets: allAssets };
+      const portable: any = { version: 3, entries: entriesMap, assets: allAssets };
+      if (includeTeam && notebookMetadata.team) {
+        portable.team = notebookMetadata.team;
+        const teamImages: string[] = [];
+        if (notebookMetadata.team.logo) teamImages.push(notebookMetadata.team.logo);
+        notebookMetadata.team.members.forEach(m => { if (m.image) teamImages.push(m.image); });
+        for (const imgPath of teamImages) await fetchAsset(imgPath);
+      }
+
       const blob = new Blob([JSON.stringify(portable, null, 2)], { type: "application/json" });
-      saveAs(blob, `notebook_export_${isoTimestamp().replace(/[:.]/g, '-')}.json`);
-      notify(`Exported ${Object.keys(entriesMap).length} entries.`, "success");
-    } catch {
-      notify("Failed to export entries.", "error");
+      const exportName = includeTeam ? `notebook_full_export_${isoTimestamp().replace(/[:.]/g, '-')}.json` : `notebook_export_${isoTimestamp().replace(/[:.]/g, '-')}.json`;
+      saveAs(blob, exportName);
+      notify(includeTeam ? "Notebook exported successfully." : `Exported ${Object.keys(entriesMap).length} entries.`, "success");
+    } catch (e) {
+      console.error(e);
+      notify("Export failed.", "error");
     } finally {
       setIsLoading(false);
     }
   }, [config, dirHandle, getDBName, getGitBasePrefix, notebookMetadata, workspaceMode, notify, setIsLoading]);
+
+  const handleExportNotebook = useCallback(async () => {
+    await handleDownloadMulti(entries, true);
+  }, [entries, handleDownloadMulti]);
 
   const handleDeleteMulti = useCallback(async (files: ExplorerFile[]) => {
     setConfirmDialog({
@@ -1111,8 +1134,34 @@ export default function App() {
             newEntriesForExplorer.push({ name: result.filename, path: result.path });
           }
         }
+        setEntries(prev => [...newEntriesForExplorer, ...prev]);
+        notify(`Imported ${newEntriesForExplorer.length} entries.`, "success");
+      }
 
-        // Finalize metadata and master LaTeX
+      // ── Handle Team Import ──────────────────────────────────────────────────
+      if (rawData.team) {
+        const teamData = rawData.team as TeamMetadata;
+        const teamImages: string[] = [];
+        if (teamData.logo) teamImages.push(teamData.logo);
+        teamData.members.forEach((m: any) => { if (m.image) teamImages.push(m.image); });
+
+        const dbName = getDBName();
+        for (const imgPath of teamImages) {
+          if (assetsToImport[imgPath]) {
+            const actualPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${imgPath}` : imgPath;
+            const content = assetsToImport[imgPath];
+            if (workspaceMode === "local" && dirHandle) {
+              await writeLocalFile(dirHandle, imgPath, content, true);
+            } else {
+              await stageChange(dbName, { path: actualPath, operation: "upsert", content, label: `Import team asset`, stagedAt: isoTimestamp() });
+              await putResource(dbName, { path: actualPath, dataUrl: content.startsWith('data:') ? content : `data:${getMimeTypeFromExtension(actualPath)};base64,${content}` });
+            }
+          }
+        }
+        // This will update notebookMetadata state and save everything including the new entries
+        await handleSaveTeam(teamData, currentMeta);
+      } else if (entryList.length > 0) {
+        // Only entries were imported, save them now
         setNotebookMetadata(currentMeta);
         const allEntriesLatex = generateAllEntriesLatex(currentMeta);
 
@@ -1123,11 +1172,8 @@ export default function App() {
           await stage({ path: currentIndexPath, content: JSON.stringify(currentMeta, null, 2), operation: "upsert", label: "Update index" });
           await stage({ path: currentAllEntriesPath, content: allEntriesLatex, operation: "upsert", label: "Update all_entries.tex" });
         }
-
-        setEntries(prev => [...newEntriesForExplorer, ...prev]);
-        notify(`Imported ${newEntriesForExplorer.length} entries.`, "success");
-      } else {
-        notify("No entries found in file.", "error");
+      } else if (!rawData.team && entryList.length === 0) {
+        notify("No valid data found in file.", "error");
       }
 
       if (workspaceMode === "local") await loadLocalExplorer();
@@ -1202,7 +1248,7 @@ export default function App() {
     setShowTeamEditor(true);
   };
 
-  const handleSaveTeam = async (team: TeamMetadata) => {
+  const handleSaveTeam = async (team: TeamMetadata, baseMetadata?: NotebookMetadata) => {
     setIsSaving(true);
     try {
       const dbName = getDBName();
@@ -1222,7 +1268,8 @@ export default function App() {
       }
 
       // 3. Update notebook.json
-      const updatedMeta = { ...notebookMetadata, team: cleanTeam };
+      const metaToUse = baseMetadata || notebookMetadata;
+      const updatedMeta = { ...metaToUse, team: cleanTeam };
       setNotebookMetadata(updatedMeta);
       await saveMetadata(updatedMeta, "Update team metadata");
 
@@ -1463,6 +1510,7 @@ export default function App() {
         </div>
         <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-nb-on-surface truncate">Notebook</p></div>
         <div className="flex items-center gap-1">
+          <button onClick={handleExportNotebook} title="Export Entire Notebook" className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors"><Download size={16} /></button>
           <button onClick={handleDisconnect} title="Switch Workspace" className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors"><ArrowLeftRight size={16} /></button>
           {isMobile && <button onClick={() => setUserSidebarPreference(false)} className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant transition-colors"><X size={18} /></button>}
         </div>
