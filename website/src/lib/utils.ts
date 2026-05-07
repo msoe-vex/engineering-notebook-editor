@@ -83,3 +83,28 @@ export function getMimeTypeFromExtension(path: string): string {
     default: return "image/png"; // Fallback
   }
 }
+
+/**
+ * Converts an SVG data URL to a PNG data URL in the browser.
+ */
+export async function convertSvgToPng(svgDataUrl: string, scale: number = 2): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      // Use scale to ensure high quality (SVGs are vectors, so we can upscale)
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error("Could not get canvas context"));
+        return;
+      }
+      // Draw image directly to canvas (supports transparency if SVG is transparent)
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => reject(new Error("Failed to load SVG image for conversion"));
+    img.src = svgDataUrl;
+  });
+}
