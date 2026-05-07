@@ -89,9 +89,15 @@ const Editor = React.memo(function Editor({
     const trimmed = raw.trim();
     if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
       try {
-        const parsed = JSON.parse(trimmed);
+        let parsed = JSON.parse(trimmed);
         // If we got another string, try parsing it again (recursive unwrap)
         if (typeof parsed === 'string') return parseInitialContent(parsed);
+        
+        // Unwrap standard wrapper { version: 3, content: { type: 'doc', ... } }
+        if (parsed && typeof parsed === 'object' && 'content' in parsed && !('type' in parsed)) {
+          parsed = parsed.content;
+        }
+        
         return parsed as TipTapNode | string;
       } catch {
         return trimmed;
