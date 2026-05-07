@@ -89,16 +89,6 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, ed
               className="flex-1 bg-transparent border-none outline-none text-[10px] font-bold tracking-widest text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
             />
           </div>
-          <div className="flex items-center gap-2 px-2 py-0.5 rounded-full bg-nb-surface-mid/50 border border-nb-outline-variant/20">
-            <UserCircle size={10} className="text-nb-tertiary" />
-            <input
-              type="text"
-              value={node.attrs.initials || ""}
-              onChange={(e) => updateAttributes({ initials: e.target.value })}
-              placeholder="Initials"
-              className="w-12 bg-transparent border-none outline-none text-[8px] font-bold text-nb-on-surface-variant"
-            />
-          </div>
         </div>
 
         <div className="relative flex justify-center">
@@ -154,7 +144,6 @@ export const ImageWithCaption = TiptapImage.extend<ImageOptions & { dbName: stri
       },
       alt: { default: "" },
       title: { default: "" },
-      initials: { default: "" },
       filePath: { default: null },
       caption: { default: "" },
       width: { default: "100%" },

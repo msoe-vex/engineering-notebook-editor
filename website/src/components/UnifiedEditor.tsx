@@ -81,7 +81,7 @@ export default function UnifiedEditor({
         id: generateUUID(),
         src: dataUrl, // Keep dataUrl for immediate preview
         alt: "",
-        title: author ?? "",
+        title: "",
         filePath: newPath,
       };
 
