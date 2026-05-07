@@ -32,6 +32,12 @@ import Underline from "@tiptap/extension-underline";
 
 
 
+import ListItem from "@tiptap/extension-list-item";
+
+const RestrictedListItem = ListItem.extend({
+  content: "paragraph+",
+});
+
 /* ─────────────────────────────────────────────────────────────────
    Main Component
    ───────────────────────────────────────────────────────────────── */
