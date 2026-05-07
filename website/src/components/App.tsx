@@ -630,10 +630,13 @@ export default function App() {
     file: ExplorerFile, 
     initialContent?: string, 
     initialLatex?: string,
-    context?: { mode?: WorkspaceMode; handle?: FileSystemDirectoryHandle | null; config?: GitHubConfig | null; metadata?: NotebookMetadata | null }
+    context?: { mode?: WorkspaceMode; handle?: FileSystemDirectoryHandle | null; config?: GitHubConfig | null; metadata?: NotebookMetadata | null },
+    skipLoading = false
   ) => {
-    setIsLoading(true);
-    setIsInitializing(true);
+    if (!skipLoading) {
+      setIsLoading(true);
+      setIsInitializing(true);
+    }
     setMobileTab("editor");
     setShowTeamEditor(false);
 
@@ -748,8 +751,6 @@ export default function App() {
 
 
   const handleNewEntry = useCallback(async () => {
-    setIsLoading(true);
-    setIsInitializing(true);
     const createdAt = isoTimestamp();
     const entryId = generateUUID();
     const filename = `${entryId}.json`;
@@ -770,30 +771,31 @@ export default function App() {
 
     const newMetadata = updateEntryInIndex(notebookMetadata, entryId, entryMeta);
 
+    // Optimistically update local state
     setEntries(prev => [{ name: filename, path }, ...prev]);
     setNotebookMetadata(newMetadata);
     notebookMetadataRef.current = newMetadata;
+    lastCreatedEntryRef.current = { id: entryId, content: jsonStr, latex: initialLatex };
 
-    try {
-      await saveEntry(path, jsonStr, "New entry");
-      await saveEntry(`${currentLatexDir}/${entryId}.tex`, initialLatex, "Init LaTeX");
-      await saveMetadata(newMetadata, "Update index for new entry");
-      const allEntriesLatex = generateAllEntriesLatex(newMetadata);
-      await saveEntry(currentAllEntriesPath, allEntriesLatex, "Update all_entries.tex");
+    // Navigate immediately to the new entry
+    const project = new URLSearchParams(window.location.search).get('project') || "";
+    navigate('/workspace/editor', { project, entry: entryId });
 
-      lastCreatedEntryRef.current = { id: entryId, content: jsonStr, latex: initialLatex };
-      const project = new URLSearchParams(window.location.search).get('project') || "";
-      navigate('/workspace/editor', { project, entry: entryId });
-      
-      if (workspaceMode === "github") refreshPending();
-    } catch {
-      notify("Failed to create entry.", "error");
-    } finally {
-      setIsLoading(false);
-      // Don't set isInitializing(false) here because navigate() will trigger handleUrlChange 
-      // which will manage its own loading state.
-    }
-  }, [workspaceMode, config, saveEntry, saveMetadata, notebookMetadata, setEntries, setNotebookMetadata, currentLatexDir, currentAllEntriesPath, refreshPending, notify, setIsLoading, setIsInitializing]);
+    // Perform persistence in the background
+    (async () => {
+      try {
+        await saveEntry(path, jsonStr, "New entry");
+        await saveEntry(`${currentLatexDir}/${entryId}.tex`, initialLatex, "Init LaTeX");
+        await saveMetadata(newMetadata, "Update index for new entry");
+        const allEntriesLatex = generateAllEntriesLatex(newMetadata);
+        await saveEntry(currentAllEntriesPath, allEntriesLatex, "Update all_entries.tex");
+        if (workspaceMode === "github") refreshPending();
+      } catch (e) {
+        console.error("Background save failed for new entry", e);
+        notify("Failed to save new entry to disk. Your changes might be lost on refresh.", "error");
+      }
+    })();
+  }, [workspaceMode, config, saveEntry, saveMetadata, notebookMetadata, setEntries, setNotebookMetadata, currentLatexDir, currentAllEntriesPath, refreshPending, notify, navigate]);
 
   const handleCloseEntry = useCallback((path?: string) => {
     if (path && openFile?.path !== path) return;
@@ -1146,7 +1148,7 @@ export default function App() {
                 handle: activeHandle,
                 config: activeConfig,
                 metadata: currentMeta
-              });
+              }, isNewEntry); // Skip loading screen for new entries
               
               // Clear cache after successful use or if mismatch
               lastCreatedEntryRef.current = null;
@@ -1461,34 +1463,41 @@ export default function App() {
   };
 
   const handleDeleteEntry = async (file: ExplorerFile) => {
-    setIsInitializing(true);
-    setIsLoading(true);
-    try {
-      const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
-      const updatedMeta = validateNotebookIntegrity(removeEntryFromMetadata(notebookMetadata, entryId));
-      await performGarbageCollection(notebookMetadata, updatedMeta);
-      setNotebookMetadata(updatedMeta);
-      await deleteFile(file.path, "Entry deleted");
-      await deleteFile(`${currentLatexDir}/${entryId}.tex`, "LaTeX deleted");
-      await saveMetadata(updatedMeta, "Metadata update (entry deleted)");
-      const allEntriesLatex = generateAllEntriesLatex(updatedMeta);
-      await saveEntry(currentAllEntriesPath, allEntriesLatex, "Update all_entries.tex");
-      setEntries(prev => prev.filter(e => e.path !== file.path));
-      setSelectedPaths(prev => {
-        const next = new Set(prev);
-        next.delete(file.path);
-        return next;
-      });
-      if (workspaceMode === "github") refreshPending();
-      if (openFile?.path === file.path) {
-        setOpenFile(null);
-        setLatexContent("");
-        const project = new URLSearchParams(window.location.search).get('project') || "";
-        navigate('/workspace', { project });
-      }
-    } finally {
-      setIsLoading(false);
+    const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
+    const updatedMeta = validateNotebookIntegrity(removeEntryFromMetadata(notebookMetadata, entryId));
+    
+    // Optimistically update local state
+    setNotebookMetadata(updatedMeta);
+    notebookMetadataRef.current = updatedMeta;
+    setEntries(prev => prev.filter(e => e.path !== file.path));
+    setSelectedPaths(prev => {
+      const next = new Set(prev);
+      next.delete(file.path);
+      return next;
+    });
+
+    if (openFile?.path === file.path) {
+      setOpenFile(null);
+      setLatexContent("");
+      const project = new URLSearchParams(window.location.search).get('project') || "";
+      navigate('/workspace', { project });
     }
+
+    // Perform persistence in the background
+    (async () => {
+      try {
+        await performGarbageCollection(notebookMetadata, updatedMeta);
+        await deleteFile(file.path, "Entry deleted");
+        await deleteFile(`${currentLatexDir}/${entryId}.tex`, "LaTeX deleted");
+        await saveMetadata(updatedMeta, "Metadata update (entry deleted)");
+        const allEntriesLatex = generateAllEntriesLatex(updatedMeta);
+        await saveEntry(currentAllEntriesPath, allEntriesLatex, "Update all_entries.tex");
+        if (workspaceMode === "github") refreshPending();
+      } catch (e) {
+        console.error("Background delete failed", e);
+        notify("Failed to complete deletion in the background.", "error");
+      }
+    })();
   };
 
 
