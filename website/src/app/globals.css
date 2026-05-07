@@ -138,13 +138,18 @@ button:disabled {
   margin-bottom: 0.75rem;
 }
 
-.ProseMirror p.is-editor-empty:first-child::before {
+.ProseMirror *:is(.is-empty, .is-editor-empty)::before {
   color: var(--color-nb-on-surface-variant);
   content: attr(data-placeholder);
   float: left;
   height: 0;
   pointer-events: none;
   opacity: 0.4;
+}
+
+/* Hide duplicate placeholders on custom node wrappers */
+.ProseMirror [data-node-view-wrapper].is-empty::before {
+  display: none;
 }
 
 .ProseMirror u, 
