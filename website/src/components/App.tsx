@@ -622,7 +622,7 @@ export default function App() {
       const meta = notebookMetadataRef.current.entries[entryId];
       const title = meta?.title || "";
       const author = meta?.author || (typeof window !== "undefined" ? localStorage.getItem("nb-last-author") || "" : "");
-      const phase = meta?.phase || "";
+      const phase = meta?.phase ?? null;
       const createdAt = meta?.createdAt || isoTimestamp();
       const updatedAt = meta?.updatedAt || createdAt;
 
@@ -669,7 +669,7 @@ export default function App() {
       const hydratedContent = hydrateAssets(content, assetCache);
       
       let currentPhase = phase as (string | number | null);
-      if (typeof currentPhase !== "number" || !(notebookMetadata.phases || []).some(p => p.id === currentPhase)) {
+      if (currentPhase !== null && typeof currentPhase !== "number" || !(notebookMetadataRef.current.phases || []).some(p => p.id === currentPhase)) {
         currentPhase = null;
       }
 

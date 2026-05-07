@@ -4,27 +4,47 @@ import React, { useState, useEffect, useMemo, memo, useCallback } from "react";
 import {
   Hash, User, Briefcase, Image as ImageIcon,
   Loader2, Check, X, Camera, Building2, Plus, Trash2, Users,
-  Palette, Shapes, Search
+  Palette, Shapes, Search, GripVertical
 } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import Image from "next/image";
+
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragStartEvent,
+  DragOverlay,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { TeamMetadata, TeamMember, ProjectPhase } from "@/lib/metadata";
 import { DEFAULT_PHASES, AVAILABLE_ICONS } from "@/lib/phases";
 
 // ─── Sub-components for performance ──────────────────────────────────────────
 
-const IconPicker = ({ 
-  currentIcon, 
-  onSelect, 
-  color 
-}: { 
-  currentIcon: string, 
+const IconPicker = ({
+  currentIcon,
+  onSelect,
+  color
+}: {
+  currentIcon: string,
   onSelect: (iconName: string) => void,
   color: string
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
-  
+
   const filteredIcons = useMemo(() => {
     const q = search.toLowerCase();
     return AVAILABLE_ICONS.filter(i => i.toLowerCase().includes(q));
@@ -81,24 +101,29 @@ const IconPicker = ({
   );
 };
 
-const PhaseRow = memo(({ 
-  phase, 
-  handlePhaseChange, 
-  removePhase
-}: { 
-  phase: ProjectPhase, 
-  handlePhaseChange: (id: number, field: keyof ProjectPhase, value: string) => void,
-  removePhase: (id: number) => void
+const PhaseCard = memo(({
+  phase,
+  handlePhaseChange,
+  removePhase,
+  attributes,
+  listeners,
+  isOverlay = false
+}: {
+  phase: ProjectPhase,
+  handlePhaseChange?: (id: number, field: keyof ProjectPhase, value: string) => void,
+  removePhase?: (id: number) => void,
+  attributes?: any,
+  listeners?: any,
+  isOverlay?: boolean
 }) => {
   const [localColor, setLocalColor] = useState(phase.color);
 
-  // Sync local color with prop if it changes externally
   useEffect(() => {
     setLocalColor(phase.color);
   }, [phase.color]);
 
-  // Debounced update to parent
   useEffect(() => {
+    if (!handlePhaseChange) return;
     const timer = setTimeout(() => {
       if (localColor !== phase.color) {
         handlePhaseChange(phase.id, "color", localColor);
@@ -109,20 +134,28 @@ const PhaseRow = memo(({
 
   return (
     <div
-      className="group flex items-center gap-4 p-3 rounded-2xl bg-nb-surface border border-nb-outline-variant hover:border-nb-primary/30 transition-all"
+      className={`flex-1 group flex items-center gap-4 p-3 rounded-2xl bg-nb-surface border border-nb-outline-variant hover:border-nb-primary/30 transition-all ${isOverlay ? 'shadow-nb-2xl border-nb-primary ring-2 ring-nb-primary/10' : ''}`}
     >
-      <IconPicker 
-        currentIcon={phase.iconName} 
+      <div
+        {...attributes}
+        {...listeners}
+        className="p-2 -ml-2 rounded-lg text-nb-on-surface-variant/20 hover:text-nb-on-surface-variant/60 hover:bg-nb-surface-low cursor-grab active:cursor-grabbing transition-all shrink-0"
+      >
+        <GripVertical size={16} />
+      </div>
+
+      <IconPicker
+        currentIcon={phase.iconName}
         color={localColor}
-        onSelect={(name) => handlePhaseChange(phase.id, "iconName", name)} 
+        onSelect={(name) => handlePhaseChange?.(phase.id, "iconName", name)}
       />
 
-      <div className="relative group/color shrink-0">
+      <div className="relative group/color shrink-0 flex items-center justify-center">
         <input
           type="color"
           value={localColor}
           onChange={e => setLocalColor(e.target.value)}
-          className="w-6 h-6 rounded-full border-2 border-white shadow-sm cursor-pointer overflow-hidden p-0"
+          className="w-7 h-7 rounded-full border-2 border-white shadow-nb-sm cursor-pointer overflow-hidden p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-none [&::-webkit-color-swatch]:rounded-full"
         />
       </div>
 
@@ -130,13 +163,13 @@ const PhaseRow = memo(({
         <input
           type="text"
           value={phase.name}
-          onChange={e => handlePhaseChange(phase.id, "name", e.target.value)}
+          onChange={e => handlePhaseChange?.(phase.id, "name", e.target.value)}
           placeholder="Phase Name"
           className="w-full bg-transparent border-none p-0 text-sm font-bold text-nb-on-surface focus:outline-none placeholder:text-nb-on-surface-variant/30"
         />
         <textarea
           value={phase.description}
-          onChange={e => handlePhaseChange(phase.id, "description", e.target.value)}
+          onChange={e => handlePhaseChange?.(phase.id, "description", e.target.value)}
           placeholder="Describe what happens in this phase..."
           rows={1}
           className="w-full bg-transparent border-none p-0 text-[10px] font-medium text-nb-on-surface-variant focus:outline-none placeholder:text-nb-on-surface-variant/20 resize-none h-auto overflow-hidden leading-relaxed"
@@ -150,12 +183,56 @@ const PhaseRow = memo(({
 
       <button
         type="button"
-        onClick={() => removePhase(phase.id)}
+        onClick={() => removePhase?.(phase.id)}
         className="p-2 rounded-lg text-nb-on-surface-variant/40 hover:text-red-500 hover:bg-red-50 transition-all cursor-pointer"
         title="Remove Phase"
       >
         <Trash2 size={16} />
       </button>
+    </div>
+  );
+});
+
+PhaseCard.displayName = "PhaseCard";
+
+const PhaseRow = memo(({
+  phase,
+  handlePhaseChange,
+  removePhase
+}: {
+  phase: ProjectPhase,
+  handlePhaseChange: (id: number, field: keyof ProjectPhase, value: string) => void,
+  removePhase: (id: number) => void
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: phase.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition: transition || 'transform 150ms cubic-bezier(0.2, 0, 0, 1), opacity 150ms ease',
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`group/row ${isDragging ? 'z-[100]' : ''}`}
+    >
+      <div className={`transition-all ${isDragging ? 'opacity-0 duration-0' : 'opacity-100 duration-200 delay-150'}`}>
+        <PhaseCard
+          phase={phase}
+          handlePhaseChange={handlePhaseChange}
+          removePhase={removePhase}
+          attributes={attributes}
+          listeners={listeners}
+        />
+      </div>
     </div>
   );
 });
@@ -180,9 +257,20 @@ export default function TeamEditor({
   const [teamData, setTeamData] = useState<TeamMetadata>(initialData);
   const [phases, setPhases] = useState<ProjectPhase[]>(initialPhases && initialPhases.length > 0 ? initialPhases : DEFAULT_PHASES);
   const [activeTab, setActiveTab] = useState<"identity" | "members" | "phases">("identity");
+  const [activeId, setActiveId] = useState<number | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 3, // Start dragging after 3 pixels of movement
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
   useEffect(() => {
     const timer = setTimeout(() => {
       if (hasChanges) {
@@ -249,16 +337,9 @@ export default function TeamEditor({
 
   const addPhase = useCallback(() => {
     setPhases(prev => {
-      const baseName = "New Phase";
-      let name = baseName;
-      let counter = 1;
-      while (prev.some(p => p.name === name)) {
-        name = `${baseName} ${counter++}`;
-      }
-      const maxId = prev.reduce((max, p) => Math.max(max, p.id), 0);
       return [...prev, {
-        id: maxId + 1,
-        name,
+        id: Date.now(),
+        name: "New Phase",
         description: "",
         iconName: "Shapes",
         color: "#94a3b8"
@@ -268,9 +349,28 @@ export default function TeamEditor({
   }, []);
 
   const removePhase = useCallback((id: number) => {
-    setPhases(prev => prev.filter(p => p.id !== id));
+    setPhases(prev => {
+      return prev.filter(p => p.id !== id);
+    });
     setHasChanges(true);
   }, []);
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as number);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setPhases((items) => {
+        const oldIndex = items.findIndex(p => p.id === active.id);
+        const newIndex = items.findIndex(p => p.id === over.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+      setHasChanges(true);
+    }
+    setActiveId(null);
+  };
 
   const restoreDefaultPhases = useCallback(() => {
     setPhases(DEFAULT_PHASES.map(p => ({ ...p })));
@@ -522,32 +622,68 @@ export default function TeamEditor({
 
           {activeTab === "phases" && (
             <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
-              <div className="grid grid-cols-1 gap-6">
-                {phases.map((phase) => (
-                  <PhaseRow 
-                    key={phase.id}
-                    phase={phase}
-                    handlePhaseChange={handlePhaseChange}
-                    removePhase={removePhase}
-                  />
-                ))}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={phases.map(p => p.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="flex gap-6">
+                    {/* Static Numbers Column */}
+                    <div className="flex flex-col gap-3 py-1">
+                      {phases.map((_, i) => (
+                        <div key={i} className="w-10 h-[74px] flex items-center justify-center">
+                          <span className="text-2xl font-black text-nb-on-surface-variant/10 select-none">
+                            {i + 1}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                  <button
-                    onClick={addPhase}
-                    className="flex items-center justify-center gap-3 p-4 rounded-2xl border-2 border-dashed border-nb-outline-variant/30 text-nb-on-surface-variant hover:border-nb-primary hover:text-nb-primary hover:bg-nb-primary/5 transition-all group cursor-pointer"
-                  >
-                    <Plus size={18} />
-                    <span className="text-xs font-black uppercase tracking-widest">Add Phase</span>
-                  </button>
-                  <button
-                    onClick={restoreDefaultPhases}
-                    className="flex items-center justify-center gap-3 p-4 rounded-2xl border-2 border-dashed border-nb-outline-variant/30 text-nb-on-surface-variant hover:border-nb-outline hover:text-nb-on-surface hover:bg-nb-surface-low transition-all group cursor-pointer"
-                  >
-                    <Palette size={18} />
-                    <span className="text-xs font-black uppercase tracking-widest">Restore Defaults</span>
-                  </button>
-                </div>
+                    {/* Sortable List */}
+                    <div className="flex-1 space-y-3">
+                      {phases.map((p) => (
+                        <PhaseRow
+                          key={p.id}
+                          phase={p}
+                          handlePhaseChange={handlePhaseChange}
+                          removePhase={removePhase}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </SortableContext>
+                <DragOverlay>
+                  {activeId ? (
+                    <div className="w-[768px]">
+                      <PhaseCard
+                        phase={phases.find(p => p.id === activeId)!}
+                        isOverlay
+                      />
+                    </div>
+                  ) : null}
+                </DragOverlay>
+              </DndContext>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                <button
+                  onClick={addPhase}
+                  className="flex items-center justify-center gap-3 p-4 rounded-2xl border-2 border-dashed border-nb-outline-variant/30 text-nb-on-surface-variant hover:border-nb-primary hover:text-nb-primary hover:bg-nb-primary/5 transition-all group cursor-pointer"
+                >
+                  <Plus size={18} />
+                  <span className="text-xs font-black uppercase tracking-widest">Add Phase</span>
+                </button>
+                <button
+                  onClick={restoreDefaultPhases}
+                  className="flex items-center justify-center gap-3 p-4 rounded-2xl border-2 border-dashed border-nb-outline-variant/30 text-nb-on-surface-variant hover:border-nb-outline hover:text-nb-on-surface hover:bg-nb-surface-low transition-all group cursor-pointer"
+                >
+                  <Palette size={18} />
+                  <span className="text-xs font-black uppercase tracking-widest">Restore Defaults</span>
+                </button>
               </div>
             </div>
           )}
