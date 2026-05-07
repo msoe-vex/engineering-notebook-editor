@@ -23,12 +23,12 @@ export function useWorkspace() {
 
   useEffect(() => { metadataRef.current = metadata; }, [metadata]);
 
-  const getDBName = useCallback(() => {
-    if (currentProjectId) {
-      return `notebook-project-${currentProjectId}`;
-    }
-    return "notebook-pending";
+  const getDBName = useCallback((projectIdOverride?: string | null) => {
+    const pid = projectIdOverride !== undefined ? projectIdOverride : currentProjectId;
+    if (pid) return `notebook-project-${pid}`;
+    return "notebook-default";
   }, [currentProjectId]);
+
 
   const loadLocalExplorer = useCallback(async (explicitHandle?: FileSystemDirectoryHandle, skipMetadata = false) => {
     const handle = explicitHandle || dirHandle;
