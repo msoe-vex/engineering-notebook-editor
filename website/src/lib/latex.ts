@@ -70,7 +70,7 @@ export const convertNodeToLatex = (node: TipTapNode): string => {
 
     case "heading": {
       const level = node.attrs?.level ?? 2;
-      const cmd = level === 1 ? "subsection*" : "subsubsection*";
+      const cmd = level === 1 ? "subsection" : "subsubsection";
       return `\\${cmd}{${children()}}\n\n`;
     }
 
@@ -95,10 +95,10 @@ export const convertNodeToLatex = (node: TipTapNode): string => {
       const attrs = (node.attrs || {}) as Record<string, string | undefined>;
       const lang = mapLanguageToLatex(attrs.language ?? "plaintext");
       const code = (node.content || []).map((n) => n.text ?? "").join("");
-      const title = attrs.title ? `${attrs.title}: ` : "";
-      const escapedCaption = escapeLaTeX(title + (attrs.caption ?? ""));
+      const title = escapeLaTeX(attrs.title ?? "");
+      const caption = escapeLaTeX(attrs.caption ?? "");
       const labelId = attrs.id || "";
-      return `\\begin{notebookcodeblock}{${lang}}{${escapedCaption}}{${labelId}}\n${code}\n\\end{notebookcodeblock}\n\n`;
+      return `\\begin{notebookcodeblock}{${lang}}{${title}}{${caption}}{${labelId}}\n${code}\n\\end{notebookcodeblock}\n\n`;
     }
 
     case "image": {
@@ -117,8 +117,8 @@ export const convertNodeToLatex = (node: TipTapNode): string => {
         imgSrc = imgSrc.replace(`${ASSETS_DIR}/`, "");
       }
 
-      const title = attrs.title ? `${attrs.title}: ` : "";
-      const escapedCaption = escapeLaTeX(title + (attrs.caption || attrs.alt || "Figure"));
+      const title = escapeLaTeX(attrs.title ?? "");
+      const caption = escapeLaTeX(attrs.caption || attrs.alt || "");
 
       // Convert "55%" to "0.55\textwidth"
       const rawWidth = (attrs.width ?? "100%").toString().replace("%", "");
@@ -126,16 +126,17 @@ export const convertNodeToLatex = (node: TipTapNode): string => {
       const latexWidth = isNaN(widthNum) ? "1" : (widthNum / 100).toFixed(2);
 
       const labelId = attrs.id || "";
-      return `\\notebookimage{${imgSrc}}{${escapedCaption}}{${latexWidth}\\textwidth}{${labelId}}\n\n`;
+      return `\\notebookimage{${imgSrc}}{${title}}{${caption}}{${latexWidth}\\textwidth}{${labelId}}\n\n`;
     }
 
     case "table": {
+      const attrs = (node.attrs || {}) as Record<string, string | undefined>;
       const rows = node.content ?? [];
       if (!rows.length) return "";
       const colCount = (rows[0]?.content ?? []).length;
       const colSpec = "|l".repeat(colCount) + "|";
-      const title = node.attrs?.title ? `${node.attrs.title}: ` : "";
-      const caption = title + (node.attrs?.caption ?? "Design Data");
+      const title = escapeLaTeX(attrs.title ?? "");
+      const caption = escapeLaTeX(attrs.caption ?? "Design Data");
 
       const body = rows.map((row) => {
         const cells = (row.content ?? []).map((cell) =>
@@ -144,10 +145,9 @@ export const convertNodeToLatex = (node: TipTapNode): string => {
         return cells.join(" & ") + " \\\\ \\hline";
       }).join("\n");
 
-      const escapedCaption = escapeLaTeX(caption);
       const labelId = (node.attrs?.id as string) || "";
 
-      return `\\notebooktable{${colSpec}}{${body}}{${escapedCaption}}{${labelId}}\n\n`;
+      return `\\notebooktable{${colSpec}}{${title}}{${body}}{${caption}}{${labelId}}\n\n`;
     }
 
     // tableRow / tableCell / tableHeader — just recurse
