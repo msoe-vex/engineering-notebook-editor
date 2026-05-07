@@ -86,7 +86,7 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, ed
               value={node.attrs.title || ""}
               onChange={(e) => updateAttributes({ title: e.target.value })}
               placeholder="Give this image a title..."
-              className="flex-1 bg-transparent border-none outline-none text-[10px] font-bold tracking-widest text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
+              className="flex-1 bg-transparent border-none outline-none text-[12px] font-bold tracking-wider text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
             />
           </div>
         </div>

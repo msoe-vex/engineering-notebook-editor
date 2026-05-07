@@ -64,8 +64,8 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
         </button>
       </div>
 
-      <div className={`bg-nb-surface transition-all duration-300 ${active ? 'bg-nb-surface-high/20' : ''}`}>
-        <div className="flex items-center justify-between px-4 py-2 border-b border-nb-outline-variant/10">
+      <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${active ? 'ring-2 ring-nb-primary/50' : ''}`}>
+        <div contentEditable={false} className="flex items-center justify-between px-4 py-2 bg-nb-surface-low/80 border-b border-nb-outline-variant/10">
           <div className="flex-1 flex items-center gap-3">
             <div className="flex items-center gap-2 text-nb-primary shrink-0">
               <Code2 size={12} />
@@ -75,7 +75,7 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
               value={node.attrs.title || ""}
               onChange={(e) => updateAttributes({ title: e.target.value })}
               placeholder="Code Snippet Title..."
-              className="flex-1 bg-transparent border-none outline-none text-[10px] font-bold tracking-widest text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
+              className="flex-1 bg-transparent border-none outline-none text-[12px] font-bold tracking-wider text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
             />
             <div className="relative group/select shrink-0 ml-auto">
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-nb-surface-low border border-nb-outline-variant/50 hover:border-nb-primary/50 hover:bg-nb-surface transition-all cursor-pointer">
