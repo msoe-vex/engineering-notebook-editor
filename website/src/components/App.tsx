@@ -1290,7 +1290,7 @@ export default function App() {
         }
       }
 
-      const metaToUse = baseMetadata || notebookMetadata;
+      const metaToUse = baseMetadata || notebookMetadataRef.current;
       
       const updatedMeta = validateNotebookIntegrity({ 
         ...metaToUse, 
@@ -1330,7 +1330,7 @@ export default function App() {
     } finally {
       setIsSaving(false);
     }
-  }, [config, deriveProjectDates, dirHandle, getDBName, getGitBasePrefix, notebookMetadata, notify, performGarbageCollection, refreshPending, saveMetadata, setNotebookMetadata, stage, stageChange, workspaceMode]);
+  }, [config, deriveProjectDates, dirHandle, getDBName, getGitBasePrefix, notify, performGarbageCollection, refreshPending, saveMetadata, setNotebookMetadata, stage, stageChange, workspaceMode]);
 
   const handleImageUploaded = async (imagePath: string, base64: string) => {
     const dbName = getDBName();

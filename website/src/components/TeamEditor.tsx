@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, memo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, memo, useCallback, useRef } from "react";
 import {
   Hash, User, Briefcase, Image as ImageIcon,
   Loader2, Check, X, Camera, Building2, Plus, Trash2, Users,
@@ -271,17 +271,22 @@ export default function TeamEditor({
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+  const onSaveRef = useRef(onSave);
+  useEffect(() => {
+    onSaveRef.current = onSave;
+  }, [onSave]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       if (hasChanges) {
-        onSave(teamData, phases).then(() => {
+        onSaveRef.current(teamData, phases).then(() => {
           setSaveSuccess(true);
           setHasChanges(false);
         });
       }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [teamData, phases, hasChanges, onSave]);
+  }, [teamData, phases, hasChanges]);
 
   useEffect(() => {
     if (saveSuccess) {
@@ -337,8 +342,9 @@ export default function TeamEditor({
 
   const addPhase = useCallback(() => {
     setPhases(prev => {
+      const nextId = prev.length + 1;
       return [...prev, {
-        id: Date.now(),
+        id: nextId,
         name: "New Phase",
         description: "",
         iconName: "Shapes",
@@ -350,7 +356,8 @@ export default function TeamEditor({
 
   const removePhase = useCallback((id: number) => {
     setPhases(prev => {
-      return prev.filter(p => p.id !== id);
+      const filtered = prev.filter(p => p.id !== id);
+      return filtered.map((p, i) => ({ ...p, id: i + 1 }));
     });
     setHasChanges(true);
   }, []);
@@ -365,7 +372,9 @@ export default function TeamEditor({
       setPhases((items) => {
         const oldIndex = items.findIndex(p => p.id === active.id);
         const newIndex = items.findIndex(p => p.id === over.id);
-        return arrayMove(items, oldIndex, newIndex);
+        const moved = arrayMove(items, oldIndex, newIndex);
+        // Re-assign IDs to match the new order (1-based)
+        return moved.map((p, i) => ({ ...p, id: i + 1 }));
       });
       setHasChanges(true);
     }
