@@ -188,7 +188,7 @@ export const convertJsonToLatex = (input: TipTapNode | string): string => {
   return convertNodeToLatex(doc as TipTapNode).replace(/\n{3,}/g, "\n\n").trim() + "\n";
 };
 
-export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: string, p: string, initialCreatedAt: string | undefined, id?: string): string => {
+export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: string, p: string | number | null, initialCreatedAt: string | undefined, id?: string): string => {
   let dateObj = initialCreatedAt ? new Date(initialCreatedAt) : new Date();
 
   // Fallback for mangled timestamps (e.g. 2026-04-28T17-36-32)
@@ -203,7 +203,7 @@ export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: strin
   }
 
   const dateStr = dateObj.toISOString().split('T')[0];
-  let latex = `\\notebookentry{${escapeLaTeX(t)}}{${dateStr}}{${escapeLaTeX(a)}}{${escapeLaTeX(p)}}\n`;
+  let latex = `\\notebookentry{${escapeLaTeX(t)}}{${dateStr}}{${escapeLaTeX(a)}}{${p ?? ""}}\n`;
   if (id) {
     latex += `\\label{${id}}\n`;
   }
@@ -256,15 +256,23 @@ export const generateTeamLatex = (team: TeamMetadata): string => {
 export const generatePhasesLatex = (phases: ProjectPhase[]): string => {
   let latex = "% DESIGN PROCESS PHASES - AUTOMATICALLY GENERATED\n\n";
   
-  phases.forEach(p => {
-    // Create a color name based on the ID (safe for LaTeX)
-    const colorName = `PhaseCustom${p.id.replace(/[^a-zA-Z0-9]/g, '')}`;
+  let phaseListLatex = "\\newcommand{\\phaselist}{\n";
+
+  phases.forEach((p) => {
+    // Create a color name based on the stable ID (safe for LaTeX)
+    const colorName = `PhaseID${p.id}`;
     const hex = p.color.startsWith("#") ? p.color.substring(1) : p.color;
     
     latex += `% Phase: ${p.name}\n`;
     latex += `\\definecolor{${colorName}}{HTML}{${hex}}\n`;
-    latex += `\\csdef{phasecolor@${p.name}}{${colorName}}\n\n`;
+    latex += `\\csdef{phasecolor@${p.id}}{${colorName}}\n`;
+    latex += `\\csdef{phasename@${p.id}}{${escapeLaTeX(p.name)}}\n\n`;
+
+    // Add to phase list using the abstracted command
+    phaseListLatex += `    \\notebookphase{${colorName}}{${escapeLaTeX(p.name)}}{${escapeLaTeX(p.description || "")}}\n`;
   });
   
-  return latex;
+  phaseListLatex += "}\n";
+  
+  return latex + phaseListLatex;
 };

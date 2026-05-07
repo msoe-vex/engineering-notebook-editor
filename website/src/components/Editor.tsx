@@ -38,19 +38,19 @@ interface EditorProps {
   isLocalMode?: boolean;
   initialTitle?: string;
   initialAuthor?: string;
-  initialPhase?: string;
+  initialPhase?: number | null;
   initialContent: string;
   initialCreatedAt?: string;
   initialUpdatedAt?: string;
   metadataMissing?: boolean;
   isValid?: boolean;
   onDeleted: (path: string) => void;
-  onContentChange?: (filename: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string }) => void;
+  onContentChange?: (filename: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null }) => void;
   onTitleChange: (title: string) => void;
   onAuthorChange: (author: string) => void;
-  onPhaseChange: (phase: string) => void;
+  onPhaseChange: (phase: number | null) => void;
   onImageUpload?: (path: string, base64: string) => void;
-  onDownloadPortable?: (path: string, content: string, info: { title: string; author: string; phase: string; createdAt: string; updatedAt: string }) => void;
+  onDownloadPortable?: (path: string, content: string, info: { title: string; author: string; phase: number | null; createdAt: string; updatedAt: string }) => void;
   onClose?: () => void;
   dbName?: string;
   isSaving?: boolean;
@@ -63,7 +63,7 @@ const Editor = React.memo(function Editor({
   filename,
   initialTitle = "",
   initialAuthor = "",
-  initialPhase = "",
+  initialPhase = null,
   initialContent = "",
   initialCreatedAt = "",
   initialUpdatedAt = "",
@@ -103,7 +103,7 @@ const Editor = React.memo(function Editor({
 
   const [title, setTitle] = useState(initialTitle);
   const [author, setAuthor] = useState(initialAuthor);
-  const [phase, setPhase] = useState(initialPhase);
+  const [phase, setPhase] = useState<number | null>(initialPhase);
   const [content, setContent] = useState<TipTapNode | string>(() => parseInitialContent(initialContent));
   const [editor, setEditor] = useState<import("@tiptap/react").Editor | null>(null);
 
@@ -113,7 +113,7 @@ const Editor = React.memo(function Editor({
   const [localIsValid, setLocalIsValid] = useState(isValid);
 
   const checkValidity = useCallback(() => {
-    if (!title?.trim() || !author?.trim() || !phase?.trim()) return false;
+    if (!title?.trim() || !author?.trim() || phase === null) return false;
     if (!editor) return true;
 
     const doc = editor.getJSON();
@@ -210,9 +210,9 @@ const Editor = React.memo(function Editor({
     };
   }, [editor]);
 
-  const generateLatex = useCallback((cnt: TipTapNode | string, t: string, a: string, p: string) => {
+  const generateLatex = useCallback((cnt: TipTapNode | string, t: string, a: string, p: number | null) => {
     const id = filename.split('/').pop()?.replace('.json', '') || "";
-    return generateEntryLatex(cnt, t, a, p, initialCreatedAt, id);
+    return generateEntryLatex(cnt, t, a, p === null ? "" : p, initialCreatedAt, id);
   }, [filename, initialCreatedAt]);
 
   const validate = useCallback(() => {
@@ -647,12 +647,12 @@ const Editor = React.memo(function Editor({
                 />
                 
                 {activePhaseCfg && (
-                  <activePhaseCfg.icon size={14} className="shrink-0" style={{ color: availablePhases.find(p => p.name === phase)?.color }} />
+                  <activePhaseCfg.icon size={14} className="shrink-0" style={{ color: availablePhases.find(p => p.id === phase)?.color }} />
                 )}
                 
                 {/* Metadata dropdown */}
-                <div className={`flex-1 w-full min-w-0 text-xs font-bold tracking-widest truncate ${phase && phaseConfig[phase] ? phaseConfig[phase].text : "text-nb-on-surface-variant/60"}`}>
-                  {phase || "Select Phase"}
+                <div className={`flex-1 w-full min-w-0 text-xs font-bold tracking-widest truncate ${phase !== null && phaseConfig[phase] ? phaseConfig[phase].text : "text-nb-on-surface-variant/60"}`}>
+                  {availablePhases.find(p => p.id === phase)?.name || "No Phase Selected"}
                 </div>
                 <ChevronDown size={12} className={`text-nb-on-surface-variant/40 shrink-0 transition-transform duration-200 ${activeMenu === "Phase" ? "rotate-180" : ""}`} />
 
@@ -662,18 +662,18 @@ const Editor = React.memo(function Editor({
                     onMouseDown={(e) => e.stopPropagation()}
                   >
                     {availablePhases.map(p => {
-                      const cfg = phaseConfig[p.name];
+                      const cfg = phaseConfig[p.id];
                       const Icon = cfg.icon;
                       return (
                         <button
                           key={p.id}
                           type="button"
-                          onClick={() => { setPhase(p.name); setActiveMenu(null); }}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[10px] font-bold tracking-widest transition-all text-left cursor-pointer active:scale-[0.98] ${phase === p.name ? `${cfg.bg} ${cfg.text} hover:brightness-90` : "text-nb-on-surface-variant hover:bg-nb-surface-mid hover:text-nb-on-surface hover:ring-1 hover:ring-nb-primary/20"}`}
+                          onClick={() => { setPhase(p.id); setActiveMenu(null); }}
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[10px] font-bold tracking-widest transition-all text-left cursor-pointer active:scale-[0.98] ${phase === p.id ? `${cfg.bg} ${cfg.text} hover:brightness-90` : "text-nb-on-surface-variant hover:bg-nb-surface-mid hover:text-nb-on-surface hover:ring-1 hover:ring-nb-primary/20"}`}
                         >
                           <Icon size={14} style={{ color: p.color }} />
                           <span className="flex-1">{p.name.toUpperCase()}</span>
-                          {phase === p.name && <LucideIcons.Check size={12} style={{ color: p.color }} />}
+                          {phase === p.id && <LucideIcons.Check size={12} style={{ color: p.color }} />}
                         </button>
                       );
                     })}

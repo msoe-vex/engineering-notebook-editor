@@ -346,7 +346,8 @@ export default function FileExplorer({
           {entries.map((f) => {
             const pConfig = f.phase && phaseConfig[f.phase] ? phaseConfig[f.phase] : null;
             const IconComponent = pConfig ? pConfig.icon : FileText;
-            const iconStyle = pConfig ? { color: availablePhases.find(p => p.name === f.phase)?.color } : undefined;
+            const phase = availablePhases.find(p => p.id === f.phase);
+            const iconStyle = phase ? { color: phase.color } : undefined;
 
             const icon = (
               <IconComponent

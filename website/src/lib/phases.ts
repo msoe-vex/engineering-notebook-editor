@@ -2,11 +2,11 @@ import * as Icons from "lucide-react";
 import { ProjectPhase } from "./metadata";
 
 export const DEFAULT_PHASES: ProjectPhase[] = [
-  { id: "1", name: "Define Problem", iconName: "Goal", color: "#3b82f6" },
-  { id: "2", name: "Generate Concepts", iconName: "Brain", color: "#a855f7" },
-  { id: "3", name: "Develop Solution", iconName: "PencilRuler", color: "#6366f1" },
-  { id: "4", name: "Construct and Test", iconName: "Hammer", color: "#f97316" },
-  { id: "5", name: "Evaluate Solution", iconName: "SearchCheck", color: "#10b981" },
+  { id: 1, name: "Define Problem", description: "Identifying the core issue, setting SMART goals, outlining constraints and deliverables.", iconName: "Goal", color: "#3b82f6" },
+  { id: 2, name: "Generate Concepts", description: "Brainstorming, research, prototyping, and decision matrices to evaluate potential solutions.", iconName: "Brain", color: "#a855f7" },
+  { id: 3, name: "Develop Solution", description: "Creating CAD, detailed sketches, math calculations, graphical models, and pseudocode.", iconName: "PencilRuler", color: "#6366f1" },
+  { id: 4, name: "Construct and Test", description: "Building the robot, writing the code, executing test plans, and gathering qualitative/quantitative data.", iconName: "Hammer", color: "#f97316" },
+  { id: 5, name: "Evaluate Solution", description: "Reflecting on constraints, event outcomes, and planning future improvements.", iconName: "SearchCheck", color: "#10b981" },
 ];
 
 export const AVAILABLE_ICONS = [
@@ -42,17 +42,12 @@ export function getPhaseConfig(phases: ProjectPhase[]): Record<string, PhaseInfo
     // Dynamically get icon component
     const IconComponent = (Icons as any)[p.iconName] || Icons.HelpCircle;
     
-    // We need to convert hex to Tailwind-like rgba for bg/border if possible, 
-    // but for now we'll just use inline styles or standard mappings.
-    // To keep it simple and premium, we'll generate some semi-transparent versions of the hex.
-    const hex = p.color;
-    
-    config[p.name] = {
+    config[p.id] = {
       icon: IconComponent,
-      color: `text-[${hex}]`, // This might not work with JIT if not Safelisted
-      bg: `bg-[${hex}]/10`,
-      border: `border-[${hex}]/20`,
-      text: `text-[${hex}]`
+      color: p.color,
+      bg: `${p.color}1a`, // 10% opacity hex
+      border: `${p.color}33`, // 20% opacity hex
+      text: p.color
     };
   });
   
