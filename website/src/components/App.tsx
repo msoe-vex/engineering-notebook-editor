@@ -277,17 +277,27 @@ export default function App() {
 
   useEffect(() => {
     if (!editorPanelRef.current || !previewPanelRef.current) return;
-    if (desktopViewMode === "editor") {
-      editorPanelRef.current.expand();
-      previewPanelRef.current.collapse();
-    } else if (desktopViewMode === "preview") {
-      editorPanelRef.current.collapse();
-      previewPanelRef.current.expand();
+    if (isMobile) {
+      if (mobileTab === "editor") {
+        editorPanelRef.current.expand();
+        previewPanelRef.current.collapse();
+      } else {
+        editorPanelRef.current.collapse();
+        previewPanelRef.current.expand();
+      }
     } else {
-      editorPanelRef.current.resize(50);
-      previewPanelRef.current.resize(50);
+      if (desktopViewMode === "editor") {
+        editorPanelRef.current.expand();
+        previewPanelRef.current.collapse();
+      } else if (desktopViewMode === "preview") {
+        editorPanelRef.current.collapse();
+        previewPanelRef.current.expand();
+      } else {
+        editorPanelRef.current.resize(50);
+        previewPanelRef.current.resize(50);
+      }
     }
-  }, [desktopViewMode]);
+  }, [isMobile, mobileTab, desktopViewMode]);
 
   const isExchangingCode = useRef(false);
   const [isExchangingGithubCode, setIsExchangingGithubCode] = useState(() => {
@@ -1398,11 +1408,11 @@ export default function App() {
         ) : (
           <PanelGroup direction="horizontal" className="h-full" id="editor-preview-group">
             <Panel
-              id="editor-panel" order={1} ref={editorPanelRef} collapsible={true} minSize={30}
-              defaultSize={desktopViewMode === "editor" ? 100 : (desktopViewMode === "preview" ? 0 : 50)}
-              onCollapse={() => { if (desktopViewMode !== "preview") setDesktopViewMode("preview"); }}
-              onExpand={() => { if (desktopViewMode === "preview") setDesktopViewMode("split"); }}
-              className={`flex flex-col h-full transition-all duration-300 ease-out ${desktopViewMode === "preview" ? "opacity-0 pointer-events-none" : "opacity-100"}`}
+              id="editor-panel" order={1} ref={editorPanelRef} collapsible={true} minSize={isMobile ? 0 : 30}
+              defaultSize={isMobile ? (mobileTab === "editor" ? 100 : 0) : (desktopViewMode === "editor" ? 100 : (desktopViewMode === "preview" ? 0 : 50))}
+              onCollapse={() => { if (!isMobile && desktopViewMode !== "preview") setDesktopViewMode("preview"); }}
+              onExpand={() => { if (!isMobile && desktopViewMode === "preview") setDesktopViewMode("split"); }}
+              className={`flex flex-col h-full transition-all duration-300 ease-out ${(isMobile ? mobileTab === "preview" : desktopViewMode === "preview") ? "opacity-0 pointer-events-none" : "opacity-100"}`}
             >
               <Editor
                 key={openFile.path} config={appConfig} isLocalMode={workspaceMode !== "github"}
@@ -1426,13 +1436,13 @@ export default function App() {
                 dbName={getDBName()} isSaving={savingPaths.has(openFile.path)} notebookMetadata={notebookMetadata} targetResourceId={targetResourceId}
               />
             </Panel>
-            <PanelResizeHandle id="editor-preview-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${desktopViewMode !== 'split' ? 'hidden' : ''}`} />
+            <PanelResizeHandle id="editor-preview-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${(isMobile || desktopViewMode !== 'split') ? 'hidden' : ''}`} />
             <Panel
-              id="preview-panel" order={2} ref={previewPanelRef} collapsible={true} minSize={30}
-              defaultSize={desktopViewMode === "preview" ? 100 : (desktopViewMode === "editor" ? 0 : 50)}
-              onCollapse={() => { if (desktopViewMode !== "editor") setDesktopViewMode("editor"); }}
-              onExpand={() => { if (desktopViewMode === "editor") setDesktopViewMode("split"); }}
-              className={`flex flex-col h-full bg-nb-surface-low transition-all duration-300 ease-out ${desktopViewMode === "editor" ? "opacity-0 pointer-events-none" : "opacity-100"}`}
+              id="preview-panel" order={2} ref={previewPanelRef} collapsible={true} minSize={isMobile ? 0 : 30}
+              defaultSize={isMobile ? (mobileTab === "preview" ? 100 : 0) : (desktopViewMode === "preview" ? 100 : (desktopViewMode === "editor" ? 0 : 50))}
+              onCollapse={() => { if (!isMobile && desktopViewMode !== "editor") setDesktopViewMode("editor"); }}
+              onExpand={() => { if (!isMobile && desktopViewMode === "editor") setDesktopViewMode("split"); }}
+              className={`flex flex-col h-full bg-nb-surface-low transition-all duration-300 ease-out ${(isMobile ? mobileTab === "editor" : desktopViewMode === "editor") ? "opacity-0 pointer-events-none" : "opacity-100"}`}
             >
               <Preview latexContent={latexContent} />
             </Panel>
@@ -1464,14 +1474,14 @@ export default function App() {
         />
       ) : (
         isMobile ? (
-          <div className="flex w-full h-full relative">
-            <div className={`fixed inset-0 z-[150] transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+          <div className="flex w-full h-full relative overflow-hidden">
+            <div className="flex-1 w-full h-full">{main}</div>
+            <div className={`fixed inset-0 z-[500] transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
               <div className="absolute inset-0 bg-black/40" onClick={() => setUserSidebarPreference(false)} />
               <div className={`absolute top-0 bottom-0 left-0 w-[85%] max-w-[300px] bg-nb-surface-low border-r border-nb-outline-variant flex flex-col shadow-2xl transition-transform duration-300 ease-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 {sidebar}
               </div>
             </div>
-            <div className="flex-1 w-full h-full">{main}</div>
           </div>
         ) : (
           <PanelGroup direction="horizontal" className="w-full h-full" id="main-layout-group">

@@ -25,7 +25,7 @@ import {
 
 import { LinkReferencePopup } from "@/components/editor/LinkReferencePopup";
 
-import { generateUUID, hashContent, getExtensionFromDataUrl } from "@/lib/utils";
+import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng } from "@/lib/utils";
 import { ASSETS_DIR } from "@/lib/constants";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
@@ -65,9 +65,18 @@ export default function UnifiedEditor({
   const handleImageFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = async () => {
-      const dataUrl = reader.result as string;
-      const base64 = dataUrl.split(",")[1];
+      let dataUrl = reader.result as string;
 
+      // Auto-convert SVG to PNG for LaTeX compatibility
+      if (file.type === "image/svg+xml" || file.name.toLowerCase().endsWith(".svg")) {
+        try {
+          dataUrl = await convertSvgToPng(dataUrl);
+        } catch (e) {
+          console.error("SVG conversion failed", e);
+        }
+      }
+
+      const base64 = dataUrl.split(",")[1];
       const hash = await hashContent(base64);
       const ext = getExtensionFromDataUrl(dataUrl);
       const newPath = `${ASSETS_DIR}/${hash}.${ext}`;

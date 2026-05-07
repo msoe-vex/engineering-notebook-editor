@@ -12,7 +12,7 @@ import {
   Brain, PencilRuler, Hammer, SearchCheck, Goal, Terminal, Link as LinkIcon, Underline as UnderlineIcon,
   FileJson
 } from "lucide-react";
-import { generateUUID, hashContent, getExtensionFromDataUrl } from "@/lib/utils";
+import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng } from "@/lib/utils";
 import { generateEntryLatex } from "@/lib/latex";
 import AutocompleteInput from "./AutocompleteInput";
 import { extractResources, extractReferences, TipTapNode, NotebookMetadata } from "@/lib/metadata";
@@ -445,9 +445,18 @@ const Editor = React.memo(function Editor({
       if (file && editor) {
         const reader = new FileReader();
         reader.onload = async () => {
-          const dataUrl = reader.result as string;
-          const base64 = dataUrl.split(",")[1];
+          let dataUrl = reader.result as string;
 
+          // Auto-convert SVG to PNG for LaTeX compatibility
+          if (file.type === "image/svg+xml" || file.name.toLowerCase().endsWith(".svg")) {
+            try {
+              dataUrl = await convertSvgToPng(dataUrl);
+            } catch (e) {
+              console.error("SVG conversion failed", e);
+            }
+          }
+
+          const base64 = dataUrl.split(",")[1];
           const hash = await hashContent(base64);
           const ext = getExtensionFromDataUrl(dataUrl);
           const newPath = `${ASSETS_DIR}/${hash}.${ext}`;
