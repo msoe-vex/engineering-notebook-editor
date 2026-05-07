@@ -33,6 +33,22 @@ export interface EntryMetadata {
   validationErrors?: string[]; // Detailed messages for the UI
 }
 
+export interface TeamMember {
+  name: string;
+  role: string;
+  image?: string; // Path to asset
+}
+
+export interface TeamMetadata {
+  teamName: string;
+  teamNumber: string;
+  startDate: string;
+  endDate: string;
+  organization: string;
+  logo?: string; // Path to asset
+  members: TeamMember[];
+}
+
 export interface TipTapMark {
   type: string;
   attrs?: Record<string, unknown>;
@@ -57,11 +73,20 @@ export interface NotebookMetadata {
   projectId?: string;
   projectName?: string;
   entries: Record<string, EntryMetadata>; // uuid -> metadata
+  team?: TeamMetadata;
 }
 
 export const EMPTY_METADATA: NotebookMetadata = { 
   version: 3, 
   entries: {},
+  team: {
+    teamName: "",
+    teamNumber: "",
+    startDate: "",
+    endDate: "",
+    organization: "",
+    members: []
+  }
 };
 
 // ─── TipTap JSON helpers ──────────────────────────────────────────────────────
@@ -443,7 +468,7 @@ export function remapContentIds(doc: TipTapDoc | TipTapNode[], globalIdMap: Map<
         if (mark.type === 'link') {
           const { href = "", resourceId, entryId } = (mark.attrs || {}) as { href?: string, resourceId?: string, entryId?: string };
 
-          let newAttrs = { ...mark.attrs };
+          const newAttrs = { ...mark.attrs } as Record<string, unknown>;
           let changed = false;
 
           if (href.startsWith('#')) {
@@ -481,6 +506,54 @@ export function remapContentIds(doc: TipTapDoc | TipTapNode[], globalIdMap: Map<
   }
 
   return { doc: apply(doc) as TipTapNode, idMap: globalIdMap };
+}
+
+/**
+ * Replaces Base64 data URLs with hashed asset paths in Team Metadata.
+ */
+export async function dehydrateTeamAssets(team: TeamMetadata): Promise<{ cleanTeam: TeamMetadata; newAssets: { path: string; base64: string }[] }> {
+  const { hashContent, getExtensionFromDataUrl } = await import("./utils");
+  const assets: { path: string; base64: string }[] = [];
+
+  const cleanTeam = JSON.parse(JSON.stringify(team)) as TeamMetadata;
+
+  const processImg = async (src: string | undefined) => {
+    if (src?.startsWith("data:")) {
+      const base64 = src.split(",")[1]?.trim();
+      if (!base64) return src;
+      const hash = await hashContent(base64);
+      const ext = getExtensionFromDataUrl(src);
+      const assetPath = `${ASSETS_DIR}/${hash}.${ext}`;
+      assets.push({ path: assetPath, base64 });
+      return assetPath;
+    }
+    return src;
+  };
+
+  if (cleanTeam.logo) cleanTeam.logo = await processImg(cleanTeam.logo);
+  for (const member of cleanTeam.members) {
+    if (member.image) member.image = await processImg(member.image);
+  }
+
+  return { cleanTeam, newAssets: assets };
+}
+
+/**
+ * Replaces asset paths with data URLs from the cache in Team Metadata.
+ */
+export function hydrateTeamAssets(team: TeamMetadata, assetCache: Map<string, string>): TeamMetadata {
+  const hydrated = JSON.parse(JSON.stringify(team)) as TeamMetadata;
+  const processImg = (src: string | undefined) => {
+    if (src?.startsWith(`${ASSETS_DIR}/`)) {
+      return assetCache.get(src) || src;
+    }
+    return src;
+  };
+  if (hydrated.logo) hydrated.logo = processImg(hydrated.logo);
+  for (const member of hydrated.members) {
+    if (member.image) member.image = processImg(member.image);
+  }
+  return hydrated;
 }
 
 

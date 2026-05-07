@@ -220,3 +220,35 @@ export const generateAllEntriesLatex = (metadata: { entries: Record<string, { id
     .map(entry => `\\input{${prefix}latex/${entry.id}.tex}`)
     .join("\n") + "\n";
 };
+
+import { TeamMetadata } from "./metadata";
+
+export const generateTeamLatex = (team: TeamMetadata): string => {
+  const cleanImg = (p: string | undefined) => {
+    if (!p) return "";
+    let s = p;
+    if (s.startsWith("resources/")) s = s.replace("resources/", "");
+    if (s.startsWith(`${ASSETS_DIR}/`)) s = s.replace(`${ASSETS_DIR}/`, "");
+    return s;
+  };
+
+  let latex = `\\teamname{${escapeLaTeX(team.teamName)}}\n`;
+  latex += `\\teamnumber{${escapeLaTeX(team.teamNumber)}}\n`;
+  latex += `\\startdate{${escapeLaTeX(team.startDate)}}\n`;
+  latex += `\\projectenddate{${escapeLaTeX(team.endDate)}}\n`;
+  latex += `\\organization{${escapeLaTeX(team.organization)}}\n`;
+  latex += `\\teamlogo{${cleanImg(team.logo)}}\n\n`;
+
+  latex += `\\teammembers{\n`;
+  team.members.forEach((m, i) => {
+    latex += `    \\teammember{${escapeLaTeX(m.name)}}{${escapeLaTeX(m.role)}}{${cleanImg(m.image)}}`;
+    if (i % 2 === 0 && i < team.members.length - 1) {
+      latex += ` \\hfill`;
+    } else if (i < team.members.length - 1) {
+      latex += ` \\\\`;
+    }
+    latex += `\n`;
+  });
+  latex += `}\n`;
+  return latex;
+};
