@@ -3,6 +3,7 @@ import FileExplorer from "./FileExplorer";
 import { ExplorerFile } from "@/lib/types";
 import { NotebookMetadata } from "@/lib/metadata";
 import { PendingChange } from "@/lib/db";
+import { Users } from "lucide-react";
 
 interface SidebarProps {
   entries: ExplorerFile[];
@@ -19,6 +20,7 @@ interface SidebarProps {
   onDownloadMulti: (files: ExplorerFile[]) => void;
   onDeleteMulti: (files: ExplorerFile[]) => void;
   onNewEntry: () => void;
+  onOpenTeam: () => void;
 }
 
 export default function Sidebar({
@@ -35,7 +37,8 @@ export default function Sidebar({
   onDeleteEntry,
   onDownloadMulti,
   onDeleteMulti,
-  onNewEntry
+  onNewEntry,
+  onOpenTeam
 }: SidebarProps) {
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"created" | "updated" | "title">("created");
@@ -100,29 +103,42 @@ export default function Sidebar({
   }, [augmentedEntries, search, sortBy, sortDirection, dateRange]);
 
   return (
-    <FileExplorer
-      entries={filteredEntries}
-      activePath={openFile?.path || null}
-      selectedPaths={selectedPaths}
-      pendingPaths={pendingPaths}
-      deletedPaths={deletedPaths}
-      onSelectEntry={(file, multi, range) => onSelectEntry(file, multi, range, filteredEntries.map(e => e.path))}
-      onOpenEntry={onOpenEntry}
-      onCloseEntry={onCloseEntry}
-      onDownloadLatex={onDownloadLatex}
-      onDownloadJson={onDownloadJson}
-      onDeleteEntry={onDeleteEntry}
-      onDownloadMulti={onDownloadMulti}
-      onDeleteMulti={onDeleteMulti}
-      onNewEntry={onNewEntry}
-      search={search}
-      onSearchChange={setSearch}
-      sortBy={sortBy}
-      onSortChange={setSortBy}
-      sortDirection={sortDirection}
-      onSortDirectionToggle={() => setSortDirection(prev => prev === "asc" ? "desc" : "asc")}
-      dateRange={dateRange}
-      onDateRangeChange={setDateRange}
-    />
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="px-3 py-2 border-b border-nb-outline-variant/10">
+        <button
+          onClick={onOpenTeam}
+          className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-nb-surface-mid hover:bg-nb-surface-high text-nb-on-surface font-bold text-xs transition-all border border-nb-outline-variant/20 hover:border-nb-primary/30 group cursor-pointer"
+        >
+          <Users size={14} className="text-nb-primary group-hover:scale-110 transition-transform" />
+          Edit Team Details
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        <FileExplorer
+          entries={filteredEntries}
+          activePath={openFile?.path || null}
+          selectedPaths={selectedPaths}
+          pendingPaths={pendingPaths}
+          deletedPaths={deletedPaths}
+          onSelectEntry={(file, multi, range) => onSelectEntry(file, multi, range, filteredEntries.map(e => e.path))}
+          onOpenEntry={onOpenEntry}
+          onCloseEntry={onCloseEntry}
+          onDownloadLatex={onDownloadLatex}
+          onDownloadJson={onDownloadJson}
+          onDeleteEntry={onDeleteEntry}
+          onDownloadMulti={onDownloadMulti}
+          onDeleteMulti={onDeleteMulti}
+          onNewEntry={onNewEntry}
+          search={search}
+          onSearchChange={setSearch}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
+          sortDirection={sortDirection}
+          onSortDirectionToggle={() => setSortDirection(prev => prev === "asc" ? "desc" : "asc")}
+          dateRange={dateRange}
+          onDateRangeChange={setDateRange}
+        />
+      </div>
+    </div>
   );
 }

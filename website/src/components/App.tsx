@@ -23,6 +23,7 @@ import Editor from "./Editor";
 import Preview from "./Preview";
 import WelcomePage from "./WelcomePage";
 import Sidebar from "./Sidebar";
+import TeamEditor from "./TeamEditor";
 import ProjectHeader from "./ProjectHeader";
 import PendingChangesPanel from "./PendingChangesPanel";
 import ConfirmationDialog from "./ConfirmationDialog";
@@ -31,9 +32,9 @@ import { HardDrive, ArrowLeftRight, X, BookOpen } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { saveAs } from "file-saver";
 import { generateUUID, hashContent, getMimeTypeFromExtension } from "@/lib/utils";
-import { generateEntryLatex, generateAllEntriesLatex } from "@/lib/latex";
-import { extractImagePaths, extractResources, extractReferences, TipTapNode } from "@/lib/metadata";
-import { ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, INDEX_PATH, ALL_ENTRIES_PATH } from "@/lib/constants";
+import { generateEntryLatex, generateAllEntriesLatex, generateTeamLatex } from "@/lib/latex";
+import { extractImagePaths, extractResources, extractReferences, TipTapNode, dehydrateTeamAssets, hydrateTeamAssets, TeamMetadata } from "@/lib/metadata";
+import { ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, INDEX_PATH, ALL_ENTRIES_PATH, TEAM_PATH } from "@/lib/constants";
 import { useWorkspace, WorkspaceMode } from "@/hooks/useWorkspace";
 import { usePersistence } from "@/hooks/usePersistence";
 import { getLocalFileContent, writeLocalFile, ensureLocalDirectory } from "@/lib/fs";
@@ -133,6 +134,7 @@ export default function App() {
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
   const [isCommitting, setIsCommitting] = useState(false);
   const [savingPaths, setSavingPaths] = useState<Set<string>>(new Set());
+  const [isSaving, setIsSaving] = useState(false);
 
   const [isRenamingProject, setIsRenamingProject] = useState(false);
   const [projectRenameValue, setProjectRenameValue] = useState("");
@@ -1010,18 +1012,22 @@ export default function App() {
 
       const globalIdMap = new Map<string, string>();
 
-      const scanForIds = (node: any) => {
+      const scanForIds = (node: unknown) => {
         if (!node || typeof node !== "object") return;
         if (Array.isArray(node)) {
           node.forEach(scanForIds);
           return;
         }
-        if (node.attrs?.id) {
-          const oldId = node.attrs.id as string;
-          if (!globalIdMap.has(oldId)) globalIdMap.set(oldId, generateUUID());
+        const n = node as Record<string, unknown>;
+        if (n.attrs && typeof n.attrs === "object") {
+          const attrs = n.attrs as Record<string, unknown>;
+          if (attrs.id) {
+            const oldId = attrs.id as string;
+            if (!globalIdMap.has(oldId)) globalIdMap.set(oldId, generateUUID());
+          }
         }
-        if (Array.isArray(node.content)) {
-          node.content.forEach(scanForIds);
+        if (Array.isArray(n.content)) {
+          n.content.forEach(scanForIds);
         }
       };
 
@@ -1128,6 +1134,88 @@ export default function App() {
       notify("Import failed.", "error");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const [showTeamEditor, setShowTeamEditor] = useState(false);
+  const [hydratedTeam, setHydratedTeam] = useState<TeamMetadata | null>(null);
+
+  const handleOpenTeamEditor = async () => {
+    if (!notebookMetadata.team) {
+      setHydratedTeam(EMPTY_METADATA.team!);
+    } else {
+      setIsLoading(true);
+      try {
+        const dbName = getDBName();
+        const assetCache = new Map<string, string>();
+        const images: string[] = [];
+        if (notebookMetadata.team.logo) images.push(notebookMetadata.team.logo);
+        notebookMetadata.team.members.forEach(m => { if (m.image) images.push(m.image); });
+
+        for (const imgPath of images) {
+          if (imgPath && !imgPath.startsWith("data:")) {
+            const cached = await getResource(dbName, imgPath);
+            if (cached) assetCache.set(imgPath, cached);
+            else if (workspaceMode === "local" && dirHandle) {
+              try {
+                const res = await getLocalFileContent(dirHandle, imgPath);
+                if (res.base64) {
+                   const dataUrl = `data:${getMimeTypeFromExtension(imgPath)};base64,${res.base64}`;
+                   assetCache.set(imgPath, dataUrl);
+                }
+              } catch (e) { console.error("Failed to load local team asset", imgPath, e); }
+            }
+          }
+        }
+        setHydratedTeam(hydrateTeamAssets(notebookMetadata.team, assetCache));
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    setShowTeamEditor(true);
+  };
+
+  const handleSaveTeam = async (team: TeamMetadata) => {
+    setIsSaving(true);
+    try {
+      const dbName = getDBName();
+      
+      // 1. Dehydrate assets
+      const { cleanTeam, newAssets } = await dehydrateTeamAssets(team);
+      
+      // 2. Save assets to local/github
+      for (const asset of newAssets) {
+        const actualPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${asset.path}` : asset.path;
+        if (workspaceMode === "local" && dirHandle) {
+          await writeLocalFile(dirHandle, asset.path, asset.base64, true);
+        } else {
+          await stageChange(dbName, { path: actualPath, operation: "upsert", content: asset.base64, label: `Team asset`, stagedAt: isoTimestamp() });
+          await putResource(dbName, { path: actualPath, dataUrl: asset.base64.startsWith('data:') ? asset.base64 : `data:image/*;base64,${asset.base64}` });
+        }
+      }
+
+      // 3. Update notebook.json
+      const updatedMeta = { ...notebookMetadata, team: cleanTeam };
+      setNotebookMetadata(updatedMeta);
+      await saveMetadata(updatedMeta, "Update team metadata");
+
+      // 4. Generate and save team.tex
+      const teamLatex = generateTeamLatex(cleanTeam);
+      const teamPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${TEAM_PATH}` : TEAM_PATH;
+      
+      if (workspaceMode === "local" && dirHandle) {
+        await writeLocalFile(dirHandle, TEAM_PATH, teamLatex);
+      } else {
+        await stage({ path: teamPath, content: teamLatex, operation: "upsert", label: "Update team.tex" });
+      }
+
+      if (workspaceMode === "github") refreshPending();
+      notify("Team information saved successfully.", "success");
+    } catch (e) {
+      console.error(e);
+      notify("Failed to save team information.", "error");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1368,6 +1456,7 @@ export default function App() {
           onDownloadMulti={handleDownloadMulti}
           onDeleteMulti={handleDeleteMulti}
           onNewEntry={handleNewEntry}
+          onOpenTeam={handleOpenTeamEditor}
         />
       </div>
       <div className="p-4 bg-nb-surface border-t border-nb-outline-variant">
@@ -1420,10 +1509,24 @@ export default function App() {
           </div>
         )}
 
-        {openFile === null ? (
+        {(!openFile && !showTeamEditor) ? (
           !isConnectingLocal && (
-            <WelcomePage workspace={{ mode: workspaceMode as "local" | "github" | "temporary", label: workspaceLabel }} onNewEntry={handleNewEntry} onImportEntry={() => importEntryInputRef.current?.click()} onDisconnect={handleDisconnect} onOpenSidebar={() => setUserSidebarPreference(true)} />
+            <WelcomePage 
+              workspace={{ mode: workspaceMode as "local" | "github" | "temporary", label: workspaceLabel }} 
+              onNewEntry={handleNewEntry} 
+              onImportEntry={() => importEntryInputRef.current?.click()} 
+              onDisconnect={handleDisconnect} 
+              onOpenSidebar={() => setUserSidebarPreference(true)} 
+              onOpenTeam={handleOpenTeamEditor}
+            />
           )
+        ) : showTeamEditor && hydratedTeam ? (
+          <TeamEditor
+            initialData={hydratedTeam}
+            onSave={handleSaveTeam}
+            onClose={() => setShowTeamEditor(false)}
+            isSaving={isSaving}
+          />
         ) : (
           <PanelGroup direction="horizontal" className="h-full" id="editor-preview-group">
             <Panel
@@ -1433,27 +1536,29 @@ export default function App() {
               onExpand={() => { if (!isMobile && desktopViewMode === "preview") setDesktopViewMode("split"); }}
               className={`flex flex-col h-full transition-all duration-300 ease-out ${(isMobile ? mobileTab === "preview" : desktopViewMode === "preview") ? "opacity-0 pointer-events-none" : "opacity-100"}`}
             >
-              <Editor
-                key={openFile.path} config={appConfig} isLocalMode={workspaceMode !== "github"}
-                initialTitle={openFile.title} initialAuthor={openFile.author} initialPhase={openFile.phase}
-                initialCreatedAt={openFile.createdAt} initialUpdatedAt={openFile.updatedAt} initialContent={openFile.tiptapContent}
-                metadataMissing={openFile.metadataMissing} isValid={notebookMetadata.entries[openFile.id]?.isValid}
-                onValidationChange={handleValidationChange} filename={openFile.path}
-                onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
-                onContentChange={handleContentChange}
-                onTitleChange={(title) => handleMetadataChange(openFile.id, { title })}
-                onAuthorChange={(author) => handleMetadataChange(openFile.id, { author })}
-                onPhaseChange={(phase) => handleMetadataChange(openFile.id, { phase })}
-                onImageUpload={handleImageUploaded} onDownloadPortable={handleDownloadPortable}
-                onClose={() => {
-                  const params = new URLSearchParams(window.location.search);
-                  params.delete('entry'); params.delete('resource');
-                  window.history.pushState({}, '', `?${params.toString()}`);
-                  window.dispatchEvent(new Event('locationchange'));
-                  setOpenFile(null);
-                }}
-                dbName={getDBName()} isSaving={savingPaths.has(openFile.path)} notebookMetadata={notebookMetadata} targetResourceId={targetResourceId}
-              />
+              {openFile && (
+                <Editor
+                  key={openFile.path} config={appConfig} isLocalMode={workspaceMode !== "github"}
+                  initialTitle={openFile.title} initialAuthor={openFile.author} initialPhase={openFile.phase}
+                  initialCreatedAt={openFile.createdAt} initialUpdatedAt={openFile.updatedAt} initialContent={openFile.tiptapContent}
+                  metadataMissing={openFile.metadataMissing} isValid={notebookMetadata.entries[openFile.id]?.isValid}
+                  onValidationChange={handleValidationChange} filename={openFile.path}
+                  onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
+                  onContentChange={handleContentChange}
+                  onTitleChange={(title) => handleMetadataChange(openFile.id, { title })}
+                  onAuthorChange={(author) => handleMetadataChange(openFile.id, { author })}
+                  onPhaseChange={(phase) => handleMetadataChange(openFile.id, { phase })}
+                  onImageUpload={handleImageUploaded} onDownloadPortable={handleDownloadPortable}
+                  onClose={() => {
+                    const params = new URLSearchParams(window.location.search);
+                    params.delete('entry'); params.delete('resource');
+                    window.history.pushState({}, '', `?${params.toString()}`);
+                    window.dispatchEvent(new Event('locationchange'));
+                    setOpenFile(null);
+                  }}
+                  dbName={getDBName()} isSaving={savingPaths.has(openFile.path)} notebookMetadata={notebookMetadata} targetResourceId={targetResourceId}
+                />
+              )}
             </Panel>
             <PanelResizeHandle id="editor-preview-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${(isMobile || desktopViewMode !== 'split') ? 'hidden' : ''}`} />
             <Panel

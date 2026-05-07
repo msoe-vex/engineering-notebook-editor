@@ -13,9 +13,10 @@ interface WelcomePageProps {
   onImportEntry: () => void;
   onDisconnect: () => void;
   onOpenSidebar: () => void;
+  onOpenTeam: () => void;
 }
 
-export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDisconnect, onOpenSidebar }: WelcomePageProps) {
+export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDisconnect, onOpenSidebar, onOpenTeam }: WelcomePageProps) {
   const ModeIcon =
     workspace.mode === "github" ? GitBranch :
       workspace.mode === "local" ? HardDrive : ArrowLeftRight;
@@ -79,6 +80,20 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
           <div>
             <div className="font-bold text-xs tracking-widest text-nb-on-surface">Import Entry</div>
             <div className="text-nb-on-surface-variant text-sm font-normal mt-0.5">Import an entry from a JSON file</div>
+          </div>
+        </button>
+
+        <button
+          id="welcome-edit-team"
+          className="flex items-center gap-4 w-full bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant px-6 py-5 rounded-2xl text-left transition-all active:scale-[0.98] group cursor-pointer"
+          onClick={onOpenTeam}
+        >
+          <div className="w-12 h-12 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0 group-hover:bg-nb-primary/20 transition-colors">
+            <BookOpen size={24} className="text-nb-primary" />
+          </div>
+          <div>
+            <div className="font-bold text-xs tracking-widest text-nb-on-surface">Edit Team Info</div>
+            <div className="text-nb-on-surface-variant text-sm font-normal mt-0.5">Configure team identity and gallery</div>
           </div>
         </button>
       </div>

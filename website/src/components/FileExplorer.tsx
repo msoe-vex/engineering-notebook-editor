@@ -324,7 +324,7 @@ export default function FileExplorer({
           </div>
         </div>
       </div>
-
+      
       {/* Entries pane */}
       <Pane
         id="explorer-entries-pane"
