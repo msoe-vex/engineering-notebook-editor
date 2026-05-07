@@ -220,7 +220,8 @@ export async function dehydrateAssets(doc: TipTapDoc): Promise<{ cleanDoc: TipTa
     if (node.type === "image") {
       const attrs = (node.attrs || {}) as Record<string, string | undefined>;
       if (attrs.src?.startsWith("data:")) {
-        const base64 = attrs.src.split(",")[1];
+        const base64 = attrs.src.split(",")[1]?.trim();
+        if (!base64) return node; // Skip if malformed
         const hash = await hashContent(base64);
         const ext = getExtensionFromDataUrl(attrs.src);
         const assetPath = `${ASSETS_DIR}/${hash}.${ext}`;
@@ -388,8 +389,8 @@ export function renameEntryInMetadata(
  * Also updates any internal links (#uuid) that point to the newly remapped IDs.
  * If globalIdMap is provided, it will use and update it for cross-entry consistency.
  */
-export function remapContentIds(doc: TipTapDoc, globalIdMap: Map<string, string> = new Map()): { doc: TipTapDoc, idMap: Map<string, string> } {
-  if (!doc) return { doc, idMap: globalIdMap };
+export function remapContentIds(doc: TipTapDoc | TipTapNode[], globalIdMap: Map<string, string> = new Map()): { doc: TipTapDoc | TipTapNode[], idMap: Map<string, string> } {
+  if (!doc) return { doc: doc as TipTapDoc, idMap: globalIdMap };
 
   const resourceTypes = new Set(["image", "table", "codeBlock", "rawLatex"]);
 

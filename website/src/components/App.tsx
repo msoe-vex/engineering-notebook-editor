@@ -30,7 +30,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { HardDrive, ArrowLeftRight, X, BookOpen } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { saveAs } from "file-saver";
-import { generateUUID, hashContent } from "@/lib/utils";
+import { generateUUID, hashContent, getMimeTypeFromExtension } from "@/lib/utils";
 import { generateEntryLatex, generateAllEntriesLatex } from "@/lib/latex";
 import { extractImagePaths, extractResources, extractReferences, TipTapNode } from "@/lib/metadata";
 import { ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, INDEX_PATH, ALL_ENTRIES_PATH } from "@/lib/constants";
@@ -424,7 +424,7 @@ export default function App() {
         const assetPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${asset.path}` : asset.path;
         await uploadResource(assetPath, asset.base64, `Asset: ${asset.path.split('/').pop()}`);
         if (workspaceMode === "github") {
-          await putResource(getDBName(), { path: assetPath, dataUrl: `data:image/*;base64,${asset.base64}` });
+          await putResource(getDBName(), { path: assetPath, dataUrl: `data:${getMimeTypeFromExtension(assetPath)};base64,${asset.base64}` });
         }
       }
 
@@ -1005,8 +1005,11 @@ export default function App() {
         if (oldId) globalIdMap.set(oldId, generateUUID());
       }
 
+      let currentMeta = notebookMetadataRef.current;
+      const newEntriesForExplorer: { name: string; path: string }[] = [];
+
       const importSingle = async (data: EntryMetadata & { content: TipTapNode }, globalAssets: Record<string, string> = {}) => {
-        if (data.content === undefined) return;
+        if (data.content === undefined) return null;
         const { content: originalContent, ...info } = data;
         const oldEntryId = info.id;
         const newId = globalIdMap.get(oldEntryId) || generateUUID();
@@ -1016,7 +1019,7 @@ export default function App() {
         const { doc: remappedDoc } = remapContentIds(originalContent, globalIdMap);
 
         // 2. Dehydrate assets (images)
-        const { cleanDoc, newAssets } = await dehydrateAssets(remappedDoc);
+        const { cleanDoc, newAssets } = await dehydrateAssets(remappedDoc as TipTapNode);
 
         // Match images from the document to provided assets in the export
         const images = extractImagePaths(cleanDoc);
@@ -1031,6 +1034,7 @@ export default function App() {
           ...info,
           id: newId,
           filename: path,
+          updatedAt: isoTimestamp(),
           // Remap references array
           references: (info.references || []).map((rId: string) => globalIdMap.get(rId) || rId),
           // Extract new resources map from remapped doc
@@ -1043,31 +1047,44 @@ export default function App() {
           await writeLocalFile(dirHandle, path, jsonStr);
           const latex = generateEntryLatex(JSON.stringify(cleanDoc), newEntryMeta.title, newEntryMeta.author, newEntryMeta.phase, newEntryMeta.createdAt, newId);
           await writeLocalFile(dirHandle, `${LATEX_DIR}/${newId}.tex`, latex);
-          const updatedMeta = updateEntryInIndex(notebookMetadataRef.current, newId, newEntryMeta);
-          setNotebookMetadata(updatedMeta);
-          const allEntriesLatex = generateAllEntriesLatex(updatedMeta);
-          await writeLocalFile(dirHandle, ALL_ENTRIES_PATH, allEntriesLatex);
         } else {
           const dbName = getDBName();
           for (const asset of newAssets) {
             const actualPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${asset.path}` : asset.path;
             await stageChange(dbName, { path: actualPath, operation: "upsert", content: asset.base64, label: `Import asset`, stagedAt: isoTimestamp() });
-            await putResource(dbName, { path: actualPath, dataUrl: asset.base64.startsWith('data:') ? asset.base64 : `data:image/*;base64,${asset.base64}` });
+            await putResource(dbName, { path: actualPath, dataUrl: asset.base64.startsWith('data:') ? asset.base64 : `data:${getMimeTypeFromExtension(actualPath)};base64,${asset.base64}` });
           }
           await stage({ path, content: jsonStr, operation: "upsert", label: "Import entry" });
           const latex = generateEntryLatex(JSON.stringify(cleanDoc), newEntryMeta.title, newEntryMeta.author, newEntryMeta.phase, newEntryMeta.createdAt, newId);
           await stage({ path: `${currentLatexDir}/${newId}.tex`, content: latex, operation: "upsert", label: "Import LaTeX" });
-          const updatedMeta = updateEntryInIndex(notebookMetadataRef.current, newId, newEntryMeta);
-          await stage({ path: currentIndexPath, content: JSON.stringify(updatedMeta, null, 2), operation: "upsert", label: "Update index" });
-          const allEntriesLatex = generateAllEntriesLatex(updatedMeta);
-          await stage({ path: currentAllEntriesPath, content: allEntriesLatex, operation: "upsert", label: "Update all_entries.tex" });
-          setNotebookMetadata(updatedMeta);
         }
+
+        return { id: newId, meta: newEntryMeta, filename: `${newId}.json`, path };
       };
 
       if (entryList.length > 0) {
-        for (const item of entryList) await importSingle(item, assetsToImport);
-        notify(`Imported ${entryList.length} entries.`, "success");
+        for (const item of entryList) {
+          const result = await importSingle(item, assetsToImport);
+          if (result) {
+            currentMeta = updateEntryInIndex(currentMeta, result.id, result.meta);
+            newEntriesForExplorer.push({ name: result.filename, path: result.path });
+          }
+        }
+
+        // Finalize metadata and master LaTeX
+        setNotebookMetadata(currentMeta);
+        const allEntriesLatex = generateAllEntriesLatex(currentMeta);
+
+        if (workspaceMode === "local" && dirHandle) {
+          await writeLocalFile(dirHandle, INDEX_PATH, JSON.stringify(currentMeta, null, 2));
+          await writeLocalFile(dirHandle, ALL_ENTRIES_PATH, allEntriesLatex);
+        } else {
+          await stage({ path: currentIndexPath, content: JSON.stringify(currentMeta, null, 2), operation: "upsert", label: "Update index" });
+          await stage({ path: currentAllEntriesPath, content: allEntriesLatex, operation: "upsert", label: "Update all_entries.tex" });
+        }
+
+        setEntries(prev => [...newEntriesForExplorer, ...prev]);
+        notify(`Imported ${newEntriesForExplorer.length} entries.`, "success");
       } else {
         notify("No entries found in file.", "error");
       }
@@ -1088,7 +1105,7 @@ export default function App() {
   const handleImageUploaded = async (imagePath: string, base64: string) => {
     const dbName = getDBName();
     const actualImgPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${imagePath}` : imagePath;
-    await putResource(dbName, { path: actualImgPath, dataUrl: `data:image/*;base64,${base64}` });
+    await putResource(dbName, { path: actualImgPath, dataUrl: `data:${getMimeTypeFromExtension(actualImgPath)};base64,${base64}` });
     await uploadResource(actualImgPath, base64, "Image upload");
     if (workspaceMode === "github") refreshPending();
   };
