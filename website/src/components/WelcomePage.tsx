@@ -86,7 +86,7 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
         <button
           id="welcome-edit-team"
           className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left transition-all active:scale-[0.98] group cursor-pointer"
-          onClick={onOpenTeam}
+          onClick={() => onOpenTeam()}
         >
           <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0 group-hover:bg-nb-primary/20 transition-colors">
             <BookOpen size={20} className="text-nb-primary" />

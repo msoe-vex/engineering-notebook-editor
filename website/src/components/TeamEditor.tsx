@@ -247,6 +247,7 @@ interface TeamEditorProps {
   onSave: (data: TeamMetadata, phases: ProjectPhase[]) => Promise<void>;
   onClose: () => void;
   isSaving?: boolean;
+  initialTab?: "identity" | "members" | "phases";
 }
 
 export default function TeamEditor({
@@ -254,11 +255,12 @@ export default function TeamEditor({
   initialPhases,
   onSave,
   onClose,
-  isSaving = false
+  isSaving = false,
+  initialTab = "identity"
 }: TeamEditorProps) {
   const [teamData, setTeamData] = useState<TeamMetadata>(initialData);
   const [phases, setPhases] = useState<ProjectPhase[]>(initialPhases && initialPhases.length > 0 ? initialPhases : DEFAULT_PHASES);
-  const [activeTab, setActiveTab] = useState<"identity" | "members" | "phases">("identity");
+  const [activeTab, setActiveTab] = useState<"identity" | "members" | "phases">(initialTab);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
