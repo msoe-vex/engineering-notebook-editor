@@ -25,7 +25,6 @@ import WelcomePage from "./WelcomePage";
 import Sidebar from "./Sidebar";
 import TeamEditor from "./TeamEditor";
 import ProjectHeader from "./ProjectHeader";
-import PendingChangesPanel from "./PendingChangesPanel";
 import ConfirmationDialog from "./ConfirmationDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { HardDrive, ArrowLeftRight, X, BookOpen } from "lucide-react";
@@ -1137,6 +1136,27 @@ export default function App() {
     }
   };
 
+  const deriveProjectDates = useCallback((metadata: NotebookMetadata) => {
+    const entries = Object.values(metadata.entries);
+    if (entries.length === 0) return { startDate: "TBD", endDate: "TBD" };
+    
+    const sorted = [...entries].sort((a, b) => 
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+    
+    const fmt = (iso: string) => {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return "Unknown";
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      return `${months[d.getMonth()]} ${d.getFullYear()}`;
+    };
+    
+    return {
+      startDate: fmt(sorted[0].createdAt),
+      endDate: fmt(sorted[sorted.length - 1].createdAt)
+    };
+  }, []);
+
   const [showTeamEditor, setShowTeamEditor] = useState(false);
   const [hydratedTeam, setHydratedTeam] = useState<TeamMetadata | null>(null);
 
@@ -1160,7 +1180,7 @@ export default function App() {
               try {
                 const res = await getLocalFileContent(dirHandle, imgPath);
                 if (res.base64) {
-                   const dataUrl = `data:${getMimeTypeFromExtension(imgPath)};base64,${res.base64}`;
+                   const dataUrl = res.base64.startsWith('data:') ? res.base64 : `data:${getMimeTypeFromExtension(imgPath)};base64,${res.base64}`;
                    assetCache.set(imgPath, dataUrl);
                 }
               } catch (e) { console.error("Failed to load local team asset", imgPath, e); }
@@ -1200,7 +1220,8 @@ export default function App() {
       await saveMetadata(updatedMeta, "Update team metadata");
 
       // 4. Generate and save team.tex
-      const teamLatex = generateTeamLatex(cleanTeam);
+      const { startDate, endDate } = deriveProjectDates(updatedMeta);
+      const teamLatex = generateTeamLatex({ ...cleanTeam, startDate, endDate });
       const teamPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${TEAM_PATH}` : TEAM_PATH;
       
       if (workspaceMode === "local" && dirHandle) {
@@ -1210,7 +1231,6 @@ export default function App() {
       }
 
       if (workspaceMode === "github") refreshPending();
-      notify("Team information saved successfully.", "success");
     } catch (e) {
       console.error(e);
       notify("Failed to save team information.", "error");
@@ -1457,17 +1477,11 @@ export default function App() {
           onDeleteMulti={handleDeleteMulti}
           onNewEntry={handleNewEntry}
           onOpenTeam={handleOpenTeamEditor}
+          isCommitting={isCommitting}
+          onCommit={handleCommitAll}
+          onDiscard={handleDiscardAll}
+          workspaceMode={workspaceMode as "github" | "local" | "temporary"}
         />
-      </div>
-      <div className="p-4 bg-nb-surface border-t border-nb-outline-variant">
-        <PendingChangesPanel pendingChanges={pendingChanges} isCommitting={isCommitting} onCommit={handleCommitAll} onDiscard={handleDiscardAll} workspaceMode={workspaceMode} />
-        <div className="flex items-center justify-between mt-2">
-          <div className="flex items-center gap-2">
-            <div className={`w-1.5 h-1.5 rounded-full ${isLoading ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`} />
-            <span className="text-[9px] font-bold tracking-widest text-nb-on-surface-variant uppercase">{isLoading ? 'Syncing' : 'Connected'}</span>
-          </div>
-          <span className="text-[9px] font-mono text-nb-on-surface-variant/40 truncate max-w-[120px]">{workspaceLabel}</span>
-        </div>
       </div>
     </div>
   );

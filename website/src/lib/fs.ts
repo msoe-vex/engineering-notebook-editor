@@ -46,14 +46,28 @@ export const writeLocalFile = async (rootHandle: FileSystemDirectoryHandle, path
   const writable = await fileHandle.createWritable();
   
   if (isBase64 && typeof content === 'string') {
-    const base64Data = content.includes(',') ? content.split(',')[1] : content;
-    const cleanBase64 = base64Data.replace(/\s/g, '');
-    const binaryString = atob(cleanBase64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
+    // 1. Remove data URL prefix if present
+    let base64Data = content.includes(',') ? content.split(',')[1] : content;
+    // 2. Remove all whitespace
+    base64Data = base64Data.replace(/\s/g, '');
+    // 3. Handle URL-safe Base64 (replace - with +, _ with /)
+    base64Data = base64Data.replace(/-/g, '+').replace(/_/g, '/');
+    // 4. Fix padding if missing
+    while (base64Data.length % 4 !== 0) {
+      base64Data += '=';
     }
-    await writable.write(bytes);
+    
+    try {
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      await writable.write(bytes);
+    } catch (atobError) {
+      console.error("Base64 decoding failed", atobError);
+      throw atobError;
+    }
   } else {
     await writable.write(content as FileSystemWriteChunkType);
   }

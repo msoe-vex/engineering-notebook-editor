@@ -42,8 +42,8 @@ export interface TeamMember {
 export interface TeamMetadata {
   teamName: string;
   teamNumber: string;
-  startDate: string;
-  endDate: string;
+  startDate?: string;
+  endDate?: string;
   organization: string;
   logo?: string; // Path to asset
   members: TeamMember[];
@@ -82,8 +82,8 @@ export const EMPTY_METADATA: NotebookMetadata = {
   team: {
     teamName: "",
     teamNumber: "",
-    startDate: "",
-    endDate: "",
+    startDate: "TBD",
+    endDate: "TBD",
     organization: "",
     members: []
   }
