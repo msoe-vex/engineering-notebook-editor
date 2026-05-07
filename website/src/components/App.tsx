@@ -265,15 +265,22 @@ export default function App() {
   const editorPanelRef = useRef<ImperativePanelHandle>(null);
   const previewPanelRef = useRef<ImperativePanelHandle>(null);
   const sidebarPanelRef = useRef<ImperativePanelHandle>(null);
+  const isToggleFromButton = useRef(false);
   const importEntryInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!sidebarPanelRef.current || isMobile) return;
     if (isSidebarOpen) {
-      sidebarPanelRef.current.expand();
+      if (isToggleFromButton.current) {
+        sidebarPanelRef.current.expand();
+        sidebarPanelRef.current.resize(20);
+      } else {
+        sidebarPanelRef.current.expand();
+      }
     } else {
       sidebarPanelRef.current.collapse();
     }
+    isToggleFromButton.current = false;
   }, [isSidebarOpen, isMobile]);
 
   useEffect(() => {
@@ -563,8 +570,8 @@ export default function App() {
   const handleOpenEntry = useCallback(async (file: ExplorerFile, silent: boolean = false, initialContent?: string, initialLatex?: string) => {
     setIsLoading(true);
     setIsInitializing(true);
-    if (isMobile) setUserSidebarPreference(false);
     setMobileTab("editor");
+    setShowTeamEditor(false);
 
     try {
       const dbName = getDBName();
@@ -1460,7 +1467,7 @@ export default function App() {
           {isMobile && <button onClick={() => setUserSidebarPreference(false)} className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant transition-colors"><X size={18} /></button>}
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-hidden flex flex-col min-h-0">
         <Sidebar
           entries={entries}
           openFile={openFile}
@@ -1491,7 +1498,7 @@ export default function App() {
       <ProjectHeader
         currentProject={currentProject || (currentProjectId === "temporary" ? { id: "temporary", name: "Temporary Workspace" } : null)}
         isSidebarOpen={isSidebarOpen}
-        onToggleSidebar={() => setUserSidebarPreference(!isSidebarOpen)}
+        onToggleSidebar={() => { isToggleFromButton.current = true; setUserSidebarPreference(!isSidebarOpen); }}
         isMobile={isMobile}
         mobileTab={mobileTab}
         onSetMobileTab={setMobileTab}
@@ -1530,7 +1537,7 @@ export default function App() {
               onNewEntry={handleNewEntry} 
               onImportEntry={() => importEntryInputRef.current?.click()} 
               onDisconnect={handleDisconnect} 
-              onOpenSidebar={() => setUserSidebarPreference(true)} 
+              onOpenSidebar={() => { isToggleFromButton.current = true; setUserSidebarPreference(true); }} 
               onOpenTeam={handleOpenTeamEditor}
             />
           )
@@ -1628,7 +1635,7 @@ export default function App() {
               onCollapse={() => setUserSidebarPreference(false)} onExpand={() => setUserSidebarPreference(true)}
               className="flex flex-col transition-all duration-300 ease-out"
             >
-              <div className={`flex-1 flex flex-col transition-all duration-300 ease-out ${!isSidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+              <div className={`flex-1 flex flex-col min-h-0 transition-all duration-300 ease-out ${!isSidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                 {sidebar}
               </div>
             </Panel>

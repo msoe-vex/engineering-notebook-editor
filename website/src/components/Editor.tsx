@@ -499,6 +499,7 @@ const Editor = React.memo(function Editor({
           {/* Row 1: Menu Bar */}
           <div className="px-4 h-10 flex items-center gap-2 border-b border-nb-outline-variant/30">
 
+
             <MenuItem label="File">
               <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} />
               <MenuAction
@@ -593,6 +594,15 @@ const Editor = React.memo(function Editor({
                 </div>
               )}
             </div>
+            
+            <button
+              onClick={onClose}
+              title="Close Entry"
+              className="p-1.5 ml-2 rounded-lg bg-nb-surface-low hover:bg-red-500/10 text-nb-on-surface-variant hover:text-red-500 transition-all border border-nb-outline-variant/30 hover:border-red-500/30 group cursor-pointer"
+            >
+              <X size={16} className="group-hover:scale-110 transition-transform" />
+            </button>
+
           </div>
 
           {/* Row 2: Metadata Row */}
