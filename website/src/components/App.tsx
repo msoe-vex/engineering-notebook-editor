@@ -17,7 +17,7 @@ import {
   NotebookMetadata, EMPTY_METADATA, EntryMetadata, EntryWrapper,
   updateEntryInIndex, removeEntryFromMetadata,
   dehydrateAssets, hydrateAssets, remapContentIds, isEntryValid, validateNotebookIntegrity,
-  extractImagePaths, extractResources, extractReferences, TipTapNode, dehydrateTeamAssets, hydrateTeamAssets, TeamMetadata, TeamMember
+  extractImagePaths, extractResources, extractReferences, TipTapNode, dehydrateTeamAssets, hydrateTeamAssets, TeamMetadata, TeamMember, ProjectPhase
 } from "@/lib/metadata";
 import Settings from "./Settings";
 import Editor from "./Editor";
@@ -32,8 +32,8 @@ import { HardDrive, ArrowLeftRight, X, BookOpen, Download } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { saveAs } from "file-saver";
 import { generateUUID, hashContent, getMimeTypeFromExtension } from "@/lib/utils";
-import { generateEntryLatex, generateAllEntriesLatex, generateTeamLatex } from "@/lib/latex";
-import { ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, INDEX_PATH, ALL_ENTRIES_PATH, TEAM_PATH } from "@/lib/constants";
+import { generateEntryLatex, generateAllEntriesLatex, generateTeamLatex, generatePhasesLatex } from "@/lib/latex";
+import { ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, INDEX_PATH, ALL_ENTRIES_PATH, TEAM_PATH, DATA_DIR } from "@/lib/constants";
 import { useWorkspace, WorkspaceMode } from "@/hooks/useWorkspace";
 import { usePersistence } from "@/hooks/usePersistence";
 import { getLocalFileContent, writeLocalFile, ensureLocalDirectory } from "@/lib/fs";
@@ -1177,7 +1177,7 @@ export default function App() {
           }
         }
         // This will update notebookMetadata state and save everything including the new entries
-        await handleSaveTeam(teamData, currentMeta);
+        await handleSaveTeam(teamData, currentMeta.phases, currentMeta);
       } else if (entryList.length > 0) {
         // Only entries were imported, save them now
         setNotebookMetadata(currentMeta);
@@ -1265,7 +1265,7 @@ export default function App() {
     setShowTeamEditor(true);
   };
 
-  const handleSaveTeam = async (team: TeamMetadata, baseMetadata?: NotebookMetadata) => {
+  const handleSaveTeam = useCallback(async (team: TeamMetadata, phases?: ProjectPhase[], baseMetadata?: NotebookMetadata) => {
     setIsSaving(true);
     try {
       const dbName = getDBName();
@@ -1284,12 +1284,15 @@ export default function App() {
         }
       }
 
-      // 3. Update notebook.json
       const metaToUse = baseMetadata || notebookMetadata;
-      const updatedMeta = validateNotebookIntegrity({ ...metaToUse, team: cleanTeam });
+      const updatedMeta = validateNotebookIntegrity({ 
+        ...metaToUse, 
+        team: cleanTeam,
+        phases: phases || metaToUse.phases
+      });
       await performGarbageCollection(metaToUse, updatedMeta);
       setNotebookMetadata(updatedMeta);
-      await saveMetadata(updatedMeta, "Update team metadata");
+      await saveMetadata(updatedMeta, "Update team and phases metadata");
 
       // 4. Generate and save team.tex
       const { startDate, endDate } = deriveProjectDates(updatedMeta);
@@ -1302,6 +1305,17 @@ export default function App() {
         await stage({ path: teamPath, content: teamLatex, operation: "upsert", label: "Update team.tex" });
       }
 
+      // 5. Generate and save phases.tex
+      const phasesToSave = phases || updatedMeta.phases || [];
+      const phasesLatex = generatePhasesLatex(phasesToSave);
+      const phasesPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${DATA_DIR}/phases.tex` : `${DATA_DIR}/phases.tex`;
+
+      if (workspaceMode === "local" && dirHandle) {
+        await writeLocalFile(dirHandle, `${DATA_DIR}/phases.tex`, phasesLatex);
+      } else {
+        await stage({ path: phasesPath, content: phasesLatex, operation: "upsert", label: "Update phases.tex" });
+      }
+
       if (workspaceMode === "github") refreshPending();
     } catch (e) {
       console.error(e);
@@ -1309,7 +1323,7 @@ export default function App() {
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [config, deriveProjectDates, dirHandle, getDBName, getGitBasePrefix, notebookMetadata, notify, performGarbageCollection, refreshPending, saveMetadata, setNotebookMetadata, stage, stageChange, workspaceMode]);
 
   const handleImageUploaded = async (imagePath: string, base64: string) => {
     const dbName = getDBName();
@@ -1609,8 +1623,9 @@ export default function App() {
             />
           )
         ) : showTeamEditor && hydratedTeam ? (
-          <TeamEditor
-            initialData={hydratedTeam}
+          <TeamEditor 
+            initialData={notebookMetadata.team || EMPTY_METADATA.team!}
+            initialPhases={notebookMetadata.phases || []}
             onSave={handleSaveTeam}
             onClose={() => setShowTeamEditor(false)}
             isSaving={isSaving}

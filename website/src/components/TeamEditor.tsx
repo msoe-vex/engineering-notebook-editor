@@ -1,42 +1,189 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, memo, useCallback } from "react";
 import {
   Hash, User, Briefcase, Image as ImageIcon,
-  Loader2, Check, X, Camera, Building2, Plus, Trash2, Users
+  Loader2, Check, X, Camera, Building2, Plus, Trash2, Users,
+  Palette, Shapes, Search
 } from "lucide-react";
+import * as LucideIcons from "lucide-react";
 import Image from "next/image";
-import { TeamMetadata, TeamMember } from "@/lib/metadata";
+import { TeamMetadata, TeamMember, ProjectPhase } from "@/lib/metadata";
+import { DEFAULT_PHASES, AVAILABLE_ICONS } from "@/lib/phases";
+
+// ─── Sub-components for performance ──────────────────────────────────────────
+
+const IconPicker = ({ 
+  currentIcon, 
+  onSelect, 
+  color 
+}: { 
+  currentIcon: string, 
+  onSelect: (iconName: string) => void,
+  color: string
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  
+  const filteredIcons = useMemo(() => {
+    const q = search.toLowerCase();
+    return AVAILABLE_ICONS.filter(i => i.toLowerCase().includes(q));
+  }, [search]);
+
+  const IconComp = (LucideIcons as any)[currentIcon] || Shapes;
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-11 h-11 rounded-[14px] flex items-center justify-center border-2 transition-all cursor-pointer group hover:scale-105 active:scale-95 shadow-sm"
+        style={{ backgroundColor: `${color}15`, color: color, borderColor: `${color}30` }}
+        title="Change Icon"
+      >
+        <IconComp size={20} className="group-hover:rotate-12 transition-transform" />
+      </button>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-[190]" onClick={() => setIsOpen(false)} />
+          <div className="absolute top-1/2 left-full ml-4 -translate-y-1/2 w-60 bg-nb-surface border border-nb-outline-variant shadow-nb-2xl rounded-[20px] p-3 z-[200] animate-in fade-in slide-in-from-left-2 duration-200">
+            <div className="relative mb-2.5">
+              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-nb-on-surface-variant/40" />
+              <input
+                autoFocus
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search icons..."
+                className="w-full bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg pl-8 pr-2 py-1.5 text-[10px] font-bold text-nb-on-surface focus:outline-none focus:ring-2 focus:ring-nb-primary/20 transition-all"
+              />
+            </div>
+            <div className="grid grid-cols-4 gap-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1">
+              {filteredIcons.map(iconName => {
+                const PickerIcon = (LucideIcons as any)[iconName] || Shapes;
+                return (
+                  <button
+                    key={iconName}
+                    type="button"
+                    onClick={() => { onSelect(iconName); setIsOpen(false); }}
+                    className={`w-8 h-8 flex items-center justify-center rounded-md transition-all hover:scale-110 cursor-pointer ${currentIcon === iconName ? "bg-nb-primary text-white" : "bg-nb-surface-low border border-nb-outline-variant/20 text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary"}`}
+                  >
+                    <PickerIcon size={14} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+const PhaseRow = memo(({ 
+  phase, 
+  index, 
+  handlePhaseChange, 
+  removePhase
+}: { 
+  phase: ProjectPhase, 
+  index: number, 
+  handlePhaseChange: (index: number, field: keyof ProjectPhase, value: string) => void,
+  removePhase: (index: number) => void
+}) => {
+  const [localColor, setLocalColor] = useState(phase.color);
+
+  // Sync local color with prop if it changes externally
+  useEffect(() => {
+    setLocalColor(phase.color);
+  }, [phase.color]);
+
+  // Debounced update to parent
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localColor !== phase.color) {
+        handlePhaseChange(index, "color", localColor);
+      }
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [localColor, index, phase.color, handlePhaseChange]);
+
+  return (
+    <div
+      className="group flex items-center gap-4 p-3 rounded-2xl bg-nb-surface border border-nb-outline-variant hover:border-nb-primary/30 transition-all"
+    >
+      <IconPicker 
+        currentIcon={phase.iconName} 
+        color={localColor}
+        onSelect={(name) => handlePhaseChange(index, "iconName", name)} 
+      />
+
+      <div className="relative group/color shrink-0">
+        <input
+          type="color"
+          value={localColor}
+          onChange={e => setLocalColor(e.target.value)}
+          className="w-6 h-6 rounded-full border-2 border-white shadow-sm cursor-pointer overflow-hidden p-0"
+        />
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <input
+          type="text"
+          value={phase.name}
+          onChange={e => handlePhaseChange(index, "name", e.target.value)}
+          placeholder="Phase Name"
+          className="w-full bg-transparent border-none p-0 text-sm font-bold text-nb-on-surface focus:outline-none placeholder:text-nb-on-surface-variant/30"
+        />
+      </div>
+
+      <button
+        type="button"
+        onClick={() => removePhase(index)}
+        className="p-2 rounded-lg text-nb-on-surface-variant/40 hover:text-red-500 hover:bg-red-50 transition-all cursor-pointer"
+        title="Remove Phase"
+      >
+        <Trash2 size={16} />
+      </button>
+    </div>
+  );
+});
+
+PhaseRow.displayName = "PhaseRow";
 
 interface TeamEditorProps {
   initialData: TeamMetadata;
-  onSave: (data: TeamMetadata) => Promise<void>;
+  initialPhases: ProjectPhase[];
+  onSave: (data: TeamMetadata, phases: ProjectPhase[]) => Promise<void>;
   onClose: () => void;
   isSaving?: boolean;
 }
 
 export default function TeamEditor({
   initialData,
+  initialPhases,
   onSave,
   onClose,
   isSaving = false
 }: TeamEditorProps) {
   const [teamData, setTeamData] = useState<TeamMetadata>(initialData);
-  const [activeTab, setActiveTab] = useState<"identity" | "members">("identity");
+  const [phases, setPhases] = useState<ProjectPhase[]>(initialPhases && initialPhases.length > 0 ? initialPhases : DEFAULT_PHASES);
+  const [activeTab, setActiveTab] = useState<"identity" | "members" | "phases">("identity");
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       if (hasChanges) {
-        onSave(teamData).then(() => {
+        onSave(teamData, phases).then(() => {
           setSaveSuccess(true);
           setHasChanges(false);
         });
       }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [teamData, hasChanges, onSave]);
+  }, [teamData, phases, hasChanges, onSave]);
 
   useEffect(() => {
     if (saveSuccess) {
@@ -73,6 +220,35 @@ export default function TeamEditor({
     setHasChanges(true);
   };
 
+  const handlePhaseChange = useCallback((index: number, field: keyof ProjectPhase, value: string) => {
+    setPhases(prev => {
+      const newPhases = [...prev];
+      newPhases[index] = { ...newPhases[index], [field]: value };
+      return newPhases;
+    });
+    setHasChanges(true);
+  }, []);
+
+  const addPhase = useCallback(() => {
+    setPhases(prev => [...prev, {
+      id: Math.random().toString(36).substr(2, 9),
+      name: "New Phase",
+      iconName: "Shapes",
+      color: "#94a3b8"
+    }]);
+    setHasChanges(true);
+  }, []);
+
+  const removePhase = useCallback((index: number) => {
+    setPhases(prev => prev.filter((_, i) => i !== index));
+    setHasChanges(true);
+  }, []);
+
+  const restoreDefaultPhases = useCallback(() => {
+    setPhases(DEFAULT_PHASES.map(p => ({ ...p, id: Math.random().toString(36).substr(2, 9) })));
+    setHasChanges(true);
+  }, []);
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, callback: (base64: string) => void) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -93,8 +269,8 @@ export default function TeamEditor({
             <Users size={24} />
           </div>
           <div>
-            <h1 className="text-xl font-black text-nb-on-surface tracking-tight">Team Configuration</h1>
-            <p className="text-xs text-nb-on-surface-variant font-medium">Manage your team identity and gallery</p>
+            <h1 className="text-xl font-black text-nb-on-surface tracking-tight">Project Configuration</h1>
+            <p className="text-xs text-nb-on-surface-variant font-medium">Identity, Team, and Design Process</p>
           </div>
         </div>
 
@@ -126,7 +302,7 @@ export default function TeamEditor({
       </div>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar p-8">
-        <div className="max-w-4xl mx-auto space-y-12">
+        <div className="max-w-4xl mx-auto space-y-12 pb-12">
 
           {/* Navigation Tabs */}
           <div className="flex gap-2 p-1 bg-nb-surface-low rounded-2xl border border-nb-outline-variant/20 w-fit">
@@ -135,18 +311,25 @@ export default function TeamEditor({
               className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer ${activeTab === "identity" ? "bg-nb-surface text-nb-primary shadow-sm" : "text-nb-on-surface-variant hover:text-nb-on-surface"}`}
             >
               <Building2 size={14} />
-              Team Details
+              Identity
             </button>
             <button
               onClick={() => setActiveTab("members")}
               className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer ${activeTab === "members" ? "bg-nb-surface text-nb-primary shadow-sm" : "text-nb-on-surface-variant hover:text-nb-on-surface"}`}
             >
               <Users size={14} />
-              Members
+              Team
+            </button>
+            <button
+              onClick={() => setActiveTab("phases")}
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer ${activeTab === "phases" ? "bg-nb-surface text-nb-primary shadow-sm" : "text-nb-on-surface-variant hover:text-nb-on-surface"}`}
+            >
+              <Palette size={14} />
+              Phases
             </button>
           </div>
 
-          {activeTab === "identity" ? (
+          {activeTab === "identity" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in slide-in-from-bottom-4 duration-500">
               {/* Left Column: Info */}
               <div className="space-y-6">
@@ -230,7 +413,9 @@ export default function TeamEditor({
                 )}
               </div>
             </div>
-          ) : (
+          )}
+
+          {activeTab === "members" && (
             <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {teamData.members.map((member, index) => (
@@ -303,6 +488,39 @@ export default function TeamEditor({
                   </div>
                   <span className="text-xs font-black uppercase tracking-widest">Add Member</span>
                 </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "phases" && (
+            <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
+              <div className="grid grid-cols-1 gap-6">
+                {phases.map((phase, index) => (
+                  <PhaseRow 
+                    key={phase.id}
+                    phase={phase}
+                    index={index}
+                    handlePhaseChange={handlePhaseChange}
+                    removePhase={removePhase}
+                  />
+                ))}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                  <button
+                    onClick={addPhase}
+                    className="flex items-center justify-center gap-3 p-4 rounded-2xl border-2 border-dashed border-nb-outline-variant/30 text-nb-on-surface-variant hover:border-nb-primary hover:text-nb-primary hover:bg-nb-primary/5 transition-all group cursor-pointer"
+                  >
+                    <Plus size={18} />
+                    <span className="text-xs font-black uppercase tracking-widest">Add Phase</span>
+                  </button>
+                  <button
+                    onClick={restoreDefaultPhases}
+                    className="flex items-center justify-center gap-3 p-4 rounded-2xl border-2 border-dashed border-nb-outline-variant/30 text-nb-on-surface-variant hover:border-nb-outline hover:text-nb-on-surface hover:bg-nb-surface-low transition-all group cursor-pointer"
+                  >
+                    <Palette size={18} />
+                    <span className="text-xs font-black uppercase tracking-widest">Restore Defaults</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
