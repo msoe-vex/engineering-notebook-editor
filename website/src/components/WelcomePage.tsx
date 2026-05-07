@@ -13,9 +13,10 @@ interface WelcomePageProps {
   onImportEntry: () => void;
   onDisconnect: () => void;
   onOpenSidebar: () => void;
+  onOpenTeam: () => void;
 }
 
-export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDisconnect, onOpenSidebar }: WelcomePageProps) {
+export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDisconnect, onOpenSidebar, onOpenTeam }: WelcomePageProps) {
   const ModeIcon =
     workspace.mode === "github" ? GitBranch :
       workspace.mode === "local" ? HardDrive : ArrowLeftRight;
@@ -39,46 +40,60 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
       </div>
 
       {/* Actions */}
-      <div className="flex flex-col gap-5 w-full max-w-sm">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl">
         <button
           id="welcome-new-entry"
           onClick={onNewEntry}
-          className="flex items-center gap-4 w-full bg-nb-primary hover:bg-nb-primary-dim text-white px-6 py-5 rounded-2xl text-left font-bold shadow-nb-lg transition-all active:scale-[0.98] group cursor-pointer"
+          className="flex items-center gap-4 bg-nb-primary hover:bg-nb-primary-dim text-white p-5 rounded-3xl text-left font-bold shadow-nb-lg transition-all active:scale-[0.98] group cursor-pointer"
         >
-          <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/20 transition-colors">
-            <Plus size={24} />
+          <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/20 transition-colors">
+            <Plus size={20} />
           </div>
           <div>
-            <div className="font-bold text-xs tracking-widest">New Entry</div>
-            <div className="text-white/70 text-sm font-normal mt-0.5">Start a new notebook entry</div>
+            <div className="font-bold text-[10px] tracking-[0.2em] uppercase opacity-70">New Entry</div>
+            <div className="text-white text-base font-bold mt-0.5 leading-tight">Start fresh entry</div>
           </div>
         </button>
 
         <button
           id="welcome-open-entry"
-          className="flex items-center gap-4 w-full bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant px-6 py-5 rounded-2xl text-left transition-all active:scale-[0.98] group cursor-pointer"
+          className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left transition-all active:scale-[0.98] group cursor-pointer"
           onClick={onOpenSidebar}
         >
-          <div className="w-12 h-12 rounded-xl bg-nb-surface-mid flex items-center justify-center shrink-0 group-hover:bg-nb-surface-high transition-colors">
-            <FolderOpen size={24} className="text-nb-tertiary" />
+          <div className="w-10 h-10 rounded-xl bg-nb-surface-mid flex items-center justify-center shrink-0 group-hover:bg-nb-surface-high transition-colors">
+            <FolderOpen size={20} className="text-nb-tertiary" />
           </div>
           <div>
-            <div className="font-bold text-xs tracking-widest text-nb-on-surface">Open Entry</div>
-            <div className="text-nb-on-surface-variant text-sm font-normal mt-0.5">Select from the sidebar</div>
+            <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Open Entry</div>
+            <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Select from sidebar</div>
           </div>
         </button>
 
         <button
           id="welcome-import-entry"
-          className="flex items-center gap-4 w-full bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant px-6 py-5 rounded-2xl text-left transition-all active:scale-[0.98] group cursor-pointer"
+          className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left transition-all active:scale-[0.98] group cursor-pointer"
           onClick={onImportEntry}
         >
-          <div className="w-12 h-12 rounded-xl bg-nb-surface-mid flex items-center justify-center shrink-0 group-hover:bg-nb-surface-high transition-colors">
-            <Upload size={24} className="text-nb-tertiary" />
+          <div className="w-10 h-10 rounded-xl bg-nb-surface-mid flex items-center justify-center shrink-0 group-hover:bg-nb-surface-high transition-colors">
+            <Upload size={20} className="text-nb-tertiary" />
           </div>
           <div>
-            <div className="font-bold text-xs tracking-widest text-nb-on-surface">Import Entry</div>
-            <div className="text-nb-on-surface-variant text-sm font-normal mt-0.5">Import an entry from a JSON file</div>
+            <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Import Entry</div>
+            <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Upload JSON file</div>
+          </div>
+        </button>
+
+        <button
+          id="welcome-edit-team"
+          className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left transition-all active:scale-[0.98] group cursor-pointer"
+          onClick={onOpenTeam}
+        >
+          <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0 group-hover:bg-nb-primary/20 transition-colors">
+            <BookOpen size={20} className="text-nb-primary" />
+          </div>
+          <div>
+            <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Team Info</div>
+            <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Configure Team</div>
           </div>
         </button>
       </div>

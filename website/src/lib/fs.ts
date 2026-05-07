@@ -1,3 +1,5 @@
+import { getMimeTypeFromExtension } from './utils';
+
 export const getLocalFileContent = async (rootHandle: FileSystemDirectoryHandle, path: string): Promise<{ text?: string; base64?: string; isImage: boolean }> => {
   try {
     const parts = path.split('/');
@@ -7,10 +9,19 @@ export const getLocalFileContent = async (rootHandle: FileSystemDirectoryHandle,
     }
     const fileHandle = await currentHandle.getFileHandle(parts[parts.length - 1]);
     const file = await fileHandle.getFile();
-    if (file.type.startsWith('image/')) {
+    const isImage = file.type.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(parts[parts.length - 1]);
+
+    if (isImage) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = () => resolve({ base64: reader.result as string, isImage: true });
+        reader.onload = () => {
+          let res = reader.result as string;
+          // If browser doesn't know mime type, it might return 'data:;base64,...'
+          if (res.startsWith('data:;base64,')) {
+            res = res.replace('data:;base64,', `data:${getMimeTypeFromExtension(path)};base64,`);
+          }
+          resolve({ base64: res, isImage: true });
+        };
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
@@ -35,14 +46,28 @@ export const writeLocalFile = async (rootHandle: FileSystemDirectoryHandle, path
   const writable = await fileHandle.createWritable();
   
   if (isBase64 && typeof content === 'string') {
-    const base64Data = content.split(',')[1] || content;
-    const byteCharacters = atob(base64Data);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    // 1. Remove data URL prefix if present
+    let base64Data = content.includes(',') ? content.split(',')[1] : content;
+    // 2. Remove all whitespace
+    base64Data = base64Data.replace(/\s/g, '');
+    // 3. Handle URL-safe Base64 (replace - with +, _ with /)
+    base64Data = base64Data.replace(/-/g, '+').replace(/_/g, '/');
+    // 4. Fix padding if missing
+    while (base64Data.length % 4 !== 0) {
+      base64Data += '=';
     }
-    const byteArray = new Uint8Array(byteNumbers);
-    await writable.write(byteArray);
+    
+    try {
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      await writable.write(bytes);
+    } catch (atobError) {
+      console.error("Base64 decoding failed", atobError);
+      throw atobError;
+    }
   } else {
     await writable.write(content as FileSystemWriteChunkType);
   }

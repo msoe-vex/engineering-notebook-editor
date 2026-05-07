@@ -46,8 +46,14 @@ export async function hashContent(content: string | ArrayBuffer): Promise<string
  * Extracts the file extension from a base64 data URL.
  */
 export function getExtensionFromDataUrl(dataUrl: string): string {
-  const match = dataUrl.match(/^data:image\/(\w+);base64,/);
-  return match ? match[1] : "png";
+  const match = dataUrl.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,/);
+  if (match) {
+    const type = match[1].toLowerCase();
+    if (type === "svg+xml") return "svg";
+    if (type === "jpeg") return "jpg";
+    return type;
+  }
+  return "png";
 }
 /**
  * Simple debounce utility.
@@ -61,4 +67,44 @@ export function debounce<Args extends unknown[], R>(
     if (timeout) clearTimeout(timeout);
     timeout = setTimeout(() => func(...args), wait);
   };
+}
+/**
+ * Maps a file path or extension to a proper mime type.
+ */
+export function getMimeTypeFromExtension(path: string): string {
+  const ext = path.split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case "svg": return "image/svg+xml";
+    case "jpg":
+    case "jpeg": return "image/jpeg";
+    case "png": return "image/png";
+    case "gif": return "image/gif";
+    case "webp": return "image/webp";
+    default: return "image/png"; // Fallback
+  }
+}
+
+/**
+ * Converts an SVG data URL to a PNG data URL in the browser.
+ */
+export async function convertSvgToPng(svgDataUrl: string, scale: number = 2): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      // Use scale to ensure high quality (SVGs are vectors, so we can upscale)
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error("Could not get canvas context"));
+        return;
+      }
+      // Draw image directly to canvas (supports transparency if SVG is transparent)
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => reject(new Error("Failed to load SVG image for conversion"));
+    img.src = svgDataUrl;
+  });
 }

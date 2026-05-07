@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import FileExplorer from "./FileExplorer";
+import PendingChangesPanel from "./PendingChangesPanel";
 import { ExplorerFile } from "@/lib/types";
 import { NotebookMetadata } from "@/lib/metadata";
 import { PendingChange } from "@/lib/db";
@@ -19,6 +20,11 @@ interface SidebarProps {
   onDownloadMulti: (files: ExplorerFile[]) => void;
   onDeleteMulti: (files: ExplorerFile[]) => void;
   onNewEntry: () => void;
+  onOpenTeam: () => void;
+  isCommitting: boolean;
+  onCommit: () => void;
+  onDiscard: () => void;
+  workspaceMode: string;
 }
 
 export default function Sidebar({
@@ -35,7 +41,11 @@ export default function Sidebar({
   onDeleteEntry,
   onDownloadMulti,
   onDeleteMulti,
-  onNewEntry
+  onNewEntry,
+  isCommitting,
+  onCommit,
+  onDiscard,
+  workspaceMode,
 }: SidebarProps) {
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"created" | "updated" | "title">("created");
@@ -100,29 +110,44 @@ export default function Sidebar({
   }, [augmentedEntries, search, sortBy, sortDirection, dateRange]);
 
   return (
-    <FileExplorer
-      entries={filteredEntries}
-      activePath={openFile?.path || null}
-      selectedPaths={selectedPaths}
-      pendingPaths={pendingPaths}
-      deletedPaths={deletedPaths}
-      onSelectEntry={(file, multi, range) => onSelectEntry(file, multi, range, filteredEntries.map(e => e.path))}
-      onOpenEntry={onOpenEntry}
-      onCloseEntry={onCloseEntry}
-      onDownloadLatex={onDownloadLatex}
-      onDownloadJson={onDownloadJson}
-      onDeleteEntry={onDeleteEntry}
-      onDownloadMulti={onDownloadMulti}
-      onDeleteMulti={onDeleteMulti}
-      onNewEntry={onNewEntry}
-      search={search}
-      onSearchChange={setSearch}
-      sortBy={sortBy}
-      onSortChange={setSortBy}
-      sortDirection={sortDirection}
-      onSortDirectionToggle={() => setSortDirection(prev => prev === "asc" ? "desc" : "asc")}
-      dateRange={dateRange}
-      onDateRangeChange={setDateRange}
-    />
+    <div className="flex flex-col h-full overflow-hidden min-h-0">
+
+      <FileExplorer
+        entries={filteredEntries}
+        activePath={openFile?.path || null}
+        selectedPaths={selectedPaths}
+        pendingPaths={pendingPaths}
+        deletedPaths={deletedPaths}
+        onSelectEntry={(file, multi, range) => onSelectEntry(file, multi, range, filteredEntries.map(e => e.path))}
+        onOpenEntry={onOpenEntry}
+        onCloseEntry={onCloseEntry}
+        onDownloadLatex={onDownloadLatex}
+        onDownloadJson={onDownloadJson}
+        onDeleteEntry={onDeleteEntry}
+        onDownloadMulti={onDownloadMulti}
+        onDeleteMulti={onDeleteMulti}
+        onNewEntry={onNewEntry}
+        search={search}
+        onSearchChange={setSearch}
+        sortBy={sortBy}
+        onSortChange={setSortBy}
+        sortDirection={sortDirection}
+        onSortDirectionToggle={() => setSortDirection(prev => prev === "asc" ? "desc" : "asc")}
+        dateRange={dateRange}
+        onDateRangeChange={setDateRange}
+      />
+
+      {pendingChanges.length > 0 && (
+        <div className="p-4 bg-nb-surface border-t border-nb-outline-variant animate-in slide-in-from-bottom-2 duration-300">
+          <PendingChangesPanel
+            pendingChanges={pendingChanges}
+            isCommitting={isCommitting}
+            onCommit={onCommit}
+            onDiscard={onDiscard}
+            workspaceMode={workspaceMode as "github" | "local" | "temporary"}
+          />
+        </div>
+      )}
+    </div>
   );
 }

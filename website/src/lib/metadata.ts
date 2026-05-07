@@ -30,7 +30,24 @@ export interface EntryMetadata {
   resources?: Record<string, { title: string, caption: string, type: string }>; // block uuid -> metadata
   isValid?: boolean;
   references?: string[]; // List of target UUIDs this entry points to
+  assets?: string[]; // List of asset paths used in this entry
   validationErrors?: string[]; // Detailed messages for the UI
+}
+
+export interface TeamMember {
+  name: string;
+  role: string;
+  image?: string; // Path to asset
+}
+
+export interface TeamMetadata {
+  teamName: string;
+  teamNumber: string;
+  startDate?: string;
+  endDate?: string;
+  organization: string;
+  logo?: string; // Path to asset
+  members: TeamMember[];
 }
 
 export interface TipTapMark {
@@ -57,11 +74,21 @@ export interface NotebookMetadata {
   projectId?: string;
   projectName?: string;
   entries: Record<string, EntryMetadata>; // uuid -> metadata
+  team?: TeamMetadata;
+  assetRefs?: Record<string, string[]>; // asset path -> [entry id or "team"]
 }
 
 export const EMPTY_METADATA: NotebookMetadata = { 
   version: 3, 
   entries: {},
+  team: {
+    teamName: "",
+    teamNumber: "",
+    startDate: "TBD",
+    endDate: "TBD",
+    organization: "",
+    members: []
+  }
 };
 
 // ─── TipTap JSON helpers ──────────────────────────────────────────────────────
@@ -220,7 +247,8 @@ export async function dehydrateAssets(doc: TipTapDoc): Promise<{ cleanDoc: TipTa
     if (node.type === "image") {
       const attrs = (node.attrs || {}) as Record<string, string | undefined>;
       if (attrs.src?.startsWith("data:")) {
-        const base64 = attrs.src.split(",")[1];
+        const base64 = attrs.src.split(",")[1]?.trim();
+        if (!base64) return node; // Skip if malformed
         const hash = await hashContent(base64);
         const ext = getExtensionFromDataUrl(attrs.src);
         const assetPath = `${ASSETS_DIR}/${hash}.${ext}`;
@@ -289,19 +317,36 @@ export function updateEntryInIndex(
  */
 export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookMetadata {
   const newEntries = { ...metadata.entries };
+  const assetRefs: Record<string, string[]> = {};
   
-  // 1. Build a global set of all existing IDs (entries and resources)
+  const trackAsset = (path: string, owner: string) => {
+    if (!assetRefs[path]) assetRefs[path] = [];
+    if (!assetRefs[path].includes(owner)) assetRefs[path].push(owner);
+  };
+
+  // 1. Collect assets from team
+  if (metadata.team) {
+    if (metadata.team.logo) trackAsset(metadata.team.logo, "team");
+    metadata.team.members.forEach(m => {
+      if (m.image) trackAsset(m.image, "team");
+    });
+  }
+
+  // 2. Build global set of all IDs and collect assets from entries
   const existingIds = new Set<string>();
-  for (const entry of Object.values(metadata.entries)) {
+  for (const [entryId, entry] of Object.entries(metadata.entries)) {
     existingIds.add(entry.id);
     if (entry.resources) {
       for (const resId of Object.keys(entry.resources)) {
         existingIds.add(resId);
       }
     }
+    if (entry.assets) {
+      entry.assets.forEach(a => trackAsset(a, entryId));
+    }
   }
 
-  // 2. Validate each entry
+  // 3. Validate each entry
   for (const [id, entry] of Object.entries(newEntries)) {
     const errors: string[] = [];
 
@@ -336,7 +381,8 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
 
   return {
     ...metadata,
-    entries: newEntries
+    entries: newEntries,
+    assetRefs
   };
 }
 
@@ -388,10 +434,8 @@ export function renameEntryInMetadata(
  * Also updates any internal links (#uuid) that point to the newly remapped IDs.
  * If globalIdMap is provided, it will use and update it for cross-entry consistency.
  */
-export function remapContentIds(doc: TipTapDoc, globalIdMap: Map<string, string> = new Map()): { doc: TipTapDoc, idMap: Map<string, string> } {
-  if (!doc) return { doc, idMap: globalIdMap };
-
-  const resourceTypes = new Set(["image", "table", "codeBlock", "rawLatex"]);
+export function remapContentIds(doc: TipTapDoc | TipTapNode[], globalIdMap: Map<string, string> = new Map()): { doc: TipTapDoc | TipTapNode[], idMap: Map<string, string> } {
+  if (!doc) return { doc: doc as TipTapDoc, idMap: globalIdMap };
 
   // Pass 1: Collect and remap IDs for this doc specifically
   function collect(node: TipTapNode | TipTapNode[]) {
@@ -425,14 +469,16 @@ export function remapContentIds(doc: TipTapDoc, globalIdMap: Map<string, string>
 
     const newNode = { ...node };
 
-    // Update ID attribute
-    if (resourceTypes.has(node.type)) {
-      const oldId = node.attrs?.id as string | undefined;
-      if (oldId && globalIdMap.has(oldId)) {
+    // Update ID attribute if present
+    if (node.attrs?.id) {
+      const oldId = node.attrs.id as string;
+      if (globalIdMap.has(oldId)) {
         newNode.attrs = { ...node.attrs, id: globalIdMap.get(oldId) };
-      } else if (!oldId) {
-        // Assign fresh ID if missing
-        newNode.attrs = { ...node.attrs, id: generateUUID() };
+      } else {
+        // This shouldn't happen due to Pass 1, but for safety:
+        const newId = generateUUID();
+        globalIdMap.set(oldId, newId);
+        newNode.attrs = { ...node.attrs, id: newId };
       }
     }
 
@@ -440,28 +486,31 @@ export function remapContentIds(doc: TipTapDoc, globalIdMap: Map<string, string>
     if (Array.isArray(node.marks)) {
       newNode.marks = node.marks.map((mark: TipTapMark) => {
         if (mark.type === 'link') {
-          const { href = "", resourceId } = (mark.attrs || {}) as { href?: string, resourceId?: string };
+          const { href = "", resourceId, entryId } = (mark.attrs || {}) as { href?: string, resourceId?: string, entryId?: string };
+
+          const newAttrs = { ...mark.attrs } as Record<string, unknown>;
+          let changed = false;
 
           if (href.startsWith('#')) {
             const oldId = href.substring(1);
             if (globalIdMap.has(oldId)) {
-              return { 
-                ...mark, 
-                attrs: { 
-                  ...mark.attrs, 
-                  href: `#${globalIdMap.get(oldId)}`,
-                  resourceId: globalIdMap.get(oldId) 
-                } 
-              };
+              const newId = globalIdMap.get(oldId);
+              newAttrs.href = `#${newId}`;
+              newAttrs.resourceId = newId;
+              changed = true;
             }
           } else if (resourceId && globalIdMap.has(resourceId)) {
-            return { 
-              ...mark, 
-              attrs: { 
-                ...mark.attrs, 
-                resourceId: globalIdMap.get(resourceId) 
-              } 
-            };
+            newAttrs.resourceId = globalIdMap.get(resourceId);
+            changed = true;
+          }
+
+          if (entryId && globalIdMap.has(entryId)) {
+            newAttrs.entryId = globalIdMap.get(entryId);
+            changed = true;
+          }
+
+          if (changed) {
+            return { ...mark, attrs: newAttrs };
           }
         }
         return mark;
@@ -477,6 +526,54 @@ export function remapContentIds(doc: TipTapDoc, globalIdMap: Map<string, string>
   }
 
   return { doc: apply(doc) as TipTapNode, idMap: globalIdMap };
+}
+
+/**
+ * Replaces Base64 data URLs with hashed asset paths in Team Metadata.
+ */
+export async function dehydrateTeamAssets(team: TeamMetadata): Promise<{ cleanTeam: TeamMetadata; newAssets: { path: string; base64: string }[] }> {
+  const { hashContent, getExtensionFromDataUrl } = await import("./utils");
+  const assets: { path: string; base64: string }[] = [];
+
+  const cleanTeam = JSON.parse(JSON.stringify(team)) as TeamMetadata;
+
+  const processImg = async (src: string | undefined) => {
+    if (src?.startsWith("data:")) {
+      const base64 = src.split(",")[1]?.trim();
+      if (!base64) return src;
+      const hash = await hashContent(base64);
+      const ext = getExtensionFromDataUrl(src);
+      const assetPath = `${ASSETS_DIR}/${hash}.${ext}`;
+      assets.push({ path: assetPath, base64 });
+      return assetPath;
+    }
+    return src;
+  };
+
+  if (cleanTeam.logo) cleanTeam.logo = await processImg(cleanTeam.logo);
+  for (const member of cleanTeam.members) {
+    if (member.image) member.image = await processImg(member.image);
+  }
+
+  return { cleanTeam, newAssets: assets };
+}
+
+/**
+ * Replaces asset paths with data URLs from the cache in Team Metadata.
+ */
+export function hydrateTeamAssets(team: TeamMetadata, assetCache: Map<string, string>): TeamMetadata {
+  const hydrated = JSON.parse(JSON.stringify(team)) as TeamMetadata;
+  const processImg = (src: string | undefined) => {
+    if (src?.startsWith(`${ASSETS_DIR}/`)) {
+      return assetCache.get(src) || src;
+    }
+    return src;
+  };
+  if (hydrated.logo) hydrated.logo = processImg(hydrated.logo);
+  for (const member of hydrated.members) {
+    if (member.image) member.image = processImg(member.image);
+  }
+  return hydrated;
 }
 
 

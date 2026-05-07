@@ -12,7 +12,7 @@ import {
   Brain, PencilRuler, Hammer, SearchCheck, Goal, Terminal, Link as LinkIcon, Underline as UnderlineIcon,
   FileJson
 } from "lucide-react";
-import { generateUUID, hashContent, getExtensionFromDataUrl } from "@/lib/utils";
+import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng } from "@/lib/utils";
 import { generateEntryLatex } from "@/lib/latex";
 import AutocompleteInput from "./AutocompleteInput";
 import { extractResources, extractReferences, TipTapNode, NotebookMetadata } from "@/lib/metadata";
@@ -445,9 +445,18 @@ const Editor = React.memo(function Editor({
       if (file && editor) {
         const reader = new FileReader();
         reader.onload = async () => {
-          const dataUrl = reader.result as string;
-          const base64 = dataUrl.split(",")[1];
+          let dataUrl = reader.result as string;
 
+          // Auto-convert SVG to PNG for LaTeX compatibility
+          if (file.type === "image/svg+xml" || file.name.toLowerCase().endsWith(".svg")) {
+            try {
+              dataUrl = await convertSvgToPng(dataUrl);
+            } catch (e) {
+              console.error("SVG conversion failed", e);
+            }
+          }
+
+          const base64 = dataUrl.split(",")[1];
           const hash = await hashContent(base64);
           const ext = getExtensionFromDataUrl(dataUrl);
           const newPath = `${ASSETS_DIR}/${hash}.${ext}`;
@@ -464,12 +473,12 @@ const Editor = React.memo(function Editor({
           if (safePos !== null) {
             editor.chain().focus().insertContentAt(safePos, {
               type: "image",
-              attrs: { id: generateUUID(), src: dataUrl, filePath: newPath, title: author }
+              attrs: { id: generateUUID(), src: dataUrl, filePath: newPath, title: "" }
             }).run();
           } else {
             editor.chain().focus().insertContent({
               type: "image",
-              attrs: { id: generateUUID(), src: dataUrl, filePath: newPath, title: author }
+              attrs: { id: generateUUID(), src: dataUrl, filePath: newPath, title: "" }
             }).run();
           }
 
@@ -489,6 +498,7 @@ const Editor = React.memo(function Editor({
 
           {/* Row 1: Menu Bar */}
           <div className="px-4 h-10 flex items-center gap-2 border-b border-nb-outline-variant/30">
+
 
             <MenuItem label="File">
               <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} />
@@ -584,6 +594,15 @@ const Editor = React.memo(function Editor({
                 </div>
               )}
             </div>
+            
+            <button
+              onClick={onClose}
+              title="Close Entry"
+              className="p-1.5 ml-2 rounded-lg bg-nb-surface-low hover:bg-red-500/10 text-nb-on-surface-variant hover:text-red-500 transition-all border border-nb-outline-variant/30 hover:border-red-500/30 group cursor-pointer"
+            >
+              <X size={16} className="group-hover:scale-110 transition-transform" />
+            </button>
+
           </div>
 
           {/* Row 2: Metadata Row */}

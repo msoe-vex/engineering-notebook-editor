@@ -9,31 +9,31 @@ import {
 import { ExplorerFile } from "@/lib/types";
 import {
   stageChange, getAllPending, clearAllPending, PendingChange,
-  putResource, getResource,
+  putResource, getResource, removeResource,
   Project, getProjects, getProject, saveProject, deleteProject, getProjectHandle, saveProjectHandle, deleteProjectHandle, deleteProjectDatabase,
   getProjectDBName
 } from "@/lib/db";
 import {
   NotebookMetadata, EMPTY_METADATA, EntryMetadata, EntryWrapper,
   updateEntryInIndex, removeEntryFromMetadata,
-  dehydrateAssets, hydrateAssets, remapContentIds, isEntryValid, validateNotebookIntegrity
+  dehydrateAssets, hydrateAssets, remapContentIds, isEntryValid, validateNotebookIntegrity,
+  extractImagePaths, extractResources, extractReferences, TipTapNode, dehydrateTeamAssets, hydrateTeamAssets, TeamMetadata, TeamMember
 } from "@/lib/metadata";
 import Settings from "./Settings";
 import Editor from "./Editor";
 import Preview from "./Preview";
 import WelcomePage from "./WelcomePage";
 import Sidebar from "./Sidebar";
+import TeamEditor from "./TeamEditor";
 import ProjectHeader from "./ProjectHeader";
-import PendingChangesPanel from "./PendingChangesPanel";
 import ConfirmationDialog from "./ConfirmationDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { HardDrive, ArrowLeftRight, X, BookOpen } from "lucide-react";
+import { HardDrive, ArrowLeftRight, X, BookOpen, Download } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { saveAs } from "file-saver";
-import { generateUUID, hashContent } from "@/lib/utils";
-import { generateEntryLatex, generateAllEntriesLatex } from "@/lib/latex";
-import { extractImagePaths, extractResources, extractReferences, TipTapNode } from "@/lib/metadata";
-import { ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, INDEX_PATH, ALL_ENTRIES_PATH } from "@/lib/constants";
+import { generateUUID, hashContent, getMimeTypeFromExtension } from "@/lib/utils";
+import { generateEntryLatex, generateAllEntriesLatex, generateTeamLatex } from "@/lib/latex";
+import { ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, INDEX_PATH, ALL_ENTRIES_PATH, TEAM_PATH } from "@/lib/constants";
 import { useWorkspace, WorkspaceMode } from "@/hooks/useWorkspace";
 import { usePersistence } from "@/hooks/usePersistence";
 import { getLocalFileContent, writeLocalFile, ensureLocalDirectory } from "@/lib/fs";
@@ -133,6 +133,7 @@ export default function App() {
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
   const [isCommitting, setIsCommitting] = useState(false);
   const [savingPaths, setSavingPaths] = useState<Set<string>>(new Set());
+  const [isSaving, setIsSaving] = useState(false);
 
   const [isRenamingProject, setIsRenamingProject] = useState(false);
   const [projectRenameValue, setProjectRenameValue] = useState("");
@@ -142,6 +143,7 @@ export default function App() {
   const [isConnectingLocal, setIsConnectingLocal] = useState(false);
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
   const [activeWorkspaceMode, setActiveWorkspaceMode] = useState<WorkspaceMode>("none");
+  const [showTeamEditor, setShowTeamEditor] = useState(false);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [prevSync, setPrevSync] = useState({ mode: workspaceMode, init: isInitializing });
   
@@ -264,30 +266,47 @@ export default function App() {
   const editorPanelRef = useRef<ImperativePanelHandle>(null);
   const previewPanelRef = useRef<ImperativePanelHandle>(null);
   const sidebarPanelRef = useRef<ImperativePanelHandle>(null);
+  const isToggleFromButton = useRef(false);
   const importEntryInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!sidebarPanelRef.current || isMobile) return;
     if (isSidebarOpen) {
-      sidebarPanelRef.current.expand();
+      if (isToggleFromButton.current) {
+        sidebarPanelRef.current.expand();
+        sidebarPanelRef.current.resize(20);
+      } else {
+        sidebarPanelRef.current.expand();
+      }
     } else {
       sidebarPanelRef.current.collapse();
     }
+    isToggleFromButton.current = false;
   }, [isSidebarOpen, isMobile]);
 
   useEffect(() => {
     if (!editorPanelRef.current || !previewPanelRef.current) return;
-    if (desktopViewMode === "editor") {
-      editorPanelRef.current.expand();
-      previewPanelRef.current.collapse();
-    } else if (desktopViewMode === "preview") {
-      editorPanelRef.current.collapse();
-      previewPanelRef.current.expand();
+    if (isMobile) {
+      if (mobileTab === "editor") {
+        editorPanelRef.current.expand();
+        previewPanelRef.current.collapse();
+      } else {
+        editorPanelRef.current.collapse();
+        previewPanelRef.current.expand();
+      }
     } else {
-      editorPanelRef.current.resize(50);
-      previewPanelRef.current.resize(50);
+      if (desktopViewMode === "editor") {
+        editorPanelRef.current.expand();
+        previewPanelRef.current.collapse();
+      } else if (desktopViewMode === "preview") {
+        editorPanelRef.current.collapse();
+        previewPanelRef.current.expand();
+      } else {
+        editorPanelRef.current.resize(50);
+        previewPanelRef.current.resize(50);
+      }
     }
-  }, [desktopViewMode]);
+  }, [isMobile, mobileTab, desktopViewMode]);
 
   const isExchangingCode = useRef(false);
   const [isExchangingGithubCode, setIsExchangingGithubCode] = useState(() => {
@@ -373,6 +392,18 @@ export default function App() {
     setPendingChanges(all);
   }, [getDBName]);
 
+  const performGarbageCollection = useCallback(async (oldMeta: NotebookMetadata, newMeta: NotebookMetadata) => {
+    const oldRefs = oldMeta.assetRefs || {};
+    const newRefs = newMeta.assetRefs || {};
+
+    for (const assetPath of Object.keys(oldRefs)) {
+      if (!newRefs[assetPath]) {
+        await deleteFile(assetPath, "Garbage collection (orphaned asset)");
+        await removeResource(getDBName(), assetPath);
+      }
+    }
+  }, [deleteFile, getDBName]);
+
   const handleContentChange = useCallback(async (changedPath: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string }) => {
     setLatexContent(latex);
     const entryId = changedPath.split('/').pop()?.replace('.json', '') || "";
@@ -400,6 +431,7 @@ export default function App() {
     const contentObj = parseContent(tiptapContent);
     const resources = (contentObj && typeof contentObj === 'object') ? extractResources(contentObj) : {};
     const references = (contentObj && typeof contentObj === 'object') ? extractReferences(contentObj) : [];
+    const assets = (contentObj && typeof contentObj === 'object') ? extractImagePaths(contentObj as TipTapNode) : [];
 
     if (info.author) localStorage.setItem("nb-last-author", info.author);
 
@@ -424,7 +456,7 @@ export default function App() {
         const assetPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${asset.path}` : asset.path;
         await uploadResource(assetPath, asset.base64, `Asset: ${asset.path.split('/').pop()}`);
         if (workspaceMode === "github") {
-          await putResource(getDBName(), { path: assetPath, dataUrl: `data:image/*;base64,${asset.base64}` });
+          await putResource(getDBName(), { path: assetPath, dataUrl: `data:${getMimeTypeFromExtension(assetPath)};base64,${asset.base64}` });
         }
       }
 
@@ -457,10 +489,11 @@ export default function App() {
           title: existingEntry?.title ?? info.title,
           author: existingEntry?.author ?? info.author,
           phase: existingEntry?.phase ?? info.phase,
-          // Content-derived fields from this save
+           // Content-derived fields from this save
           updatedAt: isoTimestamp(),
           resources,
           references,
+          assets,
         };
         const updated = {
           ...prev,
@@ -471,12 +504,15 @@ export default function App() {
           const p = projects.find(pr => pr.id === currentProjectId);
           if (p) updated.projectName = p.name;
         }
-        finalMeta = updated;
-        return updated;
+        finalMeta = validateNotebookIntegrity(updated);
+        return finalMeta;
       });
 
-      if (finalMeta) await saveMetadata(finalMeta, "Auto-save metadata");
-      if (workspaceMode === "github") refreshPending();
+      if (finalMeta) {
+        await performGarbageCollection(notebookMetadataRef.current, finalMeta);
+        await saveMetadata(finalMeta, "Auto-save metadata");
+        if (workspaceMode === "github") refreshPending();
+      }
     } finally {
       setSavingPaths(prev => {
         const next = new Set(prev);
@@ -484,7 +520,7 @@ export default function App() {
         return next;
       });
     }
-  }, [workspaceMode, currentProjectId, projects, config, getGitBasePrefix, currentLatexDir, saveEntry, saveMetadata, uploadResource, refreshPending, setNotebookMetadata, getDBName]);
+  }, [workspaceMode, currentProjectId, projects, config, getGitBasePrefix, currentLatexDir, saveEntry, saveMetadata, uploadResource, refreshPending, setNotebookMetadata, getDBName, performGarbageCollection]);
 
   const handleMetadataChange = useCallback(async (entryId: string, updates: Partial<EntryMetadata>) => {
     let finalMeta: NotebookMetadata | null = null;
@@ -552,8 +588,8 @@ export default function App() {
   const handleOpenEntry = useCallback(async (file: ExplorerFile, silent: boolean = false, initialContent?: string, initialLatex?: string) => {
     setIsLoading(true);
     setIsInitializing(true);
-    if (isMobile) setUserSidebarPreference(false);
     setMobileTab("editor");
+    setShowTeamEditor(false);
 
     try {
       const dbName = getDBName();
@@ -647,7 +683,7 @@ export default function App() {
       setIsLoading(false);
       setIsInitializing(false);
     }
-  }, [getDBName, workspaceMode, dirHandle, config, getGitBasePrefix, currentLatexDir, isMobile, notify, setIsLoading, setUserSidebarPreference, setMobileTab, setLatexContent]);
+  }, [getDBName, workspaceMode, dirHandle, config, getGitBasePrefix, currentLatexDir, notify, setIsLoading, setMobileTab, setLatexContent]);
 
   const handleNewEntry = useCallback(async () => {
     setIsLoading(true);
@@ -765,13 +801,30 @@ export default function App() {
     }
   }, [config, dirHandle, getDBName, getGitBasePrefix, notebookMetadata, workspaceMode, notify]);
 
-  const handleDownloadMulti = useCallback(async (files: ExplorerFile[]) => {
+  const handleDownloadMulti = useCallback(async (files: ExplorerFile[], includeTeam = false) => {
     try {
       setIsLoading(true);
       setIsInitializing(true);
       const dbName = getDBName();
       const entriesMap: Record<string, EntryMetadata & { content: TipTapNode }> = {};
       const allAssets: Record<string, string> = {};
+
+      const fetchAsset = async (imgPath: string) => {
+        if (allAssets[imgPath]) return;
+        const actualPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${imgPath}` : imgPath;
+        const stagedRes = (await getAllPending(dbName)).find(p => p.path === actualPath && p.operation === "upsert");
+        if (stagedRes?.content) allAssets[imgPath] = stagedRes.content;
+        else {
+          const cached = await getResource(dbName, actualPath);
+          if (cached) allAssets[imgPath] = cached;
+          else if (workspaceMode === "local" && dirHandle) {
+            try {
+              const res = await getLocalFileContent(dirHandle, imgPath);
+              if (res.base64) allAssets[imgPath] = res.base64;
+            } catch { /* ignore */ }
+          }
+        }
+      };
 
       for (const file of files) {
         const entryId = file.name.replace('.json', '');
@@ -787,28 +840,34 @@ export default function App() {
         const content = rawData.content || rawData;
 
         const images = extractImagePaths(content);
-        for (const imgPath of images) {
-          const actualPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${imgPath}` : imgPath;
-          const stagedRes = (await getAllPending(dbName)).find(p => p.path === actualPath && p.operation === "upsert");
-          if (stagedRes?.content) allAssets[imgPath] = stagedRes.content;
-          else {
-            const cached = await getResource(dbName, actualPath);
-            if (cached) allAssets[imgPath] = cached;
-          }
-        }
+        for (const imgPath of images) await fetchAsset(imgPath);
         entriesMap[entryId] = { ...meta, content };
       }
 
-      const portable = { version: 3, entries: entriesMap, assets: allAssets };
+      const portable: Record<string, unknown> = { version: 3, entries: entriesMap, assets: allAssets };
+      if (includeTeam && notebookMetadata.team) {
+        portable.team = notebookMetadata.team;
+        const teamImages: string[] = [];
+        if (notebookMetadata.team.logo) teamImages.push(notebookMetadata.team.logo);
+        notebookMetadata.team.members.forEach(m => { if (m.image) teamImages.push(m.image); });
+        for (const imgPath of teamImages) await fetchAsset(imgPath);
+      }
+
       const blob = new Blob([JSON.stringify(portable, null, 2)], { type: "application/json" });
-      saveAs(blob, `notebook_export_${isoTimestamp().replace(/[:.]/g, '-')}.json`);
-      notify(`Exported ${Object.keys(entriesMap).length} entries.`, "success");
-    } catch {
-      notify("Failed to export entries.", "error");
+      const exportName = includeTeam ? `notebook_full_export_${isoTimestamp().replace(/[:.]/g, '-')}.json` : `notebook_export_${isoTimestamp().replace(/[:.]/g, '-')}.json`;
+      saveAs(blob, exportName);
+      notify(includeTeam ? "Notebook exported successfully." : `Exported ${Object.keys(entriesMap).length} entries.`, "success");
+    } catch (e) {
+      console.error(e);
+      notify("Export failed.", "error");
     } finally {
       setIsLoading(false);
     }
   }, [config, dirHandle, getDBName, getGitBasePrefix, notebookMetadata, workspaceMode, notify, setIsLoading]);
+
+  const handleExportNotebook = useCallback(async () => {
+    await handleDownloadMulti(entries, true);
+  }, [entries, handleDownloadMulti]);
 
   const handleDeleteMulti = useCallback(async (files: ExplorerFile[]) => {
     setConfirmDialog({
@@ -999,14 +1058,40 @@ export default function App() {
       const entryList = Object.values(entriesToImport) as (EntryMetadata & { content: TipTapNode })[];
 
       const globalIdMap = new Map<string, string>();
-      // Pre-populate global map with new IDs for all entries being imported
+
+      const scanForIds = (node: unknown) => {
+        if (!node || typeof node !== "object") return;
+        if (Array.isArray(node)) {
+          node.forEach(scanForIds);
+          return;
+        }
+        const n = node as Record<string, unknown>;
+        if (n.attrs && typeof n.attrs === "object") {
+          const attrs = n.attrs as Record<string, unknown>;
+          if (attrs.id) {
+            const oldId = attrs.id as string;
+            if (!globalIdMap.has(oldId)) globalIdMap.set(oldId, generateUUID());
+          }
+        }
+        if (Array.isArray(n.content)) {
+          n.content.forEach(scanForIds);
+        }
+      };
+
+      // Pre-populate global map with new IDs for all entries AND their internal resources
       for (const item of entryList) {
-        const oldId = (item as { id?: string }).id;
-        if (oldId) globalIdMap.set(oldId, generateUUID());
+        const oldEntryId = (item as { id?: string }).id;
+        if (oldEntryId) {
+          if (!globalIdMap.has(oldEntryId)) globalIdMap.set(oldEntryId, generateUUID());
+        }
+        if (item.content) scanForIds(item.content);
       }
 
+      let currentMeta = notebookMetadataRef.current;
+      const newEntriesForExplorer: { name: string; path: string }[] = [];
+
       const importSingle = async (data: EntryMetadata & { content: TipTapNode }, globalAssets: Record<string, string> = {}) => {
-        if (data.content === undefined) return;
+        if (data.content === undefined) return null;
         const { content: originalContent, ...info } = data;
         const oldEntryId = info.id;
         const newId = globalIdMap.get(oldEntryId) || generateUUID();
@@ -1016,7 +1101,7 @@ export default function App() {
         const { doc: remappedDoc } = remapContentIds(originalContent, globalIdMap);
 
         // 2. Dehydrate assets (images)
-        const { cleanDoc, newAssets } = await dehydrateAssets(remappedDoc);
+        const { cleanDoc, newAssets } = await dehydrateAssets(remappedDoc as TipTapNode);
 
         // Match images from the document to provided assets in the export
         const images = extractImagePaths(cleanDoc);
@@ -1031,6 +1116,7 @@ export default function App() {
           ...info,
           id: newId,
           filename: path,
+          updatedAt: isoTimestamp(),
           // Remap references array
           references: (info.references || []).map((rId: string) => globalIdMap.get(rId) || rId),
           // Extract new resources map from remapped doc
@@ -1043,33 +1129,69 @@ export default function App() {
           await writeLocalFile(dirHandle, path, jsonStr);
           const latex = generateEntryLatex(JSON.stringify(cleanDoc), newEntryMeta.title, newEntryMeta.author, newEntryMeta.phase, newEntryMeta.createdAt, newId);
           await writeLocalFile(dirHandle, `${LATEX_DIR}/${newId}.tex`, latex);
-          const updatedMeta = updateEntryInIndex(notebookMetadataRef.current, newId, newEntryMeta);
-          setNotebookMetadata(updatedMeta);
-          const allEntriesLatex = generateAllEntriesLatex(updatedMeta);
-          await writeLocalFile(dirHandle, ALL_ENTRIES_PATH, allEntriesLatex);
         } else {
           const dbName = getDBName();
           for (const asset of newAssets) {
             const actualPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${asset.path}` : asset.path;
             await stageChange(dbName, { path: actualPath, operation: "upsert", content: asset.base64, label: `Import asset`, stagedAt: isoTimestamp() });
-            await putResource(dbName, { path: actualPath, dataUrl: asset.base64.startsWith('data:') ? asset.base64 : `data:image/*;base64,${asset.base64}` });
+            await putResource(dbName, { path: actualPath, dataUrl: asset.base64.startsWith('data:') ? asset.base64 : `data:${getMimeTypeFromExtension(actualPath)};base64,${asset.base64}` });
           }
           await stage({ path, content: jsonStr, operation: "upsert", label: "Import entry" });
           const latex = generateEntryLatex(JSON.stringify(cleanDoc), newEntryMeta.title, newEntryMeta.author, newEntryMeta.phase, newEntryMeta.createdAt, newId);
           await stage({ path: `${currentLatexDir}/${newId}.tex`, content: latex, operation: "upsert", label: "Import LaTeX" });
-          const updatedMeta = updateEntryInIndex(notebookMetadataRef.current, newId, newEntryMeta);
-          await stage({ path: currentIndexPath, content: JSON.stringify(updatedMeta, null, 2), operation: "upsert", label: "Update index" });
-          const allEntriesLatex = generateAllEntriesLatex(updatedMeta);
-          await stage({ path: currentAllEntriesPath, content: allEntriesLatex, operation: "upsert", label: "Update all_entries.tex" });
-          setNotebookMetadata(updatedMeta);
         }
+
+        return { id: newId, meta: newEntryMeta, filename: `${newId}.json`, path };
       };
 
       if (entryList.length > 0) {
-        for (const item of entryList) await importSingle(item, assetsToImport);
-        notify(`Imported ${entryList.length} entries.`, "success");
-      } else {
-        notify("No entries found in file.", "error");
+        for (const item of entryList) {
+          const result = await importSingle(item, assetsToImport);
+          if (result) {
+            currentMeta = updateEntryInIndex(currentMeta, result.id, result.meta);
+            newEntriesForExplorer.push({ name: result.filename, path: result.path });
+          }
+        }
+        setEntries(prev => [...newEntriesForExplorer, ...prev]);
+        notify(`Imported ${newEntriesForExplorer.length} entries.`, "success");
+      }
+
+      // ── Handle Team Import ──────────────────────────────────────────────────
+      if (rawData.team) {
+        const teamData = rawData.team as TeamMetadata;
+        const teamImages: string[] = [];
+        if (teamData.logo) teamImages.push(teamData.logo);
+        teamData.members.forEach((m: TeamMember) => { if (m.image) teamImages.push(m.image); });
+
+        const dbName = getDBName();
+        for (const imgPath of teamImages) {
+          if (assetsToImport[imgPath]) {
+            const actualPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${imgPath}` : imgPath;
+            const content = assetsToImport[imgPath];
+            if (workspaceMode === "local" && dirHandle) {
+              await writeLocalFile(dirHandle, imgPath, content, true);
+            } else {
+              await stageChange(dbName, { path: actualPath, operation: "upsert", content, label: `Import team asset`, stagedAt: isoTimestamp() });
+              await putResource(dbName, { path: actualPath, dataUrl: content.startsWith('data:') ? content : `data:${getMimeTypeFromExtension(actualPath)};base64,${content}` });
+            }
+          }
+        }
+        // This will update notebookMetadata state and save everything including the new entries
+        await handleSaveTeam(teamData, currentMeta);
+      } else if (entryList.length > 0) {
+        // Only entries were imported, save them now
+        setNotebookMetadata(currentMeta);
+        const allEntriesLatex = generateAllEntriesLatex(currentMeta);
+
+        if (workspaceMode === "local" && dirHandle) {
+          await writeLocalFile(dirHandle, INDEX_PATH, JSON.stringify(currentMeta, null, 2));
+          await writeLocalFile(dirHandle, ALL_ENTRIES_PATH, allEntriesLatex);
+        } else {
+          await stage({ path: currentIndexPath, content: JSON.stringify(currentMeta, null, 2), operation: "upsert", label: "Update index" });
+          await stage({ path: currentAllEntriesPath, content: allEntriesLatex, operation: "upsert", label: "Update all_entries.tex" });
+        }
+      } else if (!rawData.team && entryList.length === 0) {
+        notify("No valid data found in file.", "error");
       }
 
       if (workspaceMode === "local") await loadLocalExplorer();
@@ -1085,10 +1207,114 @@ export default function App() {
     }
   };
 
+  const deriveProjectDates = useCallback((metadata: NotebookMetadata) => {
+    const entries = Object.values(metadata.entries);
+    if (entries.length === 0) return { startDate: "TBD", endDate: "TBD" };
+    
+    const sorted = [...entries].sort((a, b) => 
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+    
+    const fmt = (iso: string) => {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return "Unknown";
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      return `${months[d.getMonth()]} ${d.getFullYear()}`;
+    };
+    
+    return {
+      startDate: fmt(sorted[0].createdAt),
+      endDate: fmt(sorted[sorted.length - 1].createdAt)
+    };
+  }, []);
+
+  const [hydratedTeam, setHydratedTeam] = useState<TeamMetadata | null>(null);
+
+  const handleOpenTeamEditor = async () => {
+    if (!notebookMetadata.team) {
+      setHydratedTeam(EMPTY_METADATA.team!);
+    } else {
+      setIsLoading(true);
+      try {
+        const dbName = getDBName();
+        const assetCache = new Map<string, string>();
+        const images: string[] = [];
+        if (notebookMetadata.team.logo) images.push(notebookMetadata.team.logo);
+        notebookMetadata.team.members.forEach(m => { if (m.image) images.push(m.image); });
+
+        for (const imgPath of images) {
+          if (imgPath && !imgPath.startsWith("data:")) {
+            const cached = await getResource(dbName, imgPath);
+            if (cached) assetCache.set(imgPath, cached);
+            else if (workspaceMode === "local" && dirHandle) {
+              try {
+                const res = await getLocalFileContent(dirHandle, imgPath);
+                if (res.base64) {
+                   const dataUrl = res.base64.startsWith('data:') ? res.base64 : `data:${getMimeTypeFromExtension(imgPath)};base64,${res.base64}`;
+                   assetCache.set(imgPath, dataUrl);
+                }
+              } catch (e) { console.error("Failed to load local team asset", imgPath, e); }
+            }
+          }
+        }
+        setHydratedTeam(hydrateTeamAssets(notebookMetadata.team, assetCache));
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    setShowTeamEditor(true);
+  };
+
+  const handleSaveTeam = async (team: TeamMetadata, baseMetadata?: NotebookMetadata) => {
+    setIsSaving(true);
+    try {
+      const dbName = getDBName();
+      
+      // 1. Dehydrate assets
+      const { cleanTeam, newAssets } = await dehydrateTeamAssets(team);
+      
+      // 2. Save assets to local/github
+      for (const asset of newAssets) {
+        const actualPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${asset.path}` : asset.path;
+        if (workspaceMode === "local" && dirHandle) {
+          await writeLocalFile(dirHandle, asset.path, asset.base64, true);
+        } else {
+          await stageChange(dbName, { path: actualPath, operation: "upsert", content: asset.base64, label: `Team asset`, stagedAt: isoTimestamp() });
+          await putResource(dbName, { path: actualPath, dataUrl: asset.base64.startsWith('data:') ? asset.base64 : `data:image/*;base64,${asset.base64}` });
+        }
+      }
+
+      // 3. Update notebook.json
+      const metaToUse = baseMetadata || notebookMetadata;
+      const updatedMeta = validateNotebookIntegrity({ ...metaToUse, team: cleanTeam });
+      await performGarbageCollection(metaToUse, updatedMeta);
+      setNotebookMetadata(updatedMeta);
+      await saveMetadata(updatedMeta, "Update team metadata");
+
+      // 4. Generate and save team.tex
+      const { startDate, endDate } = deriveProjectDates(updatedMeta);
+      const teamLatex = generateTeamLatex({ ...cleanTeam, startDate, endDate });
+      const teamPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${TEAM_PATH}` : TEAM_PATH;
+      
+      if (workspaceMode === "local" && dirHandle) {
+        await writeLocalFile(dirHandle, TEAM_PATH, teamLatex);
+      } else {
+        await stage({ path: teamPath, content: teamLatex, operation: "upsert", label: "Update team.tex" });
+      }
+
+      if (workspaceMode === "github") refreshPending();
+    } catch (e) {
+      console.error(e);
+      notify("Failed to save team information.", "error");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleImageUploaded = async (imagePath: string, base64: string) => {
     const dbName = getDBName();
     const actualImgPath = workspaceMode === "github" && config?.baseDir ? `${getGitBasePrefix()}${imagePath}` : imagePath;
-    await putResource(dbName, { path: actualImgPath, dataUrl: `data:image/*;base64,${base64}` });
+    await putResource(dbName, { path: actualImgPath, dataUrl: `data:${getMimeTypeFromExtension(actualImgPath)};base64,${base64}` });
     await uploadResource(actualImgPath, base64, "Image upload");
     if (workspaceMode === "github") refreshPending();
   };
@@ -1098,7 +1324,8 @@ export default function App() {
     setIsLoading(true);
     try {
       const entryId = file.path.split('/').pop()?.replace('.json', '') || "";
-      const updatedMeta = removeEntryFromMetadata(notebookMetadata, entryId);
+      const updatedMeta = validateNotebookIntegrity(removeEntryFromMetadata(notebookMetadata, entryId));
+      await performGarbageCollection(notebookMetadata, updatedMeta);
       setNotebookMetadata(updatedMeta);
       await deleteFile(file.path, "Entry deleted");
       await deleteFile(`${currentLatexDir}/${entryId}.tex`, "LaTeX deleted");
@@ -1302,11 +1529,12 @@ export default function App() {
         </div>
         <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-nb-on-surface truncate">Notebook</p></div>
         <div className="flex items-center gap-1">
+          <button onClick={handleExportNotebook} title="Export Entire Notebook" className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors"><Download size={16} /></button>
           <button onClick={handleDisconnect} title="Switch Workspace" className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors"><ArrowLeftRight size={16} /></button>
           {isMobile && <button onClick={() => setUserSidebarPreference(false)} className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant transition-colors"><X size={18} /></button>}
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-hidden flex flex-col min-h-0">
         <Sidebar
           entries={entries}
           openFile={openFile}
@@ -1322,17 +1550,12 @@ export default function App() {
           onDownloadMulti={handleDownloadMulti}
           onDeleteMulti={handleDeleteMulti}
           onNewEntry={handleNewEntry}
+          onOpenTeam={handleOpenTeamEditor}
+          isCommitting={isCommitting}
+          onCommit={handleCommitAll}
+          onDiscard={handleDiscardAll}
+          workspaceMode={workspaceMode as "github" | "local" | "temporary"}
         />
-      </div>
-      <div className="p-4 bg-nb-surface border-t border-nb-outline-variant">
-        <PendingChangesPanel pendingChanges={pendingChanges} isCommitting={isCommitting} onCommit={handleCommitAll} onDiscard={handleDiscardAll} workspaceMode={workspaceMode} />
-        <div className="flex items-center justify-between mt-2">
-          <div className="flex items-center gap-2">
-            <div className={`w-1.5 h-1.5 rounded-full ${isLoading ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`} />
-            <span className="text-[9px] font-bold tracking-widest text-nb-on-surface-variant uppercase">{isLoading ? 'Syncing' : 'Connected'}</span>
-          </div>
-          <span className="text-[9px] font-mono text-nb-on-surface-variant/40 truncate max-w-[120px]">{workspaceLabel}</span>
-        </div>
       </div>
     </div>
   );
@@ -1342,7 +1565,7 @@ export default function App() {
       <ProjectHeader
         currentProject={currentProject || (currentProjectId === "temporary" ? { id: "temporary", name: "Temporary Workspace" } : null)}
         isSidebarOpen={isSidebarOpen}
-        onToggleSidebar={() => setUserSidebarPreference(!isSidebarOpen)}
+        onToggleSidebar={() => { isToggleFromButton.current = true; setUserSidebarPreference(!isSidebarOpen); }}
         isMobile={isMobile}
         mobileTab={mobileTab}
         onSetMobileTab={setMobileTab}
@@ -1374,48 +1597,64 @@ export default function App() {
           </div>
         )}
 
-        {openFile === null ? (
+        {(!openFile && !showTeamEditor) ? (
           !isConnectingLocal && (
-            <WelcomePage workspace={{ mode: workspaceMode as "local" | "github" | "temporary", label: workspaceLabel }} onNewEntry={handleNewEntry} onImportEntry={() => importEntryInputRef.current?.click()} onDisconnect={handleDisconnect} onOpenSidebar={() => setUserSidebarPreference(true)} />
+            <WelcomePage 
+              workspace={{ mode: workspaceMode as "local" | "github" | "temporary", label: workspaceLabel }} 
+              onNewEntry={handleNewEntry} 
+              onImportEntry={() => importEntryInputRef.current?.click()} 
+              onDisconnect={handleDisconnect} 
+              onOpenSidebar={() => { isToggleFromButton.current = true; setUserSidebarPreference(true); }} 
+              onOpenTeam={handleOpenTeamEditor}
+            />
           )
+        ) : showTeamEditor && hydratedTeam ? (
+          <TeamEditor
+            initialData={hydratedTeam}
+            onSave={handleSaveTeam}
+            onClose={() => setShowTeamEditor(false)}
+            isSaving={isSaving}
+          />
         ) : (
           <PanelGroup direction="horizontal" className="h-full" id="editor-preview-group">
             <Panel
-              id="editor-panel" order={1} ref={editorPanelRef} collapsible={true} minSize={30}
-              defaultSize={desktopViewMode === "editor" ? 100 : (desktopViewMode === "preview" ? 0 : 50)}
-              onCollapse={() => { if (desktopViewMode !== "preview") setDesktopViewMode("preview"); }}
-              onExpand={() => { if (desktopViewMode === "preview") setDesktopViewMode("split"); }}
-              className={`flex flex-col h-full transition-all duration-300 ease-out ${desktopViewMode === "preview" ? "opacity-0 pointer-events-none" : "opacity-100"}`}
+              id="editor-panel" order={1} ref={editorPanelRef} collapsible={true} minSize={isMobile ? 0 : 30}
+              defaultSize={isMobile ? (mobileTab === "editor" ? 100 : 0) : (desktopViewMode === "editor" ? 100 : (desktopViewMode === "preview" ? 0 : 50))}
+              onCollapse={() => { if (!isMobile && desktopViewMode !== "preview") setDesktopViewMode("preview"); }}
+              onExpand={() => { if (!isMobile && desktopViewMode === "preview") setDesktopViewMode("split"); }}
+              className={`flex flex-col h-full transition-all duration-300 ease-out ${(isMobile ? mobileTab === "preview" : desktopViewMode === "preview") ? "opacity-0 pointer-events-none" : "opacity-100"}`}
             >
-              <Editor
-                key={openFile.path} config={appConfig} isLocalMode={workspaceMode !== "github"}
-                initialTitle={openFile.title} initialAuthor={openFile.author} initialPhase={openFile.phase}
-                initialCreatedAt={openFile.createdAt} initialUpdatedAt={openFile.updatedAt} initialContent={openFile.tiptapContent}
-                metadataMissing={openFile.metadataMissing} isValid={notebookMetadata.entries[openFile.id]?.isValid}
-                onValidationChange={handleValidationChange} filename={openFile.path}
-                onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
-                onContentChange={handleContentChange}
-                onTitleChange={(title) => handleMetadataChange(openFile.id, { title })}
-                onAuthorChange={(author) => handleMetadataChange(openFile.id, { author })}
-                onPhaseChange={(phase) => handleMetadataChange(openFile.id, { phase })}
-                onImageUpload={handleImageUploaded} onDownloadPortable={handleDownloadPortable}
-                onClose={() => {
-                  const params = new URLSearchParams(window.location.search);
-                  params.delete('entry'); params.delete('resource');
-                  window.history.pushState({}, '', `?${params.toString()}`);
-                  window.dispatchEvent(new Event('locationchange'));
-                  setOpenFile(null);
-                }}
-                dbName={getDBName()} isSaving={savingPaths.has(openFile.path)} notebookMetadata={notebookMetadata} targetResourceId={targetResourceId}
-              />
+              {openFile && (
+                <Editor
+                  key={openFile.path} config={appConfig} isLocalMode={workspaceMode !== "github"}
+                  initialTitle={openFile.title} initialAuthor={openFile.author} initialPhase={openFile.phase}
+                  initialCreatedAt={openFile.createdAt} initialUpdatedAt={openFile.updatedAt} initialContent={openFile.tiptapContent}
+                  metadataMissing={openFile.metadataMissing} isValid={notebookMetadata.entries[openFile.id]?.isValid}
+                  onValidationChange={handleValidationChange} filename={openFile.path}
+                  onDeleted={(path) => handleDeleteEntry({ name: openFile.name, path })}
+                  onContentChange={handleContentChange}
+                  onTitleChange={(title) => handleMetadataChange(openFile.id, { title })}
+                  onAuthorChange={(author) => handleMetadataChange(openFile.id, { author })}
+                  onPhaseChange={(phase) => handleMetadataChange(openFile.id, { phase })}
+                  onImageUpload={handleImageUploaded} onDownloadPortable={handleDownloadPortable}
+                  onClose={() => {
+                    const params = new URLSearchParams(window.location.search);
+                    params.delete('entry'); params.delete('resource');
+                    window.history.pushState({}, '', `?${params.toString()}`);
+                    window.dispatchEvent(new Event('locationchange'));
+                    setOpenFile(null);
+                  }}
+                  dbName={getDBName()} isSaving={savingPaths.has(openFile.path)} notebookMetadata={notebookMetadata} targetResourceId={targetResourceId}
+                />
+              )}
             </Panel>
-            <PanelResizeHandle id="editor-preview-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${desktopViewMode !== 'split' ? 'hidden' : ''}`} />
+            <PanelResizeHandle id="editor-preview-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${(isMobile || desktopViewMode !== 'split') ? 'hidden' : ''}`} />
             <Panel
-              id="preview-panel" order={2} ref={previewPanelRef} collapsible={true} minSize={30}
-              defaultSize={desktopViewMode === "preview" ? 100 : (desktopViewMode === "editor" ? 0 : 50)}
-              onCollapse={() => { if (desktopViewMode !== "editor") setDesktopViewMode("editor"); }}
-              onExpand={() => { if (desktopViewMode === "editor") setDesktopViewMode("split"); }}
-              className={`flex flex-col h-full bg-nb-surface-low transition-all duration-300 ease-out ${desktopViewMode === "editor" ? "opacity-0 pointer-events-none" : "opacity-100"}`}
+              id="preview-panel" order={2} ref={previewPanelRef} collapsible={true} minSize={isMobile ? 0 : 30}
+              defaultSize={isMobile ? (mobileTab === "preview" ? 100 : 0) : (desktopViewMode === "preview" ? 100 : (desktopViewMode === "editor" ? 0 : 50))}
+              onCollapse={() => { if (!isMobile && desktopViewMode !== "editor") setDesktopViewMode("editor"); }}
+              onExpand={() => { if (!isMobile && desktopViewMode === "editor") setDesktopViewMode("split"); }}
+              className={`flex flex-col h-full bg-nb-surface-low transition-all duration-300 ease-out ${(isMobile ? mobileTab === "editor" : desktopViewMode === "editor") ? "opacity-0 pointer-events-none" : "opacity-100"}`}
             >
               <Preview latexContent={latexContent} />
             </Panel>
@@ -1447,14 +1686,14 @@ export default function App() {
         />
       ) : (
         isMobile ? (
-          <div className="flex w-full h-full relative">
-            <div className={`fixed inset-0 z-[150] transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+          <div className="flex w-full h-full relative overflow-hidden">
+            <div className="flex-1 w-full h-full">{main}</div>
+            <div className={`fixed inset-0 z-[500] transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
               <div className="absolute inset-0 bg-black/40" onClick={() => setUserSidebarPreference(false)} />
               <div className={`absolute top-0 bottom-0 left-0 w-[85%] max-w-[300px] bg-nb-surface-low border-r border-nb-outline-variant flex flex-col shadow-2xl transition-transform duration-300 ease-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 {sidebar}
               </div>
             </div>
-            <div className="flex-1 w-full h-full">{main}</div>
           </div>
         ) : (
           <PanelGroup direction="horizontal" className="w-full h-full" id="main-layout-group">
@@ -1463,7 +1702,7 @@ export default function App() {
               onCollapse={() => setUserSidebarPreference(false)} onExpand={() => setUserSidebarPreference(true)}
               className="flex flex-col transition-all duration-300 ease-out"
             >
-              <div className={`flex-1 flex flex-col transition-all duration-300 ease-out ${!isSidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+              <div className={`flex-1 flex flex-col min-h-0 transition-all duration-300 ease-out ${!isSidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                 {sidebar}
               </div>
             </Panel>

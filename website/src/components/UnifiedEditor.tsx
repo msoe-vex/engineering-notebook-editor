@@ -25,12 +25,18 @@ import {
 
 import { LinkReferencePopup } from "@/components/editor/LinkReferencePopup";
 
-import { generateUUID, hashContent, getExtensionFromDataUrl } from "@/lib/utils";
+import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng } from "@/lib/utils";
 import { ASSETS_DIR } from "@/lib/constants";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 
 
+
+import ListItem from "@tiptap/extension-list-item";
+
+const RestrictedListItem = ListItem.extend({
+  content: "paragraph+",
+});
 
 /* ─────────────────────────────────────────────────────────────────
    Main Component
@@ -52,7 +58,7 @@ interface UnifiedEditorProps {
 
 
 export default function UnifiedEditor({
-  content, onChange, onImageUpload, author, filename, dbName = "notebook-pending", onEditorInit, notebookMetadata, onToggleLink, targetResourceId, entryId
+  content, onChange, onImageUpload, filename, dbName = "notebook-pending", onEditorInit, notebookMetadata, onToggleLink, targetResourceId, entryId
 }: UnifiedEditorProps) {
   const parseContent = (raw: string | import("@/lib/metadata").TipTapNode) => {
     if (!raw) return "";
@@ -65,9 +71,18 @@ export default function UnifiedEditor({
   const handleImageFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = async () => {
-      const dataUrl = reader.result as string;
-      const base64 = dataUrl.split(",")[1];
+      let dataUrl = reader.result as string;
 
+      // Auto-convert SVG to PNG for LaTeX compatibility
+      if (file.type === "image/svg+xml" || file.name.toLowerCase().endsWith(".svg")) {
+        try {
+          dataUrl = await convertSvgToPng(dataUrl);
+        } catch (e) {
+          console.error("SVG conversion failed", e);
+        }
+      }
+
+      const base64 = dataUrl.split(",")[1];
       const hash = await hashContent(base64);
       const ext = getExtensionFromDataUrl(dataUrl);
       const newPath = `${ASSETS_DIR}/${hash}.${ext}`;
@@ -81,7 +96,7 @@ export default function UnifiedEditor({
         id: generateUUID(),
         src: dataUrl, // Keep dataUrl for immediate preview
         alt: "",
-        title: author ?? "",
+        title: "",
         filePath: newPath,
       };
 
@@ -127,11 +142,13 @@ export default function UnifiedEditor({
         codeBlock: false,
         link: false,
         underline: false,
+        listItem: false,
         dropcursor: {
           color: '#d9282f',
           width: 3,
         }
       }),
+      RestrictedListItem,
       ImageWithCaption.configure({ inline: false, allowBase64: true, dbName }),
       TableWithCaption.configure({ resizable: true }),
       TableRow,
@@ -154,7 +171,10 @@ export default function UnifiedEditor({
         },
       }),
       Placeholder.configure({
-        placeholder: "Start writing...",
+        placeholder: ({ node }) => {
+          if (node.type.name === 'codeBlock') return ""; 
+          return "Start writing...";
+        },
       }),
       IdRemapper,
     ],

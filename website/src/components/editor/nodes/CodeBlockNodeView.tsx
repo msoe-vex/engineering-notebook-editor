@@ -65,7 +65,7 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
       </div>
 
       <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${active ? 'ring-2 ring-nb-primary/50' : ''}`}>
-        <div className="flex items-center justify-between px-4 py-2 bg-nb-surface-low/50 border-b border-nb-outline-variant/10">
+        <div contentEditable={false} className="flex items-center justify-between px-4 py-2 bg-nb-surface-low/80 border-b border-nb-outline-variant/10">
           <div className="flex-1 flex items-center gap-3">
             <div className="flex items-center gap-2 text-nb-primary shrink-0">
               <Code2 size={12} />
@@ -75,7 +75,7 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
               value={node.attrs.title || ""}
               onChange={(e) => updateAttributes({ title: e.target.value })}
               placeholder="Code Snippet Title..."
-              className="flex-1 bg-transparent border-none outline-none text-[10px] font-bold tracking-widest text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
+              className="flex-1 bg-transparent border-none outline-none text-[12px] font-bold tracking-wider text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
             />
             <div className="relative group/select shrink-0 ml-auto">
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-nb-surface-low border border-nb-outline-variant/50 hover:border-nb-primary/50 hover:bg-nb-surface transition-all cursor-pointer">
@@ -93,9 +93,19 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
             </div>
           </div>
         </div>
-        <pre spellCheck="false" className={`p-6 text-[12px] leading-[1.8] overflow-x-auto border-none m-0 text-nb-on-surface bg-transparent language-${node.attrs.language}`}>
-          <NodeViewContent as="div" className="font-mono" />
-        </pre>
+        <div className="flex flex-row items-stretch">
+          <div contentEditable={false} className="select-none text-right px-4 py-6 border-r border-nb-outline-variant/10 text-nb-on-surface-variant/20 font-mono text-[12px] leading-[1.8] bg-nb-surface-low/30 min-w-[56px] shrink-0">
+            {node.textContent.split('\n').map((_, i) => (
+              <div key={i} className="h-[1.8em]">{i + 1}</div>
+            ))}
+          </div>
+          <NodeViewContent
+            as="div"
+            spellCheck="false"
+            data-placeholder="Paste your code here..."
+            className={`flex-1 relative py-6 pl-3 pr-6 overflow-x-auto text-[12px] leading-[1.8] font-mono whitespace-pre language-${node.attrs.language} ${node.textContent.length === 0 ? 'is-empty' : ''}`}
+          />
+        </div>
 
         <div contentEditable={false} className="bg-nb-surface-low/30 border-t border-nb-outline-variant/10 px-4 py-2 flex items-center justify-center gap-2 group/caption">
           <input

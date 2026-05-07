@@ -3,7 +3,7 @@ import { NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer } from "@tiptap
 import { Table } from "@tiptap/extension-table";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
-import { GripVertical, Trash2, Table as TableIcon, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { GripVertical, Trash2, Table as TableIcon, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Rows3, Columns3 } from "lucide-react";
 
 import { NodeViewProps } from "./types";
 
@@ -66,12 +66,15 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
               value={node.attrs.title || ""}
               onChange={(e) => updateAttributes({ title: e.target.value })}
               placeholder="Table Title..."
-              className="bg-transparent border-none outline-none text-[10px] font-bold tracking-widest text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30 w-48"
+              className="bg-transparent border-none outline-none text-[12px] font-bold tracking-wider text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30 w-48"
             />
           </div>
 
           <div className={`flex items-center gap-0.5 shrink-0 transition-opacity duration-200 ${isCursorInside || isHoveringToolbar ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
             <div className="flex items-center bg-nb-surface border border-nb-outline-variant/30 p-0.5 rounded-lg shadow-sm">
+              <div className="px-1.5 text-nb-on-surface-variant/40 border-r border-nb-outline-variant/10 mr-0.5">
+                <Rows3 size={12} />
+              </div>
               <button
                 onMouseDown={(e) => { e.preventDefault(); }}
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); editor.chain().focus(undefined, { scrollIntoView: false }).addRowBefore().run(); }}
@@ -100,6 +103,9 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
             </div>
 
             <div className="flex items-center bg-nb-surface border border-nb-outline-variant/30 p-0.5 ml-1.5 rounded-lg shadow-sm">
+              <div className="px-1.5 text-nb-on-surface-variant/40 border-r border-nb-outline-variant/10 mr-0.5">
+                <Columns3 size={12} />
+              </div>
               <button
                 onMouseDown={(e) => { e.preventDefault(); }}
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); editor.chain().focus(undefined, { scrollIntoView: false }).addColumnBefore().run(); }}

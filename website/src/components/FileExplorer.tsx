@@ -192,7 +192,7 @@ export default function FileExplorer({
   const selectedEntries = entries.filter(e => selectedPaths.has(e.path));
 
   return (
-    <div className="flex flex-col h-full overflow-hidden" onClick={() => setContextMenu(null)}>
+    <div className="flex-1 flex flex-col overflow-hidden min-h-0" onClick={() => setContextMenu(null)}>
       {/* Search and Sort Header */}
       <div className="px-3 py-3 bg-nb-surface border-b border-nb-outline-variant space-y-3 shrink-0">
         <div className="relative group">
@@ -324,7 +324,7 @@ export default function FileExplorer({
           </div>
         </div>
       </div>
-
+      
       {/* Entries pane */}
       <Pane
         id="explorer-entries-pane"

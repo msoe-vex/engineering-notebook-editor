@@ -138,13 +138,18 @@ button:disabled {
   margin-bottom: 0.75rem;
 }
 
-.ProseMirror p.is-editor-empty:first-child::before {
+.ProseMirror *:is(.is-empty, .is-editor-empty)::before {
   color: var(--color-nb-on-surface-variant);
   content: attr(data-placeholder);
   float: left;
   height: 0;
   pointer-events: none;
   opacity: 0.4;
+}
+
+/* Hide duplicate placeholders on custom node wrappers */
+.ProseMirror [data-node-view-wrapper].is-empty::before {
+  display: none;
 }
 
 .ProseMirror u, 
@@ -244,7 +249,8 @@ button:disabled {
   position: absolute;
   content: "";
   left: 0; right: 0; top: 0; bottom: 0;
-  background: rgba(var(--color-nb-primary-rgb), 0.1);
+  background: var(--color-nb-primary);
+  opacity: 0.15;
   pointer-events: none;
 }
 
@@ -354,32 +360,37 @@ pre[class*="language-"],
 
 /* Tables */
 .ProseMirror table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   table-layout: auto;
   min-width: 100%;
   width: max-content;
-
-
-
-
-
   margin: 1rem 0;
   overflow: hidden;
-  border: 1.5px solid var(--color-nb-outline-variant);
-  border-radius: var(--nb-radius-sm);
+  border: 1px solid var(--color-nb-outline-variant);
+  border-radius: var(--nb-radius);
   font-size: 13px;
 }
 
 .ProseMirror table td,
 .ProseMirror table th {
   min-width: 120px;
-
-
-  border: 1px solid var(--color-nb-outline-variant);
+  border-right: 1px solid var(--color-nb-outline-variant);
+  border-bottom: 1px solid var(--color-nb-outline-variant);
   padding: 8px 12px;
   vertical-align: top;
   box-sizing: border-box;
   position: relative;
+}
+
+.ProseMirror table tr:last-child td,
+.ProseMirror table tr:last-child th {
+  border-bottom: none;
+}
+
+.ProseMirror table td:last-child,
+.ProseMirror table th:last-child {
+  border-right: none;
 }
 
 .ProseMirror table th {
