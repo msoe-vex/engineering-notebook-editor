@@ -232,11 +232,11 @@ export const generateTeamLatex = (team: TeamMetadata): string => {
     return s;
   };
 
-  let latex = `\\teamname{${escapeLaTeX(team.teamName)}}\n`;
-  latex += `\\teamnumber{${escapeLaTeX(team.teamNumber)}}\n`;
-  latex += `\\startdate{${escapeLaTeX(team.startDate)}}\n`;
-  latex += `\\projectenddate{${escapeLaTeX(team.endDate)}}\n`;
-  latex += `\\organization{${escapeLaTeX(team.organization)}}\n`;
+  let latex = `\\teamname{${escapeLaTeX(team.teamName || "")}}\n`;
+  latex += `\\teamnumber{${escapeLaTeX(team.teamNumber || "")}}\n`;
+  latex += `\\startdate{${escapeLaTeX(team.startDate || "")}}\n`;
+  latex += `\\projectenddate{${escapeLaTeX(team.endDate || "")}}\n`;
+  latex += `\\organization{${escapeLaTeX(team.organization || "")}}\n`;
   latex += `\\teamlogo{${cleanImg(team.logo)}}\n\n`;
 
   latex += `\\teammembers{\n`;
