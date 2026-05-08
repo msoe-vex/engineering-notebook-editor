@@ -611,6 +611,29 @@ class WorkspaceStore {
     return this.pendingChanges;
   }
 
+  setEntryValidity(id: string, isValid: boolean, validationErrors: string[] = []) {
+    const existingEntry = this.metadata.entries[id];
+    if (!existingEntry) return;
+
+    if (existingEntry.isValid === isValid && JSON.stringify(existingEntry.validationErrors || []) === JSON.stringify(validationErrors)) {
+      return;
+    }
+
+    this.metadata = {
+      ...this.metadata,
+      entries: {
+        ...this.metadata.entries,
+        [id]: {
+          ...existingEntry,
+          isValid,
+          validationErrors
+        }
+      }
+    };
+
+    this.notifyStateChange();
+  }
+
   async discardPendingChanges() {
     if (this.mode !== "github" && this.mode !== "temporary") {
       return;
