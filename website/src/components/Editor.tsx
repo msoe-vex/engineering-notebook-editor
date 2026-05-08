@@ -235,7 +235,7 @@ const Editor = React.memo(function Editor({
   // via the Store's updateEntry method.
   useEffect(() => {
     if (title !== lastSyncedRef.current.title || author !== lastSyncedRef.current.author || phase !== lastSyncedRef.current.phase) {
-       const contentStr = JSON.stringify(content);
+       const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
        const latex = generateLatex(content, title, author, phase);
        updateEntry(entryId, latex, contentStr, { title, author, phase });
        lastSyncedRef.current = { title, author, phase, contentStr };
@@ -249,7 +249,7 @@ const Editor = React.memo(function Editor({
   useEffect(() => {
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
 
-    const contentStr = JSON.stringify(content);
+    const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
     const isContentChanged = contentStr !== lastAutoSavedRef.current.contentStr;
     const isMetadataChanged = title !== lastAutoSavedRef.current.title ||
       author !== lastAutoSavedRef.current.author ||
