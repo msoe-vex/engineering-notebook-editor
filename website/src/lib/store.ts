@@ -301,6 +301,13 @@ class WorkspaceStore {
 
       events.emit(EventNames.PROJECT_LOADED, project);
       await this.refreshPending();
+
+      // Update last opened timestamp only if successfully opened
+      if (this.mode !== "none") {
+        project.lastOpened = new Date().toISOString();
+        await saveProject(project);
+        await this.refreshProjects();
+      }
     } finally {
       this.setLoading(false);
     }
