@@ -400,10 +400,13 @@ class WorkspaceStore {
     const actualIndexPath = `${basePrefix}${INDEX_PATH}`;
 
     const files = await fetchDirectoryTree(this.config, `${basePrefix}${ENTRIES_DIR}`);
-    const entryFiles = Array.isArray(files) ? files.map((f: GitHubFile) => ({ name: f.name, path: f.path })) : [];
+    const entryFiles = Array.isArray(files) ? files.map((f: GitHubFile) => ({ 
+      name: f.name, 
+      path: f.path.startsWith(basePrefix) ? f.path.slice(basePrefix.length) : f.path 
+    })) : [];
 
     const pending = await getAllPending(dbName);
-    const pendingMeta = pending.find(p => p.path === actualIndexPath && p.operation === "upsert");
+    const pendingMeta = pending.find(p => p.path === INDEX_PATH && p.operation === "upsert");
 
     if (pendingMeta?.content) {
       const parsed = JSON.parse(pendingMeta.content);
@@ -474,7 +477,7 @@ class WorkspaceStore {
           }
 
           // 4. Fetch from GitHub
-          const actualPath = `${basePrefix}${path}`;
+          const actualPath = this.getFullPath(path);
           console.log(`[Store] Fetching asset from GitHub: ${actualPath}`);
           const base64 = await fetchRawFileContent(this.config!, actualPath);
           const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${base64}`;
@@ -550,8 +553,8 @@ class WorkspaceStore {
       const images = extractImagePaths(content);
       for (const imgPath of images) {
         if (imgPath.startsWith('data:')) continue;
-        const actualImgPath = this.mode === "github" && this.config?.baseDir ? `${this.config.baseDir.endsWith('/') ? this.config.baseDir : this.config.baseDir + '/'}${imgPath}` : imgPath;
-        const staged = pending.find(p => p.path === actualImgPath && p.operation === "upsert");
+        const actualImgPath = this.getFullPath(imgPath);
+        const staged = pending.find(p => p.path === imgPath && p.operation === "upsert");
         if (staged?.content) {
           const dataUrl = staged.content.startsWith('data:') ? staged.content : `data:${getMimeTypeFromExtension(imgPath)};base64,${staged.content}`;
           assetCache.set(imgPath, dataUrl);
@@ -929,7 +932,7 @@ class WorkspaceStore {
         continue;
       }
 
-      gitChanges.push({ path: change.path, content: nextContent, isBinary });
+      gitChanges.push({ path: this.getFullPath(change.path), content: nextContent, isBinary });
     }
 
     if (gitChanges.length === 0) {
@@ -959,7 +962,7 @@ class WorkspaceStore {
         const res = await getLocalFileContent(this.dirHandle, path);
         return res.text || null;
       } else if (this.mode === "github" && this.config) {
-        return await fetchFileContent(this.config, path);
+        return await fetchFileContent(this.config, this.getFullPath(path));
       } else if (this.mode === "temporary") {
         // Temporary mode only exists in pending changes
         return null;
@@ -1165,7 +1168,7 @@ class WorkspaceStore {
         const res = await getLocalFileContent(this.dirHandle, path);
         return res.base64 ? res.base64.split(',')[1] : null;
       } else if (this.mode === "github" && this.config) {
-        return await fetchRawFileContent(this.config, path);
+        return await fetchRawFileContent(this.config, this.getFullPath(path));
       }
     } catch (e) {
       console.error(`Failed to get asset base64 for ${path}`, e);
@@ -1195,7 +1198,8 @@ class WorkspaceStore {
     }
 
     try {
-      return isBase64 ? await fetchRawFileContent(this.config, path) : await fetchFileContent(this.config, path);
+      const fullPath = this.getFullPath(path);
+      return isBase64 ? await fetchRawFileContent(this.config, fullPath) : await fetchFileContent(this.config, fullPath);
     } catch {
       return null;
     }
@@ -1292,6 +1296,15 @@ class WorkspaceStore {
     } finally {
       this.setLoading(false);
     }
+  }
+
+  private getFullPath(path: string): string {
+    if (this.mode !== "github" || !this.config) return path;
+    const baseDir = this.config.baseDir ? this.config.baseDir.replace(/^\/+|\/+$/g, '') : '';
+    if (!baseDir) return path;
+    const prefix = baseDir + '/';
+    if (path.startsWith(prefix)) return path;
+    return `${prefix}${path}`;
   }
 
 }
