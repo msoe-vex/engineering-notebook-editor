@@ -244,11 +244,7 @@ export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: strin
   }
 
   const dateStr = dateObj.toISOString().split('T')[0];
-  let latex = `\\notebookentry{${escapeLaTeX(t)}}{${dateStr}}{${escapeLaTeX(a)}}{${p ?? ""}}\n`;
-  if (id) {
-    latex += `\\label{${id}}\n`;
-  }
-  latex += `\n`;
+  let latex = `\\notebookentry{${escapeLaTeX(t)}}{${dateStr}}{${escapeLaTeX(a)}}{${p ?? ""}}{${id ?? ""}}\n\n`;
   latex += convertJsonToLatex(cnt, resolvedResourceTypes);
   return latex;
 };
