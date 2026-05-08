@@ -44,6 +44,7 @@ const Editor = React.memo(function Editor({
     updateEntry,
     deleteEntry,
     currentProjectId,
+    setEntryValidity,
     exportEntries
   } = useWorkspace();
 
@@ -135,9 +136,12 @@ const Editor = React.memo(function Editor({
     const valid = checkValidity();
     if (valid !== localIsValid) {
       setLocalIsValid(valid);
+      if (currentProjectId === "temporary") {
+        setEntryValidity(entryId, valid, valid ? [] : ["Incomplete metadata or resource captions"]);
+      }
       // We'll notify the parent in the debounced effect below to avoid flicker
     }
-  }, [title, author, phase, editor?.state.doc.content, checkValidity, localIsValid]);
+  }, [title, author, phase, editor?.state.doc.content, checkValidity, localIsValid, currentProjectId, entryId, setEntryValidity]);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -290,27 +294,6 @@ const Editor = React.memo(function Editor({
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
   }, [content, filename, title, author, phase]);
-
-  // Flush pending changes on unmount to prevent data loss on fast entry switch
-  useEffect(() => {
-    return () => {
-      const content = latestContentRef.current;
-      const { title, author, phase } = latestMetadataRef.current;
-
-      // Only flush if there's something to flush
-      const contentStr = JSON.stringify(content);
-      const isChanged =
-        title !== initialTitle ||
-        author !== initialAuthor ||
-        phase !== initialPhase ||
-        contentStr !== initialContent;
-
-      if (isChanged) {
-        const latex = generateLatexRef.current(content, title, author, phase);
-        updateEntry(entryId, latex, contentStr, { title, author, phase });
-      }
-    };
-  }, [filename, initialTitle, initialAuthor, initialPhase, initialContent]);
 
   const handleSave = useCallback(async () => {
     const { valid, errors } = validate();

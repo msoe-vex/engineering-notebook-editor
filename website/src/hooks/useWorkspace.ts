@@ -61,6 +61,7 @@ export function useWorkspace() {
   const createTemporaryProject = useCallback(() => store.createTemporaryProject(), []);
   const commitAll = useCallback((config: any) => store.commitAll(config), []);
   const refreshPending = useCallback(() => store.refreshPending(), []);
+  const setEntryValidity = useCallback((id: string, isValid: boolean, validationErrors?: string[]) => store.setEntryValidity(id, isValid, validationErrors), []);
   const discardPendingChanges = useCallback(() => store.discardPendingChanges(), []);
   const navigateTo = useCallback((params: any, path?: string) => store.navigateTo(params, path), []);
   const handleUrlChange = useCallback(() => store.handleUrlChange(), []);
@@ -85,6 +86,7 @@ export function useWorkspace() {
     createTemporaryProject,
     commitAll,
     refreshPending,
+    setEntryValidity,
     discardPendingChanges,
     navigateTo,
     handleUrlChange,
