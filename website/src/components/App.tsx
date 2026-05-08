@@ -100,7 +100,7 @@ export default function App() {
     createTemporaryProject,
     dirHandle,
     navigateTo,
-    exportProject,
+    exportNotebook,
     importNotebook,
     selectedPaths,
     setSelectedPaths
@@ -382,7 +382,7 @@ export default function App() {
   };
 
   const handleExportNotebook = async () => {
-    await exportProject();
+    await exportNotebook();
   };
 
   const handleImportNotebook = () => {

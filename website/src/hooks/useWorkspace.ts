@@ -66,8 +66,8 @@ export function useWorkspace() {
     navigateTo: (params: any, path?: string) => store.navigateTo(params, path),
     handleUrlChange: () => store.handleUrlChange(),
     getFileContent: (path: string) => store.getFileContent(path),
-    exportProject: () => store.exportProject(),
-    exportNotebook: (entryIds?: string[]) => store.exportNotebook(entryIds),
+    exportNotebook: () => store.exportNotebook(),
+    exportEntries: (entryIds?: string[]) => store.exportEntries(entryIds),
     importNotebook: (data: any) => store.importNotebook(data),
     setSelectedPaths: (pathsOrUpdater: Set<string> | ((prev: Set<string>) => Set<string>)) => store.setSelectedPaths(pathsOrUpdater),
   };
