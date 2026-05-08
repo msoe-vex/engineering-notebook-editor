@@ -265,13 +265,13 @@ export const generatePhasesLatex = (phases: ProjectPhase[]): string => {
 
   phases.forEach((p) => {
     // Create a color name based on the stable ID (safe for LaTeX)
-    const colorName = `PhaseID${p.id}`;
+    const colorName = `PhaseID${p.id.toString().replace(/-/g, "")}`;
     const hex = p.color.startsWith("#") ? p.color.substring(1) : p.color;
     
     latex += `% Phase: ${p.name}\n`;
     latex += `\\definecolor{${colorName}}{HTML}{${hex}}\n`;
-    latex += `\\csdef{phasecolor@${p.id}}{${colorName}}\n`;
-    latex += `\\csdef{phasename@${p.id}}{${escapeLaTeX(p.name)}}\n\n`;
+    latex += `\\csdef{phasecolor@${p.index}}{${colorName}}\n`;
+    latex += `\\csdef{phasename@${p.index}}{${escapeLaTeX(p.name)}}\n\n`;
 
     // Add to phase list using the abstracted command
     phaseListLatex += `    \\notebookphase{${colorName}}{${escapeLaTeX(p.name)}}{${escapeLaTeX(p.description || "")}}\n`;

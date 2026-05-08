@@ -70,7 +70,8 @@ export interface EntryWrapper {
 }
 
 export interface ProjectPhase {
-  id: number;
+  id: string;
+  index: number;
   name: string;
   description: string;
   iconName: string; // Lucide icon name
@@ -369,7 +370,7 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
     
     // Phase validation
     const phases = metadata.phases || [];
-    if (typeof entry.phase !== "number" || !phases.some(p => p.id === entry.phase)) {
+    if (typeof entry.phase !== "number" || !phases.some(p => p.index === entry.phase)) {
       errors.push("Missing or invalid phase");
     }
 
