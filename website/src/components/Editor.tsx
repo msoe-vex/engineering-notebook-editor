@@ -29,7 +29,6 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 
 interface EditorProps {
   onClose?: () => void;
-  targetResourceId?: string | null;
   showConfirm: (title: string, message: string, onConfirm: () => void, variant?: "danger" | "warning" | "info") => void;
 }
 
@@ -101,7 +100,6 @@ const EditorContent = React.memo(function EditorContent({
   setEntryValidity,
   exportEntries,
   onClose,
-  targetResourceId,
   showConfirm,
 }: EditorProps & {
   openFile: NonNullable<ReturnType<typeof useWorkspace>['openFile']>;
@@ -897,7 +895,6 @@ const EditorContent = React.memo(function EditorContent({
               author={author}
               onEditorInit={setEditor}
               onToggleLink={(fn) => { toggleLinkFn.current = fn; }}
-              targetResourceId={targetResourceId}
               entryId={entryId}
             />
           </div>
@@ -908,14 +905,15 @@ const EditorContent = React.memo(function EditorContent({
   );
 }, (prev, next) => {
   return (
-    prev.targetResourceId === next.targetResourceId
+    prev.openFile.id === next.openFile.id &&
+    prev.openFile.updatedAt === next.openFile.updatedAt &&
+    prev.metadata === next.metadata
   );
 });
 
 // Wrapper component that handles null check before calling hooks
 const Editor = ({
   onClose,
-  targetResourceId,
   showConfirm,
 }: EditorProps) => {
   const {
@@ -940,7 +938,6 @@ const Editor = ({
       setEntryValidity={setEntryValidity}
       exportEntries={exportEntries}
       onClose={onClose}
-      targetResourceId={targetResourceId}
       showConfirm={showConfirm}
     />
   );

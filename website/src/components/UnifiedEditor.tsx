@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   useEditor, EditorContent, Extension,
 } from "@tiptap/react";
@@ -8,6 +8,7 @@ import { NodeSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { store } from "@/lib/store";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { events, EventNames } from "@/lib/events";
 import { TableRow } from "@tiptap/extension-table-row";
 import {
   CustomLink,
@@ -52,12 +53,11 @@ interface UnifiedEditorProps {
   filename: string;
   onEditorInit?: (editor: import("@tiptap/react").Editor) => void;
   onToggleLink?: (fn: () => void) => void;
-  targetResourceId?: string | null;
   entryId?: string;
 }
 
 export default function UnifiedEditor({
-  content, onChange, onImageUpload, filename, onEditorInit, onToggleLink, targetResourceId, entryId
+  content, onChange, onImageUpload, filename, onEditorInit, onToggleLink, entryId
 }: UnifiedEditorProps) {
   const { currentProjectId, metadata } = useWorkspace();
   const dbName = currentProjectId ? `notebook-project-${currentProjectId}` : "notebook-default";
@@ -173,7 +173,7 @@ export default function UnifiedEditor({
       }),
       Placeholder.configure({
         placeholder: ({ node }) => {
-          if (node.type.name === 'codeBlock') return ""; 
+          if (node.type.name === 'codeBlock') return "";
           return "Start writing...";
         },
       }),
@@ -233,6 +233,9 @@ export default function UnifiedEditor({
                   const navParams: Record<string, string | null> = { resource: resId };
                   if (linkEntryId) navParams.entry = linkEntryId;
                   store.navigateTo(navParams);
+                } else {
+                  // Already in the same resource, but user clicked again: re-scroll
+                  events.emit(EventNames.SCROLL_TO_RESOURCE, resId);
                 }
                 return true;
               }
@@ -304,82 +307,103 @@ export default function UnifiedEditor({
   // Trigger a re-validation of links when metadata changes
   useEffect(() => {
     if (editor && !editor.isDestroyed) {
-       // Dispatch a dummy transaction to force ProseMirror to re-run the IntegrityPlugin apply method
-       const { state } = editor;
-       editor.view.dispatch(state.tr);
+      // Dispatch a dummy transaction to force ProseMirror to re-run the IntegrityPlugin apply method
+      const { state } = editor;
+      editor.view.dispatch(state.tr);
     }
   }, [metadata, editor]);
 
   const lastFilenameRef = useRef(filename);
 
+  // Deep Link Autoscroll Logic
+  const performScroll = useCallback((targetId: string, isInitial = false) => {
+    if (!editor || !targetId) return;
+
+    let attempts = 0;
+    const maxAttempts = 30; // 3 seconds total
+
+    const tryScroll = () => {
+      if (editor.isDestroyed) return true;
+
+      // 1. Entry level scroll (scroll the correct container)
+      if (targetId === entryId) {
+        const container = editor.view.dom.closest('.overflow-y-auto');
+        if (container) {
+          container.scrollTo({ top: 0, behavior: 'smooth' });
+          return true;
+        }
+        editor.view.dom.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return true;
+      }
+
+      // 2. Node level scroll
+      let foundPos = -1;
+      editor.state.doc.descendants((node, pos) => {
+        if (node.attrs.id === targetId) {
+          foundPos = pos;
+          return false;
+        }
+      });
+
+      let element: HTMLElement | null = null;
+      if (foundPos >= 0) {
+        element = editor.view.nodeDOM(foundPos) as HTMLElement;
+      }
+
+      if (!element) {
+        element = document.querySelector(`[data-id="${targetId}"]`) as HTMLElement;
+      }
+
+      if (element) {
+        // Check if element is actually "ready" (has dimensions)
+        if (element.offsetHeight === 0 && attempts < 10) return false;
+
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // Highlight
+        element.classList.add('ring-4', 'ring-nb-primary', 'ring-offset-2', 'transition-all', 'duration-1000', 'z-50');
+        setTimeout(() => {
+          if (element) element.classList.remove('ring-4', 'ring-nb-primary', 'ring-offset-2', 'z-50');
+        }, 3000);
+        return true;
+      }
+
+      return false;
+    };
+
+    // Initial delay to allow rendering
+    const timeout = setTimeout(() => {
+      if (!tryScroll()) {
+        const interval = setInterval(() => {
+          attempts++;
+          if (tryScroll() || attempts >= maxAttempts) {
+            clearInterval(interval);
+          }
+        }, 100);
+      }
+    }, isInitial ? 200 : 100);
+
+    return () => clearTimeout(timeout);
+  }, [editor, entryId]);
+
+  // Handle Global Scroll Events
   useEffect(() => {
-    if (editor && targetResourceId) {
-      const isNewEntry = lastFilenameRef.current !== filename;
-      lastFilenameRef.current = filename;
+    if (!editor) return;
+    const unsub = events.on(EventNames.SCROLL_TO_RESOURCE, (id) => {
+      if (typeof id === 'string') performScroll(id);
+    });
+    return unsub;
+  }, [editor, performScroll]);
 
-      let attempts = 0;
-      const maxAttempts = 20; // Try for 2 seconds (100ms intervals)
-
-      const tryScroll = () => {
-        // Special case: if target is the entry itself, scroll to top
-        if (targetResourceId === entryId) {
-          editor.view.dom.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          return true;
-        }
-
-        // Find node position in Tiptap doc
-        let foundPos = -1;
-        editor.state.doc.descendants((node, pos) => {
-          if (node.attrs.id === targetResourceId) {
-            foundPos = pos;
-            return false;
-          }
-        });
-
-        if (foundPos >= 0) {
-          const dom = editor.view.nodeDOM(foundPos) as HTMLElement;
-          if (dom) {
-            dom.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-            // Highlight
-            dom.classList.add('ring-4', 'ring-nb-primary', 'ring-offset-2', 'transition-all', 'duration-1000');
-            setTimeout(() => {
-              dom.classList.remove('ring-4', 'ring-nb-primary', 'ring-offset-2');
-            }, 3000);
-            return true;
-          }
-        }
-
-        // Fallback to DOM selector if nodeDOM fails
-        const element = document.querySelector(`[data-id="${targetResourceId}"]`) as HTMLElement;
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          element.classList.add('ring-4', 'ring-nb-primary', 'ring-offset-2', 'transition-all', 'duration-1000');
-          setTimeout(() => {
-            element.classList.remove('ring-4', 'ring-nb-primary', 'ring-offset-2');
-          }, 3000);
-          return true;
-        }
-
-        return false;
-      };
-
-      // Initial try with appropriate delay
-      const initialDelay = isNewEntry ? 400 : 100;
-      const timeout = setTimeout(() => {
-        if (!tryScroll()) {
-          const interval = setInterval(() => {
-            attempts++;
-            if (tryScroll() || attempts >= maxAttempts) {
-              clearInterval(interval);
-            }
-          }, 100);
-        }
-      }, initialDelay);
-
-      return () => clearTimeout(timeout);
+  // Initial mount scroll (from URL)
+  useEffect(() => {
+    if (!editor) return;
+    const params = new URLSearchParams(window.location.search);
+    const resourceId = params.get('resource');
+    if (resourceId) {
+      performScroll(resourceId, true);
     }
-  }, [editor, targetResourceId, filename, entryId]);
+  }, [editor]); // Only run on first load of the editor
 
   useEffect(() => {
     if (onToggleLink && editor) {
