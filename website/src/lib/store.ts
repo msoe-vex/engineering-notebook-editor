@@ -144,7 +144,9 @@ class WorkspaceStore {
       if (v === null) url.searchParams.delete(k);
       else url.searchParams.set(k, v);
     }
-    window.history.pushState({}, '', url.toString());
+    if (window.location.href !== url.toString()) {
+      window.history.pushState({}, '', url.toString());
+    }
     if (params.resource) {
       events.emit(EventNames.SCROLL_TO_RESOURCE, params.resource);
     }
@@ -238,7 +240,9 @@ class WorkspaceStore {
           const url = new URL(window.location.href);
           url.searchParams.set('project', "temporary");
           if (url.pathname === '/') url.pathname = '/workspace/editor';
-          window.history.pushState({}, '', url.toString());
+          if (window.location.href !== url.toString()) {
+            window.history.pushState({}, '', url.toString());
+          }
         }
         this.notifyStateChange();
         return;
@@ -314,7 +318,9 @@ class WorkspaceStore {
       const url = new URL(window.location.href);
       url.searchParams.set('project', id);
       if (url.pathname === '/') url.pathname = '/workspace/editor';
-      window.history.pushState({}, '', url.toString());
+      if (window.location.href !== url.toString()) {
+        window.history.pushState({}, '', url.toString());
+      }
 
       events.emit(EventNames.PROJECT_LOADED, project);
       await this.refreshPending();
