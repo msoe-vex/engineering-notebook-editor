@@ -31,6 +31,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { TeamMetadata, TeamMember, ProjectPhase } from "@/lib/metadata";
 import { DEFAULT_PHASES, AVAILABLE_ICONS } from "@/lib/phases";
+import { generateUUID } from "@/lib/utils";
 
 // ─── Sub-components for performance ──────────────────────────────────────────
 
@@ -111,8 +112,8 @@ const PhaseCard = memo(({
   isOverlay = false
 }: {
   phase: ProjectPhase,
-  handlePhaseChange?: (id: number, field: keyof ProjectPhase, value: string) => void,
-  removePhase?: (id: number) => void,
+  handlePhaseChange?: (id: string, field: keyof ProjectPhase, value: string) => void,
+  removePhase?: (id: string) => void,
   attributes?: DraggableAttributes,
   listeners?: Record<string, unknown>,
   isOverlay?: boolean
@@ -203,8 +204,8 @@ const PhaseRow = memo(({
   removePhase
 }: {
   phase: ProjectPhase,
-  handlePhaseChange: (id: number, field: keyof ProjectPhase, value: string) => void,
-  removePhase: (id: number) => void
+  handlePhaseChange: (id: string, field: keyof ProjectPhase, value: string) => void,
+  removePhase: (id: string) => void
 }) => {
   const {
     attributes,
@@ -263,7 +264,7 @@ export default function TeamEditor({
   const [teamData, setTeamData] = useState<TeamMetadata>(initialData);
   const [phases, setPhases] = useState<ProjectPhase[]>(initialPhases);
   const [activeTab, setActiveTab] = useState<"identity" | "members" | "phases">(initialTab);
-  const [activeId, setActiveId] = useState<number | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
@@ -328,7 +329,7 @@ export default function TeamEditor({
     setHasChanges(true);
   };
 
-  const handlePhaseChange = useCallback((id: number, field: keyof ProjectPhase, value: string) => {
+  const handlePhaseChange = useCallback((id: string, field: keyof ProjectPhase, value: string) => {
     setPhases(prev => {
       const index = prev.findIndex(p => p.id === id);
       if (index === -1) return prev;
@@ -347,9 +348,10 @@ export default function TeamEditor({
 
   const addPhase = useCallback(() => {
     setPhases(prev => {
-      const nextId = prev.length + 1;
+      const nextIndex = prev.length + 1;
       return [...prev, {
-        id: nextId,
+        id: generateUUID(),
+        index: nextIndex,
         name: "New Phase",
         description: "",
         iconName: "Shapes",
@@ -359,16 +361,16 @@ export default function TeamEditor({
     setHasChanges(true);
   }, []);
 
-  const removePhase = useCallback((id: number) => {
+  const removePhase = useCallback((id: string) => {
     setPhases(prev => {
       const filtered = prev.filter(p => p.id !== id);
-      return filtered.map((p, i) => ({ ...p, id: i + 1 }));
+      return filtered.map((p, i) => ({ ...p, index: i + 1 }));
     });
     setHasChanges(true);
   }, []);
 
   const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as number);
+    setActiveId(event.active.id as string);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -378,8 +380,8 @@ export default function TeamEditor({
         const oldIndex = items.findIndex(p => p.id === active.id);
         const newIndex = items.findIndex(p => p.id === over.id);
         const moved = arrayMove(items, oldIndex, newIndex);
-        // Re-assign IDs to match the new order (1-based)
-        return moved.map((p, i) => ({ ...p, id: i + 1 }));
+        // Re-assign indices to match the new order (1-based)
+        return moved.map((p, i) => ({ ...p, index: i + 1 }));
       });
       setHasChanges(true);
     }
@@ -405,48 +407,47 @@ export default function TeamEditor({
   return (
     <div className="flex flex-col h-full bg-nb-bg animate-in fade-in duration-300">
       {/* Header */}
-      <div className="flex items-center justify-between px-8 py-6 bg-nb-surface border-b border-nb-outline-variant shadow-nb-sm">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-nb-primary/10 text-nb-primary flex items-center justify-center">
-            <Users size={24} />
+      <div className="flex flex-col bg-nb-surface border-b border-nb-outline-variant shadow-nb-sm shrink-0">
+        <div className="flex items-center justify-between px-8 py-6">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-nb-primary/10 text-nb-primary flex items-center justify-center">
+              <Users size={24} />
+            </div>
+            <div>
+              <h1 className="text-xl font-black text-nb-on-surface tracking-tight">Project Configuration</h1>
+              <p className="text-xs text-nb-on-surface-variant font-medium">Identity, Team, and Design Process</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-black text-nb-on-surface tracking-tight">Project Configuration</h1>
-            <p className="text-xs text-nb-on-surface-variant font-medium">Identity, Team, and Design Process</p>
+
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 mr-2">
+              {isSaving || hasChanges ? (
+                <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-primary animate-pulse">
+                  <Loader2 size={12} className="animate-spin" />
+                  <span>SAVING...</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-on-surface-variant/40">
+                  <Check size={12} />
+                  <span>SAVED</span>
+                </div>
+              )}
+            </div>
+
+            <div className="w-px h-6 bg-nb-outline-variant/30" />
+
+            <button
+              onClick={onClose}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-nb-surface-mid hover:bg-nb-surface-high text-nb-on-surface font-bold text-xs transition-all border border-nb-outline-variant/20 cursor-pointer"
+            >
+              <X size={14} />
+              Close
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 mr-2">
-            {isSaving || hasChanges ? (
-              <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-primary animate-pulse">
-                <Loader2 size={12} className="animate-spin" />
-                <span>SAVING...</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-on-surface-variant/40">
-                <Check size={12} />
-                <span>SAVED</span>
-              </div>
-            )}
-          </div>
-
-          <div className="w-px h-6 bg-nb-outline-variant/30" />
-
-          <button
-            onClick={onClose}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-nb-surface-mid hover:bg-nb-surface-high text-nb-on-surface font-bold text-xs transition-all border border-nb-outline-variant/20 cursor-pointer"
-          >
-            <X size={14} />
-            Close
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-8">
-        <div className="max-w-4xl mx-auto space-y-12 pb-12">
-
-          {/* Navigation Tabs */}
+        {/* Navigation Tabs */}
+        <div className="flex justify-center pb-4">
           <div className="flex gap-2 p-1 bg-nb-surface-low rounded-2xl border border-nb-outline-variant/20 w-fit">
             <button
               onClick={() => setActiveTab("identity")}
@@ -470,6 +471,11 @@ export default function TeamEditor({
               Phases
             </button>
           </div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-8">
+        <div className="max-w-4xl mx-auto space-y-12 pb-12">
 
           {activeTab === "identity" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in slide-in-from-bottom-4 duration-500">
