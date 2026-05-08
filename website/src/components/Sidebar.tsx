@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import FileExplorer from "./FileExplorer";
 import PendingChangesPanel from "./PendingChangesPanel";
 import { ExplorerFile } from "@/lib/types";
@@ -11,6 +11,7 @@ interface SidebarProps {
   onSelectEntry: (file: ExplorerFile, multi: boolean, range: boolean, visiblePaths: string[]) => void;
   onOpenTeam: (tab?: any) => void;
   showConfirm: (title: string, message: string, onConfirm: () => void, variant?: "danger" | "warning" | "info") => void;
+  onNewEntry?: () => Promise<void>;
 }
 
 export default function Sidebar({
@@ -18,6 +19,7 @@ export default function Sidebar({
   onSelectEntry,
   onOpenTeam,
   showConfirm,
+  onNewEntry,
 }: SidebarProps) {
   const {
     entries,
@@ -37,6 +39,26 @@ export default function Sidebar({
   const [sortBy, setSortBy] = useState<"created" | "updated" | "title">("created");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
+  
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (selectedPaths.size === 0) return;
+      if (e.key === "Delete" || (e.key === "Backspace" && (e.metaKey || e.ctrlKey))) {
+        // Don't trigger if typing in an input
+        const target = e.target as HTMLElement;
+        if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+        
+        const toDelete = entries.filter(f => selectedPaths.has(f.path));
+        if (toDelete.length > 0) {
+          e.preventDefault();
+          handleConfirmDelete(toDelete);
+        }
+      }
+    };
+    
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedPaths, entries]);
 
   const pendingPaths = useMemo(() => new Set((pendingChanges || []).map(p => p.path)), [pendingChanges]);
   const deletedPaths = useMemo(() => new Set((pendingChanges || []).filter(p => p.operation === "delete").map(p => p.path)), [pendingChanges]);
@@ -143,7 +165,7 @@ export default function Sidebar({
         onDeleteEntry={(file) => handleConfirmDelete([file])}
         onDownloadMulti={() => { }}
         onDeleteMulti={handleConfirmDelete}
-        onNewEntry={createEntry}
+        onNewEntry={onNewEntry || createEntry}
         search={search}
         onSearchChange={setSearch}
         sortBy={sortBy}

@@ -254,6 +254,7 @@ export default function App() {
       const path = `${ENTRIES_DIR}/${id}.json`;
       setSelectedPaths(new Set([path]));
       lastSelectedPathRef.current = path;
+      navigateTo({ entry: id }, '/workspace/editor');
     } catch (e) {
       notify("Failed to create entry.", "error");
     }
@@ -421,6 +422,7 @@ export default function App() {
           onSelectEntry={handleSelectEntry}
           onOpenTeam={handleOpenTeamEditor}
           showConfirm={showConfirm}
+          onNewEntry={handleNewEntry}
         />
       </div>
     </div>
