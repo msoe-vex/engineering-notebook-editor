@@ -10,12 +10,14 @@ interface SidebarProps {
   selectedPaths: Set<string>;
   onSelectEntry: (file: ExplorerFile, multi: boolean, range: boolean, visiblePaths: string[]) => void;
   onOpenTeam: (tab?: any) => void;
+  showConfirm: (title: string, message: string, onConfirm: () => void, variant?: "danger" | "warning" | "info") => void;
 }
 
 export default function Sidebar({
   selectedPaths,
   onSelectEntry,
   onOpenTeam,
+  showConfirm,
 }: SidebarProps) {
   const {
     entries,
@@ -28,7 +30,8 @@ export default function Sidebar({
     commitAll,
     config,
     refreshPending,
-    currentProjectId
+    currentProjectId,
+    navigateTo
   } = useWorkspace();
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"created" | "updated" | "title">("created");
@@ -95,10 +98,25 @@ export default function Sidebar({
 
   const handleOpenEntry = (file: ExplorerFile) => {
     const id = file.name.replace('.json', '');
-    const url = new URL(window.location.href);
-    url.searchParams.set('entry', id);
-    window.history.pushState({}, '', url.toString());
-    // Store handles URL changes
+    navigateTo({ entry: id }, '/workspace/editor');
+  };
+
+  const handleConfirmDelete = (files: ExplorerFile[]) => {
+    if (files.length === 0) return;
+
+    const title = files.length === 1 ? "Delete Entry" : "Delete Multiple Entries";
+    const message = files.length === 1
+      ? `Are you sure you want to delete "${files[0].title || "Untitled Entry"}"? This action cannot be undone and will permanently remove the entry and its associated LaTeX file.`
+      : `Are you sure you want to delete ${files.length} entries? This action cannot be undone and will permanently remove all selected entries and their associated LaTeX files.`;
+
+    showConfirm(
+      title,
+      message,
+      () => {
+        files.forEach(f => deleteEntry(f));
+      },
+      "danger"
+    );
   };
 
   const handleDiscard = async () => {
@@ -118,15 +136,13 @@ export default function Sidebar({
         onSelectEntry={(file, multi, range) => onSelectEntry(file, multi, range, filteredEntries.map(e => e.path))}
         onOpenEntry={handleOpenEntry}
         onCloseEntry={() => {
-           const url = new URL(window.location.href);
-           url.searchParams.delete('entry');
-           window.history.pushState({}, '', url.toString());
+          navigateTo({ entry: null });
         }}
-        onDownloadLatex={() => {}} // TODO: implement in store if needed
-        onDownloadJson={() => {}} // TODO: implement in store if needed
-        onDeleteEntry={(file) => deleteEntry(file)}
-        onDownloadMulti={() => {}}
-        onDeleteMulti={(files) => files.forEach(f => deleteEntry(f))}
+        onDownloadLatex={() => { }} // TODO: implement in store if needed
+        onDownloadJson={() => { }} // TODO: implement in store if needed
+        onDeleteEntry={(file) => handleConfirmDelete([file])}
+        onDownloadMulti={() => { }}
+        onDeleteMulti={handleConfirmDelete}
         onNewEntry={createEntry}
         search={search}
         onSearchChange={setSearch}

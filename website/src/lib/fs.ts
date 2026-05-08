@@ -1,8 +1,13 @@
 import { getMimeTypeFromExtension } from './utils';
 
 export const getLocalFileContent = async (rootHandle: FileSystemDirectoryHandle, path: string): Promise<{ text?: string; base64?: string; isImage: boolean }> => {
+  if (path.startsWith('data:')) {
+    return { base64: path, isImage: true };
+  }
   try {
-    const parts = path.split('/');
+    const parts = path.split('/').filter(Boolean);
+    if (parts.length === 0) throw new Error("Invalid path");
+    
     let currentHandle: FileSystemDirectoryHandle = rootHandle;
     for (let i = 0; i < parts.length - 1; i++) {
       currentHandle = await currentHandle.getDirectoryHandle(parts[i]);
@@ -37,7 +42,9 @@ export const getLocalFileContent = async (rootHandle: FileSystemDirectoryHandle,
 };
 
 export const writeLocalFile = async (rootHandle: FileSystemDirectoryHandle, path: string, content: string | Uint8Array, isBase64 = false) => {
-  const parts = path.split('/');
+  const parts = path.split('/').filter(Boolean);
+  if (parts.length === 0) throw new Error("Invalid path");
+
   let currentHandle: FileSystemDirectoryHandle = rootHandle;
   for (let i = 0; i < parts.length - 1; i++) {
     currentHandle = await currentHandle.getDirectoryHandle(parts[i], { create: true });
@@ -76,7 +83,9 @@ export const writeLocalFile = async (rootHandle: FileSystemDirectoryHandle, path
 };
 
 export const deleteLocalFileAtPath = async (rootHandle: FileSystemDirectoryHandle, path: string) => {
-  const parts = path.split('/');
+  const parts = path.split('/').filter(Boolean);
+  if (parts.length === 0) return;
+
   let currentHandle: FileSystemDirectoryHandle = rootHandle;
   try {
     for (let i = 0; i < parts.length - 1; i++) {

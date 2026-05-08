@@ -329,6 +329,7 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
   const assetRefs: Record<string, string[]> = {};
   
   const trackAsset = (path: string, owner: string) => {
+    if (!path || path.startsWith("data:")) return; // Don't track hydrated data
     if (!assetRefs[path]) assetRefs[path] = [];
     if (!assetRefs[path].includes(owner)) assetRefs[path].push(owner);
   };

@@ -10,7 +10,7 @@ export function useWorkspace() {
     config: store.config,
     dirHandle: store.dirHandle,
     entries: store.entries,
-    metadata: store.metadata,
+    metadata: store.hydratedMetadata,
     currentProjectId: store.currentProjectId,
     isLoading: store.isLoading,
     isInitialized: store.isInitialized,
@@ -27,7 +27,7 @@ export function useWorkspace() {
         config: newStore.config,
         dirHandle: newStore.dirHandle,
         entries: newStore.entries,
-        metadata: newStore.metadata,
+        metadata: newStore.hydratedMetadata,
         currentProjectId: newStore.currentProjectId,
         isLoading: newStore.isLoading,
         isInitialized: newStore.isInitialized,
@@ -61,5 +61,7 @@ export function useWorkspace() {
     createTemporaryProject: () => store.createTemporaryProject(),
     commitAll: (config: any) => store.commitAll(config),
     refreshPending: () => store.refreshPending(),
+    navigateTo: (params: any, path?: string) => store.navigateTo(params, path),
+    handleUrlChange: () => store.handleUrlChange(),
   };
 }

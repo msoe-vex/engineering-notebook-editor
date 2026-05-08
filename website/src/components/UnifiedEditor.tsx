@@ -6,6 +6,7 @@ import {
 } from "@tiptap/react";
 import { NodeSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
+import { store, WorkspaceMode } from "@/lib/store";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { TableRow } from "@tiptap/extension-table-row";
 import {
@@ -159,7 +160,7 @@ export default function UnifiedEditor({
       PrismHighlightExtension,
       Extension.create({
         name: 'integrityExtension',
-        addProseMirrorPlugins: () => metadata ? [IntegrityPlugin(metadata)] : []
+        addProseMirrorPlugins: () => [IntegrityPlugin()]
       }),
       Underline,
       CustomLink.configure({
@@ -229,8 +230,9 @@ export default function UnifiedEditor({
                 }
 
                 if (changed) {
-                  window.history.pushState({}, '', `?${params.toString()}`);
-                  window.dispatchEvent(new Event('locationchange'));
+                  const navParams: Record<string, string | null> = { resource: resId };
+                  if (linkEntryId) navParams.entry = linkEntryId;
+                  store.navigateTo(navParams);
                 }
                 return true;
               }
@@ -298,6 +300,15 @@ export default function UnifiedEditor({
       onEditorInit(editor);
     }
   }, [editor, onEditorInit]);
+
+  // Trigger a re-validation of links when metadata changes
+  useEffect(() => {
+    if (editor && !editor.isDestroyed) {
+       // Dispatch a dummy transaction to force ProseMirror to re-run the IntegrityPlugin apply method
+       const { state } = editor;
+       editor.view.dispatch(state.tr);
+    }
+  }, [metadata, editor]);
 
   const lastFilenameRef = useRef(filename);
 
