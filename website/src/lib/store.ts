@@ -1,12 +1,12 @@
-import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, TipTapNode, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds } from "./metadata";
+import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds } from "./metadata";
 import { generateAllEntriesLatex, generateEntryLatex, generateTeamLatex, generatePhasesLatex } from "./latex";
 import { ExplorerFile, GitHubConfig } from "./types";
-import { getProjects, getProject, Project, getProjectDBName, getAllPending, getPending, stageChange, removeStaged, removeResource, getResource, putResource, saveProject, getProjectHandle, saveProjectHandle, PendingChange } from "./db";
+import { getProjects, getProject, Project, getAllPending, getPending, stageChange, removeStaged, getResource, putResource, saveProject, getProjectHandle, saveProjectHandle, PendingChange } from "./db";
 import { fetchFileContent, fetchDirectoryTree, fetchRawFileContent, GitHubFile } from "./github";
 import { listLocalFiles, readLocalFile, writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, ensureLocalDirectory } from "./fs";
 import { INDEX_PATH, ENTRIES_DIR, ENTRIES_INDEX_PATH, LATEX_DIR, ASSETS_DIR, TEAM_PATH, PHASES_PATH } from "./constants";
 import { events, EventNames } from "./events";
-import { generateUUID, getMimeTypeFromExtension, hashContent, generateDeterministicUUID } from "./utils";
+import { generateUUID, getMimeTypeFromExtension, generateDeterministicUUID } from "./utils";
 
 export type WorkspaceMode = "local" | "github" | "temporary" | "none";
 
@@ -168,19 +168,11 @@ class WorkspaceStore {
           if (existingHandle && await handle.isSameEntry(existingHandle)) {
             return p.id;
           }
-        } catch (e) { }
+        } catch { }
       }
     }
 
     let id: string | null = null;
-    let parsed: any = null;
-    try {
-      const metaStr = await readLocalFile(handle, INDEX_PATH);
-      parsed = JSON.parse(metaStr);
-    } catch (e) {
-      // notebook.json doesn't exist yet or is invalid
-    }
-
     if (!id) id = generateUUID();
 
     const p: Project = {
@@ -316,7 +308,6 @@ class WorkspaceStore {
         }
       }
 
-      const hydratedTeam = hydrateTeamAssets(parsed.team || { teamName: "", teamNumber: "", organization: "", logo: "", members: [] }, assetCache);
       // Keep metadata clean, but update the global asset cache
       assetCache.forEach((v, k) => this.assetCache.set(k, v));
       this.metadata = { ...EMPTY_METADATA, ...parsed };
@@ -904,7 +895,7 @@ class WorkspaceStore {
   public async importNotebook(data: any) {
     this.setLoading(true);
     try {
-      const { entries = {}, assets = {}, metadata: importMeta = {} } = data;
+      const { entries = {}, assets = {} } = data;
       const idMap = new Map<string, string>();
 
       // 1. Map ALL IDs first (Entries and their internal Resources)

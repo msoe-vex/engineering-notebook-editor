@@ -48,7 +48,7 @@ export function useWorkspace() {
     return unsub;
   }, []);
 
-  const getDBName = useCallback((id?: string) => store.getDBName(), []);
+  const getDBName = useCallback(() => store.getDBName(), []);
   const disconnect = useCallback(() => store.disconnect(), []);
   const refreshProjects = useCallback(() => store.refreshProjects(), []);
   const selectProject = useCallback((id: string) => store.selectProject(id), []);

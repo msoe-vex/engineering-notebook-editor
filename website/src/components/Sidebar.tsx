@@ -17,7 +17,6 @@ interface SidebarProps {
 export default function Sidebar({
   selectedPaths,
   onSelectEntry,
-  onOpenTeam,
   showConfirm,
   onNewEntry,
 }: SidebarProps) {

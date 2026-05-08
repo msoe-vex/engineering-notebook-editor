@@ -2,7 +2,6 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { Extension } from "@tiptap/react";
 import Prism from "prismjs";
-import { NotebookMetadata } from "@/lib/metadata";
 import { store } from "@/lib/store";
 
 // Ensure common languages are loaded
@@ -135,7 +134,7 @@ export const IntegrityPlugin = () => new Plugin({
   key: new PluginKey('link-integrity'),
   state: {
     init: (_, { doc }) => getIntegrityDecorations(doc),
-    apply: (tr, set) => {
+    apply: (tr) => {
       // Re-calculate on every transaction if metadata might have changed
       // or if the document changed. tr.docChanged is standard, but we also
       // want to catch store updates.
