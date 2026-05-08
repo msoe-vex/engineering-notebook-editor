@@ -486,7 +486,14 @@ class WorkspaceStore {
 
     // 2. Queue background persistence
     this.enqueue(async () => {
-      const contentObj = JSON.parse(tiptapContent);
+      let contentObj = JSON.parse(tiptapContent);
+      // Handle potential double-stringification
+      if (typeof contentObj === 'string') {
+        try {
+          contentObj = JSON.parse(contentObj);
+        } catch { /* use as is */ }
+      }
+      
       const { cleanDoc, newAssets } = await dehydrateAssets(contentObj);
       const entryJsonStr = JSON.stringify({ version: 3, content: cleanDoc }, null, 2);
 
