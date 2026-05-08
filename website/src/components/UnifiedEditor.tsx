@@ -15,6 +15,7 @@ import {
   PrismHighlightExtension,
   IntegrityPlugin,
   IdRemapper,
+  CustomHeading,
 } from "@/lib/editor/extensions";
 
 import {
@@ -30,6 +31,7 @@ import { LinkReferencePopup } from "@/components/editor/LinkReferencePopup";
 
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng } from "@/lib/utils";
 import { ASSETS_DIR } from "@/lib/constants";
+import { ensureHeadingIds } from "@/lib/metadata";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 
@@ -64,7 +66,9 @@ export default function UnifiedEditor({
   const parseContent = (raw: string | import("@/lib/metadata").TipTapNode) => {
     if (!raw) return "";
     try {
-      return typeof raw === "string" ? JSON.parse(raw) : raw;
+      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+      // Ensure all headings have UUIDs
+      return ensureHeadingIds(parsed);
     } catch { return raw; }
   };
 
@@ -144,11 +148,13 @@ export default function UnifiedEditor({
         link: false,
         underline: false,
         listItem: false,
+        heading: false,
         dropcursor: {
           color: '#d9282f',
           width: 3,
         }
       }),
+      CustomHeading,
       RestrictedListItem,
       ImageWithCaption.configure({ inline: false, allowBase64: true, dbName }),
       TableWithCaption.configure({ resizable: true }),

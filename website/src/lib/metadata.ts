@@ -86,6 +86,38 @@ export interface NotebookMetadata {
   assetRefs?: Record<string, string[]>; // asset path -> [entry id or "team"]
 }
 
+/**
+ * Builds a notebook-wide resource type index for LaTeX generation.
+ * Includes all entries, all stored resources, and optional local unsaved resources.
+ */
+export function buildResourceTypeIndex(
+  entries: Record<string, EntryMetadata>,
+  localResources: Record<string, { type: string }> = {},
+  currentEntryId?: string
+): Record<string, string> {
+  const resourceTypes: Record<string, string> = {};
+
+  for (const [entryId, entry] of Object.entries(entries || {})) {
+    resourceTypes[entryId] = "entry";
+
+    if (entry.resources) {
+      for (const [resourceId, resource] of Object.entries(entry.resources)) {
+        resourceTypes[resourceId] = resource.type;
+      }
+    }
+  }
+
+  if (currentEntryId) {
+    resourceTypes[currentEntryId] = "entry";
+  }
+
+  for (const [resourceId, resource] of Object.entries(localResources || {})) {
+    resourceTypes[resourceId] = resource.type;
+  }
+
+  return resourceTypes;
+}
+
 export const EMPTY_METADATA: NotebookMetadata = { 
   version: 3, 
   entries: {},
@@ -121,7 +153,7 @@ export function extractImagePaths(doc: TipTapDoc): string[] {
   return paths;
 }
 
-/** Walk every node and extract resources (blocks with IDs and titles). */
+/** Walk every node and extract resources (blocks with IDs and titles), including headers. */
 export function extractResources(doc: TipTapDoc): Record<string, { title: string, caption: string, type: string }> {
   const resources: Record<string, { title: string, caption: string, type: string }> = {};
   
@@ -137,6 +169,21 @@ export function extractResources(doc: TipTapDoc): Record<string, { title: string
         title,
         caption,
         type: node.type
+      };
+    }
+    
+    // Include headings as resources with their own IDs
+    if (node.type === "heading" && node.attrs?.id) {
+      const id = node.attrs.id as string;
+      // Extract heading text from content
+      const headingText = (node.content || [])
+        .map(child => child.text || "")
+        .join("")
+        .trim() || "Untitled Header";
+      resources[id] = { 
+        title: headingText, 
+        caption: "", 
+        type: "header" 
       };
     }
     
@@ -377,7 +424,9 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
     if (entry.resources) {
       for (const [resId, res] of Object.entries(entry.resources)) {
         if (!res.title?.trim()) errors.push(`Resource "${resId}" missing title`);
-        if (!res.caption?.trim()) errors.push(`Resource "${resId}" missing caption`);
+        if (res.type !== "header" && !res.caption?.trim()) {
+          errors.push(`Resource "${resId}" missing caption`);
+        }
       }
     }
 
@@ -464,7 +513,13 @@ export function remapContentIds(doc: TipTapDoc | TipTapNode[], globalIdMap: Map<
       return;
     }
 
-    if (node.attrs?.id) {
+    // For headings without IDs, assign new UUIDs
+    if (node.type === "heading" && !node.attrs?.id) {
+      if (!node.attrs) node.attrs = {};
+      const newId = generateUUID();
+      (node.attrs as Record<string, unknown>).id = newId;
+      globalIdMap.set(newId, newId); // Map to itself (no old ID to track)
+    } else if (node.attrs?.id) {
       const oldId = node.attrs.id as string;
       if (!globalIdMap.has(oldId)) {
         globalIdMap.set(oldId, generateUUID());
@@ -544,6 +599,31 @@ export function remapContentIds(doc: TipTapDoc | TipTapNode[], globalIdMap: Map<
   }
 
   return { doc: apply(doc) as TipTapDoc, idMap: globalIdMap };
+}
+
+/**
+ * Ensures all heading nodes have UUIDs in attrs.id
+ * Returns the modified document (mutates in place)
+ */
+export function ensureHeadingIds(doc: TipTapDoc | TipTapNode): TipTapDoc | TipTapNode {
+  if (!doc || typeof doc !== "object") return doc;
+
+  function walk(node: TipTapNode | undefined) {
+    if (!node) return;
+
+    // Assign UUID to headings without IDs
+    if (node.type === "heading" && !node.attrs?.id) {
+      if (!node.attrs) node.attrs = {};
+      (node.attrs as Record<string, unknown>).id = generateUUID();
+    }
+
+    if (Array.isArray(node.content)) {
+      node.content.forEach(walk);
+    }
+  }
+
+  walk(doc as TipTapNode);
+  return doc;
 }
 
 /**

@@ -23,6 +23,27 @@ export function LinkReferencePopup({
   const [selectedResource, setSelectedResource] = useState<{ id: string, title: string, type: string, entryTitle?: string, entryDate?: string, entryId?: string } | null>(null);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
+  const getResourceTypeLabel = (type: string) => {
+    const normalizedType = (type || "").trim();
+    const labels: Record<string, string> = {
+      entry: "Entry",
+      image: "Image",
+      table: "Table",
+      codeBlock: "Code Block",
+      header: "Header",
+      heading: "Header",
+    };
+
+    if (labels[normalizedType]) {
+      return labels[normalizedType];
+    }
+
+    return normalizedType
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .replace(/[_-]+/g, " ")
+      .replace(/\b\w/g, ch => ch.toUpperCase());
+  };
+
   useEffect(() => {
     const init = async () => {
       const { from, to } = editor.state.selection;
@@ -182,7 +203,7 @@ export function LinkReferencePopup({
                   >
                     <div className="text-sm font-bold text-nb-on-surface truncate">{r.title}</div>
                     <div className="text-[11px] text-nb-on-surface-variant/60 truncate">
-                      {r.type} • {r.entryTitle} • {r.entryDate}
+                      {getResourceTypeLabel(r.type)} • {r.entryTitle} • {r.entryDate}
                     </div>
                   </button>
                 ))}
@@ -201,7 +222,7 @@ export function LinkReferencePopup({
                 </div>
                 {selectedResource && (
                   <div className="text-[11px] text-nb-on-surface-variant/60 truncate">
-                    {selectedResource.type} • {selectedResource.entryTitle} • {selectedResource.entryDate}
+                    {getResourceTypeLabel(selectedResource.type)} • {selectedResource.entryTitle} • {selectedResource.entryDate}
                   </div>
                 )}
               </div>
