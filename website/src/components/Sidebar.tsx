@@ -139,7 +139,7 @@ export default function Sidebar({
 
   const handleOpenEntry = (file: ExplorerFile) => {
     const id = file.name.replace('.json', '');
-    navigateTo({ entry: id }, '/workspace/editor');
+    navigateTo({ entry: id, resource: null }, '/workspace/editor');
   };
 
   const handleDiscard = async () => {

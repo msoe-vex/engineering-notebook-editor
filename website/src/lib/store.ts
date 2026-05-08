@@ -145,6 +145,9 @@ class WorkspaceStore {
       else url.searchParams.set(k, v);
     }
     window.history.pushState({}, '', url.toString());
+    if (params.resource) {
+      events.emit(EventNames.SCROLL_TO_RESOURCE, params.resource);
+    }
     this.handleUrlChange(url);
   }
 

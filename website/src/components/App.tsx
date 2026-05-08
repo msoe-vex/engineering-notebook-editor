@@ -146,7 +146,6 @@ export default function App() {
   const [isRenamingProject, setIsRenamingProject] = useState(false);
   const [projectRenameValue, setProjectRenameValue] = useState("");
   const importEntryInputRef = useRef<HTMLInputElement>(null);
-  const [targetResourceId, setTargetResourceId] = useState<string | null>(null);
   const [needsPermission, setNeedsPermission] = useState(false);
   const navigateToHome = useCallback(() => {
     navigateTo({ project: null, entry: null, resource: null }, '/');
@@ -293,7 +292,6 @@ export default function App() {
     const syncView = () => {
       const path = window.location.pathname;
       const params = new URLSearchParams(window.location.search);
-      setTargetResourceId(params.get("resource"));
 
       const view = params.get("view");
       if (view === "editor" || view === "split" || view === "latex") {
@@ -637,7 +635,6 @@ export default function App() {
                       <Editor
                         key={openFile.path}
                         onClose={() => navigateTo({ entry: null, resource: null })}
-                        targetResourceId={targetResourceId}
                         showConfirm={showConfirm}
                       />
                     )}
