@@ -1,20 +1,15 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useTheme } from "next-themes";
 import {
-  GitHubConfig, fetchFileContent, fetchRawFileContent,
-  commitChanges, GitChange, fetchGitHubUser
+  GitChange, fetchGitHubUser
 } from "@/lib/github";
 import { ExplorerFile } from "@/lib/types";
 import {
   Project, saveProject, deleteProject, deleteProjectHandle, deleteProjectDatabase,
   getProjectDBName
 } from "@/lib/db";
-import {
-  NotebookMetadata, EMPTY_METADATA, EntryMetadata, EntryWrapper,
-  TipTapNode, TeamMetadata, TeamMember, ProjectPhase
-} from "@/lib/metadata";
 import Settings from "./Settings";
 import Editor from "./Editor";
 import Preview from "./Preview";
@@ -26,9 +21,6 @@ import ConfirmationDialog from "./ConfirmationDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { HardDrive, ArrowLeftRight, X, BookOpen, Download, Loader2, Upload } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
-import { saveAs } from "file-saver";
-import { generateUUID } from "@/lib/utils";
-import { generateAllEntriesLatex } from "@/lib/latex";
 import { ENTRIES_DIR, INDEX_PATH, ASSETS_DIR } from "@/lib/constants";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { events, EventNames } from "@/lib/events";
@@ -66,8 +58,6 @@ interface OpenFileState {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const isoTimestamp = () => new Date().toISOString();
-
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -83,8 +73,6 @@ export default function App() {
   const {
     mode,
     config,
-    entries,
-    metadata,
     currentProjectId,
     isLoading,
     isInitialized,
@@ -93,7 +81,6 @@ export default function App() {
     refreshProjects,
     selectProject,
     createEntry,
-    updateEntry,
     disconnect,
     createGithubProject,
     createLocalProject,
@@ -162,7 +149,6 @@ export default function App() {
   const [isRenamingProject, setIsRenamingProject] = useState(false);
   const [projectRenameValue, setProjectRenameValue] = useState("");
   const importEntryInputRef = useRef<HTMLInputElement>(null);
-  const [latexContent, setLatexContent] = useState("");
   const [targetResourceId, setTargetResourceId] = useState<string | null>(null);
   const [needsPermission, setNeedsPermission] = useState(false);
   const navigateToHome = useCallback(() => {
@@ -456,32 +442,41 @@ export default function App() {
     await exportNotebook();
   };
 
+  const importNotebookFromFile = async (file: File) => {
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const data = JSON.parse(reader.result as string);
+          await importNotebook(data);
+          showNotification("Notebook imported successfully.", "success");
+        } catch (error) {
+          console.error("Import failed", error);
+          showNotification(error instanceof Error ? error.message : "Invalid import file", "error");
+        }
+      };
+      reader.onerror = () => {
+        showNotification("Failed to read file", "error");
+      };
+      reader.readAsText(file);
+    } catch (error) {
+      showNotification("Import failed", "error");
+    }
+  };
+
   const handleImportNotebook = () => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "application/json";
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = async () => {
-          try {
-            const data = JSON.parse(reader.result as string);
-            await importNotebook(data);
-          } catch (e) {
-            console.error("Failed to parse import file", e);
-            notify("Invalid import file", "error");
-          }
-        };
-        reader.readAsText(file);
-      }
+      if (file) importNotebookFromFile(file);
     };
     input.click();
   };
 
   const processImportFile = async (file: File) => {
-    // TODO: Implement in store
-    notify("Importing entry...");
+    await importNotebookFromFile(file);
   };
 
   const requestPermission = async () => {

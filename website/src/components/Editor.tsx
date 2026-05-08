@@ -17,7 +17,7 @@ import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng } f
 import { generateEntryLatex } from "@/lib/latex";
 import { getPhases, getPhaseConfig } from "@/lib/phases";
 import AutocompleteInput from "./AutocompleteInput";
-import { extractResources, extractReferences, TipTapNode, NotebookMetadata } from "@/lib/metadata";
+import { extractResources, extractReferences, TipTapNode } from "@/lib/metadata";
 import { ASSETS_DIR } from "@/lib/constants";
 import { NodeSelection } from "@tiptap/pm/state";
 

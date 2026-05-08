@@ -1,4 +1,3 @@
-import React from 'react';
 import { CheckCircle2, AlertCircle, Loader2, Info, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 

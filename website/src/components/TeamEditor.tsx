@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, memo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, memo, useCallback } from "react";
 import {
   Hash, User, Briefcase, Image as ImageIcon,
   Loader2, Check, X, Camera, Building2, Plus, Trash2, Users,

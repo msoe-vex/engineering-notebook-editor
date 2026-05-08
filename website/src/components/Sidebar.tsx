@@ -1,8 +1,7 @@
-import React, { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import FileExplorer from "./FileExplorer";
 import PendingChangesPanel from "./PendingChangesPanel";
 import { ExplorerFile } from "@/lib/types";
-import { NotebookMetadata } from "@/lib/metadata";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { LATEX_DIR } from "@/lib/constants";
 import { showNotification } from "./Notification";

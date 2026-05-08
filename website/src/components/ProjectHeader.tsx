@@ -1,6 +1,4 @@
-import React from "react";
 import { Menu, Sun, Moon } from "lucide-react";
-import { Project } from "@/lib/db";
 
 import { useWorkspace } from "@/hooks/useWorkspace";
 
