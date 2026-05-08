@@ -446,3 +446,16 @@ export const fetchGitHubUser = async (token: string) => {
   return response.data;
 };
 
+export const initiateGitHubLogin = (clientId: string | undefined, redirectUri: string, state?: string) => {
+  if (!clientId) {
+    alert("GitHub Client ID not configured in .env.local");
+    return;
+  }
+  const scope = ""; // No 'repo' scope so we respect GitHub App installations
+  let url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}`;
+  if (state) {
+    url += `&state=${encodeURIComponent(state)}`;
+  }
+  window.location.href = url;
+};
+

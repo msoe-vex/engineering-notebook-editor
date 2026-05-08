@@ -36,4 +36,5 @@ export const EventNames = {
   STATE_CHANGED: "state:changed",
   SCROLL_TO_RESOURCE: "editor:scroll_to_resource",
   SHOW_NOTIFICATION: "ui:show_notification",
+  SHOW_GITHUB_LOGIN: "ui:show_github_login",
 };

@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTheme } from "next-themes";
 import {
-  fetchGitHubUser
+  fetchGitHubUser, initiateGitHubLogin
 } from "@/lib/github";
+import GitHubConnectionDialog from "./GitHubConnectionDialog";
 import { ExplorerFile, TeamTab, GitHubConfig } from "@/lib/types";
 import {
   Project, saveProject, deleteProject, deleteProjectHandle, deleteProjectDatabase,
@@ -81,6 +82,14 @@ export default function App() {
   const [githubToken, setGithubToken] = useState<string | null>(null);
   const [githubUser, setGithubUser] = useState<string | null>(null);
   const [isExchangingCode, setIsExchangingCode] = useState(false);
+  const authCheckStarted = useRef(false);
+  const [autoOpenGithubModal, setAutoOpenGithubModal] = useState(false);
+  const [showGitHubLoginOnly, setShowGitHubLoginOnly] = useState(false);
+  const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
+
+
+
+
 
   const notify = useCallback((message: string, type: "error" | "success" = "success") => {
     setNotification({ message, type });
@@ -139,14 +148,39 @@ export default function App() {
     navigateTo({ project: null, entry: null, resource: null }, '/');
   }, [navigateTo]);
 
-  // Listen for notifications
+  const onSignOutGithub = useCallback(() => {
+    localStorage.removeItem("nb-github-token");
+    localStorage.removeItem("nb-github-user");
+    setGithubToken(null);
+    setGithubUser(null);
+  }, []);
+
+
+  // Listen for global events
   useEffect(() => {
-    return events.on(EventNames.SHOW_NOTIFICATION, (data: unknown) => {
+    const unsubNotification = events.on(EventNames.SHOW_NOTIFICATION, (data: unknown) => {
       if (typeof data === 'object' && data !== null && 'message' in data) {
         const notification = data as { message: string; type?: "success" | "error" | "loading" | "info" };
         showNotification(notification.message, notification.type || "info");
       }
     });
+
+    const unsubLogin = events.on(EventNames.SHOW_GITHUB_LOGIN, (data: unknown) => {
+      const options = data as { loginOnly?: boolean; projectId?: string } | undefined;
+      if (options?.projectId) {
+        setPendingProjectId(options.projectId);
+      }
+      if (options?.loginOnly) {
+        setShowGitHubLoginOnly(true);
+      } else {
+        setAutoOpenGithubModal(true);
+      }
+    });
+
+    return () => {
+      unsubNotification();
+      unsubLogin();
+    };
   }, []);
 
   useEffect(() => {
@@ -155,6 +189,9 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (authCheckStarted.current) return;
+    authCheckStarted.current = true;
+
     const checkAuth = async () => {
       const storedToken = localStorage.getItem("nb-github-token");
       const storedUser = localStorage.getItem("nb-github-user");
@@ -179,6 +216,7 @@ export default function App() {
           setGithubToken(null);
           setGithubUser(null);
           showNotification("GitHub session expired. Please sign in again.", "error");
+          setShowGitHubLoginOnly(true);
           if (mode === "github") {
             disconnect();
             navigateToHome();
@@ -217,10 +255,31 @@ export default function App() {
           showNotification("GitHub authentication failed.", "error");
         } finally {
           setIsExchangingCode(false);
-          // Clean up URL
+          
+          // Clean up URL and recover state
           const url = new URL(window.location.href);
+          const state = params.get("state");
+          
+          // Remove OAuth specific params
           url.searchParams.delete("code");
+          url.searchParams.delete("state");
+
+          // Restore original search params from state if they exist
+          if (state) {
+            const stateParams = new URLSearchParams(state);
+            stateParams.forEach((val, key) => {
+              url.searchParams.set(key, val);
+            });
+          }
+
           window.history.replaceState({}, "", url.toString());
+
+          // If we have a project in the URL and we are not in a workspace, try selecting it now
+          const projectInUrl = url.searchParams.get("project");
+          if (projectInUrl && mode === "none") {
+            selectProject(projectInUrl);
+          }
+          setPendingProjectId(null);
         }
       }
     };
@@ -250,7 +309,7 @@ export default function App() {
       window.removeEventListener('popstate', syncView);
       unsub();
     };
-  }, [mode, disconnect, navigateToHome]);
+  }, [mode, disconnect, navigateToHome, selectProject]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -613,15 +672,13 @@ export default function App() {
           onCreateGithub={handleCreateGithub}
           onCreateLocal={handleCreateLocal}
           onCreateTemporary={handleCreateTemporary}
-          onSignOutGithub={() => {
-            localStorage.removeItem("nb-github-token");
-            localStorage.removeItem("nb-github-user");
-            setGithubToken(null);
-            setGithubUser(null);
-          }}
+          onSignOutGithub={onSignOutGithub}
+
           githubToken={githubToken}
           githubUser={githubUser}
           isExchangingGithubCode={isExchangingCode}
+          autoOpenGithubModal={autoOpenGithubModal}
+          onCloseGithubModal={() => setAutoOpenGithubModal(false)}
         />
       ) : (
         isMobile ? (
@@ -665,6 +722,26 @@ export default function App() {
           </div>
         </div>
       )}
+
+      <GitHubConnectionDialog
+        isOpen={showGitHubLoginOnly}
+        onClose={() => { setShowGitHubLoginOnly(false); setPendingProjectId(null); }}
+        mode="login"
+        githubToken={githubToken}
+        githubUser={githubUser}
+        onLogin={() => {
+          const state = pendingProjectId ? `?project=${pendingProjectId}` : window.location.search;
+          initiateGitHubLogin(process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID, window.location.origin, state);
+        }}
+        onSignOut={onSignOutGithub}
+        onConnect={() => {
+          // This mode is for re-auth, so we just close the dialog
+          // The project load will continue automatically because checkAuth will see the token
+          setShowGitHubLoginOnly(false);
+        }}
+        isExchangingCode={isExchangingCode}
+        projects={projects}
+      />
 
       <ConfirmationDialog
         isOpen={confirmDialog.isOpen} title={confirmDialog.title} message={confirmDialog.message}
