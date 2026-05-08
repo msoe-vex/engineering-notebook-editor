@@ -6,7 +6,7 @@ import {
 } from "@tiptap/react";
 import { NodeSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
-import { store, WorkspaceMode } from "@/lib/store";
+import { store } from "@/lib/store";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { TableRow } from "@tiptap/extension-table-row";
 import {
