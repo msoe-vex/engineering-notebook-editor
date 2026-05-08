@@ -18,6 +18,7 @@ import WelcomePage from "./WelcomePage";
 import Sidebar from "./Sidebar";
 import TeamEditor from "./TeamEditor";
 import ProjectHeader from "./ProjectHeader";
+import { ViewMode } from "./ViewToggle";
 import ConfirmationDialog from "./ConfirmationDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { HardDrive, ArrowLeftRight, X, BookOpen, Download, Loader2, Upload } from "lucide-react";
@@ -126,8 +127,7 @@ export default function App() {
   const isMobile = useIsMobile();
   const [userSidebarPreference, setUserSidebarPreference] = useState<boolean | null>(null);
   const isSidebarOpen = userSidebarPreference ?? !isMobile;
-  const [mobileTab, setMobileTab] = useState<"editor" | "preview">("editor");
-  const [desktopViewMode, setDesktopViewMode] = useState<"editor" | "split" | "preview">("editor");
+  const [viewMode, setViewMode] = useState<ViewMode>("editor");
   const [showTeamEditor, setShowTeamEditor] = useState(false);
   const [teamTab, setTeamTab] = useState<TeamTab>("identity");
   const [hasEntryInUrl, setHasEntryInUrl] = useState(false);
@@ -255,11 +255,11 @@ export default function App() {
           showNotification("GitHub authentication failed.", "error");
         } finally {
           setIsExchangingCode(false);
-          
+
           // Clean up URL and recover state
           const url = new URL(window.location.href);
           const state = params.get("state");
-          
+
           // Remove OAuth specific params
           url.searchParams.delete("code");
           url.searchParams.delete("state");
@@ -299,6 +299,11 @@ export default function App() {
       const params = new URLSearchParams(window.location.search);
       setTargetResourceId(params.get("resource"));
       setHasEntryInUrl(params.has("entry"));
+
+      const view = params.get("view");
+      if (view === "editor" || view === "split" || view === "latex") {
+        setViewMode(view === "latex" ? "preview" : view);
+      }
     };
 
     syncView();
@@ -339,27 +344,25 @@ export default function App() {
 
   useEffect(() => {
     if (!editorPanelRef.current || !previewPanelRef.current) return;
-    if (isMobile) {
-      if (mobileTab === "editor") {
-        editorPanelRef.current.expand();
-        previewPanelRef.current.collapse();
-      } else {
-        editorPanelRef.current.collapse();
-        previewPanelRef.current.expand();
-      }
-    } else {
-      if (desktopViewMode === "editor") {
-        editorPanelRef.current.expand();
-        previewPanelRef.current.collapse();
-      } else if (desktopViewMode === "preview") {
-        editorPanelRef.current.collapse();
-        previewPanelRef.current.expand();
-      } else {
-        editorPanelRef.current.resize(50);
-        previewPanelRef.current.resize(50);
-      }
+    const effectiveView = (isMobile && viewMode === "split") ? "editor" : viewMode;
+
+    if (effectiveView === "editor") {
+      editorPanelRef.current.expand();
+      previewPanelRef.current.collapse();
+    } else if (effectiveView === "preview") {
+      editorPanelRef.current.collapse();
+      previewPanelRef.current.expand();
+    } else { // split
+      editorPanelRef.current.resize(50);
+      previewPanelRef.current.resize(50);
     }
-  }, [isMobile, mobileTab, desktopViewMode]);
+  }, [isMobile, viewMode]);
+
+  const handleSetViewMode = (mode: ViewMode) => {
+    setViewMode(mode);
+    const viewParam = mode === "preview" ? "latex" : mode;
+    navigateTo({ view: viewParam });
+  };
 
   const handleNewEntry = async () => {
     try {
@@ -570,10 +573,8 @@ export default function App() {
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => { isToggleFromButton.current = true; setUserSidebarPreference(!isSidebarOpen); }}
         isMobile={isMobile}
-        mobileTab={mobileTab}
-        onSetMobileTab={setMobileTab}
-        desktopViewMode={desktopViewMode}
-        onSetDesktopViewMode={setDesktopViewMode}
+        viewMode={viewMode}
+        onSetViewMode={handleSetViewMode}
         isRenamingProject={isRenamingProject}
         projectRenameValue={projectRenameValue}
         onSetProjectRenameValue={setProjectRenameValue}
@@ -615,34 +616,39 @@ export default function App() {
                 </div>
               </div>
             )}
-            <PanelGroup direction="horizontal" className="h-full" id="editor-preview-group">
-              <Panel
-                id="editor-panel" order={1} ref={editorPanelRef} collapsible={true} minSize={isMobile ? 0 : 30}
-                defaultSize={isMobile ? (mobileTab === "editor" ? 100 : 0) : (desktopViewMode === "editor" ? 100 : (desktopViewMode === "preview" ? 0 : 50))}
-                onCollapse={() => { if (!isMobile && desktopViewMode !== "preview") setDesktopViewMode("preview"); }}
-                onExpand={() => { if (!isMobile && desktopViewMode === "preview") setDesktopViewMode("split"); }}
-                className={`flex flex-col h-full transition-all duration-300 ease-out ${(isMobile ? mobileTab === "preview" : desktopViewMode === "preview") ? "opacity-0 pointer-events-none" : "opacity-100"}`}
-              >
-                {openFile && (
-                  <Editor
-                    key={openFile.path}
-                    onClose={() => navigateTo({ entry: null, resource: null })}
-                    targetResourceId={targetResourceId}
-                    showConfirm={showConfirm}
-                  />
-                )}
-              </Panel>
-              <PanelResizeHandle id="editor-preview-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${(isMobile || desktopViewMode !== 'split') ? 'hidden' : ''}`} />
-              <Panel
-                id="preview-panel" order={2} ref={previewPanelRef} collapsible={true} minSize={isMobile ? 0 : 30}
-                defaultSize={isMobile ? (mobileTab === "preview" ? 100 : 0) : (desktopViewMode === "preview" ? 100 : (desktopViewMode === "editor" ? 0 : 50))}
-                onCollapse={() => { if (!isMobile && desktopViewMode !== "editor") setDesktopViewMode("editor"); }}
-                onExpand={() => { if (!isMobile && desktopViewMode === "editor") setDesktopViewMode("split"); }}
-                className={`flex flex-col h-full bg-nb-surface-low transition-all duration-300 ease-out ${(isMobile ? mobileTab === "editor" : desktopViewMode === "editor") ? "opacity-0 pointer-events-none" : "opacity-100"}`}
-              >
-                <Preview latexContent={openFile?.latex || ""} />
-              </Panel>
-            </PanelGroup>
+            {(() => {
+              const effectiveView = (isMobile && viewMode === "split") ? "editor" : viewMode;
+              return (
+                <PanelGroup direction="horizontal" className="h-full" id="editor-preview-group">
+                  <Panel
+                    id="editor-panel" order={1} ref={editorPanelRef} collapsible={true} minSize={isMobile ? 0 : 30}
+                    defaultSize={effectiveView === "editor" ? 100 : (effectiveView === "preview" ? 0 : 50)}
+                    onCollapse={() => { if (!isMobile && viewMode !== "preview") handleSetViewMode("preview"); }}
+                    onExpand={() => { if (!isMobile && viewMode === "preview") handleSetViewMode("split"); }}
+                    className={`flex flex-col h-full transition-all duration-300 ease-out ${(isMobile ? effectiveView === "preview" : effectiveView === "preview") ? "opacity-0 pointer-events-none" : "opacity-100"}`}
+                  >
+                    {openFile && (
+                      <Editor
+                        key={openFile.path}
+                        onClose={() => navigateTo({ entry: null, resource: null })}
+                        targetResourceId={targetResourceId}
+                        showConfirm={showConfirm}
+                      />
+                    )}
+                  </Panel>
+                  <PanelResizeHandle id="editor-preview-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${(isMobile || effectiveView !== 'split') ? 'hidden' : ''}`} />
+                  <Panel
+                    id="preview-panel" order={2} ref={previewPanelRef} collapsible={true} minSize={isMobile ? 0 : 30}
+                    defaultSize={effectiveView === "preview" ? 100 : (effectiveView === "editor" ? 0 : 50)}
+                    onCollapse={() => { if (!isMobile && viewMode !== "editor") handleSetViewMode("editor"); }}
+                    onExpand={() => { if (!isMobile && viewMode === "editor") handleSetViewMode("split"); }}
+                    className={`flex flex-col h-full bg-nb-surface-low transition-all duration-300 ease-out ${(isMobile ? effectiveView === "editor" : effectiveView === "editor") ? "opacity-0 pointer-events-none" : "opacity-100"}`}
+                  >
+                    <Preview latexContent={openFile?.latex || ""} />
+                  </Panel>
+                </PanelGroup>
+              );
+            })()}
           </div>
         ) : (
           <WelcomePage
@@ -681,33 +687,35 @@ export default function App() {
           onCloseGithubModal={() => setAutoOpenGithubModal(false)}
         />
       ) : (
-        isMobile ? (
-          <div className="flex w-full h-full relative overflow-hidden">
-            <div className="flex-1 w-full h-full">{main}</div>
-            <div className={`fixed inset-0 z-[500] transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-              <div className="absolute inset-0 bg-black/40" onClick={() => setUserSidebarPreference(false)} />
-              <div className={`absolute top-0 bottom-0 left-0 w-[85%] max-w-[300px] bg-nb-surface-low border-r border-nb-outline-variant flex flex-col shadow-2xl transition-transform duration-300 ease-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-                {sidebar}
+        <div className="flex w-full h-full relative overflow-hidden">
+          {isMobile ? (
+            <div className="flex w-full h-full relative overflow-hidden">
+              <div className="flex-1 w-full h-full">{main}</div>
+              <div className={`fixed inset-0 z-[500] transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+                <div className="absolute inset-0 bg-black/40" onClick={() => setUserSidebarPreference(false)} />
+                <div className={`absolute top-0 bottom-0 left-0 w-[85%] max-w-[300px] bg-nb-surface-low border-r border-nb-outline-variant flex flex-col shadow-2xl transition-transform duration-300 ease-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                  {sidebar}
+                </div>
               </div>
             </div>
-          </div>
-        ) : (
-          <PanelGroup direction="horizontal" className="w-full h-full" id="main-layout-group">
-            <Panel
-              id="sidebar-panel" order={1} ref={sidebarPanelRef} defaultSize={20} minSize={15} maxSize={40} collapsible={true}
-              onCollapse={() => setUserSidebarPreference(false)} onExpand={() => setUserSidebarPreference(true)}
-              className="flex flex-col transition-all duration-300 ease-out"
-            >
-              <div className={`flex-1 flex flex-col min-h-0 transition-all duration-300 ease-out ${!isSidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-                {sidebar}
-              </div>
-            </Panel>
-            <PanelResizeHandle id="sidebar-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${!isSidebarOpen ? 'hidden' : ''}`} />
-            <Panel id="main-panel" order={2} defaultSize={isSidebarOpen ? 80 : 100} minSize={30} className="flex flex-col">
-              {main}
-            </Panel>
-          </PanelGroup>
-        )
+          ) : (
+            <PanelGroup direction="horizontal" className="w-full h-full" id="main-layout-group">
+              <Panel
+                id="sidebar-panel" order={1} ref={sidebarPanelRef} defaultSize={20} minSize={15} maxSize={40} collapsible={true}
+                onCollapse={() => setUserSidebarPreference(false)} onExpand={() => setUserSidebarPreference(true)}
+                className="flex flex-col transition-all duration-300 ease-out"
+              >
+                <div className={`flex-1 flex flex-col min-h-0 transition-all duration-300 ease-out ${!isSidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                  {sidebar}
+                </div>
+              </Panel>
+              <PanelResizeHandle id="sidebar-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${!isSidebarOpen ? 'hidden' : ''}`} />
+              <Panel id="main-panel" order={2} defaultSize={isSidebarOpen ? 80 : 100} minSize={30} className="flex flex-col">
+                {main}
+              </Panel>
+            </PanelGroup>
+          )}
+        </div>
       )}
 
       {/* Notifications */}
