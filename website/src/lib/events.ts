@@ -1,4 +1,4 @@
-type Handler = (data?: any) => void;
+type Handler = (data?: unknown) => void;
 
 class EventEmitter {
   private events: Record<string, Handler[]> = {};
@@ -16,7 +16,7 @@ class EventEmitter {
     this.events[event] = this.events[event].filter(h => h !== handler);
   }
 
-  emit(event: string, data?: any) {
+  emit(event: string, data?: unknown) {
     if (!this.events[event]) return;
     this.events[event].forEach(handler => handler(data));
   }

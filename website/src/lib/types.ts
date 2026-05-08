@@ -19,3 +19,5 @@ export interface ExplorerFile {
   isValid?: boolean;
   validationErrors?: string[];
 }
+
+export type TeamTab = "identity" | "members" | "phases";

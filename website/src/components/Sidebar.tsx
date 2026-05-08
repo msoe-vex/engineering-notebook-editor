@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import FileExplorer from "./FileExplorer";
 import PendingChangesPanel from "./PendingChangesPanel";
-import { ExplorerFile } from "@/lib/types";
+import { ExplorerFile, TeamTab } from "@/lib/types";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { LATEX_DIR } from "@/lib/constants";
 import { showNotification } from "./Notification";
@@ -9,7 +9,7 @@ import { showNotification } from "./Notification";
 interface SidebarProps {
   selectedPaths: Set<string>;
   onSelectEntry: (file: ExplorerFile, multi: boolean, range: boolean, visiblePaths: string[]) => void;
-  onOpenTeam: (tab?: any) => void;
+  onOpenTeam: (tab?: TeamTab) => void;
   showConfirm: (title: string, message: string, onConfirm: () => void, variant?: "danger" | "warning" | "info") => void;
   onNewEntry?: () => Promise<void>;
 }
@@ -31,8 +31,6 @@ export default function Sidebar({
     commitAll,
     discardPendingChanges,
     config,
-    refreshPending,
-    currentProjectId,
     navigateTo,
     getFileContent,
     exportEntries
