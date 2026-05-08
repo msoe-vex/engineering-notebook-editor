@@ -408,19 +408,19 @@ export default function App() {
     navigateTo({}, `/workspace/team/${tab}`);
   };
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
     if (mode === "temporary") {
       showConfirm(
         "Leave Temporary Workspace?",
         "All changes in this temporary workspace will be lost forever if you disconnect. Are you sure you want to leave?",
-        () => {
-          disconnect();
+        async () => {
+          await disconnect();
           navigateToHome();
         },
         "warning"
       );
     } else {
-      disconnect();
+      await disconnect();
       navigateToHome();
     }
   };
