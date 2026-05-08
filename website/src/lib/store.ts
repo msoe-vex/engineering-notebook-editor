@@ -245,8 +245,18 @@ class WorkspaceStore {
           this.mode = "none";
         }
       } else if (this.mode === "github") {
+        const token = localStorage.getItem("nb-github-token");
+        if (!token) {
+          this.disconnect();
+          events.emit(EventNames.SHOW_NOTIFICATION, { message: "GitHub token is missing. Please sign in.", type: "error" });
+          events.emit(EventNames.SHOW_GITHUB_LOGIN, { loginOnly: true, projectId: project.id });
+          window.history.replaceState({}, '', '/');
+          this.notifyStateChange();
+          return;
+        }
+
         this.config = {
-          token: localStorage.getItem("nb-github-token") || "",
+          token,
           owner: project.githubConfig!.owner,
           repo: project.githubConfig!.repo,
           branch: project.githubConfig!.branch,
@@ -254,7 +264,25 @@ class WorkspaceStore {
           entriesDir: ENTRIES_DIR,
           resourcesDir: ASSETS_DIR
         };
-        await this.loadGitHubWorkspace();
+
+        try {
+          await this.loadGitHubWorkspace();
+        } catch (error: unknown) {
+          const err = error as { status?: number };
+          console.error("Failed to load GitHub workspace:", error);
+          this.disconnect();
+          const msg = err.status === 401 ? "GitHub session expired. Please sign in again." :
+                      err.status === 403 ? "You do not have access to this repository." :
+                      err.status === 404 ? "Repository or folder not found." :
+                      "Failed to connect to GitHub. Check your internet or token.";
+          if (err.status === 401) {
+            events.emit(EventNames.SHOW_GITHUB_LOGIN, { loginOnly: true, projectId: project.id });
+          }
+          events.emit(EventNames.SHOW_NOTIFICATION, { message: msg, type: "error" });
+          window.history.replaceState({}, '', '/');
+          this.notifyStateChange();
+          return;
+        }
       } else if (this.mode === "temporary") {
         this.metadata = EMPTY_METADATA;
         this.entries = [];
@@ -317,7 +345,9 @@ class WorkspaceStore {
   }
 
   private async loadGitHubWorkspace() {
-    if (!this.config) return;
+    if (!this.config) throw new Error("GitHub configuration missing");
+    if (!this.config.token) throw new Error("GitHub token is required");
+
     const dbName = this.getDBName();
     const basePrefix = this.config.baseDir ? (this.config.baseDir.endsWith('/') ? this.config.baseDir : this.config.baseDir + '/') : '';
     const actualIndexPath = `${basePrefix}${INDEX_PATH}`;
