@@ -247,11 +247,13 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 interface TeamEditorProps {
   onClose: () => void;
   initialTab?: "identity" | "members" | "phases";
+  onTabChange?: (tab: "identity" | "members" | "phases") => void;
 }
 
 export default function TeamEditor({
   onClose,
-  initialTab = "identity"
+  initialTab = "identity",
+  onTabChange
 }: TeamEditorProps) {
   const {
     metadata,
@@ -263,7 +265,7 @@ export default function TeamEditor({
 
   const [teamData, setTeamData] = useState<TeamMetadata>(initialData);
   const [phases, setPhases] = useState<ProjectPhase[]>(initialPhases);
-  const [activeTab, setActiveTab] = useState<"identity" | "members" | "phases">(initialTab);
+  const activeTab = initialTab;
   const [activeId, setActiveId] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -450,21 +452,21 @@ export default function TeamEditor({
         <div className="flex justify-center pb-4">
           <div className="flex gap-2 p-1 bg-nb-surface-low rounded-2xl border border-nb-outline-variant/20 w-fit">
             <button
-              onClick={() => setActiveTab("identity")}
+              onClick={() => onTabChange?.("identity")}
               className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer ${activeTab === "identity" ? "bg-nb-surface text-nb-primary shadow-sm" : "text-nb-on-surface-variant hover:text-nb-on-surface"}`}
             >
               <Building2 size={14} />
               Identity
             </button>
             <button
-              onClick={() => setActiveTab("members")}
+              onClick={() => onTabChange?.("members")}
               className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer ${activeTab === "members" ? "bg-nb-surface text-nb-primary shadow-sm" : "text-nb-on-surface-variant hover:text-nb-on-surface"}`}
             >
               <Users size={14} />
               Team
             </button>
             <button
-              onClick={() => setActiveTab("phases")}
+              onClick={() => onTabChange?.("phases")}
               className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer ${activeTab === "phases" ? "bg-nb-surface text-nb-primary shadow-sm" : "text-nb-on-surface-variant hover:text-nb-on-surface"}`}
             >
               <Palette size={14} />

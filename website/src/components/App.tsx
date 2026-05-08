@@ -61,6 +61,7 @@ export default function App() {
     config,
     currentProjectId,
     isLoading,
+    loadingLabel,
     isInitialized,
     projects,
     openFile,
@@ -76,8 +77,14 @@ export default function App() {
     exportNotebook,
     importNotebook,
     selectedPaths,
-    setSelectedPaths
+    setSelectedPaths,
+    hasEntryInUrl,
+    showTeamEditor,
+    teamTab
   } = useWorkspace();
+
+  // Global loading overlay for background operations (like importing/exporting)
+  const isGlobalLoading = isLoading && loadingLabel && loadingLabel !== "Loading team..." && loadingLabel !== "Opening entry...";
 
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [githubToken, setGithubToken] = useState<string | null>(null);
@@ -128,9 +135,6 @@ export default function App() {
   const [userSidebarPreference, setUserSidebarPreference] = useState<boolean | null>(null);
   const isSidebarOpen = userSidebarPreference ?? !isMobile;
   const [viewMode, setViewMode] = useState<ViewMode>("editor");
-  const [showTeamEditor, setShowTeamEditor] = useState(false);
-  const [teamTab, setTeamTab] = useState<TeamTab>("identity");
-  const [hasEntryInUrl, setHasEntryInUrl] = useState(false);
 
   const editorPanelRef = useRef<ImperativePanelHandle>(null);
   const previewPanelRef = useRef<ImperativePanelHandle>(null);
@@ -288,17 +292,8 @@ export default function App() {
 
     const syncView = () => {
       const path = window.location.pathname;
-      if (path.startsWith('/workspace/team')) {
-        setShowTeamEditor(true);
-        const tab = path.split('/').pop() as TeamTab;
-        setTeamTab(["identity", "members", "phases"].includes(tab) ? tab : "identity");
-      } else {
-        setShowTeamEditor(false);
-      }
-
       const params = new URLSearchParams(window.location.search);
       setTargetResourceId(params.get("resource"));
-      setHasEntryInUrl(params.has("entry"));
 
       const view = params.get("view");
       if (view === "editor" || view === "split" || view === "latex") {
@@ -496,7 +491,6 @@ export default function App() {
         try {
           const data = JSON.parse(reader.result as string);
           await importNotebook(data);
-          showNotification("Notebook imported successfully.", "success");
         } catch (error) {
           console.error("Import failed", error);
           showNotification(error instanceof Error ? error.message : "Invalid import file", "error");
@@ -601,11 +595,23 @@ export default function App() {
         )}
 
         {(showTeamEditor) ? (
-          <TeamEditor
-            key={`${currentProjectId}-team`}
-            onClose={() => navigateTo({}, '/workspace/editor')}
-            initialTab={teamTab}
-          />
+          <div className="flex-1 flex flex-col min-h-0 relative h-full">
+            {isLoading ? (
+              <div className="absolute inset-0 bg-nb-bg flex items-center justify-center z-50 animate-in fade-in duration-300">
+                <div className="flex flex-col items-center gap-4">
+                  <Loader2 className="w-8 h-8 text-nb-primary animate-spin" />
+                  <span className="text-sm text-nb-text-secondary animate-pulse tracking-wide uppercase font-bold text-[10px]">Loading team...</span>
+                </div>
+              </div>
+            ) : (
+              <TeamEditor
+                key={`${currentProjectId}-team`}
+                onClose={() => navigateTo({}, '/workspace/editor')}
+                initialTab={teamTab}
+                onTabChange={(tab) => navigateTo({}, `/workspace/team/${tab}`)}
+              />
+            )}
+          </div>
         ) : (openFile || hasEntryInUrl) ? (
           <div className="flex-1 flex flex-col min-h-0 relative h-full">
             {!openFile && (
@@ -757,15 +763,20 @@ export default function App() {
         variant={confirmDialog.variant}
       />
 
-      {(!isInitialized || isLoading) && (
+      {/* Global Loading Overlay */}
+      {(!isInitialized || (isLoading && mode === "none") || isGlobalLoading) && (
         <div className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-md flex flex-col items-center justify-center font-sans animate-in fade-in duration-300">
           <div className="flex flex-col items-center gap-6">
             <div className="w-20 h-20 rounded-[2.5rem] bg-nb-primary flex items-center justify-center shadow-2xl shadow-nb-primary/30 animate-pulse">
               <BookOpen size={40} className="text-white" />
             </div>
             <div className="text-center space-y-2">
-              <h1 className="text-xl font-black tracking-tight text-white">Notebook</h1>
-              <p className="text-[10px] font-black tracking-[0.2em] text-white/40 uppercase">Engineering Editor</p>
+              <h1 className="text-xl font-black tracking-tight text-white">
+                {isGlobalLoading ? loadingLabel : "Notebook"}
+              </h1>
+              <p className="text-[10px] font-black tracking-[0.2em] text-white/40 uppercase">
+                {isGlobalLoading ? "Please wait..." : "Engineering Editor"}
+              </p>
             </div>
             <div className="flex items-center gap-1 mt-4">
               <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce [animation-delay:-0.3s]" />
