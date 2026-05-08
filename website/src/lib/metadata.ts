@@ -118,9 +118,18 @@ export function buildResourceTypeIndex(
   return resourceTypes;
 }
 
+export const DEFAULT_PHASES: ProjectPhase[] = [
+  { id: "define-problem", index: 1, name: "Define Problem", description: "Identifying the core issue, setting SMART goals, outlining constraints and deliverables.", iconName: "Goal", color: "#3b82f6" },
+  { id: "generate-concepts", index: 2, name: "Generate Concepts", description: "Brainstorming, research, prototyping, and decision matrices to evaluate potential solutions.", iconName: "Brain", color: "#a855f7" },
+  { id: "develop-solution", index: 3, name: "Develop Solution", description: "Creating CAD, detailed sketches, math calculations, graphical models, and pseudocode.", iconName: "PencilRuler", color: "#6366f1" },
+  { id: "construct-test", index: 4, name: "Construct and Test", description: "Building the robot, writing the code, executing test plans, and gathering qualitative/quantitative data.", iconName: "Hammer", color: "#f97316" },
+  { id: "evaluate-solution", index: 5, name: "Evaluate Solution", description: "Reflecting on constraints, event outcomes, and planning future improvements.", iconName: "SearchCheck", color: "#10b981" },
+];
+
 export const EMPTY_METADATA: NotebookMetadata = { 
   version: 3, 
   entries: {},
+  phases: DEFAULT_PHASES,
   team: {
     teamName: "",
     teamNumber: "",
@@ -415,7 +424,7 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
     if (!entry.author?.trim()) errors.push("Missing author");
     
     // Phase validation
-    const phases = metadata.phases || [];
+    const phases = metadata.phases && metadata.phases.length > 0 ? metadata.phases : DEFAULT_PHASES;
     if (typeof entry.phase !== "number" || !phases.some(p => p.index === entry.phase)) {
       errors.push("Missing or invalid phase");
     }
