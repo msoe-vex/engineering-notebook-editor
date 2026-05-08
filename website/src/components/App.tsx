@@ -288,11 +288,14 @@ export default function App() {
     };
 
     checkAuth();
+  }, [mode, disconnect, navigateToHome, selectProject]);
 
+  // Separate effect for syncing view mode from URL (including back button support)
+  useEffect(() => {
     const syncView = () => {
       const params = new URLSearchParams(window.location.search);
 
-      const view = params.get("view");
+      const view = params.get("view") || "editor";
       if (view === "editor" || view === "split" || view === "latex") {
         setViewMode(view === "latex" ? "preview" : view);
       }
@@ -306,7 +309,7 @@ export default function App() {
       window.removeEventListener('popstate', syncView);
       unsub();
     };
-  }, [mode, disconnect, navigateToHome, selectProject]);
+  }, []);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -351,7 +354,6 @@ export default function App() {
   }, [isMobile, viewMode]);
 
   const handleSetViewMode = (mode: ViewMode) => {
-    setViewMode(mode);
     const viewParam = mode === "preview" ? "latex" : mode;
     navigateTo({ view: viewParam });
   };
@@ -409,13 +411,11 @@ export default function App() {
         "Leave Temporary Workspace?",
         "All changes in this temporary workspace will be lost forever if you disconnect. Are you sure you want to leave?",
         async () => {
-          await disconnect();
           navigateToHome();
         },
         "warning"
       );
     } else {
-      await disconnect();
       navigateToHome();
     }
   };
