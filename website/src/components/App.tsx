@@ -24,7 +24,7 @@ import TeamEditor from "./TeamEditor";
 import ProjectHeader from "./ProjectHeader";
 import ConfirmationDialog from "./ConfirmationDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { HardDrive, ArrowLeftRight, X, BookOpen, Download, Loader2 } from "lucide-react";
+import { HardDrive, ArrowLeftRight, X, BookOpen, Download, Loader2, Upload } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { saveAs } from "file-saver";
 import { generateUUID } from "@/lib/utils";
@@ -99,7 +99,9 @@ export default function App() {
     createLocalProject,
     createTemporaryProject,
     dirHandle,
-    navigateTo
+    navigateTo,
+    exportProject,
+    importNotebook
   } = useWorkspace();
 
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -379,8 +381,30 @@ export default function App() {
   };
 
   const handleExportNotebook = async () => {
-    // TODO: Implement in store
-    notify("Exporting notebook...");
+    await exportProject();
+  };
+
+  const handleImportNotebook = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json";
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = async () => {
+          try {
+            const data = JSON.parse(reader.result as string);
+            await importNotebook(data);
+          } catch (e) {
+            console.error("Failed to parse import file", e);
+            notify("Invalid import file", "error");
+          }
+        };
+        reader.readAsText(file);
+      }
+    };
+    input.click();
   };
 
   const processImportFile = async (file: File) => {
@@ -411,6 +435,7 @@ export default function App() {
         </div>
         <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-nb-on-surface truncate">Notebook</p></div>
         <div className="flex items-center gap-1">
+          <button onClick={handleImportNotebook} title="Import Notebook/Entries" className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors"><Upload size={16} /></button>
           <button onClick={handleExportNotebook} title="Export Entire Notebook" className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors"><Download size={16} /></button>
           <button onClick={handleDisconnect} title="Switch Workspace" className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors"><ArrowLeftRight size={16} /></button>
           {isMobile && <button onClick={() => setUserSidebarPreference(false)} className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant transition-colors"><X size={18} /></button>}

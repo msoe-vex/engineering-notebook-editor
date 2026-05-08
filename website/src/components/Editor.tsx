@@ -43,7 +43,8 @@ const Editor = React.memo(function Editor({
     metadata,
     updateEntry,
     deleteEntry,
-    currentProjectId
+    currentProjectId,
+    exportNotebook
   } = useWorkspace();
 
   if (!openFile) return null;
@@ -454,10 +455,8 @@ const Editor = React.memo(function Editor({
               <MenuAction
                 icon={<FileJson size={14} />}
                 label="Download JSON"
-                onClick={() => {
-                  const latestMeta = metadata?.entries?.[entryId];
-                  const currentUpdatedAt = latestMeta?.updatedAt || initialUpdatedAt || initialCreatedAt;
-                  // TODO: Implement portable download in store or keep logic here
+                onClick={async () => {
+                  await exportNotebook([entryId]);
                 }}
               />
               <MenuAction icon={<FileCode size={14} />} label="Download LaTeX" onClick={handleDownload} />

@@ -1,5 +1,5 @@
-import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, TipTapNode, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets } from "./metadata";
-import { generateAllEntriesLatex } from "./latex";
+import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, TipTapNode, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds } from "./metadata";
+import { generateAllEntriesLatex, generateEntryLatex } from "./latex";
 import { ExplorerFile, GitHubConfig } from "./types";
 import { getProjects, getProject, Project, getProjectDBName, getAllPending, stageChange, removeResource, getResource, putResource, saveProject, getProjectHandle, saveProjectHandle, PendingChange } from "./db";
 import { fetchFileContent, fetchDirectoryTree, fetchRawFileContent, GitHubFile } from "./github";
@@ -276,6 +276,14 @@ class WorkspaceStore {
     }
   }
 
+  private async reloadWorkspace() {
+    if (this.mode === "local") {
+      await this.loadLocalWorkspace();
+    } else if (this.mode === "github") {
+      await this.loadGitHubWorkspace();
+    }
+  }
+
   private async loadLocalWorkspace() {
     if (!this.dirHandle) return;
     const files = await listLocalFiles(this.dirHandle, ENTRIES_DIR);
@@ -493,7 +501,7 @@ class WorkspaceStore {
           contentObj = JSON.parse(contentObj);
         } catch { /* use as is */ }
       }
-      
+
       const { cleanDoc, newAssets } = await dehydrateAssets(contentObj);
       const entryJsonStr = JSON.stringify({ version: 3, content: cleanDoc }, null, 2);
 
@@ -517,6 +525,9 @@ class WorkspaceStore {
         await this.persistFile(latexPath, latex, `Generate LaTeX: ${info.title}`);
         this.#lastSavedContents.set(latexPath, latex);
       }
+
+      // Cleanup orphaned assets
+      await this.reconcileAssetRefs(existingEntry.assets || [], mergedEntry.assets || []);
 
       // Save Metadata
       await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Auto-save metadata");
@@ -573,6 +584,7 @@ class WorkspaceStore {
 
   async deleteEntry(file: ExplorerFile) {
     const id = file.path.split('/').pop()?.replace('.json', '') || "";
+    const oldMeta = this.metadata;
     const updatedMeta = validateNotebookIntegrity(removeEntryFromMetadata(this.metadata, id));
 
     // Memory update
@@ -596,6 +608,7 @@ class WorkspaceStore {
         await stageChange(dbName, { path: `${LATEX_DIR}/${id}.tex`, operation: "delete", label: "Delete LaTeX", stagedAt: new Date().toISOString() });
       }
 
+      await this.reconcileAssetRefs(oldMeta.assetRefs || {}, this.metadata.assetRefs || {});
       await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Delete entry");
 
       const allEntriesLatex = generateAllEntriesLatex(this.metadata);
@@ -604,6 +617,7 @@ class WorkspaceStore {
   }
 
   async saveTeam(team: TeamMetadata, phases?: ProjectPhase[]) {
+    const oldMeta = this.metadata;
     const { cleanTeam, newAssets } = await dehydrateTeamAssets(team);
 
     // Memory update
@@ -630,6 +644,7 @@ class WorkspaceStore {
       for (const asset of newAssets) {
         await this.persistFile(asset.path, asset.base64, `Team asset`, true);
       }
+      await this.reconcileAssetRefs(oldMeta.assetRefs || {}, updatedMeta.assetRefs || {});
       await this.persistFile(INDEX_PATH, metaStr, "Update team metadata");
     });
   }
@@ -654,6 +669,199 @@ class WorkspaceStore {
   }
 
   // ─── Persistence Helpers ────────────────────────────────────────────────────
+  public async getFileContent(path: string): Promise<string | null> {
+    const dbName = this.getDBName();
+    const pending = await getAllPending(dbName);
+    const staged = pending.find(p => p.path === path && p.operation === "upsert");
+    if (staged?.content) return staged.content;
+
+    try {
+      if (this.mode === "local" && this.dirHandle) {
+        const res = await getLocalFileContent(this.dirHandle, path);
+        return res.text || null;
+      } else if (this.mode === "github" && this.config) {
+        return await fetchFileContent(this.config, path);
+      } else if (this.mode === "temporary") {
+        // Temporary mode only exists in pending changes
+        return null;
+      }
+    } catch (e) {
+      console.error(`Failed to get content for ${path}:`, e);
+    }
+    return null;
+  }
+
+  public async exportNotebook(entryIds?: string[]) {
+    this.setLoading(true);
+    try {
+      const targets = entryIds || Object.keys(this.metadata.entries);
+      const assetsData: Record<string, string> = {};
+      const entriesWithContent: Record<string, EntryMetadata & { content?: any }> = {};
+      const relevantAssetRefs: Record<string, string[]> = {};
+      
+      // 1. Process Entries and their content
+      for (const id of targets) {
+        const meta = this.metadata.entries[id];
+        if (!meta) continue;
+        
+        const contentStr = await this.getFileContent(meta.filename);
+        if (!contentStr) continue;
+        
+        let content;
+        try {
+          const contentObj = JSON.parse(contentStr);
+          content = contentObj.content || contentObj;
+        } catch (e) {
+          console.error(`Failed to parse content for ${id}`, e);
+          continue;
+        }
+        
+        // Deep copy meta and add content
+        entriesWithContent[id] = { ...JSON.parse(JSON.stringify(meta)), content };
+        
+        // Collect assets referenced by this entry
+        const images = extractImagePaths(content);
+        for (const assetPath of images) {
+          if (!assetsData[assetPath] && !assetPath.startsWith('data:')) {
+            const base64 = await this.getAssetBase64(assetPath);
+            if (base64) assetsData[assetPath] = base64;
+          }
+        }
+      }
+      
+      // 2. Identify relevant AssetRefs
+      if (this.metadata.assetRefs) {
+        for (const [assetPath, owners] of Object.entries(this.metadata.assetRefs)) {
+          const filteredOwners = owners.filter(o => 
+            targets.includes(o) || (!entryIds && o === "team")
+          );
+          if (filteredOwners.length > 0) {
+            relevantAssetRefs[assetPath] = filteredOwners;
+            // Ensure team assets are also hydrated if they haven't been yet
+            if (!assetsData[assetPath] && !assetPath.startsWith('data:')) {
+              const base64 = await this.getAssetBase64(assetPath);
+              if (base64) assetsData[assetPath] = base64;
+            }
+          }
+        }
+      }
+      
+      // 3. Assemble Export following notebook.json schema (excluding project identity)
+      const exportData: any = {
+        assetRefs: relevantAssetRefs,
+        entries: entriesWithContent,
+        assets: assetsData
+      };
+
+      if (!entryIds) {
+        exportData.phases = this.metadata.phases;
+        exportData.team = this.metadata.team;
+      }
+      
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+      const { saveAs } = await import("file-saver");
+      const name = entryIds && entryIds.length === 1 
+        ? (this.metadata.entries[entryIds[0]]?.title || "entry").replace(/[^a-z0-9]/gi, '_').toLowerCase()
+        : (this.metadata.projectName || "notebook").replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      saveAs(blob, `${name}.json`);
+
+    } catch (e) {
+      console.error("Export failed", e);
+      events.emit(EventNames.SHOW_NOTIFICATION, { message: "Export failed", type: "error" });
+    } finally {
+      this.setLoading(false);
+    }
+  }
+
+  public async importNotebook(data: any) {
+    this.setLoading(true);
+    try {
+      const { entries = {}, assets = {}, metadata: importMeta = {} } = data;
+      const idMap = new Map<string, string>();
+      const entryIdList = Object.keys(entries);
+
+      // 1. Save assets first
+      for (const [path, base64] of Object.entries(assets as Record<string, string>)) {
+        const dataUrl = `data:image/*;base64,${base64}`;
+        this.assetCache.set(path, dataUrl); // Immediate memory cache
+        await this.persistFile(path, base64, `Import asset: ${path}`, true);
+        if (this.mode === "github" || this.mode === "temporary") {
+          await putResource(this.getDBName(), { path, dataUrl });
+        }
+      }
+
+      // 2. Remap entries
+      const newEntriesMap: Record<string, EntryMetadata> = {};
+      for (const oldId of entryIdList) {
+        const entryWithContent = entries[oldId];
+        const { content, ...entryMetadata } = entryWithContent;
+        const newId = generateUUID();
+        idMap.set(oldId, newId);
+
+        // Remap content IDs
+        const { doc: remappedDoc } = remapContentIds(content, idMap);
+
+        // Remap metadata IDs (resources, references)
+        const remappedMeta = remapEntryMetadataIds(entryMetadata as EntryMetadata, idMap);
+        remappedMeta.id = newId;
+        remappedMeta.filename = `${ENTRIES_DIR}/${newId}.json`;
+
+        const contentStr = JSON.stringify({ version: 3, content: remappedDoc }, null, 2);
+        const latex = generateEntryLatex(remappedDoc as any, remappedMeta.title, remappedMeta.author, remappedMeta.phase, remappedMeta.createdAt, newId);
+
+        // Save entry files
+        await this.persistFile(remappedMeta.filename, contentStr, `Import entry: ${remappedMeta.title}`);
+        await this.persistFile(`${LATEX_DIR}/${newId}.tex`, latex, `Import LaTeX: ${remappedMeta.title}`);
+
+        newEntriesMap[newId] = remappedMeta;
+      }
+
+      // 3. Update project metadata
+      this.metadata = validateNotebookIntegrity({
+        ...this.metadata,
+        entries: { ...this.metadata.entries, ...newEntriesMap }
+      });
+
+      // Save metadata
+      await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Import notebook metadata");
+
+      // Refresh project list
+      await this.reloadWorkspace();
+      this.notifyStateChange();
+      events.emit(EventNames.SHOW_NOTIFICATION, { message: `Successfully imported ${entryIdList.length} entries`, type: "success" });
+
+    } catch (e) {
+      console.error("Import failed", e);
+      events.emit(EventNames.SHOW_NOTIFICATION, { message: "Import failed", type: "error" });
+    } finally {
+      this.setLoading(false);
+    }
+  }
+
+  private async getAssetBase64(path: string): Promise<string | null> {
+    const dbName = this.getDBName();
+    const cached = await getResource(dbName, path);
+    if (cached) {
+      return cached.includes(',') ? cached.split(',')[1] : cached;
+    }
+
+    try {
+      if (this.mode === "local" && this.dirHandle) {
+        const res = await getLocalFileContent(this.dirHandle, path);
+        return res.base64 ? res.base64.split(',')[1] : null;
+      } else if (this.mode === "github" && this.config) {
+        return await fetchRawFileContent(this.config, path);
+      }
+    } catch (e) {
+      console.error(`Failed to get asset base64 for ${path}`, e);
+    }
+    return null;
+  }
+
+  public async exportProject() {
+    await this.exportNotebook();
+  }
+
   public getDBName() {
     if (this.currentProjectId) return `notebook-project-${this.currentProjectId}`;
     return "notebook-default";
@@ -672,6 +880,37 @@ class WorkspaceStore {
     } else if (this.mode === "github" || this.mode === "temporary") {
       await stageChange(this.getDBName(), { path, content, operation: "upsert", label, stagedAt: new Date().toISOString() });
       await this.refreshPending();
+    }
+  }
+
+  private async reconcileAssetRefs(oldRefs: string[] | Record<string, string[]>, newRefs: string[] | Record<string, string[]>) {
+    const removed: string[] = [];
+
+    if (Array.isArray(oldRefs) && Array.isArray(newRefs)) {
+      // Comparing specific entry assets
+      for (const path of oldRefs) {
+        // Only mark for deletion if it's not in the new set AND not used by ANY other entry/team
+        if (!newRefs.includes(path) && (!this.metadata.assetRefs?.[path] || this.metadata.assetRefs[path].length === 0)) {
+          removed.push(path);
+        }
+      }
+    } else {
+      // Comparing global assetRefs (Record<path, owners[]>)
+      const oldR = oldRefs as Record<string, string[]>;
+      const newR = newRefs as Record<string, string[]>;
+      for (const path in oldR) {
+        if (!newR[path]) removed.push(path);
+      }
+    }
+
+    for (const path of removed) {
+      if (this.mode === "local" && this.dirHandle) {
+        await deleteLocalFileAtPath(this.dirHandle, path);
+      } else if (this.mode === "github" || this.mode === "temporary") {
+        await stageChange(this.getDBName(), { path, operation: "delete", label: `Cleanup orphan: ${path}`, stagedAt: new Date().toISOString() });
+      }
+      // Also remove from global cache to prevent hydration of dead paths
+      this.assetCache.delete(path);
     }
   }
 
