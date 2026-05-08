@@ -540,7 +540,7 @@ class WorkspaceStore {
         if (this.mode === "local" && this.dirHandle) {
           entryJsonStr = (await getLocalFileContent(this.dirHandle, meta.filename)).text || "";
         } else if (this.mode === "github" && this.config) {
-          entryJsonStr = await fetchFileContent(this.config, meta.filename);
+          entryJsonStr = await fetchFileContent(this.config, this.getFullPath(meta.filename));
         }
       }
 
@@ -592,7 +592,7 @@ class WorkspaceStore {
         if (this.mode === "local" && this.dirHandle) {
           latex = await readLocalFile(this.dirHandle, texPath);
         } else if (this.mode === "github" && this.config) {
-          latex = await fetchFileContent(this.config, texPath);
+          latex = await fetchFileContent(this.config, this.getFullPath(texPath));
         }
       } catch { }
 
