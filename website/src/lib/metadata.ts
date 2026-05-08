@@ -287,8 +287,9 @@ export function hydrateAssets(doc: TipTapDoc, assetCache: Map<string, string>): 
     if (!node) return node;
     if (node.type === "image") {
       const attrs = (node.attrs || {}) as Record<string, string | undefined>;
-      if (attrs.src?.startsWith(`${ASSETS_DIR}/`)) {
-        const dataUrl = assetCache.get(attrs.src);
+      const src = attrs.src || attrs.filePath;
+      if (src && !src.startsWith("data:")) {
+        const dataUrl = assetCache.get(src);
         if (dataUrl) {
           return { ...node, attrs: { ...node.attrs, src: dataUrl } };
         }
@@ -605,8 +606,10 @@ export async function dehydrateTeamAssets(team: TeamMetadata): Promise<{ cleanTe
 export function hydrateTeamAssets(team: TeamMetadata, assetCache: Map<string, string>): TeamMetadata {
   const hydrated = JSON.parse(JSON.stringify(team)) as TeamMetadata;
   const processImg = (src: string | undefined) => {
-    if (src?.startsWith(`${ASSETS_DIR}/`)) {
-      return assetCache.get(src) || src;
+    if (src && !src.startsWith("data:")) {
+      const cached = assetCache.get(src);
+      if (!cached) console.warn(`[Hydrate] Asset not found in cache: ${src}`);
+      return cached || src;
     }
     return src;
   };

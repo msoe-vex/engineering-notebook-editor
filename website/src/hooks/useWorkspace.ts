@@ -15,12 +15,16 @@ export function useWorkspace() {
     metadata: store.hydratedMetadata,
     currentProjectId: store.currentProjectId,
     isLoading: store.isLoading,
+    loadingLabel: store.loadingLabel,
     isInitialized: store.isInitialized,
     projects: store.projects,
     openFile: store.openFile,
     pendingChanges: store.pendingChanges,
     currentProject: store.currentProject,
     selectedPaths: store.selectedPaths,
+    hasEntryInUrl: store.hasEntryInUrl,
+    showTeamEditor: store.showTeamEditor,
+    teamTab: store.teamTab,
   });
 
   useEffect(() => {
@@ -34,12 +38,16 @@ export function useWorkspace() {
         metadata: s.hydratedMetadata,
         currentProjectId: s.currentProjectId,
         isLoading: s.isLoading,
+        loadingLabel: s.loadingLabel,
         isInitialized: s.isInitialized,
         projects: s.projects,
         openFile: s.openFile,
         pendingChanges: s.pendingChanges,
         currentProject: s.currentProject,
         selectedPaths: s.selectedPaths,
+        hasEntryInUrl: s.hasEntryInUrl,
+        showTeamEditor: s.showTeamEditor,
+        teamTab: s.teamTab,
       });
     });
 

@@ -1,6 +1,6 @@
 import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds, TipTapNode } from "./metadata";
 import { generateAllEntriesLatex, generateEntryLatex, generateTeamLatex, generatePhasesLatex } from "./latex";
-import { ExplorerFile, GitHubConfig } from "./types";
+import { ExplorerFile, GitHubConfig, TeamTab } from "./types";
 import { getProjects, getProject, Project, getAllPending, getPending, stageChange, removeStaged, getResource, putResource, saveProject, getProjectHandle, saveProjectHandle, PendingChange } from "./db";
 import { fetchFileContent, fetchDirectoryTree, fetchRawFileContent, GitHubFile } from "./github";
 import { listLocalFiles, readLocalFile, writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, ensureLocalDirectory } from "./fs";
@@ -32,8 +32,12 @@ class WorkspaceStore {
   public metadata: NotebookMetadata = EMPTY_METADATA;
   public currentProjectId: string | null = null;
   public currentProject: Project | null = null;
+  public hasEntryInUrl: boolean = false;
+  public showTeamEditor: boolean = false;
+  public teamTab: TeamTab = "identity";
   public openFile: OpenFileState | null = null;
   public isLoading = false;
+  public loadingLabel = "";
   public isInitialized = false;
   public projects: Project[] = [];
   public pendingChanges: PendingChange[] = [];
@@ -70,7 +74,17 @@ class WorkspaceStore {
   }
 
   public async handleUrlChange(url: URL = new URL(window.location.href)) {
+    const path = url.pathname;
+    if (path.startsWith('/workspace/team')) {
+      this.showTeamEditor = true;
+      const tab = path.split('/').pop() as TeamTab;
+      this.teamTab = ["identity", "members", "phases"].includes(tab) ? tab : "identity";
+    } else {
+      this.showTeamEditor = false;
+    }
+
     const params = url.searchParams;
+    this.hasEntryInUrl = params.has("entry");
     const projectId = params.get("project");
     const entryId = params.get("entry");
     const resourceId = params.get("resource");
@@ -318,6 +332,17 @@ class WorkspaceStore {
       await this.loadLocalWorkspace();
     } else if (this.mode === "github") {
       await this.loadGitHubWorkspace();
+    } else if (this.mode === "temporary") {
+      // Re-populate entries from metadata for temporary mode
+      this.entries = Object.values(this.metadata.entries).map(e => ({
+        name: e.filename.split('/').pop() || '',
+        path: e.filename
+      })).sort((a, b) => {
+        const metaA = this.metadata.entries[a.path.split('/').pop()?.replace('.json', '') || ''];
+        const metaB = this.metadata.entries[b.path.split('/').pop()?.replace('.json', '') || ''];
+        return new Date(metaB?.createdAt || 0).getTime() - new Date(metaA?.createdAt || 0).getTime();
+      });
+      this.notifyStateChange();
     }
   }
 
@@ -331,22 +356,22 @@ class WorkspaceStore {
 
       // Hydrate team assets
       const assetCache = new Map<string, string>();
-      if (parsed.team?.logo) {
+      const fetchLocalAsset = async (path: string) => {
+        if (!path || path.startsWith('data:')) return;
         try {
-          const res = await getLocalFileContent(this.dirHandle, parsed.team.logo);
-          if (res.base64) assetCache.set(parsed.team.logo, res.base64);
+          const res = await getLocalFileContent(this.dirHandle!, path);
+          if (res.base64) assetCache.set(path, res.base64);
         } catch { }
-      }
+      };
+
+      const tasks: Promise<void>[] = [];
+      if (parsed.team?.logo) tasks.push(fetchLocalAsset(parsed.team.logo));
       if (parsed.team?.members) {
         for (const m of parsed.team.members) {
-          if (m.image) {
-            try {
-              const res = await getLocalFileContent(this.dirHandle, m.image);
-              if (res.base64) assetCache.set(m.image, res.base64);
-            } catch { }
-          }
+          if (m.image) tasks.push(fetchLocalAsset(m.image));
         }
       }
+      await Promise.all(tasks);
 
       // Keep metadata clean, but update the global asset cache
       assetCache.forEach((v, k) => this.assetCache.set(k, v));
@@ -361,10 +386,11 @@ class WorkspaceStore {
     if (!this.config.token) throw new Error("GitHub token is required");
 
     const dbName = this.getDBName();
-    const basePrefix = this.config.baseDir ? (this.config.baseDir.endsWith('/') ? this.config.baseDir : this.config.baseDir + '/') : '';
+    const normalizedBase = this.config.baseDir ? this.config.baseDir.replace(/^\/+|\/+$/g, '') : '';
+    const basePrefix = normalizedBase ? normalizedBase + '/' : '';
     const actualIndexPath = `${basePrefix}${INDEX_PATH}`;
 
-    const files = await fetchDirectoryTree(this.config, ENTRIES_DIR);
+    const files = await fetchDirectoryTree(this.config, `${basePrefix}${ENTRIES_DIR}`);
     const entryFiles = Array.isArray(files) ? files.map((f: GitHubFile) => ({ name: f.name, path: f.path })) : [];
 
     const pending = await getAllPending(dbName);
@@ -393,6 +419,73 @@ class WorkspaceStore {
       }
     }
     this.entries = mergedEntries;
+
+    // Hydrate team assets for GitHub
+    if (this.metadata.team) {
+      const dbName = this.getDBName();
+      const team = this.metadata.team;
+      // Normalize baseDir: remove leading/trailing slashes and ensure a single trailing slash if not empty
+      const normalizedBase = this.config.baseDir ? this.config.baseDir.replace(/^\/+|\/+$/g, '') : '';
+      const basePrefix = normalizedBase ? normalizedBase + '/' : '';
+      console.log(`[Store] Hydrating GitHub assets. baseDir: "${this.config.baseDir}", basePrefix: "${basePrefix}"`);
+
+      const fetchAsset = async (path: string) => {
+        if (!path || path.startsWith('data:')) return;
+        try {
+          // 1. Check if already in memory
+          if (this.assetCache.has(path)) {
+            console.log(`[Store] Asset already in memory: ${path}`);
+            return;
+          }
+
+          // 2. Check pending changes store (for newly uploaded but uncommitted images)
+          const pending = await getPending(dbName, path);
+          if (pending?.content) {
+            const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${pending.content}`;
+            this.assetCache.set(path, dataUrl);
+            console.log(`[Store] Hydrated GitHub asset from pending changes: ${path}`);
+            return;
+          }
+
+          // 3. Check resource cache
+          let cached = await getResource(dbName, path);
+          if (cached) {
+            // Fix legacy/corrupted image/* prefix from previous versions
+            if (cached.startsWith('data:image/*;base64,')) {
+              console.log(`[Store] Fixing legacy image/* prefix for: ${path}`);
+              cached = cached.replace('data:image/*;base64,', `data:${getMimeTypeFromExtension(path)};base64,`);
+              await putResource(dbName, { path, dataUrl: cached }); // Update cache with fix
+            }
+          }
+
+          if (cached) {
+            this.assetCache.set(path, cached);
+            console.log(`[Store] Hydrated GitHub asset from resource cache: ${path}`);
+            return;
+          }
+
+          // 4. Fetch from GitHub
+          const actualPath = `${basePrefix}${path}`;
+          console.log(`[Store] Fetching asset from GitHub: ${actualPath}`);
+          const base64 = await fetchRawFileContent(this.config!, actualPath);
+          const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${base64}`;
+          this.assetCache.set(path, dataUrl);
+          await putResource(dbName, { path, dataUrl });
+          console.log(`[Store] Hydrated GitHub asset from network: ${path}`);
+        } catch (e) {
+          console.warn(`[Store] Failed to hydrate GitHub asset: ${path}`, e);
+        }
+      };
+
+      const tasks: Promise<void>[] = [];
+      if (team.logo) tasks.push(fetchAsset(team.logo));
+      if (team.members) {
+        for (const m of team.members) {
+          if (m.image) tasks.push(fetchAsset(m.image));
+        }
+      }
+      await Promise.all(tasks);
+    }
   }
 
   // ─── Entry Management ───────────────────────────────────────────────────────
@@ -408,7 +501,10 @@ class WorkspaceStore {
       return;
     }
 
-    this.setLoading(true);
+    // Clear current file to show localized loading state in UI
+    this.openFile = null;
+    this.notifyStateChange();
+
     try {
       const dbName = this.getDBName();
       let entryJsonStr = "";
@@ -448,11 +544,19 @@ class WorkspaceStore {
         const actualImgPath = this.mode === "github" && this.config?.baseDir ? `${this.config.baseDir.endsWith('/') ? this.config.baseDir : this.config.baseDir + '/'}${imgPath}` : imgPath;
         const staged = pending.find(p => p.path === actualImgPath && p.operation === "upsert");
         if (staged?.content) {
-          assetCache.set(imgPath, staged.content.startsWith('data:') ? staged.content : `data:image/*;base64,${staged.content}`);
+          const dataUrl = staged.content.startsWith('data:') ? staged.content : `data:${getMimeTypeFromExtension(imgPath)};base64,${staged.content}`;
+          assetCache.set(imgPath, dataUrl);
         } else {
-          const cached = await getResource(dbName, actualImgPath);
-          if (cached) assetCache.set(imgPath, cached);
-          else if (this.mode === "local" && this.dirHandle) {
+          let cached = await getResource(dbName, actualImgPath);
+          if (cached) {
+            if (cached.startsWith('data:image/*;base64,')) {
+              cached = cached.replace('data:image/*;base64,', `data:${getMimeTypeFromExtension(imgPath)};base64,`);
+              await putResource(dbName, { path: actualImgPath, dataUrl: cached });
+            }
+          }
+          if (cached) {
+            assetCache.set(imgPath, cached);
+          } else if (this.mode === "local" && this.dirHandle) {
             try {
               const res = await getLocalFileContent(this.dirHandle, imgPath);
               if (res.base64) assetCache.set(imgPath, res.base64);
@@ -460,7 +564,7 @@ class WorkspaceStore {
           } else if (this.mode === "github" && this.config) {
             try {
               const base64 = await fetchRawFileContent(this.config, actualImgPath);
-              const dataUrl = `data:image/*;base64,${base64}`;
+              const dataUrl = `data:${getMimeTypeFromExtension(imgPath)};base64,${base64}`;
               assetCache.set(imgPath, dataUrl);
               await putResource(dbName, { path: actualImgPath, dataUrl });
             } catch { }
@@ -495,8 +599,15 @@ class WorkspaceStore {
 
       this.#lastSavedContents.set(meta.filename, JSON.stringify({ version: 3, content }, null, 2));
       events.emit(EventNames.ENTRY_LOADED, this.openFile);
+      this.notifyStateChange();
+    } catch (e) {
+      console.error("Failed to open entry:", e);
+      this.openFile = null;
+      this.navigateTo({ entry: null });
+      events.emit(EventNames.SHOW_NOTIFICATION, { message: "Failed to load entry.", type: "error" });
+      this.notifyStateChange();
     } finally {
-      this.setLoading(false);
+      // No global loading here
     }
   }
 
@@ -765,7 +876,7 @@ class WorkspaceStore {
     // Update memory (we'll keep the hydrated version in memory for the UI)
     const assetCache = new Map<string, string>();
     for (const asset of newAssets) {
-      const dataUrl = `data:image/*;base64,${asset.base64}`;
+      const dataUrl = `data:${getMimeTypeFromExtension(asset.path)};base64,${asset.base64}`;
       assetCache.set(asset.path, dataUrl);
       this.assetCache.set(asset.path, dataUrl); // Update global cache
     }
@@ -935,7 +1046,7 @@ class WorkspaceStore {
   }
 
   public async importNotebook(data: Record<string, unknown>) {
-    this.setLoading(true);
+    this.setLoading(true, "Importing project data...");
     try {
       const { entries = {}, assets = {} } = data as { entries: Record<string, Record<string, unknown>>; assets: Record<string, unknown> };
       const idMap = new Map<string, string>();
@@ -955,7 +1066,7 @@ class WorkspaceStore {
 
       // 2. Save assets first
       for (const [path, base64] of Object.entries(assets as Record<string, string>)) {
-        const dataUrl = `data:image/*;base64,${base64}`;
+        const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${base64}`;
         this.assetCache.set(path, dataUrl); // Immediate memory cache
         await this.persistFile(path, base64, `Import asset: ${path}`, true);
         if (this.mode === "github" || this.mode === "temporary") {
@@ -1012,7 +1123,16 @@ class WorkspaceStore {
       this.selectedPaths = newPaths;
 
       this.notifyStateChange();
-      events.emit(EventNames.SHOW_NOTIFICATION, { message: `Successfully imported ${entryIdList.length} entries`, type: "success" });
+      
+      const isFullNotebook = !!(data.team || data.phases);
+      const entryCount = entryIdList.length;
+      const entryText = `${entryCount} ${entryCount === 1 ? 'entry' : 'entries'}`;
+      
+      const message = isFullNotebook 
+        ? `Notebook imported successfully with ${entryText}` 
+        : `Successfully imported ${entryText}`;
+        
+      events.emit(EventNames.SHOW_NOTIFICATION, { message, type: "success" });
 
     } catch (e) {
       console.error("Import failed", e);
@@ -1130,8 +1250,9 @@ class WorkspaceStore {
   }
 
   // ─── State Helpers ──────────────────────────────────────────────────────────
-  private setLoading(val: boolean) {
+  private setLoading(val: boolean, label: string = "Loading...") {
     this.isLoading = val;
+    this.loadingLabel = label;
     this.notifyStateChange();
     events.emit(EventNames.LOADING_STATUS, val);
   }
@@ -1155,6 +1276,7 @@ class WorkspaceStore {
       this.metadata = EMPTY_METADATA;
       this.openFile = null;
       this.selectedPaths = new Set();
+      this.assetCache.clear();
       this.notifyStateChange();
     } finally {
       this.setLoading(false);
