@@ -5,6 +5,8 @@ import { ExplorerFile } from "@/lib/types";
 import { NotebookMetadata } from "@/lib/metadata";
 import { PendingChange, clearAllPending } from "@/lib/db";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { LATEX_DIR } from "@/lib/constants";
+import toast from "react-hot-toast";
 
 interface SidebarProps {
   selectedPaths: Set<string>;
@@ -33,7 +35,9 @@ export default function Sidebar({
     config,
     refreshPending,
     currentProjectId,
-    navigateTo
+    navigateTo,
+    getFileContent,
+    exportNotebook
   } = useWorkspace();
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"created" | "updated" | "title">("created");
@@ -146,6 +150,35 @@ export default function Sidebar({
     await clearAllPending(dbName);
     await refreshPending();
   };
+  
+  const handleDownloadJson = async (file: ExplorerFile) => {
+    const id = file.name.replace('.json', '');
+    await exportNotebook([id]);
+  };
+
+  const handleDownloadLatex = async (file: ExplorerFile) => {
+    try {
+      const id = file.name.replace('.json', '');
+      const path = `${LATEX_DIR}/${id}.tex`;
+      const content = await getFileContent(path);
+      if (content) {
+        const { saveAs } = await import("file-saver");
+        const blob = new Blob([content], { type: "text/plain" });
+        saveAs(blob, `${id}.tex`);
+        toast.success(`Downloaded ${id}.tex`);
+      } else {
+        toast.error(`Could not find LaTeX for ${file.name}`);
+      }
+    } catch (e) {
+      console.error("Download failed", e);
+      toast.error("Download failed");
+    }
+  };
+
+  const handleDownloadMulti = async (files: ExplorerFile[]) => {
+    const ids = files.map(f => f.name.replace('.json', ''));
+    await exportNotebook(ids);
+  };
 
   return (
     <div className="flex flex-col h-full overflow-hidden min-h-0">
@@ -160,10 +193,10 @@ export default function Sidebar({
         onCloseEntry={() => {
           navigateTo({ entry: null });
         }}
-        onDownloadLatex={() => { }} // TODO: implement in store if needed
-        onDownloadJson={() => { }} // TODO: implement in store if needed
+        onDownloadLatex={handleDownloadLatex}
+        onDownloadJson={handleDownloadJson}
         onDeleteEntry={(file) => handleConfirmDelete([file])}
-        onDownloadMulti={() => { }}
+        onDownloadMulti={handleDownloadMulti}
         onDeleteMulti={handleConfirmDelete}
         onNewEntry={onNewEntry || createEntry}
         search={search}

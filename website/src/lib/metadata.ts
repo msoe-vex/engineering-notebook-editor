@@ -110,8 +110,11 @@ export function extractImagePaths(doc: TipTapDoc): string[] {
   const paths: string[] = [];
   function walk(node: TipTapNode | undefined) {
     if (!node) return;
-    if (node.type === "image" && node.attrs?.filePath) {
-      paths.push(node.attrs.filePath as string);
+    if (node.type === "image") {
+      const path = (node.attrs?.filePath as string) || (node.attrs?.src as string);
+      if (path && path.startsWith(`${ASSETS_DIR}/`)) {
+        paths.push(path);
+      }
     }
     (node.content ?? []).forEach(walk);
   }
@@ -541,7 +544,31 @@ export function remapContentIds(doc: TipTapDoc | TipTapNode[], globalIdMap: Map<
     return newNode;
   }
 
-  return { doc: apply(doc) as TipTapNode, idMap: globalIdMap };
+  return { doc: apply(doc) as TipTapDoc, idMap: globalIdMap };
+}
+
+/**
+ * Remaps IDs in the entry metadata's resources and references fields.
+ */
+export function remapEntryMetadataIds(entry: EntryMetadata, idMap: Map<string, string>): EntryMetadata {
+  const newEntry = { ...entry };
+  
+  // Remap resources
+  if (entry.resources) {
+    const newResources: Record<string, any> = {};
+    for (const [oldId, res] of Object.entries(entry.resources)) {
+      const newId = idMap.get(oldId) || oldId;
+      newResources[newId] = { ...res };
+    }
+    newEntry.resources = newResources;
+  }
+  
+  // Remap references
+  if (entry.references) {
+    newEntry.references = entry.references.map(refId => idMap.get(refId) || refId);
+  }
+  
+  return newEntry;
 }
 
 /**

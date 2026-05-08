@@ -63,5 +63,9 @@ export function useWorkspace() {
     refreshPending: () => store.refreshPending(),
     navigateTo: (params: any, path?: string) => store.navigateTo(params, path),
     handleUrlChange: () => store.handleUrlChange(),
+    getFileContent: (path: string) => store.getFileContent(path),
+    exportProject: () => store.exportProject(),
+    exportNotebook: (entryIds?: string[]) => store.exportNotebook(entryIds),
+    importNotebook: (data: any) => store.importNotebook(data),
   };
 }
