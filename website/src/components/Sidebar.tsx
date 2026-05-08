@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import FileExplorer from "./FileExplorer";
 import PendingChangesPanel from "./PendingChangesPanel";
 import { ExplorerFile, TeamTab } from "@/lib/types";
@@ -40,7 +40,25 @@ export default function Sidebar({
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
   const [isCommitting, setIsCommitting] = useState(false);
-  
+
+  const handleConfirmDelete = useCallback((files: ExplorerFile[]) => {
+    if (files.length === 0) return;
+
+    const title = files.length === 1 ? "Delete Entry" : "Delete Multiple Entries";
+    const message = files.length === 1
+      ? `Are you sure you want to delete "${files[0].title || "Untitled Entry"}"? This action cannot be undone and will permanently remove the entry and its associated LaTeX file.`
+      : `Are you sure you want to delete ${files.length} entries? This action cannot be undone and will permanently remove all selected entries and their associated LaTeX files.`;
+
+    showConfirm(
+      title,
+      message,
+      () => {
+        files.forEach(f => deleteEntry(f));
+      },
+      "danger"
+    );
+  }, [showConfirm, deleteEntry]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (selectedPaths.size === 0) return;
@@ -48,7 +66,7 @@ export default function Sidebar({
         // Don't trigger if typing in an input
         const target = e.target as HTMLElement;
         if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
-        
+
         const toDelete = entries.filter(f => selectedPaths.has(f.path));
         if (toDelete.length > 0) {
           e.preventDefault();
@@ -56,10 +74,10 @@ export default function Sidebar({
         }
       }
     };
-    
+
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedPaths, entries]);
+  }, [selectedPaths, entries, handleConfirmDelete]);
 
   const pendingPaths = useMemo(() => new Set((pendingChanges || []).map(p => p.path)), [pendingChanges]);
   const deletedPaths = useMemo(() => new Set((pendingChanges || []).filter(p => p.operation === "delete").map(p => p.path)), [pendingChanges]);
@@ -124,24 +142,6 @@ export default function Sidebar({
     navigateTo({ entry: id }, '/workspace/editor');
   };
 
-  const handleConfirmDelete = (files: ExplorerFile[]) => {
-    if (files.length === 0) return;
-
-    const title = files.length === 1 ? "Delete Entry" : "Delete Multiple Entries";
-    const message = files.length === 1
-      ? `Are you sure you want to delete "${files[0].title || "Untitled Entry"}"? This action cannot be undone and will permanently remove the entry and its associated LaTeX file.`
-      : `Are you sure you want to delete ${files.length} entries? This action cannot be undone and will permanently remove all selected entries and their associated LaTeX files.`;
-
-    showConfirm(
-      title,
-      message,
-      () => {
-        files.forEach(f => deleteEntry(f));
-      },
-      "danger"
-    );
-  };
-
   const handleDiscard = async () => {
     await discardPendingChanges();
   };
@@ -163,7 +163,7 @@ export default function Sidebar({
       setIsCommitting(false);
     }
   };
-  
+
   const handleDownloadJson = async (file: ExplorerFile) => {
     const id = file.name.replace('.json', '');
     await exportEntries([id]);

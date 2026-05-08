@@ -5,7 +5,7 @@ import { useTheme } from "next-themes";
 import {
   fetchGitHubUser
 } from "@/lib/github";
-import { ExplorerFile, TeamTab } from "@/lib/types";
+import { ExplorerFile, TeamTab, GitHubConfig } from "@/lib/types";
 import {
   Project, saveProject, deleteProject, deleteProjectHandle, deleteProjectDatabase,
   getProjectDBName
@@ -29,7 +29,7 @@ import { showNotification } from "./Notification";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ViewMode = "entry";
+
 export interface FileMetadata {
   content: string;
   title?: string;
@@ -38,22 +38,7 @@ export interface FileMetadata {
   createdAt?: string;
 }
 
-interface OpenFileState {
-  path: string;
-  name: string;
-  id: string;
-  viewMode: ViewMode;
-  rawLatex: string;
-  tiptapContent: string;
-  title: string;
-  author: string;
-  phase: number | null;
-  metadataMissing: boolean;
-  createdAt: string;
-  updatedAt: string;
-  lastOpenedAt: string;
-  isLegacyRaw: boolean;
-}
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -165,8 +150,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    setMounted(true);
+    const frame = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
+  useEffect(() => {
     const checkAuth = async () => {
       const storedToken = localStorage.getItem("nb-github-token");
       const storedUser = localStorage.getItem("nb-github-user");
@@ -379,7 +367,7 @@ export default function App() {
   };
 
   if (!mounted) return null;
-  const handleCreateGithub = async (config: any) => {
+  const handleCreateGithub = async (config: GitHubConfig) => {
     try {
       // Settings.tsx passes GitHubConfig, but createGithubProject in store expects a simpler object with 'name'
       // We'll adapt it here.
@@ -456,7 +444,7 @@ export default function App() {
         showNotification("Failed to read file", "error");
       };
       reader.readAsText(file);
-    } catch (error) {
+    } catch {
       showNotification("Import failed", "error");
     }
   };
@@ -479,7 +467,6 @@ export default function App() {
   const requestPermission = async () => {
     if (dirHandle) {
       const mode = 'readwrite';
-      // @ts-ignore
       if ((await dirHandle.requestPermission({ mode })) === 'granted') {
         setNeedsPermission(false);
         selectProject(currentProjectId!);
