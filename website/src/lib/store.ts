@@ -729,22 +729,22 @@ class WorkspaceStore {
     return null;
   }
 
-  public async exportNotebook(entryIds?: string[]) {
+  public async exportEntries(entryIds?: string[]) {
     this.setLoading(true);
     try {
       const targets = entryIds || Object.keys(this.metadata.entries);
       const assetsData: Record<string, string> = {};
       const entriesWithContent: Record<string, EntryMetadata & { content?: any }> = {};
       const relevantAssetRefs: Record<string, string[]> = {};
-      
+
       // 1. Process Entries and their content
       for (const id of targets) {
         const meta = this.metadata.entries[id];
         if (!meta) continue;
-        
+
         const contentStr = await this.getFileContent(meta.filename);
         if (!contentStr) continue;
-        
+
         let content;
         try {
           const contentObj = JSON.parse(contentStr);
@@ -753,10 +753,10 @@ class WorkspaceStore {
           console.error(`Failed to parse content for ${id}`, e);
           continue;
         }
-        
+
         // Deep copy meta and add content
         entriesWithContent[id] = { ...JSON.parse(JSON.stringify(meta)), content };
-        
+
         // Collect assets referenced by this entry
         const images = extractImagePaths(content);
         for (const assetPath of images) {
@@ -766,11 +766,11 @@ class WorkspaceStore {
           }
         }
       }
-      
+
       // 2. Identify relevant AssetRefs
       if (this.metadata.assetRefs) {
         for (const [assetPath, owners] of Object.entries(this.metadata.assetRefs)) {
-          const filteredOwners = owners.filter(o => 
+          const filteredOwners = owners.filter(o =>
             targets.includes(o) || (!entryIds && o === "team")
           );
           if (filteredOwners.length > 0) {
@@ -783,7 +783,7 @@ class WorkspaceStore {
           }
         }
       }
-      
+
       // 3. Assemble Export following notebook.json schema (excluding project identity)
       const exportData: any = {
         assetRefs: relevantAssetRefs,
@@ -795,11 +795,13 @@ class WorkspaceStore {
         exportData.phases = this.metadata.phases;
         exportData.team = this.metadata.team;
       }
-      
+
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
       const { saveAs } = await import("file-saver");
-      const name = entryIds && entryIds.length === 1 
-        ? (this.metadata.entries[entryIds[0]]?.title || "entry").replace(/[^a-z0-9]/gi, '_').toLowerCase()
+      const name = entryIds
+        ? (entryIds.length === 1
+          ? (this.metadata.entries[entryIds[0]]?.title || "entry").replace(/[^a-z0-9]/gi, '_').toLowerCase()
+          : "entries")
         : (this.metadata.projectName || "notebook").replace(/[^a-z0-9]/gi, '_').toLowerCase();
       saveAs(blob, `${name}.json`);
 
@@ -882,11 +884,11 @@ class WorkspaceStore {
 
       // Refresh project list
       await this.reloadWorkspace();
-      
+
       // Select the newly imported entries
       const newPaths = new Set<string>(Object.values(newEntriesMap).map(m => m.filename));
       this.selectedPaths = newPaths;
-      
+
       this.notifyStateChange();
       events.emit(EventNames.SHOW_NOTIFICATION, { message: `Successfully imported ${entryIdList.length} entries`, type: "success" });
 
@@ -918,8 +920,8 @@ class WorkspaceStore {
     return null;
   }
 
-  public async exportProject() {
-    await this.exportNotebook();
+  public async exportNotebook() {
+    await this.exportEntries();
   }
 
   public getDBName() {

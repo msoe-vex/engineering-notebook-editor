@@ -44,7 +44,7 @@ const Editor = React.memo(function Editor({
     updateEntry,
     deleteEntry,
     currentProjectId,
-    exportNotebook
+    exportEntries
   } = useWorkspace();
 
   if (!openFile) return null;
@@ -456,7 +456,7 @@ const Editor = React.memo(function Editor({
                 icon={<FileJson size={14} />}
                 label="Download JSON"
                 onClick={async () => {
-                  await exportNotebook([entryId]);
+                  await exportEntries([entryId]);
                 }}
               />
               <MenuAction icon={<FileCode size={14} />} label="Download LaTeX" onClick={handleDownload} />

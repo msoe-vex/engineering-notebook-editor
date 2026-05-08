@@ -37,7 +37,7 @@ export default function Sidebar({
     currentProjectId,
     navigateTo,
     getFileContent,
-    exportNotebook
+    exportEntries
   } = useWorkspace();
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"created" | "updated" | "title">("created");
@@ -153,7 +153,7 @@ export default function Sidebar({
   
   const handleDownloadJson = async (file: ExplorerFile) => {
     const id = file.name.replace('.json', '');
-    await exportNotebook([id]);
+    await exportEntries([id]);
   };
 
   const handleDownloadLatex = async (file: ExplorerFile) => {
@@ -177,7 +177,7 @@ export default function Sidebar({
 
   const handleDownloadMulti = async (files: ExplorerFile[]) => {
     const ids = files.map(f => f.name.replace('.json', ''));
-    await exportNotebook(ids);
+    await exportEntries(ids);
   };
 
   return (
