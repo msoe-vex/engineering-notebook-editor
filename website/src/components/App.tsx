@@ -101,7 +101,9 @@ export default function App() {
     dirHandle,
     navigateTo,
     exportProject,
-    importNotebook
+    importNotebook,
+    selectedPaths,
+    setSelectedPaths
   } = useWorkspace();
 
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -146,7 +148,6 @@ export default function App() {
   const [desktopViewMode, setDesktopViewMode] = useState<"editor" | "split" | "preview">("editor");
   const [showTeamEditor, setShowTeamEditor] = useState(false);
   const [teamTab, setTeamTab] = useState<TeamTab>("identity");
-  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [hasEntryInUrl, setHasEntryInUrl] = useState(false);
 
   const editorPanelRef = useRef<ImperativePanelHandle>(null);
@@ -285,7 +286,7 @@ export default function App() {
 
     if (multi) {
       const id = file.path;
-      setSelectedPaths(prev => {
+      setSelectedPaths((prev: Set<string>) => {
         const next = new Set(prev);
         if (next.has(id)) next.delete(id);
         else next.add(id);

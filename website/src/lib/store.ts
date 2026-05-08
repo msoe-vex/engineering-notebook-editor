@@ -1,10 +1,10 @@
 import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, TipTapNode, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds } from "./metadata";
-import { generateAllEntriesLatex, generateEntryLatex } from "./latex";
+import { generateAllEntriesLatex, generateEntryLatex, generateTeamLatex, generatePhasesLatex } from "./latex";
 import { ExplorerFile, GitHubConfig } from "./types";
 import { getProjects, getProject, Project, getProjectDBName, getAllPending, stageChange, removeResource, getResource, putResource, saveProject, getProjectHandle, saveProjectHandle, PendingChange } from "./db";
 import { fetchFileContent, fetchDirectoryTree, fetchRawFileContent, GitHubFile } from "./github";
 import { listLocalFiles, readLocalFile, writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, ensureLocalDirectory } from "./fs";
-import { INDEX_PATH, ENTRIES_DIR, ALL_ENTRIES_PATH, LATEX_DIR, ASSETS_DIR } from "./constants";
+import { INDEX_PATH, ENTRIES_DIR, ENTRIES_INDEX_PATH, LATEX_DIR, ASSETS_DIR, TEAM_PATH, PHASES_PATH } from "./constants";
 import { events, EventNames } from "./events";
 import { generateUUID, getMimeTypeFromExtension, hashContent, generateDeterministicUUID } from "./utils";
 
@@ -38,6 +38,7 @@ class WorkspaceStore {
   public projects: Project[] = [];
   public pendingChanges: PendingChange[] = [];
   public assetCache = new Map<string, string>();
+  public selectedPaths: Set<string> = new Set();
 
   get hydratedMetadata(): NotebookMetadata {
     return {
@@ -99,6 +100,15 @@ class WorkspaceStore {
       }
     }
 
+    this.notifyStateChange();
+  }
+
+  public setSelectedPaths(pathsOrUpdater: Set<string> | ((prev: Set<string>) => Set<string>)) {
+    if (typeof pathsOrUpdater === "function") {
+      this.selectedPaths = pathsOrUpdater(this.selectedPaths);
+    } else {
+      this.selectedPaths = pathsOrUpdater;
+    }
     this.notifyStateChange();
   }
 
@@ -587,9 +597,7 @@ class WorkspaceStore {
       await this.persistFile(path, jsonStr, "New entry");
       await this.persistFile(latexPath, initialLatex, "Init LaTeX");
       await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Create entry metadata");
-
-      const allEntriesLatex = generateAllEntriesLatex(this.metadata);
-      await this.persistFile(ALL_ENTRIES_PATH, allEntriesLatex, "Update all_entries.tex");
+      await this.updateLatexMetadata();
     });
 
     this.navigateTo({ entry: id });
@@ -631,10 +639,18 @@ class WorkspaceStore {
 
       await this.reconcileAssetRefs(oldMeta.assetRefs || {}, this.metadata.assetRefs || {});
       await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Delete entry");
-
-      const allEntriesLatex = generateAllEntriesLatex(this.metadata);
-      await this.persistFile(ALL_ENTRIES_PATH, allEntriesLatex, "Update all_entries.tex");
+      await this.updateLatexMetadata();
     });
+  }
+
+  private async updateLatexMetadata() {
+    const teamLatex = generateTeamLatex(this.metadata.team || { teamName: "", teamNumber: "", startDate: "", endDate: "", organization: "", members: [] });
+    const phasesLatex = generatePhasesLatex(this.metadata.phases || []);
+    const allEntriesLatex = generateAllEntriesLatex(this.metadata);
+
+    await this.persistFile(TEAM_PATH, teamLatex, "Update team.tex");
+    await this.persistFile(PHASES_PATH, phasesLatex, "Update phases.tex");
+    await this.persistFile(ENTRIES_INDEX_PATH, allEntriesLatex, "Update entries.tex");
   }
 
   async saveTeam(team: TeamMetadata, phases?: ProjectPhase[]) {
@@ -667,6 +683,7 @@ class WorkspaceStore {
       }
       await this.reconcileAssetRefs(oldMeta.assetRefs || {}, updatedMeta.assetRefs || {});
       await this.persistFile(INDEX_PATH, metaStr, "Update team metadata");
+      await this.updateLatexMetadata();
     });
   }
 
@@ -861,9 +878,15 @@ class WorkspaceStore {
 
       // Save metadata
       await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Import notebook metadata");
+      await this.updateLatexMetadata();
 
       // Refresh project list
       await this.reloadWorkspace();
+      
+      // Select the newly imported entries
+      const newPaths = new Set<string>(Object.values(newEntriesMap).map(m => m.filename));
+      this.selectedPaths = newPaths;
+      
       this.notifyStateChange();
       events.emit(EventNames.SHOW_NOTIFICATION, { message: `Successfully imported ${entryIdList.length} entries`, type: "success" });
 

@@ -18,6 +18,7 @@ export function useWorkspace() {
     openFile: store.openFile,
     pendingChanges: store.pendingChanges,
     currentProject: store.currentProject,
+    selectedPaths: store.selectedPaths,
   });
 
   useEffect(() => {
@@ -35,6 +36,7 @@ export function useWorkspace() {
         openFile: newStore.openFile,
         pendingChanges: newStore.pendingChanges,
         currentProject: newStore.currentProject,
+        selectedPaths: newStore.selectedPaths,
       });
     });
 
@@ -67,5 +69,6 @@ export function useWorkspace() {
     exportProject: () => store.exportProject(),
     exportNotebook: (entryIds?: string[]) => store.exportNotebook(entryIds),
     importNotebook: (data: any) => store.importNotebook(data),
+    setSelectedPaths: (pathsOrUpdater: Set<string> | ((prev: Set<string>) => Set<string>)) => store.setSelectedPaths(pathsOrUpdater),
   };
 }
