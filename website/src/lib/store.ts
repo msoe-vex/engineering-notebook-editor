@@ -6,7 +6,7 @@ import { fetchFileContent, fetchDirectoryTree, fetchRawFileContent, GitHubFile }
 import { listLocalFiles, readLocalFile, writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, ensureLocalDirectory } from "./fs";
 import { INDEX_PATH, ENTRIES_DIR, ALL_ENTRIES_PATH, LATEX_DIR, ASSETS_DIR } from "./constants";
 import { events, EventNames } from "./events";
-import { generateUUID, getMimeTypeFromExtension } from "./utils";
+import { generateUUID, getMimeTypeFromExtension, hashContent, generateDeterministicUUID } from "./utils";
 
 export type WorkspaceMode = "local" | "github" | "temporary" | "none";
 
@@ -15,6 +15,7 @@ interface OpenFileState {
   name: string;
   id: string;
   tiptapContent: string;
+  latex: string;
   title: string;
   author: string;
   phase: number | null;
@@ -36,6 +37,14 @@ class WorkspaceStore {
   public isInitialized = false;
   public projects: Project[] = [];
   public pendingChanges: PendingChange[] = [];
+  public assetCache = new Map<string, string>();
+
+  get hydratedMetadata(): NotebookMetadata {
+    return {
+      ...this.metadata,
+      team: this.metadata.team ? hydrateTeamAssets(this.metadata.team, this.assetCache) : undefined
+    };
+  }
 
   // ─── Internal ───────────────────────────────────────────────────────────────
   #queue = Promise.resolve();
@@ -59,10 +68,11 @@ class WorkspaceStore {
     }
   }
 
-  private async handleUrlChange() {
-    const params = new URLSearchParams(window.location.search);
+  public async handleUrlChange(url: URL = new URL(window.location.href)) {
+    const params = url.searchParams;
     const projectId = params.get("project");
     const entryId = params.get("entry");
+    const resourceId = params.get("resource");
 
     if (projectId && projectId !== this.currentProjectId) {
       await this.selectProject(projectId);
@@ -76,7 +86,42 @@ class WorkspaceStore {
       this.openFile = null;
     }
 
+    if (resourceId) {
+      events.emit(EventNames.SCROLL_TO_RESOURCE, resourceId);
+    }
+
+    // Ensure the URL matches the state if we're in a workspace
+    if (this.currentProjectId) {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('project') !== this.currentProjectId) {
+        url.searchParams.set('project', this.currentProjectId);
+        window.history.replaceState({}, '', url.toString());
+      }
+    }
+
     this.notifyStateChange();
+  }
+
+  public navigateTo(params: Record<string, string | null>, pathname?: string) {
+    const url = new URL(window.location.href);
+    if (pathname) url.pathname = pathname;
+
+    // Preserve current project if not specified and not navigating to root
+    if (this.currentProjectId && !params.project && url.pathname !== '/') {
+      url.searchParams.set('project', this.currentProjectId);
+    }
+
+    // Clear resource if changing entry and no new resource specified
+    if (params.entry && !params.resource) {
+      url.searchParams.delete('resource');
+    }
+
+    for (const [k, v] of Object.entries(params)) {
+      if (v === null) url.searchParams.delete(k);
+      else url.searchParams.set(k, v);
+    }
+    window.history.pushState({}, '', url.toString());
+    this.handleUrlChange(url);
   }
 
   // ─── Project Management ─────────────────────────────────────────────────────
@@ -86,7 +131,7 @@ class WorkspaceStore {
   }
 
   async createGithubProject(config: { owner: string; repo: string; branch: string; folderPath: string; name: string }) {
-    const id = generateUUID();
+    const id = await generateDeterministicUUID(`github:${config.owner}/${config.repo}:${config.folderPath}`);
     const p: Project = {
       id,
       name: config.name,
@@ -105,7 +150,30 @@ class WorkspaceStore {
   }
 
   async createLocalProject(handle: FileSystemDirectoryHandle, name: string) {
-    const id = generateUUID();
+    // 1. Check if we already have this project by handle
+    for (const p of this.projects) {
+      if (p.type === "local") {
+        try {
+          const existingHandle = await getProjectHandle(p.id);
+          if (existingHandle && await handle.isSameEntry(existingHandle)) {
+            return p.id;
+          }
+        } catch (e) { }
+      }
+    }
+
+    let id: string | null = null;
+    let parsed: any = null;
+    try {
+      const metaStr = await readLocalFile(handle, INDEX_PATH);
+      parsed = JSON.parse(metaStr);
+      if (parsed.projectId) id = parsed.projectId;
+    } catch (e) {
+      // notebook.json doesn't exist yet or is invalid
+    }
+
+    if (!id) id = generateUUID();
+
     const p: Project = {
       id,
       name,
@@ -120,6 +188,12 @@ class WorkspaceStore {
     await ensureLocalDirectory(handle, ASSETS_DIR);
     await ensureLocalDirectory(handle, LATEX_DIR);
 
+    // Persist projectId to notebook.json if missing
+    if (!id || !parsed?.projectId) {
+      const initialMeta = { ...(parsed || EMPTY_METADATA), projectId: id, projectName: name };
+      await writeLocalFile(handle, INDEX_PATH, JSON.stringify(initialMeta, null, 2));
+    }
+
     await this.refreshProjects();
     return id;
   }
@@ -130,10 +204,35 @@ class WorkspaceStore {
   }
 
   async selectProject(id: string) {
+    if (this.currentProjectId === id && this.isInitialized && !this.isLoading) return;
     this.setLoading(true);
     try {
+      if (id === "temporary") {
+        if (this.currentProjectId !== "temporary") {
+          this.currentProject = { id: "temporary", name: "Temporary Project", type: "temporary", lastOpened: new Date().toISOString() };
+          this.currentProjectId = "temporary";
+          this.mode = "temporary";
+          this.metadata = { ...EMPTY_METADATA, projectId: "temporary", projectName: "Temporary Project" };
+          this.entries = [];
+
+          // Update URL for temporary project
+          const url = new URL(window.location.href);
+          url.searchParams.set('project', "temporary");
+          if (url.pathname === '/') url.pathname = '/workspace/editor';
+          window.history.pushState({}, '', url.toString());
+        }
+        this.notifyStateChange();
+        return;
+      }
+
       const project = await getProject(id);
-      if (!project) throw new Error("Project not found");
+      if (!project) {
+        this.disconnect();
+        window.history.replaceState({}, '', '/');
+        this.notifyStateChange();
+        events.emit(EventNames.SHOW_NOTIFICATION, { message: "Project not found", type: "error" });
+        return;
+      }
 
       this.currentProject = project;
       this.currentProjectId = id;
@@ -163,6 +262,12 @@ class WorkspaceStore {
         this.metadata = { ...EMPTY_METADATA, projectId: id, projectName: project.name };
         this.entries = [];
       }
+
+      // Update URL to reflect the project selection
+      const url = new URL(window.location.href);
+      url.searchParams.set('project', id);
+      if (url.pathname === '/') url.pathname = '/workspace/editor';
+      window.history.pushState({}, '', url.toString());
 
       events.emit(EventNames.PROJECT_LOADED, project);
       await this.refreshPending();
@@ -199,7 +304,9 @@ class WorkspaceStore {
       }
 
       const hydratedTeam = hydrateTeamAssets(parsed.team || { teamName: "", teamNumber: "", organization: "", logo: "", members: [] }, assetCache);
-      this.metadata = { ...EMPTY_METADATA, ...parsed, team: hydratedTeam, projectId: this.currentProjectId || undefined, projectName: this.currentProject?.name || undefined };
+      // Keep metadata clean, but update the global asset cache
+      assetCache.forEach((v, k) => this.assetCache.set(k, v));
+      this.metadata = { ...EMPTY_METADATA, ...parsed, projectId: this.currentProjectId || undefined, projectName: this.currentProject?.name || undefined };
     } catch {
       this.metadata = { ...EMPTY_METADATA, projectId: this.currentProjectId || undefined, projectName: this.currentProject?.name || undefined };
     }
@@ -218,7 +325,8 @@ class WorkspaceStore {
     const pendingMeta = pending.find(p => p.path === actualIndexPath && p.operation === "upsert");
 
     if (pendingMeta?.content) {
-      this.metadata = { ...EMPTY_METADATA, ...JSON.parse(pendingMeta.content), projectId: this.currentProjectId || undefined, projectName: this.currentProject?.name || undefined };
+      const parsed = JSON.parse(pendingMeta.content);
+      this.metadata = { ...EMPTY_METADATA, ...parsed, projectId: this.currentProjectId || undefined, projectName: this.currentProject?.name || undefined };
     } else {
       try {
         const metaStr = await fetchFileContent(this.config, actualIndexPath);
@@ -244,23 +352,42 @@ class WorkspaceStore {
   // ─── Entry Management ───────────────────────────────────────────────────────
   async openEntry(id: string) {
     const meta = this.metadata.entries[id];
-    if (!meta) return;
+
+    if (!meta) {
+      this.navigateTo({ entry: null });
+      events.emit(EventNames.SHOW_NOTIFICATION, {
+        message: "Entry not found",
+        type: "error"
+      });
+      return;
+    }
 
     this.setLoading(true);
     try {
       const dbName = this.getDBName();
       let entryJsonStr = "";
 
-      // Check pending first
+      // Fetch pending changes once to use for entry and assets
       const pending = await getAllPending(dbName);
-      const stagedEntry = pending.find(p => p.path === meta.filename && p.operation === "upsert");
 
-      if (stagedEntry?.content) {
-        entryJsonStr = stagedEntry.content;
-      } else if (this.mode === "local" && this.dirHandle) {
-        entryJsonStr = (await getLocalFileContent(this.dirHandle, meta.filename)).text || "";
-      } else if (this.mode === "github" && this.config) {
-        entryJsonStr = await fetchFileContent(this.config, meta.filename);
+      // 1. Check memory cache first (for immediate access to new/modified entries)
+      entryJsonStr = this.#lastSavedContents.get(meta.filename) || "";
+
+      // 2. Check pending changes if not in memory
+      if (!entryJsonStr) {
+        const stagedEntry = pending.find(p => p.path === meta.filename && p.operation === "upsert");
+        if (stagedEntry?.content) {
+          entryJsonStr = stagedEntry.content;
+        }
+      }
+
+      // 3. Check disk/remote if still not found
+      if (!entryJsonStr) {
+        if (this.mode === "local" && this.dirHandle) {
+          entryJsonStr = (await getLocalFileContent(this.dirHandle, meta.filename)).text || "";
+        } else if (this.mode === "github" && this.config) {
+          entryJsonStr = await fetchFileContent(this.config, meta.filename);
+        }
       }
 
       if (!entryJsonStr) throw new Error("Entry not found");
@@ -271,6 +398,7 @@ class WorkspaceStore {
       const assetCache = new Map<string, string>();
       const images = extractImagePaths(content);
       for (const imgPath of images) {
+        if (imgPath.startsWith('data:')) continue;
         const actualImgPath = this.mode === "github" && this.config?.baseDir ? `${this.config.baseDir.endsWith('/') ? this.config.baseDir : this.config.baseDir + '/'}${imgPath}` : imgPath;
         const staged = pending.find(p => p.path === actualImgPath && p.operation === "upsert");
         if (staged?.content) {
@@ -296,11 +424,22 @@ class WorkspaceStore {
 
       const hydratedContent = hydrateAssets(content, assetCache);
 
+      let latex = "";
+      try {
+        const texPath = `${LATEX_DIR}/${id}.tex`;
+        if (this.mode === "local" && this.dirHandle) {
+          latex = await readLocalFile(this.dirHandle, texPath);
+        } else if (this.mode === "github" && this.config) {
+          latex = await fetchFileContent(this.config, texPath);
+        }
+      } catch { }
+
       this.openFile = {
         path: meta.filename,
         name: meta.filename.split('/').pop() || "",
         id: id,
         tiptapContent: JSON.stringify(hydratedContent),
+        latex,
         title: meta.title,
         author: meta.author,
         phase: meta.phase,
@@ -318,7 +457,7 @@ class WorkspaceStore {
   async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null }) {
     // 1. Update memory immediately (Source of Truth)
     if (this.openFile && this.openFile.id === id) {
-      this.openFile = { ...this.openFile, ...info, tiptapContent, updatedAt: new Date().toISOString() };
+      this.openFile = { ...this.openFile, ...info, tiptapContent, latex, updatedAt: new Date().toISOString() };
     }
 
     const existingEntry = this.metadata.entries[id];
@@ -340,6 +479,10 @@ class WorkspaceStore {
 
     this.notifyStateChange();
     events.emit(EventNames.ENTRY_UPDATED, { id, ...info });
+
+    if (info.author) {
+      localStorage.setItem("nb-last-author", info.author);
+    }
 
     // 2. Queue background persistence
     this.enqueue(async () => {
@@ -380,20 +523,25 @@ class WorkspaceStore {
     const latexPath = `${LATEX_DIR}/${id}.tex`;
 
     const newEntry: EntryMetadata = {
-      id, title: "New Entry", author: localStorage.getItem("nb-last-author") || "", phase: null,
+      id,
+      title: "",
+      author: localStorage.getItem("nb-last-author") || "",
+      phase: null,
       createdAt, updatedAt: createdAt, filename: path
     };
 
     const wrapper = { version: 3, content: { type: "doc", content: [{ type: "paragraph" }] } };
     const jsonStr = JSON.stringify(wrapper, null, 2);
-    const initialLatex = `\\notebookentry{New Entry}{${createdAt.split('T')[0]}}{${newEntry.author}}{}\n\\label{${id}}\n\n`;
+    const initialLatex = `\\notebookentry{${newEntry.title}}{${createdAt.split('T')[0]}}{${newEntry.author}}{}\n\\label{${id}}\n\n`;
+
+    this.#lastSavedContents.set(path, jsonStr);
+    this.#lastSavedContents.set(latexPath, initialLatex);
 
     this.metadata = validateNotebookIntegrity({
       ...this.metadata,
       entries: { ...this.metadata.entries, [id]: newEntry }
     });
     this.entries = [{ name: `${id}.json`, path }, ...this.entries];
-
     this.notifyStateChange();
 
     this.enqueue(async () => {
@@ -405,14 +553,15 @@ class WorkspaceStore {
       await this.persistFile(ALL_ENTRIES_PATH, allEntriesLatex, "Update all_entries.tex");
     });
 
+    this.navigateTo({ entry: id });
     return id;
   }
 
   async refreshPending() {
     const dbName = this.getDBName();
-    const all = await getAllPending(dbName);
-    events.emit(EventNames.PENDING_CHANGES_UPDATED, all);
-    return all;
+    this.pendingChanges = await getAllPending(dbName);
+    this.notifyStateChange();
+    return this.pendingChanges;
   }
 
   async deleteEntry(file: ExplorerFile) {
@@ -422,24 +571,28 @@ class WorkspaceStore {
     // Memory update
     this.metadata = updatedMeta;
     this.entries = this.entries.filter(e => e.path !== file.path);
-    if (this.openFile?.id === id) this.openFile = null;
+    if (this.openFile?.id === id) {
+      this.openFile = null;
+      this.navigateTo({ entry: null });
+    }
 
     this.notifyStateChange();
 
     // Background persistence
     this.enqueue(async () => {
-      await deleteLocalFileAtPath(this.dirHandle!, file.path);
-      await deleteLocalFileAtPath(this.dirHandle!, `${LATEX_DIR}/${id}.tex`);
-      await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Delete entry");
-
-      const allEntriesLatex = generateAllEntriesLatex(this.metadata);
-      await this.persistFile(ALL_ENTRIES_PATH, allEntriesLatex, "Update all_entries.tex");
-
-      if (this.mode === "github") {
+      if (this.mode === "local" && this.dirHandle) {
+        await deleteLocalFileAtPath(this.dirHandle, file.path);
+        await deleteLocalFileAtPath(this.dirHandle, `${LATEX_DIR}/${id}.tex`);
+      } else if (this.mode === "github" || this.mode === "temporary") {
         const dbName = this.getDBName();
         await stageChange(dbName, { path: file.path, operation: "delete", label: "Delete entry", stagedAt: new Date().toISOString() });
         await stageChange(dbName, { path: `${LATEX_DIR}/${id}.tex`, operation: "delete", label: "Delete LaTeX", stagedAt: new Date().toISOString() });
       }
+
+      await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Delete entry");
+
+      const allEntriesLatex = generateAllEntriesLatex(this.metadata);
+      await this.persistFile(ALL_ENTRIES_PATH, allEntriesLatex, "Update all_entries.tex");
     });
   }
 
@@ -447,19 +600,30 @@ class WorkspaceStore {
     const { cleanTeam, newAssets } = await dehydrateTeamAssets(team);
 
     // Memory update
-    this.metadata = validateNotebookIntegrity({
+    const updatedMeta = validateNotebookIntegrity({
       ...this.metadata,
       team: cleanTeam,
       phases: phases || this.metadata.phases || []
     });
 
+    const metaStr = JSON.stringify(updatedMeta, null, 2);
+
+    // Update memory (we'll keep the hydrated version in memory for the UI)
+    const assetCache = new Map<string, string>();
+    for (const asset of newAssets) {
+      const dataUrl = `data:image/*;base64,${asset.base64}`;
+      assetCache.set(asset.path, dataUrl);
+      this.assetCache.set(asset.path, dataUrl); // Update global cache
+    }
+
+    this.metadata = { ...updatedMeta, team: cleanTeam }; // Metadata stays CLEAN
     this.notifyStateChange();
 
     this.enqueue(async () => {
       for (const asset of newAssets) {
         await this.persistFile(asset.path, asset.base64, `Team asset`, true);
       }
-      await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Update team metadata");
+      await this.persistFile(INDEX_PATH, metaStr, "Update team metadata");
     });
   }
 

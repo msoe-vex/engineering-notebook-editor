@@ -43,6 +43,15 @@ export async function hashContent(content: string | ArrayBuffer): Promise<string
 }
 
 /**
+ * Generates a deterministic UUID based on the hash of an input string.
+ */
+export async function generateDeterministicUUID(input: string): Promise<string> {
+  const hash = await hashContent(input);
+  const s = hash.substring(0, 32);
+  return `${s.substring(0, 8)}-${s.substring(8, 12)}-${s.substring(12, 16)}-${s.substring(16, 20)}-${s.substring(20)}`;
+}
+
+/**
  * Extracts the file extension from a base64 data URL.
  */
 export function getExtensionFromDataUrl(dataUrl: string): string {

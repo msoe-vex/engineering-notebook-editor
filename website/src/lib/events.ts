@@ -34,4 +34,6 @@ export const EventNames = {
   PERSISTENCE_SYNC: "persistence:sync",
   PENDING_CHANGES_UPDATED: "pending:updated",
   STATE_CHANGED: "state:changed",
+  SCROLL_TO_RESOURCE: "editor:scroll_to_resource",
+  SHOW_NOTIFICATION: "ui:show_notification",
 };

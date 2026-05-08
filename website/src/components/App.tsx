@@ -24,13 +24,16 @@ import TeamEditor from "./TeamEditor";
 import ProjectHeader from "./ProjectHeader";
 import ConfirmationDialog from "./ConfirmationDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { HardDrive, ArrowLeftRight, X, BookOpen, Download } from "lucide-react";
+import { HardDrive, ArrowLeftRight, X, BookOpen, Download, Loader2 } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { saveAs } from "file-saver";
 import { generateUUID } from "@/lib/utils";
 import { generateAllEntriesLatex } from "@/lib/latex";
 import { ENTRIES_DIR, INDEX_PATH, ASSETS_DIR } from "@/lib/constants";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { events, EventNames } from "@/lib/events";
+import { Toaster } from "react-hot-toast";
+import { showNotification } from "./Notification";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -95,7 +98,8 @@ export default function App() {
     createGithubProject,
     createLocalProject,
     createTemporaryProject,
-    dirHandle
+    dirHandle,
+    navigateTo
   } = useWorkspace();
 
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -141,11 +145,13 @@ export default function App() {
   const [showTeamEditor, setShowTeamEditor] = useState(false);
   const [teamTab, setTeamTab] = useState<TeamTab>("identity");
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
+  const [hasEntryInUrl, setHasEntryInUrl] = useState(false);
 
   const editorPanelRef = useRef<ImperativePanelHandle>(null);
   const previewPanelRef = useRef<ImperativePanelHandle>(null);
   const sidebarPanelRef = useRef<ImperativePanelHandle>(null);
   const isToggleFromButton = useRef(false);
+  const lastSelectedPathRef = useRef<string | null>(null);
   const { theme, setTheme } = useTheme();
   const isDarkMode = theme === "dark";
   const [isRenamingProject, setIsRenamingProject] = useState(false);
@@ -155,12 +161,19 @@ export default function App() {
   const [targetResourceId, setTargetResourceId] = useState<string | null>(null);
   const [needsPermission, setNeedsPermission] = useState(false);
 
+  // Listen for notifications
+  useEffect(() => {
+    return events.on(EventNames.SHOW_NOTIFICATION, (data: { message: string; type?: "success" | "error" | "loading" | "info" }) => {
+      showNotification(data.message, data.type || "info");
+    });
+  }, []);
+
   useEffect(() => {
     setMounted(true);
     setGithubToken(localStorage.getItem("nb-github-token"));
     setGithubUser(localStorage.getItem("nb-github-user"));
-    // Routing logic is now inside the Store, but we need to react to view changes
-    const handlePath = () => {
+
+    const syncView = () => {
       const path = window.location.pathname;
       if (path.startsWith('/workspace/team')) {
         setShowTeamEditor(true);
@@ -169,11 +182,32 @@ export default function App() {
       } else {
         setShowTeamEditor(false);
       }
+
+      const params = new URLSearchParams(window.location.search);
+      setTargetResourceId(params.get("resource"));
+      setHasEntryInUrl(params.has("entry"));
     };
-    window.addEventListener('popstate', handlePath);
-    handlePath();
-    return () => window.removeEventListener('popstate', handlePath);
+
+    syncView();
+    window.addEventListener('popstate', syncView);
+    const unsub = events.on(EventNames.STATE_CHANGED, syncView);
+
+    return () => {
+      window.removeEventListener('popstate', syncView);
+      unsub();
+    };
   }, []);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (mode === "temporary") {
+        e.preventDefault();
+        return "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [mode]);
 
   useEffect(() => {
     if (!sidebarPanelRef.current || isMobile) return;
@@ -217,12 +251,9 @@ export default function App() {
   const handleNewEntry = async () => {
     try {
       const id = await createEntry();
-      const project = new URLSearchParams(window.location.search).get('project') || "";
-      const url = new URL(window.location.href);
-      url.pathname = '/workspace/editor';
-      url.searchParams.set('entry', id);
-      window.history.pushState({}, '', url.toString());
-      // The store will handle the URL change and open the entry
+      const path = `${ENTRIES_DIR}/${id}.json`;
+      setSelectedPaths(new Set([path]));
+      lastSelectedPathRef.current = path;
     } catch (e) {
       notify("Failed to create entry.", "error");
     }
@@ -230,15 +261,26 @@ export default function App() {
 
   const handleOpenEntry = (file: ExplorerFile) => {
     const entryId = file.name.replace('.json', '');
-    const url = new URL(window.location.href);
-    url.pathname = '/workspace/editor';
-    url.searchParams.set('entry', entryId);
-    window.history.pushState({}, '', url.toString());
-    // Store handles the rest
+    navigateTo({ entry: entryId }, '/workspace/editor');
   };
 
   const handleSelectEntry = (file: ExplorerFile, multi: boolean, range: boolean, visiblePaths: string[]) => {
-    if (multi || range) {
+    if (range && lastSelectedPathRef.current) {
+      const start = visiblePaths.indexOf(lastSelectedPathRef.current);
+      const end = visiblePaths.indexOf(file.path);
+      if (start !== -1 && end !== -1) {
+        const [min, max] = [Math.min(start, end), Math.max(start, end)];
+        const newSelection = new Set(selectedPaths);
+        for (let i = min; i <= max; i++) {
+          newSelection.add(visiblePaths[i]);
+        }
+        setSelectedPaths(newSelection);
+        lastSelectedPathRef.current = file.path;
+        return;
+      }
+    }
+
+    if (multi) {
       const id = file.path;
       setSelectedPaths(prev => {
         const next = new Set(prev);
@@ -246,29 +288,36 @@ export default function App() {
         else next.add(id);
         return next;
       });
+      lastSelectedPathRef.current = file.path;
     } else {
-      handleOpenEntry(file);
       setSelectedPaths(new Set([file.path]));
+      lastSelectedPathRef.current = file.path;
     }
   };
 
   const handleOpenTeamEditor = (tab: TeamTab = "identity") => {
-    const url = new URL(window.location.href);
-    url.pathname = `/workspace/team/${tab}`;
-    window.history.pushState({}, '', url.toString());
-    // Store handles the rest
+    navigateTo({}, `/workspace/team/${tab}`);
   };
 
   const navigateToHome = () => {
-    const url = new URL(window.location.href);
-    url.pathname = '/';
-    url.search = '';
-    window.history.pushState({}, '', url.toString());
+    navigateTo({ project: null, entry: null, resource: null }, '/');
   };
 
   const handleDisconnect = () => {
-    disconnect();
-    navigateToHome();
+    if (mode === "temporary") {
+      showConfirm(
+        "Leave Temporary Workspace?",
+        "All changes in this temporary workspace will be lost forever if you disconnect. Are you sure you want to leave?",
+        () => {
+          disconnect();
+          navigateToHome();
+        },
+        "warning"
+      );
+    } else {
+      disconnect();
+      navigateToHome();
+    }
   };
 
   if (!mounted) return null;
@@ -329,13 +378,13 @@ export default function App() {
   };
 
   const handleExportNotebook = async () => {
-     // TODO: Implement in store
-     notify("Exporting notebook...");
+    // TODO: Implement in store
+    notify("Exporting notebook...");
   };
 
   const processImportFile = async (file: File) => {
-     // TODO: Implement in store
-     notify("Importing entry...");
+    // TODO: Implement in store
+    notify("Importing entry...");
   };
 
   const requestPermission = async () => {
@@ -371,6 +420,7 @@ export default function App() {
           selectedPaths={selectedPaths}
           onSelectEntry={handleSelectEntry}
           onOpenTeam={handleOpenTeamEditor}
+          showConfirm={showConfirm}
         />
       </div>
     </div>
@@ -411,7 +461,52 @@ export default function App() {
           </div>
         )}
 
-        {(!openFile && !showTeamEditor) ? (
+        {(showTeamEditor) ? (
+          <TeamEditor
+            key={`${currentProjectId}-team`}
+            onClose={() => navigateTo({}, '/workspace/editor')}
+            initialTab={teamTab}
+          />
+        ) : (openFile || hasEntryInUrl) ? (
+          <div className="flex-1 flex flex-col min-h-0 relative h-full">
+            {!openFile && (
+              <div className="absolute inset-0 bg-nb-bg flex items-center justify-center z-50 animate-in fade-in duration-300">
+                <div className="flex flex-col items-center gap-4">
+                  <Loader2 className="w-8 h-8 text-nb-primary animate-spin" />
+                  <span className="text-sm text-nb-text-secondary animate-pulse tracking-wide uppercase font-bold text-[10px]">Opening entry...</span>
+                </div>
+              </div>
+            )}
+            <PanelGroup direction="horizontal" className="h-full" id="editor-preview-group">
+              <Panel
+                id="editor-panel" order={1} ref={editorPanelRef} collapsible={true} minSize={isMobile ? 0 : 30}
+                defaultSize={isMobile ? (mobileTab === "editor" ? 100 : 0) : (desktopViewMode === "editor" ? 100 : (desktopViewMode === "preview" ? 0 : 50))}
+                onCollapse={() => { if (!isMobile && desktopViewMode !== "preview") setDesktopViewMode("preview"); }}
+                onExpand={() => { if (!isMobile && desktopViewMode === "preview") setDesktopViewMode("split"); }}
+                className={`flex flex-col h-full transition-all duration-300 ease-out ${(isMobile ? mobileTab === "preview" : desktopViewMode === "preview") ? "opacity-0 pointer-events-none" : "opacity-100"}`}
+              >
+                {openFile && (
+                  <Editor
+                    key={openFile.path}
+                    onClose={() => navigateTo({ entry: null, resource: null })}
+                    targetResourceId={targetResourceId}
+                    showConfirm={showConfirm}
+                  />
+                )}
+              </Panel>
+              <PanelResizeHandle id="editor-preview-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${(isMobile || desktopViewMode !== 'split') ? 'hidden' : ''}`} />
+              <Panel
+                id="preview-panel" order={2} ref={previewPanelRef} collapsible={true} minSize={isMobile ? 0 : 30}
+                defaultSize={isMobile ? (mobileTab === "preview" ? 100 : 0) : (desktopViewMode === "preview" ? 100 : (desktopViewMode === "editor" ? 0 : 50))}
+                onCollapse={() => { if (!isMobile && desktopViewMode !== "editor") setDesktopViewMode("editor"); }}
+                onExpand={() => { if (!isMobile && desktopViewMode === "editor") setDesktopViewMode("split"); }}
+                className={`flex flex-col h-full bg-nb-surface-low transition-all duration-300 ease-out ${(isMobile ? mobileTab === "editor" : desktopViewMode === "editor") ? "opacity-0 pointer-events-none" : "opacity-100"}`}
+              >
+                <Preview latexContent={openFile?.latex || ""} />
+              </Panel>
+            </PanelGroup>
+          </div>
+        ) : (
           <WelcomePage
             workspace={{ mode: mode as "local" | "github" | "temporary", label: workspaceLabel }}
             onNewEntry={createEntry}
@@ -420,48 +515,6 @@ export default function App() {
             onOpenSidebar={() => { isToggleFromButton.current = true; setUserSidebarPreference(true); }}
             onOpenTeam={handleOpenTeamEditor}
           />
-        ) : showTeamEditor ? (
-          <TeamEditor
-            key={`${currentProjectId}-team`}
-            onClose={() => {
-              const url = new URL(window.location.href);
-              url.pathname = '/workspace';
-              window.history.pushState({}, '', url.toString());
-            }}
-            initialTab={teamTab}
-          />
-        ) : (
-          <PanelGroup direction="horizontal" className="h-full" id="editor-preview-group">
-            <Panel
-              id="editor-panel" order={1} ref={editorPanelRef} collapsible={true} minSize={isMobile ? 0 : 30}
-              defaultSize={isMobile ? (mobileTab === "editor" ? 100 : 0) : (desktopViewMode === "editor" ? 100 : (desktopViewMode === "preview" ? 0 : 50))}
-              onCollapse={() => { if (!isMobile && desktopViewMode !== "preview") setDesktopViewMode("preview"); }}
-              onExpand={() => { if (!isMobile && desktopViewMode === "preview") setDesktopViewMode("split"); }}
-              className={`flex flex-col h-full transition-all duration-300 ease-out ${(isMobile ? mobileTab === "preview" : desktopViewMode === "preview") ? "opacity-0 pointer-events-none" : "opacity-100"}`}
-            >
-              {openFile && (
-                <Editor
-                  key={openFile.path}
-                  onClose={() => {
-                    const url = new URL(window.location.href);
-                    url.searchParams.delete('entry');
-                    window.history.pushState({}, '', url.toString());
-                  }}
-                  targetResourceId={targetResourceId}
-                />
-              )}
-            </Panel>
-            <PanelResizeHandle id="editor-preview-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${(isMobile || desktopViewMode !== 'split') ? 'hidden' : ''}`} />
-            <Panel
-              id="preview-panel" order={2} ref={previewPanelRef} collapsible={true} minSize={isMobile ? 0 : 30}
-              defaultSize={isMobile ? (mobileTab === "preview" ? 100 : 0) : (desktopViewMode === "preview" ? 100 : (desktopViewMode === "editor" ? 0 : 50))}
-              onCollapse={() => { if (!isMobile && desktopViewMode !== "editor") setDesktopViewMode("editor"); }}
-              onExpand={() => { if (!isMobile && desktopViewMode === "editor") setDesktopViewMode("split"); }}
-              className={`flex flex-col h-full bg-nb-surface-low transition-all duration-300 ease-out ${(isMobile ? mobileTab === "editor" : desktopViewMode === "editor") ? "opacity-0 pointer-events-none" : "opacity-100"}`}
-            >
-              <Preview latexContent={latexContent} />
-            </Panel>
-          </PanelGroup>
         )}
       </div>
     </div>
@@ -481,8 +534,8 @@ export default function App() {
           onCreateGithub={handleCreateGithub}
           onCreateLocal={handleCreateLocal}
           onCreateTemporary={handleCreateTemporary}
-          onSignOutGithub={() => { 
-            localStorage.removeItem("nb-github-token"); 
+          onSignOutGithub={() => {
+            localStorage.removeItem("nb-github-token");
             localStorage.removeItem("nb-github-user");
             setGithubToken(null);
             setGithubUser(null);
@@ -557,6 +610,8 @@ export default function App() {
           </div>
         </div>
       )}
+      {/* Toast Container */}
+      <Toaster position="bottom-right" />
     </div>
   );
 }

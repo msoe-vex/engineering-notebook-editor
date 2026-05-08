@@ -20,7 +20,6 @@ import AutocompleteInput from "./AutocompleteInput";
 import { extractResources, extractReferences, TipTapNode, NotebookMetadata } from "@/lib/metadata";
 import { ASSETS_DIR } from "@/lib/constants";
 import { NodeSelection } from "@tiptap/pm/state";
-import ConfirmationDialog from "./ConfirmationDialog";
 
 /* ─────────────────────────────────────────────────────────────────
    Component
@@ -31,11 +30,13 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 interface EditorProps {
   onClose?: () => void;
   targetResourceId?: string | null;
+  showConfirm: (title: string, message: string, onConfirm: () => void, variant?: "danger" | "warning" | "info") => void;
 }
 
 const Editor = React.memo(function Editor({
   onClose,
   targetResourceId,
+  showConfirm,
 }: EditorProps) {
   const {
     openFile,
@@ -143,7 +144,6 @@ const Editor = React.memo(function Editor({
   const tableButtonRef = useRef<HTMLDivElement>(null);
   const [gridPos, setGridPos] = useState({ top: 0, left: 0 });
 
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const toggleLinkFn = useRef<(() => void) | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
@@ -156,11 +156,16 @@ const Editor = React.memo(function Editor({
 
   const otherAuthors = React.useMemo(() => {
     const authors = new Set<string>();
+    // Add authors from existing entries
     Object.entries(metadata?.entries || {}).forEach(([id, e]) => {
       if (id !== entryId && e.author?.trim()) authors.add(e.author.trim());
     });
+    // Add team members
+    metadata?.team?.members?.forEach(m => {
+      if (m.name?.trim()) authors.add(m.name.trim());
+    });
     return Array.from(authors).sort();
-  }, [metadata?.entries, entryId]);
+  }, [metadata?.entries, metadata?.team?.members, entryId]);
 
   const otherTitles = React.useMemo(() => {
     const titles = new Set<string>();
@@ -458,7 +463,17 @@ const Editor = React.memo(function Editor({
               <MenuAction icon={<FileCode size={14} />} label="Download LaTeX" onClick={handleDownload} />
               <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
               <MenuAction icon={<X size={14} />} label="Close" onClick={onClose || (() => { })} />
-              <MenuAction icon={<Trash2 size={14} />} label="Delete" onClick={() => setShowDeleteConfirm(true)} />
+              <MenuAction icon={<Trash2 size={14} />} label="Delete" onClick={() => {
+                showConfirm(
+                  "Delete Entry",
+                  `Are you sure you want to delete "${title || "Untitled Entry"}"? This action cannot be undone and will permanently remove the entry and its associated LaTeX file.`,
+                  () => {
+                    deleteEntry({ name: filename.split('/').pop() || "", path: filename });
+                    onClose?.();
+                  },
+                  "danger"
+                );
+              }} />
             </MenuItem>
 
             <MenuItem label="Edit">
@@ -878,19 +893,6 @@ const Editor = React.memo(function Editor({
           </div>
         </div>
 
-        <ConfirmationDialog
-          isOpen={showDeleteConfirm}
-          title="Delete Entry?"
-          message="This will permanently remove the entry from your notebook. This action cannot be undone once committed."
-          confirmLabel="Delete"
-          onConfirm={() => {
-            setShowDeleteConfirm(false);
-            deleteEntry({ name: filename.split('/').pop() || "", path: filename });
-            onClose?.();
-          }}
-          onCancel={() => setShowDeleteConfirm(false)}
-          variant="danger"
-        />
       </div>
     </div>
   );

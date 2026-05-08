@@ -3,6 +3,7 @@ import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { Extension } from "@tiptap/react";
 import Prism from "prismjs";
 import { NotebookMetadata } from "@/lib/metadata";
+import { store } from "@/lib/store";
 
 // Ensure common languages are loaded
 import "prismjs/components/prism-latex";
@@ -94,8 +95,9 @@ export const PrismHighlightExtension = Extension.create({
   },
 });
 
-export function getIntegrityDecorations(doc: import("@tiptap/pm/model").Node, metadata: NotebookMetadata) {
+export function getIntegrityDecorations(doc: import("@tiptap/pm/model").Node) {
   const decorations: Decoration[] = [];
+  const metadata = store.metadata;
   if (!metadata?.entries) return DecorationSet.create(doc, []);
 
   const validIds = new Set<string>();
@@ -129,15 +131,15 @@ export function getIntegrityDecorations(doc: import("@tiptap/pm/model").Node, me
   return DecorationSet.create(doc, decorations);
 }
 
-export const IntegrityPlugin = (metadata: NotebookMetadata) => new Plugin({
+export const IntegrityPlugin = () => new Plugin({
   key: new PluginKey('link-integrity'),
   state: {
-    init: (_, { doc }) => getIntegrityDecorations(doc, metadata),
+    init: (_, { doc }) => getIntegrityDecorations(doc),
     apply: (tr, set) => {
-      if (tr.docChanged) {
-        return getIntegrityDecorations(tr.doc, metadata);
-      }
-      return set.map(tr.mapping, tr.doc);
+      // Re-calculate on every transaction if metadata might have changed
+      // or if the document changed. tr.docChanged is standard, but we also
+      // want to catch store updates.
+      return getIntegrityDecorations(tr.doc);
     },
   },
   props: {
