@@ -5,7 +5,7 @@ import { ExplorerFile } from "@/lib/types";
 import { NotebookMetadata } from "@/lib/metadata";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { LATEX_DIR } from "@/lib/constants";
-import toast from "react-hot-toast";
+import { showNotification } from "./Notification";
 
 interface SidebarProps {
   selectedPaths: Set<string>;
@@ -43,6 +43,7 @@ export default function Sidebar({
   const [sortBy, setSortBy] = useState<"created" | "updated" | "title">("created");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
+  const [isCommitting, setIsCommitting] = useState(false);
   
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -148,6 +149,24 @@ export default function Sidebar({
   const handleDiscard = async () => {
     await discardPendingChanges();
   };
+
+  const handleCommit = async () => {
+    if (!config) {
+      showNotification("GitHub is not configured for this project.", "error");
+      return;
+    }
+
+    try {
+      setIsCommitting(true);
+      await commitAll(config);
+      showNotification("Synced changes to GitHub.", "success");
+    } catch (error) {
+      console.error("GitHub sync failed", error);
+      showNotification(error instanceof Error ? error.message : "Failed to sync to GitHub", "error");
+    } finally {
+      setIsCommitting(false);
+    }
+  };
   
   const handleDownloadJson = async (file: ExplorerFile) => {
     const id = file.name.replace('.json', '');
@@ -163,13 +182,13 @@ export default function Sidebar({
         const { saveAs } = await import("file-saver");
         const blob = new Blob([content], { type: "text/plain" });
         saveAs(blob, `${id}.tex`);
-        toast.success(`Downloaded ${id}.tex`);
+        showNotification(`Downloaded ${id}.tex`, "success");
       } else {
-        toast.error(`Could not find LaTeX for ${file.name}`);
+        showNotification(`Could not find LaTeX for ${file.name}`, "error");
       }
     } catch (e) {
       console.error("Download failed", e);
-      toast.error("Download failed");
+      showNotification("Download failed", "error");
     }
   };
 
@@ -212,8 +231,8 @@ export default function Sidebar({
         <div className="p-4 bg-nb-surface border-t border-nb-outline-variant animate-in slide-in-from-bottom-2 duration-300">
           <PendingChangesPanel
             pendingChanges={pendingChanges}
-            isCommitting={false} // Store handles this now
-            onCommit={() => config && commitAll(config)}
+            isCommitting={isCommitting}
+            onCommit={handleCommit}
             onDiscard={handleDiscard}
             workspaceMode={mode as "github" | "local" | "temporary"}
           />

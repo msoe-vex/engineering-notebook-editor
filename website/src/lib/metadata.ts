@@ -80,8 +80,6 @@ export interface ProjectPhase {
 
 export interface NotebookMetadata {
   version: number;
-  projectId?: string;
-  projectName?: string;
   entries: Record<string, EntryMetadata>; // uuid -> metadata
   team?: TeamMetadata;
   phases?: ProjectPhase[];

@@ -1,7 +1,7 @@
 import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, TipTapNode, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds } from "./metadata";
 import { generateAllEntriesLatex, generateEntryLatex, generateTeamLatex, generatePhasesLatex } from "./latex";
 import { ExplorerFile, GitHubConfig } from "./types";
-import { getProjects, getProject, Project, getProjectDBName, getAllPending, stageChange, removeResource, getResource, putResource, saveProject, getProjectHandle, saveProjectHandle, PendingChange } from "./db";
+import { getProjects, getProject, Project, getProjectDBName, getAllPending, getPending, stageChange, removeStaged, removeResource, getResource, putResource, saveProject, getProjectHandle, saveProjectHandle, PendingChange } from "./db";
 import { fetchFileContent, fetchDirectoryTree, fetchRawFileContent, GitHubFile } from "./github";
 import { listLocalFiles, readLocalFile, writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, ensureLocalDirectory } from "./fs";
 import { INDEX_PATH, ENTRIES_DIR, ENTRIES_INDEX_PATH, LATEX_DIR, ASSETS_DIR, TEAM_PATH, PHASES_PATH } from "./constants";
@@ -177,7 +177,6 @@ class WorkspaceStore {
     try {
       const metaStr = await readLocalFile(handle, INDEX_PATH);
       parsed = JSON.parse(metaStr);
-      if (parsed.projectId) id = parsed.projectId;
     } catch (e) {
       // notebook.json doesn't exist yet or is invalid
     }
@@ -198,11 +197,7 @@ class WorkspaceStore {
     await ensureLocalDirectory(handle, ASSETS_DIR);
     await ensureLocalDirectory(handle, LATEX_DIR);
 
-    // Persist projectId to notebook.json if missing
-    if (!id || !parsed?.projectId) {
-      const initialMeta = { ...(parsed || EMPTY_METADATA), projectId: id, projectName: name };
-      await writeLocalFile(handle, INDEX_PATH, JSON.stringify(initialMeta, null, 2));
-    }
+
 
     await this.refreshProjects();
     return id;
@@ -222,7 +217,7 @@ class WorkspaceStore {
           this.currentProject = { id: "temporary", name: "Temporary Project", type: "temporary", lastOpened: new Date().toISOString() };
           this.currentProjectId = "temporary";
           this.mode = "temporary";
-          this.metadata = { ...EMPTY_METADATA, projectId: "temporary", projectName: "Temporary Project" };
+          this.metadata = EMPTY_METADATA;
           this.entries = [];
 
           // Update URL for temporary project
@@ -269,7 +264,7 @@ class WorkspaceStore {
         };
         await this.loadGitHubWorkspace();
       } else if (this.mode === "temporary") {
-        this.metadata = { ...EMPTY_METADATA, projectId: id, projectName: project.name };
+        this.metadata = EMPTY_METADATA;
         this.entries = [];
       }
 
@@ -324,9 +319,9 @@ class WorkspaceStore {
       const hydratedTeam = hydrateTeamAssets(parsed.team || { teamName: "", teamNumber: "", organization: "", logo: "", members: [] }, assetCache);
       // Keep metadata clean, but update the global asset cache
       assetCache.forEach((v, k) => this.assetCache.set(k, v));
-      this.metadata = { ...EMPTY_METADATA, ...parsed, projectId: this.currentProjectId || undefined, projectName: this.currentProject?.name || undefined };
+      this.metadata = { ...EMPTY_METADATA, ...parsed };
     } catch {
-      this.metadata = { ...EMPTY_METADATA, projectId: this.currentProjectId || undefined, projectName: this.currentProject?.name || undefined };
+      this.metadata = EMPTY_METADATA;
     }
   }
 
@@ -348,9 +343,9 @@ class WorkspaceStore {
     } else {
       try {
         const metaStr = await fetchFileContent(this.config, actualIndexPath);
-        this.metadata = { ...EMPTY_METADATA, ...JSON.parse(metaStr), projectId: this.currentProjectId || undefined, projectName: this.currentProject?.name || undefined };
+        this.metadata = { ...EMPTY_METADATA, ...JSON.parse(metaStr) };
       } catch {
-        this.metadata = { ...EMPTY_METADATA, projectId: this.currentProjectId || undefined, projectName: this.currentProject?.name || undefined };
+        this.metadata = EMPTY_METADATA;
       }
     }
 
@@ -688,8 +683,21 @@ class WorkspaceStore {
         await deleteLocalFileAtPath(this.dirHandle, `${LATEX_DIR}/${id}.tex`);
       } else if (this.mode === "github" || this.mode === "temporary") {
         const dbName = this.getDBName();
-        await stageChange(dbName, { path: file.path, operation: "delete", label: "Delete entry", stagedAt: new Date().toISOString() });
-        await stageChange(dbName, { path: `${LATEX_DIR}/${id}.tex`, operation: "delete", label: "Delete LaTeX", stagedAt: new Date().toISOString() });
+
+        const stagedEntry = await getPending(dbName, file.path);
+        const stagedLatex = await getPending(dbName, `${LATEX_DIR}/${id}.tex`);
+
+        if (stagedEntry?.operation === "upsert") {
+          await removeStaged(dbName, file.path);
+        } else {
+          await stageChange(dbName, { path: file.path, operation: "delete", label: "Delete entry", stagedAt: new Date().toISOString() });
+        }
+
+        if (stagedLatex?.operation === "upsert") {
+          await removeStaged(dbName, `${LATEX_DIR}/${id}.tex`);
+        } else {
+          await stageChange(dbName, { path: `${LATEX_DIR}/${id}.tex`, operation: "delete", label: "Delete LaTeX", stagedAt: new Date().toISOString() });
+        }
       }
 
       await this.reconcileAssetRefs(oldMeta.assetRefs || {}, this.metadata.assetRefs || {});
@@ -746,16 +754,41 @@ class WorkspaceStore {
     const dbName = this.getDBName();
     const all = await getAllPending(dbName);
     const { commitChanges } = await import("./github");
-
-    const gitChanges = all.map(change => ({
-      path: change.path,
-      content: change.operation === "delete" ? null : (change.content?.startsWith("data:") ? change.content.split(",")[1] : (change.content ?? "")),
-      isBinary: change.path.includes("resources/") || /\.(png|jpg|jpeg|gif|webp|pdf)$/i.test(change.path)
-    }));
-
-    await commitChanges(config, gitChanges, `Update notebook: ${all.length} changes`);
-    await this.loadGitHubWorkspace();
     const { clearAllPending } = await import("./db");
+
+    const gitChanges: { path: string; content: string | null; isBinary: boolean }[] = [];
+
+    for (const change of all) {
+      const isBinary = change.path.includes("resources/") || /\.(png|jpg|jpeg|gif|webp|pdf)$/i.test(change.path);
+      const nextContent = change.operation === "delete"
+        ? null
+        : (change.content?.startsWith("data:") ? change.content.split(",")[1] : (change.content ?? ""));
+
+      const committedContent = await this.getCommittedFileContent(change.path, isBinary);
+
+      if (change.operation === "delete") {
+        if (committedContent === null) {
+          await removeStaged(dbName, change.path);
+          continue;
+        }
+      } else if (committedContent !== null && committedContent === nextContent) {
+        await removeStaged(dbName, change.path);
+        continue;
+      }
+
+      gitChanges.push({ path: change.path, content: nextContent, isBinary });
+    }
+
+    if (gitChanges.length === 0) {
+      await clearAllPending(dbName);
+      await this.refreshPending();
+      this.notifyStateChange();
+      events.emit(EventNames.SHOW_NOTIFICATION, { message: "Nothing to sync to GitHub.", type: "info" });
+      return;
+    }
+
+    await commitChanges(config, gitChanges, `Update notebook: ${gitChanges.length} changes`);
+    await this.loadGitHubWorkspace();
     await clearAllPending(dbName);
     await this.refreshPending();
     this.notifyStateChange();
@@ -857,7 +890,7 @@ class WorkspaceStore {
         ? (entryIds.length === 1
           ? (this.metadata.entries[entryIds[0]]?.title || "entry").replace(/[^a-z0-9]/gi, '_').toLowerCase()
           : "entries")
-        : (this.metadata.projectName || "notebook").replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        : "notebook";
       saveAs(blob, `${name}.json`);
 
     } catch (e) {
@@ -991,11 +1024,42 @@ class WorkspaceStore {
     });
   }
 
+  private async getCommittedFileContent(path: string, isBase64 = false): Promise<string | null> {
+    if (this.mode !== "github" || !this.config) {
+      return null;
+    }
+
+    try {
+      return isBase64 ? await fetchRawFileContent(this.config, path) : await fetchFileContent(this.config, path);
+    } catch {
+      return null;
+    }
+  }
+
   private async persistFile(path: string, content: string, label: string, isBase64 = false) {
     if (this.mode === "local" && this.dirHandle) {
       await writeLocalFile(this.dirHandle, path, content, isBase64);
     } else if (this.mode === "github" || this.mode === "temporary") {
-      await stageChange(this.getDBName(), { path, content, operation: "upsert", label, stagedAt: new Date().toISOString() });
+      const dbName = this.getDBName();
+      const staged = await getPending(dbName, path);
+
+      if (this.mode === "github") {
+        const committed = await this.getCommittedFileContent(path, isBase64);
+
+        if (committed === content) {
+          if (staged) {
+            await removeStaged(dbName, path);
+            await this.refreshPending();
+          }
+          return;
+        }
+      }
+
+      if (staged?.operation === "upsert" && staged.content === content) {
+        return;
+      }
+
+      await stageChange(dbName, { path, content, operation: "upsert", label, stagedAt: new Date().toISOString() });
       await this.refreshPending();
     }
   }
