@@ -411,11 +411,13 @@ export default function App() {
         "Leave Temporary Workspace?",
         "All changes in this temporary workspace will be lost forever if you disconnect. Are you sure you want to leave?",
         async () => {
+          await disconnect();
           navigateToHome();
         },
         "warning"
       );
     } else {
+      await disconnect();
       navigateToHome();
     }
   };
