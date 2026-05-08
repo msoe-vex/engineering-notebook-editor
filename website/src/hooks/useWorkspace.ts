@@ -48,27 +48,50 @@ export function useWorkspace() {
     return unsub;
   }, []);
 
+  const getDBName = useCallback((id?: string) => store.getDBName(), []);
+  const disconnect = useCallback(() => store.disconnect(), []);
+  const refreshProjects = useCallback(() => store.refreshProjects(), []);
+  const selectProject = useCallback((id: string) => store.selectProject(id), []);
+  const createEntry = useCallback(() => store.createEntry(), []);
+  const deleteEntry = useCallback((file: any) => store.deleteEntry(file), []);
+  const updateEntry = useCallback((id: string, latex: string, content: string, info: any) => store.updateEntry(id, latex, content, info), []);
+  const saveTeam = useCallback((team: any, phases: any) => store.saveTeam(team, phases), []);
+  const createGithubProject = useCallback((config: any) => store.createGithubProject(config), []);
+  const createLocalProject = useCallback((handle: any, name: string) => store.createLocalProject(handle, name), []);
+  const createTemporaryProject = useCallback(() => store.createTemporaryProject(), []);
+  const commitAll = useCallback((config: any) => store.commitAll(config), []);
+  const refreshPending = useCallback(() => store.refreshPending(), []);
+  const discardPendingChanges = useCallback(() => store.discardPendingChanges(), []);
+  const navigateTo = useCallback((params: any, path?: string) => store.navigateTo(params, path), []);
+  const handleUrlChange = useCallback(() => store.handleUrlChange(), []);
+  const getFileContent = useCallback((path: string) => store.getFileContent(path), []);
+  const exportNotebook = useCallback(() => store.exportNotebook(), []);
+  const exportEntries = useCallback((entryIds?: string[]) => store.exportEntries(entryIds), []);
+  const importNotebook = useCallback((data: any) => store.importNotebook(data), []);
+  const setSelectedPaths = useCallback((pathsOrUpdater: Set<string> | ((prev: Set<string>) => Set<string>)) => store.setSelectedPaths(pathsOrUpdater), []);
+
   return {
     ...state,
-    getDBName: (id?: string) => store.getDBName(), // Keep for compatibility
-    disconnect: () => store.disconnect(),
-    refreshProjects: () => store.refreshProjects(),
-    selectProject: (id: string) => store.selectProject(id),
-    createEntry: () => store.createEntry(),
-    deleteEntry: (file: any) => store.deleteEntry(file),
-    updateEntry: (id: string, latex: string, content: string, info: any) => store.updateEntry(id, latex, content, info),
-    saveTeam: (team: any, phases: any) => store.saveTeam(team, phases),
-    createGithubProject: (config: any) => store.createGithubProject(config),
-    createLocalProject: (handle: any, name: string) => store.createLocalProject(handle, name),
-    createTemporaryProject: () => store.createTemporaryProject(),
-    commitAll: (config: any) => store.commitAll(config),
-    refreshPending: () => store.refreshPending(),
-    navigateTo: (params: any, path?: string) => store.navigateTo(params, path),
-    handleUrlChange: () => store.handleUrlChange(),
-    getFileContent: (path: string) => store.getFileContent(path),
-    exportNotebook: () => store.exportNotebook(),
-    exportEntries: (entryIds?: string[]) => store.exportEntries(entryIds),
-    importNotebook: (data: any) => store.importNotebook(data),
-    setSelectedPaths: (pathsOrUpdater: Set<string> | ((prev: Set<string>) => Set<string>)) => store.setSelectedPaths(pathsOrUpdater),
+    getDBName,
+    disconnect,
+    refreshProjects,
+    selectProject,
+    createEntry,
+    deleteEntry,
+    updateEntry,
+    saveTeam,
+    createGithubProject,
+    createLocalProject,
+    createTemporaryProject,
+    commitAll,
+    refreshPending,
+    discardPendingChanges,
+    navigateTo,
+    handleUrlChange,
+    getFileContent,
+    exportNotebook,
+    exportEntries,
+    importNotebook,
+    setSelectedPaths,
   };
 }
