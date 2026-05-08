@@ -202,6 +202,11 @@ class WorkspaceStore {
 
   async selectProject(id: string) {
     if (this.currentProjectId === id && this.isInitialized && !this.isLoading) return;
+    
+    // Ensure all pending I/O for the current project is finished before switching
+    await this.#queue;
+    
+    this.selectedPaths = new Set();
     this.setLoading(true);
     try {
       if (id === "temporary") {
@@ -1128,17 +1133,27 @@ class WorkspaceStore {
     events.emit(EventNames.STATE_CHANGED, this);
   }
 
-  disconnect() {
-    this.mode = "none";
-    this.currentProjectId = null;
-    this.currentProject = null;
-    this.dirHandle = null;
-    this.config = null;
-    this.entries = [];
-    this.metadata = EMPTY_METADATA;
-    this.openFile = null;
-    this.notifyStateChange();
+  async disconnect() {
+    this.setLoading(true);
+    try {
+      // Ensure all pending I/O for the current project is finished before context is cleared
+      await this.#queue;
+
+      this.mode = "none";
+      this.currentProjectId = null;
+      this.currentProject = null;
+      this.dirHandle = null;
+      this.config = null;
+      this.entries = [];
+      this.metadata = EMPTY_METADATA;
+      this.openFile = null;
+      this.selectedPaths = new Set();
+      this.notifyStateChange();
+    } finally {
+      this.setLoading(false);
+    }
   }
+
 }
 
 export const store = new WorkspaceStore();
