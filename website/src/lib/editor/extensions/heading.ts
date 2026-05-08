@@ -1,6 +1,8 @@
 import { Heading } from "@tiptap/extension-heading";
 import { generateUUID } from "@/lib/utils";
 
+type HeadingAttrs = { id?: string } & Record<string, unknown>;
+
 /**
  * Custom Heading extension that auto-generates UUIDs for tracking headers as resources.
  * All headings will have an id in attrs to enable reference linking and resource tracking.
@@ -29,7 +31,7 @@ export const CustomHeading = Heading.extend({
           // Auto-generate ID if not present
           const attrs = {
             ...attributes,
-            id: attributes.id || generateUUID(),
+            id: (attributes as HeadingAttrs).id || generateUUID(),
           };
           return commands.setNode(this.name, attrs);
         },
@@ -39,7 +41,7 @@ export const CustomHeading = Heading.extend({
           // Auto-generate ID if not present
           const attrs = {
             ...attributes,
-            id: attributes.id || generateUUID(),
+            id: (attributes as HeadingAttrs).id || generateUUID(),
           };
           return commands.toggleNode(this.name, "paragraph", attrs);
         },
