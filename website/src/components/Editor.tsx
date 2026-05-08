@@ -33,6 +33,65 @@ interface EditorProps {
   showConfirm: (title: string, message: string, onConfirm: () => void, variant?: "danger" | "warning" | "info") => void;
 }
 
+const parseInitialContent = (raw: unknown): TipTapNode | string => {
+  if (!raw) return "";
+  if (typeof raw === 'object' && raw !== null) return raw as TipTapNode;
+  if (typeof raw !== 'string') return String(raw);
+
+  const trimmed = raw.trim();
+  if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+    try {
+      let parsed = JSON.parse(trimmed);
+      // If we got another string, try parsing it again (recursive unwrap)
+      if (typeof parsed === 'string') return parseInitialContent(parsed);
+
+      // Unwrap standard wrapper { version: 3, content: { type: 'doc', ... } }
+      if (parsed && typeof parsed === 'object' && 'content' in parsed && !('type' in parsed)) {
+        parsed = parsed.content;
+      }
+
+      return parsed as TipTapNode | string;
+    } catch {
+      return trimmed;
+    }
+  }
+  return trimmed;
+};
+
+const MenuItem = ({ label, children, activeMenu, setActiveMenu }: { label: string, children: React.ReactNode, activeMenu: string | null, setActiveMenu: (val: string | null) => void }) => (
+  <div className="relative h-full flex items-center">
+    <button
+      type="button"
+      onMouseDown={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === label ? null : label); }}
+      onMouseEnter={() => { if (activeMenu) setActiveMenu(label); }}
+      className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-widest transition-colors cursor-pointer ${activeMenu === label ? "bg-nb-primary text-white" : "text-nb-on-surface-variant hover:bg-nb-surface-mid"
+        }`}
+    >
+      {label}
+    </button>
+    {activeMenu === label && (
+      <div
+        className="absolute top-full left-0 mt-1 w-48 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl p-1.5 z-[200] animate-in fade-in slide-in-from-top-1 duration-150"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    )}
+  </div>
+);
+
+const MenuAction = ({ icon, label, onClick, disabled, setActiveMenu }: { icon: React.ReactNode, label: string, onClick: () => void, disabled?: boolean, setActiveMenu: (val: string | null) => void }) => (
+  <button
+    type="button"
+    onClick={() => { onClick(); setActiveMenu(null); }}
+    disabled={disabled}
+    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[10px] font-bold tracking-widest text-nb-on-surface-variant hover:bg-nb-primary/10 hover:text-nb-primary transition-all disabled:opacity-30 disabled:hover:bg-transparent text-left cursor-pointer"
+  >
+    <div className="opacity-60">{icon}</div>
+    <span className="flex-1">{label}</span>
+  </button>
+);
+
 const EditorContent = React.memo(function EditorContent({
   openFile,
   metadata,
@@ -62,31 +121,7 @@ const EditorContent = React.memo(function EditorContent({
     createdAt: initialCreatedAt,
     id: entryId
   } = openFile;
-  
-  const parseInitialContent = useCallback((raw: unknown): TipTapNode | string => {
-    if (!raw) return "";
-    if (typeof raw === 'object' && raw !== null) return raw as TipTapNode;
-    if (typeof raw !== 'string') return String(raw);
 
-    const trimmed = raw.trim();
-    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
-      try {
-        let parsed = JSON.parse(trimmed);
-        // If we got another string, try parsing it again (recursive unwrap)
-        if (typeof parsed === 'string') return parseInitialContent(parsed);
-        
-        // Unwrap standard wrapper { version: 3, content: { type: 'doc', ... } }
-        if (parsed && typeof parsed === 'object' && 'content' in parsed && !('type' in parsed)) {
-          parsed = parsed.content;
-        }
-        
-        return parsed as TipTapNode | string;
-      } catch {
-        return trimmed;
-      }
-    }
-    return trimmed;
-  }, []);
 
   const [title, setTitle] = useState(initialTitle);
   const [author, setAuthor] = useState(initialAuthor);
@@ -134,14 +169,15 @@ const EditorContent = React.memo(function EditorContent({
   }, [title, author, phase, editor, metadata]);
 
   // Local metadata validation (immediate for UI)
-  const lastValidRef = useRef(localIsValid);
   useEffect(() => {
     const valid = checkValidity();
     if (valid !== localIsValid) {
-      setLocalIsValid(valid);
-      if (currentProjectId === "temporary") {
-        setEntryValidity(entryId, valid, valid ? [] : ["Incomplete metadata or resource captions"]);
-      }
+      requestAnimationFrame(() => {
+        setLocalIsValid(valid);
+        if (currentProjectId === "temporary") {
+          setEntryValidity(entryId, valid, valid ? [] : ["Incomplete metadata or resource captions"]);
+        }
+      });
       // We'll notify the parent in the debounced effect below to avoid flicker
     }
   }, [title, author, phase, editor?.state.doc.content, checkValidity, localIsValid, currentProjectId, entryId, setEntryValidity]);
@@ -173,7 +209,7 @@ const EditorContent = React.memo(function EditorContent({
       if (m.name?.trim()) authors.add(m.name.trim());
     });
     return Array.from(authors).sort();
-  }, [metadata?.entries, metadata?.team?.members, entryId]);
+  }, [metadata.entries, metadata.team?.members, entryId]);
 
   const otherTitles = React.useMemo(() => {
     const titles = new Set<string>();
@@ -181,7 +217,7 @@ const EditorContent = React.memo(function EditorContent({
       if (id !== entryId && e.title?.trim() && !e.title.endsWith(".tex")) titles.add(e.title.trim());
     });
     return Array.from(titles).sort();
-  }, [metadata?.entries, entryId]);
+  }, [metadata.entries, entryId]);
 
   const latestContentRef = useRef(content);
   const latestMetadataRef = useRef({ title, author, phase });
@@ -233,17 +269,19 @@ const EditorContent = React.memo(function EditorContent({
   });
 
   useEffect(() => {
-    setTitle(initialTitle);
-    setAuthor(initialAuthor);
-    setPhase(initialPhase);
-    setContent(parseInitialContent(initialContent));
-    setLocalIsValid(metadata.entries[entryId]?.isValid !== false);
-    setValidationErrors([]);
-    setIsSaving(false);
-    setIsAutoSaving(false);
-    lastSyncedRef.current = { title: initialTitle, author: initialAuthor, phase: initialPhase, contentStr: initialContent };
-    lastAutoSavedRef.current = { title: initialTitle, author: initialAuthor, phase: initialPhase, contentStr: initialContent };
-  }, [entryId, initialTitle, initialAuthor, initialPhase, initialContent, metadata.entries, parseInitialContent]);
+    requestAnimationFrame(() => {
+      setTitle(initialTitle);
+      setAuthor(initialAuthor);
+      setPhase(initialPhase);
+      setContent(parseInitialContent(initialContent));
+      setLocalIsValid(metadata.entries[entryId]?.isValid !== false);
+      setValidationErrors([]);
+      setIsSaving(false);
+      setIsAutoSaving(false);
+      lastSyncedRef.current = { title: initialTitle, author: initialAuthor, phase: initialPhase, contentStr: initialContent };
+      lastAutoSavedRef.current = { title: initialTitle, author: initialAuthor, phase: initialPhase, contentStr: initialContent };
+    });
+  }, [entryId, initialTitle, initialAuthor, initialPhase, initialContent, metadata.entries]);
 
   // ── Callback refs (stable references to avoid resetting timers on re-render) ──
   const generateLatexRef = useRef(generateLatex);
@@ -261,7 +299,7 @@ const EditorContent = React.memo(function EditorContent({
        updateEntry(entryId, latex, contentStr, { title, author, phase });
        lastSyncedRef.current = { title, author, phase, contentStr };
     }
-  }, [title, author, phase, entryId]);
+  }, [title, author, phase, entryId, content, generateLatex, updateEntry]);
 
 
   // ── Debounced content auto-save ──────────────────────────────────────────────
@@ -296,7 +334,7 @@ const EditorContent = React.memo(function EditorContent({
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
-  }, [content, filename, title, author, phase]);
+  }, [content, filename, title, author, phase, entryId, updateEntry]);
 
   const handleSave = useCallback(async () => {
     const { valid, errors } = validate();
@@ -322,7 +360,7 @@ const EditorContent = React.memo(function EditorContent({
     setIsAutoSaving(false);
 
     setIsSaving(false);
-  }, [content, title, author, phase, filename, generateLatex, validate, updateEntry, entryId]);
+  }, [content, title, author, phase, generateLatex, validate, updateEntry, entryId]);
 
   const handleDownload = () => {
     const latex = generateLatex(content, title, author, phase);
@@ -352,39 +390,7 @@ const EditorContent = React.memo(function EditorContent({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleSave]);
 
-  const MenuItem = ({ label, children }: { label: string, children: React.ReactNode }) => (
-    <div className="relative h-full flex items-center">
-      <button
-        type="button"
-        onMouseDown={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === label ? null : label); }}
-        onMouseEnter={() => { if (activeMenu) setActiveMenu(label); }}
-        className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-widest transition-colors cursor-pointer ${activeMenu === label ? "bg-nb-primary text-white" : "text-nb-on-surface-variant hover:bg-nb-surface-mid"
-          }`}
-      >
-        {label}
-      </button>
-      {activeMenu === label && (
-        <div
-          className="absolute top-full left-0 mt-1 w-48 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl p-1.5 z-[200] animate-in fade-in slide-in-from-top-1 duration-150"
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          {children}
-        </div>
-      )}
-    </div>
-  );
 
-  const MenuAction = ({ icon, label, onClick, disabled }: { icon: React.ReactNode, label: string, onClick: () => void, disabled?: boolean }) => (
-    <button
-      type="button"
-      onClick={() => { onClick(); setActiveMenu(null); }}
-      disabled={disabled}
-      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[10px] font-bold tracking-widest text-nb-on-surface-variant hover:bg-nb-primary/10 hover:text-nb-primary transition-all disabled:opacity-30 disabled:hover:bg-transparent text-left cursor-pointer"
-    >
-      <div className="opacity-60">{icon}</div>
-      <span className="flex-1">{label}</span>
-    </button>
-  );
 
   const insertImage = () => {
     const input = document.createElement("input");
@@ -449,18 +455,19 @@ const EditorContent = React.memo(function EditorContent({
           <div className="px-4 h-10 flex items-center gap-2 border-b border-nb-outline-variant/30">
 
 
-            <MenuItem label="File">
-              <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} />
+            <MenuItem label="File" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
+              <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} setActiveMenu={setActiveMenu} />
               <MenuAction
                 icon={<FileJson size={14} />}
                 label="Download JSON"
                 onClick={async () => {
                   await exportEntries([entryId]);
                 }}
+                setActiveMenu={setActiveMenu}
               />
-              <MenuAction icon={<FileCode size={14} />} label="Download LaTeX" onClick={handleDownload} />
+              <MenuAction icon={<FileCode size={14} />} label="Download LaTeX" onClick={handleDownload} setActiveMenu={setActiveMenu} />
               <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
-              <MenuAction icon={<X size={14} />} label="Close" onClick={onClose || (() => { })} />
+              <MenuAction icon={<X size={14} />} label="Close" onClick={onClose || (() => { })} setActiveMenu={setActiveMenu} />
               <MenuAction icon={<Trash2 size={14} />} label="Delete" onClick={() => {
                 showConfirm(
                   "Delete Entry",
@@ -471,31 +478,34 @@ const EditorContent = React.memo(function EditorContent({
                   },
                   "danger"
                 );
-              }} />
+              }} setActiveMenu={setActiveMenu} />
             </MenuItem>
 
-            <MenuItem label="Edit">
+            <MenuItem label="Edit" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
               <MenuAction
                 icon={<Undo2 size={14} />}
                 label="Undo"
                 onClick={() => editor?.chain().focus().undo().run()}
                 disabled={!editor?.can().undo()}
+                setActiveMenu={setActiveMenu}
               />
               <MenuAction
                 icon={<Redo2 size={14} />}
                 label="Redo"
                 onClick={() => editor?.chain().focus().redo().run()}
                 disabled={!editor?.can().redo()}
+                setActiveMenu={setActiveMenu}
               />
             </MenuItem>
 
             {editor && (
-              <MenuItem label="Insert">
-                <MenuAction icon={<ImagePlus size={14} />} label="Image" onClick={insertImage} />
+              <MenuItem label="Insert" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
+                <MenuAction icon={<ImagePlus size={14} />} label="Image" onClick={insertImage} setActiveMenu={setActiveMenu} />
                 <MenuAction
                   icon={<TableIcon size={14} />}
                   label="Table"
                   onClick={() => setShowTableGrid(true)}
+                  setActiveMenu={setActiveMenu}
                 />
                 <MenuAction
                   icon={<Code size={14} />}
@@ -512,6 +522,7 @@ const EditorContent = React.memo(function EditorContent({
                       editor.chain().focus().insertContent({ type: 'codeBlock', attrs: { id: generateUUID() } }).run();
                     }
                   }}
+                  setActiveMenu={setActiveMenu}
                 />
                 <MenuAction
                   icon={<Terminal size={14} />}
@@ -528,6 +539,7 @@ const EditorContent = React.memo(function EditorContent({
                       editor.chain().focus().insertContent({ type: 'rawLatex', attrs: { id: generateUUID() } }).run();
                     }
                   }}
+                  setActiveMenu={setActiveMenu}
                 />
               </MenuItem>
             )}
