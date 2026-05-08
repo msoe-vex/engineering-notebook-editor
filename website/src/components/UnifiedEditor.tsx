@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   useEditor, EditorContent, Extension,
 } from "@tiptap/react";
@@ -317,8 +317,6 @@ export default function UnifiedEditor({
     }
   }, [metadata, editor]);
 
-  const lastFilenameRef = useRef(filename);
-
   // Deep Link Autoscroll Logic
   const performScroll = useCallback((targetId: string, isInitial = false) => {
     if (!editor || !targetId) return;
@@ -407,7 +405,7 @@ export default function UnifiedEditor({
     if (resourceId) {
       performScroll(resourceId, true);
     }
-  }, [editor]); // Only run on first load of the editor
+  }, [editor, performScroll]); // Only run on first load of the editor
 
   useEffect(() => {
     if (onToggleLink && editor) {
