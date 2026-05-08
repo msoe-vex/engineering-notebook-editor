@@ -224,14 +224,18 @@ export default function UnifiedEditor({
                   changed = true;
                 }
 
-                if (resId !== params.get('resource')) {
+                // Only add resource parameter if linking to a resource within an entry, not the entry itself
+                const isLinkingToEntry = resId === linkEntryId;
+                if (!isLinkingToEntry && resId !== params.get('resource')) {
                   params.set('resource', resId);
                   changed = true;
                 }
 
                 if (changed) {
-                  const navParams: Record<string, string | null> = { resource: resId };
-                  if (linkEntryId) navParams.entry = linkEntryId;
+                  const navParams: Record<string, string | null> = { entry: linkEntryId || null };
+                  if (!isLinkingToEntry) {
+                    navParams.resource = resId;
+                  }
                   store.navigateTo(navParams);
                 } else {
                   // Already in the same resource, but user clicked again: re-scroll
