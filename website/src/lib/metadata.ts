@@ -370,7 +370,6 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
     // Phase validation
     const phases = metadata.phases || [];
     if (typeof entry.phase !== "number" || !phases.some(p => p.id === entry.phase)) {
-      entry.phase = null;
       errors.push("Missing or invalid phase");
     }
 

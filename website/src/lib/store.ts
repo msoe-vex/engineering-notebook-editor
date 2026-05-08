@@ -471,13 +471,34 @@ class WorkspaceStore {
     const existingEntry = this.metadata.entries[id];
     if (!existingEntry) return;
 
+    let contentJson = JSON.parse(tiptapContent);
+    // Handle double-stringification and wrapping
+    if (typeof contentJson === 'string') {
+      try { contentJson = JSON.parse(contentJson); } catch { }
+    }
+    if (contentJson && contentJson.content && !contentJson.type) {
+      contentJson = contentJson.content;
+    }
+
+    const discoveredResources = extractResources(contentJson);
+    const mergedResources: Record<string, any> = {};
+    const oldResources = existingEntry.resources || {};
+
+    for (const [resId, resInfo] of Object.entries(discoveredResources)) {
+      mergedResources[resId] = {
+        type: resInfo.type,
+        title: resInfo.title || oldResources[resId]?.title || "",
+        caption: resInfo.caption || oldResources[resId]?.caption || "",
+      };
+    }
+
     const mergedEntry: EntryMetadata = {
       ...existingEntry,
       ...info,
       updatedAt: new Date().toISOString(),
-      resources: extractResources(JSON.parse(tiptapContent)),
-      references: extractReferences(JSON.parse(tiptapContent)),
-      assets: extractImagePaths(JSON.parse(tiptapContent)),
+      resources: mergedResources,
+      references: extractReferences(contentJson),
+      assets: extractImagePaths(contentJson),
     };
 
     this.metadata = validateNotebookIntegrity({
@@ -778,9 +799,20 @@ class WorkspaceStore {
     try {
       const { entries = {}, assets = {}, metadata: importMeta = {} } = data;
       const idMap = new Map<string, string>();
-      const entryIdList = Object.keys(entries);
 
-      // 1. Save assets first
+      // 1. Map ALL IDs first (Entries and their internal Resources)
+      const entryIdList = Object.keys(entries);
+      for (const oldId of entryIdList) {
+        idMap.set(oldId, generateUUID());
+        const entryData = entries[oldId];
+        if (entryData.resources) {
+          for (const resId of Object.keys(entryData.resources)) {
+            idMap.set(resId, generateUUID());
+          }
+        }
+      }
+
+      // 2. Save assets first
       for (const [path, base64] of Object.entries(assets as Record<string, string>)) {
         const dataUrl = `data:image/*;base64,${base64}`;
         this.assetCache.set(path, dataUrl); // Immediate memory cache
@@ -790,13 +822,12 @@ class WorkspaceStore {
         }
       }
 
-      // 2. Remap entries
+      // 3. Remap entries
       const newEntriesMap: Record<string, EntryMetadata> = {};
       for (const oldId of entryIdList) {
         const entryWithContent = entries[oldId];
         const { content, ...entryMetadata } = entryWithContent;
-        const newId = generateUUID();
-        idMap.set(oldId, newId);
+        const newId = idMap.get(oldId)!;
 
         // Remap content IDs
         const { doc: remappedDoc } = remapContentIds(content, idMap);
@@ -816,10 +847,16 @@ class WorkspaceStore {
         newEntriesMap[newId] = remappedMeta;
       }
 
-      // 3. Update project metadata
+      // 4. Import Team and Phases if present
+      const importedPhases = data.phases;
+      const importedTeam = data.team;
+
+      // 5. Update project metadata
       this.metadata = validateNotebookIntegrity({
         ...this.metadata,
-        entries: { ...this.metadata.entries, ...newEntriesMap }
+        entries: { ...this.metadata.entries, ...newEntriesMap },
+        phases: importedPhases || this.metadata.phases,
+        team: importedTeam || this.metadata.team
       });
 
       // Save metadata
