@@ -290,7 +290,6 @@ export default function App() {
     checkAuth();
 
     const syncView = () => {
-      const path = window.location.pathname;
       const params = new URLSearchParams(window.location.search);
 
       const view = params.get("view");
