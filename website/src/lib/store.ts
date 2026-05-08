@@ -1,4 +1,4 @@
-import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds, TipTapNode } from "./metadata";
+import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds, TipTapNode, buildResourceTypeIndex } from "./metadata";
 import { generateAllEntriesLatex, generateEntryLatex, generateTeamLatex, generatePhasesLatex } from "./latex";
 import { ExplorerFile, GitHubConfig, TeamTab } from "./types";
 import { getProjects, getProject, Project, getAllPending, getPending, stageChange, removeStaged, getResource, putResource, saveProject, getProjectHandle, saveProjectHandle, PendingChange } from "./db";
@@ -1099,7 +1099,9 @@ class WorkspaceStore {
         remappedMeta.filename = `${ENTRIES_DIR}/${newId}.json`;
 
         const contentStr = JSON.stringify({ version: 3, content: remappedDoc }, null, 2);
-        const latex = generateEntryLatex(remappedDoc as TipTapNode, remappedMeta.title, remappedMeta.author, remappedMeta.phase, remappedMeta.createdAt, newId);
+        const localResources = extractResources(remappedDoc as TipTapNode);
+        const resourceTypes = buildResourceTypeIndex({ ...this.metadata.entries, ...newEntriesMap, [newId]: remappedMeta }, localResources, newId);
+        const latex = generateEntryLatex(remappedDoc as TipTapNode, remappedMeta.title, remappedMeta.author, remappedMeta.phase, remappedMeta.createdAt, newId, resourceTypes);
 
         // Save entry files
         await this.persistFile(remappedMeta.filename, contentStr, `Import entry: ${remappedMeta.title}`);

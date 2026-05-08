@@ -17,7 +17,7 @@ import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng } f
 import { generateEntryLatex } from "@/lib/latex";
 import { getPhases, getPhaseConfig } from "@/lib/phases";
 import AutocompleteInput from "./AutocompleteInput";
-import { extractResources, extractReferences, TipTapNode } from "@/lib/metadata";
+import { extractResources, extractReferences, TipTapNode, ensureHeadingIds, buildResourceTypeIndex } from "@/lib/metadata";
 import { ASSETS_DIR } from "@/lib/constants";
 import { NodeSelection } from "@tiptap/pm/state";
 
@@ -34,7 +34,10 @@ interface EditorProps {
 
 const parseInitialContent = (raw: unknown): TipTapNode | string => {
   if (!raw) return "";
-  if (typeof raw === 'object' && raw !== null) return raw as TipTapNode;
+  if (typeof raw === 'object' && raw !== null) {
+    // Ensure heading IDs for loaded content
+    return ensureHeadingIds(raw as TipTapNode);
+  }
   if (typeof raw !== 'string') return String(raw);
 
   const trimmed = raw.trim();
@@ -47,6 +50,11 @@ const parseInitialContent = (raw: unknown): TipTapNode | string => {
       // Unwrap standard wrapper { version: 3, content: { type: 'doc', ... } }
       if (parsed && typeof parsed === 'object' && 'content' in parsed && !('type' in parsed)) {
         parsed = parsed.content;
+      }
+
+      // Ensure heading IDs for loaded content
+      if (parsed && typeof parsed === 'object') {
+        parsed = ensureHeadingIds(parsed as TipTapNode);
       }
 
       return parsed as TipTapNode | string;
@@ -141,7 +149,8 @@ const EditorContent = React.memo(function EditorContent({
     // Check resources
     const resources = extractResources(doc);
     for (const res of Object.values(resources)) {
-      if (!res.title?.trim() || !res.caption?.trim()) return false;
+      if (!res.title?.trim()) return false;
+      if (res.type !== "header" && !res.caption?.trim()) return false;
     }
 
     // Check references
@@ -238,8 +247,26 @@ const EditorContent = React.memo(function EditorContent({
 
   const generateLatex = useCallback((cnt: TipTapNode | string, t: string, a: string, p: number | null) => {
     const id = filename.split('/').pop()?.replace('.json', '') || "";
-    return generateEntryLatex(cnt, t, a, p === null ? "" : p, initialCreatedAt, id);
-  }, [filename, initialCreatedAt]);
+    
+    // Extract resources from the content to pass to generateEntryLatex
+    let contentNode = cnt;
+    if (typeof cnt === 'string') {
+      try {
+        contentNode = JSON.parse(cnt);
+        // Unwrap standard wrapper if needed
+        if (contentNode && typeof contentNode === 'object' && 'content' in contentNode && !('type' in contentNode)) {
+          contentNode = (contentNode as Record<string, unknown>).content as TipTapNode;
+        }
+      } catch {
+        // Keep as string if not valid JSON
+      }
+    }
+    
+    const resources = typeof contentNode === 'object' && contentNode !== null ? extractResources(contentNode as TipTapNode) : {};
+    const resourceTypes = buildResourceTypeIndex(metadata.entries, resources, id);
+    
+    return generateEntryLatex(cnt, t, a, p === null ? "" : p, initialCreatedAt, id, resourceTypes);
+  }, [filename, initialCreatedAt, metadata.entries]);
 
   const validate = useCallback(() => {
     const errors: string[] = [];
@@ -683,6 +710,11 @@ const EditorContent = React.memo(function EditorContent({
 
                 <ToolbarButton
                   onClick={() => {
+                    if (editor.isActive("heading", { level: 1 })) {
+                      editor.chain().focus().setParagraph().run();
+                      return;
+                    }
+
                     const { selection } = editor.state;
                     const safePos = (selection instanceof NodeSelection) ? selection.to :
                       (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
@@ -701,6 +733,11 @@ const EditorContent = React.memo(function EditorContent({
                 </ToolbarButton>
                 <ToolbarButton
                   onClick={() => {
+                    if (editor.isActive("heading", { level: 2 })) {
+                      editor.chain().focus().setParagraph().run();
+                      return;
+                    }
+
                     const { selection } = editor.state;
                     const safePos = (selection instanceof NodeSelection) ? selection.to :
                       (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
