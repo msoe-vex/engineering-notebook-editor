@@ -109,6 +109,8 @@ export default function App() {
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [githubToken, setGithubToken] = useState<string | null>(null);
   const [githubUser, setGithubUser] = useState<string | null>(null);
+  const [isExchangingCode, setIsExchangingCode] = useState(false);
+
   const notify = useCallback((message: string, type: "error" | "success" = "success") => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 4000);
@@ -163,6 +165,9 @@ export default function App() {
   const [latexContent, setLatexContent] = useState("");
   const [targetResourceId, setTargetResourceId] = useState<string | null>(null);
   const [needsPermission, setNeedsPermission] = useState(false);
+  const navigateToHome = useCallback(() => {
+    navigateTo({ project: null, entry: null, resource: null }, '/');
+  }, [navigateTo]);
 
   // Listen for notifications
   useEffect(() => {
@@ -173,8 +178,78 @@ export default function App() {
 
   useEffect(() => {
     setMounted(true);
-    setGithubToken(localStorage.getItem("nb-github-token"));
-    setGithubUser(localStorage.getItem("nb-github-user"));
+
+    const checkAuth = async () => {
+      const storedToken = localStorage.getItem("nb-github-token");
+      const storedUser = localStorage.getItem("nb-github-user");
+
+      if (storedToken) {
+        setGithubToken(storedToken);
+        setGithubUser(storedUser);
+
+        // Validate token
+        try {
+          const user = await fetchGitHubUser(storedToken);
+          if (user.login !== storedUser) {
+            setGithubUser(user.login);
+            localStorage.setItem("nb-github-user", user.login);
+          }
+        } catch (e) {
+          console.error("Token validation failed:", e);
+          // Only clear if it's a 401 or similar auth error
+          // fetchGitHubUser uses octokit which throws for non-2xx
+          localStorage.removeItem("nb-github-token");
+          localStorage.removeItem("nb-github-user");
+          setGithubToken(null);
+          setGithubUser(null);
+          showNotification("GitHub session expired. Please sign in again.", "error");
+          if (mode === "github") {
+            disconnect();
+            navigateToHome();
+          }
+        }
+      }
+
+      // Handle OAuth callback
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("code");
+
+      if (code) {
+        setIsExchangingCode(true);
+        try {
+          const response = await fetch("/api/auth/github", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code }),
+          });
+
+          const data = await response.json();
+          if (data.access_token) {
+            localStorage.setItem("nb-github-token", data.access_token);
+            setGithubToken(data.access_token);
+
+            const user = await fetchGitHubUser(data.access_token);
+            localStorage.setItem("nb-github-user", user.login);
+            setGithubUser(user.login);
+
+            showNotification("Successfully signed in with GitHub!", "success");
+          } else {
+            throw new Error(data.error || "Failed to exchange code");
+          }
+        } catch (e) {
+          console.error("GitHub auth error:", e);
+          showNotification("GitHub authentication failed.", "error");
+        } finally {
+          setIsExchangingCode(false);
+          // Clean up URL
+          const url = new URL(window.location.href);
+          url.searchParams.delete("code");
+          window.history.replaceState({}, "", url.toString());
+        }
+      }
+    };
+
+    checkAuth();
 
     const syncView = () => {
       const path = window.location.pathname;
@@ -199,7 +274,7 @@ export default function App() {
       window.removeEventListener('popstate', syncView);
       unsub();
     };
-  }, []);
+  }, [mode, disconnect, navigateToHome]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -301,10 +376,6 @@ export default function App() {
 
   const handleOpenTeamEditor = (tab: TeamTab = "identity") => {
     navigateTo({}, `/workspace/team/${tab}`);
-  };
-
-  const navigateToHome = () => {
-    navigateTo({ project: null, entry: null, resource: null }, '/');
   };
 
   const handleDisconnect = () => {
@@ -427,6 +498,8 @@ export default function App() {
   const currentProject = projects.find(p => p.id === currentProjectId) || (currentProjectId === "temporary" ? { id: "temporary", name: "Temporary Workspace" } as Project : null);
   const workspaceLabel = mode === "github" ? `${config?.owner}/${config?.repo}` : (mode === "local" ? (currentProject?.name ?? "Local Folder") : "Memory");
   const appConfig = config ?? { owner: "Local", repo: "Workspace", token: "", entriesDir: ENTRIES_DIR, resourcesDir: ASSETS_DIR };
+
+  if (!mounted) return null;
 
   const sidebar = (
     <div className="flex flex-col h-full overflow-hidden bg-nb-surface-low">
@@ -570,6 +643,7 @@ export default function App() {
           }}
           githubToken={githubToken}
           githubUser={githubUser}
+          isExchangingGithubCode={isExchangingCode}
         />
       ) : (
         isMobile ? (

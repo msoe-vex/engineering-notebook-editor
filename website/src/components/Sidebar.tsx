@@ -3,7 +3,6 @@ import FileExplorer from "./FileExplorer";
 import PendingChangesPanel from "./PendingChangesPanel";
 import { ExplorerFile } from "@/lib/types";
 import { NotebookMetadata } from "@/lib/metadata";
-import { PendingChange, clearAllPending } from "@/lib/db";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { LATEX_DIR } from "@/lib/constants";
 import toast from "react-hot-toast";
@@ -32,6 +31,7 @@ export default function Sidebar({
     createEntry,
     deleteEntry,
     commitAll,
+    discardPendingChanges,
     config,
     refreshPending,
     currentProjectId,
@@ -146,9 +146,7 @@ export default function Sidebar({
   };
 
   const handleDiscard = async () => {
-    const dbName = currentProjectId ? `notebook-project-${currentProjectId}` : "notebook-default";
-    await clearAllPending(dbName);
-    await refreshPending();
+    await discardPendingChanges();
   };
   
   const handleDownloadJson = async (file: ExplorerFile) => {

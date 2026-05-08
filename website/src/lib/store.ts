@@ -611,6 +611,38 @@ class WorkspaceStore {
     return this.pendingChanges;
   }
 
+  async discardPendingChanges() {
+    if (this.mode !== "github" && this.mode !== "temporary") {
+      return;
+    }
+
+    const dbName = this.getDBName();
+    const previousOpenId = this.openFile?.id ?? null;
+
+    const { clearAllPending } = await import("./db");
+    await clearAllPending(dbName);
+
+    // Drop in-memory drafts so reload/openEntry can't resurrect discarded text.
+    this.#lastSavedContents.clear();
+
+    await this.reloadWorkspace();
+    await this.refreshPending();
+
+    if (previousOpenId) {
+      if (this.metadata.entries[previousOpenId]) {
+        await this.openEntry(previousOpenId);
+        return;
+      }
+
+      this.openFile = null;
+      this.selectedPaths = new Set();
+      this.navigateTo({ entry: null, resource: null });
+      return;
+    }
+
+    this.notifyStateChange();
+  }
+
   async deleteEntry(file: ExplorerFile) {
     const id = file.path.split('/').pop()?.replace('.json', '') || "";
     const oldMeta = this.metadata;

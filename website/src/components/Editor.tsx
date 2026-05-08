@@ -225,6 +225,19 @@ const Editor = React.memo(function Editor({
     contentStr: initialContent
   });
 
+  useEffect(() => {
+    setTitle(initialTitle);
+    setAuthor(initialAuthor);
+    setPhase(initialPhase);
+    setContent(parseInitialContent(initialContent));
+    setLocalIsValid(metadata.entries[entryId]?.isValid !== false);
+    setValidationErrors([]);
+    setIsSaving(false);
+    setIsAutoSaving(false);
+    lastSyncedRef.current = { title: initialTitle, author: initialAuthor, phase: initialPhase, contentStr: initialContent };
+    lastAutoSavedRef.current = { title: initialTitle, author: initialAuthor, phase: initialPhase, contentStr: initialContent };
+  }, [entryId, initialTitle, initialAuthor, initialPhase, initialContent, metadata.entries, parseInitialContent]);
+
   // ── Callback refs (stable references to avoid resetting timers on re-render) ──
   const generateLatexRef = useRef(generateLatex);
   useEffect(() => {

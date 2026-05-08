@@ -1,5 +1,5 @@
 import { GitHubConfig, GitHubRepo, fetchUserRepositories, fetchRepoFolders } from "@/lib/github";
-import { Project } from "@/lib/db";
+import { Project, getProjectDBName, getAllPending } from "@/lib/db";
 import { GITHUB_APP_INSTALL_URL, GITHUB_ISSUES_URL } from "@/lib/constants";
 import React, { useState, useEffect, useMemo } from "react";
 import {
@@ -44,10 +44,10 @@ export default function Settings({
   onSignOutGithub,
   isExchangingGithubCode = false,
   autoOpenGithubModal = false,
-  pendingCounts = {},
 }: SettingsProps) {
   const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const [pendingCounts, setPendingCounts] = useState<Record<string, number>>({});
 
   // Form states for GitHub
   const [repoUrl] = useState(() => (typeof window !== "undefined" ? localStorage.getItem("nb-github-repo-url") : "") || "");
@@ -114,6 +114,33 @@ export default function Settings({
     };
     init();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPendingCounts = async () => {
+      const counts = await Promise.all(
+        projects.map(async (project) => {
+          try {
+            const pending = await getAllPending(getProjectDBName(project));
+            return [project.id, pending.length] as const;
+          } catch {
+            return [project.id, 0] as const;
+          }
+        })
+      );
+
+      if (!cancelled) {
+        setPendingCounts(Object.fromEntries(counts));
+      }
+    };
+
+    void loadPendingCounts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projects]);
 
   useEffect(() => {
     const init = async () => {
