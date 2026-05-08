@@ -1,5 +1,5 @@
 import { ASSETS_DIR, DATA_DIR } from "./constants";
-import { TipTapNode } from "./metadata";
+import { TipTapNode, ProjectPhase } from "./metadata";
 
 export const escapeLaTeX = (text: string) =>
   text
@@ -33,9 +33,16 @@ export const mapLanguageToLatex = (lang: string): string => {
   return mapping[lang] || lang;
 };
 
-export const convertNodeToLatex = (node: TipTapNode): string => {
+export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<string, string>): string => {
   if (!node) return "";
-  const children = () => (node.content || []).map(convertNodeToLatex).join("");
+  
+  // Helper to get resource type (entry, header, image, codeBlock, table, etc.)
+  const getResourceType = (id: string): string | null => {
+    if (!resourceTypes) return null;
+    return resourceTypes[id] || null;
+  };
+  
+  const children = () => (node.content || []).map(n => convertNodeToLatex(n, resourceTypes)).join("");
 
   switch (node.type) {
     case "doc":
@@ -51,9 +58,23 @@ export const convertNodeToLatex = (node: TipTapNode): string => {
         if (mark.type === "link") {
           const { href, resourceId } = mark.attrs ?? {};
           if (resourceId) {
-            t = `\\hyperref[${resourceId}]{${t}}`;
+            // Determine the type of resource and pass it to the single notebooklink command
+            const resType = getResourceType(resourceId as string);
+            if (resType === "header") {
+              t = `\\notebooklink{${t}}{header}{${resourceId}}`;
+            } else if (resType === "entry") {
+              t = `\\notebooklink{${t}}{entry}{${resourceId}}`;
+            } else if (resType === "image" || resType === "codeBlock" || resType === "table") {
+              t = `\\notebooklink{${t}}{${resType}}{${resourceId}}`;
+            } else if (resType) {
+              // Unknown internal resource type still uses notebooklink
+              t = `\\notebooklink{${t}}{resource}{${resourceId}}`;
+            } else {
+              // No type info available, fall back to notebooklink as a generic internal resource
+              t = `\\notebooklink{${t}}{resource}{${resourceId}}`;
+            }
           } else if (href) {
-            t = `\\href{${href}}{${t}}`;
+            t = `\\notebooklink{${t}}{url}{${href}}`;
           }
         }
       }
@@ -70,8 +91,17 @@ export const convertNodeToLatex = (node: TipTapNode): string => {
 
     case "heading": {
       const level = node.attrs?.level ?? 2;
-      const cmd = level === 1 ? "subsection" : "subsubsection";
-      return `\\${cmd}{${children()}}\n\n`;
+      const headingText = children().trim();
+      const uuid = (node.attrs?.id as string) || "";
+      
+      if (uuid) {
+        // Use notebookheader command with UUID label
+        return `\\notebookheader{${headingText}}{${level}}{${uuid}}\n\n`;
+      } else {
+        // Fallback: standard heading without label
+        const cmd = level === 1 ? "subsection" : "subsubsection";
+        return `\\${cmd}{${headingText}}\n\n`;
+      }
     }
 
     case "bulletList":
@@ -84,9 +114,9 @@ export const convertNodeToLatex = (node: TipTapNode): string => {
       // listItem wraps content in a paragraph; extract raw text
       const parts = (node.content || []).map((child) => {
         if (child.type === "paragraph") {
-          return (child.content || []).map(convertNodeToLatex).join("");
+          return (child.content || []).map(n => convertNodeToLatex(n, resourceTypes)).join("");
         }
-        return convertNodeToLatex(child);
+        return convertNodeToLatex(child, resourceTypes);
       });
       return `  \\item ${parts.join("\n").trim()}\n`;
     }
@@ -140,7 +170,7 @@ export const convertNodeToLatex = (node: TipTapNode): string => {
 
       const body = rows.map((row) => {
         const cells = (row.content ?? []).map((cell) =>
-          (cell.content ?? []).map(convertNodeToLatex).join("").replace(/\n+$/, "").trim()
+          (cell.content ?? []).map(n => convertNodeToLatex(n, resourceTypes)).join("").replace(/\n+$/, "").trim()
         );
         return cells.join(" & ") + " \\\\ \\hline";
       }).join("\n");
@@ -172,7 +202,7 @@ export const convertNodeToLatex = (node: TipTapNode): string => {
   }
 };
 
-export const convertJsonToLatex = (input: TipTapNode | string): string => {
+export const convertJsonToLatex = (input: TipTapNode | string, resourceTypes?: Record<string, string>): string => {
   if (!input) return "";
   
   let doc = input;
@@ -185,10 +215,15 @@ export const convertJsonToLatex = (input: TipTapNode | string): string => {
     }
   }
 
-  return convertNodeToLatex(doc as TipTapNode).replace(/\n{3,}/g, "\n\n").trim() + "\n";
+  // Unwrap if it's the standard wrapper { version: 3, content: { type: 'doc', ... } }
+  if (doc && typeof doc === 'object' && 'content' in doc && !('type' in doc)) {
+    doc = (doc as Record<string, unknown>).content as TipTapNode;
+  }
+
+  return convertNodeToLatex(doc as TipTapNode, resourceTypes).replace(/\n{3,}/g, "\n\n").trim() + "\n";
 };
 
-export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: string, p: string, initialCreatedAt: string | undefined, id?: string): string => {
+export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: string, p: string | number | null, initialCreatedAt: string | undefined, id?: string, resourceTypes?: Record<string, string>): string => {
   let dateObj = initialCreatedAt ? new Date(initialCreatedAt) : new Date();
 
   // Fallback for mangled timestamps (e.g. 2026-04-28T17-36-32)
@@ -202,13 +237,15 @@ export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: strin
     dateObj = new Date();
   }
 
-  const dateStr = dateObj.toISOString().split('T')[0];
-  let latex = `\\notebookentry{${escapeLaTeX(t)}}{${dateStr}}{${escapeLaTeX(a)}}{${escapeLaTeX(p)}}\n`;
+  // Build a local fallback map when callers do not provide notebook-wide types.
+  const resolvedResourceTypes: Record<string, string> = { ...(resourceTypes || {}) };
   if (id) {
-    latex += `\\label{${id}}\n`;
+    resolvedResourceTypes[id] = "entry";
   }
-  latex += `\n`;
-  latex += convertJsonToLatex(cnt);
+
+  const dateStr = dateObj.toISOString().split('T')[0];
+  let latex = `\\notebookentry{${escapeLaTeX(t)}}{${dateStr}}{${escapeLaTeX(a)}}{${p ?? ""}}{${id ?? ""}}\n\n`;
+  latex += convertJsonToLatex(cnt, resolvedResourceTypes);
   return latex;
 };
 
@@ -251,4 +288,28 @@ export const generateTeamLatex = (team: TeamMetadata): string => {
   });
   latex += `}\n`;
   return latex;
+};
+
+export const generatePhasesLatex = (phases: ProjectPhase[]): string => {
+  let latex = "% DESIGN PROCESS PHASES - AUTOMATICALLY GENERATED\n\n";
+  
+  let phaseListLatex = "\\newcommand{\\phaselist}{\n";
+
+  phases.forEach((p) => {
+    // Create a color name based on the stable ID (safe for LaTeX)
+    const colorName = `PhaseID${p.id.toString().replace(/-/g, "")}`;
+    const hex = p.color.startsWith("#") ? p.color.substring(1) : p.color;
+    
+    latex += `% Phase: ${p.name}\n`;
+    latex += `\\definecolor{${colorName}}{HTML}{${hex}}\n`;
+    latex += `\\csdef{phasecolor@${p.index}}{${colorName}}\n`;
+    latex += `\\csdef{phasename@${p.index}}{${escapeLaTeX(p.name)}}\n\n`;
+
+    // Add to phase list using the abstracted command
+    phaseListLatex += `    \\notebookphase{${colorName}}{${escapeLaTeX(p.name)}}{${escapeLaTeX(p.description || "")}}\n`;
+  });
+  
+  phaseListLatex += "}\n";
+  
+  return latex + phaseListLatex;
 };

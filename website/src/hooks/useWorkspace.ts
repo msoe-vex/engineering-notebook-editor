@@ -1,164 +1,110 @@
-import { useState, useCallback, useRef, useEffect } from "react";
-import { NotebookMetadata, EMPTY_METADATA } from "@/lib/metadata";
+import { useState, useEffect, useCallback } from "react";
+import { store, WorkspaceMode } from "@/lib/store";
+import { events, EventNames } from "@/lib/events";
 import { ExplorerFile, GitHubConfig } from "@/lib/types";
-import { fetchFileContent, fetchDirectoryTree, GitHubFile } from "@/lib/github";
-import { listLocalFiles, readLocalFile } from "@/lib/fs";
-import { getAllPending } from "@/lib/db";
-import { INDEX_PATH, ENTRIES_DIR, ALL_ENTRIES_PATH } from "@/lib/constants";
+import { TeamMetadata, ProjectPhase } from "@/lib/metadata";
 
-export type WorkspaceMode = "local" | "github" | "temporary" | "none";
+export type { WorkspaceMode };
 
 export function useWorkspace() {
-  const [mode, setMode] = useState<WorkspaceMode>("none");
-  const [config, setConfig] = useState<GitHubConfig | null>(null);
-  const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
-  const [entries, setEntries] = useState<ExplorerFile[]>([]);
-  const [metadata, setMetadata] = useState<NotebookMetadata>(EMPTY_METADATA);
-  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const lastRemoteMetadataRef = useRef<string | null>(null);
-  const lastRemoteAllEntriesRef = useRef<string | null>(null);
-
-  const getDBName = useCallback(() => {
-    if (currentProjectId) {
-      return `notebook-project-${currentProjectId}`;
-    }
-    return "notebook-pending";
-  }, [currentProjectId]);
-
-  const loadLocalExplorer = useCallback(async (skipMetadata = false) => {
-    if (!dirHandle) return;
-    setIsLoading(true);
-    try {
-      const files = await listLocalFiles(dirHandle, ENTRIES_DIR);
-      setEntries(files);
-
-      if (!skipMetadata) {
-        try {
-          const metaStr = await readLocalFile(dirHandle, INDEX_PATH);
-          const parsed = JSON.parse(metaStr);
-          setMetadata(prev => ({ ...parsed, projectId: prev.projectId || parsed.projectId, projectName: prev.projectName || parsed.projectName }));
-        } catch {
-          setMetadata(prev => ({ ...EMPTY_METADATA, projectId: prev.projectId, projectName: prev.projectName }));
-        }
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }, [dirHandle]);
-
-  const loadGitHubExplorer = useCallback(async (skipMetadata = false) => {
-    if (!config) return;
-    setIsLoading(true);
-    try {
-      const dbName = getDBName();
-      const actualEntriesDir = config.entriesDir || ENTRIES_DIR;
-      const basePrefix = config.baseDir ? (config.baseDir.endsWith('/') ? config.baseDir : config.baseDir + '/') : '';
-      const actualIndexPath = `${basePrefix}${INDEX_PATH}`;
-      const actualAllEntriesPath = `${basePrefix}${ALL_ENTRIES_PATH}`;
-
-      const files = await fetchDirectoryTree(config, actualEntriesDir);
-      const entryFiles = Array.isArray(files) ? files.map((f: GitHubFile) => ({ name: f.name, path: f.path })) : [];
-
-      const pending = await getAllPending(dbName);
-      const pendingMeta = pending.find(p => p.path === actualIndexPath && p.operation === "upsert");
-
-      if (pendingMeta?.content) {
-        try {
-          const parsed = JSON.parse(pendingMeta.content);
-          setMetadata(prev => ({ ...parsed, projectId: prev.projectId || parsed.projectId, projectName: prev.projectName || parsed.projectName }));
-        } catch { }
-      } else if (!skipMetadata) {
-        try {
-          const metaStr = await fetchFileContent(config, actualIndexPath);
-          lastRemoteMetadataRef.current = metaStr;
-          const parsed = JSON.parse(metaStr);
-          setMetadata(prev => ({ ...parsed, projectId: prev.projectId || parsed.projectId, projectName: prev.projectName || parsed.projectName }));
-        } catch { }
-      }
-
-      try {
-        const allEntries = await fetchFileContent(config, actualAllEntriesPath);
-        lastRemoteAllEntriesRef.current = allEntries;
-      } catch { }
-
-      let mergedEntries = [...entryFiles];
-      for (const p of pending) {
-        if (p.path.startsWith(actualEntriesDir) && p.path.endsWith('.json')) {
-          if (p.operation === "upsert") {
-            if (!mergedEntries.some(e => e.path === p.path)) {
-              mergedEntries.push({ name: p.path.split('/').pop() || '', path: p.path });
-            }
-          } else if (p.operation === "delete") {
-            mergedEntries = mergedEntries.filter(e => e.path !== p.path);
-          }
-        }
-      }
-
-      setEntries(mergedEntries);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [config, getDBName]);
-
-  const connectLocal = useCallback(async (handle: FileSystemDirectoryHandle) => {
-    setDirHandle(handle);
-    setMode("local");
-    // Initialization will be triggered by useEffect
-  }, []);
-
-  const connectGitHub = useCallback((ghConfig: GitHubConfig) => {
-    setConfig(ghConfig);
-    setMode("github");
-  }, []);
-
-  const disconnect = useCallback(() => {
-    setMode("none");
-    setConfig(null);
-    setDirHandle(null);
-    setEntries([]);
-    setMetadata(EMPTY_METADATA);
-    setCurrentProjectId(null);
-  }, []);
+  const [state, setState] = useState({
+    mode: store.mode,
+    config: store.config,
+    dirHandle: store.dirHandle,
+    entries: store.entries,
+    metadata: store.hydratedMetadata,
+    currentProjectId: store.currentProjectId,
+    isLoading: store.isLoading,
+    loadingLabel: store.loadingLabel,
+    isInitialized: store.isInitialized,
+    projects: store.projects,
+    openFile: store.openFile,
+    pendingChanges: store.pendingChanges,
+    currentProject: store.currentProject,
+    selectedPaths: store.selectedPaths,
+    hasEntryInUrl: store.hasEntryInUrl,
+    showTeamEditor: store.showTeamEditor,
+    teamTab: store.teamTab,
+  });
 
   useEffect(() => {
-    const run = async () => {
-      if (mode === "local" && dirHandle) {
-        await loadLocalExplorer();
-      } else if (mode === "github" && config) {
-        await loadGitHubExplorer();
-      } else if (mode === "temporary") {
-        setEntries([]);
-        setMetadata({ ...EMPTY_METADATA });
-        setIsLoading(false);
-      }
-    };
-    run();
-  }, [mode, dirHandle, config, loadLocalExplorer, loadGitHubExplorer]);
+    const unsub = events.on(EventNames.STATE_CHANGED, (newStore: unknown) => {
+      const s = newStore as typeof store;
+      setState({
+        mode: s.mode,
+        config: s.config,
+        dirHandle: s.dirHandle,
+        entries: s.entries,
+        metadata: s.hydratedMetadata,
+        currentProjectId: s.currentProjectId,
+        isLoading: s.isLoading,
+        loadingLabel: s.loadingLabel,
+        isInitialized: s.isInitialized,
+        projects: s.projects,
+        openFile: s.openFile,
+        pendingChanges: s.pendingChanges,
+        currentProject: s.currentProject,
+        selectedPaths: s.selectedPaths,
+        hasEntryInUrl: s.hasEntryInUrl,
+        showTeamEditor: s.showTeamEditor,
+        teamTab: s.teamTab,
+      });
+    });
+
+    // Handle initial state if we missed it
+    if (!store.isInitialized && !store.isLoading) {
+      store.initialize();
+    }
+
+    return unsub;
+  }, []);
+
+  const getDBName = useCallback(() => store.getDBName(), []);
+  const disconnect = useCallback(() => store.disconnect(), []);
+  const refreshProjects = useCallback(() => store.refreshProjects(), []);
+  const selectProject = useCallback((id: string) => store.selectProject(id), []);
+  const createEntry = useCallback(() => store.createEntry(), []);
+  const deleteEntry = useCallback((file: ExplorerFile) => store.deleteEntry(file), []);
+  const updateEntry = useCallback((id: string, latex: string, content: string, info: { title: string; author: string; phase: number | null }) => store.updateEntry(id, latex, content, info), []);
+  const saveTeam = useCallback((team: TeamMetadata, phases: ProjectPhase[]) => store.saveTeam(team, phases), []);
+  const createGithubProject = useCallback((config: { owner: string; repo: string; branch: string; folderPath: string; name: string }) => store.createGithubProject(config), []);
+  const createLocalProject = useCallback((handle: FileSystemDirectoryHandle, name: string) => store.createLocalProject(handle, name), []);
+  const createTemporaryProject = useCallback(() => store.createTemporaryProject(), []);
+  const commitAll = useCallback((config: GitHubConfig) => store.commitAll(config), []);
+  const refreshPending = useCallback(() => store.refreshPending(), []);
+  const setEntryValidity = useCallback((id: string, isValid: boolean, validationErrors?: string[]) => store.setEntryValidity(id, isValid, validationErrors), []);
+  const discardPendingChanges = useCallback(() => store.discardPendingChanges(), []);
+  const navigateTo = useCallback((params: Record<string, string | null>, path?: string) => store.navigateTo(params, path), []);
+  const handleUrlChange = useCallback(() => store.handleUrlChange(), []);
+  const getFileContent = useCallback((path: string) => store.getFileContent(path), []);
+  const exportNotebook = useCallback(() => store.exportNotebook(), []);
+  const exportEntries = useCallback((entryIds?: string[]) => store.exportEntries(entryIds), []);
+  const importNotebook = useCallback((data: Record<string, unknown>) => store.importNotebook(data), []);
+  const setSelectedPaths = useCallback((pathsOrUpdater: Set<string> | ((prev: Set<string>) => Set<string>)) => store.setSelectedPaths(pathsOrUpdater), []);
 
   return {
-    mode,
-    config,
-    dirHandle,
-    entries,
-    metadata,
-    setMetadata,
-    setEntries,
-    isLoading,
-    setIsLoading,
+    ...state,
     getDBName,
-    loadLocalExplorer,
-    loadGitHubExplorer,
-    connectLocal,
-    connectGitHub,
     disconnect,
-    setMode,
-    setConfig,
-    setDirHandle,
-    currentProjectId,
-    setCurrentProjectId,
-    lastRemoteMetadataRef,
-    lastRemoteAllEntriesRef,
+    refreshProjects,
+    selectProject,
+    createEntry,
+    deleteEntry,
+    updateEntry,
+    saveTeam,
+    createGithubProject,
+    createLocalProject,
+    createTemporaryProject,
+    commitAll,
+    refreshPending,
+    setEntryValidity,
+    discardPendingChanges,
+    navigateTo,
+    handleUrlChange,
+    getFileContent,
+    exportNotebook,
+    exportEntries,
+    importNotebook,
+    setSelectedPaths,
   };
 }

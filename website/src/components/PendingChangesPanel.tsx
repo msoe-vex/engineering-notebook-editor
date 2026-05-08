@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { PendingChange } from "@/lib/db";
 
@@ -38,7 +38,7 @@ export default function PendingChangesPanel({
             <span className="text-[9px] font-black tracking-widest text-nb-tertiary uppercase flex-1 text-left">
               Pending Changes ({pendingChanges.length})
             </span>
-            <ChevronDown size={12} className={`text-nb-tertiary transition-transform ${isCollapsed ? "" : "rotate-180"}`} />
+            <ChevronDown size={12} className={`text-nb-tertiary transition-transform ${!isCollapsed ? "" : "rotate-180"}`} />
           </button>
 
           {!isCommitting && (
@@ -53,7 +53,7 @@ export default function PendingChangesPanel({
 
         {!isCollapsed && (
           <div className="max-h-24 overflow-y-auto scrollbar-hide space-y-1.5 pl-4.5 border-l border-nb-tertiary/10 ml-0.5 animate-in fade-in slide-in-from-top-1 duration-200">
-            {pendingChanges.slice(0, 5).map(p => (
+            {pendingChanges.map(p => (
               <div key={p.path} className="text-[8px] font-mono text-nb-on-surface-variant/60 truncate flex gap-2">
                 <span className={`uppercase font-bold ${p.operation === 'delete' ? 'text-red-500/60' : 'text-nb-tertiary/60'}`}>
                   {p.operation === 'delete' ? 'del' : 'upd'}
@@ -61,9 +61,6 @@ export default function PendingChangesPanel({
                 <span className="truncate">{p.path.split('/').pop()}</span>
               </div>
             ))}
-            {pendingChanges.length > 5 && (
-              <div className="text-[8px] italic opacity-40 pl-2">+{pendingChanges.length - 5} more files...</div>
-            )}
           </div>
         )}
       </div>

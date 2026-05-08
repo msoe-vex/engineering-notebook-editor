@@ -23,7 +23,7 @@ export interface EntryMetadata {
   id: string; // Entry UUID
   title: string;
   author: string;
-  phase: string;
+  phase: number | null; // Phase ID
   createdAt: string;
   updatedAt: string;
   filename: string; // Path to the entry file (e.g. "entries/uuid.json")
@@ -69,18 +69,67 @@ export interface EntryWrapper {
   content: TipTapNode; // TipTap JSON
 }
 
+export interface ProjectPhase {
+  id: string;
+  index: number;
+  name: string;
+  description: string;
+  iconName: string; // Lucide icon name
+  color: string;    // Hex color
+}
+
 export interface NotebookMetadata {
   version: number;
-  projectId?: string;
-  projectName?: string;
   entries: Record<string, EntryMetadata>; // uuid -> metadata
   team?: TeamMetadata;
+  phases?: ProjectPhase[];
   assetRefs?: Record<string, string[]>; // asset path -> [entry id or "team"]
 }
+
+/**
+ * Builds a notebook-wide resource type index for LaTeX generation.
+ * Includes all entries, all stored resources, and optional local unsaved resources.
+ */
+export function buildResourceTypeIndex(
+  entries: Record<string, EntryMetadata>,
+  localResources: Record<string, { type: string }> = {},
+  currentEntryId?: string
+): Record<string, string> {
+  const resourceTypes: Record<string, string> = {};
+
+  for (const [entryId, entry] of Object.entries(entries || {})) {
+    resourceTypes[entryId] = "entry";
+
+    if (entry.resources) {
+      for (const [resourceId, resource] of Object.entries(entry.resources)) {
+        resourceTypes[resourceId] = resource.type;
+      }
+    }
+  }
+
+  if (currentEntryId) {
+    resourceTypes[currentEntryId] = "entry";
+  }
+
+  for (const [resourceId, resource] of Object.entries(localResources || {})) {
+    resourceTypes[resourceId] = resource.type;
+  }
+
+  return resourceTypes;
+}
+
+export const DEFAULT_PHASES: ProjectPhase[] = [
+  { id: "define-problem", index: 1, name: "Define Problem", description: "Identifying the core issue, setting SMART goals, outlining constraints and deliverables.", iconName: "Goal", color: "#3b82f6" },
+  { id: "generate-concepts", index: 2, name: "Generate Concepts", description: "Brainstorming, research, prototyping, and decision matrices to evaluate potential solutions.", iconName: "Brain", color: "#a855f7" },
+  { id: "develop-solution", index: 3, name: "Develop Solution", description: "Creating CAD, detailed sketches, math calculations, graphical models, and pseudocode.", iconName: "PencilRuler", color: "#6366f1" },
+  { id: "construct-test", index: 4, name: "Construct and Test", description: "Building the robot, writing the code, executing test plans, and gathering qualitative/quantitative data.", iconName: "Hammer", color: "#f97316" },
+  { id: "evaluate-solution", index: 5, name: "Evaluate Solution", description: "Reflecting on constraints, event outcomes, and planning future improvements.", iconName: "SearchCheck", color: "#10b981" },
+];
 
 export const EMPTY_METADATA: NotebookMetadata = { 
   version: 3, 
   entries: {},
+  phases: DEFAULT_PHASES,
   team: {
     teamName: "",
     teamNumber: "",
@@ -101,8 +150,11 @@ export function extractImagePaths(doc: TipTapDoc): string[] {
   const paths: string[] = [];
   function walk(node: TipTapNode | undefined) {
     if (!node) return;
-    if (node.type === "image" && node.attrs?.filePath) {
-      paths.push(node.attrs.filePath as string);
+    if (node.type === "image") {
+      const path = (node.attrs?.filePath as string) || (node.attrs?.src as string);
+      if (path && path.startsWith(`${ASSETS_DIR}/`)) {
+        paths.push(path);
+      }
     }
     (node.content ?? []).forEach(walk);
   }
@@ -110,7 +162,7 @@ export function extractImagePaths(doc: TipTapDoc): string[] {
   return paths;
 }
 
-/** Walk every node and extract resources (blocks with IDs and titles). */
+/** Walk every node and extract resources (blocks with IDs and titles), including headers. */
 export function extractResources(doc: TipTapDoc): Record<string, { title: string, caption: string, type: string }> {
   const resources: Record<string, { title: string, caption: string, type: string }> = {};
   
@@ -126,6 +178,21 @@ export function extractResources(doc: TipTapDoc): Record<string, { title: string
         title,
         caption,
         type: node.type
+      };
+    }
+    
+    // Include headings as resources with their own IDs
+    if (node.type === "heading" && node.attrs?.id) {
+      const id = node.attrs.id as string;
+      // Extract heading text from content
+      const headingText = (node.content || [])
+        .map(child => child.text || "")
+        .join("")
+        .trim() || "Untitled Header";
+      resources[id] = { 
+        title: headingText, 
+        caption: "", 
+        type: "header" 
       };
     }
     
@@ -276,8 +343,9 @@ export function hydrateAssets(doc: TipTapDoc, assetCache: Map<string, string>): 
     if (!node) return node;
     if (node.type === "image") {
       const attrs = (node.attrs || {}) as Record<string, string | undefined>;
-      if (attrs.src?.startsWith(`${ASSETS_DIR}/`)) {
-        const dataUrl = assetCache.get(attrs.src);
+      const src = attrs.src || attrs.filePath;
+      if (src && !src.startsWith("data:")) {
+        const dataUrl = assetCache.get(src);
         if (dataUrl) {
           return { ...node, attrs: { ...node.attrs, src: dataUrl } };
         }
@@ -320,6 +388,7 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
   const assetRefs: Record<string, string[]> = {};
   
   const trackAsset = (path: string, owner: string) => {
+    if (!path || path.startsWith("data:")) return; // Don't track hydrated data
     if (!assetRefs[path]) assetRefs[path] = [];
     if (!assetRefs[path].includes(owner)) assetRefs[path].push(owner);
   };
@@ -353,13 +422,20 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
     // Check basic metadata
     if (!entry.title?.trim()) errors.push("Missing title");
     if (!entry.author?.trim()) errors.push("Missing author");
-    if (!entry.phase?.trim()) errors.push("Missing phase");
+    
+    // Phase validation
+    const phases = metadata.phases && metadata.phases.length > 0 ? metadata.phases : DEFAULT_PHASES;
+    if (typeof entry.phase !== "number" || !phases.some(p => p.index === entry.phase)) {
+      errors.push("Missing or invalid phase");
+    }
 
     // Check local resources
     if (entry.resources) {
       for (const [resId, res] of Object.entries(entry.resources)) {
         if (!res.title?.trim()) errors.push(`Resource "${resId}" missing title`);
-        if (!res.caption?.trim()) errors.push(`Resource "${resId}" missing caption`);
+        if (res.type !== "header" && !res.caption?.trim()) {
+          errors.push(`Resource "${resId}" missing caption`);
+        }
       }
     }
 
@@ -390,7 +466,7 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
 export function isEntryValid(info: EntryMetadata): boolean {
   if (!info.title?.trim()) return false;
   if (!info.author?.trim()) return false;
-  if (!info.phase?.trim()) return false;
+  if (info.phase === null) return false;
   
   if (info.resources) {
     for (const res of Object.values(info.resources)) {
@@ -446,7 +522,13 @@ export function remapContentIds(doc: TipTapDoc | TipTapNode[], globalIdMap: Map<
       return;
     }
 
-    if (node.attrs?.id) {
+    // For headings without IDs, assign new UUIDs
+    if (node.type === "heading" && !node.attrs?.id) {
+      if (!node.attrs) node.attrs = {};
+      const newId = generateUUID();
+      (node.attrs as Record<string, unknown>).id = newId;
+      globalIdMap.set(newId, newId); // Map to itself (no old ID to track)
+    } else if (node.attrs?.id) {
       const oldId = node.attrs.id as string;
       if (!globalIdMap.has(oldId)) {
         globalIdMap.set(oldId, generateUUID());
@@ -525,7 +607,56 @@ export function remapContentIds(doc: TipTapDoc | TipTapNode[], globalIdMap: Map<
     return newNode;
   }
 
-  return { doc: apply(doc) as TipTapNode, idMap: globalIdMap };
+  return { doc: apply(doc) as TipTapDoc, idMap: globalIdMap };
+}
+
+/**
+ * Ensures all heading nodes have UUIDs in attrs.id
+ * Returns the modified document (mutates in place)
+ */
+export function ensureHeadingIds(doc: TipTapDoc | TipTapNode): TipTapDoc | TipTapNode {
+  if (!doc || typeof doc !== "object") return doc;
+
+  function walk(node: TipTapNode | undefined) {
+    if (!node) return;
+
+    // Assign UUID to headings without IDs
+    if (node.type === "heading" && !node.attrs?.id) {
+      if (!node.attrs) node.attrs = {};
+      (node.attrs as Record<string, unknown>).id = generateUUID();
+    }
+
+    if (Array.isArray(node.content)) {
+      node.content.forEach(walk);
+    }
+  }
+
+  walk(doc as TipTapNode);
+  return doc;
+}
+
+/**
+ * Remaps IDs in the entry metadata's resources and references fields.
+ */
+export function remapEntryMetadataIds(entry: EntryMetadata, idMap: Map<string, string>): EntryMetadata {
+  const newEntry = { ...entry };
+  
+  // Remap resources
+  if (entry.resources) {
+    const newResources: Record<string, { title: string; caption: string; type: string }> = {};
+    for (const [oldId, res] of Object.entries(entry.resources)) {
+      const newId = idMap.get(oldId) || oldId;
+      newResources[newId] = { ...res };
+    }
+    newEntry.resources = newResources;
+  }
+  
+  // Remap references
+  if (entry.references) {
+    newEntry.references = entry.references.map(refId => idMap.get(refId) || refId);
+  }
+  
+  return newEntry;
 }
 
 /**
@@ -564,8 +695,10 @@ export async function dehydrateTeamAssets(team: TeamMetadata): Promise<{ cleanTe
 export function hydrateTeamAssets(team: TeamMetadata, assetCache: Map<string, string>): TeamMetadata {
   const hydrated = JSON.parse(JSON.stringify(team)) as TeamMetadata;
   const processImg = (src: string | undefined) => {
-    if (src?.startsWith(`${ASSETS_DIR}/`)) {
-      return assetCache.get(src) || src;
+    if (src && !src.startsWith("data:")) {
+      const cached = assetCache.get(src);
+      if (!cached) console.warn(`[Hydrate] Asset not found in cache: ${src}`);
+      return cached || src;
     }
     return src;
   };

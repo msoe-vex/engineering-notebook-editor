@@ -13,8 +13,11 @@ export interface ExplorerFile {
   path: string;
   title?: string;
   author?: string;
+  phase?: number | null;
   timestamp?: string;
   updatedAt?: string;
   isValid?: boolean;
   validationErrors?: string[];
 }
+
+export type TeamTab = "identity" | "members" | "phases";

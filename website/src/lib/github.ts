@@ -162,7 +162,22 @@ export const fetchRawFileContent = async (config: GitHubConfig, path: string) =>
   });
 
   if (!Array.isArray(response.data) && response.data.type === "file") {
-    return response.data.content.replace(/\s/g, '');
+    if (response.data.content) {
+      const content = response.data.content.replace(/\s/g, '');
+      console.log(`[GitHub] Fetched raw content for ${path}. Length: ${content.length}`);
+      return content;
+    }
+
+    // If content is missing, it's likely too large (> 1MB). Fetch blob directly.
+    console.log(`[GitHub] Content missing for ${path} (possibly > 1MB), fetching blob ${response.data.sha}`);
+    const blobResponse = await octokit.rest.git.getBlob({
+      owner: config.owner,
+      repo: config.repo,
+      file_sha: response.data.sha,
+    });
+    const content = blobResponse.data.content.replace(/\s/g, '');
+    console.log(`[GitHub] Fetched blob content for ${path}. Length: ${content.length}`);
+    return content;
   }
   throw new Error("Not a file");
 };
@@ -444,5 +459,18 @@ export const fetchGitHubUser = async (token: string) => {
   const octokit = getOctokit(token);
   const response = await octokit.rest.users.getAuthenticated();
   return response.data;
+};
+
+export const initiateGitHubLogin = (clientId: string | undefined, redirectUri: string, state?: string) => {
+  if (!clientId) {
+    alert("GitHub Client ID not configured in .env.local");
+    return;
+  }
+  const scope = ""; // No 'repo' scope so we respect GitHub App installations
+  let url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}`;
+  if (state) {
+    url += `&state=${encodeURIComponent(state)}`;
+  }
+  window.location.href = url;
 };
 

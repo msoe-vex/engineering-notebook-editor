@@ -9,126 +9,139 @@ import {
   Save, Trash2, AlertCircle, AlertTriangle, Loader2, User, X, FileCode,
   Undo2, Redo2, ImagePlus, ChevronDown, List, ListOrdered,
   Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
-  Brain, PencilRuler, Hammer, SearchCheck, Goal, Terminal, Link as LinkIcon, Underline as UnderlineIcon,
+  Terminal, Link as LinkIcon, Underline as UnderlineIcon,
   FileJson
 } from "lucide-react";
+import * as LucideIcons from "lucide-react";
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng } from "@/lib/utils";
 import { generateEntryLatex } from "@/lib/latex";
+import { getPhases, getPhaseConfig } from "@/lib/phases";
 import AutocompleteInput from "./AutocompleteInput";
-import { extractResources, extractReferences, TipTapNode, NotebookMetadata } from "@/lib/metadata";
+import { extractResources, extractReferences, TipTapNode, ensureHeadingIds, buildResourceTypeIndex } from "@/lib/metadata";
 import { ASSETS_DIR } from "@/lib/constants";
 import { NodeSelection } from "@tiptap/pm/state";
-import ConfirmationDialog from "./ConfirmationDialog";
-
-interface PhaseInfo {
-  icon: typeof Goal;
-  color: string;
-  bg: string;
-  border: string;
-  text: string;
-}
-
-const PHASE_CONFIG: Record<string, PhaseInfo> = {
-  "Define Problem": { icon: Goal, color: "text-blue-500", bg: "bg-blue-500/10", border: "border-blue-500/20", text: "text-blue-600 dark:text-blue-400" },
-  "Generate Concepts": { icon: Brain, color: "text-purple-500", bg: "bg-purple-500/10", border: "border-purple-500/20", text: "text-purple-600 dark:text-purple-400" },
-  "Develop Solution": { icon: PencilRuler, color: "text-indigo-500", bg: "bg-indigo-500/10", border: "border-indigo-500/20", text: "text-indigo-600 dark:text-indigo-400" },
-  "Construct and Test": { icon: Hammer, color: "text-orange-500", bg: "bg-orange-500/10", border: "border-orange-500/20", text: "text-orange-600 dark:text-orange-400" },
-  "Evaluate Solution": { icon: SearchCheck, color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/20", text: "text-emerald-600 dark:text-emerald-400" },
-};
-
-const PHASES = Object.keys(PHASE_CONFIG);
 
 /* ─────────────────────────────────────────────────────────────────
    Component
    ───────────────────────────────────────────────────────────────── */
 
+import { useWorkspace } from "@/hooks/useWorkspace";
+
 interface EditorProps {
-  config: {
-    owner: string;
-    repo: string;
-    token: string;
-    entriesDir: string;
-  };
-  filename: string;
-  isLocalMode?: boolean;
-  initialTitle?: string;
-  initialAuthor?: string;
-  initialPhase?: string;
-  initialContent: string;
-  initialCreatedAt?: string;
-  initialUpdatedAt?: string;
-  metadataMissing?: boolean;
-  isValid?: boolean;
-  onDeleted: (path: string) => void;
-  onContentChange?: (filename: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string }) => void;
-  onTitleChange: (title: string) => void;
-  onAuthorChange: (author: string) => void;
-  onPhaseChange: (phase: string) => void;
-  onImageUpload?: (path: string, base64: string) => void;
-  onDownloadPortable?: (path: string, content: string, info: { title: string; author: string; phase: string; createdAt: string; updatedAt: string }) => void;
   onClose?: () => void;
-  dbName?: string;
-  isSaving?: boolean;
-  notebookMetadata?: NotebookMetadata;
-  onValidationChange?: (isValid: boolean) => void;
-  targetResourceId?: string | null;
+  showConfirm: (title: string, message: string, onConfirm: () => void, variant?: "danger" | "warning" | "info") => void;
 }
 
-const Editor = React.memo(function Editor({
-  filename,
-  initialTitle = "",
-  initialAuthor = "",
-  initialPhase = "",
-  initialContent = "",
-  initialCreatedAt = "",
-  initialUpdatedAt = "",
-  isValid = true,
-  onDeleted,
-  onContentChange,
-  onValidationChange,
-  onImageUpload,
-  onTitleChange,
-  onAuthorChange,
-  onPhaseChange,
-  onDownloadPortable,
-  onClose,
-  dbName,
-  isSaving: isExternalSaving = false,
-  notebookMetadata,
-  targetResourceId,
-}: EditorProps) {
-  const parseInitialContent = useCallback((raw: unknown): TipTapNode | string => {
-    if (!raw) return "";
-    if (typeof raw === 'object' && raw !== null) return raw as TipTapNode;
-    if (typeof raw !== 'string') return String(raw);
+const parseInitialContent = (raw: unknown): TipTapNode | string => {
+  if (!raw) return "";
+  if (typeof raw === 'object' && raw !== null) {
+    // Ensure heading IDs for loaded content
+    return ensureHeadingIds(raw as TipTapNode);
+  }
+  if (typeof raw !== 'string') return String(raw);
 
-    const trimmed = raw.trim();
-    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
-      try {
-        const parsed = JSON.parse(trimmed);
-        // If we got another string, try parsing it again (recursive unwrap)
-        if (typeof parsed === 'string') return parseInitialContent(parsed);
-        return parsed as TipTapNode | string;
-      } catch {
-        return trimmed;
+  const trimmed = raw.trim();
+  if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+    try {
+      let parsed = JSON.parse(trimmed);
+      // If we got another string, try parsing it again (recursive unwrap)
+      if (typeof parsed === 'string') return parseInitialContent(parsed);
+
+      // Unwrap standard wrapper { version: 3, content: { type: 'doc', ... } }
+      if (parsed && typeof parsed === 'object' && 'content' in parsed && !('type' in parsed)) {
+        parsed = parsed.content;
       }
+
+      // Ensure heading IDs for loaded content
+      if (parsed && typeof parsed === 'object') {
+        parsed = ensureHeadingIds(parsed as TipTapNode);
+      }
+
+      return parsed as TipTapNode | string;
+    } catch {
+      return trimmed;
     }
-    return trimmed;
-  }, []);
+  }
+  return trimmed;
+};
+
+const MenuItem = ({ label, children, activeMenu, setActiveMenu }: { label: string, children: React.ReactNode, activeMenu: string | null, setActiveMenu: (val: string | null) => void }) => (
+  <div className="relative h-full flex items-center">
+    <button
+      type="button"
+      onMouseDown={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === label ? null : label); }}
+      onMouseEnter={() => { if (activeMenu) setActiveMenu(label); }}
+      className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-widest transition-colors cursor-pointer ${activeMenu === label ? "bg-nb-primary text-white" : "text-nb-on-surface-variant hover:bg-nb-surface-mid"
+        }`}
+    >
+      {label}
+    </button>
+    {activeMenu === label && (
+      <div
+        className="absolute top-full left-0 mt-1 w-48 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl p-1.5 z-[200] animate-in fade-in slide-in-from-top-1 duration-150"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    )}
+  </div>
+);
+
+const MenuAction = ({ icon, label, onClick, disabled, setActiveMenu }: { icon: React.ReactNode, label: string, onClick: () => void, disabled?: boolean, setActiveMenu: (val: string | null) => void }) => (
+  <button
+    type="button"
+    onClick={() => { onClick(); setActiveMenu(null); }}
+    disabled={disabled}
+    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[10px] font-bold tracking-widest text-nb-on-surface-variant hover:bg-nb-primary/10 hover:text-nb-primary transition-all disabled:opacity-30 disabled:hover:bg-transparent text-left cursor-pointer"
+  >
+    <div className="opacity-60">{icon}</div>
+    <span className="flex-1">{label}</span>
+  </button>
+);
+
+const EditorContent = React.memo(function EditorContent({
+  openFile,
+  metadata,
+  updateEntry,
+  deleteEntry,
+  currentProjectId,
+  setEntryValidity,
+  exportEntries,
+  onClose,
+  showConfirm,
+}: EditorProps & {
+  openFile: NonNullable<ReturnType<typeof useWorkspace>['openFile']>;
+  metadata: ReturnType<typeof useWorkspace>['metadata'];
+  updateEntry: ReturnType<typeof useWorkspace>['updateEntry'];
+  deleteEntry: ReturnType<typeof useWorkspace>['deleteEntry'];
+  currentProjectId: ReturnType<typeof useWorkspace>['currentProjectId'];
+  setEntryValidity: ReturnType<typeof useWorkspace>['setEntryValidity'];
+  exportEntries: ReturnType<typeof useWorkspace>['exportEntries'];
+}) {
+  const {
+    path: filename,
+    title: initialTitle,
+    author: initialAuthor,
+    phase: initialPhase,
+    tiptapContent: initialContent,
+    createdAt: initialCreatedAt,
+    id: entryId
+  } = openFile;
+
 
   const [title, setTitle] = useState(initialTitle);
   const [author, setAuthor] = useState(initialAuthor);
-  const [phase, setPhase] = useState(initialPhase);
+  const [phase, setPhase] = useState<number | null>(initialPhase);
   const [content, setContent] = useState<TipTapNode | string>(() => parseInitialContent(initialContent));
   const [editor, setEditor] = useState<import("@tiptap/react").Editor | null>(null);
 
   // Local validation state for immediate UI feedback.
   // Editor is the sole authority on validity while open — parent isValid is only used for initial value.
   // This prevents flickering caused by stale metadata flowing back down during debounced saves.
-  const [localIsValid, setLocalIsValid] = useState(isValid);
+  const [localIsValid, setLocalIsValid] = useState(metadata.entries[entryId]?.isValid !== false);
 
   const checkValidity = useCallback(() => {
-    if (!title?.trim() || !author?.trim() || !phase?.trim()) return false;
+    if (!title?.trim() || !author?.trim() || phase === null) return false;
     if (!editor) return true;
 
     const doc = editor.getJSON();
@@ -136,15 +149,16 @@ const Editor = React.memo(function Editor({
     // Check resources
     const resources = extractResources(doc);
     for (const res of Object.values(resources)) {
-      if (!res.title?.trim() || !res.caption?.trim()) return false;
+      if (!res.title?.trim()) return false;
+      if (res.type !== "header" && !res.caption?.trim()) return false;
     }
 
     // Check references
     const refs = extractReferences(doc);
-    if (refs.length > 0 && notebookMetadata?.entries) {
+    if (refs.length > 0 && metadata?.entries) {
       // Build set of all existing IDs
       const existingIds = new Set<string>();
-      for (const entry of Object.values(notebookMetadata.entries)) {
+      for (const entry of Object.values(metadata.entries)) {
         existingIds.add(entry.id);
         if (entry.resources) {
           for (const resId of Object.keys(entry.resources)) {
@@ -159,17 +173,21 @@ const Editor = React.memo(function Editor({
     }
 
     return true;
-  }, [title, author, phase, editor, notebookMetadata]);
+  }, [title, author, phase, editor, metadata]);
 
   // Local metadata validation (immediate for UI)
-  const lastValidRef = useRef(localIsValid);
   useEffect(() => {
     const valid = checkValidity();
     if (valid !== localIsValid) {
-      setLocalIsValid(valid);
+      requestAnimationFrame(() => {
+        setLocalIsValid(valid);
+        if (currentProjectId === "temporary") {
+          setEntryValidity(entryId, valid, valid ? [] : ["Incomplete metadata or resource captions"]);
+        }
+      });
       // We'll notify the parent in the debounced effect below to avoid flicker
     }
-  }, [title, author, phase, editor?.state.doc.content, checkValidity, localIsValid]);
+  }, [title, author, phase, editor?.state.doc.content, checkValidity, localIsValid, currentProjectId, entryId, setEntryValidity]);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -177,28 +195,36 @@ const Editor = React.memo(function Editor({
   const tableButtonRef = useRef<HTMLDivElement>(null);
   const [gridPos, setGridPos] = useState({ top: 0, left: 0 });
 
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const toggleLinkFn = useRef<(() => void) | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
-  const [, setSelectionUpdate] = useState(0);
 
-  const entryId = filename.split('/').pop()?.replace('.json', '') || "";
+  // Dynamic Phase Logic
+  const availablePhases = getPhases(metadata?.phases);
+  const phaseConfig = getPhaseConfig(availablePhases);
+  const activePhaseCfg = phase && phaseConfig[phase] ? phaseConfig[phase] : null;
+
+  const [, setSelectionUpdate] = useState(0);
 
   const otherAuthors = React.useMemo(() => {
     const authors = new Set<string>();
-    Object.entries(notebookMetadata?.entries || {}).forEach(([id, e]) => {
+    // Add authors from existing entries
+    Object.entries(metadata?.entries || {}).forEach(([id, e]) => {
       if (id !== entryId && e.author?.trim()) authors.add(e.author.trim());
     });
+    // Add team members
+    metadata?.team?.members?.forEach(m => {
+      if (m.name?.trim()) authors.add(m.name.trim());
+    });
     return Array.from(authors).sort();
-  }, [notebookMetadata?.entries, entryId]);
+  }, [metadata.entries, metadata.team?.members, entryId]);
 
   const otherTitles = React.useMemo(() => {
     const titles = new Set<string>();
-    Object.entries(notebookMetadata?.entries || {}).forEach(([id, e]) => {
+    Object.entries(metadata?.entries || {}).forEach(([id, e]) => {
       if (id !== entryId && e.title?.trim() && !e.title.endsWith(".tex")) titles.add(e.title.trim());
     });
     return Array.from(titles).sort();
-  }, [notebookMetadata?.entries, entryId]);
+  }, [metadata.entries, entryId]);
 
   const latestContentRef = useRef(content);
   const latestMetadataRef = useRef({ title, author, phase });
@@ -219,10 +245,28 @@ const Editor = React.memo(function Editor({
     };
   }, [editor]);
 
-  const generateLatex = useCallback((cnt: TipTapNode | string, t: string, a: string, p: string) => {
+  const generateLatex = useCallback((cnt: TipTapNode | string, t: string, a: string, p: number | null) => {
     const id = filename.split('/').pop()?.replace('.json', '') || "";
-    return generateEntryLatex(cnt, t, a, p, initialCreatedAt, id);
-  }, [filename, initialCreatedAt]);
+    
+    // Extract resources from the content to pass to generateEntryLatex
+    let contentNode = cnt;
+    if (typeof cnt === 'string') {
+      try {
+        contentNode = JSON.parse(cnt);
+        // Unwrap standard wrapper if needed
+        if (contentNode && typeof contentNode === 'object' && 'content' in contentNode && !('type' in contentNode)) {
+          contentNode = (contentNode as Record<string, unknown>).content as TipTapNode;
+        }
+      } catch {
+        // Keep as string if not valid JSON
+      }
+    }
+    
+    const resources = typeof contentNode === 'object' && contentNode !== null ? extractResources(contentNode as TipTapNode) : {};
+    const resourceTypes = buildResourceTypeIndex(metadata.entries, resources, id);
+    
+    return generateEntryLatex(cnt, t, a, p === null ? "" : p, initialCreatedAt, id, resourceTypes);
+  }, [filename, initialCreatedAt, metadata.entries]);
 
   const validate = useCallback(() => {
     const errors: string[] = [];
@@ -249,47 +293,39 @@ const Editor = React.memo(function Editor({
     contentStr: initialContent
   });
 
-  // ── Callback refs (stable references to avoid resetting timers on re-render) ──
-  const onContentChangeRef = useRef(onContentChange);
-  const generateLatexRef = useRef(generateLatex);
-  const onTitleChangeRef = useRef(onTitleChange);
-  const onAuthorChangeRef = useRef(onAuthorChange);
-  const onPhaseChangeRef = useRef(onPhaseChange);
-  const onValidationChangeRef = useRef(onValidationChange);
   useEffect(() => {
-    onContentChangeRef.current = onContentChange;
+    requestAnimationFrame(() => {
+      setTitle(initialTitle);
+      setAuthor(initialAuthor);
+      setPhase(initialPhase);
+      setContent(parseInitialContent(initialContent));
+      setLocalIsValid(metadata.entries[entryId]?.isValid !== false);
+      setValidationErrors([]);
+      setIsSaving(false);
+      setIsAutoSaving(false);
+      lastSyncedRef.current = { title: initialTitle, author: initialAuthor, phase: initialPhase, contentStr: initialContent };
+      lastAutoSavedRef.current = { title: initialTitle, author: initialAuthor, phase: initialPhase, contentStr: initialContent };
+    });
+  }, [entryId, initialTitle, initialAuthor, initialPhase, initialContent, metadata.entries]);
+
+  // ── Callback refs (stable references to avoid resetting timers on re-render) ──
+  const generateLatexRef = useRef(generateLatex);
+  useEffect(() => {
     generateLatexRef.current = generateLatex;
-    onTitleChangeRef.current = onTitleChange;
-    onAuthorChangeRef.current = onAuthorChange;
-    onPhaseChangeRef.current = onPhaseChange;
-    onValidationChangeRef.current = onValidationChange;
-  }, [onContentChange, generateLatex, onTitleChange, onAuthorChange, onPhaseChange, onValidationChange]);
+  }, [generateLatex]);
 
   // ── Immediate metadata sync ──────────────────────────────────────────────────
   // Title, author, and phase are synced to the parent instantly (no debounce)
-  // so the Sidebar always reflects exactly what the user is typing.
+  // via the Store's updateEntry method.
   useEffect(() => {
-    if (title !== lastSyncedRef.current.title) {
-      onTitleChangeRef.current?.(title);
-      lastSyncedRef.current.title = title;
+    if (title !== lastSyncedRef.current.title || author !== lastSyncedRef.current.author || phase !== lastSyncedRef.current.phase) {
+       const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
+       const latex = generateLatex(content, title, author, phase);
+       updateEntry(entryId, latex, contentStr, { title, author, phase });
+       lastSyncedRef.current = { title, author, phase, contentStr };
     }
-    if (author !== lastSyncedRef.current.author) {
-      onAuthorChangeRef.current?.(author);
-      lastSyncedRef.current.author = author;
-    }
-    if (phase !== lastSyncedRef.current.phase) {
-      onPhaseChangeRef.current?.(phase);
-      lastSyncedRef.current.phase = phase;
-    }
-  }, [title, author, phase]);
+  }, [title, author, phase, entryId, content, generateLatex, updateEntry]);
 
-  // ── Immediate validation sync ────────────────────────────────────────────────
-  useEffect(() => {
-    if (localIsValid !== lastValidRef.current) {
-      onValidationChangeRef.current?.(localIsValid);
-      lastValidRef.current = localIsValid;
-    }
-  }, [localIsValid]);
 
   // ── Debounced content auto-save ──────────────────────────────────────────────
   // Only content changes are debounced (800ms) since they trigger disk/GitHub I/O.
@@ -297,7 +333,7 @@ const Editor = React.memo(function Editor({
   useEffect(() => {
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
 
-    const contentStr = JSON.stringify(content);
+    const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
     const isContentChanged = contentStr !== lastAutoSavedRef.current.contentStr;
     const isMetadataChanged = title !== lastAutoSavedRef.current.title ||
       author !== lastAutoSavedRef.current.author ||
@@ -308,7 +344,7 @@ const Editor = React.memo(function Editor({
       autoSaveTimerRef.current = setTimeout(() => {
         const { title, author, phase } = latestMetadataRef.current;
         const latex = generateLatexRef.current(content, title, author, phase);
-        if (onContentChangeRef.current) onContentChangeRef.current(filename, latex, contentStr, { title, author, phase });
+        updateEntry(entryId, latex, contentStr, { title, author, phase });
 
         lastAutoSavedRef.current.contentStr = contentStr;
         lastAutoSavedRef.current.title = title;
@@ -323,28 +359,7 @@ const Editor = React.memo(function Editor({
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
-  }, [content, filename, title, author, phase]);
-
-  // Flush pending changes on unmount to prevent data loss on fast entry switch
-  useEffect(() => {
-    return () => {
-      const content = latestContentRef.current;
-      const { title, author, phase } = latestMetadataRef.current;
-
-      // Only flush if there's something to flush
-      const contentStr = JSON.stringify(content);
-      const isChanged =
-        title !== initialTitle ||
-        author !== initialAuthor ||
-        phase !== initialPhase ||
-        contentStr !== initialContent;
-
-      if (isChanged && onContentChangeRef.current) {
-        const latex = generateLatexRef.current(content, title, author, phase);
-        onContentChangeRef.current(filename, latex, contentStr, { title, author, phase });
-      }
-    };
-  }, [filename, initialTitle, initialAuthor, initialPhase, initialContent]);
+  }, [content, filename, title, author, phase, entryId, updateEntry]);
 
   const handleSave = useCallback(async () => {
     const { valid, errors } = validate();
@@ -365,14 +380,12 @@ const Editor = React.memo(function Editor({
     const latex = generateLatex(content, title, author, phase);
     const contentStr = JSON.stringify(content);
 
-    if (onContentChange) {
-      await onContentChange(filename, latex, contentStr, { title, author, phase });
-      lastSyncedRef.current = { title, author, phase, contentStr };
-      setIsAutoSaving(false);
-    }
+    await updateEntry(entryId, latex, contentStr, { title, author, phase });
+    lastSyncedRef.current = { title, author, phase, contentStr };
+    setIsAutoSaving(false);
 
     setIsSaving(false);
-  }, [content, title, author, phase, filename, onContentChange, generateLatex, validate]);
+  }, [content, title, author, phase, generateLatex, validate, updateEntry, entryId]);
 
   const handleDownload = () => {
     const latex = generateLatex(content, title, author, phase);
@@ -402,39 +415,7 @@ const Editor = React.memo(function Editor({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleSave]);
 
-  const MenuItem = ({ label, children }: { label: string, children: React.ReactNode }) => (
-    <div className="relative h-full flex items-center">
-      <button
-        type="button"
-        onMouseDown={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === label ? null : label); }}
-        onMouseEnter={() => { if (activeMenu) setActiveMenu(label); }}
-        className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-widest transition-colors cursor-pointer ${activeMenu === label ? "bg-nb-primary text-white" : "text-nb-on-surface-variant hover:bg-nb-surface-mid"
-          }`}
-      >
-        {label}
-      </button>
-      {activeMenu === label && (
-        <div
-          className="absolute top-full left-0 mt-1 w-48 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl p-1.5 z-[200] animate-in fade-in slide-in-from-top-1 duration-150"
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          {children}
-        </div>
-      )}
-    </div>
-  );
 
-  const MenuAction = ({ icon, label, onClick, disabled }: { icon: React.ReactNode, label: string, onClick: () => void, disabled?: boolean }) => (
-    <button
-      type="button"
-      onClick={() => { onClick(); setActiveMenu(null); }}
-      disabled={disabled}
-      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[10px] font-bold tracking-widest text-nb-on-surface-variant hover:bg-nb-primary/10 hover:text-nb-primary transition-all disabled:opacity-30 disabled:hover:bg-transparent text-left cursor-pointer"
-    >
-      <div className="opacity-60">{icon}</div>
-      <span className="flex-1">{label}</span>
-    </button>
-  );
 
   const insertImage = () => {
     const input = document.createElement("input");
@@ -482,7 +463,6 @@ const Editor = React.memo(function Editor({
             }).run();
           }
 
-          onImageUpload?.(newPath, base64);
         };
         reader.readAsDataURL(file);
       }
@@ -500,49 +480,57 @@ const Editor = React.memo(function Editor({
           <div className="px-4 h-10 flex items-center gap-2 border-b border-nb-outline-variant/30">
 
 
-            <MenuItem label="File">
-              <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} />
+            <MenuItem label="File" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
+              <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} setActiveMenu={setActiveMenu} />
               <MenuAction
                 icon={<FileJson size={14} />}
                 label="Download JSON"
-                onClick={() => {
-                  const latestMeta = notebookMetadata?.entries?.[entryId];
-                  const currentUpdatedAt = latestMeta?.updatedAt || initialUpdatedAt || initialCreatedAt;
-                  onDownloadPortable?.(filename, JSON.stringify(content), {
-                    title, author, phase,
-                    createdAt: initialCreatedAt,
-                    updatedAt: currentUpdatedAt
-                  });
+                onClick={async () => {
+                  await exportEntries([entryId]);
                 }}
+                setActiveMenu={setActiveMenu}
               />
-              <MenuAction icon={<FileCode size={14} />} label="Download LaTeX" onClick={handleDownload} />
+              <MenuAction icon={<FileCode size={14} />} label="Download LaTeX" onClick={handleDownload} setActiveMenu={setActiveMenu} />
               <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
-              <MenuAction icon={<X size={14} />} label="Close" onClick={onClose || (() => { })} />
-              <MenuAction icon={<Trash2 size={14} />} label="Delete" onClick={() => setShowDeleteConfirm(true)} />
+              <MenuAction icon={<X size={14} />} label="Close" onClick={onClose || (() => { })} setActiveMenu={setActiveMenu} />
+              <MenuAction icon={<Trash2 size={14} />} label="Delete" onClick={() => {
+                showConfirm(
+                  "Delete Entry",
+                  `Are you sure you want to delete "${title || "Untitled Entry"}"? This action cannot be undone and will permanently remove the entry and its associated LaTeX file.`,
+                  () => {
+                    deleteEntry({ name: filename.split('/').pop() || "", path: filename });
+                    onClose?.();
+                  },
+                  "danger"
+                );
+              }} setActiveMenu={setActiveMenu} />
             </MenuItem>
 
-            <MenuItem label="Edit">
+            <MenuItem label="Edit" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
               <MenuAction
                 icon={<Undo2 size={14} />}
                 label="Undo"
                 onClick={() => editor?.chain().focus().undo().run()}
                 disabled={!editor?.can().undo()}
+                setActiveMenu={setActiveMenu}
               />
               <MenuAction
                 icon={<Redo2 size={14} />}
                 label="Redo"
                 onClick={() => editor?.chain().focus().redo().run()}
                 disabled={!editor?.can().redo()}
+                setActiveMenu={setActiveMenu}
               />
             </MenuItem>
 
             {editor && (
-              <MenuItem label="Insert">
-                <MenuAction icon={<ImagePlus size={14} />} label="Image" onClick={insertImage} />
+              <MenuItem label="Insert" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
+                <MenuAction icon={<ImagePlus size={14} />} label="Image" onClick={insertImage} setActiveMenu={setActiveMenu} />
                 <MenuAction
                   icon={<TableIcon size={14} />}
                   label="Table"
                   onClick={() => setShowTableGrid(true)}
+                  setActiveMenu={setActiveMenu}
                 />
                 <MenuAction
                   icon={<Code size={14} />}
@@ -559,6 +547,7 @@ const Editor = React.memo(function Editor({
                       editor.chain().focus().insertContent({ type: 'codeBlock', attrs: { id: generateUUID() } }).run();
                     }
                   }}
+                  setActiveMenu={setActiveMenu}
                 />
                 <MenuAction
                   icon={<Terminal size={14} />}
@@ -575,6 +564,7 @@ const Editor = React.memo(function Editor({
                       editor.chain().focus().insertContent({ type: 'rawLatex', attrs: { id: generateUUID() } }).run();
                     }
                   }}
+                  setActiveMenu={setActiveMenu}
                 />
               </MenuItem>
             )}
@@ -582,7 +572,7 @@ const Editor = React.memo(function Editor({
             <div className="flex-1" />
 
             <div className="flex items-center gap-2 mr-2">
-              {isAutoSaving || isSaving || isExternalSaving ? (
+              {isAutoSaving || isSaving ? (
                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-primary animate-pulse">
                   <Loader2 size={12} className="animate-spin" />
                   <span>SAVING...</span>
@@ -594,7 +584,7 @@ const Editor = React.memo(function Editor({
                 </div>
               )}
             </div>
-            
+
             <button
               onClick={onClose}
               title="Close Entry"
@@ -649,26 +639,45 @@ const Editor = React.memo(function Editor({
                 />
               </div>
 
-              <div className={`h-9 w-[230px] shrink-0 flex items-center gap-2.5 px-3 rounded-xl border transition-all relative focus-within:ring-2 focus-within:ring-nb-primary/20 ${phase && PHASE_CONFIG[phase] ? `${PHASE_CONFIG[phase].bg} ${PHASE_CONFIG[phase].border}` : "bg-nb-surface-low border-nb-outline-variant/30"}`}>
-                {phase && PHASE_CONFIG[phase] && (
-                  React.createElement(PHASE_CONFIG[phase].icon, { size: 14, className: `${PHASE_CONFIG[phase].color} shrink-0` })
+              <div className={`h-9 w-[230px] shrink-0 flex items-center gap-2.5 px-3 rounded-xl border transition-all relative ${activePhaseCfg ? `${activePhaseCfg.bg} ${activePhaseCfg.border}` : "bg-nb-surface-low border-nb-outline-variant/30"}`}>
+                <div
+                  className="absolute inset-0 z-10 cursor-pointer"
+                  onClick={() => setActiveMenu(activeMenu === "Phase" ? null : "Phase")}
+                />
+
+                {activePhaseCfg && (
+                  <activePhaseCfg.icon size={14} className="shrink-0" style={{ color: availablePhases.find(p => p.index === phase)?.color }} />
                 )}
-                <select
-                  value={phase}
-                  onChange={(e) => { setPhase(e.target.value); }}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                >
-                  {!phase && <option value="" disabled>Phase</option>}
-                  {PHASES.map(p => (
-                    <option key={p} value={p} className="text-nb-on-surface bg-nb-surface">
-                      {p}
-                    </option>
-                  ))}
-                </select>
-                <div className={`flex-1 w-full min-w-0 text-xs font-bold tracking-widest truncate ${phase && PHASE_CONFIG[phase] ? PHASE_CONFIG[phase].text : "text-nb-on-surface-variant/60"}`}>
-                  {phase || "Phase"}
+
+                {/* Metadata dropdown */}
+                <div className={`flex-1 w-full min-w-0 text-xs font-bold tracking-widest truncate ${phase !== null && phaseConfig[phase] ? phaseConfig[phase].text : "text-nb-on-surface-variant/60"}`}>
+                  {availablePhases.find(p => p.index === phase)?.name || "No Phase Selected"}
                 </div>
-                <ChevronDown size={12} className="text-nb-on-surface-variant/40 shrink-0" />
+                <ChevronDown size={12} className={`text-nb-on-surface-variant/40 shrink-0 transition-transform duration-200 ${activeMenu === "Phase" ? "rotate-180" : ""}`} />
+
+                {activeMenu === "Phase" && (
+                  <div
+                    className="absolute top-full left-0 right-0 mt-1 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl p-1.5 z-[200] animate-in fade-in slide-in-from-top-1 duration-150"
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
+                    {availablePhases.map(p => {
+                      const cfg = phaseConfig[p.index];
+                      const Icon = cfg.icon;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => { setPhase(p.index); setActiveMenu(null); }}
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[10px] font-bold tracking-widest transition-all text-left cursor-pointer active:scale-[0.98] ${phase === p.index ? `${cfg.bg} ${cfg.text} hover:brightness-90` : "text-nb-on-surface-variant hover:bg-nb-surface-mid hover:text-nb-on-surface hover:ring-1 hover:ring-nb-primary/20"}`}
+                        >
+                          <Icon size={14} style={{ color: p.color }} />
+                          <span className="flex-1">{p.name.toUpperCase()}</span>
+                          {phase === p.index && <LucideIcons.Check size={12} style={{ color: p.color }} />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -701,6 +710,11 @@ const Editor = React.memo(function Editor({
 
                 <ToolbarButton
                   onClick={() => {
+                    if (editor.isActive("heading", { level: 1 })) {
+                      editor.chain().focus().setParagraph().run();
+                      return;
+                    }
+
                     const { selection } = editor.state;
                     const safePos = (selection instanceof NodeSelection) ? selection.to :
                       (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
@@ -719,6 +733,11 @@ const Editor = React.memo(function Editor({
                 </ToolbarButton>
                 <ToolbarButton
                   onClick={() => {
+                    if (editor.isActive("heading", { level: 2 })) {
+                      editor.chain().focus().setParagraph().run();
+                      return;
+                    }
+
                     const { selection } = editor.state;
                     const safePos = (selection instanceof NodeSelection) ? selection.to :
                       (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
@@ -910,38 +929,55 @@ const Editor = React.memo(function Editor({
               filename={filename}
               content={content}
               onChange={setContent}
-              onImageUpload={onImageUpload}
               author={author}
-              dbName={dbName}
               onEditorInit={setEditor}
               onToggleLink={(fn) => { toggleLinkFn.current = fn; }}
-              notebookMetadata={notebookMetadata}
-              targetResourceId={targetResourceId}
               entryId={entryId}
             />
           </div>
         </div>
 
-        <ConfirmationDialog
-          isOpen={showDeleteConfirm}
-          title="Delete Entry?"
-          message="This will permanently remove the entry from your notebook. This action cannot be undone once committed."
-          confirmLabel="Delete"
-          onConfirm={() => { setShowDeleteConfirm(false); onDeleted(filename); }}
-          onCancel={() => setShowDeleteConfirm(false)}
-          variant="danger"
-        />
       </div>
     </div>
   );
 }, (prev, next) => {
   return (
-    prev.filename === next.filename &&
-    prev.isSaving === next.isSaving &&
-    prev.isLocalMode === next.isLocalMode &&
-    prev.config === next.config &&
-    prev.dbName === next.dbName
+    prev.openFile.id === next.openFile.id &&
+    prev.openFile.updatedAt === next.openFile.updatedAt &&
+    prev.metadata === next.metadata
   );
 });
+
+// Wrapper component that handles null check before calling hooks
+const Editor = ({
+  onClose,
+  showConfirm,
+}: EditorProps) => {
+  const {
+    openFile,
+    metadata,
+    updateEntry,
+    deleteEntry,
+    currentProjectId,
+    setEntryValidity,
+    exportEntries
+  } = useWorkspace();
+
+  if (!openFile) return null;
+
+  return (
+    <EditorContent
+      openFile={openFile}
+      metadata={metadata}
+      updateEntry={updateEntry}
+      deleteEntry={deleteEntry}
+      currentProjectId={currentProjectId}
+      setEntryValidity={setEntryValidity}
+      exportEntries={exportEntries}
+      onClose={onClose}
+      showConfirm={showConfirm}
+    />
+  );
+};
 
 export default Editor;

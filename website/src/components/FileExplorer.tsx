@@ -10,6 +10,8 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 import { ExplorerFile } from "@/lib/types";
+import { getPhases, getPhaseConfig } from "@/lib/phases";
+import { NotebookMetadata } from "@/lib/metadata";
 
 interface FileExplorerProps {
   entries: ExplorerFile[];
@@ -34,6 +36,7 @@ interface FileExplorerProps {
   onSortDirectionToggle: () => void;
   dateRange: { start: string; end: string } | null;
   onDateRangeChange: (range: { start: string; end: string } | null) => void;
+  notebookMetadata?: NotebookMetadata;
 }
 
 // ─── Single file row ──────────────────────────────────────────────────────────
@@ -72,7 +75,7 @@ function FileRow({
         ${isDeleted ? 'opacity-30 grayscale' : ''}
       `}
     >
-      <div className={`shrink-0 ${isOpened ? 'text-white' : 'text-nb-tertiary'}`}>
+      <div className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all ${isOpened ? 'bg-white/20 text-white' : isSelected ? 'bg-nb-tertiary/10 text-nb-tertiary' : 'bg-nb-surface-low text-nb-tertiary'}`}>
         {icon}
       </div>
 
@@ -175,10 +178,14 @@ export default function FileExplorer({
   onSortDirectionToggle,
   dateRange,
   onDateRangeChange,
+  notebookMetadata
 }: FileExplorerProps) {
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, file: ExplorerFile } | null>(null);
+
+  const availablePhases = getPhases(notebookMetadata?.phases);
+  const phaseConfig = getPhaseConfig(availablePhases);
 
   const handleContextMenu = (e: React.MouseEvent, file: ExplorerFile) => {
     e.preventDefault();
@@ -324,7 +331,7 @@ export default function FileExplorer({
           </div>
         </div>
       </div>
-      
+
       {/* Entries pane */}
       <Pane
         id="explorer-entries-pane"
@@ -336,22 +343,37 @@ export default function FileExplorer({
         hasItems={entries.length > 0}
       >
         <div className="space-y-1">
-          {entries.map((f) => (
-            <FileRow
-              key={f.path}
-              file={f}
-              isOpened={activePath === f.path}
-              isSelected={selectedPaths.has(f.path)}
-              isPending={pendingPaths.has(f.path)}
-              isDeleted={deletedPaths.has(f.path)}
-              icon={<FileText size={13} />}
-              isValid={f.isValid}
-              sortBy={sortBy}
-              onSelect={(e) => onSelectEntry(f, e.ctrlKey || e.metaKey, e.shiftKey)}
-              onDoubleClick={() => onOpenEntry(f)}
-              onContextMenu={(e) => handleContextMenu(e, f)}
-            />
-          ))}
+          {entries.map((f) => {
+            const pConfig = f.phase && phaseConfig[f.phase] ? phaseConfig[f.phase] : null;
+            const IconComponent = pConfig ? pConfig.icon : FileText;
+            const phase = availablePhases.find(p => p.index === f.phase);
+            const iconStyle = phase ? { color: phase.color } : undefined;
+
+            const icon = (
+              <IconComponent
+                size={16}
+                style={activePath === f.path ? { color: "inherit" } : iconStyle}
+                className={activePath === f.path ? "" : pConfig ? "" : "opacity-40"}
+              />
+            );
+
+            return (
+              <FileRow
+                key={f.path}
+                file={f}
+                isOpened={activePath === f.path}
+                isSelected={selectedPaths.has(f.path)}
+                isPending={pendingPaths.has(f.path)}
+                isDeleted={deletedPaths.has(f.path)}
+                icon={icon}
+                isValid={f.isValid}
+                sortBy={sortBy}
+                onSelect={(e) => onSelectEntry(f, e.ctrlKey || e.metaKey, e.shiftKey)}
+                onDoubleClick={() => onOpenEntry(f)}
+                onContextMenu={(e) => handleContextMenu(e, f)}
+              />
+            );
+          })}
         </div>
       </Pane>
 

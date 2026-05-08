@@ -1,36 +1,59 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Website
 
-## Getting Started
+This folder contains the Next.js editor and notebook sync application.
 
-First, run the development server:
+## Local Development
+
+Install dependencies and start the dev server:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Required Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create a `.env.local` file in this folder:
 
-## Learn More
+```bash
+NEXT_PUBLIC_GITHUB_CLIENT_ID=your_github_oauth_client_id
+GITHUB_CLIENT_SECRET=your_github_oauth_client_secret
+```
 
-To learn more about Next.js, take a look at the following resources:
+- `NEXT_PUBLIC_GITHUB_CLIENT_ID` is read by the browser-side login flow.
+- `GITHUB_CLIENT_SECRET` is used by the server-side OAuth exchange route.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+If you deploy to Vercel, set the same variables in the Vercel project settings for both Preview and Production.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## GitHub App Setup
 
-## Deploy on Vercel
+When creating the GitHub OAuth/GitHub App for this project:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Homepage URL: your public deployed app URL, such as `https://your-domain.com`
+- Callback / redirect URL: the public URL that returns the user to the app after GitHub authorization
+- Keep the GitHub app URLs in sync with your deployed domain and any preview URLs you intentionally test against
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+If the deployed domain changes, update the GitHub app settings at the same time.
+
+## Before Merging
+
+Run these checks before opening or merging a PR into `main`:
+
+```bash
+npm run lint
+npm run build
+```
+
+## Vercel Deployment
+
+Recommended deployment setup:
+
+1. Import the GitHub repository into Vercel.
+2. Set the project root directory to `website`.
+3. Add `NEXT_PUBLIC_GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` in the Vercel environment variables.
+4. Enable automatic deploys from the connected GitHub branch.
+5. Add a custom domain in Vercel and point DNS to the provided Vercel targets.
+
+Preview deployments are useful for testing changes before they land on `main`.

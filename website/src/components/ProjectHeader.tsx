@@ -1,46 +1,40 @@
-import React from "react";
 import { Menu, Sun, Moon } from "lucide-react";
-import { Project } from "@/lib/db";
+import { useWorkspace } from "@/hooks/useWorkspace";
+import ViewToggle, { ViewMode } from "./ViewToggle";
 
 interface ProjectHeaderProps {
-  currentProject: Project | { id: string; name: string } | null;
   isSidebarOpen: boolean;
   onToggleSidebar: () => void;
   isMobile: boolean;
-  mobileTab: "editor" | "preview";
-  onSetMobileTab: (tab: "editor" | "preview") => void;
-  desktopViewMode: "editor" | "split" | "preview";
-  onSetDesktopViewMode: (mode: "editor" | "split" | "preview") => void;
+  viewMode: ViewMode;
+  onSetViewMode: (mode: ViewMode) => void;
   isRenamingProject: boolean;
   projectRenameValue: string;
   onSetProjectRenameValue: (val: string) => void;
   onStartRename: () => void;
   onEndRename: (save: boolean) => void;
-  isEntryOpen: boolean;
   isDarkMode: boolean;
   onToggleTheme: () => void;
   mounted: boolean;
 }
 
 export default function ProjectHeader({
-  currentProject,
   isSidebarOpen,
   onToggleSidebar,
   isMobile,
-  mobileTab,
-  onSetMobileTab,
-  desktopViewMode,
-  onSetDesktopViewMode,
+  viewMode,
+  onSetViewMode,
   isRenamingProject,
   projectRenameValue,
   onSetProjectRenameValue,
   onStartRename,
   onEndRename,
-  isEntryOpen,
   isDarkMode,
   onToggleTheme,
   mounted
 }: ProjectHeaderProps) {
+  const { currentProject, openFile } = useWorkspace();
+  const isEntryOpen = !!openFile;
   return (
     <div className="flex items-center justify-between px-4 h-14 bg-nb-surface border-b border-nb-outline-variant shrink-0">
       <button
@@ -51,24 +45,11 @@ export default function ProjectHeader({
         <Menu size={18} />
       </button>
 
-      {isEntryOpen && isMobile ? (
-        <div className="flex bg-nb-surface-low rounded-lg p-0.5 border border-nb-outline-variant/30">
-          <button
-            onClick={() => onSetMobileTab("editor")}
-            className={`px-3 py-1 rounded-md text-[9px] font-bold tracking-widest transition-all cursor-pointer ${mobileTab === 'editor' ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60'}`}
-          >
-            Editor
-          </button>
-          <button
-            onClick={() => onSetMobileTab("preview")}
-            className={`px-3 py-1 rounded-md text-[9px] font-bold tracking-widest transition-all cursor-pointer ${mobileTab === 'preview' ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60'}`}
-          >
-            Preview
-          </button>
-        </div>
-      ) : (
-        <div className="flex-1 flex justify-center min-w-0 px-4">
-          {isRenamingProject && currentProject?.id !== "temporary" ? (
+      <div className="flex-1 flex justify-center min-w-0 px-4">
+        {isEntryOpen && isMobile ? (
+          <ViewToggle viewMode={viewMode} onSetViewMode={onSetViewMode} isMobile={true} />
+        ) : (
+          isRenamingProject && currentProject?.id !== "temporary" ? (
             <input
               autoFocus
               type="text"
@@ -92,32 +73,13 @@ export default function ProjectHeader({
             >
               {currentProject?.id === "temporary" ? "Temporary Workspace" : (currentProject?.name || "Engineering Notebook")}
             </span>
-          )}
-        </div>
-      )}
+          )
+        )}
+      </div>
 
       <div className="flex items-center gap-2">
         {isEntryOpen && !isMobile && (
-          <div className="flex bg-nb-surface-low rounded-lg p-0.5 border border-nb-outline-variant/30 mr-2 shadow-sm">
-            <button
-              onClick={() => onSetDesktopViewMode("editor")}
-              className={`px-3 py-1.5 rounded-md text-[9px] font-bold tracking-widest transition-all cursor-pointer ${desktopViewMode === "editor" ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60 hover:text-nb-primary'}`}
-            >
-              Editor
-            </button>
-            <button
-              onClick={() => onSetDesktopViewMode("split")}
-              className={`px-3 py-1.5 rounded-md text-[9px] font-bold tracking-widest transition-all cursor-pointer ${desktopViewMode === "split" ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60 hover:text-nb-primary'}`}
-            >
-              Split
-            </button>
-            <button
-              onClick={() => onSetDesktopViewMode("preview")}
-              className={`px-3 py-1.5 rounded-md text-[9px] font-bold tracking-widest transition-all cursor-pointer ${desktopViewMode === "preview" ? 'bg-nb-surface text-nb-primary shadow-sm' : 'text-nb-on-surface-variant/60 hover:text-nb-primary'}`}
-            >
-              LaTeX
-            </button>
-          </div>
+          <ViewToggle viewMode={viewMode} onSetViewMode={onSetViewMode} isMobile={false} />
         )}
         <button
           onClick={onToggleTheme}
