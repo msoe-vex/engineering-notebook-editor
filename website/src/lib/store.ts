@@ -1,4 +1,4 @@
-import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds } from "./metadata";
+import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds, TipTapNode } from "./metadata";
 import { generateAllEntriesLatex, generateEntryLatex, generateTeamLatex, generatePhasesLatex } from "./latex";
 import { ExplorerFile, GitHubConfig } from "./types";
 import { getProjects, getProject, Project, getAllPending, getPending, stageChange, removeStaged, getResource, putResource, saveProject, getProjectHandle, saveProjectHandle, PendingChange } from "./db";
@@ -477,7 +477,7 @@ class WorkspaceStore {
     }
 
     const discoveredResources = extractResources(contentJson);
-    const mergedResources: Record<string, any> = {};
+    const mergedResources: Record<string, { type: string; title: string; caption: string }> = {};
     const oldResources = existingEntry.resources || {};
 
     for (const [resId, resInfo] of Object.entries(discoveredResources)) {
@@ -813,7 +813,7 @@ class WorkspaceStore {
     try {
       const targets = entryIds || Object.keys(this.metadata.entries);
       const assetsData: Record<string, string> = {};
-      const entriesWithContent: Record<string, EntryMetadata & { content?: any }> = {};
+      const entriesWithContent: Record<string, EntryMetadata & { content?: TipTapNode }> = {};
       const relevantAssetRefs: Record<string, string[]> = {};
 
       // 1. Process Entries and their content
@@ -864,7 +864,7 @@ class WorkspaceStore {
       }
 
       // 3. Assemble Export following notebook.json schema (excluding project identity)
-      const exportData: any = {
+      const exportData: Record<string, unknown> = {
         assetRefs: relevantAssetRefs,
         entries: entriesWithContent,
         assets: assetsData
@@ -892,19 +892,20 @@ class WorkspaceStore {
     }
   }
 
-  public async importNotebook(data: any) {
+  public async importNotebook(data: Record<string, unknown>) {
     this.setLoading(true);
     try {
-      const { entries = {}, assets = {} } = data;
+      const { entries = {}, assets = {} } = data as { entries: Record<string, Record<string, unknown>>; assets: Record<string, unknown> };
       const idMap = new Map<string, string>();
 
       // 1. Map ALL IDs first (Entries and their internal Resources)
       const entryIdList = Object.keys(entries);
       for (const oldId of entryIdList) {
         idMap.set(oldId, generateUUID());
-        const entryData = entries[oldId];
-        if (entryData.resources) {
-          for (const resId of Object.keys(entryData.resources)) {
+        const entryData = entries[oldId] as Record<string, unknown>;
+        const resources = entryData.resources as Record<string, unknown> | undefined;
+        if (resources) {
+          for (const resId of Object.keys(resources)) {
             idMap.set(resId, generateUUID());
           }
         }
@@ -923,20 +924,20 @@ class WorkspaceStore {
       // 3. Remap entries
       const newEntriesMap: Record<string, EntryMetadata> = {};
       for (const oldId of entryIdList) {
-        const entryWithContent = entries[oldId];
+        const entryWithContent = entries[oldId] as Record<string, unknown> & { content?: TipTapNode };
         const { content, ...entryMetadata } = entryWithContent;
         const newId = idMap.get(oldId)!;
 
         // Remap content IDs
-        const { doc: remappedDoc } = remapContentIds(content, idMap);
+        const { doc: remappedDoc } = remapContentIds((content || {}) as TipTapNode, idMap);
 
         // Remap metadata IDs (resources, references)
-        const remappedMeta = remapEntryMetadataIds(entryMetadata as EntryMetadata, idMap);
+        const remappedMeta = remapEntryMetadataIds(entryMetadata as unknown as EntryMetadata, idMap);
         remappedMeta.id = newId;
         remappedMeta.filename = `${ENTRIES_DIR}/${newId}.json`;
 
         const contentStr = JSON.stringify({ version: 3, content: remappedDoc }, null, 2);
-        const latex = generateEntryLatex(remappedDoc as any, remappedMeta.title, remappedMeta.author, remappedMeta.phase, remappedMeta.createdAt, newId);
+        const latex = generateEntryLatex(remappedDoc as TipTapNode, remappedMeta.title, remappedMeta.author, remappedMeta.phase, remappedMeta.createdAt, newId);
 
         // Save entry files
         await this.persistFile(remappedMeta.filename, contentStr, `Import entry: ${remappedMeta.title}`);
@@ -946,8 +947,8 @@ class WorkspaceStore {
       }
 
       // 4. Import Team and Phases if present
-      const importedPhases = data.phases;
-      const importedTeam = data.team;
+      const importedPhases = data.phases as ProjectPhase[] | undefined;
+      const importedTeam = data.team as TeamMetadata | undefined;
 
       // 5. Update project metadata
       this.metadata = validateNotebookIntegrity({

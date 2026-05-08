@@ -553,7 +553,7 @@ export function remapEntryMetadataIds(entry: EntryMetadata, idMap: Map<string, s
   
   // Remap resources
   if (entry.resources) {
-    const newResources: Record<string, any> = {};
+    const newResources: Record<string, { title: string; caption: string; type: string }> = {};
     for (const [oldId, res] of Object.entries(entry.resources)) {
       const newId = idMap.get(oldId) || oldId;
       newResources[newId] = { ...res };

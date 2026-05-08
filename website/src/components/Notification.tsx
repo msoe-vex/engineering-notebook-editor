@@ -6,7 +6,7 @@ export type NotificationType = 'success' | 'error' | 'loading' | 'info';
 interface NotificationProps {
   message: string;
   type: NotificationType;
-  t: any; // toast instance for closing
+  t: { visible: boolean; id: string }; // toast instance for closing
 }
 
 export const Notification = ({ message, type, t }: NotificationProps) => {

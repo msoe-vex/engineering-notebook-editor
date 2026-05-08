@@ -33,23 +33,26 @@ interface EditorProps {
   showConfirm: (title: string, message: string, onConfirm: () => void, variant?: "danger" | "warning" | "info") => void;
 }
 
-const Editor = React.memo(function Editor({
+const EditorContent = React.memo(function EditorContent({
+  openFile,
+  metadata,
+  updateEntry,
+  deleteEntry,
+  currentProjectId,
+  setEntryValidity,
+  exportEntries,
   onClose,
   targetResourceId,
   showConfirm,
-}: EditorProps) {
-  const {
-    openFile,
-    metadata,
-    updateEntry,
-    deleteEntry,
-    currentProjectId,
-    setEntryValidity,
-    exportEntries
-  } = useWorkspace();
-
-  if (!openFile) return null;
-
+}: EditorProps & {
+  openFile: NonNullable<ReturnType<typeof useWorkspace>['openFile']>;
+  metadata: ReturnType<typeof useWorkspace>['metadata'];
+  updateEntry: ReturnType<typeof useWorkspace>['updateEntry'];
+  deleteEntry: ReturnType<typeof useWorkspace>['deleteEntry'];
+  currentProjectId: ReturnType<typeof useWorkspace>['currentProjectId'];
+  setEntryValidity: ReturnType<typeof useWorkspace>['setEntryValidity'];
+  exportEntries: ReturnType<typeof useWorkspace>['exportEntries'];
+}) {
   const {
     path: filename,
     title: initialTitle,
@@ -57,9 +60,9 @@ const Editor = React.memo(function Editor({
     phase: initialPhase,
     tiptapContent: initialContent,
     createdAt: initialCreatedAt,
-    updatedAt: initialUpdatedAt,
     id: entryId
   } = openFile;
+  
   const parseInitialContent = useCallback((raw: unknown): TipTapNode | string => {
     if (!raw) return "";
     if (typeof raw === 'object' && raw !== null) return raw as TipTapNode;
@@ -896,5 +899,39 @@ const Editor = React.memo(function Editor({
     prev.targetResourceId === next.targetResourceId
   );
 });
+
+// Wrapper component that handles null check before calling hooks
+const Editor = ({
+  onClose,
+  targetResourceId,
+  showConfirm,
+}: EditorProps) => {
+  const {
+    openFile,
+    metadata,
+    updateEntry,
+    deleteEntry,
+    currentProjectId,
+    setEntryValidity,
+    exportEntries
+  } = useWorkspace();
+
+  if (!openFile) return null;
+
+  return (
+    <EditorContent
+      openFile={openFile}
+      metadata={metadata}
+      updateEntry={updateEntry}
+      deleteEntry={deleteEntry}
+      currentProjectId={currentProjectId}
+      setEntryValidity={setEntryValidity}
+      exportEntries={exportEntries}
+      onClose={onClose}
+      targetResourceId={targetResourceId}
+      showConfirm={showConfirm}
+    />
+  );
+};
 
 export default Editor;

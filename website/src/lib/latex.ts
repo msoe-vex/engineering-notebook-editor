@@ -187,7 +187,7 @@ export const convertJsonToLatex = (input: TipTapNode | string): string => {
 
   // Unwrap if it's the standard wrapper { version: 3, content: { type: 'doc', ... } }
   if (doc && typeof doc === 'object' && 'content' in doc && !('type' in doc)) {
-    doc = (doc as any).content;
+    doc = (doc as Record<string, unknown>).content as TipTapNode;
   }
 
   return convertNodeToLatex(doc as TipTapNode).replace(/\n{3,}/g, "\n\n").trim() + "\n";

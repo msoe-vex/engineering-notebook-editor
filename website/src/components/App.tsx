@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTheme } from "next-themes";
 import {
-  GitChange, fetchGitHubUser
+  fetchGitHubUser
 } from "@/lib/github";
-import { ExplorerFile } from "@/lib/types";
+import { ExplorerFile, TeamTab } from "@/lib/types";
 import {
   Project, saveProject, deleteProject, deleteProjectHandle, deleteProjectDatabase,
   getProjectDBName
@@ -21,7 +21,7 @@ import ConfirmationDialog from "./ConfirmationDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { HardDrive, ArrowLeftRight, X, BookOpen, Download, Loader2, Upload } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
-import { ENTRIES_DIR, INDEX_PATH, ASSETS_DIR } from "@/lib/constants";
+import { ENTRIES_DIR, } from "@/lib/constants";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { events, EventNames } from "@/lib/events";
 import { Toaster } from "react-hot-toast";
@@ -30,7 +30,6 @@ import { showNotification } from "./Notification";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type ViewMode = "entry";
-type TeamTab = "identity" | "members" | "phases";
 export interface FileMetadata {
   content: string;
   title?: string;
@@ -157,8 +156,11 @@ export default function App() {
 
   // Listen for notifications
   useEffect(() => {
-    return events.on(EventNames.SHOW_NOTIFICATION, (data: { message: string; type?: "success" | "error" | "loading" | "info" }) => {
-      showNotification(data.message, data.type || "info");
+    return events.on(EventNames.SHOW_NOTIFICATION, (data: unknown) => {
+      if (typeof data === 'object' && data !== null && 'message' in data) {
+        const notification = data as { message: string; type?: "success" | "error" | "loading" | "info" };
+        showNotification(notification.message, notification.type || "info");
+      }
     });
   }, []);
 
@@ -319,14 +321,9 @@ export default function App() {
       setSelectedPaths(new Set([path]));
       lastSelectedPathRef.current = path;
       navigateTo({ entry: id }, '/workspace/editor');
-    } catch (e) {
+    } catch {
       notify("Failed to create entry.", "error");
     }
-  };
-
-  const handleOpenEntry = (file: ExplorerFile) => {
-    const entryId = file.name.replace('.json', '');
-    navigateTo({ entry: entryId }, '/workspace/editor');
   };
 
   const handleSelectEntry = (file: ExplorerFile, multi: boolean, range: boolean, visiblePaths: string[]) => {
@@ -395,7 +392,7 @@ export default function App() {
       };
       const id = await createGithubProject(storeConfig);
       selectProject(id);
-    } catch (e) {
+    } catch {
       notify("Failed to create GitHub project.", "error");
     }
   };
@@ -404,7 +401,7 @@ export default function App() {
     try {
       const id = await createLocalProject(handle, handle.name);
       selectProject(id);
-    } catch (e) {
+    } catch {
       notify("Failed to create Local project.", "error");
     }
   };
@@ -413,7 +410,7 @@ export default function App() {
     try {
       const id = await createTemporaryProject();
       selectProject(id);
-    } catch (e) {
+    } catch {
       notify("Failed to create Temporary project.", "error");
     }
   };
