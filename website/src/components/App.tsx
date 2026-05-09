@@ -737,6 +737,7 @@ export default function App() {
         <HelpPage
           path={helpPath}
           onClose={handleCloseHelp}
+          navigateTo={navigateTo}
         />
       )}
 
