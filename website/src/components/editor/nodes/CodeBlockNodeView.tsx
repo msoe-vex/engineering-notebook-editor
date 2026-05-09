@@ -65,7 +65,7 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
       </div>
 
       <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${active ? 'ring-2 ring-nb-primary/50' : ''}`}>
-        <div contentEditable={false} className="flex items-center justify-between px-4 py-2 bg-nb-surface-low/80 border-b border-nb-outline-variant/10">
+        <div contentEditable={false} className="flex items-center justify-between px-4 py-2 bg-nb-surface-low/80 border-b border-nb-outline-variant/10 overflow-x-auto scrollbar-hide">
           <div className="flex-1 flex items-center gap-3">
             <div className="flex items-center gap-2 text-nb-primary shrink-0">
               <Code2 size={12} />

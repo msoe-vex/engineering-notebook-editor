@@ -12,6 +12,7 @@ interface SidebarProps {
   onOpenTeam: (tab?: TeamTab) => void;
   showConfirm: (title: string, message: string, onConfirm: () => void, variant?: "danger" | "warning" | "info") => void;
   onNewEntry?: () => Promise<void>;
+  onOpenEntry?: (file: ExplorerFile) => void;
 }
 
 export default function Sidebar({
@@ -19,6 +20,7 @@ export default function Sidebar({
   onSelectEntry,
   showConfirm,
   onNewEntry,
+  onOpenEntry,
 }: SidebarProps) {
   const {
     entries,
@@ -145,8 +147,12 @@ export default function Sidebar({
   }, [augmentedEntries, search, sortBy, sortDirection, dateRange]);
 
   const handleOpenEntry = (file: ExplorerFile) => {
-    const id = file.name.replace('.json', '');
-    navigateTo({ entry: id, resource: null }, '/workspace/editor');
+    if (onOpenEntry) {
+      onOpenEntry(file);
+    } else {
+      const id = file.name.replace('.json', '');
+      navigateTo({ entry: id, resource: null }, '/workspace/editor');
+    }
   };
 
   const handleDiscard = async () => {

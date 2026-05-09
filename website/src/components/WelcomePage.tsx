@@ -23,105 +23,107 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
       workspace.mode === "local" ? HardDrive : ArrowLeftRight;
 
   return (
-    <div className="flex flex-col min-h-full items-center justify-center bg-nb-bg p-8">
-      {/* Header */}
-      <div className="flex flex-col items-center gap-6 mb-12">
-        <div className="w-20 h-20 rounded-2xl bg-nb-primary flex items-center justify-center shadow-2xl shadow-nb-primary/30">
-          <BookOpen size={40} className="text-white" />
-        </div>
-        <div className="text-center">
-          <h1 className="text-4xl font-bold text-nb-on-surface">
-            Engineering Notebook
-          </h1>
-          <div className="flex items-center gap-2 justify-center mt-3 text-sm text-nb-on-surface-variant">
-            <ModeIcon size={14} className="text-nb-tertiary" />
-            <span className="font-mono tracking-tight">{workspace.label}</span>
+    <div className="flex flex-col min-h-full bg-nb-bg px-6 py-12">
+      <div className="m-auto w-full max-w-2xl flex flex-col items-center">
+        {/* Header */}
+        <div className="flex flex-col items-center gap-6 mb-12">
+          <div className="w-20 h-20 rounded-2xl bg-nb-primary flex items-center justify-center shadow-2xl shadow-nb-primary/30">
+            <BookOpen size={40} className="text-white" />
+          </div>
+          <div className="text-center">
+            <h1 className="text-4xl font-bold text-nb-on-surface">
+              Engineering Notebook
+            </h1>
+            <div className="flex items-center gap-2 justify-center mt-3 text-sm text-nb-on-surface-variant">
+              <ModeIcon size={14} className="text-nb-tertiary" />
+              <span className="font-mono tracking-tight">{workspace.label}</span>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl">
-        <button
-          id="welcome-new-entry"
-          onClick={onNewEntry}
-          className="flex items-center gap-4 bg-nb-primary hover:bg-nb-primary-dim text-white p-5 rounded-3xl text-left font-bold shadow-nb-lg transition-all active:scale-[0.98] group cursor-pointer"
-        >
-          <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/20 transition-colors">
-            <Plus size={20} />
-          </div>
-          <div>
-            <div className="font-bold text-[10px] tracking-[0.2em] uppercase opacity-70">New Entry</div>
-            <div className="text-white text-base font-bold mt-0.5 leading-tight">Start fresh entry</div>
-          </div>
-        </button>
+        {/* Actions */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl">
+          <button
+            id="welcome-new-entry"
+            onClick={onNewEntry}
+            className="flex items-center gap-4 bg-nb-primary hover:bg-nb-primary-dim text-white p-5 rounded-3xl text-left font-bold shadow-nb-lg transition-all active:scale-[0.98] group cursor-pointer"
+          >
+            <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/20 transition-colors">
+              <Plus size={20} />
+            </div>
+            <div>
+              <div className="font-bold text-[10px] tracking-[0.2em] uppercase opacity-70">New Entry</div>
+              <div className="text-white text-base font-bold mt-0.5 leading-tight">Start fresh entry</div>
+            </div>
+          </button>
 
-        <button
-          id="welcome-open-entry"
-          className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left transition-all active:scale-[0.98] group cursor-pointer"
-          onClick={onOpenSidebar}
-        >
-          <div className="w-10 h-10 rounded-xl bg-nb-surface-mid flex items-center justify-center shrink-0 group-hover:bg-nb-surface-high transition-colors">
-            <FolderOpen size={20} className="text-nb-tertiary" />
-          </div>
-          <div>
-            <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Open Entry</div>
-            <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Select from sidebar</div>
-          </div>
-        </button>
+          <button
+            id="welcome-open-entry"
+            className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left transition-all active:scale-[0.98] group cursor-pointer"
+            onClick={onOpenSidebar}
+          >
+            <div className="w-10 h-10 rounded-xl bg-nb-surface-mid flex items-center justify-center shrink-0 group-hover:bg-nb-surface-high transition-colors">
+              <FolderOpen size={20} className="text-nb-tertiary" />
+            </div>
+            <div>
+              <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Open Entry</div>
+              <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Select from sidebar</div>
+            </div>
+          </button>
 
-        <button
-          id="welcome-import-entry"
-          className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left transition-all active:scale-[0.98] group cursor-pointer"
-          onClick={onImportEntry}
-        >
-          <div className="w-10 h-10 rounded-xl bg-nb-surface-mid flex items-center justify-center shrink-0 group-hover:bg-nb-surface-high transition-colors">
-            <Upload size={20} className="text-nb-tertiary" />
-          </div>
-          <div>
-            <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Import Entry</div>
-            <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Upload JSON file</div>
-          </div>
-        </button>
+          <button
+            id="welcome-import-entry"
+            className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left transition-all active:scale-[0.98] group cursor-pointer"
+            onClick={onImportEntry}
+          >
+            <div className="w-10 h-10 rounded-xl bg-nb-surface-mid flex items-center justify-center shrink-0 group-hover:bg-nb-surface-high transition-colors">
+              <Upload size={20} className="text-nb-tertiary" />
+            </div>
+            <div>
+              <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Import Entry</div>
+              <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Upload JSON file</div>
+            </div>
+          </button>
 
-        <button
-          id="welcome-edit-team"
-          className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left transition-all active:scale-[0.98] group cursor-pointer"
-          onClick={() => onOpenTeam()}
-        >
-          <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0 group-hover:bg-nb-primary/20 transition-colors">
-            <BookOpen size={20} className="text-nb-primary" />
-          </div>
-          <div>
-            <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Team Info</div>
-            <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Configure Team</div>
-          </div>
-        </button>
+          <button
+            id="welcome-edit-team"
+            className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left transition-all active:scale-[0.98] group cursor-pointer"
+            onClick={() => onOpenTeam()}
+          >
+            <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0 group-hover:bg-nb-primary/20 transition-colors">
+              <BookOpen size={20} className="text-nb-primary" />
+            </div>
+            <div>
+              <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Team Info</div>
+              <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Configure Team</div>
+            </div>
+          </button>
 
-        <button
-          id="welcome-help"
-          className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left transition-all active:scale-[0.98] group cursor-pointer"
-          onClick={onOpenHelp}
-        >
-          <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0 group-hover:bg-nb-primary/20 transition-colors">
-            <BookOpen size={20} className="text-nb-primary" />
-          </div>
-          <div>
-            <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Help & Guide</div>
-            <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Learn how to use</div>
-          </div>
-        </button>
-      </div>
+          <button
+            id="welcome-help"
+            className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left transition-all active:scale-[0.98] group cursor-pointer"
+            onClick={onOpenHelp}
+          >
+            <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0 group-hover:bg-nb-primary/20 transition-colors">
+              <BookOpen size={20} className="text-nb-primary" />
+            </div>
+            <div>
+              <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Help & Guide</div>
+              <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Learn how to use</div>
+            </div>
+          </button>
+        </div>
 
-      {/* Footer */}
-      <div className="mt-16 text-center">
-        <button
-          id="welcome-disconnect"
-          onClick={onDisconnect}
-          className="text-xs font-bold tracking-widest text-nb-on-surface-variant hover:text-nb-primary transition-colors border-b border-transparent hover:border-nb-primary pb-0.5 cursor-pointer"
-        >
-          Change workspace
-        </button>
+        {/* Footer */}
+        <div className="mt-16 text-center">
+          <button
+            id="welcome-disconnect"
+            onClick={onDisconnect}
+            className="text-xs font-bold tracking-widest text-nb-on-surface-variant hover:text-nb-primary transition-colors border-b border-transparent hover:border-nb-primary pb-0.5 cursor-pointer"
+          >
+            Change workspace
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -7,7 +7,7 @@ import { createPortal } from "react-dom";
 import { saveAs } from "file-saver";
 import {
   Save, Trash2, AlertCircle, AlertTriangle, Loader2, User, X, FileCode,
-  Undo2, Redo2, ImagePlus, ChevronDown, List, ListOrdered,
+  Undo2, Redo2, ImagePlus, ChevronDown, ChevronUp, List, ListOrdered,
   Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
   Terminal, Link as LinkIcon, Underline as UnderlineIcon,
   FileJson
@@ -71,7 +71,7 @@ const MenuItem = ({ label, children, activeMenu, setActiveMenu }: { label: strin
   <div className="relative h-full flex items-center">
     <button
       type="button"
-      onMouseDown={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === label ? null : label); }}
+      onClick={() => { setActiveMenu(activeMenu === label ? null : label); }}
       onMouseEnter={() => { if (activeMenu) setActiveMenu(label); }}
       className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-widest transition-colors cursor-pointer ${activeMenu === label ? "bg-nb-primary text-white" : "text-nb-on-surface-variant hover:bg-nb-surface-mid"
         }`}
@@ -89,10 +89,10 @@ const MenuItem = ({ label, children, activeMenu, setActiveMenu }: { label: strin
   </div>
 );
 
-const MenuAction = ({ icon, label, onClick, disabled, setActiveMenu }: { icon: React.ReactNode, label: string, onClick: () => void, disabled?: boolean, setActiveMenu: (val: string | null) => void }) => (
+const MenuAction = ({ icon, label, onClick, disabled, setActiveMenu }: { icon: React.ReactNode, label: string, onClick: (e: React.MouseEvent) => void, disabled?: boolean, setActiveMenu: (val: string | null) => void }) => (
   <button
     type="button"
-    onClick={() => { onClick(); setActiveMenu(null); }}
+    onClick={(e) => { onClick(e); setActiveMenu(null); }}
     disabled={disabled}
     className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[10px] font-bold tracking-widest text-nb-on-surface-variant hover:bg-nb-primary/10 hover:text-nb-primary transition-all disabled:opacity-30 disabled:hover:bg-transparent text-left cursor-pointer"
   >
@@ -203,6 +203,18 @@ const EditorContent = React.memo(function EditorContent({
 
   const toggleLinkFn = useRef<(() => void) | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
+  
+  // Dismiss table grid on click away
+  useEffect(() => {
+    if (!showTableGrid) return;
+    const handleOutsideClick = () => {
+      // Small timeout to allow any other clicks to process first
+      setTimeout(() => setShowTableGrid(false), 0);
+    };
+    window.addEventListener("mousedown", handleOutsideClick);
+    return () => window.removeEventListener("mousedown", handleOutsideClick);
+  }, [showTableGrid]);
 
   // Dynamic Phase Logic
   const availablePhases = getPhases(metadata?.phases);
@@ -483,13 +495,23 @@ const EditorContent = React.memo(function EditorContent({
   };
 
   return (
-    <div className="flex flex-col h-full bg-nb-surface overflow-x-auto overflow-y-hidden scrollbar-hide">
-      <div className="flex flex-col min-h-full min-w-[500px]">
+    <div className="flex flex-col h-full bg-nb-surface overflow-hidden scrollbar-hide">
         {/* ── Fixed Header ────────────────────────────────────────── */}
         <div className="shrink-0 border-b border-nb-outline-variant bg-nb-surface/80 backdrop-blur-md z-[150]">
 
           {/* Row 1: Menu Bar */}
-          <div className="px-4 h-10 flex items-center gap-2 border-b border-nb-outline-variant/30">
+          <div className="px-4 h-10 flex items-center gap-2 border-b border-nb-outline-variant/30 relative z-[170]">
+            <button
+              onClick={() => setIsHeaderCollapsed(!isHeaderCollapsed)}
+              className="p-1.5 rounded-lg hover:bg-nb-surface-mid text-nb-on-surface-variant transition-colors group cursor-pointer shrink-0"
+              title={isHeaderCollapsed ? "Expand Header" : "Collapse Header"}
+            >
+              {isHeaderCollapsed ? (
+                <ChevronDown size={14} className="group-hover:scale-110 transition-transform" />
+              ) : (
+                <ChevronUp size={14} className="group-hover:scale-110 transition-transform" />
+              )}
+            </button>
 
 
             <MenuItem label="File" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
@@ -535,53 +557,60 @@ const EditorContent = React.memo(function EditorContent({
               />
             </MenuItem>
 
-            {editor && (
-              <MenuItem label="Insert" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
-                <MenuAction icon={<ImagePlus size={14} />} label="Image" onClick={insertImage} setActiveMenu={setActiveMenu} />
-                <MenuAction
-                  icon={<TableIcon size={14} />}
-                  label="Table"
-                  onClick={() => setShowTableGrid(true)}
-                  setActiveMenu={setActiveMenu}
-                />
-                <MenuAction
-                  icon={<Code size={14} />}
-                  label="Code Block"
-                  onClick={() => {
-                    const { selection } = editor.state;
-                    const safePos = (selection instanceof NodeSelection) ? selection.to :
-                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+            <MenuItem label="Insert" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
+              <MenuAction icon={<ImagePlus size={14} />} label="Image" onClick={insertImage} setActiveMenu={setActiveMenu} />
+              <MenuAction
+                icon={<TableIcon size={14} />}
+                label="Table"
+                onClick={(e) => {
+                  if (e?.currentTarget) {
+                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                    setGridPos({ top: rect.top, left: rect.right + 212 });
+                    setShowTableGrid(true);
+                  }
+                }}
+                setActiveMenu={setActiveMenu}
+              />
+              <MenuAction
+                icon={<Code size={14} />}
+                label="Code Block"
+                onClick={() => {
+                  if (!editor) return;
+                  const { selection } = editor.state;
+                  const safePos = (selection instanceof NodeSelection) ? selection.to :
+                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                      (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
 
-                    if (safePos !== null) {
-                      editor.chain().focus().insertContentAt(safePos, { type: 'codeBlock', attrs: { id: generateUUID() } }).run();
-                    } else {
-                      editor.chain().focus().insertContent({ type: 'codeBlock', attrs: { id: generateUUID() } }).run();
-                    }
-                  }}
-                  setActiveMenu={setActiveMenu}
-                />
-                <MenuAction
-                  icon={<Terminal size={14} />}
-                  label="Raw LaTeX"
-                  onClick={() => {
-                    const { selection } = editor.state;
-                    const safePos = (selection instanceof NodeSelection) ? selection.to :
-                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+                  if (safePos !== null) {
+                    editor.chain().focus().insertContentAt(safePos, { type: 'codeBlock', attrs: { id: generateUUID() } }).run();
+                  } else {
+                    editor.chain().focus().insertContent({ type: 'codeBlock', attrs: { id: generateUUID() } }).run();
+                  }
+                }}
+                setActiveMenu={setActiveMenu}
+              />
+              <MenuAction
+                icon={<Terminal size={14} />}
+                label="LaTeX Block"
+                onClick={() => {
+                  if (!editor) return;
+                  const { selection } = editor.state;
+                  const safePos = (selection instanceof NodeSelection) ? selection.to :
+                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                      (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
 
-                    if (safePos !== null) {
-                      editor.chain().focus().insertContentAt(safePos, { type: 'rawLatex', attrs: { id: generateUUID() } }).run();
-                    } else {
-                      editor.chain().focus().insertContent({ type: 'rawLatex', attrs: { id: generateUUID() } }).run();
-                    }
-                  }}
-                  setActiveMenu={setActiveMenu}
-                />
-              </MenuItem>
-            )}
+                  if (safePos !== null) {
+                    editor.chain().focus().insertContentAt(safePos, { type: 'rawLatex', attrs: { id: generateUUID() } }).run();
+                  } else {
+                    editor.chain().focus().insertContent({ type: 'rawLatex', attrs: { id: generateUUID() } }).run();
+                  }
+                }}
+                setActiveMenu={setActiveMenu}
+              />
+            </MenuItem>
 
-            <div className="flex-1" />
+
+            <div className="flex-1 min-w-[20px]" />
 
             <div className="flex items-center gap-2 mr-2">
               {isAutoSaving || isSaving ? (
@@ -608,8 +637,9 @@ const EditorContent = React.memo(function EditorContent({
           </div>
 
           {/* Row 2: Metadata Row */}
-          <div className="px-6 py-2.5 flex flex-wrap items-center gap-2 max-w-7xl mx-auto">
-            <div className="flex-1 min-w-[300px]">
+          {!isHeaderCollapsed && (
+            <div className="px-6 py-2.5 flex flex-wrap items-center gap-3 max-w-7xl mx-auto relative z-[160]">
+              <div className="flex-1 min-w-[200px]">
               <AutocompleteInput
                 type="text"
                 value={title}
@@ -634,7 +664,7 @@ const EditorContent = React.memo(function EditorContent({
               </div>
             )}
 
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3">
               <DatePicker
                 value={date}
                 onChange={(val) => setDate(val)}
@@ -657,7 +687,7 @@ const EditorContent = React.memo(function EditorContent({
                 />
               </div>
 
-              <div className={`h-9 w-[230px] shrink-0 flex items-center gap-2.5 px-3 rounded-xl border transition-all relative ${activePhaseCfg ? `${activePhaseCfg.bg} ${activePhaseCfg.border}` : "bg-nb-surface-low border-nb-outline-variant/30"}`}>
+              <div className={`h-9 w-full sm:w-[230px] shrink-0 flex items-center gap-2.5 px-3 rounded-xl border transition-all relative ${activePhaseCfg ? `${activePhaseCfg.bg} ${activePhaseCfg.border}` : "bg-nb-surface-low border-nb-outline-variant/30"}`}>
                 <div
                   className="absolute inset-0 z-10 cursor-pointer"
                   onClick={() => setActiveMenu(activeMenu === "Phase" ? null : "Phase")}
@@ -699,10 +729,11 @@ const EditorContent = React.memo(function EditorContent({
               </div>
             </div>
           </div>
+        )}
 
           {/* Row 3: Rich Toolbar */}
-          {editor && (
-            <div className="px-6 py-2 border-t border-nb-outline-variant/30 bg-nb-surface-mid/50 overflow-x-auto scrollbar-hide">
+          {editor && !isHeaderCollapsed && (
+            <div className="px-6 py-2 border-t border-nb-outline-variant/30 bg-nb-surface-mid/50 overflow-x-auto overflow-y-hidden scrollbar-hide shrink-0">
               <div className="max-w-7xl mx-auto flex items-center gap-1 min-w-max">
                 <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} title="Bold">
                   <Bold size={16} />
@@ -872,8 +903,10 @@ const EditorContent = React.memo(function EditorContent({
                       if (!showTableGrid && tableButtonRef.current) {
                         const rect = tableButtonRef.current.getBoundingClientRect();
                         setGridPos({ top: rect.bottom + 8, left: rect.right });
+                        setShowTableGrid(true);
+                      } else {
+                        setShowTableGrid(false);
                       }
-                      setShowTableGrid(!showTableGrid);
                     }}
                     active={showTableGrid}
                     title="Insert Table"
@@ -884,8 +917,8 @@ const EditorContent = React.memo(function EditorContent({
                     <div
                       style={{
                         position: 'fixed',
-                        top: gridPos.top,
-                        left: gridPos.left - 204, // Grid width (180) + padding/shadow room
+                        top: Math.min(gridPos.top, (typeof window !== 'undefined' ? window.innerHeight : 1000) - 220),
+                        left: Math.max(8, Math.min(gridPos.left - 204, (typeof window !== 'undefined' ? window.innerWidth : 1000) - 220)), 
                         zIndex: 9999
                       }}
                       className="shadow-2xl rounded-xl animate-in fade-in zoom-in-95 duration-200"
@@ -935,8 +968,8 @@ const EditorContent = React.memo(function EditorContent({
         </div>
 
         {/* ── Scrollable Workspace ──────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto bg-nb-surface scrollbar-hide">
-          <div className="max-w-7xl mx-auto pl-16 pr-8 py-4 min-h-full">
+        <div className="flex-1 overflow-y-auto overflow-x-auto bg-nb-surface scrollbar-hide">
+          <div className="max-w-7xl mx-auto px-14 lg:pl-16 lg:pr-8 py-4 min-h-full">
             {validationErrors.length > 0 && (
               <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3 animate-in slide-in-from-top-2">
                 <AlertCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
@@ -962,8 +995,6 @@ const EditorContent = React.memo(function EditorContent({
             />
           </div>
         </div>
-
-      </div>
     </div>
   );
 }, (prev, next) => {
