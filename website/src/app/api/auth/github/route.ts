@@ -12,7 +12,6 @@ export async function POST(request: Request) {
   }
 
   try {
-    console.log('Exchanging GitHub code for token...');
     const response = await fetch('https://github.com/login/oauth/access_token', {
       method: 'POST',
       headers: {
@@ -27,7 +26,6 @@ export async function POST(request: Request) {
     });
 
     const data = await response.json();
-    console.log('GitHub response received:', data.error ? 'Error' : 'Success');
 
     if (data.error) {
       return NextResponse.json({ error: data.error_description || data.error }, { status: 400 });

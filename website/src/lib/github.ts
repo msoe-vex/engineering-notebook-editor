@@ -164,19 +164,16 @@ export const fetchRawFileContent = async (config: GitHubConfig, path: string) =>
   if (!Array.isArray(response.data) && response.data.type === "file") {
     if (response.data.content) {
       const content = response.data.content.replace(/\s/g, '');
-      console.log(`[GitHub] Fetched raw content for ${path}. Length: ${content.length}`);
       return content;
     }
 
     // If content is missing, it's likely too large (> 1MB). Fetch blob directly.
-    console.log(`[GitHub] Content missing for ${path} (possibly > 1MB), fetching blob ${response.data.sha}`);
     const blobResponse = await octokit.rest.git.getBlob({
       owner: config.owner,
       repo: config.repo,
       file_sha: response.data.sha,
     });
     const content = blobResponse.data.content.replace(/\s/g, '');
-    console.log(`[GitHub] Fetched blob content for ${path}. Length: ${content.length}`);
     return content;
   }
   throw new Error("Not a file");

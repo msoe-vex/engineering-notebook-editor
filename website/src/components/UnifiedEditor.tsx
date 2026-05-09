@@ -55,11 +55,12 @@ interface UnifiedEditorProps {
   filename: string;
   onEditorInit?: (editor: import("@tiptap/react").Editor) => void;
   onToggleLink?: (fn: () => void) => void;
+  triggerRect?: DOMRect | null;
   entryId?: string;
 }
 
 export default function UnifiedEditor({
-  content, onChange, onImageUpload, filename, onEditorInit, onToggleLink, entryId
+  content, onChange, onImageUpload, filename, onEditorInit, onToggleLink, triggerRect, entryId
 }: UnifiedEditorProps) {
   const { currentProjectId, metadata } = useWorkspace();
   const dbName = currentProjectId ? `notebook-project-${currentProjectId}` : "notebook-default";
@@ -483,6 +484,7 @@ export default function UnifiedEditor({
               onClose={() => setShowLinkPopup(false)}
               filename={filename}
               showLinkPopup={showLinkPopup}
+              triggerRect={triggerRect}
             />
           )}
         </div>

@@ -18,6 +18,7 @@ import { NotebookMetadata, getLocalDateString } from "@/lib/metadata";
 import { generateEntryLatex } from "@/lib/latex";
 import { getPhases, getPhaseConfig } from "@/lib/phases";
 import AutocompleteInput from "./AutocompleteInput";
+import DatePicker from "./DatePicker";
 import { extractResources, extractReferences, TipTapNode, ensureHeadingIds, buildResourceTypeIndex } from "@/lib/metadata";
 import { ASSETS_DIR } from "@/lib/constants";
 import { NodeSelection } from "@tiptap/pm/state";
@@ -196,7 +197,9 @@ const EditorContent = React.memo(function EditorContent({
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [showTableGrid, setShowTableGrid] = useState(false);
   const tableButtonRef = useRef<HTMLDivElement>(null);
+  const linkButtonRef = useRef<HTMLDivElement>(null);
   const [gridPos, setGridPos] = useState({ top: 0, left: 0 });
+  const [linkButtonRect, setLinkButtonRect] = useState<DOMRect | null>(null);
 
   const toggleLinkFn = useRef<(() => void) | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -632,17 +635,11 @@ const EditorContent = React.memo(function EditorContent({
             )}
 
             <div className="flex items-center gap-4">
-              <div
-                className="h-9 flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50"
-              >
-                <Calendar size={14} className="text-nb-primary" />
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="text-[11px] font-bold text-nb-on-surface-variant bg-transparent outline-none w-28 cursor-pointer uppercase tracking-tight"
-                />
-              </div>
+              <DatePicker
+                value={date}
+                onChange={(val) => setDate(val)}
+                className="h-9"
+              />
 
               <div
                 className="h-9 flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50"
@@ -719,13 +716,20 @@ const EditorContent = React.memo(function EditorContent({
 
                 <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
 
-                <ToolbarButton
-                  onClick={() => toggleLinkFn.current?.()}
-                  active={editor.isActive("link")}
-                  title="Insert Link/Reference"
-                >
-                  <LinkIcon size={16} />
-                </ToolbarButton>
+                <div className="relative" ref={linkButtonRef}>
+                  <ToolbarButton
+                    onClick={() => {
+                      if (linkButtonRef.current) {
+                        setLinkButtonRect(linkButtonRef.current.getBoundingClientRect());
+                      }
+                      toggleLinkFn.current?.();
+                    }}
+                    active={editor.isActive("link")}
+                    title="Insert Link/Reference"
+                  >
+                    <LinkIcon size={16} />
+                  </ToolbarButton>
+                </div>
 
                 <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
 
@@ -953,6 +957,7 @@ const EditorContent = React.memo(function EditorContent({
               author={author}
               onEditorInit={setEditor}
               onToggleLink={(fn) => { toggleLinkFn.current = fn; }}
+              triggerRect={linkButtonRect}
               entryId={entryId}
             />
           </div>

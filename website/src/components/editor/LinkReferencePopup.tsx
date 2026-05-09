@@ -8,6 +8,7 @@ interface LinkReferencePopupProps {
   metadata?: NotebookMetadata;
   filename?: string;
   showLinkPopup: boolean;
+  triggerRect?: DOMRect | null;
 }
 
 export function LinkReferencePopup({
@@ -15,7 +16,8 @@ export function LinkReferencePopup({
   onClose,
   metadata,
   filename,
-  showLinkPopup
+  showLinkPopup,
+  triggerRect
 }: LinkReferencePopupProps) {
   const [query, setQuery] = useState("");
   const [text, setText] = useState("");
@@ -108,7 +110,7 @@ export function LinkReferencePopup({
     return allResources.filter(r =>
       (r.title || "").toLowerCase().includes(q) ||
       (r.entryTitle || "").toLowerCase().includes(q)
-    ).slice(0, 10);
+    ).slice(0, 50);
   }, [allResources, query]);
 
   const handleApply = () => {
@@ -150,10 +152,19 @@ export function LinkReferencePopup({
   return (
     <div
       className="fixed z-[1000] w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-2xl p-5 animate-in zoom-in-95 fade-in duration-200"
-      style={{
-        top: Math.min(window.innerHeight - 400, rect.bottom + 10),
-        left: Math.min(window.innerWidth - 350, rect.left)
-      }}
+      style={(() => {
+        const anchor = triggerRect || rect;
+        const spaceBelow = window.innerHeight - anchor.bottom;
+        const needsFlip = !triggerRect && spaceBelow < 620;
+        const left = Math.max(10, Math.min(window.innerWidth - 340, anchor.left));
+        
+        return {
+          top: needsFlip ? anchor.top - 10 : anchor.bottom + 10,
+          left,
+          transform: needsFlip ? 'translateY(-100%)' : 'translateY(0)',
+          transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+        };
+      })()}
       onClick={e => e.stopPropagation()}
     >
       <div className="flex items-center justify-between mb-4">
