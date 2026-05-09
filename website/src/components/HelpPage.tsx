@@ -35,13 +35,17 @@ export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
 
   const [markdownContent, setMarkdownContent] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [prevTab, setPrevTab] = useState(activeTab);
+  if (activeTab !== prevTab) {
+    setPrevTab(activeTab);
+    setIsLoading(true);
+  }
 
   const setActiveTab = (tab: string) => {
     navigateTo({}, `${baseHelpPath}/${tab}`);
   };
 
   useEffect(() => {
-    setIsLoading(true);
     fetch(`/content/help/${activeTab}.md`)
       .then(res => res.text())
       .then(text => {

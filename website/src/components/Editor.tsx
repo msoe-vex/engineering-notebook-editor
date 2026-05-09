@@ -314,21 +314,7 @@ const EditorContent = React.memo(function EditorContent({
     contentStr: initialContent
   });
 
-  useEffect(() => {
-    requestAnimationFrame(() => {
-      setTitle(initialTitle);
-      setAuthor(initialAuthor);
-      setPhase(initialPhase);
-      setDate(initialDate || getLocalDateString());
-      setContent(parseInitialContent(initialContent));
-      setLocalIsValid(metadata.entries[entryId]?.isValid !== false);
-      setValidationErrors([]);
-      setIsSaving(false);
-      setIsAutoSaving(false);
-      lastSyncedRef.current = { title: initialTitle, author: initialAuthor, phase: initialPhase, date: initialDate, contentStr: initialContent };
-      lastAutoSavedRef.current = { title: initialTitle, author: initialAuthor, phase: initialPhase, date: initialDate, contentStr: initialContent };
-    });
-  }, [entryId]);
+  // No manual reset effect needed - the component remounts when entryId changes due to the 'key' prop
 
   // ── Callback refs (stable references to avoid resetting timers on re-render) ──
   const generateLatexRef = useRef(generateLatex);
@@ -1018,6 +1004,7 @@ const Editor = ({
 
   return (
     <EditorContent
+      key={openFile.id}
       openFile={openFile}
       metadata={metadata}
       updateEntry={updateEntry}

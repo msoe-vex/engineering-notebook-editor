@@ -22,7 +22,7 @@ import ProjectHeader from "./ProjectHeader";
 import { ViewMode } from "./ViewToggle";
 import ConfirmationDialog from "./ConfirmationDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { HardDrive, ArrowLeftRight, X, BookOpen, Download, Loader2, Upload, Menu, Sun, Moon, FolderGit, HelpCircle } from "lucide-react";
+import { HardDrive, ArrowLeftRight, X, BookOpen, Download, Loader2, Upload } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { ENTRIES_DIR, } from "@/lib/constants";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -365,19 +365,16 @@ export default function App() {
     }
   }, [isMobile, viewMode]);
 
-  // Close sidebar on mobile when an entry is opened or created
-  useEffect(() => {
-    if (isMobile && openFile?.id) {
+  // Auto-close sidebar on mobile during navigation
+  const [lastNavKey, setLastNavKey] = useState<string | null>(null);
+  const currentNavKey = `${isMobile}-${openFile?.id || ''}-${currentProjectId || ''}`;
+  
+  if (isMobile && currentNavKey !== lastNavKey) {
+    setLastNavKey(currentNavKey);
+    if (openFile?.id || currentProjectId) {
       setUserSidebarPreference(false);
     }
-  }, [isMobile, openFile?.id]);
-
-  // Close sidebar on mobile when a project is selected
-  useEffect(() => {
-    if (isMobile && currentProjectId) {
-      setUserSidebarPreference(false);
-    }
-  }, [isMobile, currentProjectId]);
+  }
 
   const handleSetViewMode = (mode: ViewMode) => {
     const viewParam = mode === "preview" ? "latex" : mode;
