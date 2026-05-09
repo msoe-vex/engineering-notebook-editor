@@ -328,7 +328,7 @@ const EditorContent = React.memo(function EditorContent({
       lastSyncedRef.current = { title: initialTitle, author: initialAuthor, phase: initialPhase, date: initialDate, contentStr: initialContent };
       lastAutoSavedRef.current = { title: initialTitle, author: initialAuthor, phase: initialPhase, date: initialDate, contentStr: initialContent };
     });
-  }, [entryId, initialTitle, initialAuthor, initialPhase, initialDate, initialContent, metadata.entries]);
+  }, [entryId]);
 
   // ── Callback refs (stable references to avoid resetting timers on re-render) ──
   const generateLatexRef = useRef(generateLatex);
@@ -336,17 +336,8 @@ const EditorContent = React.memo(function EditorContent({
     generateLatexRef.current = generateLatex;
   }, [generateLatex]);
 
-  // ── Immediate metadata sync ──────────────────────────────────────────────────
-  // Title, author, and phase are synced to the parent instantly (no debounce)
-  // via the Store's updateEntry method.
-  useEffect(() => {
-    if (title !== lastSyncedRef.current.title || author !== lastSyncedRef.current.author || phase !== lastSyncedRef.current.phase || date !== lastSyncedRef.current.date) {
-      const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
-      const latex = generateLatex(content, title, author, phase, date);
-      updateEntry(entryId, latex, contentStr, { title, author, phase, date });
-      lastSyncedRef.current = { title, author, phase, date, contentStr };
-    }
-  }, [title, author, phase, date, entryId, content, generateLatex, updateEntry]);
+  // Metadata and content changes are now both handled by the debounced auto-save below
+  // to avoid spamming the storage layer while typing.
 
 
   // ── Debounced content auto-save ──────────────────────────────────────────────
@@ -366,7 +357,10 @@ const EditorContent = React.memo(function EditorContent({
       setIsAutoSaving(true);
       autoSaveTimerRef.current = setTimeout(() => {
         const { title, author, phase, date } = latestMetadataRef.current;
-        const latex = generateLatexRef.current(content, title, author, phase, date);
+        const currentContent = latestContentRef.current;
+        const contentStr = typeof currentContent === 'string' ? currentContent : JSON.stringify(currentContent);
+        
+        const latex = generateLatexRef.current(currentContent, title, author, phase, date);
         updateEntry(entryId, latex, contentStr, { title, author, phase, date });
 
         lastAutoSavedRef.current.contentStr = contentStr;
