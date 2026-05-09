@@ -2,8 +2,8 @@ import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, validateNotebookIntegr
 import { generateAllEntriesLatex, generateEntryLatex, generateTeamLatex, generatePhasesLatex } from "./latex";
 import { ExplorerFile, GitHubConfig, TeamTab } from "./types";
 import { getProjects, getProject, Project, getAllPending, getPending, stageChange, removeStaged, getResource, putResource, saveProject, getProjectHandle, saveProjectHandle, PendingChange } from "./db";
-import { fetchFileContent, fetchDirectoryTree, fetchRawFileContent, GitHubFile } from "./github";
-import { listLocalFiles, readLocalFile, writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, ensureLocalDirectory } from "./fs";
+import { fetchFileContent, fetchDirectoryTree, fetchRawFileContent, GitHubFile, checkGitHubFileExists } from "./github";
+import { listLocalFiles, readLocalFile, writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, ensureLocalDirectory, checkLocalFileExists } from "./fs";
 import { INDEX_PATH, ENTRIES_DIR, ENTRIES_INDEX_PATH, LATEX_DIR, ASSETS_DIR, TEAM_PATH, PHASES_PATH } from "./constants";
 import { events, EventNames } from "./events";
 import { generateUUID, getMimeTypeFromExtension, generateDeterministicUUID, formatDateMonthYear } from "./utils";
@@ -44,6 +44,7 @@ class WorkspaceStore {
   public isInitialized = false;
   public projects: Project[] = [];
   public pendingChanges: PendingChange[] = [];
+  public isMainTexPresent: boolean = true;
   public assetCache = new Map<string, string>();
   public selectedPaths: Set<string> = new Set();
 
@@ -415,6 +416,7 @@ class WorkspaceStore {
     } catch {
       this.metadata = EMPTY_METADATA;
     }
+    this.isMainTexPresent = await checkLocalFileExists(this.dirHandle, "main.tex");
   }
 
   private async loadGitHubWorkspace() {
@@ -515,6 +517,8 @@ class WorkspaceStore {
       }
       await Promise.all(tasks);
     }
+
+    this.isMainTexPresent = await checkGitHubFileExists(this.config, `${basePrefix}main.tex`);
   }
 
   // ─── Entry Management ───────────────────────────────────────────────────────
