@@ -6,7 +6,7 @@ import { fetchFileContent, fetchDirectoryTree, fetchRawFileContent, GitHubFile }
 import { listLocalFiles, readLocalFile, writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, ensureLocalDirectory } from "./fs";
 import { INDEX_PATH, ENTRIES_DIR, ENTRIES_INDEX_PATH, LATEX_DIR, ASSETS_DIR, TEAM_PATH, PHASES_PATH } from "./constants";
 import { events, EventNames } from "./events";
-import { generateUUID, getMimeTypeFromExtension, generateDeterministicUUID } from "./utils";
+import { generateUUID, getMimeTypeFromExtension, generateDeterministicUUID, formatDateMonthYear } from "./utils";
 
 export type WorkspaceMode = "local" | "github" | "temporary" | "none";
 
@@ -882,7 +882,27 @@ class WorkspaceStore {
   }
 
   private async updateLatexMetadata() {
-    const teamLatex = generateTeamLatex(this.metadata.team || { teamName: "", teamNumber: "", startDate: "", endDate: "", organization: "", members: [] });
+    // Calculate start and end dates based on entries
+    const entryDates = Object.values(this.metadata.entries)
+      .map(e => e.date)
+      .filter(Boolean)
+      .sort();
+
+    const startDate = entryDates.length > 0 ? entryDates[0] : "TBD";
+    const endDate = entryDates.length > 0 ? entryDates[entryDates.length - 1] : "TBD";
+
+    // Update team metadata in memory so generateTeamLatex picks it up
+    const teamInfo = {
+      teamName: "",
+      teamNumber: "",
+      organization: "",
+      members: [],
+      ...(this.metadata.team || {}),
+      startDate: formatDateMonthYear(startDate),
+      endDate: formatDateMonthYear(endDate)
+    };
+
+    const teamLatex = generateTeamLatex(teamInfo);
     const phasesLatex = generatePhasesLatex(this.metadata.phases || []);
     const allEntriesLatex = generateAllEntriesLatex(this.metadata);
 
