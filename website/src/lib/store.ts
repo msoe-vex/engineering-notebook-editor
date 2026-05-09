@@ -453,9 +453,6 @@ class WorkspaceStore {
     if (this.metadata.team) {
       const dbName = this.getDBName();
       const team = this.metadata.team;
-      // Normalize baseDir: remove leading/trailing slashes and ensure a single trailing slash if not empty
-      const normalizedBase = this.config.baseDir ? this.config.baseDir.replace(/^\/+|\/+$/g, '') : '';
-      const basePrefix = normalizedBase ? normalizedBase + '/' : '';
 
       const fetchAsset = async (path: string) => {
         if (!path || path.startsWith('data:')) return;

@@ -10,11 +10,11 @@ import {
   Undo2, Redo2, ImagePlus, ChevronDown, List, ListOrdered,
   Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
   Terminal, Link as LinkIcon, Underline as UnderlineIcon,
-  FileJson, Calendar
+  FileJson
 } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng } from "@/lib/utils";
-import { NotebookMetadata, getLocalDateString } from "@/lib/metadata";
+import { getLocalDateString } from "@/lib/metadata";
 import { generateEntryLatex } from "@/lib/latex";
 import { getPhases, getPhaseConfig } from "@/lib/phases";
 import AutocompleteInput from "./AutocompleteInput";
@@ -177,7 +177,7 @@ const EditorContent = React.memo(function EditorContent({
     }
 
     return true;
-  }, [title, author, phase, editor, metadata]);
+  }, [title, author, phase, date, editor, metadata]);
 
   // Local metadata validation (immediate for UI)
   useEffect(() => {
@@ -253,7 +253,7 @@ const EditorContent = React.memo(function EditorContent({
 
   const generateLatex = useCallback((cnt: TipTapNode | string, t: string, a: string, p: number | null, d: string) => {
     const id = filename.split('/').pop()?.replace('.json', '') || "";
-    
+
     // Extract resources from the content to pass to generateEntryLatex
     let contentNode = cnt;
     if (typeof cnt === 'string') {
@@ -267,10 +267,10 @@ const EditorContent = React.memo(function EditorContent({
         // Keep as string if not valid JSON
       }
     }
-    
+
     const resources = typeof contentNode === 'object' && contentNode !== null ? extractResources(contentNode as TipTapNode) : {};
     const resourceTypes = buildResourceTypeIndex(metadata.entries, resources, id);
-    
+
     return generateEntryLatex(cnt, t, a, p === null ? "" : p, initialCreatedAt, id, resourceTypes, d);
   }, [filename, initialCreatedAt, metadata.entries]);
 
@@ -329,10 +329,10 @@ const EditorContent = React.memo(function EditorContent({
   // via the Store's updateEntry method.
   useEffect(() => {
     if (title !== lastSyncedRef.current.title || author !== lastSyncedRef.current.author || phase !== lastSyncedRef.current.phase || date !== lastSyncedRef.current.date) {
-       const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
-       const latex = generateLatex(content, title, author, phase, date);
-       updateEntry(entryId, latex, contentStr, { title, author, phase, date });
-       lastSyncedRef.current = { title, author, phase, date, contentStr };
+      const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
+      const latex = generateLatex(content, title, author, phase, date);
+      updateEntry(entryId, latex, contentStr, { title, author, phase, date });
+      lastSyncedRef.current = { title, author, phase, date, contentStr };
     }
   }, [title, author, phase, date, entryId, content, generateLatex, updateEntry]);
 

@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import {
-  FileText, Plus, X, Clock, Calendar, SortAsc, SortDesc, CalendarDays,
+  FileText, Plus, X, Calendar, SortAsc, SortDesc, CalendarDays,
   Search, ChevronDown, AlertTriangle, ExternalLink, Trash2, FileJson, FileCode,
   Download
 } from "lucide-react";
@@ -57,7 +57,7 @@ interface FileRowProps {
 
 function FileRow({
   file, isOpened, isSelected, isPending, isDeleted, icon, isValid = true,
-  sortBy, onSelect, onDoubleClick, onContextMenu
+  onSelect, onDoubleClick, onContextMenu
 }: FileRowProps) {
   return (
     <div
