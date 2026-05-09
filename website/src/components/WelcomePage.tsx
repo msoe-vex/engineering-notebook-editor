@@ -23,7 +23,7 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
       workspace.mode === "local" ? HardDrive : ArrowLeftRight;
 
   return (
-    <div className="flex flex-col h-full items-center justify-center bg-nb-bg p-8">
+    <div className="flex flex-col min-h-full items-center justify-center bg-nb-bg p-8">
       {/* Header */}
       <div className="flex flex-col items-center gap-6 mb-12">
         <div className="w-20 h-20 rounded-2xl bg-nb-primary flex items-center justify-center shadow-2xl shadow-nb-primary/30">

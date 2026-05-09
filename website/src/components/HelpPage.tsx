@@ -13,7 +13,8 @@ import {
   Layers,
   Target,
   Lightbulb,
-  Loader2
+  Loader2,
+  ExternalLink
 } from "lucide-react";
 
 interface HelpPageProps {
@@ -29,7 +30,7 @@ export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
   const baseHelpPath = isWorkspaceHelp ? '/workspace/help' : '/help';
 
   // Determine active tab from path or default
-  const validTabs = ['modes', 'local', 'github', 'editor', 'data', 'phases', 'tips'];
+  const validTabs = ['modes', 'local', 'github', 'editor', 'data', 'phases', 'tips', 'resources'];
   const activeTab = validTabs.includes(lastSegment) ? lastSegment : (isWorkspaceHelp ? 'editor' : 'modes');
 
   const [markdownContent, setMarkdownContent] = useState("");
@@ -94,6 +95,7 @@ export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
           <NavButton active={activeTab === 'data'} onClick={() => setActiveTab('data')} icon={<Layers size={16} />} label="Import / Export" />
           <NavButton active={activeTab === 'phases'} onClick={() => setActiveTab('phases')} icon={<Target size={16} />} label="Design Process" />
           <NavButton active={activeTab === 'tips'} onClick={() => setActiveTab('tips')} icon={<Lightbulb size={16} />} label="Notebook Tips" />
+          <NavButton active={activeTab === 'resources'} onClick={() => setActiveTab('resources')} icon={<ExternalLink size={16} />} label="Resources" />
         </div>
 
         {/* Content Area */}

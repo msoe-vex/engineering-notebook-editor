@@ -4,7 +4,7 @@ import { GITHUB_ISSUES_URL } from "@/lib/constants";
 import React, { useState, useEffect } from "react";
 import {
   BookOpen, Moon, Sun, GitBranch, Folder, HardDrive, Trash2, Clock, Plus,
-  ArrowRight, History, Edit2, Check, X, AlertCircle, FolderGit, HelpCircle
+  ArrowRight, History, Edit2, Check, X, AlertCircle, FolderGit, HelpCircle, MoreVertical
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import GitHubConnectionDialog from "./GitHubConnectionDialog";
@@ -58,6 +58,7 @@ export default function Settings({
 
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 
   const GITHUB_CLIENT_ID = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID;
 
@@ -206,7 +207,7 @@ export default function Settings({
             <span className="text-[10px] font-bold text-nb-on-surface-variant/40">{projects.length} Found</span>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+          <div className="grid grid-cols-1 gap-3 pr-2">
             {[...projects].sort((a, b) => new Date(b.lastOpened).getTime() - new Date(a.lastOpened).getTime()).map(project => (
               <div
                 key={project.id}
@@ -226,7 +227,7 @@ export default function Settings({
                   </div>
                   <div className="flex-1 min-w-0">
                     {renamingId === project.id ? (
-                      <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center gap-2 w-full" onClick={e => e.stopPropagation()}>
                         <input
                           autoFocus
                           type="text"
@@ -236,10 +237,10 @@ export default function Settings({
                             if (e.key === 'Enter') { onRenameProject(project.id, renameValue); setRenamingId(null); }
                             if (e.key === 'Escape') setRenamingId(null);
                           }}
-                          className="flex-1 bg-nb-surface-low border border-nb-primary/30 px-3 py-1 rounded-lg text-sm font-bold text-nb-on-surface outline-none focus:ring-2 focus:ring-nb-primary/30"
+                          className="flex-1 min-w-0 bg-nb-surface-low border border-nb-primary/30 px-3 py-1 rounded-lg text-sm font-bold text-nb-on-surface outline-none focus:ring-2 focus:ring-nb-primary/30"
                         />
-                        <button onClick={() => { onRenameProject(project.id, renameValue); setRenamingId(null); }} className="p-1.5 rounded-lg bg-nb-primary text-white hover:bg-nb-primary-dim transition-colors cursor-pointer"><Check size={14} /></button>
-                        <button onClick={() => setRenamingId(null)} className="p-1.5 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:bg-nb-surface-high transition-colors cursor-pointer"><X size={14} /></button>
+                        <button onClick={() => { onRenameProject(project.id, renameValue); setRenamingId(null); }} className="shrink-0 p-1.5 rounded-lg bg-nb-primary text-white hover:bg-nb-primary-dim transition-colors cursor-pointer"><Check size={14} /></button>
+                        <button onClick={() => setRenamingId(null)} className="shrink-0 p-1.5 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:bg-nb-surface-high transition-colors cursor-pointer"><X size={14} /></button>
                       </div>
                     ) : (
                       <>
@@ -266,41 +267,63 @@ export default function Settings({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  {!renamingId && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setRenamingId(project.id); setRenameValue(project.name); }}
-                      className="p-2.5 rounded-xl text-nb-on-surface-variant hover:text-nb-primary hover:bg-nb-primary/5 transition-all cursor-pointer"
-                      title="Rename Project"
-                    >
-                      <Edit2 size={16} />
-                    </button>
-                  )}
-                  {project.type === "github" && project.githubConfig && (
-                    <a
-                      href={`https://github.com/${project.githubConfig.owner}/${project.githubConfig.repo}/tree/${project.githubConfig.branch}${project.githubConfig.folderPath ? '/' + project.githubConfig.folderPath : ''}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="p-2.5 rounded-xl text-nb-on-surface-variant hover:text-nb-tertiary hover:bg-nb-tertiary/5 transition-all cursor-pointer"
-                      title="Open on GitHub"
-                    >
-                      <FolderGit size={16} />
-                    </a>
-                  )}
+                <div className="relative">
                   <button
-                    onClick={(e) => { e.stopPropagation(); onDeleteProject(project.id); }}
-                    className="p-2.5 rounded-xl text-nb-on-surface-variant hover:text-red-500 hover:bg-red-50 transition-all cursor-pointer"
-                    title="Remove Project"
+                    onClick={(e) => { e.stopPropagation(); setMenuOpenId(menuOpenId === project.id ? null : project.id); }}
+                    className={`p-2.5 rounded-xl transition-all cursor-pointer ${menuOpenId === project.id ? "bg-nb-primary/10 text-nb-primary" : "text-nb-on-surface-variant hover:text-nb-on-surface hover:bg-nb-surface-mid"}`}
                   >
-                    <Trash2 size={16} />
+                    <MoreVertical size={18} />
                   </button>
-                  <button
-                    onClick={() => onSelectProject(project.id)}
-                    className="p-2.5 rounded-xl bg-nb-surface-low text-nb-primary border border-nb-outline-variant/30 hover:bg-nb-primary hover:text-white transition-all shadow-sm cursor-pointer"
-                  >
-                    <ArrowRight size={16} />
-                  </button>
+
+                  {menuOpenId === project.id && (
+                    <>
+                      <div className="fixed inset-0 z-[100]" onClick={() => setMenuOpenId(null)} />
+                      <div className="absolute right-0 top-full mt-2 w-48 bg-nb-surface border border-nb-outline-variant/30 rounded-2xl shadow-nb-xl z-[101] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                        <div className="p-1.5 flex flex-col gap-1">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onSelectProject(project.id); setMenuOpenId(null); }}
+                            className="flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold text-nb-on-surface hover:bg-nb-primary hover:text-white transition-all cursor-pointer"
+                          >
+                            <ArrowRight size={14} />
+                            Open Project
+                          </button>
+                          
+                          {!renamingId && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setRenamingId(project.id); setRenameValue(project.name); setMenuOpenId(null); }}
+                              className="flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold text-nb-on-surface hover:bg-nb-surface-mid transition-all cursor-pointer"
+                            >
+                              <Edit2 size={14} />
+                              Rename
+                            </button>
+                          )}
+
+                          {project.type === "github" && project.githubConfig && (
+                            <a
+                              href={`https://github.com/${project.githubConfig.owner}/${project.githubConfig.repo}/tree/${project.githubConfig.branch}${project.githubConfig.folderPath ? '/' + project.githubConfig.folderPath : ''}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold text-nb-on-surface hover:bg-nb-surface-mid transition-all cursor-pointer"
+                            >
+                              <FolderGit size={14} />
+                              View on GitHub
+                            </a>
+                          )}
+
+                          <div className="h-px bg-nb-outline-variant/20 my-1" />
+                          
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onDeleteProject(project.id); setMenuOpenId(null); }}
+                            className="flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold text-red-500 hover:bg-red-50 transition-all cursor-pointer"
+                          >
+                            <Trash2 size={14} />
+                            Remove Project
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
