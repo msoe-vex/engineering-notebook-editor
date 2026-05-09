@@ -663,15 +663,17 @@ export default function App() {
             })()}
           </div>
         ) : (
-          <WelcomePage
-            workspace={{ mode: mode as "local" | "github" | "temporary", label: workspaceLabel }}
-            onNewEntry={createEntry}
-            onImportEntry={() => importEntryInputRef.current?.click()}
-            onDisconnect={handleDisconnect}
-            onOpenSidebar={() => { isToggleFromButton.current = true; setUserSidebarPreference(true); }}
-            onOpenTeam={handleOpenTeamEditor}
-            onOpenHelp={() => navigateTo({}, '/help')}
-          />
+          <div className="flex-1 overflow-y-auto custom-scrollbar bg-nb-bg">
+            <WelcomePage
+              workspace={{ mode: mode as "local" | "github" | "temporary", label: workspaceLabel }}
+              onNewEntry={createEntry}
+              onImportEntry={() => importEntryInputRef.current?.click()}
+              onDisconnect={handleDisconnect}
+              onOpenSidebar={() => { isToggleFromButton.current = true; setUserSidebarPreference(true); }}
+              onOpenTeam={handleOpenTeamEditor}
+              onOpenHelp={() => navigateTo({}, '/help')}
+            />
+          </div>
         )}
       </div>
     </div>
@@ -683,23 +685,25 @@ export default function App() {
       <input type="file" ref={importEntryInputRef} accept=".json" style={{ display: "none" }} onChange={(e) => { const file = e.target.files?.[0]; if (file) processImportFile(file); e.target.value = ""; }} />
 
       {mode === "none" ? (
-        <Settings
-          projects={projects}
-          onSelectProject={selectProject}
-          onDeleteProject={handleDeleteProject}
-          onRenameProject={handleRenameProject}
-          onCreateGithub={handleCreateGithub}
-          onCreateLocal={handleCreateLocal}
-          onCreateTemporary={handleCreateTemporary}
-          onSignOutGithub={onSignOutGithub}
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <Settings
+            projects={projects}
+            onSelectProject={selectProject}
+            onDeleteProject={handleDeleteProject}
+            onRenameProject={handleRenameProject}
+            onCreateGithub={handleCreateGithub}
+            onCreateLocal={handleCreateLocal}
+            onCreateTemporary={handleCreateTemporary}
+            onSignOutGithub={onSignOutGithub}
 
-          githubToken={githubToken}
-          githubUser={githubUser}
-          isExchangingGithubCode={isExchangingCode}
-          autoOpenGithubModal={autoOpenGithubModal}
-          onCloseGithubModal={() => setAutoOpenGithubModal(false)}
-          onOpenHelp={() => navigateTo({}, '/help')}
-        />
+            githubToken={githubToken}
+            githubUser={githubUser}
+            isExchangingGithubCode={isExchangingCode}
+            autoOpenGithubModal={autoOpenGithubModal}
+            onCloseGithubModal={() => setAutoOpenGithubModal(false)}
+            onOpenHelp={() => navigateTo({}, '/help')}
+          />
+        </div>
       ) : (
         <div className="flex w-full h-full relative overflow-hidden">
           {isMobile ? (
