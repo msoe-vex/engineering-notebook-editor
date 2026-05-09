@@ -8,7 +8,7 @@ import {
 import GitHubConnectionDialog from "./GitHubConnectionDialog";
 import { ExplorerFile, TeamTab, GitHubConfig } from "@/lib/types";
 import {
-  Project, saveProject, deleteProject, deleteProjectHandle, deleteProjectDatabase,
+  Project, deleteProject, deleteProjectHandle, deleteProjectDatabase,
   getProjectDBName
 } from "@/lib/db";
 import Settings from "./Settings";
