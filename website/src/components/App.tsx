@@ -86,7 +86,6 @@ export default function App() {
     teamTab,
     showHelp,
     helpPath,
-    isMainTexPresent
   } = useWorkspace();
 
   // Global loading overlay for background operations (like importing/exporting)
@@ -149,7 +148,6 @@ export default function App() {
 
   const editorPanelRef = useRef<ImperativePanelHandle>(null);
   const previewPanelRef = useRef<ImperativePanelHandle>(null);
-  const [projectCheckedForMain, setProjectCheckedForMain] = useState<string | null>(null);
 
   const sidebarPanelRef = useRef<ImperativePanelHandle>(null);
   const isToggleFromButton = useRef(false);
@@ -377,7 +375,7 @@ export default function App() {
   // Auto-close sidebar on mobile during navigation
   const [lastNavKey, setLastNavKey] = useState<string | null>(null);
   const currentNavKey = `${isMobile}-${openFile?.id || ''}-${currentProjectId || ''}`;
-  
+
   if (isMobile && currentNavKey !== lastNavKey) {
     setLastNavKey(currentNavKey);
     if (openFile?.id || currentProjectId) {
