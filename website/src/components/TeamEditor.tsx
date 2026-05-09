@@ -33,7 +33,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { TeamMetadata, TeamMember, ProjectPhase } from "@/lib/metadata";
 import { DEFAULT_PHASES, AVAILABLE_ICONS } from "@/lib/phases";
-import { generateUUID } from "@/lib/utils";
+import { generateUUID, formatDateMonthYear } from "@/lib/utils";
 
 // ─── Sub-components for performance ──────────────────────────────────────────
 
@@ -418,6 +418,17 @@ export default function TeamEditor({
   const activeTab = initialTab;
   const [activeId, setActiveId] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const timeline = useMemo(() => {
+    const entryDates = Object.values(metadata.entries)
+      .map(e => e.date)
+      .filter(Boolean)
+      .sort();
+    return {
+      start: formatDateMonthYear(entryDates[0]),
+      end: formatDateMonthYear(entryDates[entryDates.length - 1])
+    };
+  }, [metadata.entries]);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
 
@@ -686,6 +697,21 @@ export default function TeamEditor({
                       className="w-full bg-nb-surface border border-nb-outline-variant rounded-2xl pl-12 pr-4 py-3.5 text-sm font-bold text-nb-on-surface focus:outline-none focus:ring-2 focus:ring-nb-primary/20 focus:border-nb-primary transition-all"
                     />
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant ml-1">Project Timeline</label>
+                  <div className="flex gap-4">
+                    <div className="flex-1 bg-nb-surface-low border border-nb-outline-variant/30 rounded-2xl p-4">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant/40 mb-1">Start Date</p>
+                      <p className="text-sm font-black text-nb-on-surface">{timeline.start}</p>
+                    </div>
+                    <div className="flex-1 bg-nb-surface-low border border-nb-outline-variant/30 rounded-2xl p-4">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant/40 mb-1">End Date</p>
+                      <p className="text-sm font-black text-nb-on-surface">{timeline.end}</p>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-nb-on-surface-variant/60 italic ml-1 mt-1">Calculated from the earliest and latest entries.</p>
                 </div>
 
               </div>
