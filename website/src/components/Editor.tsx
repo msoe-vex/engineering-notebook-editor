@@ -185,11 +185,8 @@ const EditorContent = React.memo(function EditorContent({
     if (valid !== localIsValid) {
       requestAnimationFrame(() => {
         setLocalIsValid(valid);
-        if (currentProjectId === "temporary") {
-          setEntryValidity(entryId, valid, valid ? [] : ["Incomplete metadata or resource captions"]);
-        }
+        setEntryValidity(entryId, valid, valid ? [] : ["Incomplete metadata or resource captions"]);
       });
-      // We'll notify the parent in the debounced effect below to avoid flicker
     }
   }, [title, author, phase, date, editor?.state.doc.content, checkValidity, localIsValid, currentProjectId, entryId, setEntryValidity]);
 
@@ -291,8 +288,35 @@ const EditorContent = React.memo(function EditorContent({
     if (!title.trim()) errors.push("Project title is required.");
     if (!author.trim()) errors.push("Author name is required.");
     if (!date.trim()) errors.push("Date is required.");
+    if (phase === null) errors.push("Project phase is required.");
+
+    if (editor) {
+      const doc = editor.getJSON();
+      const resources = extractResources(doc);
+      for (const res of Object.values(resources)) {
+        if (!res.title?.trim()) errors.push(`Title missing for ${res.type}.`);
+        if (res.type !== "header" && !res.caption?.trim()) errors.push(`Caption missing for ${res.type}.`);
+      }
+
+      const refs = extractReferences(doc);
+      if (refs.length > 0 && metadata?.entries) {
+        const existingIds = new Set<string>();
+        for (const entry of Object.values(metadata.entries)) {
+          existingIds.add(entry.id);
+          if (entry.resources) {
+            for (const resId of Object.keys(entry.resources)) {
+              existingIds.add(resId);
+            }
+          }
+        }
+        for (const refId of refs) {
+          if (!existingIds.has(refId)) errors.push(`Broken reference found: ${refId}`);
+        }
+      }
+    }
+
     return { valid: errors.length === 0, errors };
-  }, [title, author, date]);
+  }, [title, author, date, phase, editor, metadata]);
 
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
