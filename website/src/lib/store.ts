@@ -763,6 +763,7 @@ class WorkspaceStore {
 
       // Save Metadata
       await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Auto-save metadata");
+      await this.updateLatexMetadata();
     });
   }
 
