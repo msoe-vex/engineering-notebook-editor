@@ -17,6 +17,7 @@ export interface ExplorerFile {
   timestamp?: string;
   updatedAt?: string;
   isValid?: boolean;
+  date?: string;
   validationErrors?: string[];
 }
 

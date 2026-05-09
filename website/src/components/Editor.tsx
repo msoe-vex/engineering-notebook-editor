@@ -10,10 +10,11 @@ import {
   Undo2, Redo2, ImagePlus, ChevronDown, List, ListOrdered,
   Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
   Terminal, Link as LinkIcon, Underline as UnderlineIcon,
-  FileJson
+  FileJson, Calendar
 } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng } from "@/lib/utils";
+import { NotebookMetadata, getLocalDateString } from "@/lib/metadata";
 import { generateEntryLatex } from "@/lib/latex";
 import { getPhases, getPhaseConfig } from "@/lib/phases";
 import AutocompleteInput from "./AutocompleteInput";
@@ -123,6 +124,7 @@ const EditorContent = React.memo(function EditorContent({
     title: initialTitle,
     author: initialAuthor,
     phase: initialPhase,
+    date: initialDate,
     tiptapContent: initialContent,
     createdAt: initialCreatedAt,
     id: entryId
@@ -132,6 +134,7 @@ const EditorContent = React.memo(function EditorContent({
   const [title, setTitle] = useState(initialTitle);
   const [author, setAuthor] = useState(initialAuthor);
   const [phase, setPhase] = useState<number | null>(initialPhase);
+  const [date, setDate] = useState(initialDate || getLocalDateString());
   const [content, setContent] = useState<TipTapNode | string>(() => parseInitialContent(initialContent));
   const [editor, setEditor] = useState<import("@tiptap/react").Editor | null>(null);
 
@@ -141,7 +144,7 @@ const EditorContent = React.memo(function EditorContent({
   const [localIsValid, setLocalIsValid] = useState(metadata.entries[entryId]?.isValid !== false);
 
   const checkValidity = useCallback(() => {
-    if (!title?.trim() || !author?.trim() || phase === null) return false;
+    if (!title?.trim() || !author?.trim() || !date?.trim() || phase === null) return false;
     if (!editor) return true;
 
     const doc = editor.getJSON();
@@ -187,7 +190,7 @@ const EditorContent = React.memo(function EditorContent({
       });
       // We'll notify the parent in the debounced effect below to avoid flicker
     }
-  }, [title, author, phase, editor?.state.doc.content, checkValidity, localIsValid, currentProjectId, entryId, setEntryValidity]);
+  }, [title, author, phase, date, editor?.state.doc.content, checkValidity, localIsValid, currentProjectId, entryId, setEntryValidity]);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -227,12 +230,12 @@ const EditorContent = React.memo(function EditorContent({
   }, [metadata.entries, entryId]);
 
   const latestContentRef = useRef(content);
-  const latestMetadataRef = useRef({ title, author, phase });
+  const latestMetadataRef = useRef({ title, author, phase, date });
 
   useEffect(() => {
     latestContentRef.current = content;
-    latestMetadataRef.current = { title, author, phase };
-  }, [content, title, author, phase]);
+    latestMetadataRef.current = { title, author, phase, date };
+  }, [content, title, author, phase, date]);
 
   useEffect(() => {
     if (!editor) return;
@@ -245,7 +248,7 @@ const EditorContent = React.memo(function EditorContent({
     };
   }, [editor]);
 
-  const generateLatex = useCallback((cnt: TipTapNode | string, t: string, a: string, p: number | null) => {
+  const generateLatex = useCallback((cnt: TipTapNode | string, t: string, a: string, p: number | null, d: string) => {
     const id = filename.split('/').pop()?.replace('.json', '') || "";
     
     // Extract resources from the content to pass to generateEntryLatex
@@ -265,15 +268,16 @@ const EditorContent = React.memo(function EditorContent({
     const resources = typeof contentNode === 'object' && contentNode !== null ? extractResources(contentNode as TipTapNode) : {};
     const resourceTypes = buildResourceTypeIndex(metadata.entries, resources, id);
     
-    return generateEntryLatex(cnt, t, a, p === null ? "" : p, initialCreatedAt, id, resourceTypes);
+    return generateEntryLatex(cnt, t, a, p === null ? "" : p, initialCreatedAt, id, resourceTypes, d);
   }, [filename, initialCreatedAt, metadata.entries]);
 
   const validate = useCallback(() => {
     const errors: string[] = [];
     if (!title.trim()) errors.push("Project title is required.");
     if (!author.trim()) errors.push("Author name is required.");
+    if (!date.trim()) errors.push("Date is required.");
     return { valid: errors.length === 0, errors };
-  }, [title, author]);
+  }, [title, author, date]);
 
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
@@ -283,6 +287,7 @@ const EditorContent = React.memo(function EditorContent({
     title: initialTitle,
     author: initialAuthor,
     phase: initialPhase,
+    date: initialDate,
     contentStr: initialContent
   });
 
@@ -290,6 +295,7 @@ const EditorContent = React.memo(function EditorContent({
     title: initialTitle,
     author: initialAuthor,
     phase: initialPhase,
+    date: initialDate,
     contentStr: initialContent
   });
 
@@ -298,15 +304,16 @@ const EditorContent = React.memo(function EditorContent({
       setTitle(initialTitle);
       setAuthor(initialAuthor);
       setPhase(initialPhase);
+      setDate(initialDate || getLocalDateString());
       setContent(parseInitialContent(initialContent));
       setLocalIsValid(metadata.entries[entryId]?.isValid !== false);
       setValidationErrors([]);
       setIsSaving(false);
       setIsAutoSaving(false);
-      lastSyncedRef.current = { title: initialTitle, author: initialAuthor, phase: initialPhase, contentStr: initialContent };
-      lastAutoSavedRef.current = { title: initialTitle, author: initialAuthor, phase: initialPhase, contentStr: initialContent };
+      lastSyncedRef.current = { title: initialTitle, author: initialAuthor, phase: initialPhase, date: initialDate, contentStr: initialContent };
+      lastAutoSavedRef.current = { title: initialTitle, author: initialAuthor, phase: initialPhase, date: initialDate, contentStr: initialContent };
     });
-  }, [entryId, initialTitle, initialAuthor, initialPhase, initialContent, metadata.entries]);
+  }, [entryId, initialTitle, initialAuthor, initialPhase, initialDate, initialContent, metadata.entries]);
 
   // ── Callback refs (stable references to avoid resetting timers on re-render) ──
   const generateLatexRef = useRef(generateLatex);
@@ -318,13 +325,13 @@ const EditorContent = React.memo(function EditorContent({
   // Title, author, and phase are synced to the parent instantly (no debounce)
   // via the Store's updateEntry method.
   useEffect(() => {
-    if (title !== lastSyncedRef.current.title || author !== lastSyncedRef.current.author || phase !== lastSyncedRef.current.phase) {
+    if (title !== lastSyncedRef.current.title || author !== lastSyncedRef.current.author || phase !== lastSyncedRef.current.phase || date !== lastSyncedRef.current.date) {
        const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
-       const latex = generateLatex(content, title, author, phase);
-       updateEntry(entryId, latex, contentStr, { title, author, phase });
-       lastSyncedRef.current = { title, author, phase, contentStr };
+       const latex = generateLatex(content, title, author, phase, date);
+       updateEntry(entryId, latex, contentStr, { title, author, phase, date });
+       lastSyncedRef.current = { title, author, phase, date, contentStr };
     }
-  }, [title, author, phase, entryId, content, generateLatex, updateEntry]);
+  }, [title, author, phase, date, entryId, content, generateLatex, updateEntry]);
 
 
   // ── Debounced content auto-save ──────────────────────────────────────────────
@@ -337,19 +344,21 @@ const EditorContent = React.memo(function EditorContent({
     const isContentChanged = contentStr !== lastAutoSavedRef.current.contentStr;
     const isMetadataChanged = title !== lastAutoSavedRef.current.title ||
       author !== lastAutoSavedRef.current.author ||
-      phase !== lastAutoSavedRef.current.phase;
+      phase !== lastAutoSavedRef.current.phase ||
+      date !== lastAutoSavedRef.current.date;
 
     if (isContentChanged || isMetadataChanged) {
       setIsAutoSaving(true);
       autoSaveTimerRef.current = setTimeout(() => {
-        const { title, author, phase } = latestMetadataRef.current;
-        const latex = generateLatexRef.current(content, title, author, phase);
-        updateEntry(entryId, latex, contentStr, { title, author, phase });
+        const { title, author, phase, date } = latestMetadataRef.current;
+        const latex = generateLatexRef.current(content, title, author, phase, date);
+        updateEntry(entryId, latex, contentStr, { title, author, phase, date });
 
         lastAutoSavedRef.current.contentStr = contentStr;
         lastAutoSavedRef.current.title = title;
         lastAutoSavedRef.current.author = author;
         lastAutoSavedRef.current.phase = phase;
+        lastAutoSavedRef.current.date = date;
 
         setIsAutoSaving(false);
         autoSaveTimerRef.current = null;
@@ -359,7 +368,7 @@ const EditorContent = React.memo(function EditorContent({
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
-  }, [content, filename, title, author, phase, entryId, updateEntry]);
+  }, [content, filename, title, author, phase, date, entryId, updateEntry]);
 
   const handleSave = useCallback(async () => {
     const { valid, errors } = validate();
@@ -377,18 +386,18 @@ const EditorContent = React.memo(function EditorContent({
       autoSaveTimerRef.current = null;
     }
 
-    const latex = generateLatex(content, title, author, phase);
+    const latex = generateLatex(content, title, author, phase, date);
     const contentStr = JSON.stringify(content);
 
-    await updateEntry(entryId, latex, contentStr, { title, author, phase });
-    lastSyncedRef.current = { title, author, phase, contentStr };
+    await updateEntry(entryId, latex, contentStr, { title, author, phase, date });
+    lastSyncedRef.current = { title, author, phase, date, contentStr };
     setIsAutoSaving(false);
 
     setIsSaving(false);
-  }, [content, title, author, phase, generateLatex, validate, updateEntry, entryId]);
+  }, [content, title, author, phase, date, generateLatex, validate, updateEntry, entryId]);
 
   const handleDownload = () => {
-    const latex = generateLatex(content, title, author, phase);
+    const latex = generateLatex(content, title, author, phase, date);
     const blob = new Blob([latex], { type: "text/plain;charset=utf-8" });
     saveAs(blob, filename);
   };
@@ -622,7 +631,19 @@ const EditorContent = React.memo(function EditorContent({
               </div>
             )}
 
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-4">
+              <div
+                className="h-9 flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50"
+              >
+                <Calendar size={14} className="text-nb-primary" />
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="text-[11px] font-bold text-nb-on-surface-variant bg-transparent outline-none w-28 cursor-pointer uppercase tracking-tight"
+                />
+              </div>
+
               <div
                 className="h-9 flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50"
               >

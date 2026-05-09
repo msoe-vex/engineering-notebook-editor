@@ -223,7 +223,7 @@ export const convertJsonToLatex = (input: TipTapNode | string, resourceTypes?: R
   return convertNodeToLatex(doc as TipTapNode, resourceTypes).replace(/\n{3,}/g, "\n\n").trim() + "\n";
 };
 
-export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: string, p: string | number | null, initialCreatedAt: string | undefined, id?: string, resourceTypes?: Record<string, string>): string => {
+export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: string, p: string | number | null, initialCreatedAt: string | undefined, id?: string, resourceTypes?: Record<string, string>, date?: string): string => {
   let dateObj = initialCreatedAt ? new Date(initialCreatedAt) : new Date();
 
   // Fallback for mangled timestamps (e.g. 2026-04-28T17-36-32)
@@ -243,15 +243,19 @@ export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: strin
     resolvedResourceTypes[id] = "entry";
   }
 
-  const dateStr = dateObj.toISOString().split('T')[0];
-  let latex = `\\notebookentry{${escapeLaTeX(t)}}{${dateStr}}{${escapeLaTeX(a)}}{${p ?? ""}}{${id ?? ""}}\n\n`;
+  const dateStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+  let latex = `\\notebookentry{${escapeLaTeX(t)}}{${date || dateStr}}{${escapeLaTeX(a)}}{${p ?? ""}}{${id ?? ""}}\n\n`;
   latex += convertJsonToLatex(cnt, resolvedResourceTypes);
   return latex;
 };
 
-export const generateAllEntriesLatex = (metadata: { entries: Record<string, { id: string, createdAt: string }> }, prefix: string = `${DATA_DIR}/`): string => {
+export const generateAllEntriesLatex = (metadata: { entries: Record<string, { id: string, date: string, createdAt: string }> }, prefix: string = `${DATA_DIR}/`): string => {
   const entries = Object.values(metadata.entries)
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    .sort((a, b) => {
+      const dateComp = (b.date || "").localeCompare(a.date || "");
+      if (dateComp !== 0) return dateComp;
+      return (b.createdAt || "").localeCompare(a.createdAt || "");
+    });
 
   return entries
     .map(entry => `\\input{${prefix}latex/${entry.id}.tex}`)

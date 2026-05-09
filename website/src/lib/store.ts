@@ -1,4 +1,4 @@
-import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds, TipTapNode, buildResourceTypeIndex } from "./metadata";
+import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds, TipTapNode, buildResourceTypeIndex, getLocalDateString } from "./metadata";
 import { generateAllEntriesLatex, generateEntryLatex, generateTeamLatex, generatePhasesLatex } from "./latex";
 import { ExplorerFile, GitHubConfig, TeamTab } from "./types";
 import { getProjects, getProject, Project, getAllPending, getPending, stageChange, removeStaged, getResource, putResource, saveProject, getProjectHandle, saveProjectHandle, PendingChange } from "./db";
@@ -21,6 +21,7 @@ interface OpenFileState {
   phase: number | null;
   createdAt: string;
   updatedAt: string;
+  date: string;
 }
 
 class WorkspaceStore {
@@ -621,6 +622,7 @@ class WorkspaceStore {
         title: meta.title,
         author: meta.author,
         phase: meta.phase,
+        date: meta.date,
         createdAt: meta.createdAt,
         updatedAt: meta.updatedAt
       };
@@ -639,7 +641,7 @@ class WorkspaceStore {
     }
   }
 
-  async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null }) {
+  async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null; date: string }) {
     // 1. Update memory immediately (Source of Truth)
     if (this.openFile && this.openFile.id === id) {
       this.openFile = { ...this.openFile, ...info, tiptapContent, latex, updatedAt: new Date().toISOString() };
@@ -743,6 +745,7 @@ class WorkspaceStore {
       title: "",
       author: localStorage.getItem("nb-last-author") || "",
       phase: null,
+      date: getLocalDateString(),
       createdAt, updatedAt: createdAt, filename: path
     };
 
@@ -1116,11 +1119,16 @@ class WorkspaceStore {
         const remappedMeta = remapEntryMetadataIds(entryMetadata as unknown as EntryMetadata, idMap);
         remappedMeta.id = newId;
         remappedMeta.filename = `${ENTRIES_DIR}/${newId}.json`;
+        
+        // Ensure date exists
+        if (!remappedMeta.date) {
+          remappedMeta.date = remappedMeta.createdAt?.split('T')[0] || getLocalDateString();
+        }
 
         const contentStr = JSON.stringify({ version: 3, content: remappedDoc }, null, 2);
         const localResources = extractResources(remappedDoc as TipTapNode);
         const resourceTypes = buildResourceTypeIndex({ ...this.metadata.entries, ...newEntriesMap, [newId]: remappedMeta }, localResources, newId);
-        const latex = generateEntryLatex(remappedDoc as TipTapNode, remappedMeta.title, remappedMeta.author, remappedMeta.phase, remappedMeta.createdAt, newId, resourceTypes);
+        const latex = generateEntryLatex(remappedDoc as TipTapNode, remappedMeta.title, remappedMeta.author, remappedMeta.phase, remappedMeta.createdAt, newId, resourceTypes, remappedMeta.date);
 
         // Save entry files
         await this.persistFile(remappedMeta.filename, contentStr, `Import entry: ${remappedMeta.title}`);
