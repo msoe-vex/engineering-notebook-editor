@@ -385,8 +385,15 @@ class WorkspaceStore {
 
   private async loadLocalWorkspace() {
     if (!this.dirHandle) return;
+    
+    // Ensure core directories exist
+    await ensureLocalDirectory(this.dirHandle, ENTRIES_DIR);
+    await ensureLocalDirectory(this.dirHandle, ASSETS_DIR);
+    await ensureLocalDirectory(this.dirHandle, LATEX_DIR);
+
     const files = await listLocalFiles(this.dirHandle, ENTRIES_DIR);
     this.entries = files;
+    let isNew = false;
     try {
       const metaStr = await readLocalFile(this.dirHandle, INDEX_PATH);
       const parsed = JSON.parse(metaStr);
@@ -415,8 +422,15 @@ class WorkspaceStore {
       this.metadata = { ...EMPTY_METADATA, ...parsed };
     } catch {
       this.metadata = EMPTY_METADATA;
+      isNew = true;
+      // Initialize notebook.json
+      await writeLocalFile(this.dirHandle, INDEX_PATH, JSON.stringify(EMPTY_METADATA, null, 2));
     }
     this.isMainTexPresent = await checkLocalFileExists(this.dirHandle, "main.tex");
+    
+    if (isNew) {
+      await this.updateLatexMetadata();
+    }
   }
 
   private async loadGitHubWorkspace() {
@@ -427,6 +441,7 @@ class WorkspaceStore {
     const normalizedBase = this.config.baseDir ? this.config.baseDir.replace(/^\/+|\/+$/g, '') : '';
     const basePrefix = normalizedBase ? normalizedBase + '/' : '';
     const actualIndexPath = `${basePrefix}${INDEX_PATH}`;
+    let isNew = false;
 
     const files = await fetchDirectoryTree(this.config, `${basePrefix}${ENTRIES_DIR}`);
     const entryFiles = Array.isArray(files) ? files.map((f: GitHubFile) => ({
@@ -446,6 +461,16 @@ class WorkspaceStore {
         this.metadata = { ...EMPTY_METADATA, ...JSON.parse(metaStr) };
       } catch {
         this.metadata = EMPTY_METADATA;
+        isNew = true;
+        // Stage default metadata
+        await stageChange(dbName, {
+          path: INDEX_PATH,
+          operation: "upsert",
+          content: JSON.stringify(EMPTY_METADATA, null, 2),
+          label: "Initialize notebook.json",
+          stagedAt: new Date().toISOString()
+        });
+        await this.refreshPending();
       }
     }
 
@@ -519,6 +544,9 @@ class WorkspaceStore {
     }
 
     this.isMainTexPresent = await checkGitHubFileExists(this.config, `${basePrefix}main.tex`);
+    if (isNew) {
+      await this.updateLatexMetadata();
+    }
   }
 
   // ─── Entry Management ───────────────────────────────────────────────────────

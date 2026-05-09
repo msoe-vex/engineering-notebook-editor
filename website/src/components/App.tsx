@@ -474,7 +474,7 @@ export default function App() {
           repo: config.repo,
           branch: config.branch,
           folderPath: config.baseDir || "",
-          name: config.repo
+          name: config.baseDir ? `${config.repo}/${config.baseDir.replace(/^\/+|\/+$/g, '')}` : config.repo
         };
         const id = await createGithubProject(storeConfig);
         selectProject(id);
