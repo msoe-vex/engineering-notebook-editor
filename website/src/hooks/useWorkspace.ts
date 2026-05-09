@@ -25,6 +25,8 @@ export function useWorkspace() {
     hasEntryInUrl: store.hasEntryInUrl,
     showTeamEditor: store.showTeamEditor,
     teamTab: store.teamTab,
+    showHelp: store.showHelp,
+    helpPath: store.helpPath,
   });
 
   useEffect(() => {
@@ -48,6 +50,8 @@ export function useWorkspace() {
         hasEntryInUrl: s.hasEntryInUrl,
         showTeamEditor: s.showTeamEditor,
         teamTab: s.teamTab,
+        showHelp: s.showHelp,
+        helpPath: s.helpPath,
       });
     });
 
