@@ -86,7 +86,7 @@ class WorkspaceStore {
       this.showTeamEditor = false;
     }
 
-    if (path === '/help' || path === '/workspace/help') {
+    if (path.startsWith('/help') || path.startsWith('/workspace/help')) {
       this.showHelp = true;
       this.helpPath = path;
     } else {
