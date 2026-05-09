@@ -27,6 +27,7 @@ export function useWorkspace() {
     teamTab: store.teamTab,
     showHelp: store.showHelp,
     helpPath: store.helpPath,
+    isMainTexPresent: store.isMainTexPresent,
   });
 
   useEffect(() => {
@@ -52,6 +53,7 @@ export function useWorkspace() {
         teamTab: s.teamTab,
         showHelp: s.showHelp,
         helpPath: s.helpPath,
+        isMainTexPresent: s.isMainTexPresent,
       });
     });
 

@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTheme } from "next-themes";
 import {
-  fetchGitHubUser, initiateGitHubLogin
+  fetchGitHubUser, initiateGitHubLogin, checkGitHubFileExists
 } from "@/lib/github";
+import { checkLocalFileExists } from "@/lib/fs";
 import GitHubConnectionDialog from "./GitHubConnectionDialog";
 import { ExplorerFile, TeamTab, GitHubConfig } from "@/lib/types";
 import {
@@ -84,7 +85,8 @@ export default function App() {
     showTeamEditor,
     teamTab,
     showHelp,
-    helpPath
+    helpPath,
+    isMainTexPresent
   } = useWorkspace();
 
   // Global loading overlay for background operations (like importing/exporting)
@@ -113,6 +115,7 @@ export default function App() {
     title: string;
     message: string;
     onConfirm: () => void;
+    onCancel?: () => void;
     variant?: "danger" | "warning" | "info";
   }>({
     isOpen: false,
@@ -121,7 +124,7 @@ export default function App() {
     onConfirm: () => { },
   });
 
-  const showConfirm = (title: string, message: string, onConfirm: () => void, variant: "danger" | "warning" | "info" = "danger") => {
+  const showConfirm = useCallback((title: string, message: string, onConfirm: () => void, variant: "danger" | "warning" | "info" = "danger", onCancel?: () => void) => {
     setConfirmDialog({
       isOpen: true,
       title,
@@ -130,9 +133,13 @@ export default function App() {
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         onConfirm();
       },
+      onCancel: () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        onCancel?.();
+      },
       variant
     });
-  };
+  }, []);
 
   const [mounted, setMounted] = useState(false);
   const isMobile = useIsMobile();
@@ -142,6 +149,8 @@ export default function App() {
 
   const editorPanelRef = useRef<ImperativePanelHandle>(null);
   const previewPanelRef = useRef<ImperativePanelHandle>(null);
+  const [projectCheckedForMain, setProjectCheckedForMain] = useState<string | null>(null);
+
   const sidebarPanelRef = useRef<ImperativePanelHandle>(null);
   const isToggleFromButton = useRef(false);
   const lastSelectedPathRef = useRef<string | null>(null);
@@ -455,17 +464,32 @@ export default function App() {
   if (!mounted) return null;
   const handleCreateGithub = async (config: GitHubConfig) => {
     try {
-      // Home.tsx passes GitHubConfig, but createGithubProject in store expects a simpler object with 'name'
-      // We'll adapt it here.
-      const storeConfig = {
-        owner: config.owner,
-        repo: config.repo,
-        branch: config.branch,
-        folderPath: config.baseDir || "",
-        name: config.repo // Default name to repo name
+      const normalizedBase = config.baseDir ? config.baseDir.replace(/^\/+|\/+$/g, '') : '';
+      const basePrefix = normalizedBase ? normalizedBase + '/' : '';
+      const hasMain = await checkGitHubFileExists(config, `${basePrefix}main.tex`);
+
+      const proceed = async () => {
+        const storeConfig = {
+          owner: config.owner,
+          repo: config.repo,
+          branch: config.branch,
+          folderPath: config.baseDir || "",
+          name: config.repo
+        };
+        const id = await createGithubProject(storeConfig);
+        selectProject(id);
       };
-      const id = await createGithubProject(storeConfig);
-      selectProject(id);
+
+      if (!hasMain) {
+        showConfirm(
+          "Verify Project Root",
+          "This location doesn't appear to have a main.tex file in the root. Are you sure this is the correct project folder?",
+          proceed,
+          "warning"
+        );
+      } else {
+        await proceed();
+      }
     } catch {
       notify("Failed to create GitHub project.", "error");
     }
@@ -473,8 +497,23 @@ export default function App() {
 
   const handleCreateLocal = async (handle: FileSystemDirectoryHandle) => {
     try {
-      const id = await createLocalProject(handle, handle.name);
-      selectProject(id);
+      const hasMain = await checkLocalFileExists(handle, "main.tex");
+
+      const proceed = async () => {
+        const id = await createLocalProject(handle, handle.name);
+        selectProject(id);
+      };
+
+      if (!hasMain) {
+        showConfirm(
+          "Verify Project Root",
+          "This folder doesn't appear to have a main.tex file in the root. Are you sure you've selected the correct project folder?",
+          proceed,
+          "warning"
+        );
+      } else {
+        await proceed();
+      }
     } catch {
       notify("Failed to create Local project.", "error");
     }
@@ -798,8 +837,11 @@ export default function App() {
       />
 
       <ConfirmationDialog
-        isOpen={confirmDialog.isOpen} title={confirmDialog.title} message={confirmDialog.message}
-        onConfirm={confirmDialog.onConfirm} onCancel={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={confirmDialog.onCancel || (() => setConfirmDialog(prev => ({ ...prev, isOpen: false })))}
         variant={confirmDialog.variant}
       />
 
