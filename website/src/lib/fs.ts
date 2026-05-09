@@ -142,3 +142,17 @@ export const readLocalFile = async (rootHandle: FileSystemDirectoryHandle, path:
   const res = await getLocalFileContent(rootHandle, path);
   return res.text || "";
 };
+
+export const checkLocalFileExists = async (rootHandle: FileSystemDirectoryHandle, path: string): Promise<boolean> => {
+  try {
+    const parts = path.split('/').filter(Boolean);
+    let currentHandle = rootHandle;
+    for (let i = 0; i < parts.length - 1; i++) {
+      currentHandle = await currentHandle.getDirectoryHandle(parts[i]);
+    }
+    await currentHandle.getFileHandle(parts[parts.length - 1]);
+    return true;
+  } catch {
+    return false;
+  }
+};

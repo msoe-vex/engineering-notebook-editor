@@ -2,11 +2,11 @@ import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, validateNotebookIntegr
 import { generateAllEntriesLatex, generateEntryLatex, generateTeamLatex, generatePhasesLatex } from "./latex";
 import { ExplorerFile, GitHubConfig, TeamTab } from "./types";
 import { getProjects, getProject, Project, getAllPending, getPending, stageChange, removeStaged, getResource, putResource, saveProject, getProjectHandle, saveProjectHandle, PendingChange } from "./db";
-import { fetchFileContent, fetchDirectoryTree, fetchRawFileContent, GitHubFile } from "./github";
-import { listLocalFiles, readLocalFile, writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, ensureLocalDirectory } from "./fs";
+import { fetchFileContent, fetchDirectoryTree, fetchRawFileContent, GitHubFile, checkGitHubFileExists } from "./github";
+import { listLocalFiles, readLocalFile, writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, ensureLocalDirectory, checkLocalFileExists } from "./fs";
 import { INDEX_PATH, ENTRIES_DIR, ENTRIES_INDEX_PATH, LATEX_DIR, ASSETS_DIR, TEAM_PATH, PHASES_PATH } from "./constants";
 import { events, EventNames } from "./events";
-import { generateUUID, getMimeTypeFromExtension, generateDeterministicUUID } from "./utils";
+import { generateUUID, getMimeTypeFromExtension, generateDeterministicUUID, formatDateMonthYear } from "./utils";
 
 export type WorkspaceMode = "local" | "github" | "temporary" | "none";
 
@@ -44,6 +44,7 @@ class WorkspaceStore {
   public isInitialized = false;
   public projects: Project[] = [];
   public pendingChanges: PendingChange[] = [];
+  public isMainTexPresent: boolean = true;
   public assetCache = new Map<string, string>();
   public selectedPaths: Set<string> = new Set();
 
@@ -384,8 +385,15 @@ class WorkspaceStore {
 
   private async loadLocalWorkspace() {
     if (!this.dirHandle) return;
+    
+    // Ensure core directories exist
+    await ensureLocalDirectory(this.dirHandle, ENTRIES_DIR);
+    await ensureLocalDirectory(this.dirHandle, ASSETS_DIR);
+    await ensureLocalDirectory(this.dirHandle, LATEX_DIR);
+
     const files = await listLocalFiles(this.dirHandle, ENTRIES_DIR);
     this.entries = files;
+    let isNew = false;
     try {
       const metaStr = await readLocalFile(this.dirHandle, INDEX_PATH);
       const parsed = JSON.parse(metaStr);
@@ -414,6 +422,14 @@ class WorkspaceStore {
       this.metadata = { ...EMPTY_METADATA, ...parsed };
     } catch {
       this.metadata = EMPTY_METADATA;
+      isNew = true;
+      // Initialize notebook.json
+      await writeLocalFile(this.dirHandle, INDEX_PATH, JSON.stringify(EMPTY_METADATA, null, 2));
+    }
+    this.isMainTexPresent = await checkLocalFileExists(this.dirHandle, "main.tex");
+    
+    if (isNew) {
+      await this.updateLatexMetadata();
     }
   }
 
@@ -425,6 +441,7 @@ class WorkspaceStore {
     const normalizedBase = this.config.baseDir ? this.config.baseDir.replace(/^\/+|\/+$/g, '') : '';
     const basePrefix = normalizedBase ? normalizedBase + '/' : '';
     const actualIndexPath = `${basePrefix}${INDEX_PATH}`;
+    let isNew = false;
 
     const files = await fetchDirectoryTree(this.config, `${basePrefix}${ENTRIES_DIR}`);
     const entryFiles = Array.isArray(files) ? files.map((f: GitHubFile) => ({
@@ -444,6 +461,16 @@ class WorkspaceStore {
         this.metadata = { ...EMPTY_METADATA, ...JSON.parse(metaStr) };
       } catch {
         this.metadata = EMPTY_METADATA;
+        isNew = true;
+        // Stage default metadata
+        await stageChange(dbName, {
+          path: INDEX_PATH,
+          operation: "upsert",
+          content: JSON.stringify(EMPTY_METADATA, null, 2),
+          label: "Initialize notebook.json",
+          stagedAt: new Date().toISOString()
+        });
+        await this.refreshPending();
       }
     }
 
@@ -514,6 +541,11 @@ class WorkspaceStore {
         }
       }
       await Promise.all(tasks);
+    }
+
+    this.isMainTexPresent = await checkGitHubFileExists(this.config, `${basePrefix}main.tex`);
+    if (isNew) {
+      await this.updateLatexMetadata();
     }
   }
 
@@ -882,7 +914,27 @@ class WorkspaceStore {
   }
 
   private async updateLatexMetadata() {
-    const teamLatex = generateTeamLatex(this.metadata.team || { teamName: "", teamNumber: "", startDate: "", endDate: "", organization: "", members: [] });
+    // Calculate start and end dates based on entries
+    const entryDates = Object.values(this.metadata.entries)
+      .map(e => e.date)
+      .filter(Boolean)
+      .sort();
+
+    const startDate = entryDates.length > 0 ? entryDates[0] : "TBD";
+    const endDate = entryDates.length > 0 ? entryDates[entryDates.length - 1] : "TBD";
+
+    // Update team metadata in memory so generateTeamLatex picks it up
+    const teamInfo = {
+      teamName: "",
+      teamNumber: "",
+      organization: "",
+      members: [],
+      ...(this.metadata.team || {}),
+      startDate: formatDateMonthYear(startDate),
+      endDate: formatDateMonthYear(endDate)
+    };
+
+    const teamLatex = generateTeamLatex(teamInfo);
     const phasesLatex = generatePhasesLatex(this.metadata.phases || []);
     const allEntriesLatex = generateAllEntriesLatex(this.metadata);
 

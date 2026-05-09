@@ -117,3 +117,25 @@ export async function convertSvgToPng(svgDataUrl: string, scale: number = 2): Pr
     img.src = svgDataUrl;
   });
 }
+
+/**
+ * Formats a date string into "Month YYYY" (e.g. "September 2024")
+ */
+export function formatDateMonthYear(dateStr: string): string {
+  if (!dateStr || dateStr === "TBD") return "TBD";
+  try {
+    // Handle YYYY-MM-DD format carefully to avoid timezone shifts
+    const parts = dateStr.split('-');
+    if (parts.length >= 2) {
+      const year = parseInt(parts[0]);
+      const month = parseInt(parts[1]) - 1;
+      const date = new Date(year, month);
+      return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    }
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return dateStr;
+    return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  } catch {
+    return dateStr;
+  }
+}
