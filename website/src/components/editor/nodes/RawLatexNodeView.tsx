@@ -33,7 +33,7 @@ export function RawLatexNodeView({ node, deleteNode, selected, editor, updateAtt
       </div>
 
       <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${selected ? 'ring-2 ring-nb-primary/50' : ''}`}>
-        <div className="flex items-center justify-between px-4 py-2 bg-nb-surface-low/50 border-b border-nb-outline-variant/10">
+        <div className="flex items-center justify-between px-4 py-2 bg-nb-surface-low/50 border-b border-nb-outline-variant/10 overflow-x-auto scrollbar-hide">
           <div className="flex-1 flex items-center gap-2">
             <Terminal size={12} className="text-nb-primary shrink-0" />
             <input

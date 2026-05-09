@@ -365,6 +365,20 @@ export default function App() {
     }
   }, [isMobile, viewMode]);
 
+  // Close sidebar on mobile when an entry is opened or created
+  useEffect(() => {
+    if (isMobile && openFile?.id) {
+      setUserSidebarPreference(false);
+    }
+  }, [isMobile, openFile?.id]);
+
+  // Close sidebar on mobile when a project is selected
+  useEffect(() => {
+    if (isMobile && currentProjectId) {
+      setUserSidebarPreference(false);
+    }
+  }, [isMobile, currentProjectId]);
+
   const handleSetViewMode = (mode: ViewMode) => {
     const viewParam = mode === "preview" ? "latex" : mode;
     navigateTo({ view: viewParam });
@@ -377,6 +391,7 @@ export default function App() {
       setSelectedPaths(new Set([path]));
       lastSelectedPathRef.current = path;
       navigateTo({ entry: id }, '/workspace/editor');
+      if (isMobile) setUserSidebarPreference(false);
     } catch {
       notify("Failed to create entry.", "error");
     }
@@ -412,6 +427,12 @@ export default function App() {
       lastSelectedPathRef.current = file.path;
     }
   };
+
+  const handleOpenEntry = useCallback((file: ExplorerFile) => {
+    const id = file.name.replace('.json', '');
+    navigateTo({ entry: id, resource: null }, '/workspace/editor');
+    if (isMobile) setUserSidebarPreference(false);
+  }, [isMobile, navigateTo]);
 
   const handleOpenTeamEditor = (tab: TeamTab = "identity") => {
     navigateTo({}, `/workspace/team/${tab}`);
@@ -559,6 +580,7 @@ export default function App() {
         <Sidebar
           selectedPaths={selectedPaths}
           onSelectEntry={handleSelectEntry}
+          onOpenEntry={handleOpenEntry}
           onOpenTeam={handleOpenTeamEditor}
           showConfirm={showConfirm}
           onNewEntry={handleNewEntry}
@@ -663,10 +685,10 @@ export default function App() {
             })()}
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto custom-scrollbar bg-nb-bg">
+          <div className="flex-1 h-full overflow-y-auto custom-scrollbar bg-nb-bg">
             <WelcomePage
               workspace={{ mode: mode as "local" | "github" | "temporary", label: workspaceLabel }}
-              onNewEntry={createEntry}
+              onNewEntry={handleNewEntry}
               onImportEntry={() => importEntryInputRef.current?.click()}
               onDisconnect={handleDisconnect}
               onOpenSidebar={() => { isToggleFromButton.current = true; setUserSidebarPreference(true); }}
