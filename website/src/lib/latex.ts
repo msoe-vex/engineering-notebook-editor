@@ -252,9 +252,9 @@ export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: strin
 export const generateAllEntriesLatex = (metadata: { entries: Record<string, { id: string, date: string, createdAt: string }> }, prefix: string = `${DATA_DIR}/`): string => {
   const entries = Object.values(metadata.entries)
     .sort((a, b) => {
-      const dateComp = (b.date || "").localeCompare(a.date || "");
+      const dateComp = (a.date || "").localeCompare(b.date || "");
       if (dateComp !== 0) return dateComp;
-      return (b.createdAt || "").localeCompare(a.createdAt || "");
+      return (a.createdAt || "").localeCompare(b.createdAt || "");
     });
 
   return entries
