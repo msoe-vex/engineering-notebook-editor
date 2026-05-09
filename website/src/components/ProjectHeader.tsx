@@ -1,4 +1,4 @@
-import { Menu, Sun, Moon, FolderGit } from "lucide-react";
+import { Menu, Sun, Moon, FolderGit, HelpCircle } from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import ViewToggle, { ViewMode } from "./ViewToggle";
 
@@ -15,6 +15,7 @@ interface ProjectHeaderProps {
   onEndRename: (save: boolean) => void;
   isDarkMode: boolean;
   onToggleTheme: () => void;
+  onOpenHelp: () => void;
   mounted: boolean;
 }
 
@@ -31,6 +32,7 @@ export default function ProjectHeader({
   onEndRename,
   isDarkMode,
   onToggleTheme,
+  onOpenHelp,
   mounted
 }: ProjectHeaderProps) {
   const { currentProject, openFile } = useWorkspace();
@@ -94,6 +96,13 @@ export default function ProjectHeader({
         {isEntryOpen && !isMobile && (
           <ViewToggle viewMode={viewMode} onSetViewMode={onSetViewMode} isMobile={false} />
         )}
+        <button
+          onClick={onOpenHelp}
+          className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer"
+          title="Help & Documentation"
+        >
+          <HelpCircle size={16} />
+        </button>
         <button
           onClick={onToggleTheme}
           className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer"

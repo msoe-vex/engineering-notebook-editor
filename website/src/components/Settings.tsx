@@ -4,7 +4,7 @@ import { GITHUB_ISSUES_URL } from "@/lib/constants";
 import React, { useState, useEffect } from "react";
 import {
   BookOpen, Moon, Sun, GitBranch, Folder, HardDrive, Trash2, Clock, Plus,
-  ArrowRight, History, Edit2, Check, X, AlertCircle, FolderGit
+  ArrowRight, History, Edit2, Check, X, AlertCircle, FolderGit, HelpCircle
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import GitHubConnectionDialog from "./GitHubConnectionDialog";
@@ -24,6 +24,7 @@ interface SettingsProps {
   isExchangingGithubCode?: boolean;
   autoOpenGithubModal?: boolean;
   onCloseGithubModal?: () => void;
+  onOpenHelp: () => void;
   pendingCounts?: Record<string, number>;
 }
 
@@ -44,6 +45,7 @@ export default function Settings({
   isExchangingGithubCode = false,
   autoOpenGithubModal = false,
   onCloseGithubModal,
+  onOpenHelp,
 }: SettingsProps) {
   const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -328,7 +330,14 @@ export default function Settings({
         projects={projects}
       />
       {/* Footer */}
-      <div className="w-full max-w-4xl mt-12 flex items-center justify-center border-t border-nb-outline-variant/20 pt-8">
+      <div className="w-full max-w-4xl mt-12 flex items-center justify-center gap-4 border-t border-nb-outline-variant/20 pt-8">
+        <button
+          onClick={onOpenHelp}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-nb-surface border border-nb-outline-variant/30 text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary/50 transition-all shadow-nb-sm cursor-pointer"
+        >
+          <HelpCircle size={14} />
+          Help & Guide
+        </button>
         <a
           href={GITHUB_ISSUES_URL}
           target="_blank"

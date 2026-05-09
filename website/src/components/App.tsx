@@ -17,11 +17,12 @@ import Preview from "./Preview";
 import WelcomePage from "./WelcomePage";
 import Sidebar from "./Sidebar";
 import TeamEditor from "./TeamEditor";
+import HelpPage from "./HelpPage";
 import ProjectHeader from "./ProjectHeader";
 import { ViewMode } from "./ViewToggle";
 import ConfirmationDialog from "./ConfirmationDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { HardDrive, ArrowLeftRight, X, BookOpen, Download, Loader2, Upload } from "lucide-react";
+import { HardDrive, ArrowLeftRight, X, BookOpen, Download, Loader2, Upload, Menu, Sun, Moon, FolderGit, HelpCircle } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { ENTRIES_DIR, } from "@/lib/constants";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -81,7 +82,9 @@ export default function App() {
     setSelectedPaths,
     hasEntryInUrl,
     showTeamEditor,
-    teamTab
+    teamTab,
+    showHelp,
+    helpPath
   } = useWorkspace();
 
   // Global loading overlay for background operations (like importing/exporting)
@@ -151,6 +154,14 @@ export default function App() {
   const navigateToHome = useCallback(() => {
     navigateTo({ project: null, entry: null, resource: null }, '/');
   }, [navigateTo]);
+
+  const handleCloseHelp = useCallback(() => {
+    if (currentProjectId) {
+      navigateTo({}, '/workspace/editor');
+    } else {
+      navigateToHome();
+    }
+  }, [currentProjectId, navigateTo, navigateToHome]);
 
   const onSignOutGithub = useCallback(() => {
     localStorage.removeItem("nb-github-token");
@@ -534,7 +545,7 @@ export default function App() {
     <div className="flex flex-col h-full overflow-hidden bg-nb-surface-low">
       <div className="flex items-center gap-3 px-4 h-14 border-b border-nb-outline-variant shrink-0 bg-nb-surface">
         <div className="w-6 h-6 rounded-md bg-nb-primary flex items-center justify-center shadow-sm shadow-nb-primary/20">
-          <button onClick={navigateToHome} title="Home" className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors"><BookOpen size={14} className="text-white" /></button>
+          <button onClick={handleDisconnect} title="Home" className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors"><BookOpen size={14} className="text-white" /></button>
         </div>
         <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-nb-on-surface truncate">Notebook</p></div>
         <div className="flex items-center gap-1">
@@ -571,6 +582,7 @@ export default function App() {
         onEndRename={(save) => { if (save && currentProjectId) handleRenameProject(currentProjectId, projectRenameValue); setIsRenamingProject(false); }}
         isDarkMode={isDarkMode}
         onToggleTheme={() => setTheme(isDarkMode ? "light" : "dark")}
+        onOpenHelp={() => navigateTo({}, '/workspace/help')}
         mounted={mounted}
       />
 
@@ -658,6 +670,7 @@ export default function App() {
             onDisconnect={handleDisconnect}
             onOpenSidebar={() => { isToggleFromButton.current = true; setUserSidebarPreference(true); }}
             onOpenTeam={handleOpenTeamEditor}
+            onOpenHelp={() => navigateTo({}, '/help')}
           />
         )}
       </div>
@@ -685,6 +698,7 @@ export default function App() {
           isExchangingGithubCode={isExchangingCode}
           autoOpenGithubModal={autoOpenGithubModal}
           onCloseGithubModal={() => setAutoOpenGithubModal(false)}
+          onOpenHelp={() => navigateTo({}, '/help')}
         />
       ) : (
         <div className="flex w-full h-full relative overflow-hidden">
@@ -716,6 +730,14 @@ export default function App() {
             </PanelGroup>
           )}
         </div>
+      )}
+
+      {/* Help Page Overlay */}
+      {showHelp && helpPath && (
+        <HelpPage
+          path={helpPath}
+          onClose={handleCloseHelp}
+        />
       )}
 
       {/* Notifications */}
