@@ -1,4 +1,4 @@
-import { Menu, Sun, Moon } from "lucide-react";
+import { Menu, Sun, Moon, FolderGit } from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import ViewToggle, { ViewMode } from "./ViewToggle";
 
@@ -63,16 +63,29 @@ export default function ProjectHeader({
               className="bg-nb-surface-low border border-nb-primary/30 px-3 py-1 rounded-lg text-sm font-bold text-nb-on-surface outline-none focus:ring-2 focus:ring-nb-primary/30 w-full max-w-[300px]"
             />
           ) : (
-            <span
-              onClick={() => {
-                if (currentProject?.id === "temporary") return;
-                onStartRename();
-              }}
-              className={`text-sm font-bold text-nb-on-surface truncate max-w-[300px] transition-colors px-2 py-1 rounded-md ${currentProject?.id === "temporary" ? "" : "cursor-pointer hover:text-nb-primary hover:bg-nb-surface-low"}`}
-              title={currentProject?.id === "temporary" ? "" : "Click to rename project"}
-            >
-              {currentProject?.id === "temporary" ? "Temporary Workspace" : (currentProject?.name || "Engineering Notebook")}
-            </span>
+            <div className="flex items-center gap-2 max-w-[350px] min-w-0">
+              <span
+                onClick={() => {
+                  if (currentProject?.id === "temporary") return;
+                  onStartRename();
+                }}
+                className={`text-sm font-bold text-nb-on-surface truncate transition-colors px-2 py-1 rounded-md ${currentProject?.id === "temporary" ? "" : "cursor-pointer hover:text-nb-primary hover:bg-nb-surface-low"}`}
+                title={currentProject?.id === "temporary" ? "" : "Click to rename project"}
+              >
+                {currentProject?.id === "temporary" ? "Temporary Workspace" : (currentProject?.name || "Engineering Notebook")}
+              </span>
+              {currentProject?.type === "github" && currentProject.githubConfig && (
+                <a
+                  href={`https://github.com/${currentProject.githubConfig.owner}/${currentProject.githubConfig.repo}/tree/${currentProject.githubConfig.branch}${currentProject.githubConfig.folderPath ? '/' + currentProject.githubConfig.folderPath : ''}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-1.5 rounded-lg text-nb-on-surface-variant/40 hover:text-nb-tertiary hover:bg-nb-tertiary/5 transition-all cursor-pointer shrink-0"
+                  title="Open on GitHub"
+                >
+                  <FolderGit size={14} />
+                </a>
+              )}
+            </div>
           )
         )}
       </div>

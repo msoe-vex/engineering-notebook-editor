@@ -62,6 +62,7 @@ export function useWorkspace() {
   const getDBName = useCallback(() => store.getDBName(), []);
   const disconnect = useCallback(() => store.disconnect(), []);
   const refreshProjects = useCallback(() => store.refreshProjects(), []);
+  const renameProject = useCallback((id: string, name: string) => store.renameProject(id, name), []);
   const selectProject = useCallback((id: string) => store.selectProject(id), []);
   const createEntry = useCallback(() => store.createEntry(), []);
   const deleteEntry = useCallback((file: ExplorerFile) => store.deleteEntry(file), []);
@@ -87,6 +88,7 @@ export function useWorkspace() {
     getDBName,
     disconnect,
     refreshProjects,
+    renameProject,
     selectProject,
     createEntry,
     deleteEntry,

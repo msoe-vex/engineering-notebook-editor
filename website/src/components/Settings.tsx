@@ -4,7 +4,7 @@ import { GITHUB_ISSUES_URL } from "@/lib/constants";
 import React, { useState, useEffect } from "react";
 import {
   BookOpen, Moon, Sun, GitBranch, Folder, HardDrive, Trash2, Clock, Plus,
-  ArrowRight, History, Edit2, Check, X, AlertCircle
+  ArrowRight, History, Edit2, Check, X, AlertCircle, FolderGit
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import GitHubConnectionDialog from "./GitHubConnectionDialog";
@@ -273,6 +273,18 @@ export default function Settings({
                     >
                       <Edit2 size={16} />
                     </button>
+                  )}
+                  {project.type === "github" && project.githubConfig && (
+                    <a
+                      href={`https://github.com/${project.githubConfig.owner}/${project.githubConfig.repo}/tree/${project.githubConfig.branch}${project.githubConfig.folderPath ? '/' + project.githubConfig.folderPath : ''}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="p-2.5 rounded-xl text-nb-on-surface-variant hover:text-nb-tertiary hover:bg-nb-tertiary/5 transition-all cursor-pointer"
+                      title="Open on GitHub"
+                    >
+                      <FolderGit size={16} />
+                    </a>
                   )}
                   <button
                     onClick={(e) => { e.stopPropagation(); onDeleteProject(project.id); }}

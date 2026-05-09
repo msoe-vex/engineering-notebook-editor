@@ -156,7 +156,23 @@ class WorkspaceStore {
   // ─── Project Management ─────────────────────────────────────────────────────
   async refreshProjects() {
     this.projects = await getProjects();
+    // Sync currentProject if it was renamed
+    if (this.currentProjectId && this.currentProject) {
+      const updated = this.projects.find(p => p.id === this.currentProjectId);
+      if (updated && updated.name !== this.currentProject.name) {
+        this.currentProject = { ...updated };
+      }
+    }
     this.notifyStateChange();
+  }
+
+  async renameProject(id: string, name: string) {
+    const p = await getProject(id);
+    if (p) {
+      p.name = name;
+      await saveProject(p);
+      await this.refreshProjects();
+    }
   }
 
   async createGithubProject(config: { owner: string; repo: string; branch: string; folderPath: string; name: string }) {
