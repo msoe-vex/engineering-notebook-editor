@@ -12,6 +12,7 @@ import Image from "next/image";
 import {
   DndContext,
   closestCenter,
+  closestCorners,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -26,6 +27,7 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
+  rectSortingStrategy,
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -197,6 +199,147 @@ const PhaseCard = memo(({
 });
 
 PhaseCard.displayName = "PhaseCard";
+ 
+ const MemberCard = memo(({
+   member,
+   handleMemberChange,
+   removeMember,
+   attributes,
+   listeners,
+   isOverlay = false
+ }: {
+   member: TeamMember,
+   handleMemberChange?: (id: string, field: keyof TeamMember, value: string) => void,
+   removeMember?: (id: string) => void,
+   attributes?: DraggableAttributes,
+   listeners?: Record<string, unknown>,
+   isOverlay?: boolean
+ }) => {
+   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+     const file = e.target.files?.[0];
+     if (!file) return;
+ 
+     const reader = new FileReader();
+     reader.onloadend = () => {
+       handleMemberChange?.(member.id, "image", reader.result as string);
+     };
+     reader.readAsDataURL(file);
+   };
+ 
+   return (
+     <div
+       className={`group flex items-center gap-4 p-5 rounded-[28px] bg-nb-surface border border-nb-outline-variant hover:border-nb-primary/30 hover:shadow-nb-lg transition-all ${isOverlay ? 'shadow-nb-2xl border-nb-primary ring-2 ring-nb-primary/10' : ''}`}
+     >
+       <div
+         {...attributes}
+         {...listeners}
+         className="p-2 -ml-2 rounded-lg text-nb-on-surface-variant/20 hover:text-nb-on-surface-variant/60 hover:bg-nb-surface-low cursor-grab active:cursor-grabbing transition-all shrink-0"
+       >
+         <GripVertical size={16} />
+       </div>
+ 
+       {/* Member Avatar */}
+       <div className="relative">
+         <div className="w-20 h-24 rounded-2xl bg-nb-surface-low border-2 border-nb-outline-variant/30 overflow-hidden flex items-center justify-center">
+           {member.image ? (
+             <div className="relative w-full h-full">
+               <Image src={member.image} alt={member.name} fill className="object-cover" unoptimized />
+             </div>
+           ) : (
+             <User size={24} className="text-nb-on-surface-variant/20" />
+           )}
+         </div>
+         <label className="absolute -bottom-1 -right-1 p-2 rounded-xl bg-nb-surface border border-nb-outline-variant shadow-sm text-nb-on-surface-variant hover:text-nb-primary cursor-pointer transition-colors">
+           <Camera size={12} />
+           <input
+             type="file"
+             className="hidden"
+             accept="image/*"
+             onChange={handleImageUpload}
+           />
+         </label>
+       </div>
+ 
+       {/* Member Info */}
+       <div className="flex-1 space-y-3">
+         <div className="relative">
+           <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-nb-on-surface-variant/40" />
+           <input
+             type="text"
+             value={member.name}
+             onChange={e => handleMemberChange?.(member.id, "name", e.target.value)}
+             placeholder="Name"
+             className="w-full bg-nb-surface-low border border-nb-outline-variant/50 rounded-xl pl-9 pr-3 py-1.5 text-xs font-bold text-nb-on-surface focus:outline-none focus:ring-1 focus:ring-nb-primary/30 transition-all"
+           />
+         </div>
+         <div className="relative">
+           <Briefcase size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-nb-on-surface-variant/40" />
+           <input
+             type="text"
+             value={member.role}
+             onChange={e => handleMemberChange?.(member.id, "role", e.target.value)}
+             placeholder="Role"
+             className="w-full bg-nb-surface-low border border-nb-outline-variant/50 rounded-xl pl-9 pr-3 py-1.5 text-xs font-bold text-nb-on-surface focus:outline-none focus:ring-1 focus:ring-nb-primary/30 transition-all"
+           />
+         </div>
+       </div>
+ 
+       <button
+         onClick={() => removeMember?.(member.id)}
+         className="p-3 rounded-xl text-nb-on-surface-variant hover:text-red-500 hover:bg-red-50 transition-all cursor-pointer"
+         title="Remove Member"
+       >
+         <Trash2 size={18} />
+       </button>
+     </div>
+   );
+ });
+ 
+ MemberCard.displayName = "MemberCard";
+ 
+ const MemberRow = memo(({
+   member,
+   handleMemberChange,
+   removeMember
+ }: {
+   member: TeamMember,
+   handleMemberChange: (id: string, field: keyof TeamMember, value: string) => void,
+   removeMember: (id: string) => void
+ }) => {
+   const {
+     attributes,
+     listeners,
+     setNodeRef,
+     transform,
+     transition,
+     isDragging
+   } = useSortable({ id: member.id });
+ 
+   const style = {
+     transform: CSS.Transform.toString(transform),
+     transition: transition || 'transform 150ms cubic-bezier(0.2, 0, 0, 1), opacity 150ms ease',
+   };
+ 
+   return (
+     <div
+       ref={setNodeRef}
+       style={style}
+       className={`group/row ${isDragging ? 'z-[100]' : ''}`}
+     >
+       <div className={`transition-all ${isDragging ? 'opacity-0 duration-0' : 'opacity-100 duration-200 delay-150'}`}>
+         <MemberCard
+           member={member}
+           handleMemberChange={handleMemberChange}
+           removeMember={removeMember}
+           attributes={attributes}
+           listeners={listeners}
+         />
+       </div>
+     </div>
+   );
+ });
+ 
+ MemberRow.displayName = "MemberRow";
 
 const PhaseRow = memo(({
   phase,
@@ -260,7 +403,14 @@ export default function TeamEditor({
     saveTeam
   } = useWorkspace();
 
-  const initialData = metadata.team || { teamName: "", teamNumber: "", organization: "", logo: "", members: [] };
+  const initialData = useMemo(() => {
+    const data = metadata.team || { teamName: "", teamNumber: "", organization: "", logo: "", members: [] };
+    return {
+      ...data,
+      members: data.members.map(m => ({ ...m, id: m.id || generateUUID() }))
+    };
+  }, [metadata.team]);
+
   const initialPhases = metadata.phases || DEFAULT_PHASES;
 
   const [teamData, setTeamData] = useState<TeamMetadata>(initialData);
@@ -308,25 +458,29 @@ export default function TeamEditor({
     setHasChanges(true);
   };
 
-  const handleMemberChange = (index: number, field: keyof TeamMember, value: string) => {
-    const newMembers = [...teamData.members];
-    newMembers[index] = { ...newMembers[index], [field]: value };
-    setTeamData(prev => ({ ...prev, members: newMembers }));
+  const handleMemberChange = (id: string, field: keyof TeamMember, value: string) => {
+    setTeamData(prev => {
+      const index = prev.members.findIndex(m => m.id === id);
+      if (index === -1) return prev;
+      const newMembers = [...prev.members];
+      newMembers[index] = { ...newMembers[index], [field]: value };
+      return { ...prev, members: newMembers };
+    });
     setHasChanges(true);
   };
 
   const addMember = () => {
     setTeamData(prev => ({
       ...prev,
-      members: [...prev.members, { name: "", role: "", image: "" }]
+      members: [...prev.members, { id: generateUUID(), name: "", role: "", image: "" }]
     }));
     setHasChanges(true);
   };
 
-  const removeMember = (index: number) => {
+  const removeMember = (id: string) => {
     setTeamData(prev => ({
       ...prev,
-      members: prev.members.filter((_, i) => i !== index)
+      members: prev.members.filter(m => m.id !== id)
     }));
     setHasChanges(true);
   };
@@ -378,13 +532,22 @@ export default function TeamEditor({
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
-      setPhases((items) => {
-        const oldIndex = items.findIndex(p => p.id === active.id);
-        const newIndex = items.findIndex(p => p.id === over.id);
-        const moved = arrayMove(items, oldIndex, newIndex);
-        // Re-assign indices to match the new order (1-based)
-        return moved.map((p, i) => ({ ...p, index: i + 1 }));
-      });
+      if (activeTab === "phases") {
+        setPhases((items) => {
+          const oldIndex = items.findIndex(p => p.id === active.id);
+          const newIndex = items.findIndex(p => p.id === over.id);
+          const moved = arrayMove(items, oldIndex, newIndex);
+          // Re-assign indices to match the new order (1-based)
+          return moved.map((p, i) => ({ ...p, index: i + 1 }));
+        });
+      } else if (activeTab === "members") {
+        setTeamData(prev => {
+          const oldIndex = prev.members.findIndex(m => m.id === active.id);
+          const newIndex = prev.members.findIndex(m => m.id === over.id);
+          const moved = arrayMove(prev.members, oldIndex, newIndex);
+          return { ...prev, members: moved };
+        });
+      }
       setHasChanges(true);
     }
     setActiveId(null);
@@ -567,78 +730,48 @@ export default function TeamEditor({
 
           {activeTab === "members" && (
             <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {teamData.members.map((member, index) => (
-                  <div
-                    key={index}
-                    className="group flex items-center gap-4 p-5 rounded-[28px] bg-nb-surface border border-nb-outline-variant hover:border-nb-primary/30 hover:shadow-nb-lg transition-all"
-                  >
-                    {/* Member Avatar */}
-                    <div className="relative">
-                      <div className="w-20 h-24 rounded-2xl bg-nb-surface-low border-2 border-nb-outline-variant/30 overflow-hidden flex items-center justify-center">
-                        {member.image ? (
-                          <div className="relative w-full h-full">
-                            <Image src={member.image} alt={member.name} fill className="object-cover" unoptimized />
-                          </div>
-                        ) : (
-                          <User size={24} className="text-nb-on-surface-variant/20" />
-                        )}
-                      </div>
-                      <label className="absolute -bottom-1 -right-1 p-2 rounded-xl bg-nb-surface border border-nb-outline-variant shadow-sm text-nb-on-surface-variant hover:text-nb-primary cursor-pointer transition-colors">
-                        <Camera size={12} />
-                        <input
-                          type="file"
-                          className="hidden"
-                          accept="image/*"
-                          onChange={e => handleImageUpload(e, base64 => handleMemberChange(index, "image", base64))}
-                        />
-                      </label>
-                    </div>
-
-                    {/* Member Info */}
-                    <div className="flex-1 space-y-3">
-                      <div className="relative">
-                        <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-nb-on-surface-variant/40" />
-                        <input
-                          type="text"
-                          value={member.name}
-                          onChange={e => handleMemberChange(index, "name", e.target.value)}
-                          placeholder="Name"
-                          className="w-full bg-nb-surface-low border border-nb-outline-variant/50 rounded-xl pl-9 pr-3 py-1.5 text-xs font-bold text-nb-on-surface focus:outline-none focus:ring-1 focus:ring-nb-primary/30 transition-all"
-                        />
-                      </div>
-                      <div className="relative">
-                        <Briefcase size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-nb-on-surface-variant/40" />
-                        <input
-                          type="text"
-                          value={member.role}
-                          onChange={e => handleMemberChange(index, "role", e.target.value)}
-                          placeholder="Role"
-                          className="w-full bg-nb-surface-low border border-nb-outline-variant/50 rounded-xl pl-9 pr-3 py-1.5 text-xs font-bold text-nb-on-surface focus:outline-none focus:ring-1 focus:ring-nb-primary/30 transition-all"
-                        />
-                      </div>
-                    </div>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCorners}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={teamData.members.map(m => m.id)}
+                  strategy={rectSortingStrategy}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {teamData.members.map((member) => (
+                      <MemberRow
+                        key={member.id}
+                        member={member}
+                        handleMemberChange={handleMemberChange}
+                        removeMember={removeMember}
+                      />
+                    ))}
 
                     <button
-                      onClick={() => removeMember(index)}
-                      className="p-3 rounded-xl text-nb-on-surface-variant hover:text-red-500 hover:bg-red-50 transition-all cursor-pointer"
-                      title="Remove Member"
+                      onClick={addMember}
+                      className="flex flex-col items-center justify-center p-8 rounded-[28px] border-2 border-dashed border-nb-outline-variant/30 text-nb-on-surface-variant hover:border-nb-primary hover:text-nb-primary hover:bg-nb-primary/5 transition-all group cursor-pointer"
                     >
-                      <Trash2 size={18} />
+                      <div className="w-10 h-10 rounded-full bg-nb-outline-variant/10 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                        <Plus size={20} />
+                      </div>
+                      <span className="text-xs font-black uppercase tracking-widest">Add Member</span>
                     </button>
                   </div>
-                ))}
-
-                <button
-                  onClick={addMember}
-                  className="flex flex-col items-center justify-center p-8 rounded-[28px] border-2 border-dashed border-nb-outline-variant/30 text-nb-on-surface-variant hover:border-nb-primary hover:text-nb-primary hover:bg-nb-primary/5 transition-all group cursor-pointer"
-                >
-                  <div className="w-10 h-10 rounded-full bg-nb-outline-variant/10 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                    <Plus size={20} />
-                  </div>
-                  <span className="text-xs font-black uppercase tracking-widest">Add Member</span>
-                </button>
-              </div>
+                </SortableContext>
+                <DragOverlay>
+                  {activeId && teamData.members.find(m => m.id === activeId) ? (
+                    <div className="w-[400px]">
+                      <MemberCard
+                        member={teamData.members.find(m => m.id === activeId)!}
+                        isOverlay
+                      />
+                    </div>
+                  ) : null}
+                </DragOverlay>
+              </DndContext>
             </div>
           )}
 
