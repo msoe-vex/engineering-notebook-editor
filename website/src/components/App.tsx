@@ -11,7 +11,7 @@ import {
   Project, deleteProject, deleteProjectHandle, deleteProjectDatabase,
   getProjectDBName
 } from "@/lib/db";
-import Settings from "./Settings";
+import Home from "./Home";
 import Editor from "./Editor";
 import Preview from "./Preview";
 import WelcomePage from "./WelcomePage";
@@ -437,7 +437,7 @@ export default function App() {
   if (!mounted) return null;
   const handleCreateGithub = async (config: GitHubConfig) => {
     try {
-      // Settings.tsx passes GitHubConfig, but createGithubProject in store expects a simpler object with 'name'
+      // Home.tsx passes GitHubConfig, but createGithubProject in store expects a simpler object with 'name'
       // We'll adapt it here.
       const storeConfig = {
         owner: config.owner,
@@ -686,7 +686,7 @@ export default function App() {
 
       {mode === "none" ? (
         <div className="flex-1 overflow-y-auto custom-scrollbar">
-          <Settings
+          <Home
             projects={projects}
             onSelectProject={selectProject}
             onDeleteProject={handleDeleteProject}
