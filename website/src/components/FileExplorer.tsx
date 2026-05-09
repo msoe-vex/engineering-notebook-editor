@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import {
-  FileText, Plus, X, Clock, Calendar, SortAsc, SortDesc, CalendarDays,
+  FileText, Plus, X, Calendar, SortAsc, SortDesc, CalendarDays,
   Search, ChevronDown, AlertTriangle, ExternalLink, Trash2, FileJson, FileCode,
   Download
 } from "lucide-react";
@@ -30,8 +30,8 @@ interface FileExplorerProps {
   onNewEntry: () => void;
   search: string;
   onSearchChange: (val: string) => void;
-  sortBy: "created" | "updated" | "title";
-  onSortChange: (val: "created" | "updated" | "title") => void;
+  sortBy: "date" | "title";
+  onSortChange: (val: "date" | "title") => void;
   sortDirection: "asc" | "desc";
   onSortDirectionToggle: () => void;
   dateRange: { start: string; end: string } | null;
@@ -49,7 +49,7 @@ interface FileRowProps {
   isDeleted: boolean;
   icon: React.ReactNode;
   isValid?: boolean;
-  sortBy: "created" | "updated" | "title";
+  sortBy: "date" | "title";
   onSelect: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
@@ -57,7 +57,7 @@ interface FileRowProps {
 
 function FileRow({
   file, isOpened, isSelected, isPending, isDeleted, icon, isValid = true,
-  sortBy, onSelect, onDoubleClick, onContextMenu
+  onSelect, onDoubleClick, onContextMenu
 }: FileRowProps) {
   return (
     <div
@@ -85,14 +85,8 @@ function FileRow({
         </span>
         <span className={`text-[9px] font-mono truncate mt-0.5 ${isOpened ? 'text-white/70' : 'opacity-40'}`}>
           {(() => {
-            const ts = (sortBy === "updated")
-              ? (file.updatedAt || file.timestamp)
-              : file.timestamp;
-            const prefix = sortBy === "updated" ? "Modified: " : "Created: ";
-            if (!ts) return prefix + "Unknown";
-            const d = new Date(ts);
-            const valid = !isNaN(d.getTime());
-            return prefix + (valid ? d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : "Invalid Date");
+            const dateStr = file.date || file.timestamp?.split('T')[0] || "Unknown Date";
+            return "Date: " + dateStr;
           })()}
         </span>
       </div>
@@ -231,8 +225,8 @@ export default function FileExplorer({
               className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-nb-surface-low border border-nb-outline-variant rounded-xl text-[10px] font-bold tracking-wider text-nb-on-surface-variant hover:border-nb-primary transition-all cursor-pointer"
             >
               <div className="flex items-center gap-2">
-                {sortBy === 'updated' ? <Clock size={12} /> : sortBy === 'created' ? <Calendar size={12} /> : <SortAsc size={12} />}
-                <span>Sort: {sortBy.charAt(0).toUpperCase() + sortBy.slice(1)}</span>
+                {sortBy === 'date' ? <Calendar size={12} /> : <SortAsc size={12} />}
+                <span>Sort: {sortBy === 'date' ? 'Date' : 'Title'}</span>
               </div>
               <ChevronDown size={12} className={`transition-transform duration-200 ${isSortOpen ? 'rotate-180' : ''}`} />
             </button>
@@ -242,8 +236,7 @@ export default function FileExplorer({
                 <div className="fixed inset-0 z-40" onClick={() => setIsSortOpen(false)} />
                 <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-nb-surface border border-nb-outline-variant rounded-xl shadow-nb-lg py-1.5 animate-in fade-in zoom-in-95 duration-200">
                   {[
-                    { id: 'created' as const, label: 'Created', icon: <Calendar size={12} /> },
-                    { id: 'updated' as const, label: 'Updated', icon: <Clock size={12} /> },
+                    { id: 'date' as const, label: 'Date', icon: <Calendar size={12} /> },
                     { id: 'title' as const, label: 'Title', icon: <SortAsc size={12} /> }
                   ].map((s) => (
                     <button

@@ -1,4 +1,4 @@
-import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds, TipTapNode, buildResourceTypeIndex } from "./metadata";
+import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds, TipTapNode, buildResourceTypeIndex, getLocalDateString } from "./metadata";
 import { generateAllEntriesLatex, generateEntryLatex, generateTeamLatex, generatePhasesLatex } from "./latex";
 import { ExplorerFile, GitHubConfig, TeamTab } from "./types";
 import { getProjects, getProject, Project, getAllPending, getPending, stageChange, removeStaged, getResource, putResource, saveProject, getProjectHandle, saveProjectHandle, PendingChange } from "./db";
@@ -21,6 +21,7 @@ interface OpenFileState {
   phase: number | null;
   createdAt: string;
   updatedAt: string;
+  date: string;
 }
 
 class WorkspaceStore {
@@ -156,7 +157,23 @@ class WorkspaceStore {
   // ─── Project Management ─────────────────────────────────────────────────────
   async refreshProjects() {
     this.projects = await getProjects();
+    // Sync currentProject if it was renamed
+    if (this.currentProjectId && this.currentProject) {
+      const updated = this.projects.find(p => p.id === this.currentProjectId);
+      if (updated && updated.name !== this.currentProject.name) {
+        this.currentProject = { ...updated };
+      }
+    }
     this.notifyStateChange();
+  }
+
+  async renameProject(id: string, name: string) {
+    const p = await getProject(id);
+    if (p) {
+      p.name = name;
+      await saveProject(p);
+      await this.refreshProjects();
+    }
   }
 
   async createGithubProject(config: { owner: string; repo: string; branch: string; folderPath: string; name: string }) {
@@ -221,10 +238,10 @@ class WorkspaceStore {
 
   async selectProject(id: string) {
     if (this.currentProjectId === id && this.isInitialized && !this.isLoading) return;
-    
+
     // Ensure all pending I/O for the current project is finished before switching
     await this.#queue;
-    
+
     this.selectedPaths = new Set();
     this.setLoading(true);
     try {
@@ -298,9 +315,9 @@ class WorkspaceStore {
           console.error("Failed to load GitHub workspace:", error);
           this.disconnect();
           const msg = err.status === 401 ? "GitHub session expired. Please sign in again." :
-                      err.status === 403 ? "You do not have access to this repository." :
-                      err.status === 404 ? "Repository or folder not found." :
-                      "Failed to connect to GitHub. Check your internet or token.";
+            err.status === 403 ? "You do not have access to this repository." :
+              err.status === 404 ? "Repository or folder not found." :
+                "Failed to connect to GitHub. Check your internet or token.";
           if (err.status === 401) {
             events.emit(EventNames.SHOW_GITHUB_LOGIN, { loginOnly: true, projectId: project.id });
           }
@@ -400,9 +417,9 @@ class WorkspaceStore {
     const actualIndexPath = `${basePrefix}${INDEX_PATH}`;
 
     const files = await fetchDirectoryTree(this.config, `${basePrefix}${ENTRIES_DIR}`);
-    const entryFiles = Array.isArray(files) ? files.map((f: GitHubFile) => ({ 
-      name: f.name, 
-      path: f.path.startsWith(basePrefix) ? f.path.slice(basePrefix.length) : f.path 
+    const entryFiles = Array.isArray(files) ? files.map((f: GitHubFile) => ({
+      name: f.name,
+      path: f.path.startsWith(basePrefix) ? f.path.slice(basePrefix.length) : f.path
     })) : [];
 
     const pending = await getAllPending(dbName);
@@ -436,17 +453,12 @@ class WorkspaceStore {
     if (this.metadata.team) {
       const dbName = this.getDBName();
       const team = this.metadata.team;
-      // Normalize baseDir: remove leading/trailing slashes and ensure a single trailing slash if not empty
-      const normalizedBase = this.config.baseDir ? this.config.baseDir.replace(/^\/+|\/+$/g, '') : '';
-      const basePrefix = normalizedBase ? normalizedBase + '/' : '';
-      console.log(`[Store] Hydrating GitHub assets. baseDir: "${this.config.baseDir}", basePrefix: "${basePrefix}"`);
 
       const fetchAsset = async (path: string) => {
         if (!path || path.startsWith('data:')) return;
         try {
           // 1. Check if already in memory
           if (this.assetCache.has(path)) {
-            console.log(`[Store] Asset already in memory: ${path}`);
             return;
           }
 
@@ -455,7 +467,6 @@ class WorkspaceStore {
           if (pending?.content) {
             const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${pending.content}`;
             this.assetCache.set(path, dataUrl);
-            console.log(`[Store] Hydrated GitHub asset from pending changes: ${path}`);
             return;
           }
 
@@ -464,7 +475,6 @@ class WorkspaceStore {
           if (cached) {
             // Fix legacy/corrupted image/* prefix from previous versions
             if (cached.startsWith('data:image/*;base64,')) {
-              console.log(`[Store] Fixing legacy image/* prefix for: ${path}`);
               cached = cached.replace('data:image/*;base64,', `data:${getMimeTypeFromExtension(path)};base64,`);
               await putResource(dbName, { path, dataUrl: cached }); // Update cache with fix
             }
@@ -472,18 +482,15 @@ class WorkspaceStore {
 
           if (cached) {
             this.assetCache.set(path, cached);
-            console.log(`[Store] Hydrated GitHub asset from resource cache: ${path}`);
             return;
           }
 
           // 4. Fetch from GitHub
           const actualPath = this.getFullPath(path);
-          console.log(`[Store] Fetching asset from GitHub: ${actualPath}`);
           const base64 = await fetchRawFileContent(this.config!, actualPath);
           const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${base64}`;
           this.assetCache.set(path, dataUrl);
           await putResource(dbName, { path, dataUrl });
-          console.log(`[Store] Hydrated GitHub asset from network: ${path}`);
         } catch (e) {
           console.warn(`[Store] Failed to hydrate GitHub asset: ${path}`, e);
         }
@@ -605,6 +612,7 @@ class WorkspaceStore {
         title: meta.title,
         author: meta.author,
         phase: meta.phase,
+        date: meta.date,
         createdAt: meta.createdAt,
         updatedAt: meta.updatedAt
       };
@@ -623,7 +631,7 @@ class WorkspaceStore {
     }
   }
 
-  async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null }) {
+  async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null; date: string }) {
     // 1. Update memory immediately (Source of Truth)
     if (this.openFile && this.openFile.id === id) {
       this.openFile = { ...this.openFile, ...info, tiptapContent, latex, updatedAt: new Date().toISOString() };
@@ -727,6 +735,7 @@ class WorkspaceStore {
       title: "",
       author: localStorage.getItem("nb-last-author") || "",
       phase: null,
+      date: getLocalDateString(),
       createdAt, updatedAt: createdAt, filename: path
     };
 
@@ -1101,10 +1110,15 @@ class WorkspaceStore {
         remappedMeta.id = newId;
         remappedMeta.filename = `${ENTRIES_DIR}/${newId}.json`;
 
+        // Ensure date exists
+        if (!remappedMeta.date) {
+          remappedMeta.date = remappedMeta.createdAt?.split('T')[0] || getLocalDateString();
+        }
+
         const contentStr = JSON.stringify({ version: 3, content: remappedDoc }, null, 2);
         const localResources = extractResources(remappedDoc as TipTapNode);
         const resourceTypes = buildResourceTypeIndex({ ...this.metadata.entries, ...newEntriesMap, [newId]: remappedMeta }, localResources, newId);
-        const latex = generateEntryLatex(remappedDoc as TipTapNode, remappedMeta.title, remappedMeta.author, remappedMeta.phase, remappedMeta.createdAt, newId, resourceTypes);
+        const latex = generateEntryLatex(remappedDoc as TipTapNode, remappedMeta.title, remappedMeta.author, remappedMeta.phase, remappedMeta.createdAt, newId, resourceTypes, remappedMeta.date);
 
         // Save entry files
         await this.persistFile(remappedMeta.filename, contentStr, `Import entry: ${remappedMeta.title}`);
@@ -1137,15 +1151,15 @@ class WorkspaceStore {
       this.selectedPaths = newPaths;
 
       this.notifyStateChange();
-      
+
       const isFullNotebook = !!(data.team || data.phases);
       const entryCount = entryIdList.length;
       const entryText = `${entryCount} ${entryCount === 1 ? 'entry' : 'entries'}`;
-      
-      const message = isFullNotebook 
-        ? `Notebook imported successfully with ${entryText}` 
+
+      const message = isFullNotebook
+        ? `Notebook imported successfully with ${entryText}`
         : `Successfully imported ${entryText}`;
-        
+
       events.emit(EventNames.SHOW_NOTIFICATION, { message, type: "success" });
 
     } catch (e) {

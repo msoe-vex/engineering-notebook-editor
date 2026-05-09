@@ -1,6 +1,14 @@
 import { ASSETS_DIR } from "./constants";
 import { generateUUID } from "./utils";
 
+export const getLocalDateString = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 /**
  * metadata.ts — resource ↔ entry relationship tracking.
  *
@@ -26,6 +34,7 @@ export interface EntryMetadata {
   phase: number | null; // Phase ID
   createdAt: string;
   updatedAt: string;
+  date: string; // YYYY-MM-DD
   filename: string; // Path to the entry file (e.g. "entries/uuid.json")
   resources?: Record<string, { title: string, caption: string, type: string }>; // block uuid -> metadata
   isValid?: boolean;
@@ -35,6 +44,7 @@ export interface EntryMetadata {
 }
 
 export interface TeamMember {
+  id: string;
   name: string;
   role: string;
   image?: string; // Path to asset
@@ -422,6 +432,7 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
     // Check basic metadata
     if (!entry.title?.trim()) errors.push("Missing title");
     if (!entry.author?.trim()) errors.push("Missing author");
+    if (!entry.date?.trim()) errors.push("Missing date");
     
     // Phase validation
     const phases = metadata.phases && metadata.phases.length > 0 ? metadata.phases : DEFAULT_PHASES;
@@ -466,6 +477,7 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
 export function isEntryValid(info: EntryMetadata): boolean {
   if (!info.title?.trim()) return false;
   if (!info.author?.trim()) return false;
+  if (!info.date?.trim()) return false;
   if (info.phase === null) return false;
   
   if (info.resources) {

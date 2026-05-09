@@ -62,10 +62,11 @@ export function useWorkspace() {
   const getDBName = useCallback(() => store.getDBName(), []);
   const disconnect = useCallback(() => store.disconnect(), []);
   const refreshProjects = useCallback(() => store.refreshProjects(), []);
+  const renameProject = useCallback((id: string, name: string) => store.renameProject(id, name), []);
   const selectProject = useCallback((id: string) => store.selectProject(id), []);
   const createEntry = useCallback(() => store.createEntry(), []);
   const deleteEntry = useCallback((file: ExplorerFile) => store.deleteEntry(file), []);
-  const updateEntry = useCallback((id: string, latex: string, content: string, info: { title: string; author: string; phase: number | null }) => store.updateEntry(id, latex, content, info), []);
+  const updateEntry = useCallback((id: string, latex: string, content: string, info: { title: string; author: string; phase: number | null; date: string }) => store.updateEntry(id, latex, content, info), []);
   const saveTeam = useCallback((team: TeamMetadata, phases: ProjectPhase[]) => store.saveTeam(team, phases), []);
   const createGithubProject = useCallback((config: { owner: string; repo: string; branch: string; folderPath: string; name: string }) => store.createGithubProject(config), []);
   const createLocalProject = useCallback((handle: FileSystemDirectoryHandle, name: string) => store.createLocalProject(handle, name), []);
@@ -87,6 +88,7 @@ export function useWorkspace() {
     getDBName,
     disconnect,
     refreshProjects,
+    renameProject,
     selectProject,
     createEntry,
     deleteEntry,

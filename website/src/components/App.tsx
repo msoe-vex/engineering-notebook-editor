@@ -8,7 +8,7 @@ import {
 import GitHubConnectionDialog from "./GitHubConnectionDialog";
 import { ExplorerFile, TeamTab, GitHubConfig } from "@/lib/types";
 import {
-  Project, saveProject, deleteProject, deleteProjectHandle, deleteProjectDatabase,
+  Project, deleteProject, deleteProjectHandle, deleteProjectDatabase,
   getProjectDBName
 } from "@/lib/db";
 import Settings from "./Settings";
@@ -66,6 +66,7 @@ export default function App() {
     projects,
     openFile,
     refreshProjects,
+    renameProject,
     selectProject,
     createEntry,
     disconnect,
@@ -460,12 +461,7 @@ export default function App() {
   };
 
   const handleRenameProject = async (id: string, name: string) => {
-    const p = projects.find(pr => pr.id === id);
-    if (p) {
-      p.name = name;
-      await saveProject(p);
-      refreshProjects();
-    }
+    await renameProject(id, name);
   };
 
   const handleDeleteProject = async (id: string) => {
@@ -538,7 +534,7 @@ export default function App() {
     <div className="flex flex-col h-full overflow-hidden bg-nb-surface-low">
       <div className="flex items-center gap-3 px-4 h-14 border-b border-nb-outline-variant shrink-0 bg-nb-surface">
         <div className="w-6 h-6 rounded-md bg-nb-primary flex items-center justify-center shadow-sm shadow-nb-primary/20">
-          <BookOpen size={14} className="text-white" />
+          <button onClick={navigateToHome} title="Home" className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors"><BookOpen size={14} className="text-white" /></button>
         </div>
         <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-nb-on-surface truncate">Notebook</p></div>
         <div className="flex items-center gap-1">

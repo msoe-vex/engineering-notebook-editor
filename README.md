@@ -41,7 +41,7 @@ GITHUB_CLIENT_SECRET=your_github_oauth_client_secret
 Create a GitHub OAuth App or GitHub App for the editor and point it at the deployed app URL.
 
 - Homepage URL: your public app URL, such as `https://your-domain.com`
-- Callback / redirect URL: the public URL that finishes the GitHub sign-in flow for this app
+- Callback / redirect URL: the public URL that finishes the GitHub sign-in flow for this app. Use the same URL for the redirect URL as the homepage URL.
 - Update the GitHub app settings any time the deployed domain changes
 
 If you are using Vercel previews, make sure the same env vars are configured for Preview and Production deployments.
