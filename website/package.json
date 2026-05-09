@@ -37,8 +37,10 @@
     "react-dom": "19.2.5",
     "react-hot-toast": "^2.6.0",
     "react-latex-next": "^3.0.0",
+    "react-markdown": "^10.1.0",
     "react-resizable-panels": "^2.1.9",
-    "react-simple-code-editor": "^0.14.1"
+    "react-simple-code-editor": "^0.14.1",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.4",

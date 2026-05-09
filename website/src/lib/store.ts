@@ -36,6 +36,8 @@ class WorkspaceStore {
   public hasEntryInUrl: boolean = false;
   public showTeamEditor: boolean = false;
   public teamTab: TeamTab = "identity";
+  public showHelp: boolean = false;
+  public helpPath: string | null = null;
   public openFile: OpenFileState | null = null;
   public isLoading = false;
   public loadingLabel = "";
@@ -82,6 +84,14 @@ class WorkspaceStore {
       this.teamTab = ["identity", "members", "phases"].includes(tab) ? tab : "identity";
     } else {
       this.showTeamEditor = false;
+    }
+
+    if (path.startsWith('/help') || path.startsWith('/workspace/help')) {
+      this.showHelp = true;
+      this.helpPath = path;
+    } else {
+      this.showHelp = false;
+      this.helpPath = null;
     }
 
     const params = url.searchParams;

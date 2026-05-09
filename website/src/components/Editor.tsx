@@ -7,7 +7,7 @@ import { createPortal } from "react-dom";
 import { saveAs } from "file-saver";
 import {
   Save, Trash2, AlertCircle, AlertTriangle, Loader2, User, X, FileCode,
-  Undo2, Redo2, ImagePlus, ChevronDown, List, ListOrdered,
+  Undo2, Redo2, ImagePlus, ChevronDown, ChevronUp, List, ListOrdered,
   Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
   Terminal, Link as LinkIcon, Underline as UnderlineIcon,
   FileJson
@@ -71,7 +71,7 @@ const MenuItem = ({ label, children, activeMenu, setActiveMenu }: { label: strin
   <div className="relative h-full flex items-center">
     <button
       type="button"
-      onMouseDown={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === label ? null : label); }}
+      onClick={() => { setActiveMenu(activeMenu === label ? null : label); }}
       onMouseEnter={() => { if (activeMenu) setActiveMenu(label); }}
       className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-widest transition-colors cursor-pointer ${activeMenu === label ? "bg-nb-primary text-white" : "text-nb-on-surface-variant hover:bg-nb-surface-mid"
         }`}
@@ -89,10 +89,10 @@ const MenuItem = ({ label, children, activeMenu, setActiveMenu }: { label: strin
   </div>
 );
 
-const MenuAction = ({ icon, label, onClick, disabled, setActiveMenu }: { icon: React.ReactNode, label: string, onClick: () => void, disabled?: boolean, setActiveMenu: (val: string | null) => void }) => (
+const MenuAction = ({ icon, label, onClick, disabled, setActiveMenu }: { icon: React.ReactNode, label: string, onClick: (e: React.MouseEvent) => void, disabled?: boolean, setActiveMenu: (val: string | null) => void }) => (
   <button
     type="button"
-    onClick={() => { onClick(); setActiveMenu(null); }}
+    onClick={(e) => { onClick(e); setActiveMenu(null); }}
     disabled={disabled}
     className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[10px] font-bold tracking-widest text-nb-on-surface-variant hover:bg-nb-primary/10 hover:text-nb-primary transition-all disabled:opacity-30 disabled:hover:bg-transparent text-left cursor-pointer"
   >
@@ -203,6 +203,18 @@ const EditorContent = React.memo(function EditorContent({
 
   const toggleLinkFn = useRef<(() => void) | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
+
+  // Dismiss table grid on click away
+  useEffect(() => {
+    if (!showTableGrid) return;
+    const handleOutsideClick = () => {
+      // Small timeout to allow any other clicks to process first
+      setTimeout(() => setShowTableGrid(false), 0);
+    };
+    window.addEventListener("mousedown", handleOutsideClick);
+    return () => window.removeEventListener("mousedown", handleOutsideClick);
+  }, [showTableGrid]);
 
   // Dynamic Phase Logic
   const availablePhases = getPhases(metadata?.phases);
@@ -302,21 +314,7 @@ const EditorContent = React.memo(function EditorContent({
     contentStr: initialContent
   });
 
-  useEffect(() => {
-    requestAnimationFrame(() => {
-      setTitle(initialTitle);
-      setAuthor(initialAuthor);
-      setPhase(initialPhase);
-      setDate(initialDate || getLocalDateString());
-      setContent(parseInitialContent(initialContent));
-      setLocalIsValid(metadata.entries[entryId]?.isValid !== false);
-      setValidationErrors([]);
-      setIsSaving(false);
-      setIsAutoSaving(false);
-      lastSyncedRef.current = { title: initialTitle, author: initialAuthor, phase: initialPhase, date: initialDate, contentStr: initialContent };
-      lastAutoSavedRef.current = { title: initialTitle, author: initialAuthor, phase: initialPhase, date: initialDate, contentStr: initialContent };
-    });
-  }, [entryId, initialTitle, initialAuthor, initialPhase, initialDate, initialContent, metadata.entries]);
+  // No manual reset effect needed - the component remounts when entryId changes due to the 'key' prop
 
   // ── Callback refs (stable references to avoid resetting timers on re-render) ──
   const generateLatexRef = useRef(generateLatex);
@@ -324,17 +322,8 @@ const EditorContent = React.memo(function EditorContent({
     generateLatexRef.current = generateLatex;
   }, [generateLatex]);
 
-  // ── Immediate metadata sync ──────────────────────────────────────────────────
-  // Title, author, and phase are synced to the parent instantly (no debounce)
-  // via the Store's updateEntry method.
-  useEffect(() => {
-    if (title !== lastSyncedRef.current.title || author !== lastSyncedRef.current.author || phase !== lastSyncedRef.current.phase || date !== lastSyncedRef.current.date) {
-      const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
-      const latex = generateLatex(content, title, author, phase, date);
-      updateEntry(entryId, latex, contentStr, { title, author, phase, date });
-      lastSyncedRef.current = { title, author, phase, date, contentStr };
-    }
-  }, [title, author, phase, date, entryId, content, generateLatex, updateEntry]);
+  // Metadata and content changes are now both handled by the debounced auto-save below
+  // to avoid spamming the storage layer while typing.
 
 
   // ── Debounced content auto-save ──────────────────────────────────────────────
@@ -354,7 +343,10 @@ const EditorContent = React.memo(function EditorContent({
       setIsAutoSaving(true);
       autoSaveTimerRef.current = setTimeout(() => {
         const { title, author, phase, date } = latestMetadataRef.current;
-        const latex = generateLatexRef.current(content, title, author, phase, date);
+        const currentContent = latestContentRef.current;
+        const contentStr = typeof currentContent === 'string' ? currentContent : JSON.stringify(currentContent);
+        
+        const latex = generateLatexRef.current(currentContent, title, author, phase, date);
         updateEntry(entryId, latex, contentStr, { title, author, phase, date });
 
         lastAutoSavedRef.current.contentStr = contentStr;
@@ -483,133 +475,151 @@ const EditorContent = React.memo(function EditorContent({
   };
 
   return (
-    <div className="flex flex-col h-full bg-nb-surface overflow-x-auto overflow-y-hidden scrollbar-hide">
-      <div className="flex flex-col min-h-full min-w-[500px]">
-        {/* ── Fixed Header ────────────────────────────────────────── */}
-        <div className="shrink-0 border-b border-nb-outline-variant bg-nb-surface/80 backdrop-blur-md z-[150]">
+    <div className="flex flex-col h-full bg-nb-surface overflow-hidden scrollbar-hide">
+      {/* ── Fixed Header ────────────────────────────────────────── */}
+      <div className="shrink-0 border-b border-nb-outline-variant bg-nb-surface/80 backdrop-blur-md z-[150]">
 
-          {/* Row 1: Menu Bar */}
-          <div className="px-4 h-10 flex items-center gap-2 border-b border-nb-outline-variant/30">
-
-
-            <MenuItem label="File" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
-              <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} setActiveMenu={setActiveMenu} />
-              <MenuAction
-                icon={<FileJson size={14} />}
-                label="Download JSON"
-                onClick={async () => {
-                  await exportEntries([entryId]);
-                }}
-                setActiveMenu={setActiveMenu}
-              />
-              <MenuAction icon={<FileCode size={14} />} label="Download LaTeX" onClick={handleDownload} setActiveMenu={setActiveMenu} />
-              <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
-              <MenuAction icon={<X size={14} />} label="Close" onClick={onClose || (() => { })} setActiveMenu={setActiveMenu} />
-              <MenuAction icon={<Trash2 size={14} />} label="Delete" onClick={() => {
-                showConfirm(
-                  "Delete Entry",
-                  `Are you sure you want to delete "${title || "Untitled Entry"}"? This action cannot be undone and will permanently remove the entry and its associated LaTeX file.`,
-                  () => {
-                    deleteEntry({ name: filename.split('/').pop() || "", path: filename });
-                    onClose?.();
-                  },
-                  "danger"
-                );
-              }} setActiveMenu={setActiveMenu} />
-            </MenuItem>
-
-            <MenuItem label="Edit" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
-              <MenuAction
-                icon={<Undo2 size={14} />}
-                label="Undo"
-                onClick={() => editor?.chain().focus().undo().run()}
-                disabled={!editor?.can().undo()}
-                setActiveMenu={setActiveMenu}
-              />
-              <MenuAction
-                icon={<Redo2 size={14} />}
-                label="Redo"
-                onClick={() => editor?.chain().focus().redo().run()}
-                disabled={!editor?.can().redo()}
-                setActiveMenu={setActiveMenu}
-              />
-            </MenuItem>
-
-            {editor && (
-              <MenuItem label="Insert" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
-                <MenuAction icon={<ImagePlus size={14} />} label="Image" onClick={insertImage} setActiveMenu={setActiveMenu} />
-                <MenuAction
-                  icon={<TableIcon size={14} />}
-                  label="Table"
-                  onClick={() => setShowTableGrid(true)}
-                  setActiveMenu={setActiveMenu}
-                />
-                <MenuAction
-                  icon={<Code size={14} />}
-                  label="Code Block"
-                  onClick={() => {
-                    const { selection } = editor.state;
-                    const safePos = (selection instanceof NodeSelection) ? selection.to :
-                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-                    if (safePos !== null) {
-                      editor.chain().focus().insertContentAt(safePos, { type: 'codeBlock', attrs: { id: generateUUID() } }).run();
-                    } else {
-                      editor.chain().focus().insertContent({ type: 'codeBlock', attrs: { id: generateUUID() } }).run();
-                    }
-                  }}
-                  setActiveMenu={setActiveMenu}
-                />
-                <MenuAction
-                  icon={<Terminal size={14} />}
-                  label="Raw LaTeX"
-                  onClick={() => {
-                    const { selection } = editor.state;
-                    const safePos = (selection instanceof NodeSelection) ? selection.to :
-                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-                    if (safePos !== null) {
-                      editor.chain().focus().insertContentAt(safePos, { type: 'rawLatex', attrs: { id: generateUUID() } }).run();
-                    } else {
-                      editor.chain().focus().insertContent({ type: 'rawLatex', attrs: { id: generateUUID() } }).run();
-                    }
-                  }}
-                  setActiveMenu={setActiveMenu}
-                />
-              </MenuItem>
+        {/* Row 1: Menu Bar */}
+        <div className="px-4 h-10 flex items-center gap-2 border-b border-nb-outline-variant/30 relative z-[170]">
+          <button
+            onClick={() => setIsHeaderCollapsed(!isHeaderCollapsed)}
+            className="p-1.5 rounded-lg hover:bg-nb-surface-mid text-nb-on-surface-variant transition-colors group cursor-pointer shrink-0"
+            title={isHeaderCollapsed ? "Expand Header" : "Collapse Header"}
+          >
+            {isHeaderCollapsed ? (
+              <ChevronDown size={14} className="group-hover:scale-110 transition-transform" />
+            ) : (
+              <ChevronUp size={14} className="group-hover:scale-110 transition-transform" />
             )}
+          </button>
 
-            <div className="flex-1" />
 
-            <div className="flex items-center gap-2 mr-2">
-              {isAutoSaving || isSaving ? (
-                <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-primary animate-pulse">
-                  <Loader2 size={12} className="animate-spin" />
-                  <span>SAVING...</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-on-surface-variant/40">
-                  <Check size={12} />
-                  <span>SAVED</span>
-                </div>
-              )}
-            </div>
+          <MenuItem label="File" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
+            <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} setActiveMenu={setActiveMenu} />
+            <MenuAction
+              icon={<FileJson size={14} />}
+              label="Download JSON"
+              onClick={async () => {
+                await exportEntries([entryId]);
+              }}
+              setActiveMenu={setActiveMenu}
+            />
+            <MenuAction icon={<FileCode size={14} />} label="Download LaTeX" onClick={handleDownload} setActiveMenu={setActiveMenu} />
+            <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
+            <MenuAction icon={<X size={14} />} label="Close" onClick={onClose || (() => { })} setActiveMenu={setActiveMenu} />
+            <MenuAction icon={<Trash2 size={14} />} label="Delete" onClick={() => {
+              showConfirm(
+                "Delete Entry",
+                `Are you sure you want to delete "${title || "Untitled Entry"}"? This action cannot be undone and will permanently remove the entry and its associated LaTeX file.`,
+                () => {
+                  deleteEntry({ name: filename.split('/').pop() || "", path: filename });
+                  onClose?.();
+                },
+                "danger"
+              );
+            }} setActiveMenu={setActiveMenu} />
+          </MenuItem>
 
-            <button
-              onClick={onClose}
-              title="Close Entry"
-              className="p-1.5 ml-2 rounded-lg bg-nb-surface-low hover:bg-red-500/10 text-nb-on-surface-variant hover:text-red-500 transition-all border border-nb-outline-variant/30 hover:border-red-500/30 group cursor-pointer"
-            >
-              <X size={16} className="group-hover:scale-110 transition-transform" />
-            </button>
+          <MenuItem label="Edit" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
+            <MenuAction
+              icon={<Undo2 size={14} />}
+              label="Undo"
+              onClick={() => editor?.chain().focus().undo().run()}
+              disabled={!editor?.can().undo()}
+              setActiveMenu={setActiveMenu}
+            />
+            <MenuAction
+              icon={<Redo2 size={14} />}
+              label="Redo"
+              onClick={() => editor?.chain().focus().redo().run()}
+              disabled={!editor?.can().redo()}
+              setActiveMenu={setActiveMenu}
+            />
+          </MenuItem>
 
+          <MenuItem label="Insert" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
+            <MenuAction icon={<ImagePlus size={14} />} label="Image" onClick={insertImage} setActiveMenu={setActiveMenu} />
+            <MenuAction
+              icon={<TableIcon size={14} />}
+              label="Table"
+              onClick={(e) => {
+                if (e?.currentTarget) {
+                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                  setGridPos({ top: rect.top, left: rect.right + 212 });
+                  setShowTableGrid(true);
+                }
+              }}
+              setActiveMenu={setActiveMenu}
+            />
+            <MenuAction
+              icon={<Code size={14} />}
+              label="Code Block"
+              onClick={() => {
+                if (!editor) return;
+                const { selection } = editor.state;
+                const safePos = (selection instanceof NodeSelection) ? selection.to :
+                  (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                    (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
+                if (safePos !== null) {
+                  editor.chain().focus().insertContentAt(safePos, { type: 'codeBlock', attrs: { id: generateUUID() } }).run();
+                } else {
+                  editor.chain().focus().insertContent({ type: 'codeBlock', attrs: { id: generateUUID() } }).run();
+                }
+              }}
+              setActiveMenu={setActiveMenu}
+            />
+            <MenuAction
+              icon={<Terminal size={14} />}
+              label="LaTeX Block"
+              onClick={() => {
+                if (!editor) return;
+                const { selection } = editor.state;
+                const safePos = (selection instanceof NodeSelection) ? selection.to :
+                  (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                    (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
+                if (safePos !== null) {
+                  editor.chain().focus().insertContentAt(safePos, { type: 'rawLatex', attrs: { id: generateUUID() } }).run();
+                } else {
+                  editor.chain().focus().insertContent({ type: 'rawLatex', attrs: { id: generateUUID() } }).run();
+                }
+              }}
+              setActiveMenu={setActiveMenu}
+            />
+          </MenuItem>
+
+
+          <div className="flex-1 min-w-[20px]" />
+
+          <div className="flex items-center gap-2 mr-2">
+            {isAutoSaving || isSaving ? (
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-primary animate-pulse">
+                <Loader2 size={12} className="animate-spin" />
+                <span>SAVING...</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-on-surface-variant/40">
+                <Check size={12} />
+                <span>SAVED</span>
+              </div>
+            )}
           </div>
 
-          {/* Row 2: Metadata Row */}
-          <div className="px-6 py-2.5 flex flex-wrap items-center gap-2 max-w-7xl mx-auto">
-            <div className="flex-1 min-w-[300px]">
+          <button
+            onClick={onClose}
+            title="Close Entry"
+            className="p-1.5 ml-2 rounded-lg bg-nb-surface-low hover:bg-red-500/10 text-nb-on-surface-variant hover:text-red-500 transition-all border border-nb-outline-variant/30 hover:border-red-500/30 group cursor-pointer"
+          >
+            <X size={16} className="group-hover:scale-110 transition-transform" />
+          </button>
+
+        </div>
+
+        {/* Row 2: Metadata Row */}
+        {!isHeaderCollapsed && (
+          <div className="px-6 py-2.5 flex flex-wrap items-center gap-3 max-w-7xl mx-auto relative z-[160]">
+            <div className="flex-1 min-w-[200px]">
               <AutocompleteInput
                 type="text"
                 value={title}
@@ -634,7 +644,7 @@ const EditorContent = React.memo(function EditorContent({
               </div>
             )}
 
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3">
               <DatePicker
                 value={date}
                 onChange={(val) => setDate(val)}
@@ -657,7 +667,7 @@ const EditorContent = React.memo(function EditorContent({
                 />
               </div>
 
-              <div className={`h-9 w-[230px] shrink-0 flex items-center gap-2.5 px-3 rounded-xl border transition-all relative ${activePhaseCfg ? `${activePhaseCfg.bg} ${activePhaseCfg.border}` : "bg-nb-surface-low border-nb-outline-variant/30"}`}>
+              <div className="h-9 w-full sm:w-[230px] shrink-0 flex items-center gap-2.5 px-3 rounded-xl border border-nb-outline-variant/30 bg-nb-surface-low transition-all relative">
                 <div
                   className="absolute inset-0 z-10 cursor-pointer"
                   onClick={() => setActiveMenu(activeMenu === "Phase" ? null : "Phase")}
@@ -699,270 +709,271 @@ const EditorContent = React.memo(function EditorContent({
               </div>
             </div>
           </div>
+        )}
 
-          {/* Row 3: Rich Toolbar */}
-          {editor && (
-            <div className="px-6 py-2 border-t border-nb-outline-variant/30 bg-nb-surface-mid/50 overflow-x-auto scrollbar-hide">
-              <div className="max-w-7xl mx-auto flex items-center gap-1 min-w-max">
-                <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} title="Bold">
-                  <Bold size={16} />
-                </ToolbarButton>
-                <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} title="Italic">
-                  <Italic size={16} />
-                </ToolbarButton>
-                <ToolbarButton onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive("underline")} title="Underline">
-                  <UnderlineIcon size={16} />
-                </ToolbarButton>
+        {/* Row 3: Rich Toolbar */}
+        {editor && !isHeaderCollapsed && (
+          <div className="px-6 py-2 border-t border-nb-outline-variant/30 bg-nb-surface-mid/50 overflow-x-auto overflow-y-hidden scrollbar-hide shrink-0">
+            <div className="max-w-7xl mx-auto flex items-center gap-1 min-w-max">
+              <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} title="Bold">
+                <Bold size={16} />
+              </ToolbarButton>
+              <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} title="Italic">
+                <Italic size={16} />
+              </ToolbarButton>
+              <ToolbarButton onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive("underline")} title="Underline">
+                <UnderlineIcon size={16} />
+              </ToolbarButton>
 
-                <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
+              <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
 
-                <div className="relative" ref={linkButtonRef}>
-                  <ToolbarButton
-                    onClick={() => {
-                      if (linkButtonRef.current) {
-                        setLinkButtonRect(linkButtonRef.current.getBoundingClientRect());
-                      }
-                      toggleLinkFn.current?.();
+              <div className="relative" ref={linkButtonRef}>
+                <ToolbarButton
+                  onClick={() => {
+                    if (linkButtonRef.current) {
+                      setLinkButtonRect(linkButtonRef.current.getBoundingClientRect());
+                    }
+                    toggleLinkFn.current?.();
+                  }}
+                  active={editor.isActive("link")}
+                  title="Insert Link/Reference"
+                >
+                  <LinkIcon size={16} />
+                </ToolbarButton>
+              </div>
+
+              <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
+
+              <ToolbarButton
+                onClick={() => {
+                  if (editor.isActive("heading", { level: 1 })) {
+                    editor.chain().focus().setParagraph().run();
+                    return;
+                  }
+
+                  const { selection } = editor.state;
+                  const safePos = (selection instanceof NodeSelection) ? selection.to :
+                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                      (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
+                  if (safePos !== null) {
+                    editor.chain().focus().insertContentAt(safePos, { type: 'heading', attrs: { level: 1 } }).run();
+                  } else {
+                    editor.chain().focus().toggleHeading({ level: 1 }).run();
+                  }
+                }}
+                active={editor.isActive("heading", { level: 1 })}
+                title="Heading 1"
+              >
+                <Heading1 size={16} />
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => {
+                  if (editor.isActive("heading", { level: 2 })) {
+                    editor.chain().focus().setParagraph().run();
+                    return;
+                  }
+
+                  const { selection } = editor.state;
+                  const safePos = (selection instanceof NodeSelection) ? selection.to :
+                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                      (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
+                  if (safePos !== null) {
+                    editor.chain().focus().insertContentAt(safePos, { type: 'heading', attrs: { level: 2 } }).run();
+                  } else {
+                    editor.chain().focus().toggleHeading({ level: 2 }).run();
+                  }
+                }}
+                active={editor.isActive("heading", { level: 2 })}
+                title="Heading 2"
+              >
+                <Heading2 size={16} />
+              </ToolbarButton>
+
+              <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
+
+              <ToolbarButton
+                onClick={() => {
+                  const { selection } = editor.state;
+                  const safePos = (selection instanceof NodeSelection) ? selection.to :
+                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                      (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
+                  if (safePos !== null) {
+                    editor.chain().focus().insertContentAt(safePos, {
+                      type: 'bulletList',
+                      content: [{ type: 'listItem', content: [{ type: 'paragraph' }] }]
+                    }).run();
+                  } else {
+                    editor.chain().focus().toggleBulletList().run();
+                  }
+                }}
+                active={editor.isActive("bulletList")}
+                title="Bullet List"
+              >
+                <List size={16} />
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => {
+                  const { selection } = editor.state;
+                  const safePos = (selection instanceof NodeSelection) ? selection.to :
+                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                      (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
+                  if (safePos !== null) {
+                    editor.chain().focus().insertContentAt(safePos, {
+                      type: 'orderedList',
+                      content: [{ type: 'listItem', content: [{ type: 'paragraph' }] }]
+                    }).run();
+                  } else {
+                    editor.chain().focus().toggleOrderedList().run();
+                  }
+                }}
+                active={editor.isActive("orderedList")}
+                title="Ordered List"
+              >
+                <ListOrdered size={16} />
+              </ToolbarButton>
+
+              <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
+
+              <ToolbarButton
+                onClick={() => {
+                  const { selection } = editor.state;
+                  const safePos = (selection instanceof NodeSelection) ? selection.to :
+                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                      (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
+                  if (safePos !== null) {
+                    editor.chain().focus().insertContentAt(safePos, { type: 'codeBlock', attrs: { id: generateUUID() } }).run();
+                  } else {
+                    editor.chain().focus().insertContent({ type: 'codeBlock', attrs: { id: generateUUID() } }).run();
+                  }
+                }}
+                active={editor.isActive("codeBlock")}
+                title="Code Block"
+              >
+                <Code size={16} />
+              </ToolbarButton>
+
+              <ToolbarButton
+                onClick={() => {
+                  const { selection } = editor.state;
+                  const safePos = (selection instanceof NodeSelection) ? selection.to :
+                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                      (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
+                  if (safePos !== null) {
+                    editor.chain().focus().insertContentAt(safePos, { type: 'rawLatex', attrs: { id: generateUUID() } }).run();
+                  } else {
+                    editor.chain().focus().insertContent({ type: 'rawLatex', attrs: { id: generateUUID() } }).run();
+                  }
+                }}
+                active={editor.isActive("rawLatex")}
+                title="Raw LaTeX"
+              >
+                <Terminal size={16} />
+              </ToolbarButton>
+
+              <div className="relative" ref={tableButtonRef}>
+                <ToolbarButton
+                  onClick={(e) => {
+                    e?.stopPropagation();
+                    if (!showTableGrid && tableButtonRef.current) {
+                      const rect = tableButtonRef.current.getBoundingClientRect();
+                      setGridPos({ top: rect.bottom + 8, left: rect.right });
+                      setShowTableGrid(true);
+                    } else {
+                      setShowTableGrid(false);
+                    }
+                  }}
+                  active={showTableGrid}
+                  title="Insert Table"
+                >
+                  <TableIcon size={16} />
+                </ToolbarButton>
+                {showTableGrid && createPortal(
+                  <div
+                    style={{
+                      position: 'fixed',
+                      top: Math.min(gridPos.top, (typeof window !== 'undefined' ? window.innerHeight : 1000) - 220),
+                      left: Math.max(8, Math.min(gridPos.left - 204, (typeof window !== 'undefined' ? window.innerWidth : 1000) - 220)),
+                      zIndex: 9999
                     }}
-                    active={editor.isActive("link")}
-                    title="Insert Link/Reference"
+                    className="shadow-2xl rounded-xl animate-in fade-in zoom-in-95 duration-200"
+                    onMouseDown={(e) => e.stopPropagation()}
                   >
-                    <LinkIcon size={16} />
-                  </ToolbarButton>
-                </div>
-
-                <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
-
-                <ToolbarButton
-                  onClick={() => {
-                    if (editor.isActive("heading", { level: 1 })) {
-                      editor.chain().focus().setParagraph().run();
-                      return;
-                    }
-
-                    const { selection } = editor.state;
-                    const safePos = (selection instanceof NodeSelection) ? selection.to :
-                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-                    if (safePos !== null) {
-                      editor.chain().focus().insertContentAt(safePos, { type: 'heading', attrs: { level: 1 } }).run();
-                    } else {
-                      editor.chain().focus().toggleHeading({ level: 1 }).run();
-                    }
-                  }}
-                  active={editor.isActive("heading", { level: 1 })}
-                  title="Heading 1"
-                >
-                  <Heading1 size={16} />
-                </ToolbarButton>
-                <ToolbarButton
-                  onClick={() => {
-                    if (editor.isActive("heading", { level: 2 })) {
-                      editor.chain().focus().setParagraph().run();
-                      return;
-                    }
-
-                    const { selection } = editor.state;
-                    const safePos = (selection instanceof NodeSelection) ? selection.to :
-                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-                    if (safePos !== null) {
-                      editor.chain().focus().insertContentAt(safePos, { type: 'heading', attrs: { level: 2 } }).run();
-                    } else {
-                      editor.chain().focus().toggleHeading({ level: 2 }).run();
-                    }
-                  }}
-                  active={editor.isActive("heading", { level: 2 })}
-                  title="Heading 2"
-                >
-                  <Heading2 size={16} />
-                </ToolbarButton>
-
-                <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
-
-                <ToolbarButton
-                  onClick={() => {
-                    const { selection } = editor.state;
-                    const safePos = (selection instanceof NodeSelection) ? selection.to :
-                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-                    if (safePos !== null) {
-                      editor.chain().focus().insertContentAt(safePos, {
-                        type: 'bulletList',
-                        content: [{ type: 'listItem', content: [{ type: 'paragraph' }] }]
-                      }).run();
-                    } else {
-                      editor.chain().focus().toggleBulletList().run();
-                    }
-                  }}
-                  active={editor.isActive("bulletList")}
-                  title="Bullet List"
-                >
-                  <List size={16} />
-                </ToolbarButton>
-                <ToolbarButton
-                  onClick={() => {
-                    const { selection } = editor.state;
-                    const safePos = (selection instanceof NodeSelection) ? selection.to :
-                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-                    if (safePos !== null) {
-                      editor.chain().focus().insertContentAt(safePos, {
-                        type: 'orderedList',
-                        content: [{ type: 'listItem', content: [{ type: 'paragraph' }] }]
-                      }).run();
-                    } else {
-                      editor.chain().focus().toggleOrderedList().run();
-                    }
-                  }}
-                  active={editor.isActive("orderedList")}
-                  title="Ordered List"
-                >
-                  <ListOrdered size={16} />
-                </ToolbarButton>
-
-                <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
-
-                <ToolbarButton
-                  onClick={() => {
-                    const { selection } = editor.state;
-                    const safePos = (selection instanceof NodeSelection) ? selection.to :
-                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-                    if (safePos !== null) {
-                      editor.chain().focus().insertContentAt(safePos, { type: 'codeBlock', attrs: { id: generateUUID() } }).run();
-                    } else {
-                      editor.chain().focus().insertContent({ type: 'codeBlock', attrs: { id: generateUUID() } }).run();
-                    }
-                  }}
-                  active={editor.isActive("codeBlock")}
-                  title="Code Block"
-                >
-                  <Code size={16} />
-                </ToolbarButton>
-
-                <ToolbarButton
-                  onClick={() => {
-                    const { selection } = editor.state;
-                    const safePos = (selection instanceof NodeSelection) ? selection.to :
-                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-                    if (safePos !== null) {
-                      editor.chain().focus().insertContentAt(safePos, { type: 'rawLatex', attrs: { id: generateUUID() } }).run();
-                    } else {
-                      editor.chain().focus().insertContent({ type: 'rawLatex', attrs: { id: generateUUID() } }).run();
-                    }
-                  }}
-                  active={editor.isActive("rawLatex")}
-                  title="Raw LaTeX"
-                >
-                  <Terminal size={16} />
-                </ToolbarButton>
-
-                <div className="relative" ref={tableButtonRef}>
-                  <ToolbarButton
-                    onClick={(e) => {
-                      e?.stopPropagation();
-                      if (!showTableGrid && tableButtonRef.current) {
-                        const rect = tableButtonRef.current.getBoundingClientRect();
-                        setGridPos({ top: rect.bottom + 8, left: rect.right });
-                      }
-                      setShowTableGrid(!showTableGrid);
-                    }}
-                    active={showTableGrid}
-                    title="Insert Table"
-                  >
-                    <TableIcon size={16} />
-                  </ToolbarButton>
-                  {showTableGrid && createPortal(
-                    <div
-                      style={{
-                        position: 'fixed',
-                        top: gridPos.top,
-                        left: gridPos.left - 204, // Grid width (180) + padding/shadow room
-                        zIndex: 9999
-                      }}
-                      className="shadow-2xl rounded-xl animate-in fade-in zoom-in-95 duration-200"
-                      onMouseDown={(e) => e.stopPropagation()}
-                    >
-                      <TableGridSelector
-                        onSelect={(rows, cols) => {
-                          const tableContent = {
-                            type: 'table',
-                            attrs: { id: generateUUID() },
-                            content: Array.from({ length: rows }, () => ({
-                              type: 'tableRow',
-                              content: Array.from({ length: cols }, () => ({
-                                type: 'tableCell',
-                                content: [{ type: 'paragraph' }]
-                              }))
+                    <TableGridSelector
+                      onSelect={(rows, cols) => {
+                        const tableContent = {
+                          type: 'table',
+                          attrs: { id: generateUUID() },
+                          content: Array.from({ length: rows }, () => ({
+                            type: 'tableRow',
+                            content: Array.from({ length: cols }, () => ({
+                              type: 'tableCell',
+                              content: [{ type: 'paragraph' }]
                             }))
-                          };
+                          }))
+                        };
 
-                          const { selection } = editor.state;
-                          const safePos = (selection instanceof NodeSelection) ? selection.to :
-                            (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                              (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+                        const { selection } = editor.state;
+                        const safePos = (selection instanceof NodeSelection) ? selection.to :
+                          (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                            (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
 
-                          if (safePos !== null) {
-                            editor.chain().focus().insertContentAt(safePos, tableContent).run();
-                          } else {
-                            editor.chain().focus().insertContent(tableContent).run();
-                          }
-                          setShowTableGrid(false);
-                        }}
-                      />
-                    </div>,
-                    document.body
-                  )}
-                </div>
+                        if (safePos !== null) {
+                          editor.chain().focus().insertContentAt(safePos, tableContent).run();
+                        } else {
+                          editor.chain().focus().insertContent(tableContent).run();
+                        }
+                        setShowTableGrid(false);
+                      }}
+                    />
+                  </div>,
+                  document.body
+                )}
+              </div>
 
-                <ToolbarButton
-                  onClick={insertImage}
-                  title="Insert Image"
-                >
-                  <ImageIcon size={16} />
-                </ToolbarButton>
+              <ToolbarButton
+                onClick={insertImage}
+                title="Insert Image"
+              >
+                <ImageIcon size={16} />
+              </ToolbarButton>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Scrollable Workspace ──────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto overflow-x-auto bg-nb-surface scrollbar-hide">
+        <div className="max-w-7xl mx-auto px-14 lg:pl-16 lg:pr-8 py-4 min-h-full">
+          {validationErrors.length > 0 && (
+            <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3 animate-in slide-in-from-top-2">
+              <AlertCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="text-xs font-bold uppercase tracking-widest text-red-600 mb-1">Missing Information</h4>
+                <ul className="list-disc list-inside text-xs text-red-500 space-y-0.5">
+                  {validationErrors.map((err, i) => <li key={i}>{err}</li>)}
+                </ul>
               </div>
             </div>
           )}
+
+          <UnifiedEditor
+            key={filename}
+            filename={filename}
+            content={content}
+            onChange={setContent}
+            author={author}
+            onEditorInit={setEditor}
+            onToggleLink={(fn) => { toggleLinkFn.current = fn; }}
+            triggerRect={linkButtonRect}
+            entryId={entryId}
+          />
         </div>
-
-        {/* ── Scrollable Workspace ──────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto bg-nb-surface scrollbar-hide">
-          <div className="max-w-7xl mx-auto pl-16 pr-8 py-4 min-h-full">
-            {validationErrors.length > 0 && (
-              <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3 animate-in slide-in-from-top-2">
-                <AlertCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <h4 className="text-xs font-bold uppercase tracking-widest text-red-600 mb-1">Missing Information</h4>
-                  <ul className="list-disc list-inside text-xs text-red-500 space-y-0.5">
-                    {validationErrors.map((err, i) => <li key={i}>{err}</li>)}
-                  </ul>
-                </div>
-              </div>
-            )}
-
-            <UnifiedEditor
-              key={filename}
-              filename={filename}
-              content={content}
-              onChange={setContent}
-              author={author}
-              onEditorInit={setEditor}
-              onToggleLink={(fn) => { toggleLinkFn.current = fn; }}
-              triggerRect={linkButtonRect}
-              entryId={entryId}
-            />
-          </div>
-        </div>
-
       </div>
     </div>
   );
@@ -993,6 +1004,7 @@ const Editor = ({
 
   return (
     <EditorContent
+      key={openFile.id}
       openFile={openFile}
       metadata={metadata}
       updateEntry={updateEntry}

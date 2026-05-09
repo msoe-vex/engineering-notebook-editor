@@ -57,7 +57,7 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
           contentEditable={false}
           onMouseEnter={() => setIsHoveringToolbar(true)}
           onMouseLeave={() => setIsHoveringToolbar(false)}
-          className="flex items-center gap-1.5 px-3 py-2 bg-nb-surface-low/50 border-b border-nb-outline-variant/10 overflow-x-auto"
+          className="flex items-center gap-1.5 px-3 py-2 bg-nb-surface-low/50 border-b border-nb-outline-variant/10 overflow-x-auto scrollbar-hide"
         >
           <div className="flex items-center gap-1.5 pr-3 border-r border-nb-outline-variant/20 mr-1 shrink-0">
             <TableIcon size={12} className="text-nb-primary" />
