@@ -58,7 +58,7 @@ export function LinkReferencePopup({
           for (const entry of Object.values(metadata?.entries || {})) {
             const e = entry as EntryMetadata;
             const entryTitle = e.title?.trim() || "Untitled Entry";
-            const entryDate = e.createdAt?.split('T')[0];
+            const entryDate = e.date || e.createdAt?.split('T')[0];
             if (e.id === attrs.resourceId) {
               found = { id: e.id, title: e.title, type: 'entry', entryTitle, entryDate };
               break;
@@ -87,7 +87,7 @@ export function LinkReferencePopup({
     for (const [entryId, entry] of Object.entries(metadata.entries)) {
       const e = entry as EntryMetadata;
       const entryTitle = e.title?.trim() || "Untitled Entry";
-      const entryDate = e.createdAt?.split('T')[0];
+      const entryDate = e.date || e.createdAt?.split('T')[0];
 
       list.push({ id: entryId, title: entryTitle, type: "entry", entryTitle, entryDate, entryId });
 

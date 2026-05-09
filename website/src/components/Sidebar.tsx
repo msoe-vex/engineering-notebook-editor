@@ -36,7 +36,7 @@ export default function Sidebar({
     exportEntries
   } = useWorkspace();
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState<"created" | "updated" | "title">("created");
+  const [sortBy, setSortBy] = useState<"date" | "title">("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
   const [isCommitting, setIsCommitting] = useState(false);
@@ -92,6 +92,7 @@ export default function Sidebar({
         phase: meta?.phase ?? null,
         timestamp: meta?.createdAt,
         updatedAt: meta?.updatedAt,
+        date: meta?.date,
         isValid: meta?.isValid !== false
       };
     });
@@ -104,8 +105,10 @@ export default function Sidebar({
         if (!(f.title?.toLowerCase().includes(q) || f.name.toLowerCase().includes(q))) return false;
       }
       if (dateRange) {
-        const ts = f.timestamp ? new Date(f.timestamp) : null;
-        if (!ts) return false;
+        const dStr = f.date || (f.timestamp ? f.timestamp.split('T')[0] : null);
+        if (!dStr) return false;
+        
+        const ts = new Date(dStr);
         if (dateRange.start && ts < new Date(dateRange.start)) return false;
         if (dateRange.end) {
           const end = new Date(dateRange.end);
@@ -121,16 +124,20 @@ export default function Sidebar({
       if (sortBy === "title") {
         valA = a.title || a.name;
         valB = b.title || b.name;
-      } else if (sortBy === "updated") {
-        valA = a.updatedAt || a.timestamp || "";
-        valB = b.updatedAt || b.timestamp || "";
       } else {
-        valA = a.timestamp || "";
-        valB = b.timestamp || "";
+        valA = a.date || a.timestamp || "";
+        valB = b.date || b.timestamp || "";
       }
 
       if (valA < valB) return sortDirection === "asc" ? -1 : 1;
       if (valA > valB) return sortDirection === "asc" ? 1 : -1;
+      
+      // Tie-breaker: createdAt (timestamp)
+      const tsA = a.timestamp || "";
+      const tsB = b.timestamp || "";
+      if (tsA < tsB) return sortDirection === "asc" ? -1 : 1;
+      if (tsA > tsB) return sortDirection === "asc" ? 1 : -1;
+
       return 0;
     });
 

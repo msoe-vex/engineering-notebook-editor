@@ -66,7 +66,7 @@ export function useWorkspace() {
   const selectProject = useCallback((id: string) => store.selectProject(id), []);
   const createEntry = useCallback(() => store.createEntry(), []);
   const deleteEntry = useCallback((file: ExplorerFile) => store.deleteEntry(file), []);
-  const updateEntry = useCallback((id: string, latex: string, content: string, info: { title: string; author: string; phase: number | null }) => store.updateEntry(id, latex, content, info), []);
+  const updateEntry = useCallback((id: string, latex: string, content: string, info: { title: string; author: string; phase: number | null; date: string }) => store.updateEntry(id, latex, content, info), []);
   const saveTeam = useCallback((team: TeamMetadata, phases: ProjectPhase[]) => store.saveTeam(team, phases), []);
   const createGithubProject = useCallback((config: { owner: string; repo: string; branch: string; folderPath: string; name: string }) => store.createGithubProject(config), []);
   const createLocalProject = useCallback((handle: FileSystemDirectoryHandle, name: string) => store.createLocalProject(handle, name), []);
