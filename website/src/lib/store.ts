@@ -419,12 +419,12 @@ class WorkspaceStore {
 
       // Keep metadata clean, but update the global asset cache
       assetCache.forEach((v, k) => this.assetCache.set(k, v));
-      this.metadata = { ...EMPTY_METADATA, ...parsed };
+      this.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...parsed });
     } catch {
-      this.metadata = EMPTY_METADATA;
+      this.metadata = validateNotebookIntegrity(EMPTY_METADATA);
       isNew = true;
       // Initialize notebook.json
-      await writeLocalFile(this.dirHandle, INDEX_PATH, JSON.stringify(EMPTY_METADATA, null, 2));
+      await writeLocalFile(this.dirHandle, INDEX_PATH, JSON.stringify(this.metadata, null, 2));
     }
     this.isMainTexPresent = await checkLocalFileExists(this.dirHandle, "main.tex");
     
@@ -454,19 +454,19 @@ class WorkspaceStore {
 
     if (pendingMeta?.content) {
       const parsed = JSON.parse(pendingMeta.content);
-      this.metadata = { ...EMPTY_METADATA, ...parsed, projectId: this.currentProjectId || undefined, projectName: this.currentProject?.name || undefined };
+      this.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...parsed, projectId: this.currentProjectId || undefined, projectName: this.currentProject?.name || undefined });
     } else {
       try {
         const metaStr = await fetchFileContent(this.config, actualIndexPath);
-        this.metadata = { ...EMPTY_METADATA, ...JSON.parse(metaStr) };
+        this.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...JSON.parse(metaStr) });
       } catch {
-        this.metadata = EMPTY_METADATA;
+        this.metadata = validateNotebookIntegrity(EMPTY_METADATA);
         isNew = true;
         // Stage default metadata
         await stageChange(dbName, {
           path: INDEX_PATH,
           operation: "upsert",
-          content: JSON.stringify(EMPTY_METADATA, null, 2),
+          content: JSON.stringify(this.metadata, null, 2),
           label: "Initialize notebook.json",
           stagedAt: new Date().toISOString()
         });
@@ -720,7 +720,7 @@ class WorkspaceStore {
     this.notifyStateChange();
     events.emit(EventNames.ENTRY_UPDATED, { id, ...info });
 
-    if (info.author) {
+    if (info.author && info.author !== existingEntry.author) {
       localStorage.setItem("nb-last-author", info.author);
     }
 
@@ -978,7 +978,7 @@ class WorkspaceStore {
     });
   }
 
-  async commitAll(config: GitHubConfig) {
+  async commitAll(config: GitHubConfig, customMessage?: string) {
     const dbName = this.getDBName();
     const all = await getAllPending(dbName);
     const { commitChanges } = await import("./github");
@@ -1015,7 +1015,14 @@ class WorkspaceStore {
       return;
     }
 
-    await commitChanges(config, gitChanges, `Update notebook: ${gitChanges.length} changes`);
+    const changesCount = gitChanges.length;
+    const filesLabel = changesCount === 1 ? "file" : "files";
+    const defaultMsg = `Update notebook: ${changesCount} ${filesLabel}`;
+    const finalMsg = customMessage 
+      ? `${customMessage} (Updated ${changesCount} ${filesLabel})` 
+      : defaultMsg;
+
+    await commitChanges(config, gitChanges, finalMsg);
     await this.loadGitHubWorkspace();
     await clearAllPending(dbName);
     await this.refreshPending();

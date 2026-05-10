@@ -428,24 +428,32 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
   // 3. Validate each entry
   for (const [id, entry] of Object.entries(newEntries)) {
     const errors: string[] = [];
+    const TYPE_LABELS: Record<string, string> = {
+      image: "image",
+      table: "table",
+      codeBlock: "code block",
+      rawLatex: "LaTeX block",
+      header: "header"
+    };
 
     // Check basic metadata
-    if (!entry.title?.trim()) errors.push("Missing title");
-    if (!entry.author?.trim()) errors.push("Missing author");
-    if (!entry.date?.trim()) errors.push("Missing date");
+    if (!entry.title?.trim()) errors.push("Project title is required.");
+    if (!entry.author?.trim()) errors.push("Author name is required.");
+    if (!entry.date?.trim()) errors.push("Date is required.");
     
     // Phase validation
     const phases = metadata.phases && metadata.phases.length > 0 ? metadata.phases : DEFAULT_PHASES;
     if (typeof entry.phase !== "number" || !phases.some(p => p.index === entry.phase)) {
-      errors.push("Missing or invalid phase");
+      errors.push("Project phase is required.");
     }
 
     // Check local resources
     if (entry.resources) {
-      for (const [resId, res] of Object.entries(entry.resources)) {
-        if (!res.title?.trim()) errors.push(`Resource "${resId}" missing title`);
+      for (const res of Object.values(entry.resources)) {
+        const label = TYPE_LABELS[res.type] || res.type;
+        if (!res.title?.trim()) errors.push(`Title missing for ${label}.`);
         if (res.type !== "header" && !res.caption?.trim()) {
-          errors.push(`Resource "${resId}" missing caption`);
+          errors.push(`Caption missing for ${label}.`);
         }
       }
     }
@@ -454,7 +462,7 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
     if (entry.references) {
       for (const refId of entry.references) {
         if (!existingIds.has(refId)) {
-          errors.push(`Broken reference to "${refId}"`);
+          errors.push(`Broken reference found: ${refId}`);
         }
       }
     }

@@ -3,9 +3,10 @@
 import React, { useState } from "react";
 import {
   FileText, Plus, X, Calendar, SortAsc, SortDesc, CalendarDays,
-  Search, ChevronDown, AlertTriangle, ExternalLink, Trash2, FileJson, FileCode,
+  Search, ChevronDown, ExternalLink, Trash2, FileJson, FileCode,
   Download
 } from "lucide-react";
+import ValidationTooltip from "./ValidationTooltip";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,6 +50,7 @@ interface FileRowProps {
   isDeleted: boolean;
   icon: React.ReactNode;
   isValid?: boolean;
+  validationErrors?: string[];
   sortBy: "date" | "title";
   onSelect: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
@@ -56,7 +58,7 @@ interface FileRowProps {
 }
 
 function FileRow({
-  file, isOpened, isSelected, isPending, isDeleted, icon, isValid = true,
+  file, isOpened, isSelected, isPending, isDeleted, icon, isValid = true, validationErrors = [],
   onSelect, onDoubleClick, onContextMenu
 }: FileRowProps) {
   return (
@@ -93,14 +95,11 @@ function FileRow({
 
       {/* Validation Warning */}
       {!isValid && !isDeleted && (
-        <div
-          className={`shrink-0 w-6 h-6 rounded-lg flex items-center justify-center animate-pulse ${isOpened ? 'bg-white/20 text-white' : 'bg-amber-500/10 text-amber-500'}`}
-          title={file.validationErrors && file.validationErrors.length > 0
-            ? `Validation errors:\n- ${file.validationErrors.join('\n- ')}`
-            : "Incomplete entry metadata or resource captions"}
-        >
-          <AlertTriangle size={12} />
-        </div>
+        <ValidationTooltip
+          errors={validationErrors.length > 0 ? validationErrors : ["Incomplete entry metadata or resource captions"]}
+          size={12}
+          iconContainerClassName={`w-6 h-6 rounded-lg ${isOpened ? 'bg-white/20 text-white' : 'bg-amber-500/10 text-amber-500'}`}
+        />
       )}
 
       {/* Pending dot */}
@@ -360,6 +359,7 @@ export default function FileExplorer({
                 isDeleted={deletedPaths.has(f.path)}
                 icon={icon}
                 isValid={f.isValid}
+                validationErrors={f.validationErrors}
                 sortBy={sortBy}
                 onSelect={(e) => onSelectEntry(f, e.ctrlKey || e.metaKey, e.shiftKey)}
                 onDoubleClick={() => onOpenEntry(f)}

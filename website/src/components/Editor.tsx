@@ -6,12 +6,13 @@ import { ToolbarButton, TableGridSelector } from "./editor/EditorUI";
 import { createPortal } from "react-dom";
 import { saveAs } from "file-saver";
 import {
-  Save, Trash2, AlertCircle, AlertTriangle, Loader2, User, X, FileCode,
+  Save, Trash2, Loader2, User, X, FileCode,
   Undo2, Redo2, ImagePlus, ChevronDown, ChevronUp, List, ListOrdered,
   Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
   Terminal, Link as LinkIcon, Underline as UnderlineIcon,
   FileJson
 } from "lucide-react";
+import ValidationTooltip from "./ValidationTooltip";
 import * as LucideIcons from "lucide-react";
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng } from "@/lib/utils";
 import { getLocalDateString } from "@/lib/metadata";
@@ -71,6 +72,7 @@ const MenuItem = ({ label, children, activeMenu, setActiveMenu }: { label: strin
   <div className="relative h-full flex items-center">
     <button
       type="button"
+      onMouseDown={(e) => e.stopPropagation()}
       onClick={() => { setActiveMenu(activeMenu === label ? null : label); }}
       onMouseEnter={() => { if (activeMenu) setActiveMenu(label); }}
       className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-widest transition-colors cursor-pointer ${activeMenu === label ? "bg-nb-primary text-white" : "text-nb-on-surface-variant hover:bg-nb-surface-mid"
@@ -139,56 +141,70 @@ const EditorContent = React.memo(function EditorContent({
   const [content, setContent] = useState<TipTapNode | string>(() => parseInitialContent(initialContent));
   const [editor, setEditor] = useState<import("@tiptap/react").Editor | null>(null);
 
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+
+  const validate = useCallback(() => {
+    const errors: string[] = [];
+    if (!title.trim()) errors.push("Project title is required.");
+    if (!author.trim()) errors.push("Author name is required.");
+    if (!date.trim()) errors.push("Date is required.");
+    if (phase === null) errors.push("Project phase is required.");
+
+    const TYPE_LABELS: Record<string, string> = {
+      image: "image",
+      table: "table",
+      codeBlock: "code block",
+      rawLatex: "LaTeX block",
+      header: "header"
+    };
+
+    if (editor) {
+      const doc = editor.getJSON();
+      const resources = extractResources(doc);
+      for (const res of Object.values(resources)) {
+        const label = TYPE_LABELS[res.type] || res.type;
+        if (!res.title?.trim()) errors.push(`Title missing for ${label}.`);
+        if (res.type !== "header" && !res.caption?.trim()) errors.push(`Caption missing for ${label}.`);
+      }
+
+      const refs = extractReferences(doc);
+      if (refs.length > 0 && metadata?.entries) {
+        const existingIds = new Set<string>();
+        for (const entry of Object.values(metadata.entries)) {
+          existingIds.add(entry.id);
+          if (entry.resources) {
+            for (const resId of Object.keys(entry.resources)) {
+              existingIds.add(resId);
+            }
+          }
+        }
+        for (const refId of refs) {
+          if (!existingIds.has(refId)) errors.push(`Broken reference found: ${refId}`);
+        }
+      }
+    }
+
+    return { valid: errors.length === 0, errors };
+  }, [title, author, date, phase, editor, metadata]);
+
   // Local validation state for immediate UI feedback.
   // Editor is the sole authority on validity while open — parent isValid is only used for initial value.
   // This prevents flickering caused by stale metadata flowing back down during debounced saves.
   const [localIsValid, setLocalIsValid] = useState(metadata.entries[entryId]?.isValid !== false);
 
-  const checkValidity = useCallback(() => {
-    if (!title?.trim() || !author?.trim() || !date?.trim() || phase === null) return false;
-    if (!editor) return true;
 
-    const doc = editor.getJSON();
-
-    // Check resources
-    const resources = extractResources(doc);
-    for (const res of Object.values(resources)) {
-      if (!res.title?.trim()) return false;
-      if (res.type !== "header" && !res.caption?.trim()) return false;
-    }
-
-    // Check references
-    const refs = extractReferences(doc);
-    if (refs.length > 0 && metadata?.entries) {
-      // Build set of all existing IDs
-      const existingIds = new Set<string>();
-      for (const entry of Object.values(metadata.entries)) {
-        existingIds.add(entry.id);
-        if (entry.resources) {
-          for (const resId of Object.keys(entry.resources)) {
-            existingIds.add(resId);
-          }
-        }
-      }
-
-      for (const refId of refs) {
-        if (!existingIds.has(refId)) return false;
-      }
-    }
-
-    return true;
-  }, [title, author, phase, date, editor, metadata]);
 
   // Local metadata validation (immediate for UI)
   useEffect(() => {
-    const valid = checkValidity();
-    if (valid !== localIsValid) {
+    const { valid, errors } = validate();
+    if (valid !== localIsValid || JSON.stringify(errors) !== JSON.stringify(validationErrors)) {
       requestAnimationFrame(() => {
         setLocalIsValid(valid);
-        setEntryValidity(entryId, valid, valid ? [] : ["Incomplete metadata or resource captions"]);
+        setValidationErrors(errors);
+        setEntryValidity(entryId, valid, errors);
       });
     }
-  }, [title, author, phase, date, editor?.state.doc.content, checkValidity, localIsValid, currentProjectId, entryId, setEntryValidity]);
+  }, [title, author, phase, date, editor?.state.doc.content, validate, localIsValid, validationErrors, currentProjectId, entryId, setEntryValidity]);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -283,42 +299,7 @@ const EditorContent = React.memo(function EditorContent({
     return generateEntryLatex(cnt, t, a, p === null ? "" : p, initialCreatedAt, id, resourceTypes, d);
   }, [filename, initialCreatedAt, metadata.entries]);
 
-  const validate = useCallback(() => {
-    const errors: string[] = [];
-    if (!title.trim()) errors.push("Project title is required.");
-    if (!author.trim()) errors.push("Author name is required.");
-    if (!date.trim()) errors.push("Date is required.");
-    if (phase === null) errors.push("Project phase is required.");
 
-    if (editor) {
-      const doc = editor.getJSON();
-      const resources = extractResources(doc);
-      for (const res of Object.values(resources)) {
-        if (!res.title?.trim()) errors.push(`Title missing for ${res.type}.`);
-        if (res.type !== "header" && !res.caption?.trim()) errors.push(`Caption missing for ${res.type}.`);
-      }
-
-      const refs = extractReferences(doc);
-      if (refs.length > 0 && metadata?.entries) {
-        const existingIds = new Set<string>();
-        for (const entry of Object.values(metadata.entries)) {
-          existingIds.add(entry.id);
-          if (entry.resources) {
-            for (const resId of Object.keys(entry.resources)) {
-              existingIds.add(resId);
-            }
-          }
-        }
-        for (const refId of refs) {
-          if (!existingIds.has(refId)) errors.push(`Broken reference found: ${refId}`);
-        }
-      }
-    }
-
-    return { valid: errors.length === 0, errors };
-  }, [title, author, date, phase, editor, metadata]);
-
-  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -354,8 +335,6 @@ const EditorContent = React.memo(function EditorContent({
   // Only content changes are debounced (800ms) since they trigger disk/GitHub I/O.
   // Uses refs for metadata so title/author/phase keystrokes don't reset the timer.
   useEffect(() => {
-    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-
     const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
     const isContentChanged = contentStr !== lastAutoSavedRef.current.contentStr;
     const isMetadataChanged = title !== lastAutoSavedRef.current.title ||
@@ -365,11 +344,13 @@ const EditorContent = React.memo(function EditorContent({
 
     if (isContentChanged || isMetadataChanged) {
       setIsAutoSaving(true);
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+
       autoSaveTimerRef.current = setTimeout(() => {
         const { title, author, phase, date } = latestMetadataRef.current;
         const currentContent = latestContentRef.current;
         const contentStr = typeof currentContent === 'string' ? currentContent : JSON.stringify(currentContent);
-        
+
         const latex = generateLatexRef.current(currentContent, title, author, phase, date);
         updateEntry(entryId, latex, contentStr, { title, author, phase, date });
 
@@ -382,10 +363,16 @@ const EditorContent = React.memo(function EditorContent({
         setIsAutoSaving(false);
         autoSaveTimerRef.current = null;
       }, 800);
+    } else {
+      // No changes detected, ensure we aren't stuck in a saving state
+      setIsAutoSaving(false);
     }
 
     return () => {
-      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
     };
   }, [content, filename, title, author, phase, date, entryId, updateEntry]);
 
@@ -420,6 +407,14 @@ const EditorContent = React.memo(function EditorContent({
     const blob = new Blob([latex], { type: "text/plain;charset=utf-8" });
     saveAs(blob, filename);
   };
+
+  const [prevActiveMenu, setPrevActiveMenu] = useState<string | null>(null);
+  if (activeMenu !== prevActiveMenu) {
+    setPrevActiveMenu(activeMenu);
+    if (activeMenu && showTableGrid) {
+      setShowTableGrid(false);
+    }
+  }
 
   useEffect(() => {
     if (!activeMenu && !showTableGrid) return;
@@ -567,9 +562,11 @@ const EditorContent = React.memo(function EditorContent({
               icon={<TableIcon size={14} />}
               label="Table"
               onClick={(e) => {
-                if (e?.currentTarget) {
-                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                  setGridPos({ top: rect.top, left: rect.right + 212 });
+                const menuButton = (e.currentTarget as HTMLElement).closest('.relative');
+                if (menuButton) {
+                  const rect = menuButton.getBoundingClientRect();
+                  // Position below the "Insert" menu button
+                  setGridPos({ top: rect.bottom + 4, left: rect.left });
                   setShowTableGrid(true);
                 }
               }}
@@ -660,25 +657,26 @@ const EditorContent = React.memo(function EditorContent({
             </div>
 
             {!localIsValid && (
-              <div
-                className="shrink-0 text-amber-500 animate-pulse mr-4"
-                title="Incomplete metadata or resource captions"
-              >
-                <AlertTriangle size={20} />
-              </div>
+              <ValidationTooltip
+                errors={validationErrors.length > 0 ? validationErrors : ["Incomplete entry metadata or resource captions"]}
+                size={20}
+                className="mr-4"
+                iconContainerClassName="text-amber-500"
+                position="bottom"
+              />
             )}
 
             <div className="flex flex-wrap items-center gap-3">
               <DatePicker
                 value={date}
                 onChange={(val) => setDate(val)}
-                className="h-9"
+                className="h-9 flex-1 min-w-[180px]"
               />
 
               <div
-                className="h-9 flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50"
+                className="h-9 flex-1 min-w-[200px] flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50"
               >
-                <User size={14} className="text-nb-tertiary" />
+                <User size={15} className="text-nb-primary drop-shadow-sm" />
                 <AutocompleteInput
                   type="text"
                   autoComplete="off"
@@ -687,18 +685,19 @@ const EditorContent = React.memo(function EditorContent({
                   onChange={(e) => { setAuthor(e.target.value); }}
                   onSelectOption={(val) => { setAuthor(val); }}
                   placeholder="Author"
-                  className="text-xs font-semibold text-nb-on-surface-variant bg-transparent outline-none w-36"
+                  className="bg-transparent border-none outline-none text-[11px] font-bold text-nb-on-surface-variant tracking-tight flex-1 min-w-0 placeholder:text-nb-on-surface-variant/20"
                 />
               </div>
 
-              <div className="h-9 w-full sm:w-[230px] shrink-0 flex items-center gap-2.5 px-3 rounded-xl border border-nb-outline-variant/30 bg-nb-surface-low transition-all relative">
+              <div className="relative h-9 flex-1 min-w-[240px] flex items-center gap-2.5 px-3 rounded-xl border border-nb-outline-variant/30 bg-nb-surface-low transition-all">
                 <div
                   className="absolute inset-0 z-10 cursor-pointer"
+                  onMouseDown={(e) => e.stopPropagation()}
                   onClick={() => setActiveMenu(activeMenu === "Phase" ? null : "Phase")}
                 />
 
                 {activePhaseCfg && (
-                  <activePhaseCfg.icon size={14} className="shrink-0" style={{ color: availablePhases.find(p => p.index === phase)?.color }} />
+                  <activePhaseCfg.icon size={15} className="shrink-0 drop-shadow-sm" style={{ color: availablePhases.find(p => p.index === phase)?.color }} />
                 )}
 
                 {/* Metadata dropdown */}
@@ -906,7 +905,8 @@ const EditorContent = React.memo(function EditorContent({
                     e?.stopPropagation();
                     if (!showTableGrid && tableButtonRef.current) {
                       const rect = tableButtonRef.current.getBoundingClientRect();
-                      setGridPos({ top: rect.bottom + 8, left: rect.right });
+                      // Position below button, aligned to its right edge
+                      setGridPos({ top: rect.bottom + 8, left: rect.right - 204 });
                       setShowTableGrid(true);
                     } else {
                       setShowTableGrid(false);
@@ -921,8 +921,8 @@ const EditorContent = React.memo(function EditorContent({
                   <div
                     style={{
                       position: 'fixed',
-                      top: Math.min(gridPos.top, (typeof window !== 'undefined' ? window.innerHeight : 1000) - 220),
-                      left: Math.max(8, Math.min(gridPos.left - 204, (typeof window !== 'undefined' ? window.innerWidth : 1000) - 220)),
+                      top: Math.max(8, Math.min(gridPos.top, (typeof window !== 'undefined' ? window.innerHeight : 1000) - 220)),
+                      left: Math.max(8, Math.min(gridPos.left, (typeof window !== 'undefined' ? window.innerWidth : 1000) - 220)),
                       zIndex: 9999
                     }}
                     className="shadow-2xl rounded-xl animate-in fade-in zoom-in-95 duration-200"
@@ -974,18 +974,6 @@ const EditorContent = React.memo(function EditorContent({
       {/* ── Scrollable Workspace ──────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto overflow-x-auto bg-nb-surface scrollbar-hide">
         <div className="max-w-7xl mx-auto px-14 lg:pl-16 lg:pr-8 py-4 min-h-full">
-          {validationErrors.length > 0 && (
-            <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3 animate-in slide-in-from-top-2">
-              <AlertCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <h4 className="text-xs font-bold uppercase tracking-widest text-red-600 mb-1">Missing Information</h4>
-                <ul className="list-disc list-inside text-xs text-red-500 space-y-0.5">
-                  {validationErrors.map((err, i) => <li key={i}>{err}</li>)}
-                </ul>
-              </div>
-            </div>
-          )}
-
           <UnifiedEditor
             key={filename}
             filename={filename}
