@@ -12,6 +12,7 @@ import {
   Terminal, Link as LinkIcon, Underline as UnderlineIcon,
   FileJson
 } from "lucide-react";
+import ValidationTooltip from "./ValidationTooltip";
 import * as LucideIcons from "lucide-react";
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng } from "@/lib/utils";
 import { getLocalDateString } from "@/lib/metadata";
@@ -139,56 +140,70 @@ const EditorContent = React.memo(function EditorContent({
   const [content, setContent] = useState<TipTapNode | string>(() => parseInitialContent(initialContent));
   const [editor, setEditor] = useState<import("@tiptap/react").Editor | null>(null);
 
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+
+  const validate = useCallback(() => {
+    const errors: string[] = [];
+    if (!title.trim()) errors.push("Project title is required.");
+    if (!author.trim()) errors.push("Author name is required.");
+    if (!date.trim()) errors.push("Date is required.");
+    if (phase === null) errors.push("Project phase is required.");
+
+    const TYPE_LABELS: Record<string, string> = {
+      image: "image",
+      table: "table",
+      codeBlock: "code block",
+      rawLatex: "LaTeX block",
+      header: "header"
+    };
+
+    if (editor) {
+      const doc = editor.getJSON();
+      const resources = extractResources(doc);
+      for (const res of Object.values(resources)) {
+        const label = TYPE_LABELS[res.type] || res.type;
+        if (!res.title?.trim()) errors.push(`Title missing for ${label}.`);
+        if (res.type !== "header" && !res.caption?.trim()) errors.push(`Caption missing for ${label}.`);
+      }
+
+      const refs = extractReferences(doc);
+      if (refs.length > 0 && metadata?.entries) {
+        const existingIds = new Set<string>();
+        for (const entry of Object.values(metadata.entries)) {
+          existingIds.add(entry.id);
+          if (entry.resources) {
+            for (const resId of Object.keys(entry.resources)) {
+              existingIds.add(resId);
+            }
+          }
+        }
+        for (const refId of refs) {
+          if (!existingIds.has(refId)) errors.push(`Broken reference found: ${refId}`);
+        }
+      }
+    }
+
+    return { valid: errors.length === 0, errors };
+  }, [title, author, date, phase, editor, metadata]);
+
   // Local validation state for immediate UI feedback.
   // Editor is the sole authority on validity while open — parent isValid is only used for initial value.
   // This prevents flickering caused by stale metadata flowing back down during debounced saves.
   const [localIsValid, setLocalIsValid] = useState(metadata.entries[entryId]?.isValid !== false);
 
-  const checkValidity = useCallback(() => {
-    if (!title?.trim() || !author?.trim() || !date?.trim() || phase === null) return false;
-    if (!editor) return true;
 
-    const doc = editor.getJSON();
-
-    // Check resources
-    const resources = extractResources(doc);
-    for (const res of Object.values(resources)) {
-      if (!res.title?.trim()) return false;
-      if (res.type !== "header" && !res.caption?.trim()) return false;
-    }
-
-    // Check references
-    const refs = extractReferences(doc);
-    if (refs.length > 0 && metadata?.entries) {
-      // Build set of all existing IDs
-      const existingIds = new Set<string>();
-      for (const entry of Object.values(metadata.entries)) {
-        existingIds.add(entry.id);
-        if (entry.resources) {
-          for (const resId of Object.keys(entry.resources)) {
-            existingIds.add(resId);
-          }
-        }
-      }
-
-      for (const refId of refs) {
-        if (!existingIds.has(refId)) return false;
-      }
-    }
-
-    return true;
-  }, [title, author, phase, date, editor, metadata]);
 
   // Local metadata validation (immediate for UI)
   useEffect(() => {
-    const valid = checkValidity();
-    if (valid !== localIsValid) {
+    const { valid, errors } = validate();
+    if (valid !== localIsValid || JSON.stringify(errors) !== JSON.stringify(validationErrors)) {
       requestAnimationFrame(() => {
         setLocalIsValid(valid);
-        setEntryValidity(entryId, valid, valid ? [] : ["Incomplete metadata or resource captions"]);
+        setValidationErrors(errors);
+        setEntryValidity(entryId, valid, errors);
       });
     }
-  }, [title, author, phase, date, editor?.state.doc.content, checkValidity, localIsValid, currentProjectId, entryId, setEntryValidity]);
+  }, [title, author, phase, date, editor?.state.doc.content, validate, localIsValid, validationErrors, currentProjectId, entryId, setEntryValidity]);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -283,42 +298,7 @@ const EditorContent = React.memo(function EditorContent({
     return generateEntryLatex(cnt, t, a, p === null ? "" : p, initialCreatedAt, id, resourceTypes, d);
   }, [filename, initialCreatedAt, metadata.entries]);
 
-  const validate = useCallback(() => {
-    const errors: string[] = [];
-    if (!title.trim()) errors.push("Project title is required.");
-    if (!author.trim()) errors.push("Author name is required.");
-    if (!date.trim()) errors.push("Date is required.");
-    if (phase === null) errors.push("Project phase is required.");
 
-    if (editor) {
-      const doc = editor.getJSON();
-      const resources = extractResources(doc);
-      for (const res of Object.values(resources)) {
-        if (!res.title?.trim()) errors.push(`Title missing for ${res.type}.`);
-        if (res.type !== "header" && !res.caption?.trim()) errors.push(`Caption missing for ${res.type}.`);
-      }
-
-      const refs = extractReferences(doc);
-      if (refs.length > 0 && metadata?.entries) {
-        const existingIds = new Set<string>();
-        for (const entry of Object.values(metadata.entries)) {
-          existingIds.add(entry.id);
-          if (entry.resources) {
-            for (const resId of Object.keys(entry.resources)) {
-              existingIds.add(resId);
-            }
-          }
-        }
-        for (const refId of refs) {
-          if (!existingIds.has(refId)) errors.push(`Broken reference found: ${refId}`);
-        }
-      }
-    }
-
-    return { valid: errors.length === 0, errors };
-  }, [title, author, date, phase, editor, metadata]);
-
-  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -660,12 +640,13 @@ const EditorContent = React.memo(function EditorContent({
             </div>
 
             {!localIsValid && (
-              <div
-                className="shrink-0 text-amber-500 animate-pulse mr-4"
-                title="Incomplete metadata or resource captions"
-              >
-                <AlertTriangle size={20} />
-              </div>
+              <ValidationTooltip
+                errors={validationErrors.length > 0 ? validationErrors : ["Incomplete entry metadata or resource captions"]}
+                size={20}
+                className="mr-4"
+                iconContainerClassName="text-amber-500"
+                position="bottom"
+              />
             )}
 
             <div className="flex flex-wrap items-center gap-3">
@@ -974,18 +955,6 @@ const EditorContent = React.memo(function EditorContent({
       {/* ── Scrollable Workspace ──────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto overflow-x-auto bg-nb-surface scrollbar-hide">
         <div className="max-w-7xl mx-auto px-14 lg:pl-16 lg:pr-8 py-4 min-h-full">
-          {validationErrors.length > 0 && (
-            <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3 animate-in slide-in-from-top-2">
-              <AlertCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <h4 className="text-xs font-bold uppercase tracking-widest text-red-600 mb-1">Missing Information</h4>
-                <ul className="list-disc list-inside text-xs text-red-500 space-y-0.5">
-                  {validationErrors.map((err, i) => <li key={i}>{err}</li>)}
-                </ul>
-              </div>
-            </div>
-          )}
-
           <UnifiedEditor
             key={filename}
             filename={filename}

@@ -419,12 +419,12 @@ class WorkspaceStore {
 
       // Keep metadata clean, but update the global asset cache
       assetCache.forEach((v, k) => this.assetCache.set(k, v));
-      this.metadata = { ...EMPTY_METADATA, ...parsed };
+      this.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...parsed });
     } catch {
-      this.metadata = EMPTY_METADATA;
+      this.metadata = validateNotebookIntegrity(EMPTY_METADATA);
       isNew = true;
       // Initialize notebook.json
-      await writeLocalFile(this.dirHandle, INDEX_PATH, JSON.stringify(EMPTY_METADATA, null, 2));
+      await writeLocalFile(this.dirHandle, INDEX_PATH, JSON.stringify(this.metadata, null, 2));
     }
     this.isMainTexPresent = await checkLocalFileExists(this.dirHandle, "main.tex");
     
@@ -454,19 +454,19 @@ class WorkspaceStore {
 
     if (pendingMeta?.content) {
       const parsed = JSON.parse(pendingMeta.content);
-      this.metadata = { ...EMPTY_METADATA, ...parsed, projectId: this.currentProjectId || undefined, projectName: this.currentProject?.name || undefined };
+      this.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...parsed, projectId: this.currentProjectId || undefined, projectName: this.currentProject?.name || undefined });
     } else {
       try {
         const metaStr = await fetchFileContent(this.config, actualIndexPath);
-        this.metadata = { ...EMPTY_METADATA, ...JSON.parse(metaStr) };
+        this.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...JSON.parse(metaStr) });
       } catch {
-        this.metadata = EMPTY_METADATA;
+        this.metadata = validateNotebookIntegrity(EMPTY_METADATA);
         isNew = true;
         // Stage default metadata
         await stageChange(dbName, {
           path: INDEX_PATH,
           operation: "upsert",
-          content: JSON.stringify(EMPTY_METADATA, null, 2),
+          content: JSON.stringify(this.metadata, null, 2),
           label: "Initialize notebook.json",
           stagedAt: new Date().toISOString()
         });
