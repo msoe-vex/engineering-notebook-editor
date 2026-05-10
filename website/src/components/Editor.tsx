@@ -403,6 +403,12 @@ const EditorContent = React.memo(function EditorContent({
   };
 
   useEffect(() => {
+    if (activeMenu) {
+      setShowTableGrid(false);
+    }
+  }, [activeMenu]);
+
+  useEffect(() => {
     if (!activeMenu && !showTableGrid) return;
     const handleOutsideClick = () => {
       setActiveMenu(null);
@@ -548,9 +554,11 @@ const EditorContent = React.memo(function EditorContent({
               icon={<TableIcon size={14} />}
               label="Table"
               onClick={(e) => {
-                if (e?.currentTarget) {
-                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                  setGridPos({ top: rect.top, left: rect.right + 212 });
+                const menuButton = (e.currentTarget as HTMLElement).closest('.relative');
+                if (menuButton) {
+                  const rect = menuButton.getBoundingClientRect();
+                  // Position below the "Insert" menu button
+                  setGridPos({ top: rect.bottom + 4, left: rect.left });
                   setShowTableGrid(true);
                 }
               }}
@@ -889,7 +897,8 @@ const EditorContent = React.memo(function EditorContent({
                     e?.stopPropagation();
                     if (!showTableGrid && tableButtonRef.current) {
                       const rect = tableButtonRef.current.getBoundingClientRect();
-                      setGridPos({ top: rect.bottom + 8, left: rect.right });
+                      // Position below button, aligned to its right edge
+                      setGridPos({ top: rect.bottom + 8, left: rect.right - 204 });
                       setShowTableGrid(true);
                     } else {
                       setShowTableGrid(false);
@@ -904,8 +913,8 @@ const EditorContent = React.memo(function EditorContent({
                   <div
                     style={{
                       position: 'fixed',
-                      top: Math.min(gridPos.top, (typeof window !== 'undefined' ? window.innerHeight : 1000) - 220),
-                      left: Math.max(8, Math.min(gridPos.left - 204, (typeof window !== 'undefined' ? window.innerWidth : 1000) - 220)),
+                      top: Math.max(8, Math.min(gridPos.top, (typeof window !== 'undefined' ? window.innerHeight : 1000) - 220)),
+                      left: Math.max(8, Math.min(gridPos.left, (typeof window !== 'undefined' ? window.innerWidth : 1000) - 220)),
                       zIndex: 9999
                     }}
                     className="shadow-2xl rounded-xl animate-in fade-in zoom-in-95 duration-200"
