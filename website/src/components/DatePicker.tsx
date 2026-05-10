@@ -100,15 +100,16 @@ export default function DatePicker({ value, onChange, className = "" }: DatePick
   ];
 
   const [inputValue, setInputValue] = useState(value);
+  const [prevValue, setPrevValue] = useState(value);
 
   // Sync internal input value when external value changes (e.g. from picker)
-  useEffect(() => {
-    // Only update if the prop is truly different from our local state
-    // and we aren't currently focusing the input (to avoid cursor jumps)
-    if (value !== inputValue && document.activeElement?.tagName !== 'INPUT') {
+  // We do this during render to avoid cascading useEffect renders
+  if (value !== prevValue) {
+    setPrevValue(value);
+    if (document.activeElement?.tagName !== 'INPUT') {
       setInputValue(value);
     }
-  }, [value, inputValue]);
+  }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -128,13 +129,6 @@ export default function DatePicker({ value, onChange, className = "" }: DatePick
         const ISO = `${year}-${month}-${day}`;
         if (ISO !== value) onChange(ISO);
       }
-    }
-  };
-
-  const handleBlur = () => {
-    const d = new Date(inputValue + "T12:00:00");
-    if (isNaN(d.getTime()) || d.getFullYear() <= 1900) {
-      setInputValue(value);
     }
   };
 

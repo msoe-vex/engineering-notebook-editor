@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import {
   FileText, Plus, X, Calendar, SortAsc, SortDesc, CalendarDays,
-  Search, ChevronDown, AlertTriangle, ExternalLink, Trash2, FileJson, FileCode,
+  Search, ChevronDown, ExternalLink, Trash2, FileJson, FileCode,
   Download
 } from "lucide-react";
 import ValidationTooltip from "./ValidationTooltip";
