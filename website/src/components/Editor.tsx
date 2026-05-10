@@ -72,6 +72,7 @@ const MenuItem = ({ label, children, activeMenu, setActiveMenu }: { label: strin
   <div className="relative h-full flex items-center">
     <button
       type="button"
+      onMouseDown={(e) => e.stopPropagation()}
       onClick={() => { setActiveMenu(activeMenu === label ? null : label); }}
       onMouseEnter={() => { if (activeMenu) setActiveMenu(label); }}
       className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-widest transition-colors cursor-pointer ${activeMenu === label ? "bg-nb-primary text-white" : "text-nb-on-surface-variant hover:bg-nb-surface-mid"
@@ -349,7 +350,7 @@ const EditorContent = React.memo(function EditorContent({
         const { title, author, phase, date } = latestMetadataRef.current;
         const currentContent = latestContentRef.current;
         const contentStr = typeof currentContent === 'string' ? currentContent : JSON.stringify(currentContent);
-        
+
         const latex = generateLatexRef.current(currentContent, title, author, phase, date);
         updateEntry(entryId, latex, contentStr, { title, author, phase, date });
 
@@ -653,13 +654,13 @@ const EditorContent = React.memo(function EditorContent({
               <DatePicker
                 value={date}
                 onChange={(val) => setDate(val)}
-                className="h-9"
+                className="h-9 flex-1 min-w-[180px]"
               />
 
               <div
-                className="h-9 flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50"
+                className="h-9 flex-1 min-w-[200px] flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50"
               >
-                <User size={14} className="text-nb-tertiary" />
+                <User size={15} className="text-nb-primary drop-shadow-sm" />
                 <AutocompleteInput
                   type="text"
                   autoComplete="off"
@@ -668,18 +669,19 @@ const EditorContent = React.memo(function EditorContent({
                   onChange={(e) => { setAuthor(e.target.value); }}
                   onSelectOption={(val) => { setAuthor(val); }}
                   placeholder="Author"
-                  className="text-xs font-semibold text-nb-on-surface-variant bg-transparent outline-none w-36"
+                  className="bg-transparent border-none outline-none text-[11px] font-bold text-nb-on-surface-variant tracking-tight flex-1 min-w-0 placeholder:text-nb-on-surface-variant/20"
                 />
               </div>
 
-              <div className="h-9 w-full sm:w-[230px] shrink-0 flex items-center gap-2.5 px-3 rounded-xl border border-nb-outline-variant/30 bg-nb-surface-low transition-all relative">
+              <div className="relative h-9 flex-1 min-w-[240px] flex items-center gap-2.5 px-3 rounded-xl border border-nb-outline-variant/30 bg-nb-surface-low transition-all">
                 <div
                   className="absolute inset-0 z-10 cursor-pointer"
+                  onMouseDown={(e) => e.stopPropagation()}
                   onClick={() => setActiveMenu(activeMenu === "Phase" ? null : "Phase")}
                 />
 
                 {activePhaseCfg && (
-                  <activePhaseCfg.icon size={14} className="shrink-0" style={{ color: availablePhases.find(p => p.index === phase)?.color }} />
+                  <activePhaseCfg.icon size={15} className="shrink-0 drop-shadow-sm" style={{ color: availablePhases.find(p => p.index === phase)?.color }} />
                 )}
 
                 {/* Metadata dropdown */}
