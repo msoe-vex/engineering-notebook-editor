@@ -30,25 +30,48 @@ export const ToolbarButton = ({
 export const TableGridSelector = ({ onSelect, initialRows = 0, initialCols = 0 }: { onSelect: (rows: number, cols: number) => void, initialRows?: number, initialCols?: number }) => {
   const [hovered, setHovered] = useState({ r: initialRows, c: initialCols });
 
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const colWidth = rect.width / 10;
+    const rowHeight = rect.height / 10;
+    
+    const c = Math.min(10, Math.max(1, Math.ceil(x / colWidth)));
+    const r = Math.min(10, Math.max(1, Math.ceil(y / rowHeight)));
+    
+    if (r !== hovered.r || c !== hovered.c) {
+      setHovered({ r, c });
+    }
+  };
+
   return (
-    <div className="p-3 bg-nb-surface border border-nb-outline-variant shadow-nb-lg rounded-xl w-max">
-      <div className="grid grid-cols-10 gap-1 mb-2 w-[180px]">
+    <div className="p-3 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-2xl w-max animate-in fade-in zoom-in-95 duration-200">
+      <div 
+        className="grid grid-cols-10 w-[160px] h-[160px] relative cursor-pointer"
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => setHovered({ r: initialRows, c: initialCols })}
+        onClick={() => onSelect(hovered.r, hovered.c)}
+      >
         {Array.from({ length: 10 }).map((_, r) => (
           Array.from({ length: 10 }).map((_, c) => (
             <div
               key={`${r}-${c}`}
-              onMouseEnter={() => setHovered({ r: r + 1, c: c + 1 })}
-              onClick={() => onSelect(r + 1, c + 1)}
-              className={`w-3.5 h-3.5 rounded-sm border transition-colors cursor-pointer ${r < hovered.r && c < hovered.c
-                ? "bg-nb-primary border-nb-primary"
-                : "bg-nb-surface-low border-nb-outline-variant/30 hover:border-nb-primary/50"
-                }`}
-            />
+              className="flex items-center justify-center w-full h-full"
+            >
+              <div
+                className={`w-[85%] h-[85%] rounded-[1px] border transition-all duration-75 ${r < hovered.r && c < hovered.c
+                  ? "bg-nb-primary border-nb-primary shadow-[0_0_8px_rgba(var(--nb-primary-rgb),0.4)]"
+                  : "bg-nb-surface-low border-nb-outline-variant/20"
+                  }`}
+              />
+            </div>
           ))
         ))}
       </div>
-      <div className="text-[10px] font-bold tracking-widest text-nb-on-surface-variant text-center bg-nb-surface-low py-1 rounded">
-        {hovered.r > 0 ? `${hovered.r} x ${hovered.c}` : "Select Size"}
+      <div className="mt-3 text-[10px] font-black tracking-widest text-nb-on-surface-variant text-center bg-nb-surface-low py-1.5 rounded-lg border border-nb-outline-variant/10">
+        {hovered.r > 0 ? `${hovered.r} × ${hovered.c}` : "SELECT SIZE"}
       </div>
     </div>
   );
