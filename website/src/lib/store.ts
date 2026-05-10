@@ -720,7 +720,7 @@ class WorkspaceStore {
     this.notifyStateChange();
     events.emit(EventNames.ENTRY_UPDATED, { id, ...info });
 
-    if (info.author) {
+    if (info.author && info.author !== existingEntry.author) {
       localStorage.setItem("nb-last-author", info.author);
     }
 
