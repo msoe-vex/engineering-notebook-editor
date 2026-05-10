@@ -6,7 +6,7 @@ import { ToolbarButton, TableGridSelector } from "./editor/EditorUI";
 import { createPortal } from "react-dom";
 import { saveAs } from "file-saver";
 import {
-  Save, Trash2, AlertCircle, AlertTriangle, Loader2, User, X, FileCode,
+  Save, Trash2, Loader2, User, X, FileCode,
   Undo2, Redo2, ImagePlus, ChevronDown, ChevronUp, List, ListOrdered,
   Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
   Terminal, Link as LinkIcon, Underline as UnderlineIcon,
@@ -402,11 +402,13 @@ const EditorContent = React.memo(function EditorContent({
     saveAs(blob, filename);
   };
 
-  useEffect(() => {
-    if (activeMenu) {
+  const [prevActiveMenu, setPrevActiveMenu] = useState<string | null>(null);
+  if (activeMenu !== prevActiveMenu) {
+    setPrevActiveMenu(activeMenu);
+    if (activeMenu && showTableGrid) {
       setShowTableGrid(false);
     }
-  }, [activeMenu]);
+  }
 
   useEffect(() => {
     if (!activeMenu && !showTableGrid) return;

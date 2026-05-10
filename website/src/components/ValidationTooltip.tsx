@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useLayoutEffect } from 'react';
+import React, { useState, useRef, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, Info } from 'lucide-react';
 
@@ -24,9 +24,7 @@ export default function ValidationTooltip({
   const triggerRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ top: 0, left: 0 });
 
-  if (!errors || errors.length === 0) return null;
-
-  const updatePosition = () => {
+  const updatePosition = useCallback(() => {
     if (!triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
     const tooltipWidth = 256;
@@ -63,29 +61,32 @@ export default function ValidationTooltip({
 
     setPosition({ top, left });
     setIsReady(true);
-  };
+  }, [preferredPosition]);
 
   // We use useLayoutEffect to position it before the browser paints
   useLayoutEffect(() => {
-    if (isHovered) {
+    if (isHovered && errors.length > 0) {
       updatePosition();
       window.addEventListener('scroll', updatePosition, true);
       window.addEventListener('resize', updatePosition);
-    } else {
-      setIsReady(false);
     }
     return () => {
       window.removeEventListener('scroll', updatePosition, true);
       window.removeEventListener('resize', updatePosition);
     };
-  }, [isHovered]);
+  }, [isHovered, updatePosition, errors.length]);
+
+  if (!errors || errors.length === 0) return null;
 
   return (
     <div
       ref={triggerRef}
       className={`relative inline-block ${className}`}
       onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseLeave={() => {
+        setIsHovered(false);
+        setIsReady(false);
+      }}
     >
       <div className={`shrink-0 flex items-center justify-center animate-pulse cursor-help ${iconContainerClassName}`}>
         <AlertTriangle size={size} />
