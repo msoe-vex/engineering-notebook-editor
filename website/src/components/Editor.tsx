@@ -335,8 +335,6 @@ const EditorContent = React.memo(function EditorContent({
   // Only content changes are debounced (800ms) since they trigger disk/GitHub I/O.
   // Uses refs for metadata so title/author/phase keystrokes don't reset the timer.
   useEffect(() => {
-    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-
     const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
     const isContentChanged = contentStr !== lastAutoSavedRef.current.contentStr;
     const isMetadataChanged = title !== lastAutoSavedRef.current.title ||
@@ -346,6 +344,8 @@ const EditorContent = React.memo(function EditorContent({
 
     if (isContentChanged || isMetadataChanged) {
       setIsAutoSaving(true);
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+
       autoSaveTimerRef.current = setTimeout(() => {
         const { title, author, phase, date } = latestMetadataRef.current;
         const currentContent = latestContentRef.current;
@@ -363,10 +363,16 @@ const EditorContent = React.memo(function EditorContent({
         setIsAutoSaving(false);
         autoSaveTimerRef.current = null;
       }, 800);
+    } else {
+      // No changes detected, ensure we aren't stuck in a saving state
+      setIsAutoSaving(false);
     }
 
     return () => {
-      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
     };
   }, [content, filename, title, author, phase, date, entryId, updateEntry]);
 
