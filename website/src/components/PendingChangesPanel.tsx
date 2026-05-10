@@ -5,7 +5,7 @@ import { PendingChange } from "@/lib/db";
 interface PendingChangesPanelProps {
   pendingChanges: PendingChange[];
   isCommitting: boolean;
-  onCommit: () => void;
+  onCommit: (message?: string) => void;
   onDiscard: () => void;
   workspaceMode: string;
 }
@@ -18,6 +18,7 @@ export default function PendingChangesPanel({
   workspaceMode
 }: PendingChangesPanelProps) {
   const [isCollapsed, setIsCollapsed] = useState(true);
+  const [commitMessage, setCommitMessage] = useState("");
 
   if (workspaceMode !== "github" || (pendingChanges.length === 0 && !isCommitting)) {
     return null;
@@ -25,6 +26,13 @@ export default function PendingChangesPanel({
 
   const upserted = pendingChanges.filter(p => p.operation === "upsert");
   const deleted = pendingChanges.filter(p => p.operation === "delete");
+
+  const handleCommit = () => {
+    onCommit(commitMessage);
+    // Note: We don't clear commitMessage here because if the commit fails,
+    // the user should be able to try again with the same message.
+    // If it succeeds, the panel usually unmounts as pendingChanges goes to 0.
+  };
 
   return (
     <div className="mb-4">
@@ -65,8 +73,18 @@ export default function PendingChangesPanel({
         )}
       </div>
 
+      <div className="mb-3">
+        <textarea
+          value={commitMessage}
+          onChange={(e) => setCommitMessage(e.target.value)}
+          placeholder="Commit message (optional)..."
+          disabled={isCommitting}
+          className="w-full bg-nb-surface border border-nb-outline-variant rounded-lg p-2.5 text-[10px] text-nb-on-surface placeholder:text-nb-on-surface-variant/40 focus:outline-none focus:ring-1 focus:ring-nb-tertiary transition-all resize-none h-16 scrollbar-hide"
+        />
+      </div>
+
       <button
-        onClick={onCommit}
+        onClick={handleCommit}
         disabled={isCommitting || (upserted.length === 0 && deleted.length === 0)}
         className="w-full bg-nb-tertiary hover:bg-nb-tertiary-dim text-white text-[9px] font-bold tracking-widest py-3 rounded-lg transition-all active:scale-[0.98] shadow-lg shadow-nb-tertiary/20 disabled:opacity-30 cursor-pointer"
       >

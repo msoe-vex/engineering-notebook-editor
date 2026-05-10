@@ -159,7 +159,7 @@ export default function Sidebar({
     await discardPendingChanges();
   };
 
-  const handleCommit = async () => {
+  const handleCommit = async (message?: string) => {
     if (!config) {
       showNotification("GitHub is not configured for this project.", "error");
       return;
@@ -167,7 +167,7 @@ export default function Sidebar({
 
     try {
       setIsCommitting(true);
-      await commitAll(config);
+      await commitAll(config, message);
       showNotification("Synced changes to GitHub.", "success");
     } catch (error) {
       console.error("GitHub sync failed", error);
