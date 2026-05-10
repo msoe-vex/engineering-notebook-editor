@@ -77,7 +77,7 @@ export function useWorkspace() {
   const createGithubProject = useCallback((config: { owner: string; repo: string; branch: string; folderPath: string; name: string }) => store.createGithubProject(config), []);
   const createLocalProject = useCallback((handle: FileSystemDirectoryHandle, name: string) => store.createLocalProject(handle, name), []);
   const createTemporaryProject = useCallback(() => store.createTemporaryProject(), []);
-  const commitAll = useCallback((config: GitHubConfig) => store.commitAll(config), []);
+  const commitAll = useCallback((config: GitHubConfig, customMessage?: string) => store.commitAll(config, customMessage), []);
   const refreshPending = useCallback(() => store.refreshPending(), []);
   const setEntryValidity = useCallback((id: string, isValid: boolean, validationErrors?: string[]) => store.setEntryValidity(id, isValid, validationErrors), []);
   const discardPendingChanges = useCallback(() => store.discardPendingChanges(), []);

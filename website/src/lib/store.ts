@@ -978,7 +978,7 @@ class WorkspaceStore {
     });
   }
 
-  async commitAll(config: GitHubConfig) {
+  async commitAll(config: GitHubConfig, customMessage?: string) {
     const dbName = this.getDBName();
     const all = await getAllPending(dbName);
     const { commitChanges } = await import("./github");
@@ -1015,7 +1015,14 @@ class WorkspaceStore {
       return;
     }
 
-    await commitChanges(config, gitChanges, `Update notebook: ${gitChanges.length} changes`);
+    const changesCount = gitChanges.length;
+    const filesLabel = changesCount === 1 ? "file" : "files";
+    const defaultMsg = `Update notebook: ${changesCount} ${filesLabel}`;
+    const finalMsg = customMessage 
+      ? `${customMessage} (Updated ${changesCount} ${filesLabel})` 
+      : defaultMsg;
+
+    await commitChanges(config, gitChanges, finalMsg);
     await this.loadGitHubWorkspace();
     await clearAllPending(dbName);
     await this.refreshPending();
