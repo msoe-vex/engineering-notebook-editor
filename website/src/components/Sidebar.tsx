@@ -95,7 +95,8 @@ export default function Sidebar({
         timestamp: meta?.createdAt,
         updatedAt: meta?.updatedAt,
         date: meta?.date,
-        isValid: meta?.isValid !== false
+        isValid: meta?.isValid !== false,
+        validationErrors: meta?.validationErrors || []
       };
     });
   }, [entries, metadata]);
