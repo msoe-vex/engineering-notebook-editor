@@ -15,7 +15,7 @@ export default function DatePicker({ value, onChange, className = "" }: DatePick
 
   // Parse current value or default to today
   const selectedDate = value ? new Date(value + "T12:00:00") : new Date();
-  
+
   // State for the calendar view (month/year)
   const [viewDate, setViewDate] = useState(new Date(selectedDate.getTime()));
 
@@ -58,28 +58,28 @@ export default function DatePicker({ value, onChange, className = "" }: DatePick
     const month = viewDate.getMonth();
     const totalDays = daysInMonth(year, month);
     const firstDay = firstDayOfMonth(year, month);
-    
+
     const days = [];
     // Padding for first week
     for (let i = 0; i < firstDay; i++) {
       days.push(<div key={`pad-${i}`} className="w-8 h-8" />);
     }
-    
+
     for (let d = 1; d <= totalDays; d++) {
-      const isSelected = selectedDate.getFullYear() === year && 
-                         selectedDate.getMonth() === month && 
-                         selectedDate.getDate() === d;
-      const isToday = new Date().getFullYear() === year && 
-                      new Date().getMonth() === month && 
-                      new Date().getDate() === d;
-      
+      const isSelected = selectedDate.getFullYear() === year &&
+        selectedDate.getMonth() === month &&
+        selectedDate.getDate() === d;
+      const isToday = new Date().getFullYear() === year &&
+        new Date().getMonth() === month &&
+        new Date().getDate() === d;
+
       days.push(
         <button
           key={d}
           onClick={(e) => { e.stopPropagation(); handleDateSelect(d); }}
           className={`w-8 h-8 flex items-center justify-center text-[11px] font-bold rounded-lg transition-all cursor-pointer
-            ${isSelected 
-              ? "bg-nb-primary text-white shadow-md shadow-nb-primary/20 scale-110" 
+            ${isSelected
+              ? "bg-nb-primary text-white shadow-md shadow-nb-primary/20 scale-110"
               : isToday
                 ? "text-nb-primary bg-nb-primary/10 border border-nb-primary/20"
                 : "text-nb-on-surface hover:bg-nb-surface-mid hover:scale-105"
@@ -90,7 +90,7 @@ export default function DatePicker({ value, onChange, className = "" }: DatePick
         </button>
       );
     }
-    
+
     return days;
   };
 
@@ -99,25 +99,85 @@ export default function DatePicker({ value, onChange, className = "" }: DatePick
     "July", "August", "September", "October", "November", "December"
   ];
 
+  const [inputValue, setInputValue] = useState(value);
+
+  // Sync internal input value when external value changes (e.g. from picker)
+  useEffect(() => {
+    // Only update if the prop is truly different from our local state
+    // and we aren't currently focusing the input (to avoid cursor jumps)
+    if (value !== inputValue && document.activeElement?.tagName !== 'INPUT') {
+      setInputValue(value);
+    }
+  }, [value, inputValue]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setInputValue(val);
+
+    // Use mid-day to avoid timezone shifts where 2026-01-01 becomes 2025-12-31
+    const d = new Date(val + "T12:00:00");
+    if (!isNaN(d.getTime()) && d.getFullYear() > 1900) {
+      // Update the calendar view to match the typed date
+      setViewDate(new Date(d.getFullYear(), d.getMonth(), 1));
+
+      // Update parent value only if reasonably complete (YYYY-MM-DD)
+      if (val.length >= 10 || /^\d{4}-\d{1,2}-\d{1,2}$/.test(val)) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const ISO = `${year}-${month}-${day}`;
+        if (ISO !== value) onChange(ISO);
+      }
+    }
+  };
+
+  const handleBlur = () => {
+    const d = new Date(inputValue + "T12:00:00");
+    if (isNaN(d.getTime()) || d.getFullYear() <= 1900) {
+      setInputValue(value);
+    }
+  };
+
   return (
-    <div className={`relative ${className}`} ref={containerRef}>
-      <button
-        onClick={() => {
-          setIsOpen(!isOpen);
-          if (!isOpen) setViewDate(new Date(selectedDate.getTime()));
-        }}
-        className="h-full flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all hover:border-nb-primary/50 cursor-pointer"
-      >
-        <CalendarIcon size={14} className="text-nb-primary" />
-        <span className="text-[11px] font-bold text-nb-on-surface-variant uppercase tracking-tight">
-          {value ? new Date(value + "T12:00:00").toLocaleDateString(undefined, { dateStyle: 'medium' }) : "Select Date"}
-        </span>
-      </button>
+    <div
+      className={`flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all hover:border-nb-primary/50 relative cursor-pointer ${className}`}
+      ref={containerRef}
+      onClick={() => {
+        setIsOpen(!isOpen);
+        if (!isOpen) {
+          setViewDate(new Date(selectedDate.getTime()));
+          setInputValue(value);
+        }
+      }}
+    >
+      <CalendarIcon size={14} className="text-nb-primary shrink-0" />
+      <span className="text-[11px] font-bold text-nb-on-surface-variant uppercase tracking-tight w-[100px] truncate">
+        {value ? new Date(value + "T12:00:00").toLocaleDateString(undefined, { dateStyle: 'medium' }) : "Select Date"}
+      </span>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 p-4 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-2xl z-[100] w-64 animate-in fade-in zoom-in-95 duration-200">
-          <div className="flex items-center justify-between mb-4">
-            <button 
+        <div
+          className="absolute top-full left-0 mt-2 p-4 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-2xl z-[100] w-64 animate-in fade-in zoom-in-95 duration-200"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="mb-4">
+            <input
+              type="text"
+              value={inputValue}
+              onChange={handleInputChange}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  setIsOpen(false);
+                }
+              }}
+              placeholder="YYYY-MM-DD"
+              autoFocus
+              className="w-full bg-nb-surface-low border border-nb-outline-variant/30 rounded-xl px-3 py-2 text-[11px] font-bold text-nb-on-surface outline-none focus:border-nb-primary/50 transition-all placeholder:opacity-30"
+            />
+          </div>
+
+          <div className="flex items-center justify-between mb-4 pt-4 border-t border-nb-outline-variant/30">
+            <button
               onClick={handlePrevMonth}
               className="p-1.5 hover:bg-nb-surface-low rounded-lg transition-colors cursor-pointer text-nb-on-surface-variant"
             >
@@ -126,7 +186,7 @@ export default function DatePicker({ value, onChange, className = "" }: DatePick
             <div className="text-[11px] font-black uppercase tracking-widest text-nb-on-surface">
               {monthNames[viewDate.getMonth()]} {viewDate.getFullYear()}
             </div>
-            <button 
+            <button
               onClick={handleNextMonth}
               className="p-1.5 hover:bg-nb-surface-low rounded-lg transition-colors cursor-pointer text-nb-on-surface-variant"
             >
@@ -148,8 +208,8 @@ export default function DatePicker({ value, onChange, className = "" }: DatePick
 
           <div className="mt-4 pt-4 border-t border-nb-outline-variant/30 flex justify-between">
             <button
-              onClick={(e) => { 
-                e.stopPropagation(); 
+              onClick={(e) => {
+                e.stopPropagation();
                 const now = new Date();
                 const year = now.getFullYear();
                 const month = String(now.getMonth() + 1).padStart(2, '0');
