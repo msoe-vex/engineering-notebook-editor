@@ -150,8 +150,8 @@ export default function DatePicker({ value, onChange, className = "" }: DatePick
         }
       }}
     >
-      <CalendarIcon size={14} className="text-nb-primary shrink-0" />
-      <span className="text-[11px] font-bold text-nb-on-surface-variant uppercase tracking-tight w-[100px] truncate">
+      <CalendarIcon size={15} className="text-nb-primary shrink-0 drop-shadow-sm" />
+      <span className="text-[11px] font-bold text-nb-on-surface-variant tracking-tight flex-1 truncate">
         {value ? new Date(value + "T12:00:00").toLocaleDateString(undefined, { dateStyle: 'medium' }) : "Select Date"}
       </span>
 
@@ -183,7 +183,7 @@ export default function DatePicker({ value, onChange, className = "" }: DatePick
             >
               <ChevronLeft size={16} />
             </button>
-            <div className="text-[11px] font-black uppercase tracking-widest text-nb-on-surface">
+            <div className="text-[11px] font-black tracking-widest text-nb-on-surface">
               {monthNames[viewDate.getMonth()]} {viewDate.getFullYear()}
             </div>
             <button
