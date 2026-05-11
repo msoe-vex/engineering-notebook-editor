@@ -617,13 +617,10 @@ export default function App() {
     <div className="flex flex-col h-full overflow-hidden bg-nb-surface-low">
       <div className="flex items-center gap-3 px-4 h-14 border-b border-nb-outline-variant shrink-0 bg-nb-surface">
         <div className="w-6 h-6 rounded-md bg-nb-primary flex items-center justify-center shadow-sm shadow-nb-primary/20">
-          <button onClick={handleDisconnect} title="Home" className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors"><BookOpen size={14} className="text-white" /></button>
+          <BookOpen size={14} className="text-white" />
         </div>
         <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-nb-on-surface truncate">Notebook</p></div>
         <div className="flex items-center gap-1">
-          <button onClick={handleImportNotebook} title="Import Notebook/Entries" className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors"><Upload size={16} /></button>
-          <button onClick={handleExportNotebook} title="Export Entire Notebook" className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors"><Download size={16} /></button>
-          <button onClick={handleDisconnect} title="Switch Workspace" className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors"><ArrowLeftRight size={16} /></button>
           {isMobile && <button onClick={() => setUserSidebarPreference(false)} className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant transition-colors"><X size={18} /></button>}
         </div>
       </div>
@@ -656,6 +653,11 @@ export default function App() {
         isDarkMode={isDarkMode}
         onToggleTheme={() => setTheme(isDarkMode ? "light" : "dark")}
         onOpenHelp={() => navigateTo({}, '/workspace/help')}
+        onOpenTeam={handleOpenTeamEditor}
+        onOpenCompiler={() => navigateTo({}, '/workspace/compile')}
+        onImport={handleImportNotebook}
+        onExport={handleExportNotebook}
+        onDisconnect={handleDisconnect}
         mounted={mounted}
       />
 
