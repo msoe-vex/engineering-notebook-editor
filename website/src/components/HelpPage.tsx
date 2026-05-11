@@ -30,9 +30,10 @@ export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
   const baseHelpPath = isWorkspaceHelp ? '/workspace/help' : '/help';
 
   // Determine active tab from path or default
-  const validTabs = ['modes', 'local', 'github', 'editor', 'data', 'phases', 'tips', 'resources'];
+  const validTabs = ['modes', 'local', 'github', 'editor', 'compiler', 'data', 'phases', 'tips', 'resources'];
   const activeTab = validTabs.includes(lastSegment) ? lastSegment : (isWorkspaceHelp ? 'editor' : 'modes');
 
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [markdownContent, setMarkdownContent] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [prevTab, setPrevTab] = useState(activeTab);
@@ -43,6 +44,7 @@ export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
 
   const setActiveTab = (tab: string) => {
     navigateTo({}, `${baseHelpPath}/${tab}`);
+    setIsSidebarOpen(false);
   };
 
   useEffect(() => {
@@ -64,13 +66,21 @@ export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
       {/* Header */}
       <div className="h-16 border-b border-nb-outline-variant/30 flex items-center justify-between px-8 bg-nb-surface/50 backdrop-blur-xl">
         <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-nb-primary/10 text-nb-primary flex items-center justify-center">
+          <button 
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="md:hidden p-2 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant transition-colors"
+          >
             <Book size={20} />
-          </div>
-          <div>
-            <h1 className="text-lg font-black tracking-tight text-nb-on-surface leading-tight">Help Center</h1>
-            <div className="flex items-center gap-2 text-[10px] font-black tracking-[0.2em] text-nb-on-surface-variant/40 uppercase">
-              <span>{isWorkspaceHelp ? "Workspace & Editor Guide" : "General Setup & Modes"}</span>
+          </button>
+          <div className="hidden xs:flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-nb-primary/10 text-nb-primary flex items-center justify-center">
+              <Book size={20} />
+            </div>
+            <div>
+              <h1 className="text-lg font-black tracking-tight text-nb-on-surface leading-tight">Help Center</h1>
+              <div className="flex items-center gap-2 text-[10px] font-black tracking-[0.2em] text-nb-on-surface-variant/40 uppercase">
+                <span>{isWorkspaceHelp ? "Workspace & Editor Guide" : "General Setup & Modes"}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -84,11 +94,27 @@ export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
         </button>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Mobile Sidebar Backdrop */}
+        {isSidebarOpen && (
+          <div 
+            className="fixed inset-0 z-[450] bg-nb-bg/60 backdrop-blur-sm md:hidden"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+        )}
+
         {/* Sidebar Nav */}
-        <div className="w-64 border-r border-nb-outline-variant/30 p-6 flex flex-col gap-2 bg-nb-surface/20">
-          <div className="px-4 py-2">
+        <div className={`
+          fixed md:relative inset-y-0 left-0 z-[500] md:z-auto
+          w-72 md:w-64 border-r border-nb-outline-variant/30 p-6 flex flex-col gap-2 bg-nb-surface md:bg-nb-surface/20
+          transition-transform duration-300 ease-in-out
+          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+        `}>
+          <div className="px-4 py-2 flex items-center justify-between">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant/40">Setup</h3>
+            <button className="md:hidden text-nb-on-surface-variant/40 hover:text-nb-on-surface" onClick={() => setIsSidebarOpen(false)}>
+              <X size={16} />
+            </button>
           </div>
           <NavButton active={activeTab === 'modes'} onClick={() => setActiveTab('modes')} icon={<Settings size={16} />} label="Workspace Modes" />
           <NavButton active={activeTab === 'local'} onClick={() => setActiveTab('local')} icon={<HardDrive size={16} />} label="Local Setup" />
@@ -98,6 +124,7 @@ export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant/40">Using the Editor</h3>
           </div>
           <NavButton active={activeTab === 'editor'} onClick={() => setActiveTab('editor')} icon={<FileText size={16} />} label="Editor Guide" />
+          <NavButton active={activeTab === 'compiler'} onClick={() => setActiveTab('compiler')} icon={<Loader2 size={16} />} label="PDF Compilation" />
           <NavButton active={activeTab === 'data'} onClick={() => setActiveTab('data')} icon={<Layers size={16} />} label="Import / Export" />
           <NavButton active={activeTab === 'phases'} onClick={() => setActiveTab('phases')} icon={<Target size={16} />} label="Design Process" />
           <NavButton active={activeTab === 'tips'} onClick={() => setActiveTab('tips')} icon={<Lightbulb size={16} />} label="Notebook Tips" />
@@ -105,8 +132,8 @@ export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto bg-nb-bg/50 custom-scrollbar">
-          <div className="max-w-4xl mx-auto p-12 pb-32">
+        <div className="flex-1 overflow-y-auto bg-nb-bg/50 custom-scrollbar relative">
+          <div className="max-w-4xl mx-auto p-6 md:p-12 pb-32">
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-24 gap-4 animate-in fade-in duration-500">
                 <Loader2 className="w-8 h-8 text-nb-primary animate-spin" />

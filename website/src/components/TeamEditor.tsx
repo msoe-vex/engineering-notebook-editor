@@ -590,24 +590,24 @@ export default function TeamEditor({
               <Users size={20} />
             </div>
             <div>
-              <h1 className="text-lg font-black text-nb-on-surface tracking-tight leading-tight">Project Configuration</h1>
-              <div className="flex items-center gap-2 text-[10px] font-black tracking-[0.2em] text-nb-on-surface-variant/40 uppercase">
+              <h1 className="text-sm md:text-lg font-black text-nb-on-surface tracking-tight leading-tight">Project Configuration</h1>
+              <div className="hidden sm:flex items-center gap-2 text-[10px] font-black tracking-[0.2em] text-nb-on-surface-variant/40 uppercase">
                 <span>Identity, Team, and Design Process</span>
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 mr-2">
+            <div className="flex items-center gap-2 mr-2 shrink-0">
               {isSaving || hasChanges ? (
                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-primary animate-pulse">
                   <Loader2 size={12} className="animate-spin" />
-                  <span>SAVING...</span>
+                  <span className="hidden xs:inline">SAVING...</span>
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-on-surface-variant/40">
                   <Check size={12} />
-                  <span>SAVED</span>
+                  <span className="hidden xs:inline">SAVED</span>
                 </div>
               )}
             </div>
@@ -629,24 +629,24 @@ export default function TeamEditor({
           <div className="flex gap-2 p-1 bg-nb-surface-low rounded-2xl border border-nb-outline-variant/20 w-fit">
             <button
               onClick={() => onTabChange?.("identity")}
-              className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer ${activeTab === "identity" ? "bg-nb-surface text-nb-primary shadow-sm" : "text-nb-on-surface-variant hover:text-nb-on-surface"}`}
+              className={`flex items-center gap-2 px-4 md:px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer ${activeTab === "identity" ? "bg-nb-surface text-nb-primary shadow-sm" : "text-nb-on-surface-variant hover:text-nb-on-surface"}`}
             >
               <Building2 size={14} />
-              Identity
+              <span className="hidden xs:inline">Identity</span>
             </button>
             <button
               onClick={() => onTabChange?.("members")}
-              className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer ${activeTab === "members" ? "bg-nb-surface text-nb-primary shadow-sm" : "text-nb-on-surface-variant hover:text-nb-on-surface"}`}
+              className={`flex items-center gap-2 px-4 md:px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer ${activeTab === "members" ? "bg-nb-surface text-nb-primary shadow-sm" : "text-nb-on-surface-variant hover:text-nb-on-surface"}`}
             >
               <Users size={14} />
-              Team
+              <span className="hidden xs:inline">Team</span>
             </button>
             <button
               onClick={() => onTabChange?.("phases")}
-              className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer ${activeTab === "phases" ? "bg-nb-surface text-nb-primary shadow-sm" : "text-nb-on-surface-variant hover:text-nb-on-surface"}`}
+              className={`flex items-center gap-2 px-4 md:px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer ${activeTab === "phases" ? "bg-nb-surface text-nb-primary shadow-sm" : "text-nb-on-surface-variant hover:text-nb-on-surface"}`}
             >
               <Palette size={14} />
-              Phases
+              <span className="hidden xs:inline">Phases</span>
             </button>
           </div>
         </div>
