@@ -40,7 +40,8 @@
     "react-markdown": "^10.1.0",
     "react-resizable-panels": "^2.1.9",
     "react-simple-code-editor": "^0.14.1",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "texlyre-busytex": "^1.1.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.4",
