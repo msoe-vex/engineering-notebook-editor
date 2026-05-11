@@ -475,7 +475,7 @@ class WorkspaceStore {
 
     if (pendingMeta?.content) {
       const parsed = JSON.parse(pendingMeta.content);
-      this.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...parsed, projectId: this.currentProjectId || undefined, projectName: this.currentProject?.name || undefined });
+      this.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...parsed });
     } else {
       try {
         const metaStr = await fetchFileContent(this.config, actualIndexPath);
