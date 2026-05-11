@@ -147,7 +147,21 @@ export async function compileNotebook(): Promise<CompileResult> {
     finalInput = mainFile.content;
   }
 
-  const result = await (xelatex as any).compile({
+  interface BusyTexResult {
+    success: boolean;
+    pdf?: Uint8Array;
+    log: string;
+  }
+
+  const result = await (xelatex as unknown as { 
+    compile: (options: {
+      input: string;
+      mainTexPath: string;
+      additionalFiles: FileInput[];
+      rerun?: boolean;
+      cmd?: string;
+    }) => Promise<BusyTexResult> 
+  }).compile({
     input: finalInput || '',
     mainTexPath: 'main.tex',
     additionalFiles: files,
