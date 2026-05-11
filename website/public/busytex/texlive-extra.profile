@@ -1,0 +1,12 @@
+selected_scheme scheme-basic
+TEXDIR /home/runner/work/texlyre-busytex-build/texlyre-busytex-build/build/texlive-extra
+TEXMFLOCAL /home/runner/work/texlyre-busytex-build/texlyre-busytex-build/build/texlive-extra/texmf-dist/texmf-local
+TEXMFSYSVAR /home/runner/work/texlyre-busytex-build/texlyre-busytex-build/build/texlive-extra/texmf-dist/texmf-var
+TEXMFSYSCONFIG /home/runner/work/texlyre-busytex-build/texlyre-busytex-build/build/texlive-extra/texmf-dist/texmf-config
+collection-xetex  1
+collection-latex  1
+collection-luatex 1
+collection-fontsrecommended 1
+collection-fontutils 1
+collection-latexrecommended  1
+collection-latexextra  1

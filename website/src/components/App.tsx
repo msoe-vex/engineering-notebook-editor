@@ -30,6 +30,8 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 import { events, EventNames } from "@/lib/events";
 import { Toaster } from "react-hot-toast";
 import { showNotification } from "./Notification";
+import { compileNotebook } from "@/lib/busytex";
+import LoadingOverlay from "./LoadingOverlay";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -98,6 +100,8 @@ export default function App() {
   const authCheckStarted = useRef(false);
   const [autoOpenGithubModal, setAutoOpenGithubModal] = useState(false);
   const [showGitHubLoginOnly, setShowGitHubLoginOnly] = useState(false);
+  const [isCompiling, setIsCompiling] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
 
 
@@ -459,6 +463,27 @@ export default function App() {
     }
   };
 
+  const handleCompile = async () => {
+    if (isCompiling) return;
+    setIsCompiling(true);
+    try {
+      const result = await compileNotebook();
+      if (result.success && result.pdfUrl) {
+        setPdfUrl(result.pdfUrl);
+        setViewMode("preview");
+        showNotification("LaTeX compiled successfully!", "success");
+      } else {
+        showNotification("LaTeX compilation failed. Check console for details.", "error");
+        console.error(result.log);
+      }
+    } catch (e) {
+      console.error("Compilation error:", e);
+      showNotification("An error occurred during compilation.", "error");
+    } finally {
+      setIsCompiling(false);
+    }
+  };
+
   if (!mounted) return null;
   const handleCreateGithub = async (config: GitHubConfig) => {
     try {
@@ -639,6 +664,8 @@ export default function App() {
         isDarkMode={isDarkMode}
         onToggleTheme={() => setTheme(isDarkMode ? "light" : "dark")}
         onOpenHelp={() => navigateTo({}, '/workspace/help')}
+        onCompile={handleCompile}
+        isCompiling={isCompiling}
         mounted={mounted}
       />
 
@@ -712,7 +739,7 @@ export default function App() {
                     onExpand={() => { if (!isMobile && viewMode === "editor") handleSetViewMode("split"); }}
                     className={`flex flex-col h-full bg-nb-surface-low transition-all duration-300 ease-out ${(isMobile ? effectiveView === "editor" : effectiveView === "editor") ? "opacity-0 pointer-events-none" : "opacity-100"}`}
                   >
-                    <Preview latexContent={openFile?.latex || ""} />
+                    <Preview latexContent={openFile?.latex || ""} pdfUrl={pdfUrl || undefined} />
                   </Panel>
                 </PanelGroup>
               );

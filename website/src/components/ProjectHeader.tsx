@@ -1,4 +1,4 @@
-import { Menu, Sun, Moon, FolderGit, HelpCircle } from "lucide-react";
+import { Menu, Sun, Moon, FolderGit, HelpCircle, Play, Loader2 } from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import ViewToggle, { ViewMode } from "./ViewToggle";
 
@@ -16,6 +16,8 @@ interface ProjectHeaderProps {
   isDarkMode: boolean;
   onToggleTheme: () => void;
   onOpenHelp: () => void;
+  onCompile?: () => void;
+  isCompiling?: boolean;
   mounted: boolean;
 }
 
@@ -33,6 +35,8 @@ export default function ProjectHeader({
   isDarkMode,
   onToggleTheme,
   onOpenHelp,
+  onCompile,
+  isCompiling,
   mounted
 }: ProjectHeaderProps) {
   const { currentProject, openFile } = useWorkspace();
@@ -94,7 +98,18 @@ export default function ProjectHeader({
 
       <div className="flex items-center gap-2">
         {isEntryOpen && !isMobile && (
-          <ViewToggle viewMode={viewMode} onSetViewMode={onSetViewMode} isMobile={false} />
+          <div className="flex items-center gap-2 mr-2">
+            <button
+              onClick={onCompile}
+              disabled={isCompiling}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-nb-primary text-nb-on-primary hover:bg-nb-primary/90 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-xs font-bold shadow-sm"
+              title="Compile LaTeX to PDF"
+            >
+              {isCompiling ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+              {isCompiling ? "Compiling..." : "Compile PDF"}
+            </button>
+            <ViewToggle viewMode={viewMode} onSetViewMode={onSetViewMode} isMobile={false} />
+          </div>
         )}
         <button
           onClick={onOpenHelp}

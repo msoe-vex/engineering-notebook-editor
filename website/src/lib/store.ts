@@ -385,7 +385,7 @@ class WorkspaceStore {
 
   private async loadLocalWorkspace() {
     if (!this.dirHandle) return;
-    
+
     // Ensure core directories exist
     await ensureLocalDirectory(this.dirHandle, ENTRIES_DIR);
     await ensureLocalDirectory(this.dirHandle, ASSETS_DIR);
@@ -427,7 +427,7 @@ class WorkspaceStore {
       await writeLocalFile(this.dirHandle, INDEX_PATH, JSON.stringify(this.metadata, null, 2));
     }
     this.isMainTexPresent = await checkLocalFileExists(this.dirHandle, "main.tex");
-    
+
     if (isNew) {
       await this.updateLatexMetadata();
     }
@@ -914,8 +914,7 @@ class WorkspaceStore {
     });
   }
 
-  private async updateLatexMetadata() {
-    // Calculate start and end dates based on entries
+  public async updateLatexMetadata() {
     const entryDates = Object.values(this.metadata.entries)
       .map(e => e.date)
       .filter(Boolean)
@@ -1018,8 +1017,8 @@ class WorkspaceStore {
     const changesCount = gitChanges.length;
     const filesLabel = changesCount === 1 ? "file" : "files";
     const defaultMsg = `Update notebook: ${changesCount} ${filesLabel}`;
-    const finalMsg = customMessage 
-      ? `${customMessage} (Updated ${changesCount} ${filesLabel})` 
+    const finalMsg = customMessage
+      ? `${customMessage} (Updated ${changesCount} ${filesLabel})`
       : defaultMsg;
 
     await commitChanges(config, gitChanges, finalMsg);
@@ -1240,7 +1239,7 @@ class WorkspaceStore {
     }
   }
 
-  private async getAssetBase64(path: string): Promise<string | null> {
+  public async getAssetBase64(path: string): Promise<string | null> {
     const dbName = this.getDBName();
     const cached = await getResource(dbName, path);
     if (cached) {
