@@ -38,7 +38,8 @@ export async function GET(req: NextRequest) {
         'Cache-Control': 'public, max-age=31536000, immutable',
       },
     });
-  } catch (error: any) {
-    return new Response(`Proxy error: ${error.message}`, { status: 500 });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return new Response(`Proxy error: ${errorMessage}`, { status: 500 });
   }
 }
