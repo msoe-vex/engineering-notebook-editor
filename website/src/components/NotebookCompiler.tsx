@@ -128,7 +128,9 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
           >
             {isCompiling ? (
               <>
-                <Loader2 size={16} className="animate-spin" />
+                <div className="flex items-center justify-center w-4 h-4">
+                  <Loader2 size={16} className="animate-spin-stable" />
+                </div>
                 <span>Compiling...</span>
               </>
             ) : (
@@ -155,7 +157,9 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
       <div className="flex-1 overflow-hidden relative">
         {isLoadingPdf ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-nb-bg/50 backdrop-blur-sm z-10">
-            <Loader2 size={32} className="animate-spin text-nb-primary" />
+            <div className="flex items-center justify-center w-10 h-10">
+              <Loader2 size={32} className="animate-spin-stable text-nb-primary" />
+            </div>
             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant animate-pulse">Loading last version...</span>
           </div>
         ) : pdfUrl ? (
