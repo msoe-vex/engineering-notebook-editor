@@ -57,3 +57,59 @@ The `website/` app is designed to deploy on Vercel:
 - Add a custom domain in Vercel and point DNS to the Vercel deployment
 
 For notebook/PDF work, see `notebook/README.md`.
+
+## LaTeX Engine & Assets
+
+The in-browser PDF compilation is powered by **BusyTeX** (a WebAssembly build of XeTeX).
+
+### Asset Origin
+The assets in `website/public/busytex` are sourced from the [TeXlyre/texlyre-busytex](https://github.com/TeXlyre/texlyre-busytex) project. They consist of:
+- **`busytex.wasm / .js`**: The core LaTeX engine compiled to WASM.
+- **`texlive-*.js / .data`**: Virtual filesystem bundles containing the standard TeX Live distribution.
+
+These files were originally downloaded via the `texlyre-busytex` toolchain and are committed to the repository to ensure reliable local serving. Downloaded from [https://github.com/TeXlyre/texlyre-busytex/releases](https://github.com/TeXlyre/texlyre-busytex/releases).
+
+### Hosting Large Assets (GitHub Releases)
+To bypass Vercel Hobby plan limits and GitHub LFS bandwidth restrictions, the largest assets (like `texlive-recommended.js`) are hosted as **GitHub Release Assets** and served via an **Edge Proxy**.
+
+**To update or move these assets:**
+1.  **Download the assets locally**:
+    ```bash
+    cd website
+    npx texlyre-busytex download-assets ./public/busytex
+    ```
+2.  **Create a New Release**:
+    Go to your repository on GitHub -> **Releases** -> **Draft a new release**. Tag it (e.g., `v0.1.0`).
+3.  **Upload Assets**:
+    Drag and drop **both** `texlive-recommended.js` and `texlive-recommended.data` from `website/public/busytex/` into the release's binary assets area. Both files are required; the `.js` file acts as the loader and metadata, while the `.data` file contains the actual TeX Live assets.
+4.  **Update the Proxy URL**:
+    In `website/src/lib/busytex.ts`, update the `GITHUB_PACKAGE_URL` constant to point to your new release:
+    ```typescript
+    const GITHUB_PACKAGE_URL = 'https://github.com/your-org/your-repo/releases/download/v0.1.0/texlive-recommended.js';
+    ```
+    The app will automatically use the `/api/busytex-proxy` to fetch these assets with the correct CORS headers.
+
+## Updating LaTeX Dependencies
+
+If you add new LaTeX packages to the notebook templates, you must update the bundled assets in the website's public directory so the browser-based compiler can find them.
+
+### Using `notebook/bundle.bat`
+This script automates the process of gathering dependencies from your local TeX distribution and copying them to the website.
+
+**Prerequisites:**
+- A local LaTeX distribution (e.g., MiKTeX or TeX Live) installed and in your PATH.
+- PowerShell (available by default on Windows).
+
+**Usage:**
+1. Open a terminal in the `notebook/` directory.
+2. Run the bundling script:
+   ```bash
+   ./bundle.bat
+   ```
+3. The script will:
+   - Compile `main.tex` once to record all file access.
+   - Locate every `.sty`, `.cls`, and font dependency on your system.
+   - Copy the required files to `website/public/latex/`.
+   - Update `website/public/latex/manifest.json`.
+4. Commit the updated files in `website/public/latex/` to your repository.
+

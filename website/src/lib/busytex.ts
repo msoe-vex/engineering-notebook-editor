@@ -47,16 +47,19 @@ export interface CompileResult {
   log: string;
 }
 
-export async function compileNotebook(): Promise<CompileResult> {
+export async function compileNotebook(onStatus?: (status: string) => void): Promise<CompileResult> {
   // 0. Ensure LaTeX metadata (entries.tex, etc.) is up to date in the store
+  onStatus?.("Updating project metadata...");
   await store.updateLatexMetadata();
 
+  onStatus?.("Initializing LaTeX engine...");
   await initBusyTex();
   if (!xelatex) throw new Error("BusyTex not initialized");
 
   const files: FileInput[] = [];
 
   // 1. Map public dependencies (/latex/*) and user overrides
+  onStatus?.("Pre-loading LaTeX dependencies...");
   try {
     const manifestResponse = await fetch('/latex/manifest.json');
     if (manifestResponse.ok) {
@@ -84,6 +87,7 @@ export async function compileNotebook(): Promise<CompileResult> {
   }
 
   // 2. Map fonts (/fonts/*)
+  onStatus?.("Loading typography assets...");
   const fontFiles = [
     'inter/Inter-Regular.otf', 'inter/Inter-Bold.otf', 'inter/Inter-Italic.otf', 'inter/Inter-BoldItalic.otf',
     'inconsolata/Inconsolata-Regular.otf', 'inconsolata/Inconsolata-Bold.otf'
@@ -99,6 +103,7 @@ export async function compileNotebook(): Promise<CompileResult> {
   }
 
   // 3. Map project files from store (Only files in data/ are dynamic)
+  onStatus?.("Mapping document structure...");
   const teamTex = await store.getFileContent(`${DATA_DIR}/team.tex`);
   const phasesTex = await store.getFileContent(`${DATA_DIR}/phases.tex`);
   const entriesIndexTex = await store.getFileContent(`${DATA_DIR}/entries.tex`);
@@ -120,6 +125,7 @@ export async function compileNotebook(): Promise<CompileResult> {
   }
 
   // 5. Map assets (images)
+  onStatus?.("Processing notebook assets...");
   const assetPaths = new Set<string>();
   Object.values(store.metadata.entries).forEach(entry => {
     (entry.assets || []).forEach(asset => assetPaths.add(asset));
@@ -155,6 +161,7 @@ export async function compileNotebook(): Promise<CompileResult> {
   }
 
   console.log("[BusyTeX] Starting compilation...");
+  onStatus?.("Executing LaTeX engine...");
 
   // Use main.tex from the bundled files (static template)
   let finalInput = '';
