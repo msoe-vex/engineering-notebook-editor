@@ -30,6 +30,7 @@ class WorkspaceStore {
   public config: GitHubConfig | null = null;
   public dirHandle: FileSystemDirectoryHandle | null = null;
   public entries: ExplorerFile[] = [];
+  public workspaceVersion: number = 0;
   public metadata: NotebookMetadata = EMPTY_METADATA;
   public currentProjectId: string | null = null;
   public currentProject: Project | null = null;
@@ -250,13 +251,26 @@ class WorkspaceStore {
   }
 
   async createTemporaryProject() {
-    // Temporary doesn't need to be "created" in DB, just navigated to
+    const { clearAllPending, clearAllResources } = await import("./db");
+    const dbName = "notebook-project-temporary";
+    await clearAllPending(dbName);
+    await clearAllResources(dbName);
     return "temporary";
   }
 
   async selectProject(id: string) {
-    if (this.currentProjectId === id && this.isInitialized && !this.isLoading) return;
+    if (this.currentProjectId === id && id !== "temporary" && this.isInitialized && !this.isLoading) return;
 
+    // For temporary workspaces, if this is the initial load of the session, clear the DB
+    // to fulfill the UI promise of "Lost on reload".
+    if (id === "temporary" && this.mode === "none") {
+      const { clearAllPending, clearAllResources } = await import("./db");
+      const dbName = "notebook-project-temporary";
+      await clearAllPending(dbName);
+      await clearAllResources(dbName);
+    }
+
+    this.workspaceVersion++;
     // Ensure all pending I/O for the current project is finished before switching
     await this.#queue;
 
@@ -927,8 +941,8 @@ class WorkspaceStore {
       .filter(Boolean)
       .sort();
 
-    const startDate = entryDates.length > 0 ? entryDates[0] : "TBD";
-    const endDate = entryDates.length > 0 ? entryDates[entryDates.length - 1] : "TBD";
+    const startDate = entryDates.length > 0 ? entryDates[0] : "";
+    const endDate = entryDates.length > 0 ? entryDates[entryDates.length - 1] : "";
 
     // Update team metadata in memory so generateTeamLatex picks it up
     const teamInfo = {
@@ -1248,7 +1262,7 @@ class WorkspaceStore {
 
   public async getAssetBase64(path: string): Promise<string | null> {
     const dbName = this.getDBName();
-    
+
     // 1. Check pending/staged changes first (most recent local version)
     if (this.mode === "github" || this.mode === "temporary") {
       const pending = await getPending(dbName, path);
@@ -1281,8 +1295,8 @@ class WorkspaceStore {
   }
 
   public getDBName() {
-    if (this.currentProjectId) return `notebook-project-${this.currentProjectId}`;
-    return "notebook-default";
+    const id = this.currentProjectId || "default";
+    return `notebook-project-${id}`;
   }
 
   private enqueue(op: () => Promise<void>) {
@@ -1411,26 +1425,46 @@ class WorkspaceStore {
     const base64 = btoa(
       pdfData.reduce((data, byte) => data + String.fromCharCode(byte), "")
     );
-    
+
     // 1. Persist main.pdf in root
     await this.persistFile("main.pdf", base64, "Compilation: Update main.pdf", true);
-    
+
     // 2. Update lastCompiled timestamp in metadata
     this.metadata = {
       ...this.metadata,
       lastCompiled: new Date().toISOString()
     };
-    
+
     // 3. Persist updated metadata
     await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Update lastCompiled metadata");
-    
+
     this.notifyStateChange();
   }
 
   public async getCompiledPdfUrl(): Promise<string | null> {
+    const dbName = this.getDBName();
+
+    // 1. Check pending changes
+    const pending = await getPending(dbName, "main.pdf");
+    if (pending && pending.content) {
+      return this.blobFromBase64(pending.content);
+    }
+
+    // 2. Check resource store
+    const cached = await getResource(dbName, "main.pdf");
+    if (cached) {
+      const base64 = cached.includes(',') ? cached.split(',')[1] : cached;
+      return this.blobFromBase64(base64);
+    }
+
+    // 3. Check filesystem (for local/github modes)
     const base64 = await this.getAssetBase64("main.pdf");
-    if (!base64) return null;
-    
+    if (base64) return this.blobFromBase64(base64);
+
+    return null;
+  }
+
+  private blobFromBase64(base64: string): string | null {
     try {
       const binaryString = atob(base64);
       const bytes = new Uint8Array(binaryString.length);
@@ -1441,7 +1475,7 @@ class WorkspaceStore {
       return URL.createObjectURL(blob);
     } catch (e) {
       console.error("Failed to create blob URL for PDF", e);
-      return `data:application/pdf;base64,${base64}`; // Fallback
+      return null;
     }
   }
 

@@ -8,16 +8,17 @@ import { showNotification } from "./Notification";
 import { Play, Loader2, Calendar, FileText, X, RefreshCcw } from "lucide-react";
 
 export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
-  const { metadata, saveCompiledPdf, getCompiledPdfUrl, isInitialized } = useWorkspace();
+  const { currentProjectId, workspaceVersion, metadata, saveCompiledPdf, getCompiledPdfUrl, isInitialized } = useWorkspace();
   const [isCompiling, setIsCompiling] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [isLoadingPdf, setIsLoadingPdf] = useState(true);
 
   const loadLastPdf = useCallback(async () => {
     setIsLoadingPdf(true);
+    setPdfUrl(null); // Reset before loading new
     try {
       const url = await getCompiledPdfUrl();
-      if (url) setPdfUrl(url);
+      setPdfUrl(url);
     } catch (e) {
       console.error("Failed to load last compiled PDF", e);
     } finally {
@@ -29,7 +30,7 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
     if (isInitialized) {
       loadLastPdf();
     }
-  }, [loadLastPdf, isInitialized]);
+  }, [loadLastPdf, isInitialized, workspaceVersion]);
 
   const handleCompile = async () => {
     if (isCompiling) return;
@@ -74,7 +75,7 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
             <h2 className="text-lg font-black text-nb-on-surface leading-tight tracking-tight">Full Notebook Preview</h2>
             <div className="flex items-center gap-2 text-[10px] font-black tracking-widest text-nb-on-surface-variant/60">
               <Calendar size={10} />
-              <span>LAST COMPILED: {lastCompiledDate.toUpperCase()}</span>
+              <span>Last compiled: {lastCompiledDate}</span>
             </div>
           </div>
         </div>
@@ -137,7 +138,7 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
               onClick={handleCompile}
               className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-nb-surface-low border border-nb-outline-variant text-nb-on-surface font-black text-xs hover:bg-nb-surface-mid transition-all hover:border-nb-primary/30 cursor-pointer"
             >
-              <RefreshCcw size={14} className={isCompiling ? "animate-spin" : ""} />
+              <RefreshCcw size={14} className={isCompiling ? "animate-spin-reverse" : ""} />
               Generate First Version
             </button>
           </div>
