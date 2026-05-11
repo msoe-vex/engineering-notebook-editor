@@ -233,8 +233,12 @@ const EditorContent = React.memo(function EditorContent({
   const editorPanelRef = useRef<ImperativePanelHandle>(null);
   const previewPanelRef = useRef<ImperativePanelHandle>(null);
 
-  // Sync panels with viewMode
+  const isFirstMount = useRef(true);
   useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      return;
+    }
     if (!editorPanelRef.current || !previewPanelRef.current) return;
 
     if (viewMode === "editor") {
@@ -1013,10 +1017,11 @@ const EditorContent = React.memo(function EditorContent({
         <PanelGroup direction="horizontal" className="h-full" id="editor-preview-group">
           <Panel
             id="editor-panel" order={1} minSize={30} collapsible={true} ref={editorPanelRef}
+            defaultSize={viewMode === "editor" ? 100 : (viewMode === "preview" ? 0 : 50)}
             className={`flex flex-col h-full transition-all duration-500 ease-in-out ${viewMode === "preview" ? "opacity-0 scale-[0.98] pointer-events-none" : "opacity-100 scale-100"}`}
           >
             <div className="flex-1 overflow-hidden relative">
-              <div className="absolute inset-0 flex flex-col">
+              <div className="absolute inset-0 flex flex-col overflow-y-auto custom-scrollbar">
                 <UnifiedEditor
                   key={filename}
                   filename={filename}
