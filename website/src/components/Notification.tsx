@@ -24,18 +24,11 @@ export const Notification = ({ message, type, t }: NotificationProps) => {
     info: 'bg-nb-primary/5',
   };
 
-  const borderColors = {
-    success: 'border-green-100',
-    error: 'border-red-100',
-    loading: 'border-nb-primary/10',
-    info: 'border-nb-primary/10',
-  };
-
   return (
     <div
       className={`${
         t.visible ? 'animate-in fade-in slide-in-from-right-4' : 'animate-out fade-out zoom-out-95'
-      } max-w-md w-full bg-nb-surface border ${borderColors[type]} shadow-nb-lg rounded-2xl pointer-events-auto flex overflow-hidden`}
+      } max-w-md w-full bg-nb-surface shadow-nb-2xl rounded-2xl pointer-events-auto flex overflow-hidden`}
     >
       <div className={`w-1.5 shrink-0 ${type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-nb-primary'}`} />
       
