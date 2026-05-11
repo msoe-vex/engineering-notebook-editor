@@ -1248,6 +1248,16 @@ class WorkspaceStore {
 
   public async getAssetBase64(path: string): Promise<string | null> {
     const dbName = this.getDBName();
+    
+    // 1. Check pending/staged changes first (most recent local version)
+    if (this.mode === "github" || this.mode === "temporary") {
+      const pending = await getPending(dbName, path);
+      if (pending?.operation === "upsert" && pending.content) {
+        return pending.content;
+      }
+    }
+
+    // 2. Check resource cache
     const cached = await getResource(dbName, path);
     if (cached) {
       return cached.includes(',') ? cached.split(',')[1] : cached;
@@ -1420,7 +1430,19 @@ class WorkspaceStore {
   public async getCompiledPdfUrl(): Promise<string | null> {
     const base64 = await this.getAssetBase64("main.pdf");
     if (!base64) return null;
-    return `data:application/pdf;base64,${base64}`;
+    
+    try {
+      const binaryString = atob(base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      return URL.createObjectURL(blob);
+    } catch (e) {
+      console.error("Failed to create blob URL for PDF", e);
+      return `data:application/pdf;base64,${base64}`; // Fallback
+    }
   }
 
 }

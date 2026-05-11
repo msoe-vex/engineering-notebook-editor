@@ -1,8 +1,8 @@
 import { getMimeTypeFromExtension } from './utils';
 
-export const getLocalFileContent = async (rootHandle: FileSystemDirectoryHandle, path: string): Promise<{ text?: string; base64?: string; isImage: boolean }> => {
+export const getLocalFileContent = async (rootHandle: FileSystemDirectoryHandle, path: string): Promise<{ text?: string; base64?: string; isBinary: boolean }> => {
   if (path.startsWith('data:')) {
-    return { base64: path, isImage: true };
+    return { base64: path, isBinary: true };
   }
   try {
     const parts = path.split('/').filter(Boolean);
@@ -14,9 +14,11 @@ export const getLocalFileContent = async (rootHandle: FileSystemDirectoryHandle,
     }
     const fileHandle = await currentHandle.getFileHandle(parts[parts.length - 1]);
     const file = await fileHandle.getFile();
-    const isImage = file.type.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(parts[parts.length - 1]);
-
-    if (isImage) {
+    const isBinary = file.type.startsWith('image/') || 
+                    file.type === 'application/pdf' ||
+                    /\.(png|jpg|jpeg|gif|webp|svg|pdf)$/i.test(parts[parts.length - 1]);
+    
+    if (isBinary) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
@@ -25,14 +27,14 @@ export const getLocalFileContent = async (rootHandle: FileSystemDirectoryHandle,
           if (res.startsWith('data:;base64,')) {
             res = res.replace('data:;base64,', `data:${getMimeTypeFromExtension(path)};base64,`);
           }
-          resolve({ base64: res, isImage: true });
+          resolve({ base64: res, isBinary: true });
         };
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
     }
     const text = await file.text();
-    return { text, isImage: false };
+    return { text, isBinary: false };
   } catch (e: unknown) {
     if (e instanceof Error && e.name !== 'NotFoundError') {
       console.error(`Local read failed for ${path}`, e);
