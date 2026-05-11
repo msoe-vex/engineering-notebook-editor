@@ -5,7 +5,7 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 import Preview from "./Preview";
 import { compileNotebook, CompileResult } from "@/lib/busytex";
 import { showNotification } from "./Notification";
-import { Play, Loader2, Calendar, FileText, ArrowLeft, RefreshCcw } from "lucide-react";
+import { Play, Loader2, Calendar, FileText, X, RefreshCcw } from "lucide-react";
 
 export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
   const { metadata, saveCompiledPdf, getCompiledPdfUrl, isInitialized } = useWorkspace();
@@ -67,17 +67,14 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
       {/* Header */}
       <div className="flex items-center justify-between px-6 h-16 border-b border-nb-outline-variant bg-nb-surface shrink-0">
         <div className="flex items-center gap-4">
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant transition-colors cursor-pointer"
-          >
-            <ArrowLeft size={20} />
-          </button>
+          <div className="w-10 h-10 rounded-xl bg-nb-primary/10 text-nb-primary flex items-center justify-center">
+            <FileText size={20} />
+          </div>
           <div>
-            <h2 className="text-lg font-black text-nb-on-surface leading-tight tracking-tight">Compiled Notebook</h2>
+            <h2 className="text-lg font-black text-nb-on-surface leading-tight tracking-tight">Full Notebook Preview</h2>
             <div className="flex items-center gap-2 text-[10px] font-black tracking-widest text-nb-on-surface-variant/60">
               <Calendar size={10} />
-              <span>Last Compiled: {lastCompiledDate}</span>
+              <span>LAST COMPILED: {lastCompiledDate.toUpperCase()}</span>
             </div>
           </div>
         </div>
@@ -87,8 +84,8 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
             onClick={handleCompile}
             disabled={isCompiling}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black transition-all shadow-lg active:scale-[0.98] ${isCompiling
-                ? 'bg-nb-surface-low text-nb-on-surface-variant cursor-not-allowed border border-nb-outline-variant'
-                : 'bg-nb-primary text-white hover:bg-nb-primary-dim shadow-nb-primary/20 cursor-pointer'
+              ? 'bg-nb-surface-low text-nb-on-surface-variant cursor-not-allowed border border-nb-outline-variant'
+              : 'bg-nb-primary text-white hover:bg-nb-primary-dim shadow-nb-primary/20 cursor-pointer'
               }`}
           >
             {isCompiling ? (
@@ -102,6 +99,16 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
                 <span>Compile Notebook</span>
               </>
             )}
+          </button>
+
+          <div className="w-px h-6 bg-nb-outline-variant/30 mx-1" />
+
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer"
+            title="Close Compiler"
+          >
+            <X size={20} />
           </button>
         </div>
       </div>
