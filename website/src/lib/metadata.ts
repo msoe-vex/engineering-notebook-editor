@@ -94,6 +94,7 @@ export interface NotebookMetadata {
   team?: TeamMetadata;
   phases?: ProjectPhase[];
   assetRefs?: Record<string, string[]>; // asset path -> [entry id or "team"]
+  lastCompiled?: string; // ISO string
 }
 
 /**

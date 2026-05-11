@@ -95,22 +95,7 @@ export default function ProjectHeader({
           )
         )}
       </div>
-
       <div className="flex items-center gap-2">
-        {isEntryOpen && !isMobile && (
-          <div className="flex items-center gap-2 mr-2">
-            <button
-              onClick={onCompile}
-              disabled={isCompiling}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-nb-primary text-nb-on-primary hover:bg-nb-primary/90 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-xs font-bold shadow-sm"
-              title="Compile LaTeX to PDF"
-            >
-              {isCompiling ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-              {isCompiling ? "Compiling..." : "Compile PDF"}
-            </button>
-            <ViewToggle viewMode={viewMode} onSetViewMode={onSetViewMode} isMobile={false} />
-          </div>
-        )}
         <button
           onClick={onOpenHelp}
           className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer"
