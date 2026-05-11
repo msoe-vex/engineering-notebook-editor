@@ -146,6 +146,13 @@ export default function ProjectHeader({
 
       <div className="flex items-center gap-2">
         <button
+          onClick={onDisconnect}
+          className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-tertiary transition-colors cursor-pointer"
+          title="Change Workspace"
+        >
+          <ArrowLeftRight size={16} />
+        </button>
+        <button
           onClick={onToggleTheme}
           className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer"
         >
