@@ -31,7 +31,14 @@ async function fetchPublicFile(path: string): Promise<Uint8Array> {
   return new Uint8Array(buffer);
 }
 
-export async function compileNotebook(): Promise<{ success: boolean; pdfUrl?: string; log: string }> {
+export interface CompileResult {
+  success: boolean;
+  pdfUrl?: string;
+  pdf?: Uint8Array;
+  log: string;
+}
+
+export async function compileNotebook(): Promise<CompileResult> {
   // 0. Ensure LaTeX metadata (entries.tex, etc.) is up to date in the store
   await store.updateLatexMetadata();
   
@@ -150,7 +157,7 @@ export async function compileNotebook(): Promise<{ success: boolean; pdfUrl?: st
   if (result.success && result.pdf) {
     const blob = new Blob([result.pdf.slice()], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
-    return { success: true, pdfUrl: url, log: result.log };
+    return { success: true, pdfUrl: url, pdf: result.pdf, log: result.log };
   }
 
   return { success: false, log: result.log };

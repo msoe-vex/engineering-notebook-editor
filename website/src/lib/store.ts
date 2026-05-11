@@ -38,6 +38,7 @@ class WorkspaceStore {
   public teamTab: TeamTab = "identity";
   public showHelp: boolean = false;
   public helpPath: string | null = null;
+  public showCompiler: boolean = false;
   public openFile: OpenFileState | null = null;
   public isLoading = false;
   public loadingLabel = "";
@@ -93,6 +94,12 @@ class WorkspaceStore {
     } else {
       this.showHelp = false;
       this.helpPath = null;
+    }
+
+    if (path.startsWith('/workspace/compile')) {
+      this.showCompiler = true;
+    } else {
+      this.showCompiler = false;
     }
 
     const params = url.searchParams;
@@ -1388,6 +1395,32 @@ class WorkspaceStore {
     const prefix = baseDir + '/';
     if (path.startsWith(prefix)) return path;
     return `${prefix}${path}`;
+  }
+
+  public async saveCompiledPdf(pdfData: Uint8Array) {
+    const base64 = btoa(
+      pdfData.reduce((data, byte) => data + String.fromCharCode(byte), "")
+    );
+    
+    // 1. Persist main.pdf in root
+    await this.persistFile("main.pdf", base64, "Compilation: Update main.pdf", true);
+    
+    // 2. Update lastCompiled timestamp in metadata
+    this.metadata = {
+      ...this.metadata,
+      lastCompiled: new Date().toISOString()
+    };
+    
+    // 3. Persist updated metadata
+    await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Update lastCompiled metadata");
+    
+    this.notifyStateChange();
+  }
+
+  public async getCompiledPdfUrl(): Promise<string | null> {
+    const base64 = await this.getAssetBase64("main.pdf");
+    if (!base64) return null;
+    return `data:application/pdf;base64,${base64}`;
   }
 
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, FolderOpen, GitBranch, HardDrive, Plus, ArrowLeftRight, Upload } from "lucide-react";
+import { BookOpen, FolderOpen, GitBranch, HardDrive, Plus, ArrowLeftRight, Upload, Play } from "lucide-react";
 
 interface WorkspaceInfo {
   mode: "github" | "local" | "temporary";
@@ -14,10 +14,11 @@ interface WelcomePageProps {
   onDisconnect: () => void;
   onOpenSidebar: () => void;
   onOpenTeam: () => void;
+  onOpenCompiler: () => void;
   onOpenHelp: () => void;
 }
 
-export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDisconnect, onOpenSidebar, onOpenTeam, onOpenHelp }: WelcomePageProps) {
+export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDisconnect, onOpenSidebar, onOpenTeam, onOpenCompiler, onOpenHelp }: WelcomePageProps) {
   const ModeIcon =
     workspace.mode === "github" ? GitBranch :
       workspace.mode === "local" ? HardDrive : ArrowLeftRight;
@@ -96,6 +97,20 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
             <div>
               <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Team Info</div>
               <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Configure Team</div>
+            </div>
+          </button>
+
+          <button
+            id="welcome-compile"
+            className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left transition-all active:scale-[0.98] group cursor-pointer"
+            onClick={onOpenCompiler}
+          >
+            <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0 group-hover:bg-nb-primary/20 transition-colors">
+              <Play size={20} className="text-nb-primary" />
+            </div>
+            <div>
+              <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Compile & View</div>
+              <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Full Notebook PDF</div>
             </div>
           </button>
 

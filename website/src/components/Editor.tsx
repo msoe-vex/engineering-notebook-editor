@@ -10,10 +10,18 @@ import {
   Undo2, Redo2, ImagePlus, ChevronDown, ChevronUp, List, ListOrdered,
   Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
   Terminal, Link as LinkIcon, Underline as UnderlineIcon,
-  FileJson
+  FileJson, Play
 } from "lucide-react";
 import ValidationTooltip from "./ValidationTooltip";
 import * as LucideIcons from "lucide-react";
+import { 
+  Panel, 
+  PanelGroup, 
+  PanelResizeHandle,
+  ImperativePanelHandle
+} from "react-resizable-panels";
+import ViewToggle, { ViewMode } from "./ViewToggle";
+import Preview from "./Preview";
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng } from "@/lib/utils";
 import { getLocalDateString } from "@/lib/metadata";
 import { generateEntryLatex } from "@/lib/latex";
@@ -33,6 +41,9 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 interface EditorProps {
   onClose?: () => void;
   showConfirm: (title: string, message: string, onConfirm: () => void, variant?: "danger" | "warning" | "info") => void;
+  viewMode: ViewMode;
+  onSetViewMode: (mode: ViewMode) => void;
+  pdfUrl?: string;
 }
 
 const parseInitialContent = (raw: unknown): TipTapNode | string => {
@@ -113,6 +124,9 @@ const EditorContent = React.memo(function EditorContent({
   exportEntries,
   onClose,
   showConfirm,
+  viewMode,
+  onSetViewMode,
+  pdfUrl,
 }: EditorProps & {
   openFile: NonNullable<ReturnType<typeof useWorkspace>['openFile']>;
   metadata: ReturnType<typeof useWorkspace>['metadata'];
@@ -217,6 +231,25 @@ const EditorContent = React.memo(function EditorContent({
   const toggleLinkFn = useRef<(() => void) | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
+  const editorPanelRef = useRef<ImperativePanelHandle>(null);
+  const previewPanelRef = useRef<ImperativePanelHandle>(null);
+
+  // Sync panels with viewMode
+  useEffect(() => {
+    if (!editorPanelRef.current || !previewPanelRef.current) return;
+    
+    if (viewMode === "editor") {
+      editorPanelRef.current.expand();
+      previewPanelRef.current.collapse();
+    } else if (viewMode === "preview") {
+      editorPanelRef.current.collapse();
+      previewPanelRef.current.expand();
+    } else { // split
+      editorPanelRef.current.expand();
+      previewPanelRef.current.resize(50);
+      editorPanelRef.current.resize(50);
+    }
+  }, [viewMode]);
 
   // Dismiss table grid on click away
   useEffect(() => {
@@ -612,6 +645,11 @@ const EditorContent = React.memo(function EditorContent({
 
 
           <div className="flex-1 min-w-[20px]" />
+          
+          <div className="flex items-center gap-2 mr-4">
+            <ViewToggle viewMode={viewMode} onSetViewMode={onSetViewMode} />
+          </div>
+
 
           <div className="flex items-center gap-2 mr-2">
             {isAutoSaving || isSaving ? (
@@ -972,20 +1010,37 @@ const EditorContent = React.memo(function EditorContent({
       </div>
 
       {/* ── Scrollable Workspace ──────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto overflow-x-auto bg-nb-surface scrollbar-hide">
-        <div className="max-w-7xl mx-auto px-14 lg:pl-16 lg:pr-8 py-4 min-h-full">
-          <UnifiedEditor
-            key={filename}
-            filename={filename}
-            content={content}
-            onChange={setContent}
-            author={author}
-            onEditorInit={setEditor}
-            onToggleLink={(fn) => { toggleLinkFn.current = fn; }}
-            triggerRect={linkButtonRect}
-            entryId={entryId}
-          />
-        </div>
+      <div className="flex-1 overflow-hidden relative">
+        <PanelGroup direction="horizontal" className="h-full" id="editor-preview-group">
+          <Panel
+            id="editor-panel" order={1} minSize={30} collapsible={true} ref={editorPanelRef}
+            className={`flex flex-col h-full transition-all duration-500 ease-in-out ${viewMode === "preview" ? "opacity-0 scale-[0.98] pointer-events-none" : "opacity-100 scale-100"}`}
+          >
+            <div className="flex-1 overflow-hidden relative">
+              <div className="absolute inset-0 flex flex-col">
+                <UnifiedEditor
+                  key={filename}
+                  filename={filename}
+                  content={content}
+                  onChange={setContent}
+                  author={author}
+                  onEditorInit={setEditor}
+                  onToggleLink={(fn) => { toggleLinkFn.current = fn; }}
+                  triggerRect={linkButtonRect}
+                  entryId={entryId}
+                />
+              </div>
+            </div>
+          </Panel>
+          <PanelResizeHandle id="editor-preview-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${viewMode !== 'split' ? 'hidden' : ''}`} />
+          <Panel
+            id="preview-panel" order={2} collapsible={true} minSize={30} ref={previewPanelRef}
+            defaultSize={viewMode === "preview" ? 100 : (viewMode === "editor" ? 0 : 50)}
+            className={`flex flex-col h-full bg-nb-surface-low transition-all duration-500 ease-in-out ${viewMode === "editor" ? "opacity-0 scale-[0.98] pointer-events-none" : "opacity-100 scale-100"}`}
+          >
+            <Preview latexContent={generateEntryLatex(content, title, author, phase, initialCreatedAt, entryId, {}, date)} />
+          </Panel>
+        </PanelGroup>
       </div>
     </div>
   );
@@ -998,10 +1053,7 @@ const EditorContent = React.memo(function EditorContent({
 });
 
 // Wrapper component that handles null check before calling hooks
-const Editor = ({
-  onClose,
-  showConfirm,
-}: EditorProps) => {
+const Editor = (props: EditorProps) => {
   const {
     openFile,
     metadata,
@@ -1024,8 +1076,7 @@ const Editor = ({
       currentProjectId={currentProjectId}
       setEntryValidity={setEntryValidity}
       exportEntries={exportEntries}
-      onClose={onClose}
-      showConfirm={showConfirm}
+      {...props}
     />
   );
 };
