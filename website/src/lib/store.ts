@@ -30,6 +30,7 @@ class WorkspaceStore {
   public config: GitHubConfig | null = null;
   public dirHandle: FileSystemDirectoryHandle | null = null;
   public entries: ExplorerFile[] = [];
+  public workspaceVersion: number = 0;
   public metadata: NotebookMetadata = EMPTY_METADATA;
   public currentProjectId: string | null = null;
   public currentProject: Project | null = null;
@@ -38,6 +39,7 @@ class WorkspaceStore {
   public teamTab: TeamTab = "identity";
   public showHelp: boolean = false;
   public helpPath: string | null = null;
+  public showCompiler: boolean = false;
   public openFile: OpenFileState | null = null;
   public isLoading = false;
   public loadingLabel = "";
@@ -93,6 +95,12 @@ class WorkspaceStore {
     } else {
       this.showHelp = false;
       this.helpPath = null;
+    }
+
+    if (path.startsWith('/workspace/compile')) {
+      this.showCompiler = true;
+    } else {
+      this.showCompiler = false;
     }
 
     const params = url.searchParams;
@@ -243,13 +251,26 @@ class WorkspaceStore {
   }
 
   async createTemporaryProject() {
-    // Temporary doesn't need to be "created" in DB, just navigated to
+    const { clearAllPending, clearAllResources } = await import("./db");
+    const dbName = "notebook-project-temporary";
+    await clearAllPending(dbName);
+    await clearAllResources(dbName);
     return "temporary";
   }
 
   async selectProject(id: string) {
-    if (this.currentProjectId === id && this.isInitialized && !this.isLoading) return;
+    if (this.currentProjectId === id && id !== "temporary" && this.isInitialized && !this.isLoading) return;
 
+    // For temporary workspaces, if this is the initial load of the session, clear the DB
+    // to fulfill the UI promise of "Lost on reload".
+    if (id === "temporary" && this.mode === "none") {
+      const { clearAllPending, clearAllResources } = await import("./db");
+      const dbName = "notebook-project-temporary";
+      await clearAllPending(dbName);
+      await clearAllResources(dbName);
+    }
+
+    this.workspaceVersion++;
     // Ensure all pending I/O for the current project is finished before switching
     await this.#queue;
 
@@ -385,7 +406,7 @@ class WorkspaceStore {
 
   private async loadLocalWorkspace() {
     if (!this.dirHandle) return;
-    
+
     // Ensure core directories exist
     await ensureLocalDirectory(this.dirHandle, ENTRIES_DIR);
     await ensureLocalDirectory(this.dirHandle, ASSETS_DIR);
@@ -427,7 +448,7 @@ class WorkspaceStore {
       await writeLocalFile(this.dirHandle, INDEX_PATH, JSON.stringify(this.metadata, null, 2));
     }
     this.isMainTexPresent = await checkLocalFileExists(this.dirHandle, "main.tex");
-    
+
     if (isNew) {
       await this.updateLatexMetadata();
     }
@@ -454,7 +475,7 @@ class WorkspaceStore {
 
     if (pendingMeta?.content) {
       const parsed = JSON.parse(pendingMeta.content);
-      this.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...parsed, projectId: this.currentProjectId || undefined, projectName: this.currentProject?.name || undefined });
+      this.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...parsed });
     } else {
       try {
         const metaStr = await fetchFileContent(this.config, actualIndexPath);
@@ -914,15 +935,14 @@ class WorkspaceStore {
     });
   }
 
-  private async updateLatexMetadata() {
-    // Calculate start and end dates based on entries
+  public async updateLatexMetadata() {
     const entryDates = Object.values(this.metadata.entries)
       .map(e => e.date)
       .filter(Boolean)
       .sort();
 
-    const startDate = entryDates.length > 0 ? entryDates[0] : "TBD";
-    const endDate = entryDates.length > 0 ? entryDates[entryDates.length - 1] : "TBD";
+    const startDate = entryDates.length > 0 ? entryDates[0] : "";
+    const endDate = entryDates.length > 0 ? entryDates[entryDates.length - 1] : "";
 
     // Update team metadata in memory so generateTeamLatex picks it up
     const teamInfo = {
@@ -1018,8 +1038,8 @@ class WorkspaceStore {
     const changesCount = gitChanges.length;
     const filesLabel = changesCount === 1 ? "file" : "files";
     const defaultMsg = `Update notebook: ${changesCount} ${filesLabel}`;
-    const finalMsg = customMessage 
-      ? `${customMessage} (Updated ${changesCount} ${filesLabel})` 
+    const finalMsg = customMessage
+      ? `${customMessage} (Updated ${changesCount} ${filesLabel})`
       : defaultMsg;
 
     await commitChanges(config, gitChanges, finalMsg);
@@ -1240,8 +1260,18 @@ class WorkspaceStore {
     }
   }
 
-  private async getAssetBase64(path: string): Promise<string | null> {
+  public async getAssetBase64(path: string): Promise<string | null> {
     const dbName = this.getDBName();
+
+    // 1. Check pending/staged changes first (most recent local version)
+    if (this.mode === "github" || this.mode === "temporary") {
+      const pending = await getPending(dbName, path);
+      if (pending?.operation === "upsert" && pending.content) {
+        return pending.content;
+      }
+    }
+
+    // 2. Check resource cache
     const cached = await getResource(dbName, path);
     if (cached) {
       return cached.includes(',') ? cached.split(',')[1] : cached;
@@ -1265,8 +1295,8 @@ class WorkspaceStore {
   }
 
   public getDBName() {
-    if (this.currentProjectId) return `notebook-project-${this.currentProjectId}`;
-    return "notebook-default";
+    const id = this.currentProjectId || "default";
+    return `notebook-project-${id}`;
   }
 
   private enqueue(op: () => Promise<void>) {
@@ -1389,6 +1419,64 @@ class WorkspaceStore {
     const prefix = baseDir + '/';
     if (path.startsWith(prefix)) return path;
     return `${prefix}${path}`;
+  }
+
+  public async saveCompiledPdf(pdfData: Uint8Array) {
+    const base64 = btoa(
+      pdfData.reduce((data, byte) => data + String.fromCharCode(byte), "")
+    );
+
+    // 1. Persist main.pdf in root
+    await this.persistFile("main.pdf", base64, "Compilation: Update main.pdf", true);
+
+    // 2. Update lastCompiled timestamp in metadata
+    this.metadata = {
+      ...this.metadata,
+      lastCompiled: new Date().toISOString()
+    };
+
+    // 3. Persist updated metadata
+    await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Update lastCompiled metadata");
+
+    this.notifyStateChange();
+  }
+
+  public async getCompiledPdfUrl(): Promise<string | null> {
+    const dbName = this.getDBName();
+
+    // 1. Check pending changes
+    const pending = await getPending(dbName, "main.pdf");
+    if (pending && pending.content) {
+      return this.blobFromBase64(pending.content);
+    }
+
+    // 2. Check resource store
+    const cached = await getResource(dbName, "main.pdf");
+    if (cached) {
+      const base64 = cached.includes(',') ? cached.split(',')[1] : cached;
+      return this.blobFromBase64(base64);
+    }
+
+    // 3. Check filesystem (for local/github modes)
+    const base64 = await this.getAssetBase64("main.pdf");
+    if (base64) return this.blobFromBase64(base64);
+
+    return null;
+  }
+
+  private blobFromBase64(base64: string): string | null {
+    try {
+      const binaryString = atob(base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      return URL.createObjectURL(blob);
+    } catch (e) {
+      console.error("Failed to create blob URL for PDF", e);
+      return null;
+    }
   }
 
 }

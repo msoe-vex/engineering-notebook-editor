@@ -14,16 +14,16 @@ import {
 } from "@/lib/db";
 import Home from "./Home";
 import Editor from "./Editor";
-import Preview from "./Preview";
 import WelcomePage from "./WelcomePage";
 import Sidebar from "./Sidebar";
 import TeamEditor from "./TeamEditor";
+import NotebookCompiler from "./NotebookCompiler";
 import HelpPage from "./HelpPage";
 import ProjectHeader from "./ProjectHeader";
 import { ViewMode } from "./ViewToggle";
 import ConfirmationDialog from "./ConfirmationDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { HardDrive, ArrowLeftRight, X, BookOpen, Download, Loader2, Upload } from "lucide-react";
+import { HardDrive, X, BookOpen, Loader2 } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { ENTRIES_DIR, } from "@/lib/constants";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -84,8 +84,10 @@ export default function App() {
     hasEntryInUrl,
     showTeamEditor,
     teamTab,
+    showCompiler,
     showHelp,
     helpPath,
+    getCompiledPdfUrl,
   } = useWorkspace();
 
   // Global loading overlay for background operations (like importing/exporting)
@@ -98,6 +100,7 @@ export default function App() {
   const authCheckStarted = useRef(false);
   const [autoOpenGithubModal, setAutoOpenGithubModal] = useState(false);
   const [showGitHubLoginOnly, setShowGitHubLoginOnly] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
 
 
@@ -330,6 +333,17 @@ export default function App() {
     };
   }, []);
 
+  // Load last compiled PDF URL when project changes or app initializes
+  useEffect(() => {
+    if (isInitialized && currentProjectId) {
+      const loadPdf = async () => {
+        const url = await getCompiledPdfUrl();
+        if (url) setPdfUrl(url);
+      };
+      loadPdf();
+    }
+  }, [isInitialized, currentProjectId, getCompiledPdfUrl]);
+
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (mode === "temporary") {
@@ -458,6 +472,7 @@ export default function App() {
       navigateToHome();
     }
   };
+
 
   if (!mounted) return null;
   const handleCreateGithub = async (config: GitHubConfig) => {
@@ -600,13 +615,10 @@ export default function App() {
     <div className="flex flex-col h-full overflow-hidden bg-nb-surface-low">
       <div className="flex items-center gap-3 px-4 h-14 border-b border-nb-outline-variant shrink-0 bg-nb-surface">
         <div className="w-6 h-6 rounded-md bg-nb-primary flex items-center justify-center shadow-sm shadow-nb-primary/20">
-          <button onClick={handleDisconnect} title="Home" className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors"><BookOpen size={14} className="text-white" /></button>
+          <BookOpen size={14} className="text-white" />
         </div>
         <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-nb-on-surface truncate">Notebook</p></div>
         <div className="flex items-center gap-1">
-          <button onClick={handleImportNotebook} title="Import Notebook/Entries" className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors"><Upload size={16} /></button>
-          <button onClick={handleExportNotebook} title="Export Entire Notebook" className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors"><Download size={16} /></button>
-          <button onClick={handleDisconnect} title="Switch Workspace" className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors"><ArrowLeftRight size={16} /></button>
           {isMobile && <button onClick={() => setUserSidebarPreference(false)} className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant transition-colors"><X size={18} /></button>}
         </div>
       </div>
@@ -639,6 +651,11 @@ export default function App() {
         isDarkMode={isDarkMode}
         onToggleTheme={() => setTheme(isDarkMode ? "light" : "dark")}
         onOpenHelp={() => navigateTo({}, '/workspace/help')}
+        onOpenTeam={handleOpenTeamEditor}
+        onOpenCompiler={() => navigateTo({}, '/workspace/compile')}
+        onImport={handleImportNotebook}
+        onExport={handleExportNotebook}
+        onDisconnect={handleDisconnect}
         mounted={mounted}
       />
 
@@ -675,6 +692,12 @@ export default function App() {
               />
             )}
           </div>
+        ) : (showCompiler) ? (
+          <div className="flex-1 flex flex-col min-h-0 relative h-full">
+            <NotebookCompiler
+              onClose={() => navigateTo({}, '/workspace/editor')}
+            />
+          </div>
         ) : (openFile || hasEntryInUrl) ? (
           <div className="flex-1 flex flex-col min-h-0 relative h-full">
             {!openFile && (
@@ -685,38 +708,16 @@ export default function App() {
                 </div>
               </div>
             )}
-            {(() => {
-              const effectiveView = (isMobile && viewMode === "split") ? "editor" : viewMode;
-              return (
-                <PanelGroup direction="horizontal" className="h-full" id="editor-preview-group">
-                  <Panel
-                    id="editor-panel" order={1} ref={editorPanelRef} collapsible={true} minSize={isMobile ? 0 : 30}
-                    defaultSize={effectiveView === "editor" ? 100 : (effectiveView === "preview" ? 0 : 50)}
-                    onCollapse={() => { if (!isMobile && viewMode !== "preview") handleSetViewMode("preview"); }}
-                    onExpand={() => { if (!isMobile && viewMode === "preview") handleSetViewMode("split"); }}
-                    className={`flex flex-col h-full transition-all duration-300 ease-out ${(isMobile ? effectiveView === "preview" : effectiveView === "preview") ? "opacity-0 pointer-events-none" : "opacity-100"}`}
-                  >
-                    {openFile && (
-                      <Editor
-                        key={openFile.path}
-                        onClose={() => navigateTo({ entry: null, resource: null })}
-                        showConfirm={showConfirm}
-                      />
-                    )}
-                  </Panel>
-                  <PanelResizeHandle id="editor-preview-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${(isMobile || effectiveView !== 'split') ? 'hidden' : ''}`} />
-                  <Panel
-                    id="preview-panel" order={2} ref={previewPanelRef} collapsible={true} minSize={isMobile ? 0 : 30}
-                    defaultSize={effectiveView === "preview" ? 100 : (effectiveView === "editor" ? 0 : 50)}
-                    onCollapse={() => { if (!isMobile && viewMode !== "editor") handleSetViewMode("editor"); }}
-                    onExpand={() => { if (!isMobile && viewMode === "editor") handleSetViewMode("split"); }}
-                    className={`flex flex-col h-full bg-nb-surface-low transition-all duration-300 ease-out ${(isMobile ? effectiveView === "editor" : effectiveView === "editor") ? "opacity-0 pointer-events-none" : "opacity-100"}`}
-                  >
-                    <Preview latexContent={openFile?.latex || ""} />
-                  </Panel>
-                </PanelGroup>
-              );
-            })()}
+            {openFile && (
+              <Editor
+                key={openFile.path}
+                onClose={() => navigateTo({ entry: null, resource: null })}
+                showConfirm={showConfirm}
+                viewMode={viewMode}
+                onSetViewMode={handleSetViewMode}
+                pdfUrl={pdfUrl || undefined}
+              />
+            )}
           </div>
         ) : (
           <div className="flex-1 h-full overflow-y-auto custom-scrollbar bg-nb-bg">
@@ -727,6 +728,7 @@ export default function App() {
               onDisconnect={handleDisconnect}
               onOpenSidebar={() => { isToggleFromButton.current = true; setUserSidebarPreference(true); }}
               onOpenTeam={handleOpenTeamEditor}
+              onOpenCompiler={() => navigateTo({}, '/workspace/compile')}
               onOpenHelp={() => navigateTo({}, '/help')}
             />
           </div>

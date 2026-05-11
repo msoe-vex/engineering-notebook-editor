@@ -27,7 +27,9 @@ export function useWorkspace() {
     teamTab: store.teamTab,
     showHelp: store.showHelp,
     helpPath: store.helpPath,
+    showCompiler: store.showCompiler,
     isMainTexPresent: store.isMainTexPresent,
+    workspaceVersion: store.workspaceVersion,
   });
 
   useEffect(() => {
@@ -53,7 +55,9 @@ export function useWorkspace() {
         teamTab: s.teamTab,
         showHelp: s.showHelp,
         helpPath: s.helpPath,
+        showCompiler: s.showCompiler,
         isMainTexPresent: s.isMainTexPresent,
+        workspaceVersion: s.workspaceVersion,
       });
     });
 
@@ -88,6 +92,8 @@ export function useWorkspace() {
   const exportEntries = useCallback((entryIds?: string[]) => store.exportEntries(entryIds), []);
   const importNotebook = useCallback((data: Record<string, unknown>) => store.importNotebook(data), []);
   const setSelectedPaths = useCallback((pathsOrUpdater: Set<string> | ((prev: Set<string>) => Set<string>)) => store.setSelectedPaths(pathsOrUpdater), []);
+  const getCompiledPdfUrl = useCallback(() => store.getCompiledPdfUrl(), []);
+  const saveCompiledPdf = useCallback((pdf: Uint8Array) => store.saveCompiledPdf(pdf), []);
 
   return {
     ...state,
@@ -114,5 +120,7 @@ export function useWorkspace() {
     exportEntries,
     importNotebook,
     setSelectedPaths,
+    getCompiledPdfUrl,
+    saveCompiledPdf,
   };
 }

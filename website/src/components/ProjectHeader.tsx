@@ -1,4 +1,8 @@
-import { Menu, Sun, Moon, FolderGit, HelpCircle } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import {
+  Menu, Sun, Moon, HelpCircle, Play,
+  MoreVertical, Download, Upload, ArrowLeftRight, Settings2, Edit3, ExternalLink
+} from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import ViewToggle, { ViewMode } from "./ViewToggle";
 
@@ -16,6 +20,11 @@ interface ProjectHeaderProps {
   isDarkMode: boolean;
   onToggleTheme: () => void;
   onOpenHelp: () => void;
+  onOpenTeam: () => void;
+  onOpenCompiler: () => void;
+  onImport: () => void;
+  onExport: () => void;
+  onDisconnect: () => void;
   mounted: boolean;
 }
 
@@ -33,12 +42,36 @@ export default function ProjectHeader({
   isDarkMode,
   onToggleTheme,
   onOpenHelp,
+  onOpenTeam,
+  onOpenCompiler,
+  onImport,
+  onExport,
+  onDisconnect,
   mounted
 }: ProjectHeaderProps) {
   const { currentProject, openFile } = useWorkspace();
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const isEntryOpen = !!openFile;
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    if (showMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showMenu]);
+
+  const githubUrl = currentProject?.type === "github" && currentProject.githubConfig
+    ? `https://github.com/${currentProject.githubConfig.owner}/${currentProject.githubConfig.repo}/tree/${currentProject.githubConfig.branch}${currentProject.githubConfig.folderPath ? '/' + currentProject.githubConfig.folderPath : ''}`
+    : null;
+
   return (
-    <div className="flex items-center justify-between px-4 h-14 bg-nb-surface border-b border-nb-outline-variant shrink-0">
+    <div className="flex items-center justify-between px-4 h-14 bg-nb-surface border-b border-nb-outline-variant shrink-0 relative z-50">
       <button
         onClick={onToggleSidebar}
         className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors cursor-pointer"
@@ -65,27 +98,45 @@ export default function ProjectHeader({
               className="bg-nb-surface-low border border-nb-primary/30 px-3 py-1 rounded-lg text-sm font-bold text-nb-on-surface outline-none focus:ring-2 focus:ring-nb-primary/30 w-full max-w-[300px]"
             />
           ) : (
-            <div className="flex items-center gap-2 max-w-[350px] min-w-0">
-              <span
-                onClick={() => {
-                  if (currentProject?.id === "temporary") return;
-                  onStartRename();
-                }}
-                className={`text-sm font-bold text-nb-on-surface truncate transition-colors px-2 py-1 rounded-md ${currentProject?.id === "temporary" ? "" : "cursor-pointer hover:text-nb-primary hover:bg-nb-surface-low"}`}
-                title={currentProject?.id === "temporary" ? "" : "Click to rename project"}
+            <div className="flex items-center gap-1 max-w-full min-w-0 relative" ref={menuRef}>
+              <div
+                onClick={() => setShowMenu(!showMenu)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-nb-surface-low transition-all cursor-pointer group min-w-0 max-w-full"
               >
-                {currentProject?.id === "temporary" ? "Temporary Workspace" : (currentProject?.name || "Engineering Notebook")}
-              </span>
-              {currentProject?.type === "github" && currentProject.githubConfig && (
-                <a
-                  href={`https://github.com/${currentProject.githubConfig.owner}/${currentProject.githubConfig.repo}/tree/${currentProject.githubConfig.branch}${currentProject.githubConfig.folderPath ? '/' + currentProject.githubConfig.folderPath : ''}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-1.5 rounded-lg text-nb-on-surface-variant/40 hover:text-nb-tertiary hover:bg-nb-tertiary/5 transition-all cursor-pointer shrink-0"
-                  title="Open on GitHub"
-                >
-                  <FolderGit size={14} />
-                </a>
+                <span className="text-sm font-black text-nb-on-surface truncate tracking-tight">
+                  {currentProject?.id === "temporary" ? "Temporary Workspace" : (currentProject?.name || "Engineering Notebook")}
+                </span>
+                <MoreVertical size={14} className="text-nb-on-surface-variant/40 group-hover:text-nb-primary transition-colors shrink-0" />
+              </div>
+
+              {showMenu && (
+                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 bg-nb-surface border border-nb-outline-variant shadow-nb-2xl rounded-2xl py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                  <div className="px-3 py-2 border-b border-nb-outline-variant/30 mb-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant/40 px-1">Project Actions</p>
+                  </div>
+
+                  <MenuButton icon={<Play size={14} />} label="Compile Notebook" onClick={() => { onOpenCompiler(); setShowMenu(false); }} />
+                  <MenuButton icon={<Settings2 size={14} />} label="Project Configuration" onClick={() => { onOpenTeam(); setShowMenu(false); }} />
+
+                  <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
+
+                  {currentProject?.id !== "temporary" && (
+                    <MenuButton icon={<Edit3 size={14} />} label="Rename Project" onClick={() => { onStartRename(); setShowMenu(false); }} />
+                  )}
+                  {githubUrl && (
+                    <MenuButton icon={<ExternalLink size={14} />} label="Open in GitHub" onClick={() => { window.open(githubUrl, '_blank'); setShowMenu(false); }} />
+                  )}
+
+                  <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
+
+                  <MenuButton icon={<Upload size={14} />} label="Import Notebook" onClick={() => { onImport(); setShowMenu(false); }} />
+                  <MenuButton icon={<Download size={14} />} label="Export Notebook" onClick={() => { onExport(); setShowMenu(false); }} />
+
+                  <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
+
+                  <MenuButton icon={<HelpCircle size={14} />} label="Help & Documentation" onClick={() => { onOpenHelp(); setShowMenu(false); }} />
+                  <MenuButton icon={<ArrowLeftRight size={14} />} label="Change Workspace" onClick={() => { onDisconnect(); setShowMenu(false); }} color="text-nb-tertiary" />
+                </div>
               )}
             </div>
           )
@@ -93,15 +144,12 @@ export default function ProjectHeader({
       </div>
 
       <div className="flex items-center gap-2">
-        {isEntryOpen && !isMobile && (
-          <ViewToggle viewMode={viewMode} onSetViewMode={onSetViewMode} isMobile={false} />
-        )}
         <button
-          onClick={onOpenHelp}
-          className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer"
-          title="Help & Documentation"
+          onClick={onDisconnect}
+          className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-tertiary transition-colors cursor-pointer"
+          title="Change Workspace"
         >
-          <HelpCircle size={16} />
+          <ArrowLeftRight size={16} />
         </button>
         <button
           onClick={onToggleTheme}
@@ -111,5 +159,17 @@ export default function ProjectHeader({
         </button>
       </div>
     </div>
+  );
+}
+
+function MenuButton({ icon, label, onClick, color = "text-nb-on-surface-variant" }: { icon: React.ReactNode, label: string, onClick: () => void, color?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full flex items-center gap-3 px-4 py-2 text-sm font-bold text-nb-on-surface hover:bg-nb-surface-mid transition-colors cursor-pointer"
+    >
+      <div className={color}>{icon}</div>
+      <span>{label}</span>
+    </button>
   );
 }
