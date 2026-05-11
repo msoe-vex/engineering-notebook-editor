@@ -8,7 +8,7 @@ import { showNotification } from "./Notification";
 import { Play, Loader2, Calendar, FileText, ArrowLeft, RefreshCcw } from "lucide-react";
 
 export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
-  const { metadata, saveCompiledPdf, getCompiledPdfUrl } = useWorkspace();
+  const { metadata, saveCompiledPdf, getCompiledPdfUrl, isInitialized } = useWorkspace();
   const [isCompiling, setIsCompiling] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [isLoadingPdf, setIsLoadingPdf] = useState(true);
@@ -26,8 +26,10 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
   }, [getCompiledPdfUrl]);
 
   useEffect(() => {
-    loadLastPdf();
-  }, [loadLastPdf]);
+    if (isInitialized) {
+      loadLastPdf();
+    }
+  }, [loadLastPdf, isInitialized]);
 
   const handleCompile = async () => {
     if (isCompiling) return;
