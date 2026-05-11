@@ -460,6 +460,16 @@ pre[class*="language-"],
 .zoom-in-95 { animation-name: zoom-in; }
 .slide-in-from-top-4 { animation-name: slide-in-from-top; }
 
+@keyframes spin-stable {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-stable {
+  animation: spin-stable 0.8s linear infinite;
+  transform-origin: center center;
+}
+
 @keyframes spin-reverse {
   from { transform: rotate(0deg); }
   to { transform: rotate(-360deg); }
@@ -467,6 +477,7 @@ pre[class*="language-"],
 
 .animate-spin-reverse {
   animation: spin-reverse 1s linear infinite;
+  transform-origin: center center;
 }
 
 .custom-scrollbar::-webkit-scrollbar {

@@ -9,9 +9,9 @@ const GITHUB_PACKAGE_URL = 'https://github.com/msoe-vex/engineering-notebook-edi
 
 export async function initBusyTex() {
   if (runner && runner.isInitialized()) return;
-  
-  const basePath = typeof window !== 'undefined' 
-    ? window.location.origin + '/busytex' 
+
+  const basePath = typeof window !== 'undefined'
+    ? window.location.origin + '/busytex'
     : '/busytex';
 
   // Use the CORS proxy to fetch the remote package.
@@ -28,7 +28,7 @@ export async function initBusyTex() {
     preloadDataPackages: [proxiedPackageUrl],
     verbose: true,
   });
-  
+
   await runner.initialize(true); // useWorker = true
   xelatex = new XeLatex(runner);
 }
@@ -50,19 +50,28 @@ export interface CompileResult {
 export async function compileNotebook(): Promise<CompileResult> {
   // 0. Ensure LaTeX metadata (entries.tex, etc.) is up to date in the store
   await store.updateLatexMetadata();
-  
+
   await initBusyTex();
   if (!xelatex) throw new Error("BusyTex not initialized");
 
   const files: FileInput[] = [];
 
-  // 1. Map public dependencies (/latex/*)
+  // 1. Map public dependencies (/latex/*) and user overrides
   try {
     const manifestResponse = await fetch('/latex/manifest.json');
     if (manifestResponse.ok) {
       const packageFiles = await manifestResponse.json() as string[];
       for (const pkg of packageFiles) {
         try {
+          // Try to pull main.tex and engineering_notebook.sty from workspace first
+          if (pkg === 'main.tex' || pkg === 'engineering_notebook.sty') {
+            const userContent = await store.getFileContent(pkg);
+            if (userContent) {
+              files.push({ path: pkg, content: userContent });
+              continue;
+            }
+          }
+
           const content = await fetchPublicFile(`/latex/${pkg}`);
           files.push({ path: pkg, content });
         } catch (e) {
@@ -146,7 +155,7 @@ export async function compileNotebook(): Promise<CompileResult> {
   }
 
   console.log("[BusyTeX] Starting compilation...");
-  
+
   // Use main.tex from the bundled files (static template)
   let finalInput = '';
   const mainFile = files.find(f => f.path === 'main.tex');
@@ -162,14 +171,14 @@ export async function compileNotebook(): Promise<CompileResult> {
     log: string;
   }
 
-  const result = await (xelatex as unknown as { 
+  const result = await (xelatex as unknown as {
     compile: (options: {
       input: string;
       mainTexPath: string;
       additionalFiles: FileInput[];
       rerun?: boolean;
       cmd?: string;
-    }) => Promise<BusyTexResult> 
+    }) => Promise<BusyTexResult>
   }).compile({
     input: finalInput || '',
     mainTexPath: 'main.tex',
