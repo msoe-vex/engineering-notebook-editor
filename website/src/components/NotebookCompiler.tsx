@@ -8,7 +8,7 @@ import { showNotification } from "./Notification";
 import { Play, Loader2, Calendar, FileText, X, RefreshCcw } from "lucide-react";
 
 export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
-  const { currentProjectId, workspaceVersion, metadata, saveCompiledPdf, getCompiledPdfUrl, isInitialized } = useWorkspace();
+  const { workspaceVersion, metadata, saveCompiledPdf, getCompiledPdfUrl, isInitialized } = useWorkspace();
   const [isCompiling, setIsCompiling] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [isLoadingPdf, setIsLoadingPdf] = useState(true);

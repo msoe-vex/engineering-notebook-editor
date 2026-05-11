@@ -23,15 +23,13 @@ import ProjectHeader from "./ProjectHeader";
 import { ViewMode } from "./ViewToggle";
 import ConfirmationDialog from "./ConfirmationDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { HardDrive, ArrowLeftRight, X, BookOpen, Download, Loader2, Upload } from "lucide-react";
+import { HardDrive, X, BookOpen, Loader2 } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { ENTRIES_DIR, } from "@/lib/constants";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { events, EventNames } from "@/lib/events";
 import { Toaster } from "react-hot-toast";
 import { showNotification } from "./Notification";
-import { compileNotebook } from "@/lib/busytex";
-import LoadingOverlay from "./LoadingOverlay";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

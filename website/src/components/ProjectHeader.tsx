@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { 
-  Menu, Sun, Moon, FolderGit, HelpCircle, Play, Loader2, 
-  MoreVertical, Download, Upload, ArrowLeftRight, Settings2, 
-  BookOpen, Edit3, ExternalLink 
+import {
+  Menu, Sun, Moon, HelpCircle, Play,
+  MoreVertical, Download, Upload, ArrowLeftRight, Settings2, Edit3, ExternalLink
 } from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import ViewToggle, { ViewMode } from "./ViewToggle";
@@ -67,7 +66,7 @@ export default function ProjectHeader({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showMenu]);
 
-  const githubUrl = currentProject?.type === "github" && currentProject.githubConfig 
+  const githubUrl = currentProject?.type === "github" && currentProject.githubConfig
     ? `https://github.com/${currentProject.githubConfig.owner}/${currentProject.githubConfig.repo}/tree/${currentProject.githubConfig.branch}${currentProject.githubConfig.folderPath ? '/' + currentProject.githubConfig.folderPath : ''}`
     : null;
 
@@ -100,7 +99,7 @@ export default function ProjectHeader({
             />
           ) : (
             <div className="flex items-center gap-1 max-w-full min-w-0 relative" ref={menuRef}>
-              <div 
+              <div
                 onClick={() => setShowMenu(!showMenu)}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-nb-surface-low transition-all cursor-pointer group min-w-0 max-w-full"
               >
@@ -115,26 +114,26 @@ export default function ProjectHeader({
                   <div className="px-3 py-2 border-b border-nb-outline-variant/30 mb-1">
                     <p className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant/40 px-1">Project Actions</p>
                   </div>
-                  
+
                   <MenuButton icon={<Play size={14} />} label="Compile Notebook" onClick={() => { onOpenCompiler(); setShowMenu(false); }} />
                   <MenuButton icon={<Settings2 size={14} />} label="Project Configuration" onClick={() => { onOpenTeam(); setShowMenu(false); }} />
-                  
+
                   <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
-                  
+
                   {currentProject?.id !== "temporary" && (
                     <MenuButton icon={<Edit3 size={14} />} label="Rename Project" onClick={() => { onStartRename(); setShowMenu(false); }} />
                   )}
                   {githubUrl && (
                     <MenuButton icon={<ExternalLink size={14} />} label="Open in GitHub" onClick={() => { window.open(githubUrl, '_blank'); setShowMenu(false); }} />
                   )}
-                  
+
                   <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
-                  
+
                   <MenuButton icon={<Upload size={14} />} label="Import Notebook" onClick={() => { onImport(); setShowMenu(false); }} />
                   <MenuButton icon={<Download size={14} />} label="Export Notebook" onClick={() => { onExport(); setShowMenu(false); }} />
-                  
+
                   <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
-                  
+
                   <MenuButton icon={<HelpCircle size={14} />} label="Help & Documentation" onClick={() => { onOpenHelp(); setShowMenu(false); }} />
                   <MenuButton icon={<ArrowLeftRight size={14} />} label="Change Workspace" onClick={() => { onDisconnect(); setShowMenu(false); }} color="text-nb-tertiary" />
                 </div>
