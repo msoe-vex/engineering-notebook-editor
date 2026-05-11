@@ -5,6 +5,8 @@ import { DATA_DIR, LATEX_DIR } from './constants';
 let runner: BusyTexRunner | null = null;
 let xelatex: XeLatex | null = null;
 
+const GITHUB_PACKAGE_URL = 'https://github.com/msoe-vex/engineering-notebook-editor/releases/download/v0.1.0/texlive-recommended.js';
+
 export async function initBusyTex() {
   if (runner && runner.isInitialized()) return;
   
@@ -12,11 +14,18 @@ export async function initBusyTex() {
     ? window.location.origin + '/busytex' 
     : '/busytex';
 
+  // Use the CORS proxy to fetch the remote package.
+  // The proxy also fixes the MIME type so the browser can execute the script.
+  const proxiedPackageUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/api/busytex-proxy?url=${encodeURIComponent(GITHUB_PACKAGE_URL)}`
+    : GITHUB_PACKAGE_URL;
+
   runner = new BusyTexRunner({
     busytexBasePath: basePath,
     engineMode: 'combined',
-    // We still need the basic engine environment
-    preloadDataPackages: ['texlive-basic.js'],
+    // By providing the proxied URL to the .js file, BusyTeX will 
+    // automatically use the same proxy for the .data file.
+    preloadDataPackages: [proxiedPackageUrl],
     verbose: true,
   });
   
