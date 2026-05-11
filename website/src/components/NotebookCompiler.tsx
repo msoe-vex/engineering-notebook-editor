@@ -5,10 +5,10 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 import Preview from "./Preview";
 import { compileNotebook, CompileResult } from "@/lib/busytex";
 import { showNotification } from "./Notification";
-import { Play, Loader2, Calendar, FileText, X, RefreshCcw } from "lucide-react";
+import { Play, Loader2, Calendar, FileText, X, RefreshCcw, Download } from "lucide-react";
 
 export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
-  const { workspaceVersion, metadata, saveCompiledPdf, getCompiledPdfUrl, isInitialized } = useWorkspace();
+  const { workspaceVersion, metadata, saveCompiledPdf, getCompiledPdfUrl, isInitialized, currentProject } = useWorkspace();
   const [isCompiling, setIsCompiling] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [isLoadingPdf, setIsLoadingPdf] = useState(true);
@@ -74,6 +74,17 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const handleDownload = () => {
+    if (!pdfUrl) return;
+    const link = document.createElement("a");
+    link.href = pdfUrl;
+    const title = (currentProject?.name || metadata.team?.teamName || "Untitled").replace(/\s+/g, '_');
+    link.download = `Engineering_Notebook_${title}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const lastCompiledDate = metadata.lastCompiled
     ? new Date(metadata.lastCompiled).toLocaleString()
     : "Never";
@@ -96,6 +107,17 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="flex items-center gap-3">
+          {pdfUrl && (
+            <button
+              onClick={handleDownload}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black transition-all border border-nb-outline-variant bg-nb-surface-low text-nb-on-surface hover:bg-nb-surface-mid hover:border-nb-primary/30 cursor-pointer shadow-sm active:scale-[0.98]"
+              title="Download PDF"
+            >
+              <Download size={16} />
+              <span className="hidden sm:inline">Download</span>
+            </button>
+          )}
+
           <button
             onClick={handleCompile}
             disabled={isCompiling}
@@ -106,7 +128,9 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
           >
             {isCompiling ? (
               <>
-                <Loader2 size={16} className="animate-spin" />
+                <div className="flex items-center justify-center w-4 h-4">
+                  <Loader2 size={16} className="animate-spin-stable" />
+                </div>
                 <span>Compiling...</span>
               </>
             ) : (
@@ -133,7 +157,9 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
       <div className="flex-1 overflow-hidden relative">
         {isLoadingPdf ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-nb-bg/50 backdrop-blur-sm z-10">
-            <Loader2 size={32} className="animate-spin text-nb-primary" />
+            <div className="flex items-center justify-center w-10 h-10">
+              <Loader2 size={32} className="animate-spin-stable text-nb-primary" />
+            </div>
             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant animate-pulse">Loading last version...</span>
           </div>
         ) : pdfUrl ? (
