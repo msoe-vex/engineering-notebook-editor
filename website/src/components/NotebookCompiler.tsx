@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import Preview from "./Preview";
 import { compileNotebook, CompileResult } from "@/lib/busytex";
@@ -13,24 +13,39 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [isLoadingPdf, setIsLoadingPdf] = useState(true);
 
-  const loadLastPdf = useCallback(async () => {
-    setIsLoadingPdf(true);
-    setPdfUrl(null); // Reset before loading new
-    try {
-      const url = await getCompiledPdfUrl();
-      setPdfUrl(url);
-    } catch (e) {
-      console.error("Failed to load last compiled PDF", e);
-    } finally {
-      setIsLoadingPdf(false);
-    }
-  }, [getCompiledPdfUrl]);
-
   useEffect(() => {
-    if (isInitialized) {
-      loadLastPdf();
-    }
-  }, [loadLastPdf, isInitialized, workspaceVersion]);
+    let active = true;
+
+    const loadPdf = async () => {
+      if (!isInitialized) return;
+
+      // Delay resets to avoid synchronous setState warnings in effect
+      await Promise.resolve();
+      if (!active) return;
+
+      setPdfUrl(null);
+      setIsLoadingPdf(true);
+
+      try {
+        const url = await getCompiledPdfUrl();
+        if (active) {
+          setPdfUrl(url);
+        }
+      } catch (e) {
+        console.error("Failed to load last compiled PDF", e);
+      } finally {
+        if (active) {
+          setIsLoadingPdf(false);
+        }
+      }
+    };
+
+    loadPdf();
+
+    return () => {
+      active = false;
+    };
+  }, [getCompiledPdfUrl, isInitialized, workspaceVersion]);
 
   const handleCompile = async () => {
     if (isCompiling) return;
@@ -131,7 +146,7 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
             <div className="space-y-2">
               <h3 className="text-xl font-black text-nb-on-surface tracking-tight">No PDF Generated Yet</h3>
               <p className="text-sm text-nb-on-surface-variant leading-relaxed font-medium">
-                You haven't compiled this notebook yet. Click the button above to generate a full PDF version of your documentation.
+                You have not compiled this notebook yet. Click the button above to generate a full PDF version of your documentation.
               </p>
             </div>
             <button
