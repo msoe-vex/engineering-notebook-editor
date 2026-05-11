@@ -584,14 +584,16 @@ export default function TeamEditor({
     <div className="flex flex-col h-full bg-nb-bg animate-in fade-in duration-300">
       {/* Header */}
       <div className="flex flex-col bg-nb-surface border-b border-nb-outline-variant shadow-nb-sm shrink-0">
-        <div className="flex items-center justify-between px-8 py-6">
+        <div className="flex items-center justify-between px-8 h-16">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-nb-primary/10 text-nb-primary flex items-center justify-center">
-              <Users size={24} />
+            <div className="w-10 h-10 rounded-xl bg-nb-primary/10 text-nb-primary flex items-center justify-center">
+              <Users size={20} />
             </div>
             <div>
-              <h1 className="text-xl font-black text-nb-on-surface tracking-tight">Project Configuration</h1>
-              <p className="text-xs text-nb-on-surface-variant font-medium">Identity, Team, and Design Process</p>
+              <h1 className="text-lg font-black text-nb-on-surface tracking-tight leading-tight">Project Configuration</h1>
+              <div className="flex items-center gap-2 text-[10px] font-black tracking-[0.2em] text-nb-on-surface-variant/40 uppercase">
+                <span>Identity, Team, and Design Process</span>
+              </div>
             </div>
           </div>
 
@@ -614,10 +616,10 @@ export default function TeamEditor({
 
             <button
               onClick={onClose}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-nb-surface-mid hover:bg-nb-surface-high text-nb-on-surface font-bold text-xs transition-all border border-nb-outline-variant/20 cursor-pointer"
+              className="p-2 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer"
+              title="Close Configuration"
             >
-              <X size={14} />
-              Close
+              <X size={20} />
             </button>
           </div>
         </div>

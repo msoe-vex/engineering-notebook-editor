@@ -62,21 +62,23 @@ export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
   return (
     <div className="fixed inset-0 z-[600] bg-nb-bg flex flex-col animate-in fade-in duration-300">
       {/* Header */}
-      <div className="h-20 border-b border-nb-outline-variant/30 flex items-center justify-between px-8 bg-nb-surface/50 backdrop-blur-xl">
+      <div className="h-16 border-b border-nb-outline-variant/30 flex items-center justify-between px-8 bg-nb-surface/50 backdrop-blur-xl">
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 rounded-xl bg-nb-primary/10 text-nb-primary flex items-center justify-center">
             <Book size={20} />
           </div>
           <div>
-            <h1 className="text-lg font-black tracking-tight text-nb-on-surface">Help Center</h1>
-            <p className="text-[10px] font-black tracking-[0.2em] text-nb-on-surface-variant/40 uppercase">
-              {isWorkspaceHelp ? "Workspace & Editor Guide" : "General Setup & Modes"}
-            </p>
+            <h1 className="text-lg font-black tracking-tight text-nb-on-surface leading-tight">Help Center</h1>
+            <div className="flex items-center gap-2 text-[10px] font-black tracking-[0.2em] text-nb-on-surface-variant/40 uppercase">
+              <span>{isWorkspaceHelp ? "Workspace & Editor Guide" : "General Setup & Modes"}</span>
+            </div>
           </div>
         </div>
+        
         <button
           onClick={onClose}
-          className="p-2.5 hover:bg-nb-surface-mid rounded-xl text-nb-on-surface-variant hover:text-nb-on-surface transition-all active:scale-95 cursor-pointer"
+          className="p-2 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer"
+          title="Close Help"
         >
           <X size={20} />
         </button>
