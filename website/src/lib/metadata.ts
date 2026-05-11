@@ -137,15 +137,15 @@ export const DEFAULT_PHASES: ProjectPhase[] = [
   { id: "evaluate-solution", index: 5, name: "Evaluate Solution", description: "Reflecting on constraints, event outcomes, and planning future improvements.", iconName: "SearchCheck", color: "#10b981" },
 ];
 
-export const EMPTY_METADATA: NotebookMetadata = { 
-  version: 3, 
+export const EMPTY_METADATA: NotebookMetadata = {
+  version: 3,
   entries: {},
   phases: DEFAULT_PHASES,
   team: {
     teamName: "",
     teamNumber: "",
-    startDate: "TBD",
-    endDate: "TBD",
+    startDate: "",
+    endDate: "",
     organization: "",
     members: []
   }
@@ -176,10 +176,10 @@ export function extractImagePaths(doc: TipTapDoc): string[] {
 /** Walk every node and extract resources (blocks with IDs and titles), including headers. */
 export function extractResources(doc: TipTapDoc): Record<string, { title: string, caption: string, type: string }> {
   const resources: Record<string, { title: string, caption: string, type: string }> = {};
-  
+
   function walk(node: TipTapNode | undefined) {
     if (!node) return;
-    
+
     // Include any node that has a UUID id
     if (node.attrs?.id) {
       const title = (node.attrs.title as string) || "";
@@ -191,7 +191,7 @@ export function extractResources(doc: TipTapDoc): Record<string, { title: string
         type: node.type
       };
     }
-    
+
     // Include headings as resources with their own IDs
     if (node.type === "heading" && node.attrs?.id) {
       const id = node.attrs.id as string;
@@ -200,18 +200,18 @@ export function extractResources(doc: TipTapDoc): Record<string, { title: string
         .map(child => child.text || "")
         .join("")
         .trim() || "Untitled Header";
-      resources[id] = { 
-        title: headingText, 
-        caption: "", 
-        type: "header" 
+      resources[id] = {
+        title: headingText,
+        caption: "",
+        type: "header"
       };
     }
-    
+
     if (Array.isArray(node.content)) {
       node.content.forEach(walk);
     }
   }
-  
+
   walk(doc);
   return resources;
 }
@@ -380,8 +380,8 @@ export function updateEntryInIndex(
 ): NotebookMetadata {
   const next = {
     ...metadata,
-    entries: { 
-      ...metadata.entries, 
+    entries: {
+      ...metadata.entries,
       [entryId]: info
     }
   };
@@ -397,7 +397,7 @@ export function updateEntryInIndex(
 export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookMetadata {
   const newEntries = { ...metadata.entries };
   const assetRefs: Record<string, string[]> = {};
-  
+
   const trackAsset = (path: string, owner: string) => {
     if (!path || path.startsWith("data:")) return; // Don't track hydrated data
     if (!assetRefs[path]) assetRefs[path] = [];
@@ -441,7 +441,7 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
     if (!entry.title?.trim()) errors.push("Project title is required.");
     if (!entry.author?.trim()) errors.push("Author name is required.");
     if (!entry.date?.trim()) errors.push("Date is required.");
-    
+
     // Phase validation
     const phases = metadata.phases && metadata.phases.length > 0 ? metadata.phases : DEFAULT_PHASES;
     if (typeof entry.phase !== "number" || !phases.some(p => p.index === entry.phase)) {
@@ -488,13 +488,13 @@ export function isEntryValid(info: EntryMetadata): boolean {
   if (!info.author?.trim()) return false;
   if (!info.date?.trim()) return false;
   if (info.phase === null) return false;
-  
+
   if (info.resources) {
     for (const res of Object.values(info.resources)) {
       if (!res.title?.trim() || !res.caption?.trim()) return false;
     }
   }
-  
+
   return true;
 }
 
@@ -505,7 +505,7 @@ export function removeEntryFromMetadata(
 ): NotebookMetadata {
   const newEntries = { ...metadata.entries };
   delete newEntries[entryId];
-  
+
   const next = { ...metadata, entries: newEntries };
   return validateNotebookIntegrity(next);
 }
@@ -521,7 +521,7 @@ export function renameEntryInMetadata(
     newEntries[newId] = newEntries[oldId];
     delete newEntries[oldId];
   }
-  
+
   const next = { ...metadata, entries: newEntries };
   return validateNotebookIntegrity(next);
 }
@@ -537,7 +537,7 @@ export function remapContentIds(doc: TipTapDoc | TipTapNode[], globalIdMap: Map<
   // Pass 1: Collect and remap IDs for this doc specifically
   function collect(node: TipTapNode | TipTapNode[]) {
     if (!node || typeof node !== "object") return;
-    
+
     if (Array.isArray(node)) {
       node.forEach(collect);
       return;
@@ -555,7 +555,7 @@ export function remapContentIds(doc: TipTapDoc | TipTapNode[], globalIdMap: Map<
         globalIdMap.set(oldId, generateUUID());
       }
     }
-    
+
     if (Array.isArray(node.content)) {
       node.content.forEach(collect);
     }
@@ -661,7 +661,7 @@ export function ensureHeadingIds(doc: TipTapDoc | TipTapNode): TipTapDoc | TipTa
  */
 export function remapEntryMetadataIds(entry: EntryMetadata, idMap: Map<string, string>): EntryMetadata {
   const newEntry = { ...entry };
-  
+
   // Remap resources
   if (entry.resources) {
     const newResources: Record<string, { title: string; caption: string; type: string }> = {};
@@ -671,12 +671,12 @@ export function remapEntryMetadataIds(entry: EntryMetadata, idMap: Map<string, s
     }
     newEntry.resources = newResources;
   }
-  
+
   // Remap references
   if (entry.references) {
     newEntry.references = entry.references.map(refId => idMap.get(refId) || refId);
   }
-  
+
   return newEntry;
 }
 

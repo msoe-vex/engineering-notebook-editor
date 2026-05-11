@@ -53,7 +53,6 @@ export async function compileNotebook(): Promise<CompileResult> {
     if (manifestResponse.ok) {
       const packageFiles = await manifestResponse.json() as string[];
       for (const pkg of packageFiles) {
-        if (pkg === 'vex_notebook.sty') continue;
         try {
           const content = await fetchPublicFile(`/latex/${pkg}`);
           files.push({ path: pkg, content });
@@ -81,15 +80,11 @@ export async function compileNotebook(): Promise<CompileResult> {
     }
   }
 
-  // 3. Map project files from store
-  const mainTex = await store.getFileContent('main.tex');
-  const notebookSty = await store.getFileContent('vex_notebook.sty');
+  // 3. Map project files from store (Only files in data/ are dynamic)
   const teamTex = await store.getFileContent(`${DATA_DIR}/team.tex`);
   const phasesTex = await store.getFileContent(`${DATA_DIR}/phases.tex`);
   const entriesIndexTex = await store.getFileContent(`${DATA_DIR}/entries.tex`);
 
-  if (mainTex) files.push({ path: 'main.tex', content: mainTex });
-  if (notebookSty) files.push({ path: 'vex_notebook.sty', content: notebookSty });
   if (teamTex) files.push({ path: 'data/team.tex', content: teamTex });
   if (phasesTex) files.push({ path: 'data/phases.tex', content: phasesTex });
   if (entriesIndexTex) {
@@ -142,8 +137,18 @@ export async function compileNotebook(): Promise<CompileResult> {
   }
 
   console.log("[BusyTeX] Starting compilation...");
+  
+  // Use main.tex from the bundled files (static template)
+  let finalInput = '';
+  const mainFile = files.find(f => f.path === 'main.tex');
+  if (mainFile && typeof mainFile.content !== 'string') {
+    finalInput = new TextDecoder().decode(mainFile.content);
+  } else if (mainFile && typeof mainFile.content === 'string') {
+    finalInput = mainFile.content;
+  }
+
   const result = await (xelatex as any).compile({
-    input: mainTex || '',
+    input: finalInput || '',
     mainTexPath: 'main.tex',
     additionalFiles: files,
     rerun: true,

@@ -122,7 +122,7 @@ export async function convertSvgToPng(svgDataUrl: string, scale: number = 2): Pr
  * Formats a date string into "Month YYYY" (e.g. "September 2024")
  */
 export function formatDateMonthYear(dateStr: string): string {
-  if (!dateStr || dateStr === "TBD") return "TBD";
+  if (!dateStr) return "";
   try {
     // Handle YYYY-MM-DD format carefully to avoid timezone shifts
     const parts = dateStr.split('-');

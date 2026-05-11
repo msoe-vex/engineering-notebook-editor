@@ -29,6 +29,7 @@ export function useWorkspace() {
     helpPath: store.helpPath,
     showCompiler: store.showCompiler,
     isMainTexPresent: store.isMainTexPresent,
+    workspaceVersion: store.workspaceVersion,
   });
 
   useEffect(() => {
@@ -56,6 +57,7 @@ export function useWorkspace() {
         helpPath: s.helpPath,
         showCompiler: s.showCompiler,
         isMainTexPresent: s.isMainTexPresent,
+        workspaceVersion: s.workspaceVersion,
       });
     });
 

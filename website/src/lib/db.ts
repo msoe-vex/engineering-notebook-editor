@@ -277,6 +277,16 @@ export async function clearAllPending(dbName: string): Promise<void> {
   });
 }
 
+export async function clearAllResources(dbName: string): Promise<void> {
+  const db = await openDB(dbName);
+  return new Promise((resolve, reject) => {
+    const store = tx(db, RESOURCE_STORE, "readwrite");
+    const req = store.clear();
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
 export async function getPending(dbName: string, path: string): Promise<PendingChange | undefined> {
   const db = await openDB(dbName);
   return new Promise((resolve, reject) => {
