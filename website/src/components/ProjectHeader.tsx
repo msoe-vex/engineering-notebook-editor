@@ -71,7 +71,7 @@ export default function ProjectHeader({
     : null;
 
   return (
-    <div className="flex items-center justify-between px-4 h-14 bg-nb-surface border-b border-nb-outline-variant shrink-0 relative z-50">
+    <div className="flex items-center justify-between px-4 h-14 bg-nb-surface border-b border-nb-outline-variant shrink-0 relative z-[200]">
       <button
         onClick={onToggleSidebar}
         className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors cursor-pointer"
