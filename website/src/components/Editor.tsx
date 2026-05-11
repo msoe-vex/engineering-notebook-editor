@@ -10,13 +10,13 @@ import {
   Undo2, Redo2, ImagePlus, ChevronDown, ChevronUp, List, ListOrdered,
   Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
   Terminal, Link as LinkIcon, Underline as UnderlineIcon,
-  FileJson, Play
+  FileJson
 } from "lucide-react";
 import ValidationTooltip from "./ValidationTooltip";
 import * as LucideIcons from "lucide-react";
-import { 
-  Panel, 
-  PanelGroup, 
+import {
+  Panel,
+  PanelGroup,
   PanelResizeHandle,
   ImperativePanelHandle
 } from "react-resizable-panels";
@@ -126,7 +126,6 @@ const EditorContent = React.memo(function EditorContent({
   showConfirm,
   viewMode,
   onSetViewMode,
-  pdfUrl,
 }: EditorProps & {
   openFile: NonNullable<ReturnType<typeof useWorkspace>['openFile']>;
   metadata: ReturnType<typeof useWorkspace>['metadata'];
@@ -237,7 +236,7 @@ const EditorContent = React.memo(function EditorContent({
   // Sync panels with viewMode
   useEffect(() => {
     if (!editorPanelRef.current || !previewPanelRef.current) return;
-    
+
     if (viewMode === "editor") {
       editorPanelRef.current.expand();
       previewPanelRef.current.collapse();
@@ -645,7 +644,7 @@ const EditorContent = React.memo(function EditorContent({
 
 
           <div className="flex-1 min-w-[20px]" />
-          
+
           <div className="flex items-center gap-2 mr-4">
             <ViewToggle viewMode={viewMode} onSetViewMode={onSetViewMode} />
           </div>
