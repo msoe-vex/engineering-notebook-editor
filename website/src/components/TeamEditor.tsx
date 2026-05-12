@@ -400,8 +400,7 @@ export default function TeamEditor({
 }: TeamEditorProps) {
   const {
     metadata,
-    saveTeam,
-    navigateTo
+    saveTeam
   } = useWorkspace();
 
   const initialData = useMemo(() => {
@@ -615,23 +614,13 @@ export default function TeamEditor({
 
             <div className="w-px h-6 bg-nb-outline-variant/30" />
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => navigateTo({}, '/workspace/compile')}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-nb-primary/10 text-nb-primary hover:bg-nb-primary hover:text-white transition-all cursor-pointer"
-                title="Go to Compiler"
-              >
-                <Play size={14} className="fill-current" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Compile</span>
-              </button>
-              <button
-                onClick={onClose}
-                className="p-2 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer"
-                title="Close Configuration"
-              >
-                <X size={20} />
-              </button>
-            </div>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer"
+              title="Close Configuration"
+            >
+              <X size={20} />
+            </button>
           </div>
         </div>
 
