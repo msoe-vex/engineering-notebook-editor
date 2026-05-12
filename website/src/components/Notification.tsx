@@ -27,7 +27,7 @@ export const Notification = ({ message, type, t }: NotificationProps) => {
   return (
     <div
       className={`${
-        t.visible ? 'animate-in fade-in slide-in-from-right-4' : 'animate-out fade-out zoom-out-95'
+        t.visible ? 'animate-in fade-in slide-in-from-right-4' : 'animate-out fade-out slide-out-to-right-4'
       } max-w-md w-full bg-nb-surface shadow-nb-2xl rounded-2xl pointer-events-auto flex overflow-hidden`}
     >
       <div className={`w-1.5 shrink-0 ${type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : type === 'info' ? 'bg-nb-tertiary' : 'bg-nb-primary'}`} />
