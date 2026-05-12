@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import GitHubConnectionDialog from "./GitHubConnectionDialog";
+import Logo from "./ui/Logo";
 
 
 interface HomeProps {
@@ -133,13 +134,13 @@ export default function Home({
 
         {/* Left Side: Brand & Actions */}
         <div className="lg:col-span-5 flex flex-col gap-8">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-nb-primary flex items-center justify-center shadow-2xl shadow-nb-primary/30">
-              <BookOpen size={28} className="text-white" />
+          <div className="flex items-center gap-4 group cursor-default">
+            <div className="w-14 h-14 rounded-2xl bg-nb-primary flex items-center justify-center shadow-2xl shadow-nb-primary/30 group-hover:scale-105 transition-transform">
+              <Logo className="text-white" size={32} strokeWidth={18} />
             </div>
             <div>
-              <h1 className="text-2xl font-black tracking-tight text-nb-on-surface">Notebook</h1>
-              <p className="text-xs font-bold tracking-widest text-nb-on-surface-variant uppercase opacity-60">Engineering Editor</p>
+              <h1 className="text-2xl font-black tracking-tight text-nb-on-surface group-hover:text-nb-primary transition-colors">ENGen</h1>
+              <p className="text-xs font-bold tracking-widest text-nb-on-surface-variant uppercase opacity-60">Engineering Notebook Generator</p>
             </div>
           </div>
 

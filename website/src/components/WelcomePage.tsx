@@ -1,6 +1,7 @@
 "use client";
 
 import { BookOpen, FolderOpen, GitBranch, HardDrive, Plus, ArrowLeftRight, Upload, Play } from "lucide-react";
+import Logo from "./ui/Logo";
 
 interface WorkspaceInfo {
   mode: "github" | "local" | "temporary";
@@ -28,12 +29,16 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
       <div className="m-auto w-full max-w-2xl flex flex-col items-center">
         {/* Header */}
         <div className="flex flex-col items-center gap-6 mb-12">
-          <div className="w-20 h-20 rounded-2xl bg-nb-primary flex items-center justify-center shadow-2xl shadow-nb-primary/30">
-            <BookOpen size={40} className="text-white" />
-          </div>
+          <button
+            onClick={onDisconnect}
+            className="w-20 h-20 rounded-2xl bg-nb-primary flex items-center justify-center shadow-2xl shadow-nb-primary/30 hover:scale-105 transition-transform cursor-pointer group"
+            title="Go to Home"
+          >
+            <Logo className="text-white group-hover:rotate-12 transition-transform" size={48} strokeWidth={18} />
+          </button>
           <div className="text-center">
             <h1 className="text-4xl font-bold text-nb-on-surface">
-              Engineering Notebook
+              ENGen
             </h1>
             <div className="flex items-center gap-2 justify-center mt-3 text-sm text-nb-on-surface-variant">
               <ModeIcon size={14} className="text-nb-tertiary" />

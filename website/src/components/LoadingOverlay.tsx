@@ -1,19 +1,35 @@
 import React from 'react';
-import { Loader2 } from 'lucide-react';
+import Logo from './ui/Logo';
 
-export default function LoadingOverlay() {
+interface LoadingOverlayProps {
+  label?: string;
+  subtitle?: string;
+}
+
+export default function LoadingOverlay({ 
+  label = "ENGen", 
+  subtitle = "Engineering Notebook Generator" 
+}: LoadingOverlayProps) {
   return (
-    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-background/80 backdrop-blur-md animate-in fade-in duration-500">
-      <div className="relative flex items-center justify-center">
-        <div className="absolute h-24 w-24 rounded-full border-4 border-primary/20 border-t-primary animate-spin shadow-xl"></div>
-        <Loader2 className="h-10 w-10 text-primary animate-pulse" />
+    <div className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-md flex flex-col items-center justify-center font-sans animate-in fade-in duration-300">
+      <div className="flex flex-col items-center gap-6">
+        <div className="w-20 h-20 rounded-[2.5rem] bg-nb-primary flex items-center justify-center shadow-2xl shadow-nb-primary/30 animate-pulse">
+          <Logo className="text-white" size={48} strokeWidth={18} />
+        </div>
+        <div className="text-center space-y-2">
+          <h1 className="text-xl font-black tracking-tight text-white uppercase">
+            {label}
+          </h1>
+          <p className="text-[10px] font-black tracking-[0.2em] text-white/40 uppercase">
+            {subtitle}
+          </p>
+        </div>
+        <div className="flex items-center gap-1 mt-4">
+          <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce [animation-delay:-0.3s]" />
+          <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce [animation-delay:-0.15s]" />
+          <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce" />
+        </div>
       </div>
-      <h2 className="mt-8 text-xl font-semibold tracking-tight text-foreground animate-pulse">
-        Loading Notebook...
-      </h2>
-      <p className="mt-2 text-sm text-muted-foreground max-w-[200px] text-center leading-relaxed">
-        Preparing your workspace and syncing data
-      </p>
     </div>
   );
 }
