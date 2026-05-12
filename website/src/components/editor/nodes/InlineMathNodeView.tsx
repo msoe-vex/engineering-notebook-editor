@@ -86,6 +86,9 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
           <span
             ref={inputRef}
             contentEditable
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="off"
             suppressContentEditableWarning
             className="outline-none min-w-[1ch] focus:ring-0"
             onInput={(e) => {
@@ -100,6 +103,13 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
                 e.preventDefault();
                 setIsEditing(false);
                 editor.commands.focus();
+              }
+              if (e.key === 'Backspace' && node.attrs.latex === "") {
+                e.preventDefault();
+                const pos = getPos();
+                if (typeof pos === 'number') {
+                  editor.chain().focus().deleteRange({ from: pos, to: pos + node.nodeSize }).run();
+                }
               }
               // Arrow keys logic to "exit" the node
               if (e.key === 'ArrowRight') {

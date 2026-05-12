@@ -220,7 +220,7 @@ export default function UnifiedEditor({
       }),
       Placeholder.configure({
         placeholder: ({ node }) => {
-          if (node.type.name === 'codeBlock') return "";
+          if (['codeBlock', 'rawLatex', 'mathBlock'].includes(node.type.name)) return "";
           return "Start writing...";
         },
       }),

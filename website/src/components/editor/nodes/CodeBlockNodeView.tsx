@@ -180,6 +180,16 @@ export const CustomCodeBlock = CodeBlock.extend({
         }
         return false;
       },
+      Backspace: ({ editor }) => {
+        const { state } = editor;
+        const { selection } = state;
+        const { $from } = selection;
+
+        if (selection.empty && $from.parent.type.name === this.name && $from.parent.content.size === 0) {
+          return editor.commands.deleteNode(this.name);
+        }
+        return false;
+      },
     };
   },
 });
