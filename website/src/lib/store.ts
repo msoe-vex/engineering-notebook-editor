@@ -1195,7 +1195,10 @@ class WorkspaceStore {
       }
 
       // 3. Remap entries
+      // Pass 1: Remap all IDs and build the full entry metadata map
+      const remappedEntries: { id: string, doc: TipTapNode, meta: EntryMetadata }[] = [];
       const newEntriesMap: Record<string, EntryMetadata> = {};
+
       for (const oldId of entryIdList) {
         const entryWithContent = entries[oldId] as Record<string, unknown> & { content?: TipTapNode };
         const { content, ...entryMetadata } = entryWithContent;
@@ -1209,21 +1212,27 @@ class WorkspaceStore {
         remappedMeta.id = newId;
         remappedMeta.filename = `${ENTRIES_DIR}/${newId}.json`;
 
-        // Ensure date exists
         if (!remappedMeta.date) {
           remappedMeta.date = remappedMeta.createdAt?.split('T')[0] || getLocalDateString();
         }
 
-        const contentStr = JSON.stringify({ version: 3, content: remappedDoc }, null, 2);
-        const localResources = extractResources(remappedDoc as TipTapNode);
-        const resourceTypes = buildResourceTypeIndex({ ...this.metadata.entries, ...newEntriesMap, [newId]: remappedMeta }, localResources, newId);
-        const latex = generateEntryLatex(remappedDoc as TipTapNode, remappedMeta.title, remappedMeta.author, remappedMeta.phase, remappedMeta.createdAt, newId, resourceTypes, remappedMeta.date);
-
-        // Save entry files
-        await this.persistFile(remappedMeta.filename, contentStr, `Import entry: ${remappedMeta.title}`);
-        await this.persistFile(`${LATEX_DIR}/${newId}.tex`, latex, `Import LaTeX: ${remappedMeta.title}`);
-
+        remappedEntries.push({ id: newId, doc: remappedDoc as TipTapNode, meta: remappedMeta });
         newEntriesMap[newId] = remappedMeta;
+      }
+
+      // Build the global resource index using all new entries
+      const globalResourceTypes = buildResourceTypeIndex({ ...this.metadata.entries, ...newEntriesMap });
+
+      // Pass 2: Generate LaTeX and persist files
+      for (const item of remappedEntries) {
+        const { id, doc, meta } = item;
+        const contentStr = JSON.stringify({ version: 3, content: doc }, null, 2);
+        
+        // Generate LaTeX with the global index so cross-entry links work
+        const latex = generateEntryLatex(doc, meta.title, meta.author, meta.phase, meta.createdAt, id, globalResourceTypes, meta.date);
+
+        await this.persistFile(meta.filename, contentStr, `Import entry: ${meta.title}`);
+        await this.persistFile(`${LATEX_DIR}/${id}.tex`, latex, `Import LaTeX: ${meta.title}`);
       }
 
       // 4. Import Team and Phases if present

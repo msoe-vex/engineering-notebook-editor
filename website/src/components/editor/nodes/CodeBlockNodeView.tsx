@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer } from "@tiptap/react";
 import { CodeBlock, type CodeBlockOptions } from "@tiptap/extension-code-block";
-import { GripVertical, Trash2, Code2, ChevronDown } from "lucide-react";
+import { GripVertical, Trash2, Code2, ChevronDown, Check } from "lucide-react";
 
 import { NodeViewProps } from "./types";
 
@@ -23,6 +24,43 @@ export const LANGUAGES: Record<string, string> = {
 export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: NodeViewProps) {
   const [isCursorInside, setIsCursorInside] = useState(false);
   const [dragEnabled, setDragEnabled] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!isDropdownOpen) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
+          buttonRef.current && !buttonRef.current.contains(e.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    const handleScroll = () => {
+      if (buttonRef.current) {
+        setDropdownRect(buttonRef.current.getBoundingClientRect());
+      }
+    };
+
+    window.addEventListener("mousedown", handleOutsideClick);
+    window.addEventListener("scroll", handleScroll, true);
+    window.addEventListener("resize", handleScroll);
+
+    return () => {
+      window.removeEventListener("mousedown", handleOutsideClick);
+      window.removeEventListener("scroll", handleScroll, true);
+      window.removeEventListener("resize", handleScroll);
+    };
+  }, [isDropdownOpen]);
+
+  const toggleDropdown = () => {
+    if (buttonRef.current) {
+      setDropdownRect(buttonRef.current.getBoundingClientRect());
+    }
+    setIsDropdownOpen(!isDropdownOpen);
+  };
 
   React.useEffect(() => {
     const check = () => {
@@ -44,9 +82,9 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
     <NodeViewWrapper
       draggable={dragEnabled}
       data-id={node.attrs.id}
-      className={`my-6 group relative w-full transition ${active ? 'z-[100]' : 'z-10'}`}
+      className={`my-6 group relative w-full transition ${active ? 'z-[100]' : 'z-10'} pl-12`}
     >
-      <div contentEditable={false} className="absolute -left-12 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
+      <div contentEditable={false} className="absolute left-0 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
         <div
           data-drag-handle
           onMouseEnter={() => setDragEnabled(true)}
@@ -77,24 +115,61 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
               placeholder="Code Snippet Title..."
               className="flex-1 bg-transparent border-none outline-none text-[12px] font-bold tracking-wider text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
             />
-            <div className="relative group/select shrink-0 ml-auto">
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-nb-surface-low border border-nb-outline-variant/50 hover:border-nb-primary/50 hover:bg-nb-surface transition-all cursor-pointer">
-                <select
-                  value={node.attrs.language}
-                  onChange={(e) => updateAttributes({ language: e.target.value })}
-                  className="text-[10px] font-bold tracking-widest bg-transparent border-none outline-none text-nb-on-surface cursor-pointer transition-colors appearance-none pr-4"
+            <div className="relative shrink-0 ml-auto">
+              <button
+                ref={buttonRef}
+                type="button"
+                onClick={toggleDropdown}
+                className={`flex items-center gap-2 px-3 py-1 rounded-full transition-all border ${isDropdownOpen
+                    ? "bg-nb-primary border-nb-primary text-white shadow-lg shadow-nb-primary/20"
+                    : "bg-nb-surface-low border-nb-outline-variant/50 text-nb-on-surface-variant hover:border-nb-primary/50 hover:bg-nb-surface hover:text-nb-on-surface"
+                  }`}
+              >
+                <span className="text-[9px] font-black tracking-[0.15em] uppercase">
+                  {LANGUAGES[node.attrs.language] || "Plain Text"}
+                </span>
+                <ChevronDown size={10} className={`transition-transform duration-200 ${isDropdownOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {isDropdownOpen && dropdownRect && createPortal(
+                <div
+                  ref={dropdownRef}
+                  style={{
+                    position: 'fixed',
+                    top: dropdownRect.bottom + 8,
+                    left: dropdownRect.right - 192, // 192px is w-48
+                    width: '192px',
+                    zIndex: 9999,
+                  }}
+                  className="bg-nb-surface border border-nb-outline-variant shadow-nb-2xl rounded-xl p-1.5 animate-in fade-in zoom-in-95 duration-200 ring-1 ring-nb-primary/10"
                 >
-                  {Object.entries(LANGUAGES).map(([key, label]) => (
-                    <option key={key} value={key} className="text-nb-on-surface bg-nb-surface">{label}</option>
-                  ))}
-                </select>
-                <ChevronDown size={10} className="absolute right-2 text-nb-on-surface-variant/40 group-hover/select:text-nb-primary transition-colors pointer-events-none" />
-              </div>
+                  <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+                    {Object.entries(LANGUAGES).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => {
+                          updateAttributes({ language: key });
+                          setIsDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[10px] font-bold tracking-widest transition-all text-left cursor-pointer active:scale-[0.98] ${node.attrs.language === key
+                            ? "bg-nb-primary/10 text-nb-primary"
+                            : "text-nb-on-surface-variant hover:bg-nb-surface-mid hover:text-nb-on-surface"
+                          }`}
+                      >
+                        <span className="uppercase">{label}</span>
+                        {node.attrs.language === key && <Check size={10} />}
+                      </button>
+                    ))}
+                  </div>
+                </div>,
+                document.body
+              )}
             </div>
           </div>
         </div>
         <div className="flex flex-row items-stretch">
-          <div contentEditable={false} className="select-none text-right px-4 py-6 border-r border-nb-outline-variant/10 text-nb-on-surface-variant/20 font-mono text-[12px] leading-[1.8] bg-nb-surface-low/30 min-w-[56px] shrink-0">
+          <div contentEditable={false} className="select-none text-right px-4 py-6 border-r border-nb-outline-variant/10 text-nb-on-surface-variant/20 font-mono text-[14px] leading-[1.8] bg-nb-surface-low/30 min-w-[56px] shrink-0">
             {node.textContent.split('\n').map((_, i) => (
               <div key={i} className="h-[1.8em]">{i + 1}</div>
             ))}
@@ -103,7 +178,7 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
             as="div"
             spellCheck="false"
             data-placeholder="Paste your code here..."
-            className={`flex-1 relative py-6 pl-3 pr-6 overflow-x-auto text-[12px] leading-[1.8] font-mono whitespace-pre language-${node.attrs.language} ${node.textContent.length === 0 ? 'is-empty' : ''}`}
+            className={`flex-1 relative py-6 pl-3 pr-6 overflow-x-auto text-[14px] leading-[1.8] font-mono whitespace-pre language-${node.attrs.language} ${node.textContent.length === 0 ? 'is-empty' : ''}`}
           />
         </div>
 
@@ -177,6 +252,16 @@ export const CustomCodeBlock = CodeBlock.extend({
             });
             return true;
           }
+        }
+        return false;
+      },
+      Backspace: ({ editor }) => {
+        const { state } = editor;
+        const { selection } = state;
+        const { $from } = selection;
+
+        if (selection.empty && $from.parent.type.name === this.name && $from.parent.content.size === 0) {
+          return editor.commands.deleteNode(this.name);
         }
         return false;
       },

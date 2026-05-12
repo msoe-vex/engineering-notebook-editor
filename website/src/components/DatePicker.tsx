@@ -1,6 +1,5 @@
-"use client";
-
 import React, { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
 
 interface DatePickerProps {
@@ -12,6 +11,7 @@ interface DatePickerProps {
 export default function DatePicker({ value, onChange, className = "" }: DatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
 
   // Parse current value or default to today
   const selectedDate = value ? new Date(value + "T12:00:00") : new Date();
@@ -30,6 +30,16 @@ export default function DatePicker({ value, onChange, className = "" }: DatePick
     }
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
+
+  const updateCoords = () => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setCoords({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX
+      });
+    }
+  };
 
   const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
@@ -103,10 +113,9 @@ export default function DatePicker({ value, onChange, className = "" }: DatePick
   const [prevValue, setPrevValue] = useState(value);
 
   // Sync internal input value when external value changes (e.g. from picker)
-  // We do this during render to avoid cascading useEffect renders
   if (value !== prevValue) {
     setPrevValue(value);
-    if (document.activeElement?.tagName !== 'INPUT') {
+    if (typeof document !== 'undefined' && document.activeElement?.tagName !== 'INPUT') {
       setInputValue(value);
     }
   }
@@ -115,13 +124,9 @@ export default function DatePicker({ value, onChange, className = "" }: DatePick
     const val = e.target.value;
     setInputValue(val);
 
-    // Use mid-day to avoid timezone shifts where 2026-01-01 becomes 2025-12-31
     const d = new Date(val + "T12:00:00");
     if (!isNaN(d.getTime()) && d.getFullYear() > 1900) {
-      // Update the calendar view to match the typed date
       setViewDate(new Date(d.getFullYear(), d.getMonth(), 1));
-
-      // Update parent value only if reasonably complete (YYYY-MM-DD)
       if (val.length >= 10 || /^\d{4}-\d{1,2}-\d{1,2}$/.test(val)) {
         const year = d.getFullYear();
         const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -137,21 +142,28 @@ export default function DatePicker({ value, onChange, className = "" }: DatePick
       className={`flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all hover:border-nb-primary/50 relative cursor-pointer ${className}`}
       ref={containerRef}
       onClick={() => {
-        setIsOpen(!isOpen);
         if (!isOpen) {
+          updateCoords();
           setViewDate(new Date(selectedDate.getTime()));
           setInputValue(value);
         }
+        setIsOpen(!isOpen);
       }}
     >
-      <CalendarIcon size={15} className="text-nb-primary shrink-0 drop-shadow-sm" />
+      <CalendarIcon size={18} className="text-nb-primary shrink-0 drop-shadow-sm" />
       <span className="text-[11px] font-bold text-nb-on-surface-variant tracking-tight flex-1 truncate">
         {value ? new Date(value + "T12:00:00").toLocaleDateString(undefined, { dateStyle: 'medium' }) : "Select Date"}
       </span>
 
-      {isOpen && (
+      {isOpen && createPortal(
         <div
-          className="absolute top-full left-0 mt-2 p-4 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-2xl z-[100] w-64 animate-in fade-in zoom-in-95 duration-200"
+          style={{
+            position: 'fixed',
+            top: coords.top + 8,
+            left: coords.left,
+            zIndex: 9999
+          }}
+          className="p-4 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-2xl w-64 animate-in fade-in zoom-in-95 duration-200"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="mb-4">
@@ -222,7 +234,8 @@ export default function DatePicker({ value, onChange, className = "" }: DatePick
               Close
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

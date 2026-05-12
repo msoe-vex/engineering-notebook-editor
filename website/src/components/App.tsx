@@ -21,10 +21,12 @@ import NotebookCompiler from "./NotebookCompiler";
 import HelpPage from "./HelpPage";
 import ProjectHeader from "./ProjectHeader";
 import AboutPage from "./AboutPage";
+import LoadingOverlay from "./LoadingOverlay";
+import Logo from "./ui/Logo";
 import { ViewMode } from "./ViewToggle";
 import ConfirmationDialog from "./ConfirmationDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { HardDrive, X, BookOpen, Loader2 } from "lucide-react";
+import { HardDrive, X, Loader2 } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { ENTRIES_DIR, } from "@/lib/constants";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -615,11 +617,14 @@ export default function App() {
 
   const sidebar = (
     <div className="flex flex-col h-full overflow-hidden bg-nb-surface-low">
-      <div className="flex items-center gap-3 px-4 h-14 border-b border-nb-outline-variant shrink-0 bg-nb-surface">
-        <div className="w-6 h-6 rounded-md bg-nb-primary flex items-center justify-center shadow-sm shadow-nb-primary/20">
-          <BookOpen size={14} className="text-white" />
+      <div
+        onClick={navigateToHome}
+        className="flex items-center gap-3 px-4 h-14 border-b border-nb-outline-variant shrink-0 bg-nb-surface cursor-pointer group hover:bg-nb-surface-low transition-all"
+      >
+        <div className="w-7 h-7 rounded-lg bg-nb-primary flex items-center justify-center shadow-sm shadow-nb-primary/20 group-hover:scale-110 transition-transform">
+          <Logo className="text-white" size={18} strokeWidth={20} />
         </div>
-        <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-nb-on-surface truncate">Notebook</p></div>
+        <div className="flex-1 min-w-0"><p className="text-sm font-black text-nb-on-surface truncate tracking-tight">ENGen</p></div>
         <div className="flex items-center gap-1">
           {isMobile && <button onClick={() => setUserSidebarPreference(false)} className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant transition-colors"><X size={18} /></button>}
         </div>
@@ -632,6 +637,7 @@ export default function App() {
           onOpenTeam={handleOpenTeamEditor}
           showConfirm={showConfirm}
           onNewEntry={handleNewEntry}
+          onSelectAll={(paths) => setSelectedPaths(new Set(paths))}
         />
       </div>
     </div>
@@ -658,6 +664,7 @@ export default function App() {
         onImport={handleImportNotebook}
         onExport={handleExportNotebook}
         onDisconnect={handleDisconnect}
+        onGoHome={navigateToHome}
         mounted={mounted}
       />
 
@@ -850,26 +857,10 @@ export default function App() {
 
       {/* Global Loading Overlay */}
       {(!isInitialized || (isLoading && mode === "none") || isGlobalLoading) && (
-        <div className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-md flex flex-col items-center justify-center font-sans animate-in fade-in duration-300">
-          <div className="flex flex-col items-center gap-6">
-            <div className="w-20 h-20 rounded-[2.5rem] bg-nb-primary flex items-center justify-center shadow-2xl shadow-nb-primary/30 animate-pulse">
-              <BookOpen size={40} className="text-white" />
-            </div>
-            <div className="text-center space-y-2">
-              <h1 className="text-xl font-black tracking-tight text-white">
-                {isGlobalLoading ? loadingLabel : "Notebook"}
-              </h1>
-              <p className="text-[10px] font-black tracking-[0.2em] text-white/40 uppercase">
-                {isGlobalLoading ? "Please wait..." : "Engineering Editor"}
-              </p>
-            </div>
-            <div className="flex items-center gap-1 mt-4">
-              <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce [animation-delay:-0.3s]" />
-              <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce [animation-delay:-0.15s]" />
-              <div className="w-1.5 h-1.5 rounded-full bg-nb-primary animate-bounce" />
-            </div>
-          </div>
-        </div>
+        <LoadingOverlay
+          label={isGlobalLoading ? loadingLabel : "ENGen"}
+          subtitle={isGlobalLoading ? "Please wait..." : "Engineering Notebook Generator"}
+        />
       )}
       {/* Toast Container */}
       <Toaster position="bottom-right" />

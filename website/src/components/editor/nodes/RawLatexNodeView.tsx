@@ -5,16 +5,15 @@ import { GripVertical, Trash2, Terminal } from "lucide-react";
 
 import { NodeViewProps } from "./types";
 
-export function RawLatexNodeView({ node, deleteNode, selected, editor, updateAttributes }: NodeViewProps) {
+export function RawLatexNodeView({ node, deleteNode, selected, editor }: NodeViewProps) {
   const [dragEnabled, setDragEnabled] = useState(false);
 
   return (
     <NodeViewWrapper
       draggable={dragEnabled}
-      data-id={node.attrs.id}
-      className={`my-6 group relative w-full transition ${selected ? 'z-[100]' : 'z-10'}`}
+      className={`my-6 group relative w-full transition ${selected ? 'z-[100]' : 'z-10'} pl-12`}
     >
-      <div contentEditable={false} className="absolute -left-12 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
+      <div contentEditable={false} className="absolute left-0 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
         <div
           data-drag-handle
           onMouseEnter={() => setDragEnabled(true)}
@@ -33,21 +32,22 @@ export function RawLatexNodeView({ node, deleteNode, selected, editor, updateAtt
       </div>
 
       <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${selected ? 'ring-2 ring-nb-primary/50' : ''}`}>
-        <div className="flex items-center justify-between px-4 py-2 bg-nb-surface-low/50 border-b border-nb-outline-variant/10 overflow-x-auto scrollbar-hide">
+        <div className="flex items-center justify-between px-4 py-2 bg-nb-surface-low/50 border-b border-nb-outline-variant/10">
           <div className="flex-1 flex items-center gap-2">
             <Terminal size={12} className="text-nb-primary shrink-0" />
-            <input
-              type="text"
-              value={node.attrs.title || ""}
-              onChange={(e) => updateAttributes({ title: e.target.value })}
-              placeholder="LaTeX Block Title..."
-              className="flex-1 bg-transparent border-none outline-none text-[10px] font-bold tracking-widest text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
-            />
+            <span className="text-[10px] font-black tracking-[0.2em] text-nb-on-surface-variant/50 uppercase">Raw LaTeX</span>
           </div>
         </div>
-        <pre spellCheck="false" className="p-6 text-[12px] leading-[1.8] overflow-x-auto border-none m-0 text-nb-on-surface bg-transparent language-latex">
-          <NodeViewContent as="div" className="font-mono" />
-        </pre>
+        <div className="flex flex-row items-stretch">
+          <NodeViewContent
+            as="div"
+            spellCheck="false"
+            autoCorrect="off"
+            autoCapitalize="off"
+            data-placeholder="Type your LaTeX code here..."
+            className={`flex-1 relative py-6 px-6 overflow-x-auto text-[14px] leading-[1.8] font-mono whitespace-pre language-latex ${node.textContent.length === 0 ? 'is-empty' : ''}`}
+          />
+        </div>
       </div>
     </NodeViewWrapper>
   );
@@ -68,14 +68,8 @@ export const CustomRawLatex = CodeBlock.extend({
   addAttributes() {
     return {
       ...this.parent!(),
-      id: {
-        default: null,
-        parseHTML: element => element.getAttribute('data-id'),
-        renderHTML: attributes => ({ 'data-id': attributes.id }),
-      },
       content: { default: "" },
       caption: { default: "" },
-      title: { default: "" },
     };
   },
   parseHTML() {
@@ -86,6 +80,9 @@ export const CustomRawLatex = CodeBlock.extend({
   },
   addNodeView() {
     return ReactNodeViewRenderer(RawLatexNodeView);
+  },
+  addInputRules() {
+    return [];
   },
   addKeyboardShortcuts() {
     return {
@@ -114,6 +111,16 @@ export const CustomRawLatex = CodeBlock.extend({
             });
             return true;
           }
+        }
+        return false;
+      },
+      Backspace: ({ editor }) => {
+        const { state } = editor;
+        const { selection } = state;
+        const { $from } = selection;
+
+        if (selection.empty && $from.parent.type.name === this.name && $from.parent.content.size === 0) {
+          return editor.commands.deleteNode(this.name);
         }
         return false;
       },

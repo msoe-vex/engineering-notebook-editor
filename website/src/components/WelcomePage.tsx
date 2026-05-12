@@ -1,6 +1,7 @@
 "use client";
 
-import { BookOpen, FolderOpen, GitBranch, HardDrive, Plus, ArrowLeftRight, Upload, Play } from "lucide-react";
+import { Users, BookOpen, FolderOpen, GitBranch, HardDrive, Plus, ArrowLeftRight, Upload, Play } from "lucide-react";
+import Logo from "./ui/Logo";
 
 interface WorkspaceInfo {
   mode: "github" | "local" | "temporary";
@@ -28,16 +29,20 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
       <div className="m-auto w-full max-w-2xl flex flex-col items-center">
         {/* Header */}
         <div className="flex flex-col items-center gap-6 mb-12">
-          <div className="w-20 h-20 rounded-2xl bg-nb-primary flex items-center justify-center shadow-2xl shadow-nb-primary/30">
-            <BookOpen size={40} className="text-white" />
-          </div>
+          <button
+            onClick={onDisconnect}
+            className="w-20 h-20 rounded-2xl bg-nb-primary flex items-center justify-center shadow-2xl shadow-nb-primary/30 hover:scale-105 transition-transform cursor-pointer group"
+            title="Go to Home"
+          >
+            <Logo className="text-white group-hover:rotate-12 transition-transform" size={48} strokeWidth={18} />
+          </button>
           <div className="text-center">
             <h1 className="text-4xl font-bold text-nb-on-surface">
-              Engineering Notebook
+              ENGen
             </h1>
             <div className="flex items-center gap-2 justify-center mt-3 text-sm text-nb-on-surface-variant">
               <ModeIcon size={14} className="text-nb-tertiary" />
-              <span className="font-mono tracking-tight">{workspace.label}</span>
+              <span className="tracking-tight">{workspace.label}</span>
             </div>
           </div>
         </div>
@@ -47,14 +52,14 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
           <button
             id="welcome-new-entry"
             onClick={onNewEntry}
-            className="flex items-center gap-4 bg-nb-primary hover:bg-nb-primary-dim text-white p-5 rounded-3xl text-left font-bold shadow-nb-lg transition-all active:scale-[0.98] group cursor-pointer"
+            className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left font-bold shadow-nb-lg transition-all active:scale-[0.98] group cursor-pointer"
           >
-            <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/20 transition-colors">
-              <Plus size={20} />
+            <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0 group-hover:bg-nb-primary/20 transition-colors">
+              <Plus size={20} className="text-nb-primary" />
             </div>
             <div>
               <div className="font-bold text-[10px] tracking-[0.2em] uppercase opacity-70">New Entry</div>
-              <div className="text-white text-base font-bold mt-0.5 leading-tight">Start fresh entry</div>
+              <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Start fresh entry</div>
             </div>
           </button>
 
@@ -63,8 +68,8 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
             className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left transition-all active:scale-[0.98] group cursor-pointer"
             onClick={onOpenSidebar}
           >
-            <div className="w-10 h-10 rounded-xl bg-nb-surface-mid flex items-center justify-center shrink-0 group-hover:bg-nb-surface-high transition-colors">
-              <FolderOpen size={20} className="text-nb-tertiary" />
+            <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0 group-hover:bg-nb-primary/20 transition-colors">
+              <FolderOpen size={20} className="text-nb-primary" />
             </div>
             <div>
               <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Open Entry</div>
@@ -77,8 +82,8 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
             className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left transition-all active:scale-[0.98] group cursor-pointer"
             onClick={onImportEntry}
           >
-            <div className="w-10 h-10 rounded-xl bg-nb-surface-mid flex items-center justify-center shrink-0 group-hover:bg-nb-surface-high transition-colors">
-              <Upload size={20} className="text-nb-tertiary" />
+            <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0 group-hover:bg-nb-surface-high transition-colors">
+              <Upload size={20} className="text-nb-primary" />
             </div>
             <div>
               <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Import Entry</div>
@@ -92,7 +97,7 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
             onClick={() => onOpenTeam()}
           >
             <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0 group-hover:bg-nb-primary/20 transition-colors">
-              <BookOpen size={20} className="text-nb-primary" />
+              <Users size={20} className="text-nb-primary" />
             </div>
             <div>
               <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Team Info</div>

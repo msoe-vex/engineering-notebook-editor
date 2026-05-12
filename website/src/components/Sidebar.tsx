@@ -13,6 +13,7 @@ interface SidebarProps {
   showConfirm: (title: string, message: string, onConfirm: () => void, variant?: "danger" | "warning" | "info") => void;
   onNewEntry?: () => Promise<void>;
   onOpenEntry?: (file: ExplorerFile) => void;
+  onSelectAll: (paths: string[]) => void;
 }
 
 export default function Sidebar({
@@ -21,6 +22,7 @@ export default function Sidebar({
   showConfirm,
   onNewEntry,
   onOpenEntry,
+  onSelectAll,
 }: SidebarProps) {
   const {
     entries,
@@ -42,6 +44,7 @@ export default function Sidebar({
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
   const [isCommitting, setIsCommitting] = useState(false);
+  const [isDiscarding, setIsDiscarding] = useState(false);
 
   const handleConfirmDelete = useCallback((files: ExplorerFile[]) => {
     if (files.length === 0) return;
@@ -60,26 +63,6 @@ export default function Sidebar({
       "danger"
     );
   }, [showConfirm, deleteEntry]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (selectedPaths.size === 0) return;
-      if (e.key === "Delete" || (e.key === "Backspace" && (e.metaKey || e.ctrlKey))) {
-        // Don't trigger if typing in an input
-        const target = e.target as HTMLElement;
-        if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
-
-        const toDelete = entries.filter(f => selectedPaths.has(f.path));
-        if (toDelete.length > 0) {
-          e.preventDefault();
-          handleConfirmDelete(toDelete);
-        }
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedPaths, entries, handleConfirmDelete]);
 
   const pendingPaths = useMemo(() => new Set((pendingChanges || []).map(p => p.path)), [pendingChanges]);
   const deletedPaths = useMemo(() => new Set((pendingChanges || []).filter(p => p.operation === "delete").map(p => p.path)), [pendingChanges]);
@@ -147,6 +130,34 @@ export default function Sidebar({
     return list;
   }, [augmentedEntries, search, sortBy, sortDirection, dateRange]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Delete" || (e.key === "Backspace" && (e.metaKey || e.ctrlKey))) {
+        // Don't trigger if typing in an input
+        const target = e.target as HTMLElement;
+        if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+
+        if (selectedPaths.size === 0) return;
+        const toDelete = entries.filter(f => selectedPaths.has(f.path));
+        if (toDelete.length > 0) {
+          e.preventDefault();
+          handleConfirmDelete(toDelete);
+        }
+      }
+
+      if (e.key === "a" && (e.metaKey || e.ctrlKey)) {
+        const target = e.target as HTMLElement;
+        if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+
+        e.preventDefault();
+        onSelectAll(filteredEntries.map(f => f.path));
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedPaths, entries, handleConfirmDelete, onSelectAll, filteredEntries]);
+
   const handleOpenEntry = (file: ExplorerFile) => {
     if (onOpenEntry) {
       onOpenEntry(file);
@@ -157,7 +168,16 @@ export default function Sidebar({
   };
 
   const handleDiscard = async () => {
-    await discardPendingChanges();
+    try {
+      setIsDiscarding(true);
+      await discardPendingChanges();
+      showNotification("Discarded all pending changes.", "info");
+    } catch (e) {
+      console.error("Discard failed", e);
+      showNotification("Failed to discard changes.", "error");
+    } finally {
+      setIsDiscarding(false);
+    }
   };
 
   const handleCommit = async (message?: string) => {
@@ -237,17 +257,20 @@ export default function Sidebar({
         notebookMetadata={metadata}
       />
 
-      {pendingChanges.length > 0 && (
-        <div className="p-4 bg-nb-surface border-t border-nb-outline-variant animate-in slide-in-from-bottom-2 duration-300">
-          <PendingChangesPanel
-            pendingChanges={pendingChanges}
-            isCommitting={isCommitting}
-            onCommit={handleCommit}
-            onDiscard={handleDiscard}
-            workspaceMode={mode as "github" | "local" | "temporary"}
-          />
+      <div className={`grid transition-all duration-500 ease-in-out ${pendingChanges.length > 0 || isCommitting || isDiscarding ? 'grid-rows-[1fr] opacity-100 border-t border-nb-outline-variant' : 'grid-rows-[0fr] opacity-0'}`}>
+        <div className="overflow-hidden">
+          <div className="p-4 bg-nb-surface">
+            <PendingChangesPanel
+              pendingChanges={pendingChanges}
+              isCommitting={isCommitting}
+              isDiscarding={isDiscarding}
+              onCommit={handleCommit}
+              onDiscard={handleDiscard}
+              workspaceMode={mode as "github" | "local" | "temporary"}
+            />
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

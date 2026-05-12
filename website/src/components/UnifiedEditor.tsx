@@ -3,9 +3,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
-  useEditor, EditorContent, Extension,
+  useEditor, EditorContent, Extension, InputRule
 } from "@tiptap/react";
-import { NodeSelection } from "@tiptap/pm/state";
+import { NodeSelection, Transaction, EditorState, Plugin } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { store } from "@/lib/store";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -26,6 +26,8 @@ import {
   RestrictedTableCell,
   CustomCodeBlock,
   CustomRawLatex,
+  InlineMathNode,
+  MathBlockNode,
 } from "@/components/editor/nodes";
 
 import { LinkReferencePopup } from "@/components/editor/LinkReferencePopup";
@@ -56,12 +58,11 @@ interface UnifiedEditorProps {
   filename: string;
   onEditorInit?: (editor: import("@tiptap/react").Editor) => void;
   onToggleLink?: (fn: () => void) => void;
-  triggerRect?: DOMRect | null;
   entryId?: string;
 }
 
 export default function UnifiedEditor({
-  content, onChange, onImageUpload, filename, onEditorInit, onToggleLink, triggerRect, entryId
+  content, onChange, onImageUpload, filename, onEditorInit, onToggleLink, entryId
 }: UnifiedEditorProps) {
   const { currentProjectId, metadata } = useWorkspace();
   const dbName = currentProjectId ? `notebook-project-${currentProjectId}` : "notebook-default";
@@ -127,6 +128,7 @@ export default function UnifiedEditor({
   const [, setSelectionUpdate] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [showLinkPopup, setShowLinkPopup] = useState(false);
+  const [isMentionMode, setIsMentionMode] = useState(false);
   const [isCtrlPressed, setIsCtrlPressed] = useState(false);
 
   useEffect(() => {
@@ -165,6 +167,43 @@ export default function UnifiedEditor({
       RestrictedTableCell,
       CustomCodeBlock,
       CustomRawLatex,
+      InlineMathNode,
+      MathBlockNode,
+      Extension.create({
+        name: 'mathCodeMutualExclusion',
+        addProseMirrorPlugins() {
+          return [
+            new Plugin({
+              appendTransaction(transactions: readonly Transaction[], oldState: EditorState, newState: EditorState) {
+                const { tr } = newState;
+                let modified = false;
+
+                // If code mark was just added to a range containing math, convert math to code text
+                if (transactions.some(t => t.docChanged || t.storedMarks)) {
+                  newState.doc.descendants((node, pos) => {
+                    if (node.type.name === 'inlineMath') {
+                      const hasCodeMark = node.marks.some((m) => m.type.name === 'code');
+
+                      if (hasCodeMark) {
+                        const latex = node.attrs.latex || "";
+                        if (latex) {
+                          tr.replaceWith(pos, pos + node.nodeSize, newState.schema.text(latex));
+                          tr.addMark(pos, pos + latex.length, newState.schema.marks.code.create());
+                        } else {
+                          tr.delete(pos, pos + node.nodeSize);
+                        }
+                        modified = true;
+                      }
+                    }
+                  });
+                }
+
+                return modified ? tr : null;
+              }
+            })
+          ];
+        }
+      }),
       PrismHighlightExtension,
       Extension.create({
         name: 'integrityExtension',
@@ -176,14 +215,43 @@ export default function UnifiedEditor({
         autolink: true,
         linkOnPaste: true,
         HTMLAttributes: {
-          class: 'text-nb-primary hover:underline hover:decoration-nb-primary transition-all cursor-text',
+          class: 'text-nb-primary underline decoration-nb-primary/30 underline-offset-[3px] hover:decoration-nb-primary transition-all cursor-text',
         },
       }),
       Placeholder.configure({
         placeholder: ({ node }) => {
-          if (node.type.name === 'codeBlock') return "";
+          if (['codeBlock', 'rawLatex', 'mathBlock'].includes(node.type.name)) return "";
           return "Start writing...";
         },
+      }),
+      Extension.create({
+        name: 'customEnterBehavior',
+        addKeyboardShortcuts() {
+          return {
+            Enter: ({ editor }) => {
+              if (editor.isActive('code')) {
+                return editor.chain().splitBlock().unsetMark('code').run();
+              }
+              if (editor.isActive('link')) {
+                return editor.chain().splitBlock().unsetMark('link').unsetMark('underline').run();
+              }
+              return false;
+            },
+          };
+        },
+      }),
+      Extension.create({
+        name: 'mentionTrigger',
+        addInputRules: () => [
+          new InputRule({
+            find: /(?:^|\s)@$/,
+            handler: () => {
+              setIsMentionMode(true);
+              setShowLinkPopup(true);
+              return null; // Keep @ for now, we'll delete it on apply or just leave it if cancelled
+            }
+          })
+        ]
       }),
       IdRemapper,
     ],
@@ -482,10 +550,10 @@ export default function UnifiedEditor({
             <LinkReferencePopup
               editor={editor}
               metadata={metadata}
-              onClose={() => setShowLinkPopup(false)}
+              onClose={() => { setShowLinkPopup(false); setIsMentionMode(false); }}
               filename={filename}
               showLinkPopup={showLinkPopup}
-              triggerRect={triggerRect}
+              isMention={isMentionMode}
             />,
             document.body
           )}

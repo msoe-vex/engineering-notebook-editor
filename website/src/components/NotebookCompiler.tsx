@@ -2,21 +2,34 @@
 
 import { useState, useEffect } from "react";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import Preview from "./Preview";
+import dynamic from "next/dynamic";
 import { compileNotebook, CompileResult } from "@/lib/busytex";
 import { showNotification } from "./Notification";
 import { Play, Loader2, Calendar, FileText, X, RefreshCcw, Download } from "lucide-react";
 
+const Preview = dynamic(() => import("./Preview"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex flex-col items-center justify-center h-full gap-4 bg-nb-bg/50 backdrop-blur-sm">
+      <Loader2 size={32} className="animate-spin-stable text-nb-primary" />
+      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant animate-pulse">Initializing Preview...</span>
+    </div>
+  )
+});
+
 export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
-  const { workspaceVersion, metadata, saveCompiledPdf, getCompiledPdfUrl, isInitialized, currentProject } = useWorkspace();
+  const { metadata, saveCompiledPdf, getCompiledPdfUrl, isInitialized, currentProject } = useWorkspace();
   const [isCompiling, setIsCompiling] = useState(false);
   const [compileStatus, setCompileStatus] = useState<string>("");
   const [compileProgress, setCompileProgress] = useState(0);
+  const [compileStep, setCompileStep] = useState(0);
+  const [totalSteps, setTotalSteps] = useState(0);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [isLoadingPdf, setIsLoadingPdf] = useState(true);
 
   useEffect(() => {
     let active = true;
+    let currentUrl: string | null = null;
 
     const loadPdf = async () => {
       if (!isInitialized) return;
@@ -25,13 +38,18 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
       await Promise.resolve();
       if (!active) return;
 
-      setPdfUrl(null);
       setIsLoadingPdf(true);
 
       try {
         const url = await getCompiledPdfUrl();
         if (active) {
-          setPdfUrl(url);
+          setPdfUrl(prev => {
+            if (prev && prev.startsWith('blob:')) {
+              URL.revokeObjectURL(prev);
+            }
+            return url;
+          });
+          currentUrl = url;
         }
       } catch (e) {
         console.error("Failed to load last compiled PDF", e);
@@ -46,8 +64,11 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
 
     return () => {
       active = false;
+      if (currentUrl && currentUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(currentUrl);
+      }
     };
-  }, [getCompiledPdfUrl, isInitialized, workspaceVersion]);
+  }, [getCompiledPdfUrl, isInitialized, metadata.lastCompiled]);
 
   const handleCompile = async () => {
     if (isCompiling) return;
@@ -56,16 +77,11 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
     setCompileStatus("Starting...");
 
     try {
-      const result: CompileResult = await compileNotebook((status) => {
+      const result: CompileResult = await compileNotebook((status, step, total, percentage) => {
         setCompileStatus(status);
-        // Map stages to approximate percentages for the progress bar
-        if (status.includes("metadata")) setCompileProgress(10);
-        else if (status.includes("Initializing")) setCompileProgress(20);
-        else if (status.includes("dependencies")) setCompileProgress(35);
-        else if (status.includes("typography")) setCompileProgress(50);
-        else if (status.includes("structure")) setCompileProgress(65);
-        else if (status.includes("assets")) setCompileProgress(80);
-        else if (status.includes("Pass 1")) setCompileProgress(90);
+        setCompileStep(step);
+        setTotalSteps(total);
+        setCompileProgress(percentage);
       });
 
       if (result.success && result.pdf) {
@@ -198,7 +214,9 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
             <div className="text-center space-y-3 max-w-xs px-6">
               <div className="space-y-1">
                 <h3 className="text-lg font-black text-nb-on-surface tracking-tight leading-tight">{compileStatus}</h3>
-                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-nb-on-surface-variant/40">Step {Math.min(7, Math.ceil(compileProgress / 13))} of 7</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-nb-on-surface-variant/40">
+                  Step {compileStep} of {totalSteps}
+                </p>
               </div>
 
               <div className="w-full h-1 bg-nb-surface-low rounded-full overflow-hidden">
