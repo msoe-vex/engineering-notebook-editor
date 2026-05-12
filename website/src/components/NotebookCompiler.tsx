@@ -22,6 +22,8 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
   const [isCompiling, setIsCompiling] = useState(false);
   const [compileStatus, setCompileStatus] = useState<string>("");
   const [compileProgress, setCompileProgress] = useState(0);
+  const [compileStep, setCompileStep] = useState(0);
+  const [totalSteps, setTotalSteps] = useState(0);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [isLoadingPdf, setIsLoadingPdf] = useState(true);
 
@@ -75,16 +77,11 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
     setCompileStatus("Starting...");
 
     try {
-      const result: CompileResult = await compileNotebook((status) => {
+      const result: CompileResult = await compileNotebook((status, step, total, percentage) => {
         setCompileStatus(status);
-        // Map stages to approximate percentages for the progress bar
-        if (status.includes("metadata")) setCompileProgress(10);
-        else if (status.includes("Initializing")) setCompileProgress(20);
-        else if (status.includes("dependencies")) setCompileProgress(35);
-        else if (status.includes("typography")) setCompileProgress(50);
-        else if (status.includes("structure")) setCompileProgress(65);
-        else if (status.includes("assets")) setCompileProgress(80);
-        else if (status.includes("Pass 1")) setCompileProgress(90);
+        setCompileStep(step);
+        setTotalSteps(total);
+        setCompileProgress(percentage);
       });
 
       if (result.success && result.pdf) {
@@ -217,7 +214,9 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
             <div className="text-center space-y-3 max-w-xs px-6">
               <div className="space-y-1">
                 <h3 className="text-lg font-black text-nb-on-surface tracking-tight leading-tight">{compileStatus}</h3>
-                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-nb-on-surface-variant/40">Step {Math.min(7, Math.ceil(compileProgress / 13))} of 7</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-nb-on-surface-variant/40">
+                  Step {compileStep} of {totalSteps}
+                </p>
               </div>
 
               <div className="w-full h-1 bg-nb-surface-low rounded-full overflow-hidden">
