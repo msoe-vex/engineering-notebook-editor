@@ -254,12 +254,14 @@ export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: strin
   return latex;
 };
 
-export const generateAllEntriesLatex = (metadata: { entries: Record<string, { id: string, date: string, createdAt: string }> }, prefix: string = `${DATA_DIR}/`): string => {
+export const generateAllEntriesLatex = (metadata: { entries: Record<string, { id: string, date: string, createdAt: string, updatedAt?: string }> }, prefix: string = `${DATA_DIR}/`): string => {
   const entries = Object.values(metadata.entries)
     .sort((a, b) => {
       const dateComp = (a.date || "").localeCompare(b.date || "");
       if (dateComp !== 0) return dateComp;
-      return (a.createdAt || "").localeCompare(b.createdAt || "");
+      const timeA = a.updatedAt || a.createdAt || "";
+      const timeB = b.updatedAt || b.createdAt || "";
+      return timeA.localeCompare(timeB);
     });
 
   return entries
