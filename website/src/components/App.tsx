@@ -20,6 +20,7 @@ import TeamEditor from "./TeamEditor";
 import NotebookCompiler from "./NotebookCompiler";
 import HelpPage from "./HelpPage";
 import ProjectHeader from "./ProjectHeader";
+import AboutPage from "./AboutPage";
 import { ViewMode } from "./ViewToggle";
 import ConfirmationDialog from "./ConfirmationDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
@@ -86,6 +87,7 @@ export default function App() {
     teamTab,
     showCompiler,
     showHelp,
+    showAbout,
     helpPath,
     getCompiledPdfUrl,
   } = useWorkspace();
@@ -760,6 +762,7 @@ export default function App() {
             autoOpenGithubModal={autoOpenGithubModal}
             onCloseGithubModal={() => setAutoOpenGithubModal(false)}
             onOpenHelp={() => navigateTo({}, '/help')}
+            onOpenAbout={() => navigateTo({}, '/about')}
           />
         </div>
       ) : (
@@ -870,6 +873,18 @@ export default function App() {
       )}
       {/* Toast Container */}
       <Toaster position="bottom-right" />
+      {/* About Page Overlay */}
+      {showAbout && (
+        <AboutPage
+          onClose={() => {
+            if (currentProjectId) navigateTo({}, '/workspace/editor');
+            else navigateToHome();
+          }}
+          onTryIt={() => {
+            navigateToHome();
+          }}
+        />
+      )}
     </div>
   );
 }
