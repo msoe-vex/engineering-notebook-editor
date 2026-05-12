@@ -438,14 +438,14 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
     };
 
     // Check basic metadata
-    if (!entry.title?.trim()) errors.push("Project title is required.");
+    if (!entry.title?.trim()) errors.push("Entry title is required.");
     if (!entry.author?.trim()) errors.push("Author name is required.");
     if (!entry.date?.trim()) errors.push("Date is required.");
 
     // Phase validation
     const phases = metadata.phases && metadata.phases.length > 0 ? metadata.phases : DEFAULT_PHASES;
     if (typeof entry.phase !== "number" || !phases.some(p => p.index === entry.phase)) {
-      errors.push("Project phase is required.");
+      errors.push("Entry phase is required.");
     }
 
     // Check local resources

@@ -40,6 +40,7 @@ class WorkspaceStore {
   public showHelp: boolean = false;
   public helpPath: string | null = null;
   public showCompiler: boolean = false;
+  public showAbout: boolean = false;
   public openFile: OpenFileState | null = null;
   public isLoading = false;
   public loadingLabel = "";
@@ -95,6 +96,12 @@ class WorkspaceStore {
     } else {
       this.showHelp = false;
       this.helpPath = null;
+    }
+
+    if (path === '/about' || path === '/workspace/about') {
+      this.showAbout = true;
+    } else {
+      this.showAbout = false;
     }
 
     if (path.startsWith('/workspace/compile')) {
@@ -398,7 +405,9 @@ class WorkspaceStore {
       })).sort((a, b) => {
         const metaA = this.metadata.entries[a.path.split('/').pop()?.replace('.json', '') || ''];
         const metaB = this.metadata.entries[b.path.split('/').pop()?.replace('.json', '') || ''];
-        return new Date(metaB?.createdAt || 0).getTime() - new Date(metaA?.createdAt || 0).getTime();
+        const timeA = metaA?.updatedAt || metaA?.createdAt || 0;
+        const timeB = metaB?.updatedAt || metaB?.createdAt || 0;
+        return new Date(timeB).getTime() - new Date(timeA).getTime();
       });
       this.notifyStateChange();
     }
@@ -805,7 +814,7 @@ class WorkspaceStore {
 
     const wrapper = { version: 3, content: { type: "doc", content: [{ type: "paragraph" }] } };
     const jsonStr = JSON.stringify(wrapper, null, 2);
-    const initialLatex = `\\notebookentry{${newEntry.title}}{${createdAt.split('T')[0]}}{${newEntry.author}}{}\n\\label{${id}}\n\n`;
+    const initialLatex = `\\notebookentry{${newEntry.title}}{${createdAt.split('T')[0]}}{${newEntry.author}}{}{${id}}\n\n`;
 
     this.#lastSavedContents.set(path, jsonStr);
     this.#lastSavedContents.set(latexPath, initialLatex);

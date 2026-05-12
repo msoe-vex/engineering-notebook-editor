@@ -135,9 +135,9 @@ export default function Sidebar({
       if (valA < valB) return sortDirection === "asc" ? -1 : 1;
       if (valA > valB) return sortDirection === "asc" ? 1 : -1;
       
-      // Tie-breaker: createdAt (timestamp)
-      const tsA = a.timestamp || "";
-      const tsB = b.timestamp || "";
+      // Tie-breaker: updatedAt (timestamp)
+      const tsA = a.updatedAt || a.timestamp || "";
+      const tsB = b.updatedAt || b.timestamp || "";
       if (tsA < tsB) return sortDirection === "asc" ? -1 : 1;
       if (tsA > tsB) return sortDirection === "asc" ? 1 : -1;
 

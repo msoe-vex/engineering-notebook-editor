@@ -4,7 +4,7 @@ import {
   MoreVertical, Download, Upload, ArrowLeftRight, Settings2, Edit3, ExternalLink
 } from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import ViewToggle, { ViewMode } from "./ViewToggle";
+import { ViewMode } from "./ViewToggle";
 
 interface ProjectHeaderProps {
   isSidebarOpen: boolean;
@@ -31,9 +31,6 @@ interface ProjectHeaderProps {
 export default function ProjectHeader({
   isSidebarOpen,
   onToggleSidebar,
-  isMobile,
-  viewMode,
-  onSetViewMode,
   isRenamingProject,
   projectRenameValue,
   onSetProjectRenameValue,
@@ -49,10 +46,9 @@ export default function ProjectHeader({
   onDisconnect,
   mounted
 }: ProjectHeaderProps) {
-  const { currentProject, openFile } = useWorkspace();
+  const { currentProject } = useWorkspace();
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const isEntryOpen = !!openFile;
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -81,65 +77,61 @@ export default function ProjectHeader({
       </button>
 
       <div className="flex-1 flex justify-center min-w-0 px-4">
-        {isEntryOpen && isMobile ? (
-          <ViewToggle viewMode={viewMode} onSetViewMode={onSetViewMode} isMobile={true} />
+        {isRenamingProject && currentProject?.id !== "temporary" ? (
+          <input
+            autoFocus
+            type="text"
+            value={projectRenameValue}
+            onChange={(e) => onSetProjectRenameValue(e.target.value)}
+            onBlur={() => onEndRename(true)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onEndRename(true);
+              if (e.key === 'Escape') onEndRename(false);
+            }}
+            className="bg-nb-surface-low border border-nb-primary/30 px-3 py-1 rounded-lg text-sm font-bold text-nb-on-surface outline-none focus:ring-2 focus:ring-nb-primary/30 w-full max-w-[300px]"
+          />
         ) : (
-          isRenamingProject && currentProject?.id !== "temporary" ? (
-            <input
-              autoFocus
-              type="text"
-              value={projectRenameValue}
-              onChange={(e) => onSetProjectRenameValue(e.target.value)}
-              onBlur={() => onEndRename(true)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') onEndRename(true);
-                if (e.key === 'Escape') onEndRename(false);
-              }}
-              className="bg-nb-surface-low border border-nb-primary/30 px-3 py-1 rounded-lg text-sm font-bold text-nb-on-surface outline-none focus:ring-2 focus:ring-nb-primary/30 w-full max-w-[300px]"
-            />
-          ) : (
-            <div className="flex items-center gap-1 max-w-full min-w-0 relative" ref={menuRef}>
-              <div
-                onClick={() => setShowMenu(!showMenu)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-nb-surface-low transition-all cursor-pointer group min-w-0 max-w-full"
-              >
-                <span className="text-sm font-black text-nb-on-surface truncate tracking-tight">
-                  {currentProject?.id === "temporary" ? "Temporary Workspace" : (currentProject?.name || "Engineering Notebook")}
-                </span>
-                <MoreVertical size={14} className="text-nb-on-surface-variant/40 group-hover:text-nb-primary transition-colors shrink-0" />
-              </div>
-
-              {showMenu && (
-                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 bg-nb-surface border border-nb-outline-variant shadow-nb-2xl rounded-2xl py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                  <div className="px-3 py-2 border-b border-nb-outline-variant/30 mb-1">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant/40 px-1">Project Actions</p>
-                  </div>
-
-                  <MenuButton icon={<Play size={14} />} label="Compile Notebook" onClick={() => { onOpenCompiler(); setShowMenu(false); }} />
-                  <MenuButton icon={<Settings2 size={14} />} label="Project Configuration" onClick={() => { onOpenTeam(); setShowMenu(false); }} />
-
-                  <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
-
-                  {currentProject?.id !== "temporary" && (
-                    <MenuButton icon={<Edit3 size={14} />} label="Rename Project" onClick={() => { onStartRename(); setShowMenu(false); }} />
-                  )}
-                  {githubUrl && (
-                    <MenuButton icon={<ExternalLink size={14} />} label="Open in GitHub" onClick={() => { window.open(githubUrl, '_blank'); setShowMenu(false); }} />
-                  )}
-
-                  <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
-
-                  <MenuButton icon={<Upload size={14} />} label="Import Notebook" onClick={() => { onImport(); setShowMenu(false); }} />
-                  <MenuButton icon={<Download size={14} />} label="Export Notebook" onClick={() => { onExport(); setShowMenu(false); }} />
-
-                  <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
-
-                  <MenuButton icon={<HelpCircle size={14} />} label="Help & Documentation" onClick={() => { onOpenHelp(); setShowMenu(false); }} />
-                  <MenuButton icon={<ArrowLeftRight size={14} />} label="Change Workspace" onClick={() => { onDisconnect(); setShowMenu(false); }} color="text-nb-tertiary" />
-                </div>
-              )}
+          <div className="flex items-center gap-1 max-w-full min-w-0 relative" ref={menuRef}>
+            <div
+              onClick={() => setShowMenu(!showMenu)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-nb-surface-low transition-all cursor-pointer group min-w-0 max-w-full"
+            >
+              <span className="text-sm font-black text-nb-on-surface truncate tracking-tight">
+                {currentProject?.id === "temporary" ? "Temporary Workspace" : (currentProject?.name || "Engineering Notebook")}
+              </span>
+              <MoreVertical size={14} className="text-nb-on-surface-variant/40 group-hover:text-nb-primary transition-colors shrink-0" />
             </div>
-          )
+
+            {showMenu && (
+              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 bg-nb-surface border border-nb-outline-variant shadow-nb-2xl rounded-2xl py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                <div className="px-3 py-2 border-b border-nb-outline-variant/30 mb-1">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant/40 px-1">Project Actions</p>
+                </div>
+
+                <MenuButton icon={<Play size={14} />} label="Compile Notebook" onClick={() => { onOpenCompiler(); setShowMenu(false); }} />
+                <MenuButton icon={<Settings2 size={14} />} label="Project Configuration" onClick={() => { onOpenTeam(); setShowMenu(false); }} />
+
+                <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
+
+                {currentProject?.id !== "temporary" && (
+                  <MenuButton icon={<Edit3 size={14} />} label="Rename Project" onClick={() => { onStartRename(); setShowMenu(false); }} />
+                )}
+                {githubUrl && (
+                  <MenuButton icon={<ExternalLink size={14} />} label="Open in GitHub" onClick={() => { window.open(githubUrl, '_blank'); setShowMenu(false); }} />
+                )}
+
+                <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
+
+                <MenuButton icon={<Upload size={14} />} label="Import Notebook" onClick={() => { onImport(); setShowMenu(false); }} />
+                <MenuButton icon={<Download size={14} />} label="Export Notebook" onClick={() => { onExport(); setShowMenu(false); }} />
+
+                <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
+
+                <MenuButton icon={<HelpCircle size={14} />} label="Help & Documentation" onClick={() => { onOpenHelp(); setShowMenu(false); }} />
+                <MenuButton icon={<ArrowLeftRight size={14} />} label="Change Workspace" onClick={() => { onDisconnect(); setShowMenu(false); }} color="text-nb-tertiary" />
+              </div>
+            )}
+          </div>
         )}
       </div>
 

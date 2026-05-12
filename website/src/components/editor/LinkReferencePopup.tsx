@@ -24,6 +24,20 @@ export function LinkReferencePopup({
   const [link, setLink] = useState("");
   const [selectedResource, setSelectedResource] = useState<{ id: string, title: string, type: string, entryTitle?: string, entryDate?: string, entryId?: string } | null>(null);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const popupRef = React.useRef<HTMLDivElement>(null);
+  const [popupHeight, setPopupHeight] = useState(400); // Default estimate
+
+  useEffect(() => {
+    if (popupRef.current) {
+      const resizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          setPopupHeight(entry.contentRect.height);
+        }
+      });
+      resizeObserver.observe(popupRef.current);
+      return () => resizeObserver.disconnect();
+    }
+  }, [showLinkPopup]);
 
   const getResourceTypeLabel = (type: string) => {
     const normalizedType = (type || "").trim();
@@ -151,18 +165,29 @@ export function LinkReferencePopup({
 
   return (
     <div
+      ref={popupRef}
       className="fixed z-[1000] w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-2xl p-5 animate-in zoom-in-95 fade-in duration-200"
       style={(() => {
         const anchor = triggerRect || rect;
-        const spaceBelow = window.innerHeight - anchor.bottom;
-        const needsFlip = !triggerRect && spaceBelow < 620;
-        const left = Math.max(10, Math.min(window.innerWidth - 340, anchor.left));
+        const padding = 6;
         
+        // Vertical positioning with flip detection
+        const spaceBelow = window.innerHeight - anchor.bottom - padding;
+        const spaceAbove = anchor.top - padding;
+        const needsFlip = spaceBelow < popupHeight && spaceAbove > spaceBelow;
+
+        // Horizontal positioning: Align with left of button, but stay in window
+        let left = anchor.left;
+        if (left + 320 > window.innerWidth - 20) { // 320 is w-80
+          left = window.innerWidth - 340;
+        }
+        left = Math.max(10, left);
+
         return {
-          top: needsFlip ? anchor.top - 10 : anchor.bottom + 10,
+          top: needsFlip ? anchor.top - padding : anchor.bottom + padding,
           left,
           transform: needsFlip ? 'translateY(-100%)' : 'translateY(0)',
-          transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+          transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
         };
       })()}
       onClick={e => e.stopPropagation()}
@@ -201,7 +226,7 @@ export function LinkReferencePopup({
               placeholder="URL or search resource..."
             />
             {isSearchFocused && query && !selectedResource && filtered.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-nb-surface border border-nb-outline-variant shadow-nb-lg rounded-lg overflow-hidden z-50 max-h-60 overflow-y-auto scrollbar-thin">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-nb-surface border border-nb-outline-variant shadow-nb-2xl rounded-xl overflow-hidden z-50 max-h-[300px] overflow-y-auto custom-scrollbar ring-1 ring-nb-primary/10">
                 {filtered.map(r => (
                   <button
                     key={r.id}
@@ -210,11 +235,14 @@ export function LinkReferencePopup({
                       setSelectedResource(r);
                       setQuery("");
                     }}
-                    className="w-full px-4 py-2.5 text-left hover:bg-nb-primary/5 transition-colors border-b border-nb-outline-variant/10 last:border-0"
+                    className="w-full px-4 py-3 text-left hover:bg-nb-primary/5 transition-colors border-b border-nb-outline-variant/5 last:border-0 group/res"
                   >
-                    <div className="text-sm font-bold text-nb-on-surface truncate">{r.title}</div>
-                    <div className="text-[11px] text-nb-on-surface-variant/60 truncate">
-                      {getResourceTypeLabel(r.type)} • {r.entryTitle} • {r.entryDate}
+                    <div className="text-[13px] font-bold text-nb-on-surface truncate group-hover/res:text-nb-primary transition-colors">{r.title}</div>
+                    <div className="text-[10px] font-medium text-nb-on-surface-variant/50 truncate flex items-center gap-1.5 mt-0.5">
+                      <span className="px-1.5 py-0.5 rounded-md bg-nb-surface-low border border-nb-outline-variant/30 text-nb-primary font-black uppercase text-[8px] tracking-widest">{getResourceTypeLabel(r.type)}</span>
+                      <span>{r.entryTitle}</span>
+                      <span className="w-1 h-1 rounded-full bg-nb-outline-variant/50" />
+                      <span>{r.entryDate}</span>
                     </div>
                   </button>
                 ))}

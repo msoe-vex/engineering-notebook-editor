@@ -8,10 +8,10 @@
 \RequirePackage{graphicx}
 \RequirePackage{xcolor}
 \RequirePackage{tcolorbox}
+\RequirePackage{amsmath}
+\RequirePackage{amssymb}
 \RequirePackage{hyperref}
-\RequirePackage{bookmark}
 \RequirePackage{booktabs}
-\RequirePackage{tabularx}
 \RequirePackage{titlesec}
 \RequirePackage{tocloft}
 \RequirePackage{ifthen}
@@ -22,12 +22,23 @@
 \RequirePackage{xstring}
 \RequirePackage{letltxmacro}
 \RequirePackage{etoolbox}
+\RequirePackage[normalem]{ulem}
+\renewcommand{\underline}[1]{\uline{#1}}
 
 % XeLaTeX Font Setup
 \RequirePackage{fontspec}
 
 % Load fonts from the /fonts/ path which will be mapped in the WASM engine
 \setmainfont{Inter}[
+    Path = ./fonts/inter/,
+    Extension = .otf,
+    UprightFont = *-Regular,
+    BoldFont = *-Bold,
+    ItalicFont = *-Italic,
+    BoldItalicFont = *-BoldItalic
+]
+
+\setsansfont{Inter}[
     Path = ./fonts/inter/,
     Extension = .otf,
     UprightFont = *-Regular,
@@ -43,7 +54,7 @@
     BoldFont = *-Bold
 ]
 
-\renewcommand{\familydefault}{\sfdefault}
+\renewcommand{\familydefault}{\rmdefault}
 
 % Global Caption Styling
 \captionsetup{
@@ -425,28 +436,28 @@
 % Supported types: entry, header, image, table, codeBlock, url
 \newcommand{\notebooklink}[3]{%
     \ifthenelse{\equal{#2}{url}}{%
-        \href{#3}{#1}%
+        \href{#3}{#1\ [#3]}%
     }{%
-        \ifcsname r@#3\endcsname
-            \ifthenelse{\equal{#2}{entry}}{%
-                \hyperref[#3]{#1 (\nameref*{#3}\ p.\,\pageref*{#3})}%
+        \ifthenelse{\equal{#2}{entry}}{%
+            \hyperref[#3]{#1\ [\nameref*{#3}\ p.\,\pageref*{#3}]}%
+        }{%
+            \ifthenelse{\equal{#2}{header}}{%
+                \hyperref[#3]{#1\ [\nameref*{#3}\ p.\,\pageref*{#3}]}%
             }{%
-                \ifthenelse{\equal{#2}{header}}{%
-                    \hyperref[#3]{#1 (\nameref*{#3}\ p.\,\pageref*{#3})}%
+                \ifthenelse{\equal{#2}{image}\OR\equal{#2}{table}\OR\equal{#2}{codeBlock}}{%
+                    \hyperref[#3]{#1\ [\cref*{#3}\ p.\,\pageref*{#3}]}%
                 }{%
-                    \hyperref[#3]{#1 (\cref*{#3})}%
+                    \hyperref[#3]{#1}%
                 }%
             }%
-        \else
-            \hyperref[#3]{#1}%
-        \fi
+        }%
     }%
 }
 
 % Backward-compatible wrappers for older generated LaTeX files
-\newcommand{\resourcelink}[2][]{\notebooklink{#2}{resource}{#1}}
-\newcommand{\entrylink}[2][]{\notebooklink{#2}{entry}{#1}}
-\newcommand{\headerlink}[2][]{\notebooklink{#2}{header}{#1}}
+\newcommand{\resourcelink}[2][]{\notebooklink{#2}{resource}{#1}{}}
+\newcommand{\entrylink}[2][]{\notebooklink{#2}{entry}{#1}{}}
+\newcommand{\headerlink}[2][]{\notebooklink{#2}{header}{#1}{}}
 
 % Command to output a header with UUID label
 % Usage: \notebookheader{text}{level}{uuid}

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   useEditor, EditorContent, Extension,
 } from "@tiptap/react";
@@ -477,7 +478,7 @@ export default function UnifiedEditor({
           >
             <EditorContent editor={editor} className="h-full" />
           </div>
-          {showLinkPopup && (
+          {showLinkPopup && createPortal(
             <LinkReferencePopup
               editor={editor}
               metadata={metadata}
@@ -485,7 +486,8 @@ export default function UnifiedEditor({
               filename={filename}
               showLinkPopup={showLinkPopup}
               triggerRect={triggerRect}
-            />
+            />,
+            document.body
           )}
         </div>
       </div>
