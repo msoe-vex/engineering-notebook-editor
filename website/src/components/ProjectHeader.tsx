@@ -4,7 +4,7 @@ import {
   MoreVertical, Download, Upload, ArrowLeftRight, Settings2, Edit3, ExternalLink
 } from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import ViewToggle, { ViewMode } from "./ViewToggle";
+import { ViewMode } from "./ViewToggle";
 
 interface ProjectHeaderProps {
   isSidebarOpen: boolean;
@@ -31,9 +31,6 @@ interface ProjectHeaderProps {
 export default function ProjectHeader({
   isSidebarOpen,
   onToggleSidebar,
-  isMobile,
-  viewMode,
-  onSetViewMode,
   isRenamingProject,
   projectRenameValue,
   onSetProjectRenameValue,
@@ -49,10 +46,9 @@ export default function ProjectHeader({
   onDisconnect,
   mounted
 }: ProjectHeaderProps) {
-  const { currentProject, openFile } = useWorkspace();
+  const { currentProject } = useWorkspace();
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const isEntryOpen = !!openFile;
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
