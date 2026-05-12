@@ -191,14 +191,18 @@ export async function compileNotebook(onStatus?: (status: string) => void): Prom
     mainTexPath: 'main.tex',
     additionalFiles: files,
     rerun: true,
-    cmd: 'xelatex -synctex=1 --no-shell-escape --interaction=batchmode --no-pdf --fmt /texlive/texmf-dist/texmf-var/web2c/xetex/xelatex.fmt main.tex'
+    cmd: 'xelatex -synctex=1 --no-shell-escape --interaction=batchmode --halt-on-error --no-pdf --fmt /texlive/texmf-dist/texmf-var/web2c/xetex/xelatex.fmt main.tex'
   });
 
   if (result.log) {
     console.log("[BusyTeX] Final LaTeX Log Output:\n", result.log);
   }
 
-  if (result.success && result.pdf) {
+  // Detect errors in the log even if success is true
+  const hasErrorMarker = result.log.split('\n').some(line => line.startsWith('! '));
+  const isActuallySuccessful = result.success && !hasErrorMarker;
+
+  if (isActuallySuccessful && result.pdf) {
     const blob = new Blob([result.pdf.slice()], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     return { success: true, pdfUrl: url, pdf: result.pdf, log: result.log };
