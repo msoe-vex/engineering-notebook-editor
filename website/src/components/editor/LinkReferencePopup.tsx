@@ -8,7 +8,7 @@ interface LinkReferencePopupProps {
   metadata?: NotebookMetadata;
   filename?: string;
   showLinkPopup: boolean;
-  triggerRect?: DOMRect | null;
+  isMention?: boolean;
 }
 
 export function LinkReferencePopup({
@@ -17,13 +17,14 @@ export function LinkReferencePopup({
   metadata,
   filename,
   showLinkPopup,
-  triggerRect
+  isMention
 }: LinkReferencePopupProps) {
   const [query, setQuery] = useState("");
   const [text, setText] = useState("");
   const [link, setLink] = useState("");
   const [selectedResource, setSelectedResource] = useState<{ id: string, title: string, type: string, entryTitle?: string, entryDate?: string, entryId?: string } | null>(null);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
   const popupRef = React.useRef<HTMLDivElement>(null);
   const [popupHeight, setPopupHeight] = useState(400); // Default estimate
 
@@ -36,6 +37,17 @@ export function LinkReferencePopup({
       });
       resizeObserver.observe(popupRef.current);
       return () => resizeObserver.disconnect();
+    }
+  }, [showLinkPopup]);
+
+  // Auto-focus search input when opening
+  useEffect(() => {
+    if (showLinkPopup) {
+      // Small timeout to ensure the popup is rendered and visible
+      const timer = setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
     }
   }, [showLinkPopup]);
 
@@ -142,9 +154,14 @@ export function LinkReferencePopup({
     }
 
     if (finalLink || trimmedText) {
-      const marks: import("@tiptap/pm/model").Mark[] = [editor.schema.marks.underline.create()];
+      const marks: import("@tiptap/pm/model").Mark[] = [];
       if (finalLink) {
         marks.push(editor.schema.marks.link.create({ href: finalLink, resourceId, entryId }));
+      }
+
+      if (isMention) {
+        const { from } = editor.state.selection;
+        editor.chain().deleteRange({ from: from - 1, to: from }).focus().run();
       }
 
       editor.chain()
@@ -168,27 +185,37 @@ export function LinkReferencePopup({
       ref={popupRef}
       className="fixed z-[1000] w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-2xl p-5 animate-in zoom-in-95 fade-in duration-200"
       style={(() => {
-        const anchor = triggerRect || rect;
-        const padding = 6;
+        const anchor = rect;
+        const padding = 8;
+        const popupWidth = 320;
         
-        // Vertical positioning with flip detection
+        // Determine vertical placement
         const spaceBelow = window.innerHeight - anchor.bottom - padding;
         const spaceAbove = anchor.top - padding;
-        const needsFlip = spaceBelow < popupHeight && spaceAbove > spaceBelow;
-
-        // Horizontal positioning: Align with left of button, but stay in window
-        let left = anchor.left;
-        if (left + 320 > window.innerWidth - 20) { // 320 is w-80
-          left = window.innerWidth - 340;
+        
+        let y: number;
+        if (spaceBelow >= popupHeight || spaceBelow > spaceAbove) {
+          // Try below first
+          y = anchor.bottom + padding;
+        } else {
+          // Flip above
+          y = anchor.top - padding - popupHeight;
         }
-        left = Math.max(10, left);
+
+        // Final safety clamp for vertical
+        y = Math.max(10, Math.min(y, window.innerHeight - popupHeight - 10));
+
+        // Horizontal placement with safety clamp
+        let x = anchor.left;
+        x = Math.max(20, Math.min(x, window.innerWidth - popupWidth - 20));
 
         return {
-          top: needsFlip ? anchor.top - padding : anchor.bottom + padding,
-          left,
-          transform: needsFlip ? 'translateY(-100%)' : 'translateY(0)',
-          transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
-        };
+          top: y,
+          left: x,
+          maxHeight: 'min(calc(100vh - 40px), 800px)',
+          transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+          pointerEvents: showLinkPopup ? 'auto' : 'none'
+        } as React.CSSProperties;
       })()}
       onClick={e => e.stopPropagation()}
     >
@@ -213,6 +240,7 @@ export function LinkReferencePopup({
           <label className="block text-[10px] font-bold text-nb-on-surface-variant/50 mb-1.5">Link or Resource</label>
           <div className="relative">
             <input
+              ref={searchInputRef}
               type="text"
               value={selectedResource ? selectedResource.title : link}
               onFocus={() => setIsSearchFocused(true)}
