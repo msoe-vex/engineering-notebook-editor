@@ -2,10 +2,20 @@
 
 import { useState, useEffect } from "react";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import Preview from "./Preview";
+import dynamic from "next/dynamic";
 import { compileNotebook, CompileResult } from "@/lib/busytex";
 import { showNotification } from "./Notification";
 import { Play, Loader2, Calendar, FileText, X, RefreshCcw, Download } from "lucide-react";
+
+const Preview = dynamic(() => import("./Preview"), { 
+  ssr: false,
+  loading: () => (
+    <div className="flex flex-col items-center justify-center h-full gap-4 bg-nb-bg/50 backdrop-blur-sm">
+      <Loader2 size={32} className="animate-spin-stable text-nb-primary" />
+      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant animate-pulse">Initializing Preview...</span>
+    </div>
+  )
+});
 
 export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
   const { workspaceVersion, metadata, saveCompiledPdf, getCompiledPdfUrl, isInitialized, currentProject } = useWorkspace();
@@ -17,6 +27,7 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     let active = true;
+    let currentUrl: string | null = null;
 
     const loadPdf = async () => {
       if (!isInitialized) return;
@@ -25,13 +36,18 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
       await Promise.resolve();
       if (!active) return;
 
-      setPdfUrl(null);
       setIsLoadingPdf(true);
 
       try {
         const url = await getCompiledPdfUrl();
         if (active) {
-          setPdfUrl(url);
+          setPdfUrl(prev => {
+            if (prev && prev.startsWith('blob:')) {
+              URL.revokeObjectURL(prev);
+            }
+            return url;
+          });
+          currentUrl = url;
         }
       } catch (e) {
         console.error("Failed to load last compiled PDF", e);
@@ -46,8 +62,11 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
 
     return () => {
       active = false;
+      if (currentUrl && currentUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(currentUrl);
+      }
     };
-  }, [getCompiledPdfUrl, isInitialized, workspaceVersion]);
+  }, [getCompiledPdfUrl, isInitialized, metadata.lastCompiled]);
 
   const handleCompile = async () => {
     if (isCompiling) return;
