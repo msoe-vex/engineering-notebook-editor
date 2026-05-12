@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, memo, useCallback } from "react";
 import {
   Hash, User, Briefcase, Image as ImageIcon,
   Loader2, Check, X, Camera, Building2, Plus, Trash2, Users,
-  Palette, Shapes, Search, GripVertical, LucideIcon, Play
+  Palette, Shapes, Search, GripVertical, LucideIcon
 } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import Image from "next/image";

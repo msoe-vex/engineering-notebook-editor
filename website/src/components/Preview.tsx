@@ -5,7 +5,7 @@ import "prismjs/components/prism-latex";
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
-import { Loader2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, FileText } from "lucide-react";
+import { Loader2, ZoomIn, ZoomOut, FileText } from "lucide-react";
 
 // Set up worker using the version from the package
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -31,12 +31,6 @@ export default function Preview({ latexContent, pdfUrl }: PreviewProps) {
   const [scale, setScale] = useState(1.0);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState<number>(0);
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
-  }, []);
 
 
   useEffect(() => {
@@ -69,27 +63,6 @@ export default function Preview({ latexContent, pdfUrl }: PreviewProps) {
     };
   }, []);
 
-  const resizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const observer = new ResizeObserver((entries) => {
-      if (resizeTimeoutRef.current) clearTimeout(resizeTimeoutRef.current);
-      resizeTimeoutRef.current = setTimeout(() => {
-        for (const entry of entries) {
-          setContainerWidth(entry.contentRect.width);
-        }
-      }, 50); // Small debounce for smooth panel resizing
-    });
-
-    observer.observe(container);
-    return () => {
-      observer.disconnect();
-      if (resizeTimeoutRef.current) clearTimeout(resizeTimeoutRef.current);
-    };
-  }, [pdfUrl]);
 
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
@@ -102,7 +75,7 @@ export default function Preview({ latexContent, pdfUrl }: PreviewProps) {
     if (!numPages) return;
     const container = e.currentTarget;
     const pageElements = container.querySelectorAll('[data-page-number]');
-    
+
     let currentPage = 1;
     let minDistance = Infinity;
 
@@ -136,15 +109,15 @@ export default function Preview({ latexContent, pdfUrl }: PreviewProps) {
       setPageInput(pageNumber.toString());
       return;
     }
-    
+
     const container = scrollRef.current;
     const pageEl = container?.querySelector(`[data-page-number="${p}"]`) as HTMLElement;
-    
+
     if (container && pageEl) {
       const containerRect = container.getBoundingClientRect();
       const pageRect = pageEl.getBoundingClientRect();
       const scrollTarget = pageRect.top - containerRect.top + container.scrollTop - 24;
-      
+
       // Custom fast smooth scroll
       const start = container.scrollTop;
       const change = scrollTarget - start;
@@ -155,10 +128,10 @@ export default function Preview({ latexContent, pdfUrl }: PreviewProps) {
         if (!startTime) startTime = timestamp;
         const progress = timestamp - startTime;
         const percent = Math.min(progress / duration, 1);
-        
+
         // Easing function: easeOutCubic
         const ease = 1 - Math.pow(1 - percent, 3);
-        
+
         container.scrollTop = start + change * ease;
 
         if (progress < duration) {
@@ -167,7 +140,7 @@ export default function Preview({ latexContent, pdfUrl }: PreviewProps) {
       };
 
       requestAnimationFrame(animateScroll);
-      
+
       setPageNumber(p);
       setPageInput(p.toString());
     }
@@ -176,7 +149,7 @@ export default function Preview({ latexContent, pdfUrl }: PreviewProps) {
   return (
     <div ref={containerRef} className="flex flex-col h-full bg-nb-bg transition-colors duration-300 overflow-hidden relative group">
       {pdfUrl && numPages && (
-        <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 p-1.5 bg-nb-surface/80 backdrop-blur-md border border-nb-outline-variant/30 rounded-2xl shadow-nb-lg animate-in slide-in-from-top-4 duration-500 transition-opacity whitespace-nowrap min-w-max ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+        <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 p-1.5 bg-nb-surface/80 backdrop-blur-md border border-nb-outline-variant/30 rounded-2xl shadow-nb-lg animate-in slide-in-from-top-4 duration-500 transition-opacity whitespace-nowrap min-w-max opacity-100 lg:opacity-0 lg:group-hover:opacity-100`}>
           <form onSubmit={handlePageInputSubmit} className="flex items-center gap-1.5 px-3 py-1 whitespace-nowrap">
             <input
               type="text"
@@ -218,7 +191,7 @@ export default function Preview({ latexContent, pdfUrl }: PreviewProps) {
 
       <div className="flex-1 overflow-hidden relative">
         {pdfUrl ? (
-          <div 
+          <div
             ref={scrollRef}
             onScroll={handleScroll}
             className="h-full overflow-auto bg-nb-surface-low/50 custom-scrollbar py-8"
@@ -246,8 +219,8 @@ export default function Preview({ latexContent, pdfUrl }: PreviewProps) {
                 }
               >
                 {Array.from(new Array(numPages || 0), (el, index) => (
-                  <div 
-                    key={`page_${index + 1}`} 
+                  <div
+                    key={`page_${index + 1}`}
                     data-page-number={index + 1}
                     className="mb-8 shadow-nb-2xl rounded-sm overflow-hidden bg-white transition-all duration-300 origin-top"
                   >
