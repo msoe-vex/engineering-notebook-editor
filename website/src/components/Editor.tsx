@@ -21,8 +21,18 @@ import {
   ImperativePanelHandle
 } from "react-resizable-panels";
 import ViewToggle, { ViewMode } from "./ViewToggle";
-import Preview from "./Preview";
+import dynamic from "next/dynamic";
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng } from "@/lib/utils";
+
+const Preview = dynamic(() => import("./Preview"), { 
+  ssr: false,
+  loading: () => (
+    <div className="flex flex-col items-center justify-center h-full gap-4 bg-nb-bg/50 backdrop-blur-sm">
+      <Loader2 size={32} className="animate-spin-stable text-nb-primary" />
+      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant animate-pulse">Initializing Preview...</span>
+    </div>
+  )
+});
 import { getLocalDateString } from "@/lib/metadata";
 import { generateEntryLatex } from "@/lib/latex";
 import { getPhases, getPhaseConfig } from "@/lib/phases";
