@@ -44,9 +44,9 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
     <NodeViewWrapper
       draggable={dragEnabled}
       data-id={node.attrs.id}
-      className={`my-6 group relative w-full transition ${active ? 'z-[100]' : 'z-10'}`}
+      className={`my-6 group relative w-full transition ${active ? 'z-[100]' : 'z-10'} pl-12`}
     >
-      <div contentEditable={false} className="absolute -left-12 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
+      <div contentEditable={false} className="absolute left-0 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
         <div
           data-drag-handle
           onMouseEnter={() => setDragEnabled(true)}
