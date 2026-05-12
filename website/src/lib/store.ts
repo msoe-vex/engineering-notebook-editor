@@ -398,7 +398,9 @@ class WorkspaceStore {
       })).sort((a, b) => {
         const metaA = this.metadata.entries[a.path.split('/').pop()?.replace('.json', '') || ''];
         const metaB = this.metadata.entries[b.path.split('/').pop()?.replace('.json', '') || ''];
-        return new Date(metaB?.createdAt || 0).getTime() - new Date(metaA?.createdAt || 0).getTime();
+        const timeA = metaA?.updatedAt || metaA?.createdAt || 0;
+        const timeB = metaB?.updatedAt || metaB?.createdAt || 0;
+        return new Date(timeB).getTime() - new Date(timeA).getTime();
       });
       this.notifyStateChange();
     }
