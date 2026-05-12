@@ -9,7 +9,7 @@ import {
   Save, Trash2, Loader2, User, X, FileCode,
   Undo2, Redo2, ImagePlus, ChevronDown, ChevronUp, List, ListOrdered,
   Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
-  Terminal, Link as LinkIcon, Underline as UnderlineIcon,
+  Terminal, Link as LinkIcon, Underline as UnderlineIcon, Sigma,
   FileJson
 } from "lucide-react";
 import ValidationTooltip from "./ValidationTooltip";
@@ -24,7 +24,7 @@ import ViewToggle, { ViewMode } from "./ViewToggle";
 import dynamic from "next/dynamic";
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng } from "@/lib/utils";
 
-const Preview = dynamic(() => import("./Preview"), { 
+const Preview = dynamic(() => import("./Preview"), {
   ssr: false,
   loading: () => (
     <div className="flex flex-col items-center justify-center h-full gap-4 bg-nb-bg/50 backdrop-blur-sm">
@@ -797,6 +797,12 @@ const EditorContent = React.memo(function EditorContent({
               </ToolbarButton>
               <ToolbarButton onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive("underline")} title="Underline">
                 <UnderlineIcon size={16} />
+              </ToolbarButton>
+              <ToolbarButton onClick={() => editor.chain().focus().toggleCode().run()} active={editor.isActive("code")} title="Inline Code">
+                <Code size={16} />
+              </ToolbarButton>
+              <ToolbarButton onClick={() => editor.chain().focus().toggleInlineMath().run()} active={editor.isActive("inlineMath")} title="Inline Math">
+                <Sigma size={16} />
               </ToolbarButton>
 
               <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />

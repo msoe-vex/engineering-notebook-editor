@@ -87,6 +87,9 @@ export const CustomRawLatex = CodeBlock.extend({
   addNodeView() {
     return ReactNodeViewRenderer(RawLatexNodeView);
   },
+  addInputRules() {
+    return [];
+  },
   addKeyboardShortcuts() {
     return {
       'Mod-a': ({ editor }) => {

@@ -35,13 +35,13 @@ export const mapLanguageToLatex = (lang: string): string => {
 
 export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<string, string>): string => {
   if (!node) return "";
-  
+
   // Helper to get resource type (entry, header, image, codeBlock, table, etc.)
   const getResourceType = (id: string): string | null => {
     if (!resourceTypes) return null;
     return resourceTypes[id] || null;
   };
-  
+
   const children = () => (node.content || []).map(n => convertNodeToLatex(n, resourceTypes)).join("");
 
   switch (node.type) {
@@ -98,7 +98,7 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
       const level = node.attrs?.level ?? 2;
       const headingText = children().trim();
       const uuid = (node.attrs?.id as string) || "";
-      
+
       if (uuid) {
         // Use notebookheader command with UUID label
         return `\\notebookheader{${headingText}}{${level}}{${uuid}}\n\n`;
@@ -199,6 +199,10 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
       return code + "\n\n";
     }
 
+    case "inlineMath": {
+      return `$${node.attrs?.latex || ""}$`;
+    }
+
     case "horizontalRule":
       return "\\noindent\\rule{\\linewidth}{0.4pt}\n\n";
 
@@ -209,7 +213,7 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
 
 export const convertJsonToLatex = (input: TipTapNode | string, resourceTypes?: Record<string, string>): string => {
   if (!input) return "";
-  
+
   let doc = input;
   if (typeof input === 'string') {
     try {
@@ -303,14 +307,14 @@ export const generateTeamLatex = (team: TeamMetadata): string => {
 
 export const generatePhasesLatex = (phases: ProjectPhase[]): string => {
   let latex = "% DESIGN PROCESS PHASES - AUTOMATICALLY GENERATED\n\n";
-  
+
   let phaseListLatex = "\\newcommand{\\phaselist}{\n";
 
   phases.forEach((p) => {
     // Create a color name based on the stable ID (safe for LaTeX)
     const colorName = `PhaseID${p.id.toString().replace(/-/g, "")}`;
     const hex = p.color.startsWith("#") ? p.color.substring(1) : p.color;
-    
+
     latex += `% Phase: ${p.name}\n`;
     latex += `\\definecolor{${colorName}}{HTML}{${hex}}\n`;
     latex += `\\csdef{phasecolor@${p.index}}{${colorName}}\n`;
@@ -319,8 +323,8 @@ export const generatePhasesLatex = (phases: ProjectPhase[]): string => {
     // Add to phase list using the abstracted command
     phaseListLatex += `    \\notebookphase{${colorName}}{${escapeLaTeX(p.name)}}{${escapeLaTeX(p.description || "")}}\n`;
   });
-  
+
   phaseListLatex += "}\n";
-  
+
   return latex + phaseListLatex;
 };
