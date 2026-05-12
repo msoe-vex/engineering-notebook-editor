@@ -153,6 +153,7 @@ export const InlineMathNode = Node.create({
   inline: true,
   selectable: true,
   atom: true,
+  marks: "", // Prevent formatting marks like bold/code on this node
 
   addAttributes() {
     return {
@@ -193,10 +194,47 @@ export const InlineMathNode = Node.create({
         });
       },
       toggleInlineMath: () => ({ chain, editor }: any) => {
-        const { from, to } = editor.state.selection;
-        const text = editor.state.doc.textBetween(from, to, " ");
+        const { from, to, $from } = editor.state.selection;
         
+        // Find the math node if it's selected or if the cursor is touching it
+        let mathNodePos = -1;
+        let mathNode: any = null;
+
+        // 1. Check current selection range
+        editor.state.doc.nodesBetween(from, to, (node: any, pos: number) => {
+          if (node.type.name === this.name) {
+            mathNodePos = pos;
+            mathNode = node;
+            return false;
+          }
+        });
+
+        // 2. If not found, check if cursor is adjacent to one
+        if (!mathNode) {
+          const nodeBefore = $from.nodeBefore;
+          const nodeAfter = $from.nodeAfter;
+          
+          if (nodeBefore?.type.name === this.name) {
+            mathNode = nodeBefore;
+            mathNodePos = from - nodeBefore.nodeSize;
+          } else if (nodeAfter?.type.name === this.name) {
+            mathNode = nodeAfter;
+            mathNodePos = from;
+          }
+        }
+
+        // If found, convert back to text
+        if (mathNode) {
+          return chain()
+            .insertContentAt({ from: mathNodePos, to: mathNodePos + mathNode.nodeSize }, mathNode.attrs.latex || "")
+            .setTextSelection({ from: mathNodePos, to: mathNodePos + (mathNode.attrs.latex?.length || 0) })
+            .run();
+        }
+
+        // Otherwise, create a new math node from selection
+        const text = editor.state.doc.textBetween(from, to, " ");
         return chain()
+          .unsetMark("code")
           .insertContent({
             type: this.name,
             attrs: { latex: text },
