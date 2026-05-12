@@ -137,14 +137,6 @@ export default function ProjectHeader({
 
       <div className="flex items-center gap-2">
         <button
-          onClick={onOpenCompiler}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-nb-primary/10 text-nb-primary hover:bg-nb-primary hover:text-white transition-all cursor-pointer group"
-          title="Compile Notebook"
-        >
-          <Play size={16} className="fill-current" />
-          <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">Compile</span>
-        </button>
-        <button
           onClick={onDisconnect}
           className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-tertiary transition-colors cursor-pointer"
           title="Change Workspace"
