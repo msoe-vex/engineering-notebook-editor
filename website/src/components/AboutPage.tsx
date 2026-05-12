@@ -20,7 +20,7 @@ export default function AboutPage({ onClose, onTryIt }: AboutPageProps) {
   const { setTheme, resolvedTheme } = useTheme();
 
   return (
-    <div className="fixed inset-0 z-[1000] bg-nb-bg overflow-y-auto custom-scrollbar">
+    <div className="fixed inset-0 z-[1000] bg-nb-bg overflow-y-auto custom-scrollbar" style={{ scrollbarGutter: 'stable' }}>
       <style dangerouslySetInnerHTML={{ __html: BLINK_CSS }} />
       {/* Navigation */}
       <div className="sticky top-0 z-10 bg-nb-bg/80 backdrop-blur-md border-b border-nb-outline-variant/30">
