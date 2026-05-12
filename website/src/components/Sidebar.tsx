@@ -13,6 +13,7 @@ interface SidebarProps {
   showConfirm: (title: string, message: string, onConfirm: () => void, variant?: "danger" | "warning" | "info") => void;
   onNewEntry?: () => Promise<void>;
   onOpenEntry?: (file: ExplorerFile) => void;
+  onSelectAll: (paths: string[]) => void;
 }
 
 export default function Sidebar({
@@ -21,6 +22,7 @@ export default function Sidebar({
   showConfirm,
   onNewEntry,
   onOpenEntry,
+  onSelectAll,
 }: SidebarProps) {
   const {
     entries,
@@ -61,26 +63,6 @@ export default function Sidebar({
       "danger"
     );
   }, [showConfirm, deleteEntry]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (selectedPaths.size === 0) return;
-      if (e.key === "Delete" || (e.key === "Backspace" && (e.metaKey || e.ctrlKey))) {
-        // Don't trigger if typing in an input
-        const target = e.target as HTMLElement;
-        if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
-
-        const toDelete = entries.filter(f => selectedPaths.has(f.path));
-        if (toDelete.length > 0) {
-          e.preventDefault();
-          handleConfirmDelete(toDelete);
-        }
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedPaths, entries, handleConfirmDelete]);
 
   const pendingPaths = useMemo(() => new Set((pendingChanges || []).map(p => p.path)), [pendingChanges]);
   const deletedPaths = useMemo(() => new Set((pendingChanges || []).filter(p => p.operation === "delete").map(p => p.path)), [pendingChanges]);
@@ -147,6 +129,34 @@ export default function Sidebar({
 
     return list;
   }, [augmentedEntries, search, sortBy, sortDirection, dateRange]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Delete" || (e.key === "Backspace" && (e.metaKey || e.ctrlKey))) {
+        // Don't trigger if typing in an input
+        const target = e.target as HTMLElement;
+        if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+
+        if (selectedPaths.size === 0) return;
+        const toDelete = entries.filter(f => selectedPaths.has(f.path));
+        if (toDelete.length > 0) {
+          e.preventDefault();
+          handleConfirmDelete(toDelete);
+        }
+      }
+
+      if (e.key === "a" && (e.metaKey || e.ctrlKey)) {
+        const target = e.target as HTMLElement;
+        if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+
+        e.preventDefault();
+        onSelectAll(filteredEntries.map(f => f.path));
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedPaths, entries, handleConfirmDelete, onSelectAll, filteredEntries]);
 
   const handleOpenEntry = (file: ExplorerFile) => {
     if (onOpenEntry) {

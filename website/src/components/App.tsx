@@ -637,6 +637,7 @@ export default function App() {
           onOpenTeam={handleOpenTeamEditor}
           showConfirm={showConfirm}
           onNewEntry={handleNewEntry}
+          onSelectAll={(paths) => setSelectedPaths(new Set(paths))}
         />
       </div>
     </div>
