@@ -7,7 +7,7 @@ import { compileNotebook, CompileResult } from "@/lib/busytex";
 import { showNotification } from "./Notification";
 import { Play, Loader2, Calendar, FileText, X, RefreshCcw, Download } from "lucide-react";
 
-const Preview = dynamic(() => import("./Preview"), { 
+const Preview = dynamic(() => import("./Preview"), {
   ssr: false,
   loading: () => (
     <div className="flex flex-col items-center justify-center h-full gap-4 bg-nb-bg/50 backdrop-blur-sm">
@@ -18,7 +18,7 @@ const Preview = dynamic(() => import("./Preview"), {
 });
 
 export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
-  const { workspaceVersion, metadata, saveCompiledPdf, getCompiledPdfUrl, isInitialized, currentProject } = useWorkspace();
+  const { metadata, saveCompiledPdf, getCompiledPdfUrl, isInitialized, currentProject } = useWorkspace();
   const [isCompiling, setIsCompiling] = useState(false);
   const [compileStatus, setCompileStatus] = useState<string>("");
   const [compileProgress, setCompileProgress] = useState(0);
