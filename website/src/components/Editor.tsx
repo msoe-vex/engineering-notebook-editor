@@ -17,8 +17,7 @@ import * as LucideIcons from "lucide-react";
 import {
   Panel,
   PanelGroup,
-  PanelResizeHandle,
-  ImperativePanelHandle
+  PanelResizeHandle
 } from "react-resizable-panels";
 import ViewToggle, { ViewMode } from "./ViewToggle";
 import dynamic from "next/dynamic";
