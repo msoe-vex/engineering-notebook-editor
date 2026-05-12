@@ -24,6 +24,8 @@
 \RequirePackage{etoolbox}
 \RequirePackage{microtype}
 \RequirePackage{soul}
+\definecolor{codebg}{HTML}{F3F4F6}
+\sethlcolor{codebg}
 \soulregister{\textbf}{1}
 \soulregister{\textit}{1}
 \soulregister{\underline}{1}
@@ -34,6 +36,8 @@
 \soulregister{\Cref}{1}
 \soulregister{\nameref}{1}
 \soulregister{\pageref}{1}
+\newcommand{\notebookinlinecode}[1]{{\small\texttt{\hl{#1}}}}
+\soulregister{\notebookinlinecode}{1}
 \renewcommand{\underline}[1]{\ul{#1}}
 
 % XeLaTeX Font Setup

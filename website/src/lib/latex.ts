@@ -59,7 +59,7 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
 
       if (hasBold) t = `\\textbf{${t}}`;
       if (hasItalic) t = `\\textit{${t}}`;
-      if (hasCode) t = `\\texttt{${t}}`;
+      if (hasCode) t = `\\notebookinlinecode{${t}}`;
       if (hasUnderline) t = `\\underline{${t}}`;
 
       if (linkMark) {

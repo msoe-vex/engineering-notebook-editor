@@ -63,7 +63,7 @@ export async function compileNotebook(onStatus?: CompileStatusCallback): Promise
   const files: FileInput[] = [];
 
   // 1. Map public dependencies (/latex/*) and user overrides
-  onStatus?.("Pre-loading LaTeX dependencies...", 3, TOTAL_STEPS, 35);
+  onStatus?.("Loading LaTeX dependencies...", 3, TOTAL_STEPS, 35);
   try {
     const manifestResponse = await fetch('/latex/manifest.json');
     if (manifestResponse.ok) {
