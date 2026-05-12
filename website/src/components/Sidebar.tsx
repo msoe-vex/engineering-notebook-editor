@@ -42,6 +42,7 @@ export default function Sidebar({
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
   const [isCommitting, setIsCommitting] = useState(false);
+  const [isDiscarding, setIsDiscarding] = useState(false);
 
   const handleConfirmDelete = useCallback((files: ExplorerFile[]) => {
     if (files.length === 0) return;
@@ -157,7 +158,16 @@ export default function Sidebar({
   };
 
   const handleDiscard = async () => {
-    await discardPendingChanges();
+    try {
+      setIsDiscarding(true);
+      await discardPendingChanges();
+      showNotification("Discarded all pending changes.", "info");
+    } catch (e) {
+      console.error("Discard failed", e);
+      showNotification("Failed to discard changes.", "error");
+    } finally {
+      setIsDiscarding(false);
+    }
   };
 
   const handleCommit = async (message?: string) => {
@@ -237,17 +247,20 @@ export default function Sidebar({
         notebookMetadata={metadata}
       />
 
-      {pendingChanges.length > 0 && (
-        <div className="p-4 bg-nb-surface border-t border-nb-outline-variant animate-in slide-in-from-bottom-2 duration-300">
-          <PendingChangesPanel
-            pendingChanges={pendingChanges}
-            isCommitting={isCommitting}
-            onCommit={handleCommit}
-            onDiscard={handleDiscard}
-            workspaceMode={mode as "github" | "local" | "temporary"}
-          />
+      <div className={`grid transition-all duration-500 ease-in-out ${pendingChanges.length > 0 || isCommitting || isDiscarding ? 'grid-rows-[1fr] opacity-100 border-t border-nb-outline-variant' : 'grid-rows-[0fr] opacity-0'}`}>
+        <div className="overflow-hidden">
+          <div className="p-4 bg-nb-surface">
+            <PendingChangesPanel
+              pendingChanges={pendingChanges}
+              isCommitting={isCommitting}
+              isDiscarding={isDiscarding}
+              onCommit={handleCommit}
+              onDiscard={handleDiscard}
+              workspaceMode={mode as "github" | "local" | "temporary"}
+            />
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
