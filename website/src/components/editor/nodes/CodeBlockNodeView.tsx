@@ -169,7 +169,7 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
           </div>
         </div>
         <div className="flex flex-row items-stretch">
-          <div contentEditable={false} className="select-none text-right px-4 py-6 border-r border-nb-outline-variant/10 text-nb-on-surface-variant/20 font-mono text-[12px] leading-[1.8] bg-nb-surface-low/30 min-w-[56px] shrink-0">
+          <div contentEditable={false} className="select-none text-right px-4 py-6 border-r border-nb-outline-variant/10 text-nb-on-surface-variant/20 font-mono text-[14px] leading-[1.8] bg-nb-surface-low/30 min-w-[56px] shrink-0">
             {node.textContent.split('\n').map((_, i) => (
               <div key={i} className="h-[1.8em]">{i + 1}</div>
             ))}
@@ -178,7 +178,7 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
             as="div"
             spellCheck="false"
             data-placeholder="Paste your code here..."
-            className={`flex-1 relative py-6 pl-3 pr-6 overflow-x-auto text-[12px] leading-[1.8] font-mono whitespace-pre language-${node.attrs.language} ${node.textContent.length === 0 ? 'is-empty' : ''}`}
+            className={`flex-1 relative py-6 pl-3 pr-6 overflow-x-auto text-[14px] leading-[1.8] font-mono whitespace-pre language-${node.attrs.language} ${node.textContent.length === 0 ? 'is-empty' : ''}`}
           />
         </div>
 

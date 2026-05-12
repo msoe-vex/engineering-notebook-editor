@@ -138,7 +138,7 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
               spellCheck="false"
               autoCorrect="off"
               autoCapitalize="off"
-              className="w-full bg-transparent text-nb-on-surface font-mono text-base outline-none resize-none overflow-hidden text-center placeholder:text-nb-on-surface-variant/20"
+              className="w-full bg-transparent text-nb-on-surface font-mono text-[14px] outline-none resize-none overflow-hidden text-center placeholder:text-nb-on-surface-variant/20"
               style={{ height: 'auto' }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
