@@ -242,7 +242,7 @@ export default function Preview({ latexContent, pdfUrl }: PreviewProps) {
           <div className="h-full overflow-y-auto p-8 custom-scrollbar relative">
             <div className="absolute inset-0 opacity-[0.02] pointer-events-none" style={{ backgroundImage: 'linear-gradient(0deg, currentColor 1px, transparent 1px), linear-gradient(90deg, currentColor 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
 
-            <pre className="whitespace-pre-wrap !bg-transparent !m-0 !p-0 text-[12px] leading-[1.8] font-mono text-nb-on-surface relative z-10">
+            <pre className="whitespace-pre-wrap !bg-transparent !m-0 !p-0 text-[14px] leading-[1.8] font-mono text-nb-on-surface relative z-10">
               <code ref={rawCodeRef} className="language-latex !bg-transparent !p-0">
                 {latexContent}
               </code>
