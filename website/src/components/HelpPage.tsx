@@ -132,7 +132,7 @@ export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto bg-nb-bg/50 custom-scrollbar relative">
+        <div className="flex-1 overflow-y-auto bg-nb-bg/50 custom-scrollbar relative" style={{ scrollbarGutter: 'stable' }}>
           <div className="max-w-4xl mx-auto p-6 md:p-12 pb-32">
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-24 gap-4 animate-in fade-in duration-500">
