@@ -3,4 +3,5 @@ export * from "./TableNodeView";
 export * from "./CodeBlockNodeView";
 export * from "./RawLatexNodeView";
 export * from "./InlineMathNodeView";
+export * from "./MathBlockNodeView";
 export * from "./types";

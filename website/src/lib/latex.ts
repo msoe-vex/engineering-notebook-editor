@@ -203,6 +203,16 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
       return `$${node.attrs?.latex || ""}$`;
     }
 
+    case "mathBlock": {
+      const attrs = (node.attrs || {}) as Record<string, string | undefined>;
+      const title = escapeLaTeX(attrs.title ?? "");
+      const caption = escapeLaTeX(attrs.caption ?? "");
+      const latex = attrs.latex || "";
+      const labelId = attrs.id || "";
+
+      return `\\notebookequation{${latex}}{${title}}{${caption}}{${labelId}}\n\n`;
+    }
+
     case "horizontalRule":
       return "\\noindent\\rule{\\linewidth}{0.4pt}\n\n";
 

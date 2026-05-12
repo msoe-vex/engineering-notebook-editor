@@ -956,6 +956,25 @@ const EditorContent = React.memo(function EditorContent({
                 <Terminal size={16} />
               </ToolbarButton>
 
+              <ToolbarButton
+                onClick={() => {
+                  const { selection } = editor.state;
+                  const safePos = (selection instanceof NodeSelection) ? selection.to :
+                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                      (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
+                  if (safePos !== null) {
+                    editor.chain().focus().insertContentAt(safePos, { type: 'mathBlock', attrs: { id: generateUUID() } }).run();
+                  } else {
+                    editor.chain().focus().insertContent({ type: 'mathBlock', attrs: { id: generateUUID() } }).run();
+                  }
+                }}
+                active={editor.isActive("mathBlock")}
+                title="Equation Block"
+              >
+                <Sigma size={16} className="scale-110" />
+              </ToolbarButton>
+
               <div className="relative" ref={tableButtonRef}>
                 <ToolbarButton
                   onClick={(e) => {

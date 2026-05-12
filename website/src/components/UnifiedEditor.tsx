@@ -27,6 +27,7 @@ import {
   CustomCodeBlock,
   CustomRawLatex,
   InlineMathNode,
+  MathBlockNode,
 } from "@/components/editor/nodes";
 
 import { LinkReferencePopup } from "@/components/editor/LinkReferencePopup";
@@ -167,6 +168,7 @@ export default function UnifiedEditor({
       CustomCodeBlock,
       CustomRawLatex,
       InlineMathNode,
+      MathBlockNode,
       Extension.create({
         name: 'mathCodeMutualExclusion',
         addProseMirrorPlugins() {
@@ -181,7 +183,7 @@ export default function UnifiedEditor({
                   newState.doc.descendants((node: any, pos: number) => {
                     if (node.type.name === 'inlineMath') {
                       const hasCodeMark = node.marks.some((m: any) => m.type.name === 'code');
-                      
+
                       if (hasCodeMark) {
                         const latex = node.attrs.latex || "";
                         if (latex) {
