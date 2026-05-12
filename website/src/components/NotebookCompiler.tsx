@@ -84,14 +84,14 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
         setCompileStatus("Failed");
         showNotification("Compilation failed. Check log for details.", "error");
         console.error(result.log);
-        setTimeout(() => setIsCompiling(false), 1500);
+        setIsCompiling(false);
       }
     } catch (e) {
       setCompileProgress(0);
       setCompileStatus("Error");
       console.error("Compilation error:", e);
       showNotification("An error occurred during compilation.", "error");
-      setTimeout(() => setIsCompiling(false), 1500);
+      setIsCompiling(false);
     }
   };
 

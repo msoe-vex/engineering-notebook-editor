@@ -435,23 +435,17 @@
 % Usage: \notebooklink{text}{type}{uuid/url}
 % Supported types: entry, header, image, table, codeBlock, url
 \newcommand{\notebooklink}[3]{%
-    \ifthenelse{\equal{#2}{url}}{%
-        \href{#3}{#1\ [#3]}%
+    \ifboolexpr{test {\ifstrequal{#2}{url}} or test {\ifstrequal{#2}{resource}}}{%
+        \href{\detokenize{#3}}{#1}\ [\nolinkurl{\detokenize{#3}}]%
     }{%
-        \ifthenelse{\equal{#2}{entry}}{%
-            \hyperref[#3]{#1\ [\nameref*{#3}\ p.\,\pageref*{#3}]}%
-        }{%
-            \ifthenelse{\equal{#2}{header}}{%
-                \hyperref[#3]{#1\ [\nameref*{#3}\ p.\,\pageref*{#3}]}%
-            }{%
-                \ifthenelse{\equal{#2}{image}\OR\equal{#2}{table}\OR\equal{#2}{codeBlock}}{%
-                    \hyperref[#3]{#1\ [\cref*{#3}\ p.\,\pageref*{#3}]}%
-                }{%
-                    \hyperref[#3]{#1}%
-                }%
-            }%
-        }%
-    }%
+    \ifboolexpr{test {\ifstrequal{#2}{entry}} or test {\ifstrequal{#2}{header}}}{%
+        \hyperref[#3]{#1\ [\nameref*{#3}\ p.\,\pageref*{#3}]}%
+    }{%
+    \ifboolexpr{test {\ifstrequal{#2}{image}} or test {\ifstrequal{#2}{table}} or test {\ifstrequal{#2}{codeBlock}}}{%
+        \hyperref[#3]{#1\ [\cref*{#3}\ p.\,\pageref*{#3}]}%
+    }{%
+        \hyperref[#3]{#1}%
+    }}}%
 }
 
 % Backward-compatible wrappers for older generated LaTeX files
