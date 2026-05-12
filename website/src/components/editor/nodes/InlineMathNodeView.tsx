@@ -25,22 +25,44 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
     }
   }, [selected]);
 
-  // Handle focus when entering edit mode
+  const prevSelectionPos = useRef(editor.state.selection.from);
+
   useEffect(() => {
-    if (isEditing && inputRef.current) {
+    const update = () => {
+      const pos = getPos();
+      const currentFrom = editor.state.selection.from;
+      if (typeof pos === 'number' && currentFrom !== pos) {
+        prevSelectionPos.current = currentFrom;
+      }
+    };
+    editor.on('selectionUpdate', update);
+    return () => { editor.off('selectionUpdate', update); };
+  }, [editor, getPos]);
+
+  // Handle focus when entering edit mode
+  React.useLayoutEffect(() => {
+    if (isEditing && inputRef.current && document.activeElement !== inputRef.current) {
       if (inputRef.current.textContent !== node.attrs.latex) {
         inputRef.current.textContent = node.attrs.latex;
       }
-      // Focus and move cursor to end
+      
+      const pos = getPos();
+      const isComingFromRight = typeof pos === 'number' && prevSelectionPos.current >= pos + 1;
+      
       inputRef.current.focus();
-      const range = document.createRange();
       const sel = window.getSelection();
-      range.selectNodeContents(inputRef.current);
-      range.collapse(false);
-      sel?.removeAllRanges();
-      sel?.addRange(range);
+      const range = document.createRange();
+      
+      if (sel && inputRef.current.childNodes.length > 0) {
+        const textNode = inputRef.current.childNodes[0];
+        const offset = isComingFromRight ? (node.attrs.latex?.length || 0) : 0;
+        range.setStart(textNode, Math.min(offset, textNode.textContent?.length || 0));
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
     }
-  }, [isEditing]);
+  }, [isEditing, node.attrs.latex]);
 
   // Render KaTeX when not editing
   useEffect(() => {
@@ -59,7 +81,7 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
   return (
     <NodeViewWrapper as="span" className="nb-inline-math-node mx-0.5 px-0.5 rounded transition-colors inline-flex items-center align-middle relative">
       {isEditing ? (
-        <span key="edit" className="flex items-center bg-nb-tertiary/5 text-nb-tertiary border-b border-nb-tertiary/40 px-1 py-0.5 font-mono text-[0.95em]">
+        <span key="edit" className="flex items-center bg-nb-outline-variant/15 text-nb-on-surface border-b border-nb-outline-variant/50 px-1 py-0.5 font-mono text-[0.95em] rounded-t-sm">
           <span className="opacity-40 font-bold mr-0.5">$</span>
           <span
             ref={inputRef}
@@ -76,7 +98,7 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
-                inputRef.current?.blur();
+                setIsEditing(false);
                 editor.commands.focus();
               }
               // Arrow keys logic to "exit" the node
@@ -84,10 +106,10 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
                 const selection = window.getSelection();
                 if (selection && selection.anchorOffset === (inputRef.current?.textContent?.length || 0)) {
                   e.preventDefault();
-                  inputRef.current?.blur();
+                  setIsEditing(false);
                   const pos = getPos();
                   if (typeof pos === 'number') {
-                    editor.commands.setTextSelection(pos + node.nodeSize);
+                    editor.chain().focus().setTextSelection(pos + node.nodeSize).run();
                   }
                 }
               }
@@ -95,10 +117,10 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
                 const selection = window.getSelection();
                 if (selection && selection.anchorOffset === 0) {
                   e.preventDefault();
-                  inputRef.current?.blur();
+                  setIsEditing(false);
                   const pos = getPos();
                   if (typeof pos === 'number') {
-                    editor.commands.setTextSelection(pos);
+                    editor.chain().focus().setTextSelection(pos).run();
                   }
                 }
               }
