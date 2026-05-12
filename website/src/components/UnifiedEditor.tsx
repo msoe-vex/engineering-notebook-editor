@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import {
   useEditor, EditorContent, Extension, InputRule
 } from "@tiptap/react";
-import { NodeSelection, Transaction, EditorState, Plugin, PluginKey } from "@tiptap/pm/state";
+import { NodeSelection, Transaction, EditorState, Plugin } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { store } from "@/lib/store";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -175,14 +175,14 @@ export default function UnifiedEditor({
           return [
             new Plugin({
               appendTransaction(transactions: readonly Transaction[], oldState: EditorState, newState: EditorState) {
-                const { selection, tr } = newState;
+                const { tr } = newState;
                 let modified = false;
 
                 // If code mark was just added to a range containing math, convert math to code text
                 if (transactions.some(t => t.docChanged || t.storedMarks)) {
-                  newState.doc.descendants((node: any, pos: number) => {
+                  newState.doc.descendants((node, pos) => {
                     if (node.type.name === 'inlineMath') {
-                      const hasCodeMark = node.marks.some((m: any) => m.type.name === 'code');
+                      const hasCodeMark = node.marks.some((m) => m.type.name === 'code');
 
                       if (hasCodeMark) {
                         const latex = node.attrs.latex || "";
@@ -245,7 +245,7 @@ export default function UnifiedEditor({
         addInputRules: () => [
           new InputRule({
             find: /(?:^|\s)@$/,
-            handler: ({ range }) => {
+            handler: () => {
               setIsMentionMode(true);
               setShowLinkPopup(true);
               return null; // Keep @ for now, we'll delete it on apply or just leave it if cancelled

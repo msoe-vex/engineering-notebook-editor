@@ -799,7 +799,7 @@ const EditorContent = React.memo(function EditorContent({
               <ToolbarButton onClick={() => editor.chain().focus().toggleCode().run()} active={editor.isActive("code")} title="Inline Code">
                 <Code size={16} />
               </ToolbarButton>
-              <ToolbarButton onClick={() => (editor.chain().focus() as any).toggleInlineMath().run()} active={editor.isActive("inlineMath")} title="Inline Math">
+              <ToolbarButton onClick={() => (editor.chain().focus() as unknown as { toggleInlineMath: () => import("@tiptap/core").ChainedCommands }).toggleInlineMath().run()} active={editor.isActive("inlineMath")} title="Inline Math">
                 <Sigma size={16} />
               </ToolbarButton>
 

@@ -21,7 +21,9 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
   // Sync isEditing with selected state
   useEffect(() => {
     if (selected) {
-      setIsEditing(true);
+      // Use a timeout to avoid cascading render warning by pushing the update to the next tick
+      const timer = setTimeout(() => setIsEditing(true), 0);
+      return () => clearTimeout(timer);
     }
   }, [selected]);
 
@@ -45,14 +47,14 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
       if (inputRef.current.textContent !== node.attrs.latex) {
         inputRef.current.textContent = node.attrs.latex;
       }
-      
+
       const pos = getPos();
       const isComingFromRight = typeof pos === 'number' && prevSelectionPos.current >= pos + 1;
-      
+
       inputRef.current.focus();
       const sel = window.getSelection();
       const range = document.createRange();
-      
+
       if (sel && inputRef.current.childNodes.length > 0) {
         const textNode = inputRef.current.childNodes[0];
         const offset = isComingFromRight ? (node.attrs.latex?.length || 0) : 0;
@@ -62,7 +64,7 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
         sel.addRange(range);
       }
     }
-  }, [isEditing, node.attrs.latex]);
+  }, [isEditing, node.attrs.latex, getPos]);
 
   // Render KaTeX when not editing
   useEffect(() => {
@@ -72,7 +74,7 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
           throwOnError: false,
           displayMode: false,
         });
-      } catch (e) {
+      } catch {
         renderRef.current.textContent = node.attrs.latex;
       }
     }
@@ -197,21 +199,21 @@ export const InlineMathNode = Node.create({
 
   addCommands() {
     return {
-      setInlineMath: (latex: string) => ({ commands }: any) => {
+      setInlineMath: (latex: string) => ({ commands }: import("@tiptap/core").CommandProps) => {
         return commands.insertContent({
           type: this.name,
           attrs: { latex },
         });
       },
-      toggleInlineMath: () => ({ chain, editor }: any) => {
+      toggleInlineMath: () => ({ chain, editor }: import("@tiptap/core").CommandProps) => {
         const { from, to, $from } = editor.state.selection;
-        
+
         // Find the math node if it's selected or if the cursor is touching it
         let mathNodePos = -1;
-        let mathNode: any = null;
+        let mathNode: import("@tiptap/pm/model").Node | null = null;
 
         // 1. Check current selection range
-        editor.state.doc.nodesBetween(from, to, (node: any, pos: number) => {
+        editor.state.doc.nodesBetween(from, to, (node, pos) => {
           if (node.type.name === this.name) {
             mathNodePos = pos;
             mathNode = node;
@@ -223,7 +225,7 @@ export const InlineMathNode = Node.create({
         if (!mathNode) {
           const nodeBefore = $from.nodeBefore;
           const nodeAfter = $from.nodeAfter;
-          
+
           if (nodeBefore?.type.name === this.name) {
             mathNode = nodeBefore;
             mathNodePos = from - nodeBefore.nodeSize;
@@ -252,7 +254,7 @@ export const InlineMathNode = Node.create({
           .setNodeSelection(from)
           .run();
       },
-    } as any;
+    } as unknown as import("@tiptap/core").RawCommands;
   },
 
   addInputRules() {
@@ -260,7 +262,7 @@ export const InlineMathNode = Node.create({
       new InputRule({
         find: /\$([^$]+)\$$/,
         handler: ({ range, match, chain }) => {
-          const [fullMatch, latex] = match;
+          const [latex] = match;
           if (latex) {
             chain()
               .deleteRange(range)
