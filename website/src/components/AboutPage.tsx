@@ -83,9 +83,9 @@ export default function AboutPage({ onClose, onTryIt }: AboutPageProps) {
       </section>
 
       {/* Workflow Section with Carousel */}
-      <section className="py-24 bg-nb-surface-low overflow-hidden">
+      <section className="py-16 bg-nb-surface-low overflow-hidden">
         <div className="max-w-5xl mx-auto px-6">
-          <div className="text-center mb-16">
+          <div className="text-center mb-10">
             <h2 className="text-4xl font-black text-nb-on-surface mb-4 tracking-tight">The Professional Pipeline</h2>
             <p className="text-nb-on-surface-variant font-medium">How we turn your ideas into standard-compliant documentation.</p>
           </div>
@@ -182,23 +182,23 @@ function PipelineCarousel() {
   ];
 
   return (
-    <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-16">
+    <div className="flex flex-col lg:flex-row items-stretch gap-8 lg:gap-12">
       {/* Selector Side */}
-      <div className="w-full lg:w-1/3 flex flex-col gap-4">
+      <div className="w-full lg:w-[30%] flex flex-col gap-3">
         {steps.map((step, idx) => (
           <button
             key={idx}
             onClick={() => setActiveStep(idx)}
-            className={`p-6 rounded-3xl text-left transition-all duration-300 border cursor-pointer ${activeStep === idx
+            className={`p-4 rounded-3xl text-left transition-all duration-300 border cursor-pointer ${activeStep === idx
               ? "bg-nb-surface border-nb-primary/30 shadow-nb-xl scale-[1.02]"
               : "bg-transparent border-transparent opacity-50 hover:opacity-100"
               }`}
           >
-            <div className={`w-10 h-10 rounded-xl ${step.bg} ${step.color} flex items-center justify-center mb-4`}>
+            <div className={`w-8 h-8 rounded-lg ${step.bg} ${step.color} flex items-center justify-center mb-3`}>
               {step.icon}
             </div>
-            <h3 className="text-lg font-black text-nb-on-surface mb-2">{step.title}</h3>
-            <p className="text-sm text-nb-on-surface-variant font-medium leading-relaxed">
+            <h3 className="text-base font-black text-nb-on-surface mb-1">{step.title}</h3>
+            <p className="text-xs text-nb-on-surface-variant font-medium leading-normal">
               {step.description}
             </p>
           </button>
@@ -206,7 +206,7 @@ function PipelineCarousel() {
       </div>
 
       {/* Mockup Side */}
-      <div className="w-full lg:w-2/3 aspect-[16/10] bg-nb-surface border border-nb-outline-variant/30 rounded-[32px] p-4 lg:p-8 shadow-nb-2xl relative overflow-hidden flex items-center justify-center">
+      <div className="w-full lg:w-[70%] aspect-[4/3] bg-nb-surface border border-nb-outline-variant/30 rounded-[32px] p-4 lg:p-6 shadow-nb-2xl relative overflow-hidden flex items-center justify-center">
         <div className="absolute top-0 left-0 w-full h-1 bg-nb-primary/20">
           <div
             className="h-full bg-nb-primary transition-all duration-500 ease-out"
