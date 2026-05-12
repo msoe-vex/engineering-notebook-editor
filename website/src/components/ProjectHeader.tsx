@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { ViewMode } from "./ViewToggle";
+import Logo from "./ui/Logo";
 
 interface ProjectHeaderProps {
   isSidebarOpen: boolean;
@@ -25,6 +26,7 @@ interface ProjectHeaderProps {
   onImport: () => void;
   onExport: () => void;
   onDisconnect: () => void;
+  onGoHome: () => void;
   mounted: boolean;
 }
 
@@ -68,13 +70,15 @@ export default function ProjectHeader({
 
   return (
     <div className="flex items-center justify-between px-4 h-14 bg-nb-surface border-b border-nb-outline-variant shrink-0 relative z-[200]">
-      <button
-        onClick={onToggleSidebar}
-        className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors cursor-pointer"
-        title={isSidebarOpen ? "Close Sidebar" : "Open Sidebar"}
-      >
-        <Menu size={18} />
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={onToggleSidebar}
+          className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-primary transition-colors cursor-pointer"
+          title={isSidebarOpen ? "Close Sidebar" : "Open Sidebar"}
+        >
+          <Menu size={18} />
+        </button>
+      </div>
 
       <div className="flex-1 flex justify-center min-w-0 px-4">
         {isRenamingProject && currentProject?.id !== "temporary" ? (
@@ -97,7 +101,7 @@ export default function ProjectHeader({
               className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-nb-surface-low transition-all cursor-pointer group min-w-0 max-w-full"
             >
               <span className="text-sm font-black text-nb-on-surface truncate tracking-tight">
-                {currentProject?.id === "temporary" ? "Temporary Workspace" : (currentProject?.name || "Engineering Notebook")}
+                {currentProject?.id === "temporary" ? "Temporary Workspace" : (currentProject?.name || "ENGen Project")}
               </span>
               <MoreVertical size={14} className="text-nb-on-surface-variant/40 group-hover:text-nb-primary transition-colors shrink-0" />
             </div>
@@ -122,8 +126,8 @@ export default function ProjectHeader({
 
                 <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
 
-                <MenuButton icon={<Upload size={14} />} label="Import Notebook" onClick={() => { onImport(); setShowMenu(false); }} />
-                <MenuButton icon={<Download size={14} />} label="Export Notebook" onClick={() => { onExport(); setShowMenu(false); }} />
+                <MenuButton icon={<Upload size={14} />} label="Import ENGen Data" onClick={() => { onImport(); setShowMenu(false); }} />
+                <MenuButton icon={<Download size={14} />} label="Export ENGen Data" onClick={() => { onExport(); setShowMenu(false); }} />
 
                 <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
 

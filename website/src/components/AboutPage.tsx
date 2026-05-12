@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTheme } from "next-themes";
 import { BookOpen, Edit3, FileText, Download, Zap, Heart, ArrowRight, Shield, Globe, Bold, Italic, List, Type, Sun, Moon } from "lucide-react";
+import Logo from "./ui/Logo";
 
 const BLINK_CSS = `
   @keyframes blink {
@@ -25,12 +26,15 @@ export default function AboutPage({ onClose, onTryIt }: AboutPageProps) {
       {/* Navigation */}
       <div className="sticky top-0 z-10 bg-nb-bg/80 backdrop-blur-md border-b border-nb-outline-variant/30">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-nb-primary flex items-center justify-center shadow-lg shadow-nb-primary/20">
-              <BookOpen size={18} className="text-white" />
+          <button
+            onClick={onClose}
+            className="flex items-center gap-3 hover:opacity-70 transition-opacity cursor-pointer group"
+          >
+            <div className="w-8 h-8 rounded-lg bg-nb-primary flex items-center justify-center shadow-lg shadow-nb-primary/20 group-hover:scale-110 transition-transform">
+              <Logo className="text-white" size={20} strokeWidth={20} />
             </div>
-            <span className="font-black tracking-tight text-nb-on-surface">Notebook</span>
-          </div>
+            <span className="font-black tracking-tight text-nb-on-surface">ENGen</span>
+          </button>
           <div className="flex items-center gap-4">
             <button
               onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
@@ -67,27 +71,63 @@ export default function AboutPage({ onClose, onTryIt }: AboutPageProps) {
             Professional Engineering Notebooks, <span className="text-nb-primary">Simplified.</span>
           </h1>
           <p className="text-lg lg:text-xl text-nb-on-surface-variant/80 mb-12 leading-relaxed max-w-2xl mx-auto font-medium">
-            Go from rough notes to professional, competition-ready PDFs in seconds.
-            All the power of LaTeX, without the steep learning curve.
+            We built this because engineering notebooks are tedious to document and format.
+            Spend less time wrestling with margins and more time on documenting your design.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <button
               onClick={onTryIt}
               className="w-full sm:w-auto px-10 py-5 rounded-2xl bg-nb-primary text-white text-sm font-black uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-2xl shadow-nb-primary/30 active:scale-95 cursor-pointer flex items-center justify-center gap-3"
             >
-              Start Your Notebook
+              Get Started
               <ArrowRight size={18} />
             </button>
           </div>
         </div>
       </section>
 
+      {/* Origin Section */}
+      <section className="py-24 bg-nb-surface-low border-y border-nb-outline-variant/30">
+        <div className="max-w-4xl mx-auto px-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+            <div>
+              <h2 className="text-3xl font-black text-nb-on-surface mb-6 tracking-tight">The Documentation Problem</h2>
+              <div className="space-y-4 text-nb-on-surface-variant font-medium leading-relaxed">
+                <p>
+                  As engineering students, we spent more time fixing image captions and table alignments than actually analyzing our robots.
+                </p>
+                <p>
+                  We needed a tool that combined the ease of a markdown editor with the professional formatting of LaTeX—something that stayed out of the way while we worked.
+                </p>
+                <p>
+                  This project was born out of that frustration. It&apos;s built to help you meet rigorous documentation standards without the burnout.
+                </p>
+              </div>
+            </div>
+            <div className="bg-nb-surface p-8 rounded-[32px] border border-nb-outline-variant/30 shadow-nb-xl">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-nb-tertiary/10 text-nb-tertiary flex items-center justify-center">
+                  <Shield size={24} />
+                </div>
+                <div>
+                  <h3 className="font-black text-nb-on-surface">Data Permanence</h3>
+                  <p className="text-xs text-nb-on-surface-variant">Your files, forever.</p>
+                </div>
+              </div>
+              <p className="text-sm text-nb-on-surface-variant leading-relaxed">
+                We use LaTeX because it&apos;s the gold standard for engineering. Even if this website disappeared tomorrow, your translated LaTeX files remain standard plain text, editable and able to compile anywhere, forever.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Workflow Section with Carousel */}
-      <section className="py-16 bg-nb-surface-low overflow-hidden">
+      <section className="py-24 overflow-hidden">
         <div className="max-w-5xl mx-auto px-6">
-          <div className="text-center mb-10">
-            <h2 className="text-4xl font-black text-nb-on-surface mb-4 tracking-tight">The Professional Pipeline</h2>
-            <p className="text-nb-on-surface-variant font-medium">How we turn your ideas into standard-compliant documentation.</p>
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-black text-nb-on-surface mb-4 tracking-tight">The Pipeline</h2>
+            <p className="text-nb-on-surface-variant font-medium">From raw ideas to standard-compliant documentation.</p>
           </div>
 
           <PipelineCarousel />
@@ -95,28 +135,28 @@ export default function AboutPage({ onClose, onTryIt }: AboutPageProps) {
       </section>
 
       {/* Features Grid */}
-      <section className="py-24">
+      <section className="py-24 bg-nb-surface-low">
         <div className="max-w-5xl mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <FeatureCard
               icon={<Zap size={24} className="text-nb-primary" />}
-              title="Fast & Lightweight"
-              description="Runs entirely in your browser using WASM technology. No server-side processing needed for standard builds."
+              title="Browser-Based Power"
+              description="Compiles LaTeX directly in your browser using WASM. No complex local installations or heavy software required."
             />
             <FeatureCard
-              icon={<Shield size={24} className="text-nb-tertiary" />}
-              title="Your Data, Your Way"
-              description="Choose between local folder sync or GitHub integration. We never store your notebook content on our servers."
+              icon={<Globe size={24} className="text-nb-tertiary" />}
+              title="Open Source & Free"
+              description="Built by students at MSOE. This tool is and will always be free for teams to use, with the code open to the community."
             />
             <FeatureCard
-              icon={<Globe size={24} className="text-nb-primary" />}
-              title="GitHub Integration"
-              description="Full version control and cloud backups. Collaborative editing made easy through standard Git workflows."
+              icon={<FileText size={24} className="text-nb-primary" />}
+              title="Standard Compliant"
+              description="Generates documents that meet competition requirements (like VRC/VEXU) with automatic indexing and cross-referencing."
             />
             <FeatureCard
               icon={<Heart size={24} className="text-nb-tertiary" />}
-              title="Free & Open Source"
-              description="Completely free to use with no hidden costs. Built by engineers, for engineers."
+              title="Long-Term Support"
+              description="LaTeX has been a standard for 40+ years. By using it, you ensure your documentation isn't locked into a proprietary format."
             />
           </div>
         </div>
@@ -125,15 +165,15 @@ export default function AboutPage({ onClose, onTryIt }: AboutPageProps) {
       {/* Final CTA */}
       <section className="py-24 bg-nb-primary">
         <div className="max-w-3xl mx-auto px-6 text-center">
-          <h2 className="text-4xl font-black text-white mb-6 tracking-tight">Ready to build something amazing?</h2>
+          <h2 className="text-4xl font-black text-white mb-6 tracking-tight">Ready to document better?</h2>
           <p className="text-white/80 mb-10 text-lg font-medium leading-relaxed">
-            Start creating your digital engineering notebook.
+            Start your digital engineering notebook today.
           </p>
           <button
             onClick={onTryIt}
             className="px-12 py-5 rounded-2xl bg-white text-nb-primary text-sm font-black uppercase tracking-widest hover:bg-nb-surface-low transition-all shadow-2xl active:scale-95 cursor-pointer"
           >
-            Get Started Now
+            Open the Editor
           </button>
         </div>
       </section>
@@ -142,8 +182,10 @@ export default function AboutPage({ onClose, onTryIt }: AboutPageProps) {
       <footer className="py-12 border-t border-nb-outline-variant/30">
         <div className="max-w-5xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-3 opacity-50 grayscale">
-            <BookOpen size={18} />
-            <span className="text-xs font-bold uppercase tracking-widest">Engineering Notebook</span>
+            <div className="w-6 h-6 rounded bg-nb-on-surface flex items-center justify-center">
+              <BookOpen size={14} className="text-nb-bg" />
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface">ENGen Built by Students @ MSOE</span>
           </div>
         </div>
       </footer>
@@ -156,24 +198,24 @@ function PipelineCarousel() {
 
   const steps = [
     {
-      title: "1. The Rich Text Editor",
-      description: "Focus on your engineering content with a familiar interface. Automatic captions for images and tables keep your notebook organized.",
+      title: "1. The Structural Editor",
+      description: "Focus on your engineering content. Automatic captions for images and tables keep your structure consistent without the manual labor.",
       icon: <Edit3 size={20} />,
       color: "text-nb-primary",
       bg: "bg-nb-primary/10",
       mockup: <EditorMockup />
     },
     {
-      title: "2. Automatic LaTeX Generation",
-      description: "No more wrestling with curly braces. The editor instantly translates your structure into professional LaTeX code.",
+      title: "2. LaTeX Translation",
+      description: "The editor translates your work into high-quality LaTeX code. It's actively maintained, open, and ensures your data is never locked in.",
       icon: <FileText size={20} />,
       color: "text-nb-tertiary",
       bg: "bg-nb-tertiary/10",
       mockup: <LatexMockup />
     },
     {
-      title: "3. Professional PDF Output",
-      description: "One click to compile. Your work is transformed into a high-standard engineering document with linked references and page numbers.",
+      title: "3. Compliant PDF Output",
+      description: "One click to compile. Get a professional document with linked references, page numbers, and consistent styling every time.",
       icon: <Download size={20} />,
       color: "text-nb-primary",
       bg: "bg-nb-primary/10",

@@ -9,8 +9,8 @@ const workSans = Work_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Engineering Notebook Editor",
-  description: "A professional engineering notebook editor for VEX robotics teams.",
+  title: "ENGen | Engineering Notebook Generator",
+  description: "ENGen: A professional engineering notebook editor for robotics teams.",
   icons: {
     icon: "/rr.svg",
   },
