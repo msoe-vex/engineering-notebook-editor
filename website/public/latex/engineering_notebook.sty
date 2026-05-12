@@ -22,8 +22,19 @@
 \RequirePackage{xstring}
 \RequirePackage{letltxmacro}
 \RequirePackage{etoolbox}
-\RequirePackage[normalem]{ulem}
-\renewcommand{\underline}[1]{\uline{#1}}
+\RequirePackage{microtype}
+\RequirePackage{soul}
+\soulregister{\textbf}{1}
+\soulregister{\textit}{1}
+\soulregister{\underline}{1}
+\soulregister{\notebooklink}{3}
+\soulregister{\hyperref}{2}
+\soulregister{\href}{2}
+\soulregister{\cref}{1}
+\soulregister{\Cref}{1}
+\soulregister{\nameref}{1}
+\soulregister{\pageref}{1}
+\renewcommand{\underline}[1]{\ul{#1}}
 
 % XeLaTeX Font Setup
 \RequirePackage{fontspec}
@@ -110,6 +121,7 @@
 
 % Page Geometry and Paragraph Styling
 \geometry{a4paper, margin=1in, headheight=15pt}
+\setlength{\emergencystretch}{3em}
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0.8em}
 
