@@ -6,7 +6,13 @@ import "katex/dist/katex.min.css";
 
 import { NodeViewProps } from "./types";
 
-export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: NodeViewProps) {
+declare module "@tiptap/core" {
+  interface Commands<ReturnType> {
+    setMathBlock: (latex: string) => ReturnType;
+  }
+}
+
+export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, selected }: NodeViewProps) {
   const [isEditing, setIsEditing] = useState(selected);
   const [isHoveringToolbar, setIsHoveringToolbar] = useState(false);
   const [dragEnabled, setDragEnabled] = useState(false);
@@ -18,7 +24,8 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
   // Sync isEditing with selected state (only on initial selection)
   useEffect(() => {
     if (selected && !prevSelected.current) {
-      setIsEditing(true);
+      const timer = setTimeout(() => setIsEditing(true), 0);
+      return () => clearTimeout(timer);
     }
     prevSelected.current = selected;
   }, [selected]);
@@ -47,7 +54,7 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
           throwOnError: false,
           displayMode: true,
         });
-      } catch (e) {
+      } catch {
         renderRef.current.textContent = node.attrs.latex;
       }
     }
@@ -207,13 +214,13 @@ export const MathBlockNode = Node.create({
 
   addCommands() {
     return {
-      setMathBlock: (latex: string) => ({ commands }: any) => {
+      setMathBlock: (latex: string) => ({ commands }: import("@tiptap/core").CommandProps) => {
         return commands.insertContent({
           type: this.name,
           attrs: { latex, id: crypto.randomUUID() },
         });
       },
-    } as any;
+    } as unknown as import("@tiptap/core").RawCommands;
   },
 
   addNodeView() {

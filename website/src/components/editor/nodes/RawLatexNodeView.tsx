@@ -5,7 +5,7 @@ import { GripVertical, Trash2, Terminal } from "lucide-react";
 
 import { NodeViewProps } from "./types";
 
-export function RawLatexNodeView({ node, deleteNode, selected, editor, updateAttributes }: NodeViewProps) {
+export function RawLatexNodeView({ node, deleteNode, selected, editor }: NodeViewProps) {
   const [dragEnabled, setDragEnabled] = useState(false);
 
   return (
