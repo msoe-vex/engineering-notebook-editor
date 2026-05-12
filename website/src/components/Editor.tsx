@@ -235,8 +235,6 @@ const EditorContent = React.memo(function EditorContent({
   const tableButtonRef = useRef<HTMLDivElement>(null);
   const linkButtonRef = useRef<HTMLDivElement>(null);
   const [gridPos, setGridPos] = useState({ top: 0, left: 0 });
-  const [linkButtonRect, setLinkButtonRect] = useState<DOMRect | null>(null);
-
   const toggleLinkFn = useRef<(() => void) | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
@@ -542,10 +540,11 @@ const EditorContent = React.memo(function EditorContent({
   return (
     <div className="flex flex-col h-full bg-nb-surface overflow-hidden scrollbar-hide">
       {/* ── Fixed Header ────────────────────────────────────────── */}
-      <div className="shrink-0 border-b border-nb-outline-variant bg-nb-surface/80 backdrop-blur-md z-[150]">
+      <div className="shrink-0 border-b border-nb-outline-variant bg-nb-surface/80 backdrop-blur-md z-[150] overflow-x-auto scrollbar-hide">
+        <div className="min-w-[1100px] w-full">
 
         {/* Row 1: Menu Bar */}
-        <div className="px-4 h-10 flex items-center gap-2 border-b border-nb-outline-variant/30 relative z-[170]">
+        <div className="px-6 h-10 flex items-center gap-2 border-b border-nb-outline-variant/30 relative z-[170]">
           <button
             onClick={() => setIsHeaderCollapsed(!isHeaderCollapsed)}
             className="p-1.5 rounded-lg hover:bg-nb-surface-mid text-nb-on-surface-variant transition-colors group cursor-pointer shrink-0"
@@ -688,9 +687,8 @@ const EditorContent = React.memo(function EditorContent({
 
         </div>
 
-        {/* Row 2: Metadata Row */}
         {!isHeaderCollapsed && (
-          <div className="px-6 py-2.5 flex flex-wrap items-center gap-3 max-w-7xl mx-auto relative z-[160]">
+          <div className="px-6 py-2.5 flex flex-nowrap items-center gap-3 relative z-[160]">
             <div className="flex-1 min-w-[200px]">
               <AutocompleteInput
                 type="text"
@@ -717,7 +715,7 @@ const EditorContent = React.memo(function EditorContent({
               />
             )}
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-nowrap items-center gap-3 shrink-0">
               <DatePicker
                 value={date}
                 onChange={(val) => setDate(val)}
@@ -787,8 +785,8 @@ const EditorContent = React.memo(function EditorContent({
 
         {/* Row 3: Rich Toolbar */}
         {editor && !isHeaderCollapsed && (
-          <div className="px-6 py-2 border-t border-nb-outline-variant/30 bg-nb-surface-mid/50 overflow-x-auto overflow-y-hidden scrollbar-hide shrink-0">
-            <div className="max-w-7xl mx-auto flex items-center gap-1 min-w-max">
+          <div className="border-t border-nb-outline-variant/30 bg-nb-surface-mid/50 shrink-0">
+            <div className="px-6 py-2 flex items-center gap-1 min-w-max">
               <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} title="Bold">
                 <Bold size={16} />
               </ToolbarButton>
@@ -801,7 +799,7 @@ const EditorContent = React.memo(function EditorContent({
               <ToolbarButton onClick={() => editor.chain().focus().toggleCode().run()} active={editor.isActive("code")} title="Inline Code">
                 <Code size={16} />
               </ToolbarButton>
-              <ToolbarButton onClick={() => editor.chain().focus().toggleInlineMath().run()} active={editor.isActive("inlineMath")} title="Inline Math">
+              <ToolbarButton onClick={() => (editor.chain().focus() as any).toggleInlineMath().run()} active={editor.isActive("inlineMath")} title="Inline Math">
                 <Sigma size={16} />
               </ToolbarButton>
 
@@ -810,9 +808,6 @@ const EditorContent = React.memo(function EditorContent({
               <div className="relative" ref={linkButtonRef}>
                 <ToolbarButton
                   onClick={() => {
-                    if (linkButtonRef.current) {
-                      setLinkButtonRect(linkButtonRef.current.getBoundingClientRect());
-                    }
                     toggleLinkFn.current?.();
                   }}
                   active={editor.isActive("link")}
@@ -1044,7 +1039,8 @@ const EditorContent = React.memo(function EditorContent({
               </ToolbarButton>
             </div>
           </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* ── Scrollable Workspace ──────────────────────────────────── */}
@@ -1065,7 +1061,6 @@ const EditorContent = React.memo(function EditorContent({
                   author={author}
                   onEditorInit={setEditor}
                   onToggleLink={(fn) => { toggleLinkFn.current = fn; }}
-                  triggerRect={linkButtonRect}
                   entryId={entryId}
                 />
               </div>
