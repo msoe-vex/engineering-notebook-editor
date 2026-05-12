@@ -26,6 +26,7 @@ import {
   RestrictedTableCell,
   CustomCodeBlock,
   CustomRawLatex,
+  InlineMathNode,
 } from "@/components/editor/nodes";
 
 import { LinkReferencePopup } from "@/components/editor/LinkReferencePopup";
@@ -165,6 +166,7 @@ export default function UnifiedEditor({
       RestrictedTableCell,
       CustomCodeBlock,
       CustomRawLatex,
+      InlineMathNode,
       PrismHighlightExtension,
       Extension.create({
         name: 'integrityExtension',
