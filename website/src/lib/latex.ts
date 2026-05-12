@@ -50,32 +50,37 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
 
     case "text": {
       let t = escapeLaTeX(node.text ?? "");
-      for (const mark of (node.marks ?? [])) {
-        if (mark.type === "bold") t = `\\textbf{${t}}`;
-        if (mark.type === "italic") t = `\\textit{${t}}`;
-        if (mark.type === "code") t = `\\texttt{${t}}`;
-        if (mark.type === "underline") t = `\\underline{${t}}`;
-        if (mark.type === "link") {
-          const { href, resourceId } = mark.attrs ?? {};
-          if (resourceId) {
-            // Determine the type of resource and pass it to the single notebooklink command
-            const resType = getResourceType(resourceId as string);
-            if (resType === "header") {
-              t = `\\notebooklink{${t}}{header}{${resourceId}}`;
-            } else if (resType === "entry") {
-              t = `\\notebooklink{${t}}{entry}{${resourceId}}`;
-            } else if (resType === "image" || resType === "codeBlock" || resType === "table") {
-              t = `\\notebooklink{${t}}{${resType}}{${resourceId}}`;
-            } else if (resType) {
-              // Unknown internal resource type still uses notebooklink
-              t = `\\notebooklink{${t}}{resource}{${resourceId}}`;
-            } else {
-              // No type info available, fall back to notebooklink as a generic internal resource
-              t = `\\notebooklink{${t}}{resource}{${resourceId}}`;
-            }
-          } else if (href) {
-            t = `\\notebooklink{${t}}{url}{${href}}`;
+      const marks = node.marks || [];
+      const hasBold = marks.some(m => m.type === "bold");
+      const hasItalic = marks.some(m => m.type === "italic");
+      const hasCode = marks.some(m => m.type === "code");
+      const hasUnderline = marks.some(m => m.type === "underline");
+      const linkMark = marks.find(m => m.type === "link");
+
+      if (hasBold) t = `\\textbf{${t}}`;
+      if (hasItalic) t = `\\textit{${t}}`;
+      if (hasCode) t = `\\texttt{${t}}`;
+      if (hasUnderline) t = `\\underline{${t}}`;
+
+      if (linkMark) {
+        const { href, resourceId, entryId } = linkMark.attrs ?? {};
+        const finalResourceId = (resourceId || entryId) as string | undefined;
+
+        if (finalResourceId) {
+          const resType = getResourceType(finalResourceId);
+          if (resType === "header") {
+            t = `\\notebooklink{${t}}{header}{${finalResourceId}}`;
+          } else if (resType === "entry") {
+            t = `\\notebooklink{${t}}{entry}{${finalResourceId}}`;
+          } else if (resType === "image" || resType === "codeBlock" || resType === "table") {
+            t = `\\notebooklink{${t}}{${resType}}{${finalResourceId}}`;
+          } else if (resType) {
+            t = `\\notebooklink{${t}}{${resType}}{${finalResourceId}}`;
+          } else {
+            t = `\\notebooklink{${t}}{resource}{${finalResourceId}}`;
           }
+        } else if (href) {
+          t = `\\notebooklink{${t}}{url}{${href}}`;
         }
       }
       return t;

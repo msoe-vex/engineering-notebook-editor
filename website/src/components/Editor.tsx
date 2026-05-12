@@ -158,10 +158,10 @@ const EditorContent = React.memo(function EditorContent({
 
   const validate = useCallback(() => {
     const errors: string[] = [];
-    if (!title.trim()) errors.push("Project title is required.");
+    if (!title.trim()) errors.push("Entry title is required.");
     if (!author.trim()) errors.push("Author name is required.");
     if (!date.trim()) errors.push("Date is required.");
-    if (phase === null) errors.push("Project phase is required.");
+    if (phase === null) errors.push("Entry phase is required.");
 
     const TYPE_LABELS: Record<string, string> = {
       image: "image",
@@ -692,7 +692,7 @@ const EditorContent = React.memo(function EditorContent({
                 onSelectOption={(val) => {
                   setTitle(val);
                 }}
-                placeholder="Project Title..."
+                placeholder="Entry Title..."
                 className="w-full text-xl font-bold bg-transparent text-nb-on-surface outline-none placeholder:text-nb-outline-variant"
               />
             </div>
@@ -1042,7 +1042,7 @@ const EditorContent = React.memo(function EditorContent({
             defaultSize={viewMode === "preview" ? 100 : (viewMode === "editor" ? 0 : 50)}
             className={`flex flex-col h-full bg-nb-surface-low transition-all duration-500 ease-in-out ${viewMode === "editor" ? "opacity-0 scale-[0.98] pointer-events-none" : "opacity-100 scale-100"}`}
           >
-            <Preview latexContent={generateEntryLatex(content, title, author, phase, initialCreatedAt, entryId, {}, date)} />
+            <Preview latexContent={generateLatex(content, title, author, phase, date)} />
           </Panel>
         </PanelGroup>
       </div>
