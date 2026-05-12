@@ -40,6 +40,7 @@ class WorkspaceStore {
   public showHelp: boolean = false;
   public helpPath: string | null = null;
   public showCompiler: boolean = false;
+  public showAbout: boolean = false;
   public openFile: OpenFileState | null = null;
   public isLoading = false;
   public loadingLabel = "";
@@ -95,6 +96,12 @@ class WorkspaceStore {
     } else {
       this.showHelp = false;
       this.helpPath = null;
+    }
+
+    if (path === '/about' || path === '/workspace/about') {
+      this.showAbout = true;
+    } else {
+      this.showAbout = false;
     }
 
     if (path.startsWith('/workspace/compile')) {

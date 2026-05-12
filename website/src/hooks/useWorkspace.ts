@@ -28,6 +28,7 @@ export function useWorkspace() {
     showHelp: store.showHelp,
     helpPath: store.helpPath,
     showCompiler: store.showCompiler,
+    showAbout: store.showAbout,
     isMainTexPresent: store.isMainTexPresent,
     workspaceVersion: store.workspaceVersion,
   });
@@ -56,6 +57,7 @@ export function useWorkspace() {
         showHelp: s.showHelp,
         helpPath: s.helpPath,
         showCompiler: s.showCompiler,
+        showAbout: s.showAbout,
         isMainTexPresent: s.isMainTexPresent,
         workspaceVersion: s.workspaceVersion,
       });

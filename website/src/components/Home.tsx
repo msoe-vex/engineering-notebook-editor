@@ -25,6 +25,7 @@ interface HomeProps {
   autoOpenGithubModal?: boolean;
   onCloseGithubModal?: () => void;
   onOpenHelp: () => void;
+  onOpenAbout: () => void;
   pendingCounts?: Record<string, number>;
 }
 
@@ -46,6 +47,7 @@ export default function Home({
   autoOpenGithubModal = false,
   onCloseGithubModal,
   onOpenHelp,
+  onOpenAbout,
 }: HomeProps) {
   const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -354,6 +356,13 @@ export default function Home({
       />
       {/* Footer */}
       <div className="w-full max-w-4xl mt-12 flex items-center justify-center gap-4 border-t border-nb-outline-variant/20 pt-8">
+        <button
+          onClick={onOpenAbout}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-nb-surface border border-nb-outline-variant/30 text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary/50 transition-all shadow-nb-sm cursor-pointer"
+        >
+          <BookOpen size={14} />
+          About
+        </button>
         <button
           onClick={onOpenHelp}
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-nb-surface border border-nb-outline-variant/30 text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary/50 transition-all shadow-nb-sm cursor-pointer"
