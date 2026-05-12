@@ -618,15 +618,31 @@ export default function App() {
   const sidebar = (
     <div className="flex flex-col h-full overflow-hidden bg-nb-surface-low">
       <div
-        onClick={navigateToHome}
-        className="flex items-center gap-3 px-4 h-14 border-b border-nb-outline-variant shrink-0 bg-nb-surface cursor-pointer group hover:bg-nb-surface-low transition-all"
+        className="flex items-center gap-3 px-4 h-14 border-b border-nb-outline-variant shrink-0 bg-nb-surface"
       >
-        <div className="w-7 h-7 rounded-lg bg-nb-primary flex items-center justify-center shadow-sm shadow-nb-primary/20 group-hover:scale-110 transition-transform">
-          <Logo className="text-white" size={18} strokeWidth={20} />
+        <div
+          onClick={navigateToHome}
+          className="flex items-center gap-3 cursor-pointer group flex-1 min-w-0"
+        >
+          <div className="w-7 h-7 rounded-lg bg-nb-primary flex items-center justify-center shadow-sm shadow-nb-primary/20 group-hover:scale-110 transition-transform">
+            <Logo className="text-white" size={18} strokeWidth={20} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-black text-nb-on-surface truncate tracking-tight group-hover:text-nb-primary transition-colors">ENGen</p>
+          </div>
         </div>
-        <div className="flex-1 min-w-0"><p className="text-sm font-black text-nb-on-surface truncate tracking-tight">ENGen</p></div>
         <div className="flex items-center gap-1">
-          {isMobile && <button onClick={() => setUserSidebarPreference(false)} className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant transition-colors"><X size={18} /></button>}
+          {isMobile && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setUserSidebarPreference(false);
+              }}
+              className="p-1.5 cursor-pointer rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant transition-colors"
+            >
+              <X size={18} />
+            </button>
+          )}
         </div>
       </div>
       <div className="flex-1 overflow-hidden flex flex-col min-h-0">
