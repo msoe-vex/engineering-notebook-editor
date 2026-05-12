@@ -128,6 +128,9 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
               }}
               onBlur={() => setIsEditing(false)}
               placeholder="Type LaTeX here (e.g. ax^2 + bx + c = 0)..."
+              spellCheck="false"
+              autoCorrect="off"
+              autoCapitalize="off"
               className="w-full bg-transparent text-nb-on-surface font-mono text-base outline-none resize-none overflow-hidden text-center placeholder:text-nb-on-surface-variant/20"
               style={{ height: 'auto' }}
               onKeyDown={(e) => {
@@ -138,6 +141,11 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
                 }
                 if (e.key === 'Escape') {
                   setIsEditing(false);
+                  editor.commands.focus();
+                }
+                if (e.key === 'Backspace' && node.attrs.latex === "") {
+                  e.preventDefault();
+                  deleteNode();
                   editor.commands.focus();
                 }
                 e.stopPropagation();
