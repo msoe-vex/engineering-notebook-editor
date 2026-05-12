@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
-  useEditor, EditorContent, Extension,
+  useEditor, EditorContent, Extension, InputRule
 } from "@tiptap/react";
 import { NodeSelection, Transaction, EditorState, Plugin, PluginKey } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
@@ -58,12 +58,11 @@ interface UnifiedEditorProps {
   filename: string;
   onEditorInit?: (editor: import("@tiptap/react").Editor) => void;
   onToggleLink?: (fn: () => void) => void;
-  triggerRect?: DOMRect | null;
   entryId?: string;
 }
 
 export default function UnifiedEditor({
-  content, onChange, onImageUpload, filename, onEditorInit, onToggleLink, triggerRect, entryId
+  content, onChange, onImageUpload, filename, onEditorInit, onToggleLink, entryId
 }: UnifiedEditorProps) {
   const { currentProjectId, metadata } = useWorkspace();
   const dbName = currentProjectId ? `notebook-project-${currentProjectId}` : "notebook-default";
@@ -129,6 +128,7 @@ export default function UnifiedEditor({
   const [, setSelectionUpdate] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [showLinkPopup, setShowLinkPopup] = useState(false);
+  const [isMentionMode, setIsMentionMode] = useState(false);
   const [isCtrlPressed, setIsCtrlPressed] = useState(false);
 
   useEffect(() => {
@@ -215,7 +215,7 @@ export default function UnifiedEditor({
         autolink: true,
         linkOnPaste: true,
         HTMLAttributes: {
-          class: 'text-nb-primary hover:underline hover:decoration-nb-primary transition-all cursor-text',
+          class: 'text-nb-primary underline decoration-nb-primary/30 underline-offset-[3px] hover:decoration-nb-primary transition-all cursor-text',
         },
       }),
       Placeholder.configure({
@@ -239,6 +239,19 @@ export default function UnifiedEditor({
             },
           };
         },
+      }),
+      Extension.create({
+        name: 'mentionTrigger',
+        addInputRules: () => [
+          new InputRule({
+            find: /(?:^|\s)@$/,
+            handler: ({ range }) => {
+              setIsMentionMode(true);
+              setShowLinkPopup(true);
+              return null; // Keep @ for now, we'll delete it on apply or just leave it if cancelled
+            }
+          })
+        ]
       }),
       IdRemapper,
     ],
@@ -537,10 +550,10 @@ export default function UnifiedEditor({
             <LinkReferencePopup
               editor={editor}
               metadata={metadata}
-              onClose={() => setShowLinkPopup(false)}
+              onClose={() => { setShowLinkPopup(false); setIsMentionMode(false); }}
               filename={filename}
               showLinkPopup={showLinkPopup}
-              triggerRect={triggerRect}
+              isMention={isMentionMode}
             />,
             document.body
           )}
