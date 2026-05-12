@@ -224,6 +224,22 @@ export default function UnifiedEditor({
           return "Start writing...";
         },
       }),
+      Extension.create({
+        name: 'customEnterBehavior',
+        addKeyboardShortcuts() {
+          return {
+            Enter: ({ editor }) => {
+              if (editor.isActive('code')) {
+                return editor.chain().splitBlock().unsetMark('code').run();
+              }
+              if (editor.isActive('link')) {
+                return editor.chain().splitBlock().unsetMark('link').unsetMark('underline').run();
+              }
+              return false;
+            },
+          };
+        },
+      }),
       IdRemapper,
     ],
     content: parseContent(content),
