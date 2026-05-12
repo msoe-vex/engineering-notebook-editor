@@ -89,28 +89,47 @@ const parseInitialContent = (raw: unknown): TipTapNode | string => {
   return trimmed;
 };
 
-const MenuItem = ({ label, children, activeMenu, setActiveMenu }: { label: string, children: React.ReactNode, activeMenu: string | null, setActiveMenu: (val: string | null) => void }) => (
-  <div className="relative h-full flex items-center">
-    <button
-      type="button"
-      onMouseDown={(e) => e.stopPropagation()}
-      onClick={() => { setActiveMenu(activeMenu === label ? null : label); }}
-      onMouseEnter={() => { if (activeMenu) setActiveMenu(label); }}
-      className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-widest transition-colors cursor-pointer ${activeMenu === label ? "bg-nb-primary text-white" : "text-nb-on-surface-variant hover:bg-nb-surface-mid"
-        }`}
-    >
-      {label}
-    </button>
-    {activeMenu === label && (
-      <div
-        className="absolute top-full left-0 mt-1 w-48 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl p-1.5 z-[200] animate-in fade-in slide-in-from-top-1 duration-150"
+const MenuItem = ({ label, children, activeMenu, setActiveMenu }: { label: string, children: React.ReactNode, activeMenu: string | null, setActiveMenu: (val: string | null) => void }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    if (activeMenu === label && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setCoords({ top: rect.bottom, left: rect.left });
+    }
+  }, [activeMenu, label]);
+
+  return (
+    <div className="relative h-full flex items-center" ref={containerRef}>
+      <button
+        type="button"
         onMouseDown={(e) => e.stopPropagation()}
+        onClick={() => { setActiveMenu(activeMenu === label ? null : label); }}
+        onMouseEnter={() => { if (activeMenu) setActiveMenu(label); }}
+        className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-widest transition-colors cursor-pointer ${activeMenu === label ? "bg-nb-primary text-white" : "text-nb-on-surface-variant hover:bg-nb-surface-mid"
+          }`}
       >
-        {children}
-      </div>
-    )}
-  </div>
-);
+        {label}
+      </button>
+      {activeMenu === label && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            top: coords.top + 4,
+            left: coords.left,
+            zIndex: 9999
+          }}
+          className="w-48 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl p-1.5 animate-in fade-in slide-in-from-top-1 duration-150"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          {children}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+};
 
 const MenuAction = ({ icon, label, onClick, disabled, setActiveMenu }: { icon: React.ReactNode, label: string, onClick: (e: React.MouseEvent) => void, disabled?: boolean, setActiveMenu: (val: string | null) => void }) => (
   <button
@@ -231,15 +250,17 @@ const EditorContent = React.memo(function EditorContent({
 
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
-  const [showTableGrid, setShowTableGrid] = useState(false);
+  const editorPanelRef = useRef<import("react-resizable-panels").ImperativePanelHandle>(null);
+  const previewPanelRef = useRef<import("react-resizable-panels").ImperativePanelHandle>(null);
   const tableButtonRef = useRef<HTMLDivElement>(null);
-  const linkButtonRef = useRef<HTMLDivElement>(null);
+  const phaseButtonRef = useRef<HTMLDivElement>(null);
   const [gridPos, setGridPos] = useState({ top: 0, left: 0 });
+  const [phasePos, setPhasePos] = useState({ top: 0, left: 0, width: 0 });
+  const [showTableGrid, setShowTableGrid] = useState(false);
+  const linkButtonRef = useRef<HTMLDivElement>(null);
   const toggleLinkFn = useRef<(() => void) | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
-  const editorPanelRef = useRef<ImperativePanelHandle>(null);
-  const previewPanelRef = useRef<ImperativePanelHandle>(null);
 
   const isFirstMount = useRef(true);
   useEffect(() => {
@@ -543,378 +564,85 @@ const EditorContent = React.memo(function EditorContent({
       <div className="shrink-0 border-b border-nb-outline-variant bg-nb-surface/80 backdrop-blur-md z-[150] overflow-x-auto scrollbar-hide">
         <div className="min-w-[1100px] w-full">
 
-        {/* Row 1: Menu Bar */}
-        <div className="px-6 h-10 flex items-center gap-2 border-b border-nb-outline-variant/30 relative z-[170]">
-          <button
-            onClick={() => setIsHeaderCollapsed(!isHeaderCollapsed)}
-            className="p-1.5 rounded-lg hover:bg-nb-surface-mid text-nb-on-surface-variant transition-colors group cursor-pointer shrink-0"
-            title={isHeaderCollapsed ? "Expand Header" : "Collapse Header"}
-          >
-            {isHeaderCollapsed ? (
-              <ChevronDown size={14} className="group-hover:scale-110 transition-transform" />
-            ) : (
-              <ChevronUp size={14} className="group-hover:scale-110 transition-transform" />
-            )}
-          </button>
+          {/* Row 1: Menu Bar */}
+          <div className="px-6 h-10 flex items-center gap-2 border-b border-nb-outline-variant/30 relative z-[170]">
+            <button
+              onClick={() => setIsHeaderCollapsed(!isHeaderCollapsed)}
+              className="p-1.5 rounded-lg hover:bg-nb-surface-mid text-nb-on-surface-variant transition-colors group cursor-pointer shrink-0"
+              title={isHeaderCollapsed ? "Expand Header" : "Collapse Header"}
+            >
+              {isHeaderCollapsed ? (
+                <ChevronDown size={14} className="group-hover:scale-110 transition-transform" />
+              ) : (
+                <ChevronUp size={14} className="group-hover:scale-110 transition-transform" />
+              )}
+            </button>
 
 
-          <MenuItem label="File" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
-            <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} setActiveMenu={setActiveMenu} />
-            <MenuAction
-              icon={<FileJson size={14} />}
-              label="Download JSON"
-              onClick={async () => {
-                await exportEntries([entryId]);
-              }}
-              setActiveMenu={setActiveMenu}
-            />
-            <MenuAction icon={<FileCode size={14} />} label="Download LaTeX" onClick={handleDownload} setActiveMenu={setActiveMenu} />
-            <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
-            <MenuAction icon={<X size={14} />} label="Close" onClick={onClose || (() => { })} setActiveMenu={setActiveMenu} />
-            <MenuAction icon={<Trash2 size={14} />} label="Delete" onClick={() => {
-              showConfirm(
-                "Delete Entry",
-                `Are you sure you want to delete "${title || "Untitled Entry"}"? This action cannot be undone and will permanently remove the entry and its associated LaTeX file.`,
-                () => {
-                  deleteEntry({ name: filename.split('/').pop() || "", path: filename });
-                  onClose?.();
-                },
-                "danger"
-              );
-            }} setActiveMenu={setActiveMenu} />
-          </MenuItem>
-
-          <MenuItem label="Edit" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
-            <MenuAction
-              icon={<Undo2 size={14} />}
-              label="Undo"
-              onClick={() => editor?.chain().focus().undo().run()}
-              disabled={!editor?.can().undo()}
-              setActiveMenu={setActiveMenu}
-            />
-            <MenuAction
-              icon={<Redo2 size={14} />}
-              label="Redo"
-              onClick={() => editor?.chain().focus().redo().run()}
-              disabled={!editor?.can().redo()}
-              setActiveMenu={setActiveMenu}
-            />
-          </MenuItem>
-
-          <MenuItem label="Insert" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
-            <MenuAction icon={<ImagePlus size={14} />} label="Image" onClick={insertImage} setActiveMenu={setActiveMenu} />
-            <MenuAction
-              icon={<TableIcon size={14} />}
-              label="Table"
-              onClick={(e) => {
-                const menuButton = (e.currentTarget as HTMLElement).closest('.relative');
-                if (menuButton) {
-                  const rect = menuButton.getBoundingClientRect();
-                  // Position below the "Insert" menu button
-                  setGridPos({ top: rect.bottom + 4, left: rect.left });
-                  setShowTableGrid(true);
-                }
-              }}
-              setActiveMenu={setActiveMenu}
-            />
-            <MenuAction
-              icon={<Code size={14} />}
-              label="Code Block"
-              onClick={() => {
-                if (!editor) return;
-                const { selection } = editor.state;
-                const safePos = (selection instanceof NodeSelection) ? selection.to :
-                  (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                    (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-                if (safePos !== null) {
-                  editor.chain().focus().insertContentAt(safePos, { type: 'codeBlock', attrs: { id: generateUUID() } }).run();
-                } else {
-                  editor.chain().focus().insertContent({ type: 'codeBlock', attrs: { id: generateUUID() } }).run();
-                }
-              }}
-              setActiveMenu={setActiveMenu}
-            />
-            <MenuAction
-              icon={<Terminal size={14} />}
-              label="LaTeX Block"
-              onClick={() => {
-                if (!editor) return;
-                const { selection } = editor.state;
-                const safePos = (selection instanceof NodeSelection) ? selection.to :
-                  (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                    (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-                if (safePos !== null) {
-                  editor.chain().focus().insertContentAt(safePos, { type: 'rawLatex', attrs: { id: generateUUID() } }).run();
-                } else {
-                  editor.chain().focus().insertContent({ type: 'rawLatex', attrs: { id: generateUUID() } }).run();
-                }
-              }}
-              setActiveMenu={setActiveMenu}
-            />
-          </MenuItem>
-
-
-          <div className="flex-1 min-w-[20px]" />
-
-          <div className="flex items-center gap-2 mr-4">
-            <ViewToggle viewMode={viewMode} onSetViewMode={onSetViewMode} />
-          </div>
-
-
-          <div className="flex items-center gap-2 mr-2">
-            {isAutoSaving || isSaving ? (
-              <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-primary animate-pulse">
-                <Loader2 size={12} className="animate-spin" />
-                <span>SAVING...</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-on-surface-variant/40">
-                <Check size={12} />
-                <span>SAVED</span>
-              </div>
-            )}
-          </div>
-
-          <button
-            onClick={onClose}
-            title="Close Entry"
-            className="p-1.5 ml-2 rounded-lg bg-nb-surface-low hover:bg-red-500/10 text-nb-on-surface-variant hover:text-red-500 transition-all border border-nb-outline-variant/30 hover:border-red-500/30 group cursor-pointer"
-          >
-            <X size={16} className="group-hover:scale-110 transition-transform" />
-          </button>
-
-        </div>
-
-        {!isHeaderCollapsed && (
-          <div className="px-6 py-2.5 flex flex-nowrap items-center gap-3 relative z-[160]">
-            <div className="flex-1 min-w-[200px]">
-              <AutocompleteInput
-                type="text"
-                value={title}
-                options={otherTitles}
-                onChange={(e) => {
-                  setTitle(e.target.value);
+            <MenuItem label="File" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
+              <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} setActiveMenu={setActiveMenu} />
+              <MenuAction
+                icon={<FileJson size={14} />}
+                label="Download JSON"
+                onClick={async () => {
+                  await exportEntries([entryId]);
                 }}
-                onSelectOption={(val) => {
-                  setTitle(val);
-                }}
-                placeholder="Entry Title..."
-                className="w-full text-xl font-bold bg-transparent text-nb-on-surface outline-none placeholder:text-nb-outline-variant"
+                setActiveMenu={setActiveMenu}
               />
-            </div>
+              <MenuAction icon={<FileCode size={14} />} label="Download LaTeX" onClick={handleDownload} setActiveMenu={setActiveMenu} />
+              <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
+              <MenuAction icon={<X size={14} />} label="Close" onClick={onClose || (() => { })} setActiveMenu={setActiveMenu} />
+              <MenuAction icon={<Trash2 size={14} />} label="Delete" onClick={() => {
+                showConfirm(
+                  "Delete Entry",
+                  `Are you sure you want to delete "${title || "Untitled Entry"}"? This action cannot be undone and will permanently remove the entry and its associated LaTeX file.`,
+                  () => {
+                    deleteEntry({ name: filename.split('/').pop() || "", path: filename });
+                    onClose?.();
+                  },
+                  "danger"
+                );
+              }} setActiveMenu={setActiveMenu} />
+            </MenuItem>
 
-            {!localIsValid && (
-              <ValidationTooltip
-                errors={validationErrors.length > 0 ? validationErrors : ["Incomplete entry metadata or resource captions"]}
-                size={20}
-                className="mr-4"
-                iconContainerClassName="text-amber-500"
-                position="bottom"
+            <MenuItem label="Edit" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
+              <MenuAction
+                icon={<Undo2 size={14} />}
+                label="Undo"
+                onClick={() => editor?.chain().focus().undo().run()}
+                disabled={!editor?.can().undo()}
+                setActiveMenu={setActiveMenu}
               />
-            )}
-
-            <div className="flex flex-nowrap items-center gap-3 shrink-0">
-              <DatePicker
-                value={date}
-                onChange={(val) => setDate(val)}
-                className="h-9 flex-1 min-w-[180px]"
+              <MenuAction
+                icon={<Redo2 size={14} />}
+                label="Redo"
+                onClick={() => editor?.chain().focus().redo().run()}
+                disabled={!editor?.can().redo()}
+                setActiveMenu={setActiveMenu}
               />
+            </MenuItem>
 
-              <div
-                className="h-9 flex-1 min-w-[200px] flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50"
-              >
-                <User size={15} className="text-nb-primary drop-shadow-sm" />
-                <AutocompleteInput
-                  type="text"
-                  autoComplete="off"
-                  value={author}
-                  options={otherAuthors}
-                  onChange={(e) => { setAuthor(e.target.value); }}
-                  onSelectOption={(val) => { setAuthor(val); }}
-                  placeholder="Author"
-                  className="bg-transparent border-none outline-none text-[11px] font-bold text-nb-on-surface-variant tracking-tight flex-1 min-w-0 placeholder:text-nb-on-surface-variant/20"
-                />
-              </div>
-
-              <div className="relative h-9 flex-1 min-w-[240px] flex items-center gap-2.5 px-3 rounded-xl border border-nb-outline-variant/30 bg-nb-surface-low transition-all">
-                <div
-                  className="absolute inset-0 z-10 cursor-pointer"
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={() => setActiveMenu(activeMenu === "Phase" ? null : "Phase")}
-                />
-
-                {activePhaseCfg && (
-                  <activePhaseCfg.icon size={15} className="shrink-0 drop-shadow-sm" style={{ color: availablePhases.find(p => p.index === phase)?.color }} />
-                )}
-
-                {/* Metadata dropdown */}
-                <div className={`flex-1 w-full min-w-0 text-xs font-bold tracking-widest truncate ${phase !== null && phaseConfig[phase] ? phaseConfig[phase].text : "text-nb-on-surface-variant/60"}`}>
-                  {availablePhases.find(p => p.index === phase)?.name || "No Phase Selected"}
-                </div>
-                <ChevronDown size={12} className={`text-nb-on-surface-variant/40 shrink-0 transition-transform duration-200 ${activeMenu === "Phase" ? "rotate-180" : ""}`} />
-
-                {activeMenu === "Phase" && (
-                  <div
-                    className="absolute top-full left-0 right-0 mt-1 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl p-1.5 z-[200] animate-in fade-in slide-in-from-top-1 duration-150"
-                    onMouseDown={(e) => e.stopPropagation()}
-                  >
-                    {availablePhases.map(p => {
-                      const cfg = phaseConfig[p.index];
-                      const Icon = cfg.icon;
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => { setPhase(p.index); setActiveMenu(null); }}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[10px] font-bold tracking-widest transition-all text-left cursor-pointer active:scale-[0.98] ${phase === p.index ? `${cfg.bg} ${cfg.text} hover:brightness-90` : "text-nb-on-surface-variant hover:bg-nb-surface-mid hover:text-nb-on-surface hover:ring-1 hover:ring-nb-primary/20"}`}
-                        >
-                          <Icon size={14} style={{ color: p.color }} />
-                          <span className="flex-1">{p.name.toUpperCase()}</span>
-                          {phase === p.index && <LucideIcons.Check size={12} style={{ color: p.color }} />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Row 3: Rich Toolbar */}
-        {editor && !isHeaderCollapsed && (
-          <div className="border-t border-nb-outline-variant/30 bg-nb-surface-mid/50 shrink-0">
-            <div className="px-6 py-2 flex items-center gap-1 min-w-max">
-              <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} title="Bold">
-                <Bold size={16} />
-              </ToolbarButton>
-              <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} title="Italic">
-                <Italic size={16} />
-              </ToolbarButton>
-              <ToolbarButton onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive("underline")} title="Underline">
-                <UnderlineIcon size={16} />
-              </ToolbarButton>
-              <ToolbarButton onClick={() => editor.chain().focus().toggleCode().run()} active={editor.isActive("code")} title="Inline Code">
-                <Code size={16} />
-              </ToolbarButton>
-              <ToolbarButton onClick={() => (editor.chain().focus() as unknown as { toggleInlineMath: () => import("@tiptap/core").ChainedCommands }).toggleInlineMath().run()} active={editor.isActive("inlineMath")} title="Inline Math">
-                <Sigma size={16} />
-              </ToolbarButton>
-
-              <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
-
-              <div className="relative" ref={linkButtonRef}>
-                <ToolbarButton
-                  onClick={() => {
-                    toggleLinkFn.current?.();
-                  }}
-                  active={editor.isActive("link")}
-                  title="Insert Link/Reference"
-                >
-                  <LinkIcon size={16} />
-                </ToolbarButton>
-              </div>
-
-              <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
-
-              <ToolbarButton
-                onClick={() => {
-                  if (editor.isActive("heading", { level: 1 })) {
-                    editor.chain().focus().setParagraph().run();
-                    return;
-                  }
-
-                  const { selection } = editor.state;
-                  const safePos = (selection instanceof NodeSelection) ? selection.to :
-                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                      (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-                  if (safePos !== null) {
-                    editor.chain().focus().insertContentAt(safePos, { type: 'heading', attrs: { level: 1 } }).run();
-                  } else {
-                    editor.chain().focus().toggleHeading({ level: 1 }).run();
+            <MenuItem label="Insert" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
+              <MenuAction icon={<ImagePlus size={14} />} label="Image" onClick={insertImage} setActiveMenu={setActiveMenu} />
+              <MenuAction
+                icon={<TableIcon size={14} />}
+                label="Table"
+                onClick={(e) => {
+                  const menuButton = (e.currentTarget as HTMLElement).closest('.relative');
+                  if (menuButton) {
+                    const rect = menuButton.getBoundingClientRect();
+                    // Position below the "Insert" menu button
+                    setGridPos({ top: rect.bottom + 4, left: rect.left });
+                    setShowTableGrid(true);
                   }
                 }}
-                active={editor.isActive("heading", { level: 1 })}
-                title="Heading 1"
-              >
-                <Heading1 size={16} />
-              </ToolbarButton>
-              <ToolbarButton
+                setActiveMenu={setActiveMenu}
+              />
+              <MenuAction
+                icon={<Code size={14} />}
+                label="Code Block"
                 onClick={() => {
-                  if (editor.isActive("heading", { level: 2 })) {
-                    editor.chain().focus().setParagraph().run();
-                    return;
-                  }
-
-                  const { selection } = editor.state;
-                  const safePos = (selection instanceof NodeSelection) ? selection.to :
-                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                      (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-                  if (safePos !== null) {
-                    editor.chain().focus().insertContentAt(safePos, { type: 'heading', attrs: { level: 2 } }).run();
-                  } else {
-                    editor.chain().focus().toggleHeading({ level: 2 }).run();
-                  }
-                }}
-                active={editor.isActive("heading", { level: 2 })}
-                title="Heading 2"
-              >
-                <Heading2 size={16} />
-              </ToolbarButton>
-
-              <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
-
-              <ToolbarButton
-                onClick={() => {
-                  const { selection } = editor.state;
-                  const safePos = (selection instanceof NodeSelection) ? selection.to :
-                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                      (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-                  if (safePos !== null) {
-                    editor.chain().focus().insertContentAt(safePos, {
-                      type: 'bulletList',
-                      content: [{ type: 'listItem', content: [{ type: 'paragraph' }] }]
-                    }).run();
-                  } else {
-                    editor.chain().focus().toggleBulletList().run();
-                  }
-                }}
-                active={editor.isActive("bulletList")}
-                title="Bullet List"
-              >
-                <List size={16} />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => {
-                  const { selection } = editor.state;
-                  const safePos = (selection instanceof NodeSelection) ? selection.to :
-                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                      (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-                  if (safePos !== null) {
-                    editor.chain().focus().insertContentAt(safePos, {
-                      type: 'orderedList',
-                      content: [{ type: 'listItem', content: [{ type: 'paragraph' }] }]
-                    }).run();
-                  } else {
-                    editor.chain().focus().toggleOrderedList().run();
-                  }
-                }}
-                active={editor.isActive("orderedList")}
-                title="Ordered List"
-              >
-                <ListOrdered size={16} />
-              </ToolbarButton>
-
-              <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
-
-              <ToolbarButton
-                onClick={() => {
+                  if (!editor) return;
                   const { selection } = editor.state;
                   const safePos = (selection instanceof NodeSelection) ? selection.to :
                     (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
@@ -926,14 +654,13 @@ const EditorContent = React.memo(function EditorContent({
                     editor.chain().focus().insertContent({ type: 'codeBlock', attrs: { id: generateUUID() } }).run();
                   }
                 }}
-                active={editor.isActive("codeBlock")}
-                title="Code Block"
-              >
-                <Code size={16} />
-              </ToolbarButton>
-
-              <ToolbarButton
+                setActiveMenu={setActiveMenu}
+              />
+              <MenuAction
+                icon={<Terminal size={14} />}
+                label="LaTeX Block"
                 onClick={() => {
+                  if (!editor) return;
                   const { selection } = editor.state;
                   const safePos = (selection instanceof NodeSelection) ? selection.to :
                     (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
@@ -945,100 +672,411 @@ const EditorContent = React.memo(function EditorContent({
                     editor.chain().focus().insertContent({ type: 'rawLatex', attrs: { id: generateUUID() } }).run();
                   }
                 }}
-                active={editor.isActive("rawLatex")}
-                title="Raw LaTeX"
-              >
-                <Terminal size={16} />
-              </ToolbarButton>
+                setActiveMenu={setActiveMenu}
+              />
+            </MenuItem>
 
-              <ToolbarButton
-                onClick={() => {
-                  const { selection } = editor.state;
-                  const safePos = (selection instanceof NodeSelection) ? selection.to :
-                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                      (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
 
-                  if (safePos !== null) {
-                    editor.chain().focus().insertContentAt(safePos, { type: 'mathBlock', attrs: { id: generateUUID() } }).run();
-                  } else {
-                    editor.chain().focus().insertContent({ type: 'mathBlock', attrs: { id: generateUUID() } }).run();
-                  }
-                }}
-                active={editor.isActive("mathBlock")}
-                title="Equation Block"
-              >
-                <Sigma size={16} className="scale-110" />
-              </ToolbarButton>
+            <div className="flex-1 min-w-[20px]" />
 
-              <div className="relative" ref={tableButtonRef}>
-                <ToolbarButton
-                  onClick={(e) => {
-                    e?.stopPropagation();
-                    if (!showTableGrid && tableButtonRef.current) {
-                      const rect = tableButtonRef.current.getBoundingClientRect();
-                      // Position below button, aligned to its right edge
-                      setGridPos({ top: rect.bottom + 8, left: rect.right - 204 });
-                      setShowTableGrid(true);
-                    } else {
-                      setShowTableGrid(false);
-                    }
+            <div className="flex items-center gap-2 mr-4">
+              <ViewToggle viewMode={viewMode} onSetViewMode={onSetViewMode} />
+            </div>
+
+
+            <div className="flex items-center gap-2 mr-2">
+              {isAutoSaving || isSaving ? (
+                <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-primary animate-pulse">
+                  <Loader2 size={12} className="animate-spin" />
+                  <span>SAVING...</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-on-surface-variant/40">
+                  <Check size={12} />
+                  <span>SAVED</span>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={onClose}
+              title="Close Entry"
+              className="p-1.5 ml-2 rounded-lg bg-nb-surface-low hover:bg-red-500/10 text-nb-on-surface-variant hover:text-red-500 transition-all border border-nb-outline-variant/30 hover:border-red-500/30 group cursor-pointer"
+            >
+              <X size={16} className="group-hover:scale-110 transition-transform" />
+            </button>
+
+          </div>
+
+          {!isHeaderCollapsed && (
+            <div className="px-6 py-2.5 flex flex-nowrap items-center gap-3 relative z-[160]">
+              <div className="flex-1 min-w-[200px]">
+                <AutocompleteInput
+                  type="text"
+                  value={title}
+                  options={otherTitles}
+                  onChange={(e) => {
+                    setTitle(e.target.value);
                   }}
-                  active={showTableGrid}
-                  title="Insert Table"
-                >
-                  <TableIcon size={16} />
-                </ToolbarButton>
-                {showTableGrid && createPortal(
-                  <div
-                    style={{
-                      position: 'fixed',
-                      top: Math.max(8, Math.min(gridPos.top, (typeof window !== 'undefined' ? window.innerHeight : 1000) - 220)),
-                      left: Math.max(8, Math.min(gridPos.left, (typeof window !== 'undefined' ? window.innerWidth : 1000) - 220)),
-                      zIndex: 9999
-                    }}
-                    className="shadow-2xl rounded-xl animate-in fade-in zoom-in-95 duration-200"
-                    onMouseDown={(e) => e.stopPropagation()}
-                  >
-                    <TableGridSelector
-                      onSelect={(rows, cols) => {
-                        const tableContent = {
-                          type: 'table',
-                          attrs: { id: generateUUID() },
-                          content: Array.from({ length: rows }, () => ({
-                            type: 'tableRow',
-                            content: Array.from({ length: cols }, () => ({
-                              type: 'tableCell',
-                              content: [{ type: 'paragraph' }]
-                            }))
-                          }))
-                        };
-
-                        const { selection } = editor.state;
-                        const safePos = (selection instanceof NodeSelection) ? selection.to :
-                          (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                            (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-                        if (safePos !== null) {
-                          editor.chain().focus().insertContentAt(safePos, tableContent).run();
-                        } else {
-                          editor.chain().focus().insertContent(tableContent).run();
-                        }
-                        setShowTableGrid(false);
-                      }}
-                    />
-                  </div>,
-                  document.body
-                )}
+                  onSelectOption={(val) => {
+                    setTitle(val);
+                  }}
+                  placeholder="Entry Title..."
+                  className="w-full text-xl font-bold bg-transparent text-nb-on-surface outline-none placeholder:text-nb-outline-variant"
+                />
               </div>
 
-              <ToolbarButton
-                onClick={insertImage}
-                title="Insert Image"
-              >
-                <ImageIcon size={16} />
-              </ToolbarButton>
+              {!localIsValid && (
+                <ValidationTooltip
+                  errors={validationErrors.length > 0 ? validationErrors : ["Incomplete entry metadata or resource captions"]}
+                  size={20}
+                  className="mr-4"
+                  iconContainerClassName="text-amber-500"
+                  position="bottom"
+                />
+              )}
+
+              <div className="flex flex-nowrap items-center gap-3 shrink-0">
+                <DatePicker
+                  value={date}
+                  onChange={(val) => setDate(val)}
+                  className="h-9 flex-1 min-w-[180px]"
+                />
+
+                <div
+                  className="h-9 flex-1 min-w-[200px] flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50"
+                >
+                  <User size={15} className="text-nb-primary drop-shadow-sm shrink-0" />
+                  <AutocompleteInput
+                    type="text"
+                    autoComplete="off"
+                    value={author}
+                    options={otherAuthors}
+                    onChange={(e) => { setAuthor(e.target.value); }}
+                    onSelectOption={(val) => { setAuthor(val); }}
+                    placeholder="Author"
+                    className="bg-transparent border-none outline-none text-[13px] font-bold text-nb-on-surface-variant tracking-tight flex-1 min-w-0 placeholder:text-nb-on-surface-variant/20"
+                  />
+                </div>
+
+                <div
+                  ref={phaseButtonRef}
+                  className="relative h-9 flex-1 min-w-[240px] flex items-center gap-2.5 px-3 rounded-xl border border-nb-outline-variant/30 bg-nb-surface-low transition-all"
+                >
+                  <div
+                    className="absolute inset-0 z-10 cursor-pointer"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={() => {
+                      if (activeMenu !== "Phase" && phaseButtonRef.current) {
+                        const rect = phaseButtonRef.current.getBoundingClientRect();
+                        setPhasePos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+                      }
+                      setActiveMenu(activeMenu === "Phase" ? null : "Phase");
+                    }}
+                  />
+
+                  {activePhaseCfg && (
+                    <activePhaseCfg.icon size={15} className="shrink-0 drop-shadow-sm" style={{ color: availablePhases.find(p => p.index === phase)?.color }} />
+                  )}
+
+                  {/* Metadata dropdown */}
+                  <div className={`flex-1 w-full min-w-0 text-xs font-bold tracking-widest truncate ${phase !== null && phaseConfig[phase] ? phaseConfig[phase].text : "text-nb-on-surface-variant/60"}`}>
+                    {availablePhases.find(p => p.index === phase)?.name || "No Phase Selected"}
+                  </div>
+                  <ChevronDown size={12} className={`text-nb-on-surface-variant/40 shrink-0 transition-transform duration-200 ${activeMenu === "Phase" ? "rotate-180" : ""}`} />
+
+                  {activeMenu === "Phase" && createPortal(
+                    <div
+                      style={{
+                        position: 'fixed',
+                        top: phasePos.top,
+                        left: phasePos.left,
+                        width: phasePos.width,
+                        zIndex: 9999
+                      }}
+                      className="mt-1 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl p-1.5 animate-in fade-in slide-in-from-top-1 duration-150"
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
+                      {availablePhases.map(p => {
+                        const cfg = phaseConfig[p.index];
+                        const Icon = cfg.icon;
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => { setPhase(p.index); setActiveMenu(null); }}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[10px] font-bold tracking-widest transition-all text-left cursor-pointer active:scale-[0.98] ${phase === p.index ? `${cfg.bg} ${cfg.text} hover:brightness-90` : "text-nb-on-surface-variant hover:bg-nb-surface-mid hover:text-nb-on-surface hover:ring-1 hover:ring-nb-primary/20"}`}
+                          >
+                            <Icon size={14} style={{ color: p.color }} />
+                            <span className="flex-1">{p.name.toUpperCase()}</span>
+                            {phase === p.index && <LucideIcons.Check size={12} style={{ color: p.color }} />}
+                          </button>
+                        );
+                      })}
+                    </div>,
+                    document.body
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Row 3: Rich Toolbar */}
+          {editor && !isHeaderCollapsed && (
+            <div className="border-t border-nb-outline-variant/30 bg-nb-surface-mid/50 shrink-0">
+              <div className="px-6 py-2 flex items-center gap-1 min-w-max">
+                <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} title="Bold">
+                  <Bold size={16} />
+                </ToolbarButton>
+                <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} title="Italic">
+                  <Italic size={16} />
+                </ToolbarButton>
+                <ToolbarButton onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive("underline")} title="Underline">
+                  <UnderlineIcon size={16} />
+                </ToolbarButton>
+                <ToolbarButton onClick={() => editor.chain().focus().toggleCode().run()} active={editor.isActive("code")} title="Inline Code">
+                  <Code size={16} />
+                </ToolbarButton>
+                <ToolbarButton onClick={() => (editor.chain().focus() as unknown as { toggleInlineMath: () => import("@tiptap/core").ChainedCommands }).toggleInlineMath().run()} active={editor.isActive("inlineMath")} title="Inline Math">
+                  <Sigma size={16} />
+                </ToolbarButton>
+
+                <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
+
+                <div className="relative" ref={linkButtonRef}>
+                  <ToolbarButton
+                    onClick={() => {
+                      toggleLinkFn.current?.();
+                    }}
+                    active={editor.isActive("link")}
+                    title="Insert Link/Reference"
+                  >
+                    <LinkIcon size={16} />
+                  </ToolbarButton>
+                </div>
+
+                <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
+
+                <ToolbarButton
+                  onClick={() => {
+                    if (editor.isActive("heading", { level: 1 })) {
+                      editor.chain().focus().setParagraph().run();
+                      return;
+                    }
+
+                    const { selection } = editor.state;
+                    const safePos = (selection instanceof NodeSelection) ? selection.to :
+                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
+                    if (safePos !== null) {
+                      editor.chain().focus().insertContentAt(safePos, { type: 'heading', attrs: { level: 1 } }).run();
+                    } else {
+                      editor.chain().focus().toggleHeading({ level: 1 }).run();
+                    }
+                  }}
+                  active={editor.isActive("heading", { level: 1 })}
+                  title="Heading 1"
+                >
+                  <Heading1 size={16} />
+                </ToolbarButton>
+                <ToolbarButton
+                  onClick={() => {
+                    if (editor.isActive("heading", { level: 2 })) {
+                      editor.chain().focus().setParagraph().run();
+                      return;
+                    }
+
+                    const { selection } = editor.state;
+                    const safePos = (selection instanceof NodeSelection) ? selection.to :
+                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
+                    if (safePos !== null) {
+                      editor.chain().focus().insertContentAt(safePos, { type: 'heading', attrs: { level: 2 } }).run();
+                    } else {
+                      editor.chain().focus().toggleHeading({ level: 2 }).run();
+                    }
+                  }}
+                  active={editor.isActive("heading", { level: 2 })}
+                  title="Heading 2"
+                >
+                  <Heading2 size={16} />
+                </ToolbarButton>
+
+                <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
+
+                <ToolbarButton
+                  onClick={() => {
+                    const { selection } = editor.state;
+                    const safePos = (selection instanceof NodeSelection) ? selection.to :
+                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
+                    if (safePos !== null) {
+                      editor.chain().focus().insertContentAt(safePos, {
+                        type: 'bulletList',
+                        content: [{ type: 'listItem', content: [{ type: 'paragraph' }] }]
+                      }).run();
+                    } else {
+                      editor.chain().focus().toggleBulletList().run();
+                    }
+                  }}
+                  active={editor.isActive("bulletList")}
+                  title="Bullet List"
+                >
+                  <List size={16} />
+                </ToolbarButton>
+                <ToolbarButton
+                  onClick={() => {
+                    const { selection } = editor.state;
+                    const safePos = (selection instanceof NodeSelection) ? selection.to :
+                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
+                    if (safePos !== null) {
+                      editor.chain().focus().insertContentAt(safePos, {
+                        type: 'orderedList',
+                        content: [{ type: 'listItem', content: [{ type: 'paragraph' }] }]
+                      }).run();
+                    } else {
+                      editor.chain().focus().toggleOrderedList().run();
+                    }
+                  }}
+                  active={editor.isActive("orderedList")}
+                  title="Ordered List"
+                >
+                  <ListOrdered size={16} />
+                </ToolbarButton>
+
+                <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
+
+                <ToolbarButton
+                  onClick={() => {
+                    const { selection } = editor.state;
+                    const safePos = (selection instanceof NodeSelection) ? selection.to :
+                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
+                    if (safePos !== null) {
+                      editor.chain().focus().insertContentAt(safePos, { type: 'codeBlock', attrs: { id: generateUUID() } }).run();
+                    } else {
+                      editor.chain().focus().insertContent({ type: 'codeBlock', attrs: { id: generateUUID() } }).run();
+                    }
+                  }}
+                  active={editor.isActive("codeBlock")}
+                  title="Code Block"
+                >
+                  <Code size={16} />
+                </ToolbarButton>
+
+                <ToolbarButton
+                  onClick={() => {
+                    const { selection } = editor.state;
+                    const safePos = (selection instanceof NodeSelection) ? selection.to :
+                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
+                    if (safePos !== null) {
+                      editor.chain().focus().insertContentAt(safePos, { type: 'rawLatex', attrs: { id: generateUUID() } }).run();
+                    } else {
+                      editor.chain().focus().insertContent({ type: 'rawLatex', attrs: { id: generateUUID() } }).run();
+                    }
+                  }}
+                  active={editor.isActive("rawLatex")}
+                  title="Raw LaTeX"
+                >
+                  <Terminal size={16} />
+                </ToolbarButton>
+
+                <ToolbarButton
+                  onClick={() => {
+                    const { selection } = editor.state;
+                    const safePos = (selection instanceof NodeSelection) ? selection.to :
+                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
+                    if (safePos !== null) {
+                      editor.chain().focus().insertContentAt(safePos, { type: 'mathBlock', attrs: { id: generateUUID() } }).run();
+                    } else {
+                      editor.chain().focus().insertContent({ type: 'mathBlock', attrs: { id: generateUUID() } }).run();
+                    }
+                  }}
+                  active={editor.isActive("mathBlock")}
+                  title="Equation Block"
+                >
+                  <Sigma size={16} className="scale-110" />
+                </ToolbarButton>
+
+                <div className="relative" ref={tableButtonRef}>
+                  <ToolbarButton
+                    onClick={(e) => {
+                      e?.stopPropagation();
+                      if (!showTableGrid && tableButtonRef.current) {
+                        const rect = tableButtonRef.current.getBoundingClientRect();
+                        // Position below button, aligned to its right edge
+                        setGridPos({ top: rect.bottom + 8, left: rect.right - 204 });
+                        setShowTableGrid(true);
+                      } else {
+                        setShowTableGrid(false);
+                      }
+                    }}
+                    active={showTableGrid}
+                    title="Insert Table"
+                  >
+                    <TableIcon size={16} />
+                  </ToolbarButton>
+                  {showTableGrid && createPortal(
+                    <div
+                      style={{
+                        position: 'fixed',
+                        top: Math.max(8, Math.min(gridPos.top, (typeof window !== 'undefined' ? window.innerHeight : 1000) - 220)),
+                        left: Math.max(8, Math.min(gridPos.left, (typeof window !== 'undefined' ? window.innerWidth : 1000) - 220)),
+                        zIndex: 9999
+                      }}
+                      className="shadow-2xl rounded-xl animate-in fade-in zoom-in-95 duration-200"
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
+                      <TableGridSelector
+                        onSelect={(rows, cols) => {
+                          const tableContent = {
+                            type: 'table',
+                            attrs: { id: generateUUID() },
+                            content: Array.from({ length: rows }, () => ({
+                              type: 'tableRow',
+                              content: Array.from({ length: cols }, () => ({
+                                type: 'tableCell',
+                                content: [{ type: 'paragraph' }]
+                              }))
+                            }))
+                          };
+
+                          const { selection } = editor.state;
+                          const safePos = (selection instanceof NodeSelection) ? selection.to :
+                            (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                              (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
+                          if (safePos !== null) {
+                            editor.chain().focus().insertContentAt(safePos, tableContent).run();
+                          } else {
+                            editor.chain().focus().insertContent(tableContent).run();
+                          }
+                          setShowTableGrid(false);
+                        }}
+                      />
+                    </div>,
+                    document.body
+                  )}
+                </div>
+
+                <ToolbarButton
+                  onClick={insertImage}
+                  title="Insert Image"
+                >
+                  <ImageIcon size={16} />
+                </ToolbarButton>
+              </div>
+            </div>
           )}
         </div>
       </div>
