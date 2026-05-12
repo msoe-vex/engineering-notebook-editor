@@ -805,7 +805,7 @@ class WorkspaceStore {
 
     const wrapper = { version: 3, content: { type: "doc", content: [{ type: "paragraph" }] } };
     const jsonStr = JSON.stringify(wrapper, null, 2);
-    const initialLatex = `\\notebookentry{${newEntry.title}}{${createdAt.split('T')[0]}}{${newEntry.author}}{}\n\\label{${id}}\n\n`;
+    const initialLatex = `\\notebookentry{${newEntry.title}}{${createdAt.split('T')[0]}}{${newEntry.author}}{}{${id}}\n\n`;
 
     this.#lastSavedContents.set(path, jsonStr);
     this.#lastSavedContents.set(latexPath, initialLatex);
