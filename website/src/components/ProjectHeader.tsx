@@ -5,7 +5,6 @@ import {
 } from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { ViewMode } from "./ViewToggle";
-import Logo from "./ui/Logo";
 
 interface ProjectHeaderProps {
   isSidebarOpen: boolean;

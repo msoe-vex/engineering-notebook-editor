@@ -26,7 +26,7 @@ import Logo from "./ui/Logo";
 import { ViewMode } from "./ViewToggle";
 import ConfirmationDialog from "./ConfirmationDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { HardDrive, X, BookOpen, Loader2 } from "lucide-react";
+import { HardDrive, X, Loader2 } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { ENTRIES_DIR, } from "@/lib/constants";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -856,7 +856,7 @@ export default function App() {
 
       {/* Global Loading Overlay */}
       {(!isInitialized || (isLoading && mode === "none") || isGlobalLoading) && (
-        <LoadingOverlay 
+        <LoadingOverlay
           label={isGlobalLoading ? loadingLabel : "ENGen"}
           subtitle={isGlobalLoading ? "Please wait..." : "Engineering Notebook Generator"}
         />
