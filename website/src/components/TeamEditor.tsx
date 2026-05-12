@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, memo, useCallback } from "react";
 import {
   Hash, User, Briefcase, Image as ImageIcon,
   Loader2, Check, X, Camera, Building2, Plus, Trash2, Users,
-  Palette, Shapes, Search, GripVertical, LucideIcon
+  Palette, Shapes, Search, GripVertical, LucideIcon, Play
 } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import Image from "next/image";
@@ -199,147 +199,147 @@ const PhaseCard = memo(({
 });
 
 PhaseCard.displayName = "PhaseCard";
- 
- const MemberCard = memo(({
-   member,
-   handleMemberChange,
-   removeMember,
-   attributes,
-   listeners,
-   isOverlay = false
- }: {
-   member: TeamMember,
-   handleMemberChange?: (id: string, field: keyof TeamMember, value: string) => void,
-   removeMember?: (id: string) => void,
-   attributes?: DraggableAttributes,
-   listeners?: Record<string, unknown>,
-   isOverlay?: boolean
- }) => {
-   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-     const file = e.target.files?.[0];
-     if (!file) return;
- 
-     const reader = new FileReader();
-     reader.onloadend = () => {
-       handleMemberChange?.(member.id, "image", reader.result as string);
-     };
-     reader.readAsDataURL(file);
-   };
- 
-   return (
-     <div
-       className={`group flex items-center gap-4 p-5 rounded-[28px] bg-nb-surface border border-nb-outline-variant hover:border-nb-primary/30 hover:shadow-nb-lg transition-all ${isOverlay ? 'shadow-nb-2xl border-nb-primary ring-2 ring-nb-primary/10' : ''}`}
-     >
-       <div
-         {...attributes}
-         {...listeners}
-         className="p-2 -ml-2 rounded-lg text-nb-on-surface-variant/20 hover:text-nb-on-surface-variant/60 hover:bg-nb-surface-low cursor-grab active:cursor-grabbing transition-all shrink-0"
-       >
-         <GripVertical size={16} />
-       </div>
- 
-       {/* Member Avatar */}
-       <div className="relative">
-         <div className="w-20 h-24 rounded-2xl bg-nb-surface-low border-2 border-nb-outline-variant/30 overflow-hidden flex items-center justify-center">
-           {member.image ? (
-             <div className="relative w-full h-full">
-               <Image src={member.image} alt={member.name} fill className="object-cover" unoptimized />
-             </div>
-           ) : (
-             <User size={24} className="text-nb-on-surface-variant/20" />
-           )}
-         </div>
-         <label className="absolute -bottom-1 -right-1 p-2 rounded-xl bg-nb-surface border border-nb-outline-variant shadow-sm text-nb-on-surface-variant hover:text-nb-primary cursor-pointer transition-colors">
-           <Camera size={12} />
-           <input
-             type="file"
-             className="hidden"
-             accept="image/*"
-             onChange={handleImageUpload}
-           />
-         </label>
-       </div>
- 
-       {/* Member Info */}
-       <div className="flex-1 space-y-3">
-         <div className="relative">
-           <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-nb-on-surface-variant/40" />
-           <input
-             type="text"
-             value={member.name}
-             onChange={e => handleMemberChange?.(member.id, "name", e.target.value)}
-             placeholder="Name"
-             className="w-full bg-nb-surface-low border border-nb-outline-variant/50 rounded-xl pl-9 pr-3 py-1.5 text-xs font-bold text-nb-on-surface focus:outline-none focus:ring-1 focus:ring-nb-primary/30 transition-all"
-           />
-         </div>
-         <div className="relative">
-           <Briefcase size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-nb-on-surface-variant/40" />
-           <input
-             type="text"
-             value={member.role}
-             onChange={e => handleMemberChange?.(member.id, "role", e.target.value)}
-             placeholder="Role"
-             className="w-full bg-nb-surface-low border border-nb-outline-variant/50 rounded-xl pl-9 pr-3 py-1.5 text-xs font-bold text-nb-on-surface focus:outline-none focus:ring-1 focus:ring-nb-primary/30 transition-all"
-           />
-         </div>
-       </div>
- 
-       <button
-         onClick={() => removeMember?.(member.id)}
-         className="p-3 rounded-xl text-nb-on-surface-variant hover:text-red-500 hover:bg-red-50 transition-all cursor-pointer"
-         title="Remove Member"
-       >
-         <Trash2 size={18} />
-       </button>
-     </div>
-   );
- });
- 
- MemberCard.displayName = "MemberCard";
- 
- const MemberRow = memo(({
-   member,
-   handleMemberChange,
-   removeMember
- }: {
-   member: TeamMember,
-   handleMemberChange: (id: string, field: keyof TeamMember, value: string) => void,
-   removeMember: (id: string) => void
- }) => {
-   const {
-     attributes,
-     listeners,
-     setNodeRef,
-     transform,
-     transition,
-     isDragging
-   } = useSortable({ id: member.id });
- 
-   const style = {
-     transform: CSS.Transform.toString(transform),
-     transition: transition || 'transform 150ms cubic-bezier(0.2, 0, 0, 1), opacity 150ms ease',
-   };
- 
-   return (
-     <div
-       ref={setNodeRef}
-       style={style}
-       className={`group/row ${isDragging ? 'z-[100]' : ''}`}
-     >
-       <div className={`transition-all ${isDragging ? 'opacity-0 duration-0' : 'opacity-100 duration-200 delay-150'}`}>
-         <MemberCard
-           member={member}
-           handleMemberChange={handleMemberChange}
-           removeMember={removeMember}
-           attributes={attributes}
-           listeners={listeners}
-         />
-       </div>
-     </div>
-   );
- });
- 
- MemberRow.displayName = "MemberRow";
+
+const MemberCard = memo(({
+  member,
+  handleMemberChange,
+  removeMember,
+  attributes,
+  listeners,
+  isOverlay = false
+}: {
+  member: TeamMember,
+  handleMemberChange?: (id: string, field: keyof TeamMember, value: string) => void,
+  removeMember?: (id: string) => void,
+  attributes?: DraggableAttributes,
+  listeners?: Record<string, unknown>,
+  isOverlay?: boolean
+}) => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      handleMemberChange?.(member.id, "image", reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div
+      className={`group flex items-center gap-4 p-5 rounded-[28px] bg-nb-surface border border-nb-outline-variant hover:border-nb-primary/30 hover:shadow-nb-lg transition-all ${isOverlay ? 'shadow-nb-2xl border-nb-primary ring-2 ring-nb-primary/10' : ''}`}
+    >
+      <div
+        {...attributes}
+        {...listeners}
+        className="p-2 -ml-2 rounded-lg text-nb-on-surface-variant/20 hover:text-nb-on-surface-variant/60 hover:bg-nb-surface-low cursor-grab active:cursor-grabbing transition-all shrink-0"
+      >
+        <GripVertical size={16} />
+      </div>
+
+      {/* Member Avatar */}
+      <div className="relative">
+        <div className="w-20 h-24 rounded-2xl bg-nb-surface-low border-2 border-nb-outline-variant/30 overflow-hidden flex items-center justify-center">
+          {member.image ? (
+            <div className="relative w-full h-full">
+              <Image src={member.image} alt={member.name} fill className="object-cover" unoptimized />
+            </div>
+          ) : (
+            <User size={24} className="text-nb-on-surface-variant/20" />
+          )}
+        </div>
+        <label className="absolute -bottom-1 -right-1 p-2 rounded-xl bg-nb-surface border border-nb-outline-variant shadow-sm text-nb-on-surface-variant hover:text-nb-primary cursor-pointer transition-colors">
+          <Camera size={12} />
+          <input
+            type="file"
+            className="hidden"
+            accept="image/*"
+            onChange={handleImageUpload}
+          />
+        </label>
+      </div>
+
+      {/* Member Info */}
+      <div className="flex-1 space-y-3">
+        <div className="relative">
+          <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-nb-on-surface-variant/40" />
+          <input
+            type="text"
+            value={member.name}
+            onChange={e => handleMemberChange?.(member.id, "name", e.target.value)}
+            placeholder="Name"
+            className="w-full bg-nb-surface-low border border-nb-outline-variant/50 rounded-xl pl-9 pr-3 py-1.5 text-xs font-bold text-nb-on-surface focus:outline-none focus:ring-1 focus:ring-nb-primary/30 transition-all"
+          />
+        </div>
+        <div className="relative">
+          <Briefcase size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-nb-on-surface-variant/40" />
+          <input
+            type="text"
+            value={member.role}
+            onChange={e => handleMemberChange?.(member.id, "role", e.target.value)}
+            placeholder="Role"
+            className="w-full bg-nb-surface-low border border-nb-outline-variant/50 rounded-xl pl-9 pr-3 py-1.5 text-xs font-bold text-nb-on-surface focus:outline-none focus:ring-1 focus:ring-nb-primary/30 transition-all"
+          />
+        </div>
+      </div>
+
+      <button
+        onClick={() => removeMember?.(member.id)}
+        className="p-3 rounded-xl text-nb-on-surface-variant hover:text-red-500 hover:bg-red-50 transition-all cursor-pointer"
+        title="Remove Member"
+      >
+        <Trash2 size={18} />
+      </button>
+    </div>
+  );
+});
+
+MemberCard.displayName = "MemberCard";
+
+const MemberRow = memo(({
+  member,
+  handleMemberChange,
+  removeMember
+}: {
+  member: TeamMember,
+  handleMemberChange: (id: string, field: keyof TeamMember, value: string) => void,
+  removeMember: (id: string) => void
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: member.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition: transition || 'transform 150ms cubic-bezier(0.2, 0, 0, 1), opacity 150ms ease',
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`group/row ${isDragging ? 'z-[100]' : ''}`}
+    >
+      <div className={`transition-all ${isDragging ? 'opacity-0 duration-0' : 'opacity-100 duration-200 delay-150'}`}>
+        <MemberCard
+          member={member}
+          handleMemberChange={handleMemberChange}
+          removeMember={removeMember}
+          attributes={attributes}
+          listeners={listeners}
+        />
+      </div>
+    </div>
+  );
+});
+
+MemberRow.displayName = "MemberRow";
 
 const PhaseRow = memo(({
   phase,
@@ -400,7 +400,8 @@ export default function TeamEditor({
 }: TeamEditorProps) {
   const {
     metadata,
-    saveTeam
+    saveTeam,
+    navigateTo
   } = useWorkspace();
 
   const initialData = useMemo(() => {
@@ -614,13 +615,23 @@ export default function TeamEditor({
 
             <div className="w-px h-6 bg-nb-outline-variant/30" />
 
-            <button
-              onClick={onClose}
-              className="p-2 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer"
-              title="Close Configuration"
-            >
-              <X size={20} />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigateTo({}, '/workspace/compile')}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-nb-primary/10 text-nb-primary hover:bg-nb-primary hover:text-white transition-all cursor-pointer"
+                title="Go to Compiler"
+              >
+                <Play size={14} className="fill-current" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Compile</span>
+              </button>
+              <button
+                onClick={onClose}
+                className="p-2 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer"
+                title="Close Configuration"
+              >
+                <X size={20} />
+              </button>
+            </div>
           </div>
         </div>
 
