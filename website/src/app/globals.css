@@ -6,7 +6,7 @@
    ═══════════════════════════════════════════════════════════════ */
 
 :root {
-  /* ── Light Mode Tokens ────────────────────────────────────── */
+  /* ... previous light mode tokens ... */
   --nb-bg: #fbf9f8;
   --nb-surface-lowest: #ffffff;
   --nb-surface-low: #f5f3f3;
@@ -20,7 +20,7 @@
 }
 
 .dark {
-  /* ── Dark Mode Tokens ─────────────────────────────────────── */
+  /* ... previous dark mode tokens ... */
   --nb-bg: #111213;
   --nb-surface-lowest: #1a1c1e;
   /* Map dark surface to lowest */
@@ -56,8 +56,8 @@
   --color-nb-outline-variant: var(--nb-outline-variant);
 
   /* ── Typography ─────────────────────────────────────────────── */
-  --font-sans: var(--font-work-sans), "Work Sans", system-ui, sans-serif;
-  --font-mono: ui-monospace, "Cascadia Code", "Fira Mono", "Consolas", monospace;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-inconsolata), monospace;
 }
 
 /* ═══════════════════════════════════════════════════════════════
