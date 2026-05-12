@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import {
   useEditor, EditorContent, Extension,
 } from "@tiptap/react";
-import { NodeSelection } from "@tiptap/pm/state";
+import { NodeSelection, Transaction, EditorState, Plugin, PluginKey } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { store } from "@/lib/store";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -167,6 +167,41 @@ export default function UnifiedEditor({
       CustomCodeBlock,
       CustomRawLatex,
       InlineMathNode,
+      Extension.create({
+        name: 'mathCodeMutualExclusion',
+        addProseMirrorPlugins() {
+          return [
+            new Plugin({
+              appendTransaction(transactions: readonly Transaction[], oldState: EditorState, newState: EditorState) {
+                const { selection, tr } = newState;
+                let modified = false;
+
+                // If code mark was just added to a range containing math, convert math to code text
+                if (transactions.some(t => t.docChanged || t.storedMarks)) {
+                  newState.doc.descendants((node: any, pos: number) => {
+                    if (node.type.name === 'inlineMath') {
+                      const hasCodeMark = node.marks.some((m: any) => m.type.name === 'code');
+                      
+                      if (hasCodeMark) {
+                        const latex = node.attrs.latex || "";
+                        if (latex) {
+                          tr.replaceWith(pos, pos + node.nodeSize, newState.schema.text(latex));
+                          tr.addMark(pos, pos + latex.length, newState.schema.marks.code.create());
+                        } else {
+                          tr.delete(pos, pos + node.nodeSize);
+                        }
+                        modified = true;
+                      }
+                    }
+                  });
+                }
+
+                return modified ? tr : null;
+              }
+            })
+          ];
+        }
+      }),
       PrismHighlightExtension,
       Extension.create({
         name: 'integrityExtension',
