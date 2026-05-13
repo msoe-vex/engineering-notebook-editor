@@ -24,6 +24,7 @@
 \RequirePackage{etoolbox}
 \RequirePackage{microtype}
 \RequirePackage{soul}
+\RequirePackage[normalem]{ulem}
 \definecolor{codebg}{HTML}{F3F4F6}
 \sethlcolor{codebg}
 \soulregister{\textbf}{1}
@@ -36,9 +37,31 @@
 \soulregister{\Cref}{1}
 \soulregister{\nameref}{1}
 \soulregister{\pageref}{1}
-\newcommand{\notebookinlinecode}[1]{{\small\texttt{\hl{#1}}}}
-\soulregister{\notebookinlinecode}{1}
-\renewcommand{\underline}[1]{\ul{#1}}
+\newcommand{\notebookinlinecode}[1]{{\small\texttt{\protect\notebookrichtext{ffff00}{0}{0}{#1}}}}
+
+% Universal ulem-based rich text decorator. Handles hl, ul, and st in a single pass
+% to prevent nesting conflicts and support multi-line breaking.
+\DeclareRobustCommand{\notebookrichtext}[3]{%
+  \bgroup
+  \def\nbhlcolor{#1}%
+  \def\nbhasul{#2}%
+  \def\nbhasst{#3}%
+  \markoverwith{%
+    \ifx\nbhlcolor\empty\else
+      \rlap{\textcolor[HTML]{\nbhlcolor}{\rule[-.3ex]{2pt}{2.5ex}}}%
+    \fi
+    \ifnum\nbhasul=1
+      \rlap{\rule[-.3ex]{2pt}{0.4pt}}%
+    \fi
+    \ifnum\nbhasst=1
+      \rlap{\rule[0.5ex]{2pt}{0.4pt}}%
+    \fi
+    \rule{2pt}{0pt}%
+  }%
+  \ULon
+}
+\soulregister{\textsuperscript}{1}
+\soulregister{\textsubscript}{1}
 
 % XeLaTeX Font Setup
 \RequirePackage{fontspec}
@@ -491,13 +514,16 @@
 \newcommand{\headerlink}[2][]{\notebooklink{#2}{header}{#1}{}}
 
 % Command to output a header with UUID label
-% Usage: \notebookheader{text}{level}{uuid}
-% level: 1 = subsection, 2 = subsubsection, etc.
-\newcommand{\notebookheader}[3]{%
-    \ifnum#2=1
-        \subsection{#1}%
+% Usage: \notebookheader{formattedText}{plainText}{level}{uuid}
+% #1 = formatted text (rich marks for display)
+% #2 = plain text (safe for TOC and PDF bookmarks)
+% #3 = level: 1 = subsection, 2 = subsubsection, etc.
+% #4 = UUID label for cross-referencing
+\newcommand{\notebookheader}[4]{%
+    \ifnum#3=1\relax
+        \subsection[\texorpdfstring{#2}{#2}]{#1}%
     \else
-        \subsubsection{#1}%
+        \subsubsection[\texorpdfstring{#2}{#2}]{#1}%
     \fi
-    \label{#3}%
+    \label{#4}%
 }

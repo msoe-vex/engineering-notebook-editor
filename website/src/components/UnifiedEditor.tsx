@@ -61,6 +61,14 @@ const RestrictedListItem = ListItem.extend({
   },
 });
 
+const CustomSuperscript = Superscript.extend({
+  excludes: 'subscript',
+});
+
+const CustomSubscript = Subscript.extend({
+  excludes: 'superscript',
+});
+
 /* ─────────────────────────────────────────────────────────────────
    Main Component
    ───────────────────────────────────────────────────────────────── */
@@ -162,11 +170,15 @@ export default function UnifiedEditor({
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
+      TextStyle.configure(),
+      Color.configure(),
       StarterKit.configure({
         codeBlock: false,
         link: false,
         underline: false,
         listItem: false,
+        bulletList: false,
+        orderedList: false,
         heading: false,
         dropcursor: {
           color: '#d9282f',
@@ -181,11 +193,9 @@ export default function UnifiedEditor({
         HTMLAttributes: { class: "list-decimal ml-4" },
       }),
       RestrictedListItem,
-      Color,
-      TextStyle,
       Highlight.configure({ multicolor: true }),
-      Superscript,
-      Subscript,
+      CustomSuperscript,
+      CustomSubscript,
       ImageWithCaption.configure({ inline: false, allowBase64: true, dbName }),
       TableWithCaption.configure({ resizable: true }),
       TableRow,
