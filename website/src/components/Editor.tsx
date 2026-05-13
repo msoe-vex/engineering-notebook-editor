@@ -1039,7 +1039,7 @@ const EditorContent = React.memo(function EditorContent({
                       >
                         <span className="text-sm font-medium">Paragraph (Standard Text)</span>
                       </button>
-                      {([1, 2, 3, 4] as const).map(level => (
+                      {([1, 2] as const).map(level => (
                         <button
                           key={level}
                           className={`w-full flex items-center px-4 py-3 rounded-lg transition-all text-left cursor-pointer active:scale-[0.98] ${editor.isActive("heading", { level }) ? "bg-nb-primary text-white" : "text-nb-on-surface-variant hover:bg-nb-surface-mid"}`}

@@ -198,7 +198,7 @@ export default function UnifiedEditor({
           width: 3,
         }
       }),
-      CustomHeading,
+      CustomHeading.configure({ levels: [1, 2] }),
       BulletList.configure({
         HTMLAttributes: { class: "list-disc" },
       }),
