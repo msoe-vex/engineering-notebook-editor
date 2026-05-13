@@ -33,6 +33,14 @@ export const mapLanguageToLatex = (lang: string): string => {
   return mapping[lang] || lang;
 };
 
+// Recursively extract plain text from a TipTap node tree (no formatting commands).
+// Used for headings / moving arguments where LaTeX commands would break.
+const plainTextFromNode = (node: TipTapNode): string => {
+  if (!node) return "";
+  if (node.type === "text") return escapeLaTeX(node.text ?? "");
+  return (node.content || []).map(plainTextFromNode).join("");
+};
+
 export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<string, string>): string => {
   if (!node) return "";
 
@@ -62,24 +70,31 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
       const subscriptMark = marks.find(m => m.type === "subscript");
       const linkMark = marks.find(m => m.type === "link");
 
+      // Innermost: Scripts
+      if (superscriptMark) t = `\\textsuperscript{${t}}`;
+      if (subscriptMark) t = `\\textsubscript{${t}}`;
+
+      // Ulem-based universal rich text decorator for line breaking
+      let hlColor = "";
+      if (highlightMark) {
+        hlColor = highlightMark.attrs?.color ? (highlightMark.attrs.color as string).replace("#", "") : "ffff00";
+      }
+      let hasUl = hasUnderline ? 1 : 0;
+      let hasSt = strikeMark ? 1 : 0;
+
+      if (hlColor || hasUl || hasSt) {
+        t = `\\protect\\notebookrichtext{${hlColor}}{${hasUl}}{${hasSt}}{${t}}`;
+      }
+
+      // Semantic: Bold and Italic
       if (hasBold) t = `\\textbf{${t}}`;
       if (hasItalic) t = `\\textit{${t}}`;
+
       if (hasCode) t = `\\notebookinlinecode{${t}}`;
-      if (hasUnderline) t = `\\underline{${t}}`;
-      if (strikeMark) t = `\\st{${t}}`;
-      if (superscriptMark) t = `^{${t}}`;
-      if (subscriptMark) t = `_{${t}}`;
+
       if (colorMark) {
         const hex = (colorMark.attrs?.color as string).replace("#", "");
         t = `\\textcolor[HTML]{${hex}}{${t}}`;
-      }
-      if (highlightMark) {
-        if (highlightMark.attrs?.color) {
-          const hex = (highlightMark.attrs.color as string).replace("#", "");
-          t = `\\sethlcolor[HTML]{${hex}}\\hl{${t}}`;
-        } else {
-          t = `\\hl{${t}}`;
-        }
       }
 
       if (linkMark) {
@@ -116,16 +131,17 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
 
     case "heading": {
       const level = node.attrs?.level ?? 2;
-      const headingText = children().trim();
+      const formattedText = children().trim();
+      const plainText = plainTextFromNode(node).trim();
       const uuid = (node.attrs?.id as string) || "";
 
       if (uuid) {
-        // Use notebookheader command with UUID label
-        return `\\notebookheader{${headingText}}{${level}}{${uuid}}\n\n`;
+        // notebookheader{formatted}{plain}{level}{uuid}
+        return `\\notebookheader{${formattedText}}{${plainText}}{${level}}{${uuid}}\n\n`;
       } else {
-        // Fallback: standard heading without label
+        // Fallback: standard heading without label (plain text only)
         const cmd = level === 1 ? "subsection" : (level === 2 ? "subsubsection" : "paragraph");
-        return `\\${cmd}{${headingText}}\n\n`;
+        return `\\${cmd}{${plainText}}\n\n`;
       }
     }
 
