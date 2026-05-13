@@ -572,6 +572,7 @@
     % Light blue links
     \definecolor{linkblue}{HTML}{1E90FF}
     \hypersetup{linkcolor=black, urlcolor=black, citecolor=black}
+    \urlstyle{same}
 }
 
 % Helper command for formatted links
@@ -579,7 +580,7 @@
 % Supported types: entry, heading, image, table, codeBlock, url
 \newcommand{\notebooklink}[3]{%
     \ifboolexpr{test {\ifstrequal{#2}{url}}}{%
-        \href{\detokenize{#3}}{#1\ [\nolinkurl{\detokenize{#3}}]}%
+        \href{\detokenize{#3}}{#1\ \lbrack\nolinkurl{\detokenize{#3}}\rbrack}%
     }{%
     \ifboolexpr{test {\ifstrequal{#2}{entry}} or test {\ifstrequal{#2}{heading}}}{%
         \hyperref[#3]{#1\ \lbrack\nameref*{#3},~p.\,\pageref*{#3}\rbrack}%
