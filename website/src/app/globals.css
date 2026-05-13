@@ -615,12 +615,31 @@ pre[class*="language-"],
   list-style-position: outside;
 }
 
-.ProseMirror ul {
-  list-style-type: disc;
-}
+/* Bullet Lists (ul) - Hierarchical Markers matching LaTeX */
+.ProseMirror ul { list-style-type: disc; }
+.ProseMirror ul ul { list-style-type: "- "; }
+.ProseMirror ul ul ul { list-style-type: "* "; }
+.ProseMirror ul ul ul ul { list-style-type: "\22C5 "; }
+.ProseMirror ul ul ul ul ul { list-style-type: disc; }
+.ProseMirror ul ul ul ul ul ul { list-style-type: "- "; }
+.ProseMirror ul ul ul ul ul ul ul { list-style-type: "* "; }
+.ProseMirror ul ul ul ul ul ul ul ul { list-style-type: "\22C5 "; }
 
-.ProseMirror ol {
-  list-style-type: decimal;
+/* Ordered Lists (ol) - Hierarchical Markers */
+.ProseMirror ol { list-style-type: decimal; }
+.ProseMirror ol ol { list-style-type: lower-alpha; }
+.ProseMirror ol ol ol { list-style-type: lower-roman; }
+.ProseMirror ol ol ol ol { list-style-type: upper-alpha; }
+.ProseMirror ol ol ol ol ol { list-style-type: decimal; }
+.ProseMirror ol ol ol ol ol ol { list-style-type: lower-alpha; }
+.ProseMirror ol ol ol ol ol ol ol { list-style-type: lower-roman; }
+.ProseMirror ol ol ol ol ol ol ol ol { list-style-type: upper-alpha; }
+
+/* Nested lists should not add extra top margin */
+.ProseMirror li > ul,
+.ProseMirror li > ol {
+  margin-top: 0.25rem;
+  margin-bottom: 0;
 }
 
 .ProseMirror li {
@@ -732,28 +751,61 @@ pre[class*="language-"],
 }
 
 @keyframes slide-in-from-top {
-  from { transform: translateY(-1rem); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(-1rem);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 @keyframes slide-in-from-right {
-  from { transform: translateX(1rem); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+  from {
+    transform: translateX(1rem);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
 @keyframes fade-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
 }
 
 @keyframes zoom-out {
-  from { opacity: 1; transform: scale(1); }
-  to { opacity: 0; transform: scale(0.95); }
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
 }
 
 @keyframes slide-out-to-right {
-  from { transform: translateX(0); opacity: 1; }
-  to { transform: translateX(1rem); opacity: 0; }
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+
+  to {
+    transform: translateX(1rem);
+    opacity: 0;
+  }
 }
 
 
@@ -769,15 +821,33 @@ pre[class*="language-"],
   animation-fill-mode: forwards;
 }
 
-.fade-in { animation-name: fade-in; }
-.fade-out { animation-name: fade-out; }
+.fade-in {
+  animation-name: fade-in;
+}
 
-.zoom-in-95 { animation-name: zoom-in; }
-.zoom-out-95 { animation-name: zoom-out; }
+.fade-out {
+  animation-name: fade-out;
+}
 
-.slide-in-from-top-4 { animation-name: slide-in-from-top; }
-.slide-in-from-right-4 { animation-name: slide-in-from-right; }
-.slide-out-to-right-4 { animation-name: slide-out-to-right; }
+.zoom-in-95 {
+  animation-name: zoom-in;
+}
+
+.zoom-out-95 {
+  animation-name: zoom-out;
+}
+
+.slide-in-from-top-4 {
+  animation-name: slide-in-from-top;
+}
+
+.slide-in-from-right-4 {
+  animation-name: slide-in-from-right;
+}
+
+.slide-out-to-right-4 {
+  animation-name: slide-out-to-right;
+}
 
 @keyframes spin-stable {
   from {

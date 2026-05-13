@@ -168,10 +168,10 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
     }
 
     case "bulletList":
-      return `\\begin{itemize}\n${children()}\\end{itemize}\n\n`;
+      return `\\begin{notebookunorderedlist}\n${children()}\\end{notebookunorderedlist}\n\n`;
 
     case "orderedList":
-      return `\\begin{enumerate}\n${children()}\\end{enumerate}\n\n`;
+      return `\\begin{notebookorderedlist}\n${children()}\\end{notebookorderedlist}\n\n`;
 
     case "listItem": {
       // listItem wraps content in a paragraph; extract raw text

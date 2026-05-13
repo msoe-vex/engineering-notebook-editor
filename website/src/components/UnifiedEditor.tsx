@@ -55,7 +55,20 @@ const RestrictedListItem = ListItem.extend({
   addKeyboardShortcuts() {
     return {
       Enter: () => this.editor.commands.splitListItem(this.name),
-      Tab: () => this.editor.commands.sinkListItem(this.name),
+      Tab: () => {
+        // Limit depth to 8 levels to match LaTeX export constraints
+        const { state } = this.editor;
+        const { $from } = state.selection;
+        let listDepth = 0;
+        for (let i = 0; i <= $from.depth; i++) {
+          const node = $from.node(i);
+          if (node.type.name === 'bulletList' || node.type.name === 'orderedList') {
+            listDepth++;
+          }
+        }
+        if (listDepth >= 8) return true; // Consume the event but do not indent further
+        return this.editor.commands.sinkListItem(this.name);
+      },
       "Shift-Tab": () => this.editor.commands.liftListItem(this.name),
     };
   },
@@ -187,10 +200,10 @@ export default function UnifiedEditor({
       }),
       CustomHeading,
       BulletList.configure({
-        HTMLAttributes: { class: "list-disc ml-4" },
+        HTMLAttributes: { class: "list-disc" },
       }),
       OrderedList.configure({
-        HTMLAttributes: { class: "list-decimal ml-4" },
+        HTMLAttributes: { class: "list-decimal" },
       }),
       RestrictedListItem,
       Highlight.configure({ multicolor: true }),
