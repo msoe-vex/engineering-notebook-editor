@@ -74,7 +74,7 @@
   \seq_map_inline:Nn \l_tmpa_seq 
    {
     \tl_map_inline:nn { ##1 } { \oldtextsuperscript{####1} \allowbreak }
-    ~
+    \c_space_tl
    }
   \unskip
  }
@@ -84,7 +84,7 @@
   \seq_map_inline:Nn \l_tmpa_seq 
    {
     \tl_map_inline:nn { ##1 } { \oldtextsubscript{####1} \allowbreak }
-    ~
+    \c_space_tl
    }
   \unskip
  }
