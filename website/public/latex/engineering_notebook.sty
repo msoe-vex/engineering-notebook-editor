@@ -22,6 +22,8 @@
 \RequirePackage{caption}
 \RequirePackage{cleveref}
 \RequirePackage{xstring}
+\RequirePackage{expl3}
+\RequirePackage{xparse}
 \RequirePackage{letltxmacro}
 \RequirePackage{etoolbox}
 \RequirePackage{microtype}
@@ -62,6 +64,32 @@
   }%
   \ULon
 }
+% Redefine standard scripts to map over words, allowing ulem to see spaces and wrap lines natively
+\ExplSyntaxOn
+\let\oldtextsuperscript\textsuperscript
+\let\oldtextsubscript\textsubscript
+\RenewDocumentCommand{\textsuperscript}{m}
+ {
+  \seq_set_split:Nnn \l_tmpa_seq { ~ } { #1 }
+  \seq_map_inline:Nn \l_tmpa_seq 
+   {
+    \tl_map_inline:nn { ##1 } { \oldtextsuperscript{####1} \allowbreak }
+    ~
+   }
+  \unskip
+ }
+\RenewDocumentCommand{\textsubscript}{m}
+ {
+  \seq_set_split:Nnn \l_tmpa_seq { ~ } { #1 }
+  \seq_map_inline:Nn \l_tmpa_seq 
+   {
+    \tl_map_inline:nn { ##1 } { \oldtextsubscript{####1} \allowbreak }
+    ~
+   }
+  \unskip
+ }
+\ExplSyntaxOff
+
 \soulregister{\textsuperscript}{1}
 \soulregister{\textsubscript}{1}
 
