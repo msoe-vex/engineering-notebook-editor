@@ -211,6 +211,31 @@
 \exhyphenpenalty=5000
 \tolerance=2000
 
+% Advanced List Configuration
+\RequirePackage{enumitem}
+\setlistdepth{8}
+\setlist{leftmargin=1.5em} % Consistent indentation for all levels
+
+\newlist{notebookunorderedlist}{itemize}{8}
+\setlist[notebookunorderedlist,1]{label=\textbullet}
+\setlist[notebookunorderedlist,2]{label=\textendash}
+\setlist[notebookunorderedlist,3]{label=\textasteriskcentered}
+\setlist[notebookunorderedlist,4]{label=\textperiodcentered}
+\setlist[notebookunorderedlist,5]{label=\textbullet}
+\setlist[notebookunorderedlist,6]{label=\textendash}
+\setlist[notebookunorderedlist,7]{label=\textasteriskcentered}
+\setlist[notebookunorderedlist,8]{label=\textperiodcentered}
+
+\newlist{notebookorderedlist}{enumerate}{8}
+\setlist[notebookorderedlist,1]{label=\arabic*.}
+\setlist[notebookorderedlist,2]{label=\alph*.}
+\setlist[notebookorderedlist,3]{label=\roman*.}
+\setlist[notebookorderedlist,4]{label=\Alph*.}
+\setlist[notebookorderedlist,5]{label=\arabic*.}
+\setlist[notebookorderedlist,6]{label=\alph*.}
+\setlist[notebookorderedlist,7]{label=\roman*.}
+\setlist[notebookorderedlist,8]{label=\Alph*.}
+
 % Color mappings for project phases
 \input{data/phases.tex}
 \definecolor{PhaseDefault}{HTML}{94a3b8}
