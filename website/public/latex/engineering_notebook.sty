@@ -27,20 +27,37 @@
 \RequirePackage{letltxmacro}
 \RequirePackage{etoolbox}
 \RequirePackage{microtype}
-\RequirePackage{soul}
 \RequirePackage[normalem]{ulem}
-\definecolor{codebg}{HTML}{F3F4F6}
-\sethlcolor{codebg}
-\soulregister{\textbf}{1}
-\soulregister{\textit}{1}
-\soulregister{\underline}{1}
-\soulregister{\notebooklink}{3}
-\soulregister{\hyperref}{2}
-\soulregister{\href}{2}
-\soulregister{\cref}{1}
-\soulregister{\Cref}{1}
-\soulregister{\nameref}{1}
-\soulregister{\pageref}{1}
+
+% ==============================================================================
+% ENGINEERING NOTEBOOK CUSTOM COMMANDS
+% ==============================================================================
+% This package defines all the necessary commands to style the engineering notebook.
+% All notebook-specific formatting is encapsulated in macros starting with \notebook...
+% You can redefine any of these commands to customize the output without modifying
+% the JSON-to-LaTeX converter logic.
+%
+% \notebookbold{text}          : Applies bold formatting
+% \notebookitalic{text}        : Applies italic formatting
+% \notebooktextcolor{hex}{text}: Applies text color (HTML hex format)
+% \notebookinlinecode{text}    : Applies inline code styling
+% \notebookdecoration{color}{underline}{strikeout}{text} : Applies highlights/lines
+% \notebooksuperscript{text}   : Applies superscript (with native word-wrapping)
+% \notebooksubscript{text}     : Applies subscript (with native word-wrapping)
+% \notebookseqsplit{text}      : Wraps abnormally long unbreakable words
+% \notebookheader{formatted}{raw}{level}{label} : Section headers and TOC entries
+% \notebookentry{title}{date}{author}{phase}{label} : Notebook entry titles
+% \notebookimage{file}{title}{caption}{width}{label} : Standardized figures
+% \begin{notebookcodeblock}{lang}{title}{caption}{label} : Standardized code blocks
+% \notebooktable{columns}{title}{content}{caption}{label} : Standardized tables
+% \notebookequation{math}{title}{caption}{label} : Standardized block equations
+% ==============================================================================
+
+% Basic semantic formatting
+\newcommand{\notebookbold}[1]{\textbf{#1}}
+\newcommand{\notebookitalic}[1]{\textit{#1}}
+\newcommand{\notebooktextcolor}[2]{\textcolor[HTML]{#1}{#2}}
+\newcommand{\notebookseqsplit}[1]{\seqsplit{#1}}
 \newcommand{\notebookinlinecode}[1]{{\small\texttt{\notebookdecoration{ffff00}{0}{0}{#1}}}}
 
 % ulem-based rich text formatter
@@ -64,9 +81,11 @@
   }%
   \ULon
 }
-% Redefine standard scripts to map over words, allowing ulem to see spaces and wrap lines natively
+
+% Scripts and character splitting
+% These map over characters natively so that un-breakable strings word-wrap perfectly
 \ExplSyntaxOn
-\NewDocumentCommand{\charsplit}{m}
+\NewDocumentCommand{\notebookcharsplit}{m}
  {
   \seq_set_split:Nnn \l_tmpa_seq { ~ } { #1 }
   \seq_map_inline:Nn \l_tmpa_seq 
@@ -77,32 +96,28 @@
   \unskip
  }
 
-\let\oldtextsuperscript\textsuperscript
-\let\oldtextsubscript\textsubscript
-\RenewDocumentCommand{\textsuperscript}{m}
+\NewDocumentCommand{\notebooksuperscript}{m}
  {
   \seq_set_split:Nnn \l_tmpa_seq { ~ } { #1 }
   \seq_map_inline:Nn \l_tmpa_seq 
    {
-    \tl_map_inline:nn { ##1 } { \oldtextsuperscript{####1} \allowbreak }
+    \tl_map_inline:nn { ##1 } { \textsuperscript{####1} \allowbreak }
     \c_space_tl
    }
   \unskip
  }
-\RenewDocumentCommand{\textsubscript}{m}
+
+\NewDocumentCommand{\notebooksubscript}{m}
  {
   \seq_set_split:Nnn \l_tmpa_seq { ~ } { #1 }
   \seq_map_inline:Nn \l_tmpa_seq 
    {
-    \tl_map_inline:nn { ##1 } { \oldtextsubscript{####1} \allowbreak }
+    \tl_map_inline:nn { ##1 } { \textsubscript{####1} \allowbreak }
     \c_space_tl
    }
   \unskip
  }
 \ExplSyntaxOff
-
-\soulregister{\textsuperscript}{1}
-\soulregister{\textsubscript}{1}
 
 % XeLaTeX Font Setup
 \RequirePackage{fontspec}
@@ -388,13 +403,13 @@
     \phantomsection
     \protected@edef\@currentlabelname{#1}%
     \label{#5}%
-    \section*{\charsplit{#1} \hfill \normalfont\small #2}
+    \section*{\notebookcharsplit{#1} \hfill \normalfont\small #2}
     \leavevmode\par\vspace{-\baselineskip}
     \addcontentsline{toc}{section}{%
         \texorpdfstring{%
             \protect\colorbox{toccolor-\thesection}{\makebox[0pt][l]{\hspace{-3pt}\rule[-4pt]{0pt}{14pt}}}%
             \hspace{6pt}%
-            \textbf{\charsplit{#1}} \protect\textcolor{gray}{(#2)}%
+            \textbf{\notebookcharsplit{#1}} \protect\textcolor{gray}{(#2)}%
         }{#1}%
     }
     \vspace{-0.2cm}
@@ -446,13 +461,7 @@
 
 % \notebooktable{columns}{title}{content}{caption}{label}
 
-% Custom Text Formatting
-\newcommand{\notebookbold}[1]{\textbf{#1}}
-\newcommand{\notebookitalic}[1]{\textit{#1}}
-\newcommand{\notebooksuperscript}[1]{\textsuperscript{#1}}
-\newcommand{\notebooksubscript}[1]{\textsubscript{#1}}
-\newcommand{\notebooktextcolor}[2]{\textcolor[HTML]{#1}{#2}}
-\newcommand{\notebookseqsplit}[1]{\seqsplit{#1}}
+
 
 % \begin{notebookcodeblock}{language}{title}{caption}{label} ... \end{notebookcodeblock}
 \newcommand{\@currentcodecaption}{}
@@ -570,9 +579,9 @@
 % #4 = UUID label for cross-referencing
 \newcommand{\notebookheader}[4]{%
     \ifnum#3=1\relax
-        \subsection[\texorpdfstring{\charsplit{#2}}{#2}]{#1}%
+        \subsection[\texorpdfstring{\notebookcharsplit{#2}}{#2}]{#1}%
     \else
-        \subsubsection[\texorpdfstring{\charsplit{#2}}{#2}]{#1}%
+        \subsubsection[\texorpdfstring{\notebookcharsplit{#2}}{#2}]{#1}%
     \fi
     \label{#4}%
 }
