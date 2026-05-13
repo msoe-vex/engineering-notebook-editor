@@ -156,7 +156,9 @@ export function LinkReferencePopup({
     if (finalLink || trimmedText) {
       const marks: import("@tiptap/pm/model").Mark[] = [];
       if (finalLink) {
-        marks.push(editor.schema.marks.link.create({ href: finalLink, resourceId, entryId }));
+        marks.push(editor.schema.marks.link.create({ href: finalLink, resourceId, entryId, autoStyled: true }));
+        marks.push(editor.schema.marks.underline.create());
+        marks.push(editor.schema.marks.textStyle.create({ color: '#3b82f6' }));
       }
 
       if (isMention) {
@@ -168,7 +170,7 @@ export function LinkReferencePopup({
         .focus()
         .insertContent({
           type: 'text',
-          text: trimmedText || finalLink,
+          text: trimmedText || (finalLink.startsWith('#') ? (selectedResource?.title || finalLink) : finalLink),
           marks: marks.map(m => m.toJSON())
         })
         .run();

@@ -20,6 +20,14 @@ export const CustomLink = Link.extend({
           return { 'data-entry-id': attributes.entryId };
         },
       },
+      autoStyled: {
+        default: false,
+        parseHTML: element => element.hasAttribute('data-auto-styled'),
+        renderHTML: attributes => {
+          if (!attributes.autoStyled) return {};
+          return { 'data-auto-styled': '' };
+        },
+      },
     };
   },
   addProseMirrorPlugins() {

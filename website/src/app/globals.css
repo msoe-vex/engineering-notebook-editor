@@ -185,11 +185,12 @@ button:disabled {
 }
 
 .ProseMirror a {
-  text-decoration: none;
+  text-underline-offset: 4px;
+  transition: all 0.2s ease;
 }
 
 .ProseMirror a:hover {
-  text-decoration: underline;
+  opacity: 0.8;
 }
 
 .ProseMirror a::after {
@@ -198,8 +199,8 @@ button:disabled {
   font-size: 0.7em;
   margin-left: 2px;
   vertical-align: super;
-  opacity: 0.5;
-  color: var(--color-nb-primary);
+  opacity: 0.4;
+  color: currentColor;
   display: inline-block;
   transition: opacity 0.2s;
 }

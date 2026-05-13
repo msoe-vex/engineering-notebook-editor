@@ -278,13 +278,45 @@ export default function UnifiedEditor({
         name: 'integrityExtension',
         addProseMirrorPlugins: () => [IntegrityPlugin()]
       }),
+      Extension.create({
+        name: 'initialLinkStyler',
+        addProseMirrorPlugins() {
+          return [
+            new Plugin({
+              appendTransaction(transactions, oldState, newState) {
+                const { tr } = newState;
+                let modified = false;
+
+                newState.doc.descendants((node, pos) => {
+                  if (node.isText) {
+                    const linkMark = node.marks.find(m => m.type.name === 'link');
+                    if (linkMark && !linkMark.attrs.autoStyled) {
+                      // Apply default styling (underline and light blue color)
+                      tr.addMark(pos, pos + node.nodeSize, newState.schema.marks.underline.create());
+                      tr.addMark(pos, pos + node.nodeSize, newState.schema.marks.textStyle.create({ color: '#3b82f6' }));
+
+                      // Mark as autoStyled so we don't re-apply if the user manually changes it
+                      const newAttrs = { ...linkMark.attrs, autoStyled: true };
+                      tr.removeMark(pos, pos + node.nodeSize, newState.schema.marks.link);
+                      tr.addMark(pos, pos + node.nodeSize, newState.schema.marks.link.create(newAttrs));
+                      modified = true;
+                    }
+                  }
+                });
+
+                return modified ? tr : null;
+              }
+            })
+          ];
+        }
+      }),
       Underline,
       CustomLink.configure({
         openOnClick: false,
         autolink: true,
         linkOnPaste: true,
         HTMLAttributes: {
-          class: 'text-nb-primary underline decoration-nb-primary/30 underline-offset-[3px] hover:decoration-nb-primary transition-all cursor-text',
+          class: 'transition-all cursor-text',
         },
       }),
       Placeholder.configure({
