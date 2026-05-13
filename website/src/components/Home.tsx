@@ -3,11 +3,12 @@ import { Project, getProjectDBName, getAllPending } from "@/lib/db";
 import { GITHUB_ISSUES_URL } from "@/lib/constants";
 import React, { useState, useEffect } from "react";
 import {
-  BookOpen, Moon, Sun, GitBranch, Folder, HardDrive, Trash2, Clock, Plus,
-  ArrowRight, History, Edit2, Check, X, AlertCircle, FolderGit, HelpCircle, MoreVertical
+  BookOpen, Moon, Sun, Folder, HardDrive, Trash2, Clock, Plus,
+  ArrowRight, History, Edit2, Check, X, AlertCircle, HelpCircle, MoreVertical
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import GitHubConnectionDialog from "./GitHubConnectionDialog";
+import GithubIcon from "./ui/GithubIcon";
 import Logo from "./ui/Logo";
 
 
@@ -166,7 +167,7 @@ export default function Home({
                 className="group flex items-center gap-4 p-4 rounded-2xl border transition-all text-left shadow-nb-sm bg-nb-surface border-nb-outline-variant/30 hover:border-nb-tertiary/50 hover:bg-nb-tertiary/5 cursor-pointer"
               >
                 <div className="w-10 h-10 rounded-xl bg-nb-tertiary/10 text-nb-tertiary flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <GitBranch size={20} />
+                  <GithubIcon size={20} />
                 </div>
                 <div className="flex-1">
                   <h3 className="text-sm font-bold text-nb-on-surface">GitHub Repository</h3>
@@ -224,7 +225,7 @@ export default function Home({
                       project.type === "github" ? "bg-nb-tertiary/10 text-nb-tertiary" :
                         "bg-nb-on-surface-variant/10 text-nb-on-surface-variant"
                       }`}>
-                      {project.type === "github" ? <GitBranch size={22} /> :
+                      {project.type === "github" ? <GithubIcon size={22} /> :
                         project.type === "local" ? <Folder size={22} /> :
                           <HardDrive size={22} />}
                     </div>
@@ -320,7 +321,7 @@ export default function Home({
                                 onClick={(e) => e.stopPropagation()}
                                 className="flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold text-nb-on-surface hover:bg-nb-surface-mid transition-all cursor-pointer"
                               >
-                                <FolderGit size={14} />
+                                <GithubIcon size={14} />
                                 View on GitHub
                               </a>
                             )}

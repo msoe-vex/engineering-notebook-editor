@@ -2,8 +2,15 @@
 
 import { useState } from "react";
 import { useTheme } from "next-themes";
-import { BookOpen, Edit3, FileText, Download, Zap, Heart, ArrowRight, Shield, Globe, Bold, Italic, List, Type, Sun, Moon } from "lucide-react";
+import Image from "next/image";
+import {
+  Edit3, FileText, Download, ArrowRight,
+  Shield, Bold, Italic, List, Type, Sun, Moon,
+  Sigma, Code, Image as ImageIcon, Table as TableIcon, Terminal, Link as LinkIcon,
+  Lock, WifiOff, ChevronDown
+} from "lucide-react";
 import Logo from "./ui/Logo";
+import GithubIcon from "./ui/GithubIcon";
 
 const BLINK_CSS = `
   @keyframes blink {
@@ -19,6 +26,13 @@ interface AboutPageProps {
 
 export default function AboutPage({ onClose, onTryIt }: AboutPageProps) {
   const { setTheme, resolvedTheme } = useTheme();
+
+  const scrollToId = (id: string) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[1000] bg-nb-bg overflow-y-auto custom-scrollbar" style={{ scrollbarGutter: 'stable' }}>
@@ -60,7 +74,7 @@ export default function AboutPage({ onClose, onTryIt }: AboutPageProps) {
       </div>
 
       {/* Hero Section */}
-      <section className="relative py-20 lg:py-32 overflow-hidden">
+      <section id="hero" className="relative py-20 lg:py-32 overflow-hidden min-h-[80vh] flex flex-col justify-center">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-full pointer-events-none">
           <div className="absolute top-1/4 left-0 w-64 h-64 bg-nb-primary/10 rounded-full blur-[100px]" />
           <div className="absolute bottom-1/4 right-0 w-64 h-64 bg-nb-tertiary/10 rounded-full blur-[100px]" />
@@ -76,54 +90,72 @@ export default function AboutPage({ onClose, onTryIt }: AboutPageProps) {
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <button
-              onClick={onTryIt}
+              onClick={() => scrollToId('features')}
               className="w-full sm:w-auto px-10 py-5 rounded-2xl bg-nb-primary text-white text-sm font-black uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-2xl shadow-nb-primary/30 active:scale-95 cursor-pointer flex items-center justify-center gap-3"
             >
-              Get Started
-              <ArrowRight size={18} />
+              Explore Features
+              <ChevronDown size={18} />
             </button>
           </div>
         </div>
       </section>
 
-      {/* Origin Section */}
-      <section className="py-24 bg-nb-surface-low border-y border-nb-outline-variant/30">
-        <div className="max-w-4xl mx-auto px-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-            <div>
-              <h2 className="text-3xl font-black text-nb-on-surface mb-6 tracking-tight">The Documentation Problem</h2>
-              <div className="space-y-4 text-nb-on-surface-variant font-medium leading-relaxed">
-                <p>
-                  As engineering students, we spent more time fixing image captions and table alignments than actually analyzing our robots.
-                </p>
-                <p>
-                  We needed a tool that combined the ease of a markdown editor with the professional formatting of LaTeX—something that stayed out of the way while we worked.
-                </p>
-                <p>
-                  This project was born out of that frustration. It&apos;s built to help you meet rigorous documentation standards without the burnout.
-                </p>
+      {/* Detailed Features Grid */}
+      <section id="features" className="py-24 bg-nb-surface-low overflow-hidden border-y border-nb-outline-variant/30">
+        <div className="max-w-5xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-black text-nb-on-surface mb-4 tracking-tight">Powerful Editor Features</h2>
+            <p className="text-nb-on-surface-variant font-medium">Everything you need for technical documentation.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <FeatureCard
+              icon={<Sigma size={24} className="text-nb-primary" />}
+              title="Math Rendering"
+              description="Full support for Inline and Block LaTeX math. Write complex equations and see them rendered instantly with KaTeX."
+            />
+            <FeatureCard
+              icon={<Code size={24} className="text-nb-tertiary" />}
+              title="Code Blocks"
+              description="Document your software with syntax-highlighted code blocks. Perfect for sharing algorithms and control logic."
+            />
+            <FeatureCard
+              icon={<ImageIcon size={24} className="text-nb-primary" />}
+              title="Smart Images"
+              description="Drag and drop images with automatic captioning and sizing. All images are handled as standard LaTeX figures."
+            />
+            <FeatureCard
+              icon={<TableIcon size={24} className="text-nb-tertiary" />}
+              title="Dynamic Tables"
+              description="Create and manage complex data tables with ease. No more wrestling with LaTeX tabular environments."
+            />
+            <FeatureCard
+              icon={<Terminal size={24} className="text-nb-primary" />}
+              title="Raw LaTeX"
+              description="Need more control? Insert raw LaTeX blocks anywhere in your entry for custom formatting and advanced packages."
+            />
+            <FeatureCard
+              icon={<LinkIcon size={24} className="text-nb-tertiary" />}
+              title="Cross-References"
+              description="Automatically link to figures, tables, and other notebook entries. Build a connected web of documentation."
+            />
+          </div>
+
+          <div className="mt-20 flex justify-center">
+            <button
+              onClick={() => scrollToId('pipeline')}
+              className="flex flex-col items-center gap-3 text-nb-on-surface-variant hover:text-nb-primary transition-all group"
+            >
+              <span className="text-[10px] font-black uppercase tracking-[0.2em]">See the Workflow</span>
+              <div className="w-12 h-12 rounded-full border border-nb-outline-variant/30 flex items-center justify-center group-hover:border-nb-primary/30 group-hover:bg-nb-primary/5">
+                <ChevronDown size={20} className="group-hover:translate-y-1 transition-transform" />
               </div>
-            </div>
-            <div className="bg-nb-surface p-8 rounded-[32px] border border-nb-outline-variant/30 shadow-nb-xl">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 rounded-2xl bg-nb-tertiary/10 text-nb-tertiary flex items-center justify-center">
-                  <Shield size={24} />
-                </div>
-                <div>
-                  <h3 className="font-black text-nb-on-surface">Data Permanence</h3>
-                  <p className="text-xs text-nb-on-surface-variant">Your files, forever.</p>
-                </div>
-              </div>
-              <p className="text-sm text-nb-on-surface-variant leading-relaxed">
-                We use LaTeX because it&apos;s the gold standard for engineering. Even if this website disappeared tomorrow, your translated LaTeX files remain standard plain text, editable and able to compile anywhere, forever.
-              </p>
-            </div>
+            </button>
           </div>
         </div>
       </section>
 
       {/* Workflow Section with Carousel */}
-      <section className="py-24 overflow-hidden">
+      <section id="pipeline" className="py-24 overflow-hidden">
         <div className="max-w-5xl mx-auto px-6">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-black text-nb-on-surface mb-4 tracking-tight">The Pipeline</h2>
@@ -131,39 +163,151 @@ export default function AboutPage({ onClose, onTryIt }: AboutPageProps) {
           </div>
 
           <PipelineCarousel />
+
+          <div className="mt-20 flex justify-center">
+            <button
+              onClick={() => scrollToId('trust')}
+              className="flex flex-col items-center gap-3 text-nb-on-surface-variant hover:text-nb-primary transition-all group"
+            >
+              <span className="text-[10px] font-black uppercase tracking-[0.2em]">Security & Standards</span>
+              <div className="w-12 h-12 rounded-full border border-nb-outline-variant/30 flex items-center justify-center group-hover:border-nb-primary/30 group-hover:bg-nb-primary/5">
+                <ChevronDown size={20} className="group-hover:translate-y-1 transition-transform" />
+              </div>
+            </button>
+          </div>
         </div>
       </section>
 
-      {/* Features Grid */}
-      <section className="py-24 bg-nb-surface-low">
+      {/* Trust & Collaboration Grid */}
+      <section id="trust" className="py-24 bg-nb-surface border-y border-nb-outline-variant/30 overflow-hidden">
         <div className="max-w-5xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-black text-nb-on-surface mb-4 tracking-tight">Trust & Collaboration</h2>
+            <p className="text-nb-on-surface-variant font-medium">Built for professional engineering standards.</p>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <FeatureCard
-              icon={<Zap size={24} className="text-nb-primary" />}
-              title="Browser-Based Power"
-              description="Compiles LaTeX directly in your browser using WASM. No complex local installations or heavy software required."
-            />
-            <FeatureCard
-              icon={<Globe size={24} className="text-nb-tertiary" />}
-              title="Open Source & Free"
-              description="Built by students at MSOE. This tool is and will always be free for teams to use, with the code open to the community."
-            />
-            <FeatureCard
-              icon={<FileText size={24} className="text-nb-primary" />}
-              title="Standard Compliant"
-              description="Generates documents that meet competition requirements (like VRC/VEXU) with automatic indexing and cross-referencing."
-            />
-            <FeatureCard
-              icon={<Heart size={24} className="text-nb-tertiary" />}
-              title="Long-Term Support"
-              description="LaTeX has been a standard for 40+ years. By using it, you ensure your documentation isn't locked into a proprietary format."
-            />
+            <div className="bg-nb-surface-low p-8 rounded-[32px] border border-nb-outline-variant/30 shadow-nb-xl relative overflow-hidden group">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-nb-primary/10 text-nb-primary flex items-center justify-center">
+                  <Shield size={24} />
+                </div>
+                <div>
+                  <h3 className="font-black text-nb-on-surface">Data Permanence</h3>
+                  <p className="text-xs text-nb-on-surface-variant">Your files, forever.</p>
+                </div>
+              </div>
+              <p className="text-sm text-nb-on-surface-variant leading-relaxed font-medium">
+                We use LaTeX because it&apos;s the gold standard for engineering. Even if this website disappeared tomorrow, your translated LaTeX files remain standard plain text, editable and able to compile anywhere, forever.
+              </p>
+            </div>
+
+            <div className="bg-nb-surface-low p-8 rounded-[32px] border border-nb-outline-variant/30 shadow-nb-xl relative overflow-hidden group">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-nb-tertiary/10 text-nb-tertiary flex items-center justify-center">
+                  <GithubIcon size={24} />
+                </div>
+                <div>
+                  <h3 className="font-black text-nb-on-surface">GitHub Integration</h3>
+                  <p className="text-xs text-nb-on-surface-variant">Professional Version Control.</p>
+                </div>
+              </div>
+              <p className="text-sm text-nb-on-surface-variant leading-relaxed font-medium">
+                Sync directly with your team&apos;s GitHub repository. Benefit from professional version control, branch management, and a unified source of truth for your notebook.
+              </p>
+            </div>
+
+            <div className="bg-nb-surface-low p-8 rounded-[32px] border border-nb-outline-variant/30 shadow-nb-xl relative overflow-hidden group">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-nb-primary/10 text-nb-primary flex items-center justify-center">
+                  <Lock size={24} />
+                </div>
+                <div>
+                  <h3 className="font-black text-nb-on-surface">Privacy First</h3>
+                  <p className="text-xs text-nb-on-surface-variant">No central servers.</p>
+                </div>
+              </div>
+              <p className="text-sm text-nb-on-surface-variant leading-relaxed font-medium">
+                Your engineering designs are your own. Content is never stored on our servers. It lives solely on your machine or within your private GitHub repository.
+              </p>
+            </div>
+
+            <div className="bg-nb-surface-low p-8 rounded-[32px] border border-nb-outline-variant/30 shadow-nb-xl relative overflow-hidden group">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-nb-tertiary/10 text-nb-tertiary flex items-center justify-center">
+                  <WifiOff size={24} />
+                </div>
+                <div>
+                  <h3 className="font-black text-nb-on-surface">Offline Capability</h3>
+                  <p className="text-xs text-nb-on-surface-variant">Document anywhere.</p>
+                </div>
+              </div>
+              <p className="text-sm text-nb-on-surface-variant leading-relaxed font-medium">
+                Document your work at the workbench or in the pits. Because the editor and LaTeX engine run entirely in your browser, you don&apos;t need a stable connection to stay productive.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-20 flex justify-center">
+            <button
+              onClick={() => scrollToId('origin')}
+              className="flex flex-col items-center gap-3 text-nb-on-surface-variant hover:text-nb-primary transition-all group"
+            >
+              <span className="text-[10px] font-black uppercase tracking-[0.2em]">Our Story</span>
+              <div className="w-12 h-12 rounded-full border border-nb-outline-variant/30 flex items-center justify-center group-hover:border-nb-primary/30 group-hover:bg-nb-primary/5">
+                <ChevronDown size={20} className="group-hover:translate-y-1 transition-transform" />
+              </div>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Origin Section */}
+      <section id="origin" className="py-24 bg-nb-surface-low">
+        <div className="max-w-4xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center gap-4 mb-8">
+              <Image src="/rr.svg" alt="Raider Robotics" width={80} height={80} className="h-20 w-auto" />
+              <div className="h-12 w-px bg-nb-outline-variant/30" />
+              <h2 className="text-3xl font-black text-nb-on-surface tracking-tight">Raider Robotics</h2>
+            </div>
+            <h3 className="text-4xl font-black text-nb-on-surface mb-6 tracking-tight">Built by Students, for Students</h3>
+            <div className="max-w-2xl mx-auto space-y-4 text-nb-on-surface-variant font-medium leading-relaxed">
+              <p>
+                ENGen was developed by the <strong>MSOE Raider Robotics</strong> team. We are a student-led organization at the Milwaukee School of Engineering competing in the VEX U robotics competition.
+              </p>
+              <p>
+                This tool was born from our own need for a streamlined documentation process that meets the high standards of professional engineering while maintaining the speed required in a fast-paced competition environment.
+              </p>
+              <div className="pt-6">
+                <a
+                  href="https://www.msoevex.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-nb-surface border border-nb-outline-variant/30 text-xs font-black uppercase tracking-widest text-nb-primary hover:bg-nb-primary/5 transition-all shadow-nb-sm"
+                >
+                  Visit msoevex.com
+                  <ArrowRight size={14} />
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-16 flex justify-center">
+            <button
+              onClick={() => scrollToId('cta')}
+              className="flex flex-col items-center gap-3 text-nb-on-surface-variant hover:text-nb-primary transition-all group"
+            >
+              <span className="text-[10px] font-black uppercase tracking-[0.2em]">Ready?</span>
+              <div className="w-12 h-12 rounded-full border border-nb-outline-variant/30 flex items-center justify-center group-hover:border-nb-primary/30 group-hover:bg-nb-primary/5">
+                <ChevronDown size={20} className="group-hover:translate-y-1 transition-transform" />
+              </div>
+            </button>
           </div>
         </div>
       </section>
 
       {/* Final CTA */}
-      <section className="py-24 bg-nb-primary">
+      <section id="cta" className="py-24 bg-nb-primary">
         <div className="max-w-3xl mx-auto px-6 text-center">
           <h2 className="text-4xl font-black text-white mb-6 tracking-tight">Ready to document better?</h2>
           <p className="text-white/80 mb-10 text-lg font-medium leading-relaxed">
@@ -181,11 +325,9 @@ export default function AboutPage({ onClose, onTryIt }: AboutPageProps) {
       {/* Footer */}
       <footer className="py-12 border-t border-nb-outline-variant/30">
         <div className="max-w-5xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-3 opacity-50 grayscale">
-            <div className="w-6 h-6 rounded bg-nb-on-surface flex items-center justify-center">
-              <BookOpen size={14} className="text-nb-bg" />
-            </div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface">ENGen Built by Students @ MSOE</span>
+          <div className="flex items-center gap-3 grayscale opacity-30 hover:opacity-100 hover:grayscale-0 transition-all cursor-default">
+            <Image src="/rr.svg" alt="Raider Robotics" width={24} height={24} className="w-6 h-6" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface">Made by MSOE Raider Robotics</span>
           </div>
         </div>
       </footer>

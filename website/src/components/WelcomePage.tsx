@@ -1,6 +1,7 @@
 "use client";
 
-import { Users, BookOpen, FolderOpen, GitBranch, HardDrive, Plus, ArrowLeftRight, Upload, Play } from "lucide-react";
+import { Users, BookOpen, FolderOpen, HardDrive, Plus, ArrowLeftRight, Upload, Play } from "lucide-react";
+import GithubIcon from "./ui/GithubIcon";
 import Logo from "./ui/Logo";
 
 interface WorkspaceInfo {
@@ -21,7 +22,7 @@ interface WelcomePageProps {
 
 export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDisconnect, onOpenSidebar, onOpenTeam, onOpenCompiler, onOpenHelp }: WelcomePageProps) {
   const ModeIcon =
-    workspace.mode === "github" ? GitBranch :
+    workspace.mode === "github" ? GithubIcon :
       workspace.mode === "local" ? HardDrive : ArrowLeftRight;
 
   return (

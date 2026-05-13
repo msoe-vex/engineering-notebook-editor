@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
+import GithubIcon from "./ui/GithubIcon";
 import {
   Menu, Sun, Moon, HelpCircle, Play,
-  MoreVertical, Download, Upload, ArrowLeftRight, Settings2, Edit3, ExternalLink
+  MoreVertical, Download, Upload, ArrowLeftRight, Settings2, Edit3
 } from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { ViewMode } from "./ViewToggle";
@@ -120,10 +121,13 @@ export default function ProjectHeader({
                   <MenuButton icon={<Edit3 size={14} />} label="Rename Project" onClick={() => { onStartRename(); setShowMenu(false); }} />
                 )}
                 {githubUrl && (
-                  <MenuButton icon={<ExternalLink size={14} />} label="Open in GitHub" onClick={() => { window.open(githubUrl, '_blank'); setShowMenu(false); }} />
+                  <MenuButton icon={<GithubIcon size={14} />} label="Open in GitHub" onClick={() => { window.open(githubUrl, '_blank'); setShowMenu(false); }} />
                 )}
 
-                <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
+                {(currentProject?.id !== "temporary" || githubUrl) && (
+                  <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
+                )}
+
 
                 <MenuButton icon={<Upload size={14} />} label="Import ENGen Data" onClick={() => { onImport(); setShowMenu(false); }} />
                 <MenuButton icon={<Download size={14} />} label="Export ENGen Data" onClick={() => { onExport(); setShowMenu(false); }} />
@@ -131,7 +135,7 @@ export default function ProjectHeader({
                 <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
 
                 <MenuButton icon={<HelpCircle size={14} />} label="Help & Documentation" onClick={() => { onOpenHelp(); setShowMenu(false); }} />
-                <MenuButton icon={<ArrowLeftRight size={14} />} label="Change Workspace" onClick={() => { onDisconnect(); setShowMenu(false); }} color="text-nb-tertiary" />
+                <MenuButton icon={<ArrowLeftRight size={14} />} label="Change Workspace" onClick={() => { onDisconnect(); setShowMenu(false); }} />
               </div>
             )}
           </div>
