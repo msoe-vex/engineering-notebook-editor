@@ -57,7 +57,18 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
       return children();
 
     case "text": {
-      let t = escapeLaTeX(node.text ?? "");
+      const rawText = node.text ?? "";
+      let t = rawText.split(" ").map(w => {
+         if (w.length > 30) {
+            const chunks = [];
+            for (let i = 0; i < w.length; i += 10) {
+               chunks.push(escapeLaTeX(w.substring(i, i + 10)));
+            }
+            return chunks.join("__NB_BREAK__");
+         }
+         return escapeLaTeX(w);
+      }).join(" ");
+
       const marks = node.marks || [];
       const hasBold = marks.some(m => m.type === "bold");
       const hasItalic = marks.some(m => m.type === "italic");
@@ -70,9 +81,22 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
       const subscriptMark = marks.find(m => m.type === "subscript");
       const linkMark = marks.find(m => m.type === "link");
 
-      // Innermost: Scripts
-      if (superscriptMark) t = `\\textsuperscript{${t}}`;
-      if (subscriptMark) t = `\\textsubscript{${t}}`;
+      // Innermost: Scripts (split by space and chunk breaks to allow line wrapping)
+      const wrapScript = (cmd: string) => {
+        t = t.split(" ").map(w => {
+          if (!w) return "";
+          if (w.includes("__NB_BREAK__")) {
+             return w.split("__NB_BREAK__").map(chunk => `\\${cmd}{${chunk}}`).join("\\allowbreak{}");
+          }
+          return `\\${cmd}{${w}}`;
+        }).join(" ");
+      };
+
+      if (superscriptMark) wrapScript("textsuperscript");
+      if (subscriptMark) wrapScript("textsubscript");
+
+      // Clean up any remaining breaks for non-script text
+      t = t.replace(/__NB_BREAK__/g, "\\allowbreak{}");
 
       // Ulem-based universal rich text decorator for line breaking
       let hlColor = "";

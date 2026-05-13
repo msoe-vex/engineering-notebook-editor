@@ -131,6 +131,7 @@
     "puenc.def",
     "refcount.sty",
     "rerunfilecheck.sty",
+    "seqsplit.sty",
     "size12.clo",
     "soul-ori.sty",
     "soul.sty",
@@ -158,5 +159,6 @@
     "xkvutils.tex",
     "xparse.sty",
     "xstring.sty",
-    "xstring.tex"
+    "xstring.tex",
+    "xurl.sty"
 ]
