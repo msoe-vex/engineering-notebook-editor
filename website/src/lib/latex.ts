@@ -55,12 +55,32 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
       const hasItalic = marks.some(m => m.type === "italic");
       const hasCode = marks.some(m => m.type === "code");
       const hasUnderline = marks.some(m => m.type === "underline");
+      const strikeMark = marks.find(m => m.type === "strike");
+      const colorMark = marks.find(m => m.type === "textStyle" && m.attrs?.color);
+      const highlightMark = marks.find(m => m.type === "highlight");
+      const superscriptMark = marks.find(m => m.type === "superscript");
+      const subscriptMark = marks.find(m => m.type === "subscript");
       const linkMark = marks.find(m => m.type === "link");
 
       if (hasBold) t = `\\textbf{${t}}`;
       if (hasItalic) t = `\\textit{${t}}`;
       if (hasCode) t = `\\notebookinlinecode{${t}}`;
       if (hasUnderline) t = `\\underline{${t}}`;
+      if (strikeMark) t = `\\st{${t}}`;
+      if (superscriptMark) t = `^{${t}}`;
+      if (subscriptMark) t = `_{${t}}`;
+      if (colorMark) {
+        const hex = (colorMark.attrs?.color as string).replace("#", "");
+        t = `\\textcolor[HTML]{${hex}}{${t}}`;
+      }
+      if (highlightMark) {
+        if (highlightMark.attrs?.color) {
+          const hex = (highlightMark.attrs.color as string).replace("#", "");
+          t = `\\sethlcolor[HTML]{${hex}}\\hl{${t}}`;
+        } else {
+          t = `\\hl{${t}}`;
+        }
+      }
 
       if (linkMark) {
         const { href, resourceId, entryId } = linkMark.attrs ?? {};
@@ -104,7 +124,7 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
         return `\\notebookheader{${headingText}}{${level}}{${uuid}}\n\n`;
       } else {
         // Fallback: standard heading without label
-        const cmd = level === 1 ? "subsection" : "subsubsection";
+        const cmd = level === 1 ? "subsection" : (level === 2 ? "subsubsection" : "paragraph");
         return `\\${cmd}{${headingText}}\n\n`;
       }
     }

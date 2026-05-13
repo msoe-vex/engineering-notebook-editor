@@ -8,9 +8,9 @@ import { saveAs } from "file-saver";
 import {
   Save, Trash2, Loader2, User, X, FileCode,
   Undo2, Redo2, ImagePlus, ChevronDown, ChevronUp, List, ListOrdered,
-  Code, Table as TableIcon, Heading1, Heading2, Bold, Italic, Check, Image as ImageIcon,
+  Code, Table as TableIcon, Heading, Heading1, Heading2, Heading3, Heading4, Bold, Italic, Check, Image as ImageIcon,
   Terminal, Link as LinkIcon, Underline as UnderlineIcon, Sigma,
-  FileJson
+  FileJson, Strikethrough, Palette, Highlighter, Superscript, Subscript
 } from "lucide-react";
 import ValidationTooltip from "./ValidationTooltip";
 import * as LucideIcons from "lucide-react";
@@ -40,6 +40,82 @@ import DatePicker from "./DatePicker";
 import { extractResources, extractReferences, TipTapNode, ensureHeadingIds, buildResourceTypeIndex } from "@/lib/metadata";
 import { ASSETS_DIR } from "@/lib/constants";
 import { NodeSelection } from "@tiptap/pm/state";
+
+// ─── Sub-components for Performance ──────────────────────────────────────────
+
+const ColorMenu = ({ editor, onReset }: { editor: any, onReset: () => void }) => {
+  return (
+    <>
+      <div className="grid grid-cols-5 gap-1.5 mb-3">
+        {["#000000", "#d9282f", "#1e40af", "#2d5a27", "#7e22ce", "#f59e0b", "#6b7280", "#ffffff", "#ef4444", "#3b82f6"].map(color => (
+          <button
+            key={color}
+            className="w-6 h-6 rounded-md border border-nb-outline-variant/30 cursor-pointer hover:scale-110 transition-transform shadow-sm"
+            style={{ backgroundColor: color }}
+            onClick={() => {
+              editor.chain().focus().setColor(color).run();
+            }}
+          />
+        ))}
+      </div>
+      <div className="flex flex-col gap-2 pt-2 border-t border-nb-outline-variant/30">
+        <div className="flex items-center justify-between">
+          <label className="text-[9px] font-black text-nb-on-surface-variant uppercase tracking-widest">Custom</label>
+          <input
+            type="color"
+            className="w-8 h-5 rounded cursor-pointer bg-transparent border-none p-0"
+            onInput={(e: any) => {
+              editor.chain().focus().setColor(e.target.value).run();
+            }}
+          />
+        </div>
+        <button
+          className="w-full text-[9px] font-black py-2 hover:bg-nb-surface-mid rounded-lg transition-colors uppercase tracking-widest text-nb-on-surface-variant border border-nb-outline-variant/20"
+          onClick={onReset}
+        >
+          Reset Color
+        </button>
+      </div>
+    </>
+  );
+};
+
+const HighlightMenu = ({ editor, onClear }: { editor: any, onClear: () => void }) => {
+  return (
+    <>
+      <div className="grid grid-cols-5 gap-1.5 mb-3">
+        {["#ffff00", "#00ff00", "#00ffff", "#ff00ff", "#ff0000", "#ffa500", "#cccccc", "#fef08a", "#bbf7d0", "#bfdbfe"].map(color => (
+          <button
+            key={color}
+            className="w-6 h-6 rounded-md border border-nb-outline-variant/30 cursor-pointer hover:scale-110 transition-transform shadow-sm"
+            style={{ backgroundColor: color }}
+            onClick={() => {
+              editor.chain().focus().toggleHighlight({ color }).run();
+            }}
+          />
+        ))}
+      </div>
+      <div className="flex flex-col gap-2 pt-2 border-t border-nb-outline-variant/30">
+        <div className="flex items-center justify-between">
+          <label className="text-[9px] font-black text-nb-on-surface-variant uppercase tracking-widest">Custom</label>
+          <input
+            type="color"
+            className="w-8 h-5 rounded cursor-pointer bg-transparent border-none p-0"
+            onInput={(e: any) => {
+              editor.chain().focus().setHighlight({ color: e.target.value }).run();
+            }}
+          />
+        </div>
+        <button
+          className="w-full text-[9px] font-black py-2 hover:bg-nb-surface-mid rounded-lg transition-colors uppercase tracking-widest text-nb-on-surface-variant border border-nb-outline-variant/20"
+          onClick={onClear}
+        >
+          Clear Highlight
+        </button>
+      </div>
+    </>
+  );
+};
 
 /* ─────────────────────────────────────────────────────────────────
    Component
@@ -839,6 +915,83 @@ const EditorContent = React.memo(function EditorContent({
                 <ToolbarButton onClick={() => (editor.chain().focus() as unknown as { toggleInlineMath: () => import("@tiptap/core").ChainedCommands }).toggleInlineMath().run()} active={editor.isActive("inlineMath")} title="Inline Math">
                   <Sigma size={16} />
                 </ToolbarButton>
+                <ToolbarButton onClick={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive("strike")} title="Strike-through">
+                  <Strikethrough size={16} />
+                </ToolbarButton>
+                <ToolbarButton onClick={() => editor.chain().focus().toggleSuperscript().run()} active={editor.isActive("superscript")} title="Superscript">
+                  <Superscript size={16} />
+                </ToolbarButton>
+                <ToolbarButton onClick={() => editor.chain().focus().toggleSubscript().run()} active={editor.isActive("subscript")} title="Subscript">
+                  <Subscript size={16} />
+                </ToolbarButton>
+
+                <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
+
+                <div className="relative">
+                  <ToolbarButton
+                    onClick={() => {
+                      setActiveMenu(activeMenu === "TextColor" ? null : "TextColor");
+                    }}
+                    active={activeMenu === "TextColor"}
+                    title="Text Color"
+                  >
+                    <Palette size={16} />
+                  </ToolbarButton>
+                  {activeMenu === "TextColor" && createPortal(
+                    <div
+                      style={{
+                        position: 'fixed',
+                        top: (linkButtonRef.current?.getBoundingClientRect().bottom ?? 0) + 48,
+                        left: linkButtonRef.current?.getBoundingClientRect().left ?? 0,
+                        zIndex: 9999
+                      }}
+                      className="bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl p-3 w-44 animate-in fade-in slide-in-from-top-1 duration-150"
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
+                      <ColorMenu
+                        editor={editor}
+                        onReset={() => {
+                          editor.chain().focus().unsetColor().run();
+                          setActiveMenu(null);
+                        }}
+                      />
+                    </div>,
+                    document.body
+                  )}
+                </div>
+
+                <div className="relative">
+                  <ToolbarButton
+                    onClick={() => {
+                      setActiveMenu(activeMenu === "Highlight" ? null : "Highlight");
+                    }}
+                    active={activeMenu === "Highlight"}
+                    title="Highlight"
+                  >
+                    <Highlighter size={16} />
+                  </ToolbarButton>
+                  {activeMenu === "Highlight" && createPortal(
+                    <div
+                      style={{
+                        position: 'fixed',
+                        top: (linkButtonRef.current?.getBoundingClientRect().bottom ?? 0) + 48,
+                        left: (linkButtonRef.current?.getBoundingClientRect().left ?? 0) + 40,
+                        zIndex: 9999
+                      }}
+                      className="bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl p-3 w-44 animate-in fade-in slide-in-from-top-1 duration-150"
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
+                      <HighlightMenu
+                        editor={editor}
+                        onClear={() => {
+                          editor.chain().focus().unsetHighlight().run();
+                          setActiveMenu(null);
+                        }}
+                      />
+                    </div>,
+                    document.body
+                  )}
+                </div>
 
                 <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
 
@@ -856,52 +1009,66 @@ const EditorContent = React.memo(function EditorContent({
 
                 <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
 
-                <ToolbarButton
-                  onClick={() => {
-                    if (editor.isActive("heading", { level: 1 })) {
-                      editor.chain().focus().setParagraph().run();
-                      return;
-                    }
+                <div className="relative">
+                  <ToolbarButton
+                    onClick={() => {
+                      setActiveMenu(activeMenu === "HeadingDropdown" ? null : "HeadingDropdown");
+                    }}
+                    active={editor.isActive("heading")}
+                    title="Change Heading"
+                  >
+                    <div className="flex items-center gap-1">
+                      <Heading size={16} />
+                      <ChevronDown size={10} className={`transition-transform duration-200 ${activeMenu === "HeadingDropdown" ? "rotate-180" : ""}`} />
+                    </div>
+                  </ToolbarButton>
+                  {activeMenu === "HeadingDropdown" && createPortal(
+                    <div
+                      style={{
+                        position: 'fixed',
+                        top: (linkButtonRef.current?.getBoundingClientRect().bottom ?? 0) + 48,
+                        left: (linkButtonRef.current?.getBoundingClientRect().left ?? 0) + 160,
+                        zIndex: 9999
+                      }}
+                      className="bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl p-1.5 w-56 animate-in fade-in slide-in-from-top-1 duration-150"
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        className={`w-full flex items-center px-4 py-3 rounded-lg transition-all text-left cursor-pointer active:scale-[0.98] ${!editor.isActive("heading") ? "bg-nb-primary text-white" : "text-nb-on-surface-variant hover:bg-nb-surface-mid"}`}
+                        onClick={() => { editor.chain().focus().setParagraph().run(); setActiveMenu(null); }}
+                      >
+                        <span className="text-sm font-medium">Paragraph (Standard Text)</span>
+                      </button>
+                      {([1, 2, 3, 4] as const).map(level => (
+                        <button
+                          key={level}
+                          className={`w-full flex items-center px-4 py-3 rounded-lg transition-all text-left cursor-pointer active:scale-[0.98] ${editor.isActive("heading", { level }) ? "bg-nb-primary text-white" : "text-nb-on-surface-variant hover:bg-nb-surface-mid"}`}
+                          onClick={() => {
+                            const { selection } = editor.state;
+                            const safePos = (selection instanceof NodeSelection) ? selection.to :
+                              (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                                (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
 
-                    const { selection } = editor.state;
-                    const safePos = (selection instanceof NodeSelection) ? selection.to :
-                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-                    if (safePos !== null) {
-                      editor.chain().focus().insertContentAt(safePos, { type: 'heading', attrs: { level: 1 } }).run();
-                    } else {
-                      editor.chain().focus().toggleHeading({ level: 1 }).run();
-                    }
-                  }}
-                  active={editor.isActive("heading", { level: 1 })}
-                  title="Heading 1"
-                >
-                  <Heading1 size={16} />
-                </ToolbarButton>
-                <ToolbarButton
-                  onClick={() => {
-                    if (editor.isActive("heading", { level: 2 })) {
-                      editor.chain().focus().setParagraph().run();
-                      return;
-                    }
-
-                    const { selection } = editor.state;
-                    const safePos = (selection instanceof NodeSelection) ? selection.to :
-                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-                    if (safePos !== null) {
-                      editor.chain().focus().insertContentAt(safePos, { type: 'heading', attrs: { level: 2 } }).run();
-                    } else {
-                      editor.chain().focus().toggleHeading({ level: 2 }).run();
-                    }
-                  }}
-                  active={editor.isActive("heading", { level: 2 })}
-                  title="Heading 2"
-                >
-                  <Heading2 size={16} />
-                </ToolbarButton>
+                            if (safePos !== null) {
+                              editor.chain().focus().insertContentAt(safePos, { type: 'heading', attrs: { level } }).run();
+                            } else {
+                              editor.chain().focus().toggleHeading({ level }).run();
+                            }
+                            setActiveMenu(null);
+                          }}
+                        >
+                          <span style={{
+                            fontSize: level === 1 ? '1.25rem' : level === 2 ? '1.05rem' : level === 3 ? '0.95rem' : '0.85rem',
+                            fontWeight: 'bold'
+                          }}>
+                            Heading Level {level}
+                          </span>
+                        </button>
+                      ))}
+                    </div>,
+                    document.body
+                  )}
+                </div>
 
                 <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
 

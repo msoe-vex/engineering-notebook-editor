@@ -18,6 +18,11 @@ import {
   IdRemapper,
   CustomHeading,
 } from "@/lib/editor/extensions";
+import { Color } from "@tiptap/extension-color";
+import { TextStyle } from "@tiptap/extension-text-style";
+import { Highlight } from "@tiptap/extension-highlight";
+import { Superscript } from "@tiptap/extension-superscript";
+import { Subscript } from "@tiptap/extension-subscript";
 
 import {
   ImageWithCaption,
@@ -40,10 +45,20 @@ import Underline from "@tiptap/extension-underline";
 
 
 
+import BulletList from "@tiptap/extension-bullet-list";
+import OrderedList from "@tiptap/extension-ordered-list";
 import ListItem from "@tiptap/extension-list-item";
 
 const RestrictedListItem = ListItem.extend({
-  content: "paragraph+",
+  name: 'listItem',
+  content: "paragraph block*",
+  addKeyboardShortcuts() {
+    return {
+      Enter: () => this.editor.commands.splitListItem(this.name),
+      Tab: () => this.editor.commands.sinkListItem(this.name),
+      "Shift-Tab": () => this.editor.commands.liftListItem(this.name),
+    };
+  },
 });
 
 /* ─────────────────────────────────────────────────────────────────
@@ -159,7 +174,18 @@ export default function UnifiedEditor({
         }
       }),
       CustomHeading,
+      BulletList.configure({
+        HTMLAttributes: { class: "list-disc ml-4" },
+      }),
+      OrderedList.configure({
+        HTMLAttributes: { class: "list-decimal ml-4" },
+      }),
       RestrictedListItem,
+      Color,
+      TextStyle,
+      Highlight.configure({ multicolor: true }),
+      Superscript,
+      Subscript,
       ImageWithCaption.configure({ inline: false, allowBase64: true, dbName }),
       TableWithCaption.configure({ resizable: true }),
       TableRow,
@@ -169,6 +195,26 @@ export default function UnifiedEditor({
       CustomRawLatex,
       InlineMathNode,
       MathBlockNode,
+      Extension.create({
+        name: 'globalTabHandler',
+        priority: 1,
+        addKeyboardShortcuts() {
+          return {
+            Tab: () => {
+              // If we are in a list, sinkListItem is already handled by RestrictedListItem
+              // and it returns true if successful. If it returns false, it will fall through to here.
+              // We return true here to prevent focus jumping, but only if we haven't already handled it.
+              
+              // In Tiptap, shortcuts are tried in reverse order of the extensions array.
+              // So this should be AFTER RestrictedListItem to act as a fallback.
+              return true;
+            },
+            "Shift-Tab": () => {
+              return true;
+            },
+          };
+        },
+      }),
       Extension.create({
         name: 'mathCodeMutualExclusion',
         addProseMirrorPlugins() {
