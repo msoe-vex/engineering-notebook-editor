@@ -57,17 +57,7 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
       return children();
 
     case "text": {
-      const rawText = node.text ?? "";
-      let t = rawText.split(" ").map(w => {
-         if (w.length > 30) {
-            const chunks = [];
-            for (let i = 0; i < w.length; i += 10) {
-               chunks.push(escapeLaTeX(w.substring(i, i + 10)));
-            }
-            return chunks.join("__NB_BREAK__");
-         }
-         return escapeLaTeX(w);
-      }).join(" ");
+      let t = escapeLaTeX(node.text ?? "");
 
       const marks = node.marks || [];
       const hasBold = marks.some(m => m.type === "bold");
@@ -81,22 +71,15 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
       const subscriptMark = marks.find(m => m.type === "subscript");
       const linkMark = marks.find(m => m.type === "link");
 
-      // Innermost: Scripts (split by space and chunk breaks to allow line wrapping)
-      const wrapScript = (cmd: string) => {
-        t = t.split(" ").map(w => {
-          if (!w) return "";
-          if (w.includes("__NB_BREAK__")) {
-             return w.split("__NB_BREAK__").map(chunk => `\\${cmd}{${chunk}}`).join("\\allowbreak{}");
-          }
-          return `\\${cmd}{${w}}`;
-        }).join(" ");
-      };
+      // Auto-wrap abnormally long unbreakable words for regular text
+      // (Scripts are handled natively character-by-character in engineering_notebook.sty)
+      if (!superscriptMark && !subscriptMark) {
+        t = t.replace(/(\S{40,})/g, "\\seqsplit{$1}");
+      }
 
-      if (superscriptMark) wrapScript("textsuperscript");
-      if (subscriptMark) wrapScript("textsubscript");
-
-      // Clean up any remaining breaks for non-script text
-      t = t.replace(/__NB_BREAK__/g, "\\allowbreak{}");
+      // Innermost: Scripts (Now handled natively in engineering_notebook.sty via expl3)
+      if (superscriptMark) t = `\\textsuperscript{${t}}`;
+      if (subscriptMark) t = `\\textsubscript{${t}}`;
 
       // Ulem-based universal rich text decorator for line breaking
       let hlColor = "";
