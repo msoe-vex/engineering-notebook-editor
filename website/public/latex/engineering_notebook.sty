@@ -576,25 +576,28 @@
 
 % Helper command for formatted links
 % Usage: \notebooklink{text}{type}{uuid/url}
-% Supported types: entry, header, image, table, codeBlock, url
+% Supported types: entry, heading, image, table, codeBlock, url
 \newcommand{\notebooklink}[3]{%
-    \ifboolexpr{test {\ifstrequal{#2}{url}} or test {\ifstrequal{#2}{resource}}}{%
+    \ifboolexpr{test {\ifstrequal{#2}{url}}}{%
         \href{\detokenize{#3}}{#1\ [\nolinkurl{\detokenize{#3}}]}%
     }{%
-    \ifboolexpr{test {\ifstrequal{#2}{entry}} or test {\ifstrequal{#2}{header}}}{%
+    \ifboolexpr{test {\ifstrequal{#2}{entry}} or test {\ifstrequal{#2}{heading}}}{%
         \hyperref[#3]{#1\ [\nameref*{#3}\ p.\,\pageref*{#3}]}%
+    }{%
+    \ifboolexpr{test {\ifstrequal{#2}{resource}}}{%
+        \hyperref[#3]{#1}%
     }{%
     \ifboolexpr{test {\ifstrequal{#2}{image}} or test {\ifstrequal{#2}{table}} or test {\ifstrequal{#2}{codeBlock}} or test {\ifstrequal{#2}{mathBlock}}}{%
         \hyperref[#3]{#1\ [\cref*{#3}\ p.\,\pageref*{#3}]}%
     }{%
         \hyperref[#3]{#1}%
-    }}}%
+    }}}}%
 }
 
 % Backward-compatible wrappers for older generated LaTeX files
 \newcommand{\resourcelink}[2][]{\notebooklink{#2}{resource}{#1}{}}
 \newcommand{\entrylink}[2][]{\notebooklink{#2}{entry}{#1}{}}
-\newcommand{\headerlink}[2][]{\notebooklink{#2}{header}{#1}{}}
+\newcommand{\headinglink}[2][]{\notebooklink{#2}{heading}{#1}{}}
 
 % Command to output a header with UUID label
 % Usage: \notebookheader{formattedText}{plainText}{level}{uuid}
@@ -603,10 +606,11 @@
 % #3 = level: 1 = subsection, 2 = subsubsection, etc.
 % #4 = UUID label for cross-referencing
 \newcommand{\notebookheader}[4]{%
+    \phantomsection%
+    \label{#4}%
     \ifnum#3=1\relax
         \subsection[\texorpdfstring{\notebookcharsplit{#2}}{#2}]{#1}%
     \else
         \subsubsection[\texorpdfstring{\notebookcharsplit{#2}}{#2}]{#1}%
     \fi
-    \label{#4}%
 }

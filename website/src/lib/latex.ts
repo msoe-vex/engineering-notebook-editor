@@ -125,8 +125,8 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
 
         if (finalResourceId) {
           const resType = getResourceType(finalResourceId);
-          if (resType === "header") {
-            t = `\\notebooklink{${t}}{header}{${finalResourceId}}`;
+          if (resType === "heading") {
+            t = `\\notebooklink{${t}}{heading}{${finalResourceId}}`;
           } else if (resType === "entry") {
             t = `\\notebooklink{${t}}{entry}{${finalResourceId}}`;
           } else if (resType === "image" || resType === "codeBlock" || resType === "table") {
