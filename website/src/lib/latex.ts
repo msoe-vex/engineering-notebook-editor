@@ -41,6 +41,21 @@ const plainTextFromNode = (node: TipTapNode): string => {
   return (node.content || []).map(plainTextFromNode).join("");
 };
 
+const cssColorToHex = (colorStr: string | undefined): string => {
+  if (!colorStr) return "000000";
+  const str = colorStr as string;
+  if (str.startsWith("rgb")) {
+    const rgbMatch = str.match(/\d+/g);
+    if (rgbMatch && rgbMatch.length >= 3) {
+      const r = parseInt(rgbMatch[0]).toString(16).padStart(2, "0");
+      const g = parseInt(rgbMatch[1]).toString(16).padStart(2, "0");
+      const b = parseInt(rgbMatch[2]).toString(16).padStart(2, "0");
+      return r + g + b;
+    }
+  }
+  return str.replace("#", "");
+};
+
 export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<string, string>): string => {
   if (!node) return "";
 
@@ -84,7 +99,7 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
       // Ulem-based universal rich text decorator for line breaking
       let hlColor = "";
       if (highlightMark) {
-        hlColor = highlightMark.attrs?.color ? (highlightMark.attrs.color as string).replace("#", "") : "ffff00";
+        hlColor = highlightMark.attrs?.color ? cssColorToHex(highlightMark.attrs.color as string) : "ffff00";
       }
       let hasUl = hasUnderline ? 1 : 0;
       let hasSt = strikeMark ? 1 : 0;
@@ -100,7 +115,7 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
       if (hasCode) t = `\\notebookinlinecode{${t}}`;
 
       if (colorMark) {
-        const hex = (colorMark.attrs?.color as string).replace("#", "");
+        const hex = cssColorToHex(colorMark.attrs?.color as string);
         t = `\\textcolor[HTML]{${hex}}{${t}}`;
       }
 
