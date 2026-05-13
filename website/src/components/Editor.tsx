@@ -270,9 +270,9 @@ const EditorContent = React.memo(function EditorContent({
     const TYPE_LABELS: Record<string, string> = {
       image: "image",
       table: "table",
-      codeBlock: "code block",
-      rawLatex: "LaTeX block",
-      header: "header"
+      codeBlock: "codeBlock",
+      rawLatex: "latexBlock",
+      heading: "heading"
     };
 
     if (editor) {
@@ -281,7 +281,7 @@ const EditorContent = React.memo(function EditorContent({
       for (const res of Object.values(resources)) {
         const label = TYPE_LABELS[res.type] || res.type;
         if (!res.title?.trim()) errors.push(`Title missing for ${label}.`);
-        if (res.type !== "header" && !res.caption?.trim()) errors.push(`Caption missing for ${label}.`);
+        if (!res.caption?.trim()) errors.push(`Caption missing for ${label}.`);
       }
 
       const refs = extractReferences(doc);
