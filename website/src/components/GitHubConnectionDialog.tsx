@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { GitBranch, X, Loader2, Search, Check, Folder, Plus, ExternalLink, HardDrive } from "lucide-react";
+import { X, Loader2, Search, Check, Folder, Plus, ExternalLink, HardDrive } from "lucide-react";
+import GithubIcon from "./ui/GithubIcon";
 import { GitHubConfig, GitHubRepo, fetchUserRepositories, fetchRepoFolders } from "@/lib/github";
 import { GITHUB_APP_INSTALL_URL } from "@/lib/constants";
 import { Project } from "@/lib/db";
@@ -102,7 +103,7 @@ export default function GitHubConnectionDialog({
         <div className="p-8 pb-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className={`w-12 h-12 rounded-2xl ${isSetup ? 'bg-nb-tertiary/10 text-nb-tertiary' : 'bg-nb-primary/10 text-nb-primary'} flex items-center justify-center`}>
-              <GitBranch size={24} />
+              <GithubIcon size={24} />
             </div>
             <div>
               <h2 className="text-xl font-black text-nb-on-surface">{isSetup ? 'Connect Repository' : 'Sign in with GitHub'}</h2>
@@ -123,7 +124,7 @@ export default function GitHubConnectionDialog({
           {!githubToken ? (
             <div className="flex flex-col items-center justify-center py-12 text-center gap-6">
               <div className="w-16 h-16 rounded-3xl bg-nb-surface-low border border-nb-outline-variant/30 flex items-center justify-center text-nb-on-surface-variant/40">
-                {isExchangingCode ? <Loader2 size={32} className="text-nb-primary animate-spin" /> : <GitBranch size={32} />}
+                {isExchangingCode ? <Loader2 size={32} className="text-nb-primary animate-spin" /> : <GithubIcon size={32} />}
               </div>
               <div className="space-y-2">
                 <h3 className="font-bold text-nb-on-surface">{isExchangingCode ? 'Signing in...' : 'Sign in Required'}</h3>
@@ -138,7 +139,7 @@ export default function GitHubConnectionDialog({
                   onClick={onLogin}
                   className="w-full bg-nb-primary hover:bg-nb-primary-dim text-white py-4 rounded-2xl font-bold text-sm transition-all active:scale-95 shadow-lg shadow-nb-primary/20 flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <GitBranch size={18} />
+                  <GithubIcon size={18} />
                   Continue with GitHub
                 </button>
               )}
@@ -229,7 +230,7 @@ export default function GitHubConnectionDialog({
                                   }`}
                                 >
                                   <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${selectedRepo?.repo === repo.name ? "bg-white/20" : "bg-nb-surface-low border border-nb-outline-variant/20"}`}>
-                                    <GitBranch size={12} />
+                                    <GithubIcon size={12} />
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
