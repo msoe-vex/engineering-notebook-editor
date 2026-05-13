@@ -6,7 +6,6 @@ import remarkGfm from "remark-gfm";
 import {
   Book,
   Settings,
-  GitBranch,
   HardDrive,
   X,
   FileText,
@@ -14,8 +13,10 @@ import {
   Target,
   Lightbulb,
   Loader2,
-  ExternalLink
+  ExternalLink,
+  Play
 } from "lucide-react";
+import GithubIcon from "./ui/GithubIcon";
 
 interface HelpPageProps {
   path: string;
@@ -66,7 +67,7 @@ export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
       {/* Header */}
       <div className="h-16 border-b border-nb-outline-variant/30 flex items-center justify-between px-8 bg-nb-surface/50 backdrop-blur-xl">
         <div className="flex items-center gap-4">
-          <button 
+          <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             className="md:hidden p-2 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant transition-colors"
           >
@@ -84,7 +85,7 @@ export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
             </div>
           </div>
         </div>
-        
+
         <button
           onClick={onClose}
           className="p-2 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer"
@@ -97,7 +98,7 @@ export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
       <div className="flex-1 flex overflow-hidden relative">
         {/* Mobile Sidebar Backdrop */}
         {isSidebarOpen && (
-          <div 
+          <div
             className="fixed inset-0 z-[450] bg-nb-bg/60 backdrop-blur-sm md:hidden"
             onClick={() => setIsSidebarOpen(false)}
           />
@@ -118,13 +119,13 @@ export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
           </div>
           <NavButton active={activeTab === 'modes'} onClick={() => setActiveTab('modes')} icon={<Settings size={16} />} label="Workspace Modes" />
           <NavButton active={activeTab === 'local'} onClick={() => setActiveTab('local')} icon={<HardDrive size={16} />} label="Local Setup" />
-          <NavButton active={activeTab === 'github'} onClick={() => setActiveTab('github')} icon={<GitBranch size={16} />} label="GitHub Setup" />
+          <NavButton active={activeTab === 'github'} onClick={() => setActiveTab('github')} icon={<GithubIcon size={16} />} label="GitHub Setup" />
 
           <div className="px-4 py-2 mt-4">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant/40">Using the Editor</h3>
           </div>
           <NavButton active={activeTab === 'editor'} onClick={() => setActiveTab('editor')} icon={<FileText size={16} />} label="Editor Guide" />
-          <NavButton active={activeTab === 'compiler'} onClick={() => setActiveTab('compiler')} icon={<Loader2 size={16} />} label="PDF Compilation" />
+          <NavButton active={activeTab === 'compiler'} onClick={() => setActiveTab('compiler')} icon={<Play size={16} />} label="PDF Compilation" />
           <NavButton active={activeTab === 'data'} onClick={() => setActiveTab('data')} icon={<Layers size={16} />} label="Import / Export" />
           <NavButton active={activeTab === 'phases'} onClick={() => setActiveTab('phases')} icon={<Target size={16} />} label="Design Process" />
           <NavButton active={activeTab === 'tips'} onClick={() => setActiveTab('tips')} icon={<Lightbulb size={16} />} label="Notebook Tips" />
