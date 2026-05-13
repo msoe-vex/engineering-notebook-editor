@@ -89,12 +89,12 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
       // Auto-wrap abnormally long unbreakable words for regular text
       // (Scripts are handled natively character-by-character in engineering_notebook.sty)
       if (!superscriptMark && !subscriptMark) {
-        t = t.replace(/(\S{40,})/g, "\\seqsplit{$1}");
+        t = t.replace(/(\S{40,})/g, "\\notebookseqsplit{$1}");
       }
 
       // Innermost: Scripts (Now handled natively in engineering_notebook.sty via expl3)
-      if (superscriptMark) t = `\\textsuperscript{${t}}`;
-      if (subscriptMark) t = `\\textsubscript{${t}}`;
+      if (superscriptMark) t = `\\notebooksuperscript{${t}}`;
+      if (subscriptMark) t = `\\notebooksubscript{${t}}`;
 
       // Ulem-based universal rich text decorator for line breaking
       let hlColor = "";
@@ -105,18 +105,18 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
       let hasSt = strikeMark ? 1 : 0;
 
       if (hlColor || hasUl || hasSt) {
-        t = `\\protect\\notebookrichtext{${hlColor}}{${hasUl}}{${hasSt}}{${t}}`;
+        t = `\\notebookdecoration{${hlColor}}{${hasUl}}{${hasSt}}{${t}}`;
       }
 
       // Semantic: Bold and Italic
-      if (hasBold) t = `\\textbf{${t}}`;
-      if (hasItalic) t = `\\textit{${t}}`;
+      if (hasBold) t = `\\notebookbold{${t}}`;
+      if (hasItalic) t = `\\notebookitalic{${t}}`;
 
       if (hasCode) t = `\\notebookinlinecode{${t}}`;
 
       if (colorMark) {
         const hex = cssColorToHex(colorMark.attrs?.color as string);
-        t = `\\textcolor[HTML]{${hex}}{${t}}`;
+        t = `\\notebooktextcolor{${hex}}{${t}}`;
       }
 
       if (linkMark) {

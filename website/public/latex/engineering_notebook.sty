@@ -41,11 +41,11 @@
 \soulregister{\Cref}{1}
 \soulregister{\nameref}{1}
 \soulregister{\pageref}{1}
-\newcommand{\notebookinlinecode}[1]{{\small\texttt{\protect\notebookrichtext{ffff00}{0}{0}{#1}}}}
+\newcommand{\notebookinlinecode}[1]{{\small\texttt{\notebookdecoration{ffff00}{0}{0}{#1}}}}
 
-% Universal ulem-based rich text decorator. Handles hl, ul, and st in a single pass
-% to prevent nesting conflicts and support multi-line breaking.
-\DeclareRobustCommand{\notebookrichtext}[3]{%
+% ulem-based rich text formatter
+% #1 = highlight color (hex), #2 = underline (1/0), #3 = strikeout (1/0)
+\DeclareRobustCommand{\notebookdecoration}[3]{%
   \bgroup
   \def\nbhlcolor{#1}%
   \def\nbhasul{#2}%
@@ -445,6 +445,14 @@
 }
 
 % \notebooktable{columns}{title}{content}{caption}{label}
+
+% Custom Text Formatting
+\newcommand{\notebookbold}[1]{\textbf{#1}}
+\newcommand{\notebookitalic}[1]{\textit{#1}}
+\newcommand{\notebooksuperscript}[1]{\textsuperscript{#1}}
+\newcommand{\notebooksubscript}[1]{\textsubscript{#1}}
+\newcommand{\notebooktextcolor}[2]{\textcolor[HTML]{#1}{#2}}
+\newcommand{\notebookseqsplit}[1]{\seqsplit{#1}}
 
 % \begin{notebookcodeblock}{language}{title}{caption}{label} ... \end{notebookcodeblock}
 \newcommand{\@currentcodecaption}{}
