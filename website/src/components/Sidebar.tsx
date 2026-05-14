@@ -147,7 +147,7 @@ export default function Sidebar({
 
       if (e.key === "a" && (e.metaKey || e.ctrlKey)) {
         const target = e.target as HTMLElement;
-        if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+        if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable || target.closest('.ProseMirror') || target.closest('[tabindex="0"]')) return;
 
         e.preventDefault();
         onSelectAll(filteredEntries.map(f => f.path));

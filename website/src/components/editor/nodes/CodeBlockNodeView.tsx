@@ -178,7 +178,7 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
             as="div"
             spellCheck="false"
             data-placeholder="Paste your code here..."
-            className={`flex-1 relative py-6 pl-3 pr-6 overflow-x-auto text-[14px] leading-[1.8] font-mono whitespace-pre language-${node.attrs.language} ${node.textContent.length === 0 ? 'is-empty' : ''}`}
+            className={`flex-1 relative py-6 pl-3 pr-6 overflow-x-hidden text-[14px] leading-[1.8] font-mono whitespace-pre-wrap break-words language-${node.attrs.language} ${node.textContent.length === 0 ? 'is-empty' : ''}`}
           />
         </div>
 
