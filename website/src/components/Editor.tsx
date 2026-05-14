@@ -46,8 +46,8 @@ import { NodeSelection } from "@tiptap/pm/state";
 const ColorMenu = ({ editor, onReset }: { editor: any, onReset: () => void }) => {
   return (
     <>
-      <div className="grid grid-cols-5 gap-1.5 mb-3">
-        {["#000000", "#d9282f", "#1e40af", "#2d5a27", "#7e22ce", "#f59e0b", "#6b7280", "#ffffff", "#ef4444", "#3b82f6"].map(color => (
+      <div className="grid grid-cols-4 gap-1.5 mb-3">
+        {["#d9282f", "#1e40af", "#2d5a27", "#7e22ce", "#f59e0b", "#6b7280", "#ef4444", "#3b82f6"].map(color => (
           <button
             key={color}
             className="w-6 h-6 rounded-md border border-nb-outline-variant/30 cursor-pointer hover:scale-110 transition-transform shadow-sm"
@@ -935,7 +935,13 @@ const EditorContent = React.memo(function EditorContent({
                     active={activeMenu === "TextColor"}
                     title="Text Color"
                   >
-                    <Palette size={16} />
+                    <div className="flex flex-col items-center gap-0.5">
+                      <Palette size={16} style={{ color: editor.getAttributes('textStyle').color || 'inherit' }} />
+                      <div
+                        className="w-4 h-0.5 rounded-full"
+                        style={{ backgroundColor: editor.getAttributes('textStyle').color || 'currentColor' }}
+                      />
+                    </div>
                   </ToolbarButton>
                   {activeMenu === "TextColor" && createPortal(
                     <div
@@ -968,7 +974,13 @@ const EditorContent = React.memo(function EditorContent({
                     active={activeMenu === "Highlight"}
                     title="Highlight"
                   >
-                    <Highlighter size={16} />
+                    <div className="flex flex-col items-center gap-0.5">
+                      <Highlighter size={16} style={{ color: editor.getAttributes('highlight').color || 'inherit' }} />
+                      <div
+                        className="w-4 h-0.5 rounded-full"
+                        style={{ backgroundColor: editor.getAttributes('highlight').color || 'transparent' }}
+                      />
+                    </div>
                   </ToolbarButton>
                   {activeMenu === "Highlight" && createPortal(
                     <div
