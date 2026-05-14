@@ -540,10 +540,10 @@ export default function UnifiedEditor({
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
         // Highlight
-        element.classList.add('ring-4', 'ring-nb-primary', 'ring-offset-2', 'transition-all', 'duration-1000', 'z-50');
+        element.classList.add('ring-4', 'ring-nb-primary', 'ring-offset-2', 'transition-all', 'duration-500', 'z-50');
         setTimeout(() => {
           if (element) element.classList.remove('ring-4', 'ring-nb-primary', 'ring-offset-2', 'z-50');
-        }, 3000);
+        }, 1500);
         return true;
       }
 
