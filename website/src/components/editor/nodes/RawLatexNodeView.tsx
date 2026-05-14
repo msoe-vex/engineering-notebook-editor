@@ -45,7 +45,7 @@ export function RawLatexNodeView({ node, deleteNode, selected, editor }: NodeVie
             autoCorrect="off"
             autoCapitalize="off"
             data-placeholder="Type your LaTeX code here..."
-            className={`flex-1 relative py-6 px-6 overflow-x-auto text-[14px] leading-[1.8] font-mono whitespace-pre language-latex ${node.textContent.length === 0 ? 'is-empty' : ''}`}
+            className={`flex-1 relative py-6 px-6 overflow-x-hidden text-[14px] leading-[1.8] font-mono whitespace-pre-wrap break-words language-latex ${node.textContent.length === 0 ? 'is-empty' : ''}`}
           />
         </div>
       </div>

@@ -239,10 +239,24 @@ export default function Preview({ latexContent, pdfUrl }: PreviewProps) {
             </div>
           </div>
         ) : (
-          <div className="h-full overflow-y-auto p-8 custom-scrollbar relative">
-            <div className="absolute inset-0 opacity-[0.02] pointer-events-none" style={{ backgroundImage: 'linear-gradient(0deg, currentColor 1px, transparent 1px), linear-gradient(90deg, currentColor 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
-
-            <pre className="whitespace-pre-wrap !bg-transparent !m-0 !p-0 text-[14px] leading-[1.8] font-mono text-nb-on-surface relative z-10">
+          <div
+            className="h-full overflow-y-auto p-8 custom-scrollbar relative focus:outline-none"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+                if (!pdfUrl && rawCodeRef.current) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const range = document.createRange();
+                  range.selectNodeContents(rawCodeRef.current);
+                  const selection = window.getSelection();
+                  selection?.removeAllRanges();
+                  selection?.addRange(range);
+                }
+              }
+            }}
+          >
+            <pre className="language-latex whitespace-pre-wrap break-words !m-0 !p-0 text-[14px] leading-[1.8] font-mono text-nb-on-surface relative z-10">
               <code ref={rawCodeRef} className="language-latex !bg-transparent !p-0">
                 {latexContent}
               </code>
