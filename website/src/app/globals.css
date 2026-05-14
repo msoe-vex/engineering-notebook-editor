@@ -89,6 +89,14 @@ button {
   cursor: pointer;
 }
 
+::selection {
+  background-color: #f8e1e1;
+}
+
+.dark ::selection {
+  background-color: #43181a;
+}
+
 button:disabled {
   cursor: default;
 }
@@ -197,17 +205,21 @@ button:disabled {
 .ProseMirror a::after {
   content: "\2197";
   /* Unicode North East Arrow */
-  font-size: 0.7em;
-  margin-left: 2px;
-  vertical-align: super;
-  opacity: 0.4;
+  font-size: 13px;
+  font-weight: 700;
+  margin-left: 4px;
+  vertical-align: baseline;
+  position: relative;
+  top: -1px;
+  opacity: 0.7;
   color: currentColor;
   display: inline-block;
-  transition: opacity 0.2s;
+  transition: all 0.2s ease;
 }
 
 .ProseMirror a:hover::after {
   opacity: 1;
+  transform: translate(1px, -1px);
 }
 
 .nb-broken-link {
@@ -228,66 +240,6 @@ button:disabled {
 .ProseMirror-selectednode {
   outline: none !important;
   box-shadow: none !important;
-}
-
-.ProseMirror table,
-.ProseMirror [data-node-view-wrapper] table {
-  border-collapse: collapse;
-  table-layout: auto;
-  min-width: 100%;
-  width: max-content;
-
-
-
-
-
-  margin: 1rem 0;
-  overflow: hidden;
-  border-radius: 8px;
-}
-
-.ProseMirror td,
-.ProseMirror th {
-  min-width: 120px;
-
-
-  border: 1px solid var(--color-nb-outline-variant);
-  padding: 0 !important;
-  /* Remove padding from cell to allow child to fill */
-  vertical-align: top;
-  box-sizing: border-box;
-  position: relative;
-  background-clip: padding-box;
-}
-
-.ProseMirror td>p,
-.ProseMirror th>p {
-  margin: 0;
-  padding: 12px 16px;
-  /* Move padding here */
-  min-height: 1.5em;
-  /* Ensure height for cursor */
-  width: 100%;
-}
-
-
-
-.dark .ProseMirror td,
-.dark .ProseMirror th {
-  border-color: rgba(255, 255, 255, 0.1);
-}
-
-.ProseMirror .selectedCell:after {
-  z-index: 2;
-  position: absolute;
-  content: "";
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  background: var(--color-nb-primary);
-  opacity: 0.15;
-  pointer-events: none;
 }
 
 .ProseMirror h1 {
@@ -653,39 +605,96 @@ pre[class*="language-"],
   margin-bottom: 0.25rem;
 }
 
+/* Inline Math */
+.nb-inline-math-node {
+  background-color: var(--color-nb-surface-low);
+  min-width: 1.5em;
+  min-height: 1.2em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+}
+
+.nb-inline-math-node:hover {
+  background-color: var(--color-nb-surface-mid);
+}
+
+.dark .nb-inline-math-node {
+  background-color: rgba(0, 118, 188, 0.08);
+}
+
+.dark .nb-inline-math-node:hover {
+  background-color: rgba(0, 118, 188, 0.15);
+}
+
 /* Tables */
 .ProseMirror table {
   border-collapse: separate;
   border-spacing: 0;
   table-layout: auto;
-  min-width: 100%;
-  width: max-content;
-  margin: 1rem 0;
-  overflow: hidden;
-  border: 1px solid var(--color-nb-outline-variant);
-  border-radius: var(--nb-radius);
+  width: fit-content;
+  max-width: 100%;
+  margin: 1.5rem auto; /* Centered in block */
   font-size: 13px;
 }
 
 .ProseMirror table td,
 .ProseMirror table th {
   min-width: 120px;
+  /* Basic grid: right and bottom borders */
   border-right: 1px solid var(--color-nb-outline-variant);
   border-bottom: 1px solid var(--color-nb-outline-variant);
-  padding: 8px 12px;
+  padding: 12px 16px;
   vertical-align: top;
   box-sizing: border-box;
   position: relative;
+  background-clip: padding-box;
 }
 
-.ProseMirror table tr:last-child td,
-.ProseMirror table tr:last-child th {
-  border-bottom: none;
+/* Top and Left borders provided by first row/column */
+.ProseMirror table tr:first-child td,
+.ProseMirror table tr:first-child th {
+  border-top: 1px solid var(--color-nb-outline-variant);
 }
 
-.ProseMirror table td:last-child,
-.ProseMirror table th:last-child {
-  border-right: none;
+.ProseMirror table td:first-child,
+.ProseMirror table th:first-child {
+  border-left: 1px solid var(--color-nb-outline-variant);
+}
+
+/* Rounded corners for the grid itself */
+.ProseMirror table tr:first-child th:first-child,
+.ProseMirror table tr:first-child td:first-child {
+  border-top-left-radius: var(--nb-radius);
+}
+
+.ProseMirror table tr:first-child th:last-child,
+.ProseMirror table tr:first-child td:last-child {
+  border-top-right-radius: var(--nb-radius);
+}
+
+.ProseMirror table tr:last-child td:first-child {
+  border-bottom-left-radius: var(--nb-radius);
+}
+
+.ProseMirror table tr:last-child td:last-child {
+  border-bottom-right-radius: var(--nb-radius);
+}
+
+.dark .ProseMirror table td,
+.dark .ProseMirror table th,
+.dark .ProseMirror table tr:first-child td,
+.dark .ProseMirror table tr:first-child th,
+.dark .ProseMirror table td:first-child,
+.dark .ProseMirror table th:first-child {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.ProseMirror table td > p,
+.ProseMirror table th > p {
+  margin: 0;
+  min-height: 1.5em;
 }
 
 .ProseMirror table th {

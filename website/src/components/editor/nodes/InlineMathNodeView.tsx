@@ -276,7 +276,7 @@ export const InlineMathNode = Node.create({
       new InputRule({
         find: /\$([^$]+)\$$/,
         handler: ({ range, match, chain }) => {
-          const [latex] = match;
+          const latex = match[1];
           if (latex) {
             chain()
               .deleteRange(range)

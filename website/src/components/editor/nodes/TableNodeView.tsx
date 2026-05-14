@@ -134,8 +134,8 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
           </div>
         </div>
 
-        <div className="w-full overflow-x-auto">
-          <NodeViewContent as={"table" as unknown as "div"} className="border-collapse min-w-full table-auto" />
+        <div className="w-full overflow-x-auto custom-scrollbar flex justify-center">
+          <NodeViewContent as={"table" as unknown as "div"} className="table-auto" />
         </div>
 
         <div contentEditable={false} className="bg-nb-surface-low/30 border-t border-nb-outline-variant/10 px-4 py-2 flex items-center justify-center gap-2 group/caption">
