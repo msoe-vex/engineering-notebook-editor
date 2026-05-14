@@ -127,15 +127,8 @@ const PhaseCard = memo(({
     setPrevColor(phase.color);
   }
 
-  useEffect(() => {
-    if (!handlePhaseChange) return;
-    const timer = setTimeout(() => {
-      if (localColor !== phase.color) {
-        handlePhaseChange(phase.id, "color", localColor);
-      }
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [localColor, phase.id, phase.color, handlePhaseChange]);
+  // Color confirmation logic
+  const hasColorChanged = localColor !== phase.color;
 
   return (
     <div
@@ -155,13 +148,23 @@ const PhaseCard = memo(({
         onSelect={(name) => handlePhaseChange?.(phase.id, "iconName", name)}
       />
 
-      <div className="relative group/color shrink-0 flex items-center justify-center">
+      <div className="relative group/color shrink-0 flex items-center gap-2">
         <input
           type="color"
           value={localColor}
           onChange={e => setLocalColor(e.target.value)}
           className="w-7 h-7 rounded-full border-2 border-white shadow-nb-sm cursor-pointer overflow-hidden p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-none [&::-webkit-color-swatch]:rounded-full"
         />
+        {hasColorChanged && (
+          <button
+            type="button"
+            onClick={() => handlePhaseChange?.(phase.id, "color", localColor)}
+            className="p-1.5 rounded-xl bg-nb-primary text-white shadow-nb-lg hover:scale-110 active:scale-95 transition-all animate-in fade-in zoom-in-95 duration-200 cursor-pointer"
+            title="Confirm Color"
+          >
+            <Check size={12} />
+          </button>
+        )}
       </div>
 
       <div className="flex-1 min-w-0 space-y-2">

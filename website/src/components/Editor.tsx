@@ -43,7 +43,11 @@ import { NodeSelection } from "@tiptap/pm/state";
 
 // ─── Sub-components for Performance ──────────────────────────────────────────
 
-const ColorMenu = ({ editor, onReset }: { editor: any, onReset: () => void }) => {
+const ColorMenu = ({ editor, onReset, onApply }: { editor: any, onReset: () => void, onApply: () => void }) => {
+  const [localColor, setLocalColor] = useState(() => editor.getAttributes('textStyle').color || "#000000");
+  const currentColor = editor.getAttributes('textStyle').color || "#000000";
+  const hasChanged = localColor !== currentColor;
+
   return (
     <>
       <div className="grid grid-cols-4 gap-1.5 mb-3">
@@ -54,20 +58,36 @@ const ColorMenu = ({ editor, onReset }: { editor: any, onReset: () => void }) =>
             style={{ backgroundColor: color }}
             onClick={() => {
               editor.chain().focus().setColor(color).run();
+              setLocalColor(color);
+              onApply();
             }}
           />
         ))}
       </div>
       <div className="flex flex-col gap-2 pt-2 border-t border-nb-outline-variant/30">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <label className="text-[9px] font-black text-nb-on-surface-variant uppercase tracking-widest">Custom</label>
-          <input
-            type="color"
-            className="w-8 h-5 rounded cursor-pointer bg-transparent border-none p-0"
-            onInput={(e: any) => {
-              editor.chain().focus().setColor(e.target.value).run();
-            }}
-          />
+          <div className="flex items-center gap-1.5">
+            <input
+              type="color"
+              value={localColor}
+              className="w-8 h-5 rounded cursor-pointer bg-transparent border-none p-0"
+              onInput={(e: any) => {
+                setLocalColor(e.target.value);
+              }}
+            />
+            {hasChanged && (
+              <button
+                onClick={() => {
+                  editor.chain().focus().setColor(localColor).run();
+                  onApply();
+                }}
+                className="px-2 py-0.5 rounded bg-nb-primary text-white text-[9px] font-bold uppercase tracking-wider animate-in fade-in zoom-in-95 duration-200 cursor-pointer"
+              >
+                Apply
+              </button>
+            )}
+          </div>
         </div>
         <button
           className="w-full text-[9px] font-black py-2 hover:bg-nb-surface-mid rounded-lg transition-colors uppercase tracking-widest text-nb-on-surface-variant border border-nb-outline-variant/20"
@@ -80,7 +100,11 @@ const ColorMenu = ({ editor, onReset }: { editor: any, onReset: () => void }) =>
   );
 };
 
-const HighlightMenu = ({ editor, onClear }: { editor: any, onClear: () => void }) => {
+const HighlightMenu = ({ editor, onClear, onApply }: { editor: any, onClear: () => void, onApply: () => void }) => {
+  const [localColor, setLocalColor] = useState(() => editor.getAttributes('highlight').color || "#ffff00");
+  const currentColor = editor.getAttributes('highlight').color || "#ffff00";
+  const hasChanged = localColor !== currentColor;
+
   return (
     <>
       <div className="grid grid-cols-5 gap-1.5 mb-3">
@@ -91,20 +115,36 @@ const HighlightMenu = ({ editor, onClear }: { editor: any, onClear: () => void }
             style={{ backgroundColor: color }}
             onClick={() => {
               editor.chain().focus().toggleHighlight({ color }).run();
+              setLocalColor(color);
+              onApply();
             }}
           />
         ))}
       </div>
       <div className="flex flex-col gap-2 pt-2 border-t border-nb-outline-variant/30">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <label className="text-[9px] font-black text-nb-on-surface-variant uppercase tracking-widest">Custom</label>
-          <input
-            type="color"
-            className="w-8 h-5 rounded cursor-pointer bg-transparent border-none p-0"
-            onInput={(e: any) => {
-              editor.chain().focus().setHighlight({ color: e.target.value }).run();
-            }}
-          />
+          <div className="flex items-center gap-1.5">
+            <input
+              type="color"
+              value={localColor}
+              className="w-8 h-5 rounded cursor-pointer bg-transparent border-none p-0"
+              onInput={(e: any) => {
+                setLocalColor(e.target.value);
+              }}
+            />
+            {hasChanged && (
+              <button
+                onClick={() => {
+                  editor.chain().focus().setHighlight({ color: localColor }).run();
+                  onApply();
+                }}
+                className="px-2 py-0.5 rounded bg-nb-primary text-white text-[9px] font-bold uppercase tracking-wider animate-in fade-in zoom-in-95 duration-200 cursor-pointer"
+              >
+                Apply
+              </button>
+            )}
+          </div>
         </div>
         <button
           className="w-full text-[9px] font-black py-2 hover:bg-nb-surface-mid rounded-lg transition-colors uppercase tracking-widest text-nb-on-surface-variant border border-nb-outline-variant/20"
@@ -960,6 +1000,7 @@ const EditorContent = React.memo(function EditorContent({
                           editor.chain().focus().unsetColor().run();
                           setActiveMenu(null);
                         }}
+                        onApply={() => setActiveMenu(null)}
                       />
                     </div>,
                     document.body
@@ -999,6 +1040,7 @@ const EditorContent = React.memo(function EditorContent({
                           editor.chain().focus().unsetHighlight().run();
                           setActiveMenu(null);
                         }}
+                        onApply={() => setActiveMenu(null)}
                       />
                     </div>,
                     document.body
