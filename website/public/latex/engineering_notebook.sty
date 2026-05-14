@@ -58,7 +58,22 @@
 \newcommand{\notebookbold}[1]{\textbf{#1}}
 \newcommand{\notebookitalic}[1]{\textit{#1}}
 \newcommand{\notebooktextcolor}[2]{\textcolor[HTML]{#1}{#2}}
-\newcommand{\notebookinlinecode}[1]{{\small\texttt{\notebookdecoration{ffff00}{0}{0}{#1}}}}
+
+% Inline Code Styling
+\definecolor{nbcodebg}{HTML}{EEEEEE}
+\definecolor{nbcodeborder}{HTML}{C4C7C5}
+
+\DeclareRobustCommand{\notebookinlinecode}{%
+  \bgroup
+  \small\ttfamily
+  \markoverwith{%
+    \rlap{\textcolor{nbcodebg}{\rule[-0.3ex]{2pt}{2.5ex}}}%
+    \rlap{\textcolor{nbcodeborder}{\rule[2.2ex]{2pt}{0.4pt}}}%
+    \rlap{\textcolor{nbcodeborder}{\rule[-0.3ex]{2pt}{0.4pt}}}%
+    \rule{2pt}{0pt}%
+  }%
+  \ULon
+}
 
 % ulem-based rich text formatter
 % #1 = highlight color (hex), #2 = underline (1/0), #3 = strikeout (1/0)
