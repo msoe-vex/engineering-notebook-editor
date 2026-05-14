@@ -12,7 +12,6 @@
 \RequirePackage{amssymb}
 \RequirePackage{hyperref}
 \RequirePackage{xurl} % Allows line breaks anywhere in URLs
-\RequirePackage{seqsplit} % Allows line breaks in arbitrarily long words
 \RequirePackage{booktabs}
 \RequirePackage{titlesec}
 \RequirePackage{tocloft}
@@ -37,27 +36,26 @@
 % You can redefine any of these commands to customize the output without modifying
 % the JSON-to-LaTeX converter logic.
 %
-% \notebookbold{text}          : Applies bold formatting
-% \notebookitalic{text}        : Applies italic formatting
-% \notebooktextcolor{hex}{text}: Applies text color (HTML hex format)
-% \notebookinlinecode{text}    : Applies inline code styling
-% \notebookdecoration{color}{underline}{strikeout}{text} : Applies highlights/lines
-% \notebooksuperscript{text}   : Applies superscript (with native word-wrapping)
-% \notebooksubscript{text}     : Applies subscript (with native word-wrapping)
-% \notebookseqsplit{text}      : Wraps abnormally long unbreakable words
-% \notebookheader{formatted}{raw}{level}{label} : Section headers and TOC entries
-% \notebookentry{title}{date}{author}{phase}{label} : Notebook entry titles
-% \notebookimage{file}{title}{caption}{width}{label} : Standardized figures
-% \begin{notebookcodeblock}{lang}{title}{caption}{label} : Standardized code blocks
+% \notebookbold{text}                                     : Applies bold formatting
+% \notebookitalic{text}                                   : Applies italic formatting
+% \notebooktextcolor{hex}{text}                           : Applies text color (HTML hex format)
+% \notebookinlinecode{text}                               : Applies inline code styling
+% \notebookdecoration{color}{underline}{strikeout}{text}  : Applies highlights/lines
+% \notebooksuperscript{text}                              : Applies superscript (with native word-wrapping)
+% \notebooksubscript{text}                                : Applies subscript (with native word-wrapping)
+% \notebookcharsplit{text}                                : Splits abnormally long unbreakable words at spaces in order to allow line wrapping
+% \notebookheader{formatted}{raw}{level}{label}           : Section headers and TOC entries
+% \notebookentry{title}{date}{author}{phase}{label}       : Notebook entry titles
+% \notebookimage{file}{title}{caption}{width}{label}      : Standardized figures
+% \begin{notebookcodeblock}{lang}{title}{caption}{label}  : Standardized code blocks
 % \notebooktable{columns}{title}{content}{caption}{label} : Standardized tables
-% \notebookequation{math}{title}{caption}{label} : Standardized block equations
+% \notebookequation{math}{title}{caption}{label}          : Standardized block equations
 % ==============================================================================
 
 % Basic semantic formatting
 \newcommand{\notebookbold}[1]{\textbf{#1}}
 \newcommand{\notebookitalic}[1]{\textit{#1}}
 \newcommand{\notebooktextcolor}[2]{\textcolor[HTML]{#1}{#2}}
-\newcommand{\notebookseqsplit}[1]{\seqsplit{#1}}
 \newcommand{\notebookinlinecode}[1]{{\small\texttt{\notebookdecoration{ffff00}{0}{0}{#1}}}}
 
 % ulem-based rich text formatter

@@ -89,7 +89,7 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
       // Auto-wrap abnormally long unbreakable words for regular text
       // (Scripts are handled natively character-by-character in engineering_notebook.sty)
       if (!superscriptMark && !subscriptMark) {
-        t = t.replace(/(\S{40,})/g, "\\notebookseqsplit{$1}");
+        t = t.replace(/(\S{40,})/g, "\\notebookcharsplit{$1}");
       }
 
       // Innermost: Scripts (Now handled natively in engineering_notebook.sty via expl3)
