@@ -1,5 +1,29 @@
 \ProvidesPackage{engineering_notebook}[Engineering Notebook Template]
 
+% ==============================================================================
+% ENGINEERING NOTEBOOK CUSTOM COMMANDS
+% ==============================================================================
+% This package defines all the necessary commands to style the engineering notebook.
+% All notebook-specific formatting is encapsulated in macros starting with \notebook...
+% You can redefine any of these commands to customize the output without modifying
+% the JSON-to-LaTeX converter logic.
+%
+% \notebookbold{text}                                     : Applies bold formatting
+% \notebookitalic{text}                                   : Applies italic formatting
+% \notebooktextcolor{hex}{text}                           : Applies text color (HTML hex format)
+% \notebookinlinecode{text}                               : Applies inline code styling
+% \notebookdecoration{color}{underline}{strikeout}{text}  : Applies highlights/lines
+% \notebooksuperscript{text}                              : Applies superscript (with native word-wrapping)
+% \notebooksubscript{text}                                : Applies subscript (with native word-wrapping)
+% \notebookcharsplit{text}                                : Splits abnormally long unbreakable words at spaces in order to allow line wrapping
+% \notebookheader{formatted}{raw}{level}{label}           : Section headers and TOC entries
+% \notebookentry{title}{date}{author}{phase}{label}       : Notebook entry titles
+% \notebookimage{file}{title}{caption}{width}{label}      : Standardized figures
+% \begin{notebookcodeblock}{lang}{title}{caption}{label}  : Standardized code blocks
+% \notebooktable{columns}{title}{content}{caption}{label} : Standardized tables
+% \notebookequation{math}{title}{caption}{label}          : Standardized block equations
+% ==============================================================================
+
 % Ensure hyperref uses colored link text even if other packages load it early
 \PassOptionsToPackage{colorlinks=true}{hyperref}
 
@@ -27,30 +51,8 @@
 \RequirePackage{etoolbox}
 \RequirePackage{microtype}
 \RequirePackage[normalem]{ulem}
-
-% ==============================================================================
-% ENGINEERING NOTEBOOK CUSTOM COMMANDS
-% ==============================================================================
-% This package defines all the necessary commands to style the engineering notebook.
-% All notebook-specific formatting is encapsulated in macros starting with \notebook...
-% You can redefine any of these commands to customize the output without modifying
-% the JSON-to-LaTeX converter logic.
-%
-% \notebookbold{text}                                     : Applies bold formatting
-% \notebookitalic{text}                                   : Applies italic formatting
-% \notebooktextcolor{hex}{text}                           : Applies text color (HTML hex format)
-% \notebookinlinecode{text}                               : Applies inline code styling
-% \notebookdecoration{color}{underline}{strikeout}{text}  : Applies highlights/lines
-% \notebooksuperscript{text}                              : Applies superscript (with native word-wrapping)
-% \notebooksubscript{text}                                : Applies subscript (with native word-wrapping)
-% \notebookcharsplit{text}                                : Splits abnormally long unbreakable words at spaces in order to allow line wrapping
-% \notebookheader{formatted}{raw}{level}{label}           : Section headers and TOC entries
-% \notebookentry{title}{date}{author}{phase}{label}       : Notebook entry titles
-% \notebookimage{file}{title}{caption}{width}{label}      : Standardized figures
-% \begin{notebookcodeblock}{lang}{title}{caption}{label}  : Standardized code blocks
-% \notebooktable{columns}{title}{content}{caption}{label} : Standardized tables
-% \notebookequation{math}{title}{caption}{label}          : Standardized block equations
-% ==============================================================================
+\RequirePackage{fontspec}
+\RequirePackage{enumitem}
 
 % Basic semantic formatting
 \newcommand{\notebookbold}[1]{\textbf{#1}}
@@ -116,9 +118,6 @@
   \unskip
  }
 \ExplSyntaxOff
-
-% XeLaTeX Font Setup
-\RequirePackage{fontspec}
 
 % Load fonts from the /fonts/ path which will be mapped in the WASM engine
 \setmainfont{Inter}[
@@ -210,7 +209,6 @@
 \tolerance=2000
 
 % Advanced List Configuration
-\RequirePackage{enumitem}
 \setlistdepth{8}
 \setlist{leftmargin=1.5em} % Consistent indentation for all levels
 
