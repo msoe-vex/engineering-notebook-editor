@@ -12,7 +12,7 @@ declare module "@tiptap/core" {
   }
 }
 
-export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, selected }: NodeViewProps) {
+export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: NodeViewProps) {
   const [isEditing, setIsEditing] = useState(selected);
   const [isHoveringToolbar, setIsHoveringToolbar] = useState(false);
   const [dragEnabled, setDragEnabled] = useState(false);
@@ -21,14 +21,13 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
 
   const prevSelected = useRef(selected);
 
-  // Sync isEditing with selected state (only on initial selection)
+  // Automatically enter edit mode if the node is selected AND empty (e.g. just created)
   useEffect(() => {
-    if (selected && !prevSelected.current) {
+    if (selected && !node.attrs.latex) {
       const timer = setTimeout(() => setIsEditing(true), 0);
       return () => clearTimeout(timer);
     }
-    prevSelected.current = selected;
-  }, [selected]);
+  }, [selected, node.attrs.latex]);
 
   // Handle focus when entering edit mode
   React.useLayoutEffect(() => {
@@ -163,7 +162,18 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
           {/* Render View */}
           <div
             ref={renderRef}
-            onClick={() => setIsEditing(true)}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const pos = getPos();
+              if (typeof pos === 'number') {
+                if (selected) {
+                  setIsEditing(true);
+                } else {
+                  editor.commands.setNodeSelection(pos);
+                }
+              }
+            }}
             className="cursor-pointer hover:bg-nb-surface-high/20 px-6 py-8 transition-colors w-full flex justify-center overflow-x-auto custom-scrollbar"
             style={{ display: isEditing ? 'none' : 'flex' }}
           />
