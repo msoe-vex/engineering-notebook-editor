@@ -18,14 +18,13 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
   const inputRef = useRef<HTMLSpanElement>(null);
   const renderRef = useRef<HTMLSpanElement>(null);
 
-  // Sync isEditing with selected state
+  // Automatically enter edit mode if the node is selected AND empty (e.g. just created)
   useEffect(() => {
-    if (selected) {
-      // Use a timeout to avoid cascading render warning by pushing the update to the next tick
+    if (selected && !node.attrs.latex) {
       const timer = setTimeout(() => setIsEditing(true), 0);
       return () => clearTimeout(timer);
     }
-  }, [selected]);
+  }, [selected, node.attrs.latex]);
 
   const prevSelectionPos = useRef(editor.state.selection.from);
 
@@ -147,10 +146,25 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
           ref={renderRef}
           contentEditable={false}
           className="cursor-pointer hover:ring-2 hover:ring-nb-tertiary/20 rounded px-1 transition-all"
-          onClick={() => {
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const pos = getPos();
+            if (typeof pos === 'number') {
+              if (selected) {
+                setIsEditing(true);
+              } else {
+                editor.commands.setNodeSelection(pos);
+              }
+            }
+          }}
+          onDoubleClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
             const pos = getPos();
             if (typeof pos === 'number') {
               editor.commands.setNodeSelection(pos);
+              setIsEditing(true);
             }
           }}
         />
