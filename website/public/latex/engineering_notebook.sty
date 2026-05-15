@@ -54,6 +54,7 @@
 \RequirePackage{fontspec}
 \RequirePackage{enumitem}
 \RequirePackage{cancel}
+\RequirePackage{breqn}
 
 % Basic semantic formatting
 \newcommand{\notebookbold}[1]{\textbf{#1}}
@@ -569,9 +570,9 @@
     \refstepcounter{equation}
     \blockheader{Equation \theequation}{#2}
     \label{#4}
-    \begin{equation*}
+    \begin{dmath*}
         #1
-    \end{equation*}
+    \end{dmath*}
     \nopagebreak
     \begin{center}
         \small #3
