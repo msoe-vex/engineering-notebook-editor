@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
-import { NodeViewWrapper, ReactNodeViewRenderer, Node } from "@tiptap/react";
+import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
+import { Node, InputRule } from "@tiptap/core";
 import { GripVertical, Trash2, Sigma, Edit3 } from "lucide-react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
@@ -52,6 +53,7 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
         katex.render(node.attrs.latex || " ", renderRef.current, {
           throwOnError: false,
           displayMode: true,
+          strict: false,
         });
       } catch {
         renderRef.current.textContent = node.attrs.latex;
@@ -235,5 +237,22 @@ export const MathBlockNode = Node.create({
 
   addNodeView() {
     return ReactNodeViewRenderer(MathBlockNodeView);
+  },
+
+  addInputRules() {
+    return [
+      new InputRule({
+        find: /^\$\$\$\s$/,
+        handler: ({ range, chain }) => {
+          chain()
+            .deleteRange(range)
+            .insertContent({
+              type: this.name,
+              attrs: { latex: "", id: crypto.randomUUID() },
+            })
+            .run();
+        },
+      }),
+    ];
   },
 });

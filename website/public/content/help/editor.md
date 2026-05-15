@@ -10,3 +10,16 @@ Drag and drop images directly into the editor. Use the toolbar for bold, italics
 
 ## Real-time LaTeX Preview
 The right panel shows a live preview of the generated LaTeX code for your entry. This allows you to see exactly how your content is being translated into technical documentation and ensures that all your formatting and references are correctly captured.
+
+## Keyboard Shortcuts
+Speed up your documentation with these shortcuts:
+- **Bold**: `Ctrl + B`
+- **Italic**: `Ctrl + I`
+- **Underline**: `Ctrl + U`
+- **Strike-through**: `Ctrl + Shift + X` or `Ctrl + Shift + S`
+- **Superscript**: `Ctrl + Shift + =` or `Ctrl + +`
+- **Subscript**: `Ctrl + Shift + -` or `Ctrl + _`
+- **Undo / Redo**: `Ctrl + Z` / `Ctrl + Y`
+- **Save**: `Ctrl + S`
+- **Code**: Type \`code\` to format text as inline code, or type \`\`\` followed by a space to start a code block.
+- **Math**: Type \$E=mc^2\$ to format text as inline math, or type \$\$\$ followed by a space to start a math block.
