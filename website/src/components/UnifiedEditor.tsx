@@ -334,7 +334,7 @@ export default function UnifiedEditor({
                 return editor.chain().splitBlock().unsetMark('code').run();
               }
               if (editor.isActive('link')) {
-                return editor.chain().splitBlock().unsetMark('link').unsetMark('underline').run();
+                return editor.chain().splitBlock().unsetMark('link').unsetMark('underline').unsetColor().run();
               }
               return false;
             },
