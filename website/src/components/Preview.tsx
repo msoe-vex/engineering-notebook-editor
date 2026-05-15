@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useLayoutEffect } from "react";
 import Prism from "prismjs";
 import "prismjs/components/prism-latex";
 import { Document, Page, pdfjs } from 'react-pdf';
+import type { PageProps } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 import { Loader2, ZoomIn, ZoomOut, FileText } from "lucide-react";
@@ -29,9 +30,41 @@ export default function Preview({ latexContent, pdfUrl }: PreviewProps) {
   const [pageNumber, setPageNumber] = useState(1);
   const [pageInput, setPageInput] = useState("1");
   const [scale, setScale] = useState(1.0);
+  const [baseHeight, setBaseHeight] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const lastScaleRef = useRef(scale);
 
+  // Measure base height once loaded to calculate correct scroll area
+  useEffect(() => {
+    if (pdfUrl && numPages && contentRef.current) {
+      const resizeObserver = new ResizeObserver((entries) => {
+        for (let entry of entries) {
+          // Use the actual height of the unscaled content wrapper
+          setBaseHeight(entry.target.scrollHeight);
+        }
+      });
+      resizeObserver.observe(contentRef.current);
+      return () => resizeObserver.disconnect();
+    }
+  }, [pdfUrl, numPages]);
+
+  // Synchronize scroll position with zoom to keep center stable and prevent flicker
+  useLayoutEffect(() => {
+    if (!scrollRef.current || scale === lastScaleRef.current) return;
+    
+    const container = scrollRef.current;
+    const oldScale = lastScaleRef.current;
+    const newScale = scale;
+    
+    const viewportCenter = container.scrollTop + container.clientHeight / 2;
+    const ratio = newScale / oldScale;
+    const newViewportCenter = viewportCenter * ratio;
+    
+    container.scrollTop = newViewportCenter - container.clientHeight / 2;
+    lastScaleRef.current = scale;
+  }, [scale]);
 
   useEffect(() => {
     if (rawCodeRef.current && !pdfUrl) {
@@ -46,7 +79,7 @@ export default function Preview({ latexContent, pdfUrl }: PreviewProps) {
         e.preventDefault();
         const delta = e.deltaY;
         setScale(s => {
-          const newScale = s - delta * 0.001; // Slower, smoother zoom
+          const newScale = s - delta * 0.0015;
           return Math.min(3.0, Math.max(0.1, newScale));
         });
       }
@@ -63,6 +96,11 @@ export default function Preview({ latexContent, pdfUrl }: PreviewProps) {
     };
   }, []);
 
+  useEffect(() => {
+    if (rawCodeRef.current && !pdfUrl) {
+      Prism.highlightElement(rawCodeRef.current);
+    }
+  }, [latexContent, pdfUrl]);
 
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
@@ -196,7 +234,7 @@ export default function Preview({ latexContent, pdfUrl }: PreviewProps) {
             onScroll={handleScroll}
             className="h-full overflow-auto bg-nb-surface-low/50 custom-scrollbar py-8"
           >
-            <div className="flex flex-col items-center min-w-min mx-auto w-fit px-4 md:px-8">
+            <div className="min-w-full w-fit mx-auto px-4 md:px-8">
               <Document
                 file={pdfUrl}
                 onLoadSuccess={onDocumentLoadSuccess}
@@ -218,23 +256,43 @@ export default function Preview({ latexContent, pdfUrl }: PreviewProps) {
                   </div>
                 }
               >
-                {Array.from(new Array(numPages || 0), (el, index) => (
-                  <div
-                    key={`page_${index + 1}`}
-                    data-page-number={index + 1}
-                    className="mb-8 shadow-nb-2xl rounded-sm overflow-hidden bg-white transition-all duration-300 origin-top"
+                <div 
+                  style={{ 
+                    width: `${1000 * scale}px`,
+                    height: `${baseHeight * scale}px`,
+                    margin: '0 auto',
+                    overflow: 'hidden',
+                    position: 'relative'
+                  }}
+                >
+                  <div 
+                    style={{ 
+                      transform: `scale(${scale})`, 
+                      transformOrigin: 'top left',
+                      width: '1000px',
+                    }}
                   >
-                    <Page
-                      pageNumber={index + 1}
-                      scale={scale}
-                      width={1000} // High-quality stable width for instant resizing
-                      renderAnnotationLayer={true}
-                      renderTextLayer={true}
-                      devicePixelRatio={typeof window !== 'undefined' ? Math.min(2, window.devicePixelRatio) : 1}
-                      className="max-w-full h-auto !bg-transparent"
-                    />
+                    <div ref={contentRef} className="flex flex-col items-center w-full">
+                      {Array.from(new Array(numPages || 0), (el, index) => (
+                        <div
+                          key={`page_${index + 1}`}
+                          data-page-number={index + 1}
+                          className="mb-8 shadow-nb-2xl rounded-sm overflow-hidden bg-white"
+                        >
+                          <Page
+                            pageNumber={index + 1}
+                            scale={1.0}
+                            renderMode={"svg" as PageProps['renderMode']}
+                            width={1000}
+                            renderAnnotationLayer={true}
+                            renderTextLayer={true}
+                            className="max-w-full h-auto !bg-transparent"
+                          />
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
+                </div>
               </Document>
             </div>
           </div>
