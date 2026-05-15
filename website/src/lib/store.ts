@@ -50,6 +50,8 @@ class WorkspaceStore {
   public isMainTexPresent: boolean = true;
   public assetCache = new Map<string, string>();
   public selectedPaths: Set<string> = new Set();
+  public isSaving = false;
+  public isPendingSave = false;
 
   get hydratedMetadata(): NotebookMetadata {
     return {
@@ -61,6 +63,8 @@ class WorkspaceStore {
   // ─── Internal ───────────────────────────────────────────────────────────────
   #queue = Promise.resolve();
   #lastSavedContents = new Map<string, string>();
+  #savingCount = 0;
+  #pendingSaveCount = 0;
 
   constructor() {
     if (typeof window !== "undefined") {
@@ -1324,9 +1328,25 @@ class WorkspaceStore {
   }
 
   private enqueue(op: () => Promise<void>) {
+    this.#savingCount++;
+    if (!this.isSaving) {
+      this.isSaving = true;
+      this.notifyStateChange();
+    }
+
     this.#queue = this.#queue.then(async () => {
-      try { await op(); } catch (e) { console.error("Background persistence error:", e); }
-      if (this.#queue === Promise.resolve()) events.emit(EventNames.PERSISTENCE_SYNC);
+      try {
+        await op();
+      } catch (e) {
+        console.error("Background persistence error:", e);
+      } finally {
+        this.#savingCount--;
+        if (this.#savingCount === 0) {
+          this.isSaving = false;
+          this.notifyStateChange();
+          events.emit(EventNames.PERSISTENCE_SYNC);
+        }
+      }
     });
   }
 
@@ -1413,6 +1433,17 @@ class WorkspaceStore {
 
   private notifyStateChange() {
     events.emit(EventNames.STATE_CHANGED, this);
+  }
+
+  public setPendingSave(val: boolean) {
+    if (val) this.#pendingSaveCount++;
+    else this.#pendingSaveCount = Math.max(0, this.#pendingSaveCount - 1);
+
+    const next = this.#pendingSaveCount > 0;
+    if (next !== this.isPendingSave) {
+      this.isPendingSave = next;
+      this.notifyStateChange();
+    }
   }
 
   async disconnect() {

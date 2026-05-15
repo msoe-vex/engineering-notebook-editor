@@ -270,6 +270,7 @@ const EditorContent = React.memo(function EditorContent({
   showConfirm,
   viewMode,
   onSetViewMode,
+  setPendingSave,
 }: EditorProps & {
   openFile: NonNullable<ReturnType<typeof useWorkspace>['openFile']>;
   metadata: ReturnType<typeof useWorkspace>['metadata'];
@@ -278,6 +279,7 @@ const EditorContent = React.memo(function EditorContent({
   currentProjectId: ReturnType<typeof useWorkspace>['currentProjectId'];
   setEntryValidity: ReturnType<typeof useWorkspace>['setEntryValidity'];
   exportEntries: ReturnType<typeof useWorkspace>['exportEntries'];
+  setPendingSave: (val: boolean) => void;
 }) {
   const {
     path: filename,
@@ -524,7 +526,11 @@ const EditorContent = React.memo(function EditorContent({
 
     if (isContentChanged || isMetadataChanged) {
       setIsAutoSaving(true);
-      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      } else {
+        setPendingSave(true);
+      }
 
       autoSaveTimerRef.current = setTimeout(() => {
         const { title, author, phase, date } = latestMetadataRef.current;
@@ -540,6 +546,7 @@ const EditorContent = React.memo(function EditorContent({
         lastAutoSavedRef.current.phase = phase;
         lastAutoSavedRef.current.date = date;
 
+        setPendingSave(false);
         setIsAutoSaving(false);
         autoSaveTimerRef.current = null;
       }, 800);
@@ -551,6 +558,7 @@ const EditorContent = React.memo(function EditorContent({
     return () => {
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
+        setPendingSave(false);
         autoSaveTimerRef.current = null;
       }
     };
@@ -1353,7 +1361,8 @@ const Editor = (props: EditorProps) => {
     deleteEntry,
     currentProjectId,
     setEntryValidity,
-    exportEntries
+    exportEntries,
+    setPendingSave,
   } = useWorkspace();
 
   if (!openFile) return null;
@@ -1368,6 +1377,7 @@ const Editor = (props: EditorProps) => {
       currentProjectId={currentProjectId}
       setEntryValidity={setEntryValidity}
       exportEntries={exportEntries}
+      setPendingSave={setPendingSave}
       {...props}
     />
   );

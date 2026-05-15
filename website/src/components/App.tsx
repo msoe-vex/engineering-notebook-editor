@@ -92,6 +92,8 @@ export default function App() {
     showAbout,
     helpPath,
     getCompiledPdfUrl,
+    isSaving,
+    isPendingSave,
   } = useWorkspace();
 
   // Global loading overlay for background operations (like importing/exporting)
@@ -166,16 +168,48 @@ export default function App() {
   const importEntryInputRef = useRef<HTMLInputElement>(null);
   const [needsPermission, setNeedsPermission] = useState(false);
   const navigateToHome = useCallback(() => {
-    navigateTo({ project: null, entry: null, resource: null }, '/');
+    navigateTo({ project: null, entry: null, resource: null }, "/");
   }, [navigateTo]);
+
+  const checkUnsaved = useCallback(
+    (action: () => void) => {
+      if (isSaving || isPendingSave) {
+        showConfirm(
+          "Unsaved Changes",
+          "You have changes that are currently being saved. If you leave now, some changes might be lost. Are you sure you want to proceed?",
+          action,
+          "warning"
+        );
+      } else {
+        action();
+      }
+    },
+    [isSaving, isPendingSave, showConfirm]
+  );
+
+  const handleGoHome = useCallback(() => {
+    checkUnsaved(navigateToHome);
+  }, [checkUnsaved, navigateToHome]);
 
   const handleCloseHelp = useCallback(() => {
     if (currentProjectId) {
       navigateTo({}, '/workspace/editor');
     } else {
-      navigateToHome();
+      handleGoHome();
     }
   }, [currentProjectId, navigateTo, navigateToHome]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isSaving || isPendingSave) {
+        e.preventDefault();
+        e.returnValue = "You have unsaved changes that are currently being saved. Are you sure you want to leave?";
+        return e.returnValue;
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isSaving, isPendingSave]);
 
   const onSignOutGithub = useCallback(() => {
     localStorage.removeItem("nb-github-token");
@@ -443,19 +477,20 @@ export default function App() {
   };
 
   const handleDisconnect = async () => {
+    const proceed = async () => {
+      await disconnect();
+      navigateToHome();
+    };
+
     if (mode === "temporary") {
       showConfirm(
         "Leave Temporary Workspace?",
         "All changes in this temporary workspace will be lost forever if you disconnect. Are you sure you want to leave?",
-        async () => {
-          await disconnect();
-          navigateToHome();
-        },
+        proceed,
         "warning"
       );
     } else {
-      await disconnect();
-      navigateToHome();
+      checkUnsaved(proceed);
     }
   };
 
@@ -603,7 +638,7 @@ export default function App() {
         className="flex items-center gap-3 px-4 h-14 border-b border-nb-outline-variant shrink-0 bg-nb-surface"
       >
         <div
-          onClick={navigateToHome}
+          onClick={handleGoHome}
           className="flex items-center gap-3 cursor-pointer group flex-1 min-w-0"
         >
           <div className="w-7 h-7 rounded-lg bg-nb-primary flex items-center justify-center shadow-sm shadow-nb-primary/20 group-hover:scale-110 transition-transform">
@@ -662,7 +697,7 @@ export default function App() {
         onImport={handleImportNotebook}
         onExport={handleExportNotebook}
         onDisconnect={handleDisconnect}
-        onGoHome={navigateToHome}
+        onGoHome={handleGoHome}
         mounted={mounted}
       />
 

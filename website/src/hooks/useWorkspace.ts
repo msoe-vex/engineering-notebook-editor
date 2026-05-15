@@ -31,6 +31,8 @@ export function useWorkspace() {
     showAbout: store.showAbout,
     isMainTexPresent: store.isMainTexPresent,
     workspaceVersion: store.workspaceVersion,
+    isSaving: store.isSaving,
+    isPendingSave: store.isPendingSave,
   });
 
   useEffect(() => {
@@ -60,6 +62,8 @@ export function useWorkspace() {
         showAbout: s.showAbout,
         isMainTexPresent: s.isMainTexPresent,
         workspaceVersion: s.workspaceVersion,
+        isSaving: s.isSaving,
+        isPendingSave: s.isPendingSave,
       });
     });
 
@@ -124,5 +128,8 @@ export function useWorkspace() {
     setSelectedPaths,
     getCompiledPdfUrl,
     saveCompiledPdf,
+    isSaving: state.isSaving,
+    isPendingSave: state.isPendingSave,
+    setPendingSave: useCallback((val: boolean) => store.setPendingSave(val), []),
   };
 }
