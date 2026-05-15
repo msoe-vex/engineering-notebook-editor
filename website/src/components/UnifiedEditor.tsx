@@ -76,10 +76,26 @@ const RestrictedListItem = ListItem.extend({
 
 const CustomSuperscript = Superscript.extend({
   excludes: 'subscript',
+  addKeyboardShortcuts() {
+    return {
+      ...this.parent?.(),
+      'Mod-Shift-=': () => { this.editor.chain().focus().toggleSuperscript().run(); return true; },
+      'Mod-+': () => { this.editor.chain().focus().toggleSuperscript().run(); return true; },
+      'Mod-=': () => { this.editor.chain().focus().toggleSuperscript().run(); return true; },
+    };
+  },
 });
 
 const CustomSubscript = Subscript.extend({
   excludes: 'superscript',
+  addKeyboardShortcuts() {
+    return {
+      ...this.parent?.(),
+      'Mod-Shift--': () => { this.editor.chain().focus().toggleSubscript().run(); return true; },
+      'Mod--': () => { this.editor.chain().focus().toggleSubscript().run(); return true; },
+      'Mod-_': () => { this.editor.chain().focus().toggleSubscript().run(); return true; },
+    };
+  },
 });
 
 /* ─────────────────────────────────────────────────────────────────
@@ -216,8 +232,8 @@ export default function UnifiedEditor({
       RestrictedTableCell,
       CustomCodeBlock,
       CustomRawLatex,
-      InlineMathNode,
       MathBlockNode,
+      InlineMathNode,
       Extension.create({
         name: 'globalTabHandler',
         priority: 1,
@@ -326,7 +342,7 @@ export default function UnifiedEditor({
         },
       }),
       Extension.create({
-        name: 'customEnterBehavior',
+        name: 'customShortcuts',
         addKeyboardShortcuts() {
           return {
             Enter: ({ editor }) => {
@@ -338,6 +354,8 @@ export default function UnifiedEditor({
               }
               return false;
             },
+            'Mod-Shift-s': ({ editor }) => { editor.chain().focus().toggleStrike().run(); return true; },
+            'Mod-Shift-x': ({ editor }) => { editor.chain().focus().toggleStrike().run(); return true; },
           };
         },
       }),

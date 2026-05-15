@@ -72,6 +72,7 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
         katex.render(node.attrs.latex || "", renderRef.current, {
           throwOnError: false,
           displayMode: false,
+          strict: false,
         });
       } catch {
         renderRef.current.textContent = node.attrs.latex;
@@ -274,12 +275,21 @@ export const InlineMathNode = Node.create({
   addInputRules() {
     return [
       new InputRule({
-        find: /\$([^$]+)\$$/,
+        find: /(?:^|[^$])\$([^$]+)\$$/,
         handler: ({ range, match, chain }) => {
+          const fullMatch = match[0];
           const latex = match[1];
+          
           if (latex) {
+            // If the match starts with a character before $, we need to keep that character
+            const hasLeadingChar = !fullMatch.startsWith('$');
+            const actualRange = {
+              from: hasLeadingChar ? range.from + 1 : range.from,
+              to: range.to
+            };
+
             chain()
-              .deleteRange(range)
+              .deleteRange(actualRange)
               .insertContent({
                 type: this.name,
                 attrs: { latex: latex.trim() },
