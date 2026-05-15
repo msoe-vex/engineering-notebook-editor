@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { X, Loader2, Search, Check, Folder, Plus, ExternalLink, HardDrive } from "lucide-react";
 import GithubIcon from "./ui/GithubIcon";
-import { GitHubConfig, GitHubRepo, fetchUserRepositories, fetchRepoFolders } from "@/lib/github";
+import { GitHubConfig, GitHubRepo, fetchUserRepositories, fetchRepoFolders, isGitHub401 } from "@/lib/github";
 import { GITHUB_APP_INSTALL_URL } from "@/lib/constants";
 import { Project } from "@/lib/db";
 
@@ -55,6 +55,9 @@ export default function GitHubConnectionDialog({
           setUserRepos(repos);
         } catch (e) {
           console.error("Failed to fetch GitHub repos", e);
+          if (isGitHub401(e)) {
+            onSignOut();
+          }
         } finally {
           setIsLoadingRepos(false);
         }
@@ -72,6 +75,9 @@ export default function GitHubConnectionDialog({
           setAvailableFolders(folders);
         } catch (e) {
           console.error("Failed to fetch folders", e);
+          if (isGitHub401(e)) {
+            onSignOut();
+          }
         } finally {
           setIsLoadingFolders(false);
         }

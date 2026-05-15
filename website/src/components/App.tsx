@@ -206,9 +206,14 @@ export default function App() {
       }
     });
 
+    const unsubSessionExpired = events.on(EventNames.GITHUB_SESSION_EXPIRED, () => {
+      onSignOutGithub();
+    });
+
     return () => {
       unsubNotification();
       unsubLogin();
+      unsubSessionExpired();
     };
   }, []);
 
@@ -228,29 +233,6 @@ export default function App() {
       if (storedToken) {
         setGithubToken(storedToken);
         setGithubUser(storedUser);
-
-        // Validate token
-        try {
-          const user = await fetchGitHubUser(storedToken);
-          if (user.login !== storedUser) {
-            setGithubUser(user.login);
-            localStorage.setItem("nb-github-user", user.login);
-          }
-        } catch (e) {
-          console.error("Token validation failed:", e);
-          // Only clear if it's a 401 or similar auth error
-          // fetchGitHubUser uses octokit which throws for non-2xx
-          localStorage.removeItem("nb-github-token");
-          localStorage.removeItem("nb-github-user");
-          setGithubToken(null);
-          setGithubUser(null);
-          showNotification("GitHub session expired. Please sign in again.", "error");
-          setShowGitHubLoginOnly(true);
-          if (mode === "github") {
-            disconnect();
-            navigateToHome();
-          }
-        }
       }
 
       // Handle OAuth callback

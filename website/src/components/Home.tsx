@@ -124,7 +124,10 @@ export default function Home({
     try {
       const handle = await window.showDirectoryPicker({ mode: "readwrite" });
       onCreateLocal(handle);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') return;
+      console.error(e);
+    }
   };
 
   if (!mounted) return null;

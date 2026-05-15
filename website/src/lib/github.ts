@@ -43,6 +43,15 @@ export const getOctokit = (token: string) => {
   return octokit;
 };
 
+export const isGitHub401 = (error: unknown): boolean => {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    (error as { status: number }).status === 401
+  );
+};
+
 
 
 // Properly encode and decode base64 including UTF-8 characters
@@ -443,6 +452,7 @@ export const fetchUserRepositories = async (token: string) => {
     });
   } catch (e) {
     console.error("Failed to fetch repositories via installations:", e);
+    if (isGitHub401(e)) throw e;
     // If the installation check fails, we return an empty list to stay strict
     return [];
   }
@@ -464,6 +474,7 @@ export const fetchRepoFolders = async (token: string, owner: string, repo: strin
     return [];
   } catch (e) {
     console.error("Failed to fetch folders", e);
+    if (isGitHub401(e)) throw e;
     return [];
   }
 };

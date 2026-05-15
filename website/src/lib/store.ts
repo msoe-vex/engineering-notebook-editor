@@ -2,7 +2,7 @@ import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, validateNotebookIntegr
 import { generateAllEntriesLatex, generateEntryLatex, generateTeamLatex, generatePhasesLatex } from "./latex";
 import { ExplorerFile, GitHubConfig, TeamTab } from "./types";
 import { getProjects, getProject, Project, getAllPending, getPending, stageChange, removeStaged, getResource, putResource, saveProject, getProjectHandle, saveProjectHandle, PendingChange } from "./db";
-import { fetchFileContent, fetchDirectoryTree, fetchRawFileContent, GitHubFile, checkGitHubFileExists } from "./github";
+import { fetchFileContent, fetchDirectoryTree, fetchRawFileContent, GitHubFile, checkGitHubFileExists, isGitHub401, fetchGitHubUser } from "./github";
 import { listLocalFiles, readLocalFile, writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, ensureLocalDirectory, checkLocalFileExists } from "./fs";
 import { INDEX_PATH, ENTRIES_DIR, ENTRIES_INDEX_PATH, LATEX_DIR, ASSETS_DIR, TEAM_PATH, PHASES_PATH } from "./constants";
 import { events, EventNames } from "./events";
@@ -315,22 +315,22 @@ class WorkspaceStore {
 
       this.currentProject = project;
       this.currentProjectId = id;
-      this.mode = project.type as WorkspaceMode;
+      const projectType = project.type as WorkspaceMode;
 
-      if (this.mode === "local") {
+      if (projectType === "local") {
         const handle = await getProjectHandle(id);
         if (handle) {
           this.dirHandle = handle;
           await this.loadLocalWorkspace();
+          this.mode = "local";
         } else {
           // Needs permission
           this.mode = "none";
         }
-      } else if (this.mode === "github") {
+      } else if (projectType === "github") {
         const token = localStorage.getItem("nb-github-token");
         if (!token) {
           this.disconnect();
-          events.emit(EventNames.SHOW_NOTIFICATION, { message: "GitHub token is missing. Please sign in.", type: "error" });
           events.emit(EventNames.SHOW_GITHUB_LOGIN, { loginOnly: true, projectId: project.id });
           window.history.replaceState({}, '', '/');
           this.notifyStateChange();
@@ -348,7 +348,11 @@ class WorkspaceStore {
         };
 
         try {
+          // Verify token before transitioning to workspace view
+          await fetchGitHubUser(token);
+          
           await this.loadGitHubWorkspace();
+          this.mode = "github";
         } catch (error: unknown) {
           const err = error as { status?: number };
           console.error("Failed to load GitHub workspace:", error);
@@ -359,8 +363,10 @@ class WorkspaceStore {
                 "Failed to connect to GitHub. Check your internet or token.";
           if (err.status === 401) {
             events.emit(EventNames.SHOW_GITHUB_LOGIN, { loginOnly: true, projectId: project.id });
+            events.emit(EventNames.GITHUB_SESSION_EXPIRED);
+          } else {
+            events.emit(EventNames.SHOW_NOTIFICATION, { message: msg, type: "error" });
           }
-          events.emit(EventNames.SHOW_NOTIFICATION, { message: msg, type: "error" });
           window.history.replaceState({}, '', '/');
           this.notifyStateChange();
           return;
@@ -1338,13 +1344,14 @@ class WorkspaceStore {
   }
 
   private async persistFile(path: string, content: string, label: string, isBase64 = false) {
-    if (this.mode === "local" && this.dirHandle) {
+    if ((this.mode === "local" || (this.mode === "none" && this.dirHandle)) && this.dirHandle) {
       await writeLocalFile(this.dirHandle, path, content, isBase64);
-    } else if (this.mode === "github" || this.mode === "temporary") {
+    } else if (this.mode === "github" || this.mode === "temporary" || (this.mode === "none" && this.config)) {
+      const mode = (this.mode === "none" && this.config) ? "github" : this.mode;
       const dbName = this.getDBName();
       const staged = await getPending(dbName, path);
 
-      if (this.mode === "github") {
+      if (mode === "github") {
         const committed = await this.getCommittedFileContent(path, isBase64);
 
         if (committed === content) {
@@ -1431,7 +1438,7 @@ class WorkspaceStore {
   }
 
   private getFullPath(path: string): string {
-    if (this.mode !== "github" || !this.config) return path;
+    if (!this.config) return path;
     const baseDir = this.config.baseDir ? this.config.baseDir.replace(/^\/+|\/+$/g, '') : '';
     if (!baseDir) return path;
     const prefix = baseDir + '/';
