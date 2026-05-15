@@ -80,7 +80,7 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
   }, [node.attrs.latex, isEditing]);
 
   return (
-    <NodeViewWrapper as="span" className="nb-inline-math-node mx-0.5 px-0.5 rounded transition-colors inline-flex items-center align-middle relative">
+    <NodeViewWrapper as="span" className={`nb-inline-math-node mx-0.5 px-0.5 rounded transition-all inline-flex items-center align-middle relative ${selected ? 'ring-2 ring-nb-primary bg-nb-primary/10 shadow-sm' : ''}`}>
       {isEditing ? (
         <span key="edit" className="flex items-center bg-nb-outline-variant/15 text-nb-on-surface border-b border-nb-outline-variant/50 px-1 py-0.5 font-mono text-[1.0em] rounded-t-sm">
           <span className="opacity-40 font-bold mr-0.5">$</span>
