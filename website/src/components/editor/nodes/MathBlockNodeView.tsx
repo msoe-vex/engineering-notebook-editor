@@ -20,8 +20,6 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const renderRef = useRef<HTMLDivElement>(null);
 
-  const prevSelected = useRef(selected);
-
   // Automatically enter edit mode if the node is selected AND empty (e.g. just created)
   useEffect(() => {
     if (selected && !node.attrs.latex) {

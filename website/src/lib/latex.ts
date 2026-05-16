@@ -101,8 +101,8 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
       if (highlightMark) {
         hlColor = highlightMark.attrs?.color ? cssColorToHex(highlightMark.attrs.color as string) : "ffff00";
       }
-      let hasUl = hasUnderline ? 1 : 0;
-      let hasSt = strikeMark ? 1 : 0;
+      const hasUl = hasUnderline ? 1 : 0;
+      const hasSt = strikeMark ? 1 : 0;
 
       if (hlColor || hasUl || hasSt) {
         t = `\\notebookdecoration{${hlColor}}{${hasUl}}{${hasSt}}{${t}}`;
