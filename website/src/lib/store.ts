@@ -2,7 +2,7 @@ import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, validateNotebookIntegr
 import { generateAllEntriesLatex, generateEntryLatex, generateTeamLatex, generatePhasesLatex } from "./latex";
 import { ExplorerFile, GitHubConfig, TeamTab } from "./types";
 import { getProjects, getProject, Project, getAllPending, getPending, stageChange, removeStaged, getResource, putResource, saveProject, getProjectHandle, saveProjectHandle, PendingChange } from "./db";
-import { fetchFileContent, fetchDirectoryTree, fetchRawFileContent, GitHubFile, checkGitHubFileExists, isGitHub401, fetchGitHubUser } from "./github";
+import { fetchFileContent, fetchDirectoryTree, fetchRawFileContent, GitHubFile, checkGitHubFileExists, fetchGitHubUser } from "./github";
 import { listLocalFiles, readLocalFile, writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, ensureLocalDirectory, checkLocalFileExists } from "./fs";
 import { INDEX_PATH, ENTRIES_DIR, ENTRIES_INDEX_PATH, LATEX_DIR, ASSETS_DIR, TEAM_PATH, PHASES_PATH } from "./constants";
 import { events, EventNames } from "./events";
@@ -354,7 +354,7 @@ class WorkspaceStore {
         try {
           // Verify token before transitioning to workspace view
           await fetchGitHubUser(token);
-          
+
           await this.loadGitHubWorkspace();
           this.mode = "github";
         } catch (error: unknown) {
@@ -1237,7 +1237,7 @@ class WorkspaceStore {
       for (const item of remappedEntries) {
         const { id, doc, meta } = item;
         const contentStr = JSON.stringify({ version: 3, content: doc }, null, 2);
-        
+
         // Generate LaTeX with the global index so cross-entry links work
         const latex = generateEntryLatex(doc, meta.title, meta.author, meta.phase, meta.createdAt, id, globalResourceTypes, meta.date);
 

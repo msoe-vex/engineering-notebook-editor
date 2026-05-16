@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import UnifiedEditor from "./UnifiedEditor";
+import { Editor as TiptapEditor } from "@tiptap/react";
 import { ToolbarButton, TableGridSelector } from "./editor/EditorUI";
 import { createPortal } from "react-dom";
 import { saveAs } from "file-saver";
 import {
   Save, Trash2, Loader2, User, X, FileCode,
   Undo2, Redo2, ImagePlus, ChevronDown, ChevronUp, List, ListOrdered,
-  Code, Table as TableIcon, Heading, Heading1, Heading2, Heading3, Heading4, Bold, Italic, Check, Image as ImageIcon,
+  Code, Table as TableIcon, Heading, Bold, Italic, Check, Image as ImageIcon,
   Terminal, Link as LinkIcon, Underline as UnderlineIcon, Sigma,
   FileJson, Strikethrough, Palette, Highlighter, Superscript, Subscript
 } from "lucide-react";
@@ -43,7 +44,7 @@ import { NodeSelection } from "@tiptap/pm/state";
 
 // ─── Sub-components for Performance ──────────────────────────────────────────
 
-const ColorMenu = ({ editor, onReset, onApply }: { editor: any, onReset: () => void, onApply: () => void }) => {
+const ColorMenu = ({ editor, onReset, onApply }: { editor: TiptapEditor, onReset: () => void, onApply: () => void }) => {
   const [localColor, setLocalColor] = useState(() => editor.getAttributes('textStyle').color || "#000000");
   const currentColor = editor.getAttributes('textStyle').color || "#000000";
   const hasChanged = localColor !== currentColor;
@@ -72,7 +73,7 @@ const ColorMenu = ({ editor, onReset, onApply }: { editor: any, onReset: () => v
               type="color"
               value={localColor}
               className="w-8 h-5 rounded cursor-pointer bg-transparent border-none p-0"
-              onInput={(e: any) => {
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                 setLocalColor(e.target.value);
               }}
             />
@@ -100,7 +101,7 @@ const ColorMenu = ({ editor, onReset, onApply }: { editor: any, onReset: () => v
   );
 };
 
-const HighlightMenu = ({ editor, onClear, onApply }: { editor: any, onClear: () => void, onApply: () => void }) => {
+const HighlightMenu = ({ editor, onClear, onApply }: { editor: TiptapEditor, onClear: () => void, onApply: () => void }) => {
   const [localColor, setLocalColor] = useState(() => editor.getAttributes('highlight').color || "#ffff00");
   const currentColor = editor.getAttributes('highlight').color || "#ffff00";
   const hasChanged = localColor !== currentColor;
@@ -129,7 +130,7 @@ const HighlightMenu = ({ editor, onClear, onApply }: { editor: any, onClear: () 
               type="color"
               value={localColor}
               className="w-8 h-5 rounded cursor-pointer bg-transparent border-none p-0"
-              onInput={(e: any) => {
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                 setLocalColor(e.target.value);
               }}
             />
@@ -378,6 +379,10 @@ const EditorContent = React.memo(function EditorContent({
   const toggleLinkFn = useRef<(() => void) | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
+  const [textColorPos, setTextColorPos] = useState({ top: 0, left: 0 });
+  const [highlightPos, setHighlightPos] = useState({ top: 0, left: 0 });
+  const textColorButtonRef = useRef<HTMLDivElement>(null);
+  const highlightButtonRef = useRef<HTMLDivElement>(null);
 
   const isFirstMount = useRef(true);
   useEffect(() => {
@@ -562,7 +567,7 @@ const EditorContent = React.memo(function EditorContent({
         autoSaveTimerRef.current = null;
       }
     };
-  }, [content, filename, title, author, phase, date, entryId, updateEntry]);
+  }, [content, filename, title, author, phase, date, entryId, updateEntry, setPendingSave]);
 
   const handleSave = useCallback(async () => {
     const { valid, errors } = validate();
@@ -975,9 +980,13 @@ const EditorContent = React.memo(function EditorContent({
 
                 <div className="w-px h-6 bg-nb-outline-variant/30 mx-1.5" />
 
-                <div className="relative">
+                <div className="relative" ref={textColorButtonRef}>
                   <ToolbarButton
                     onClick={() => {
+                      if (activeMenu !== "TextColor" && textColorButtonRef.current) {
+                        const rect = textColorButtonRef.current.getBoundingClientRect();
+                        setTextColorPos({ top: rect.bottom + 4, left: rect.left });
+                      }
                       setActiveMenu(activeMenu === "TextColor" ? null : "TextColor");
                     }}
                     active={activeMenu === "TextColor"}
@@ -995,8 +1004,8 @@ const EditorContent = React.memo(function EditorContent({
                     <div
                       style={{
                         position: 'fixed',
-                        top: (linkButtonRef.current?.getBoundingClientRect().bottom ?? 0) + 48,
-                        left: linkButtonRef.current?.getBoundingClientRect().left ?? 0,
+                        top: textColorPos.top,
+                        left: textColorPos.left,
                         zIndex: 9999
                       }}
                       className="bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl p-3 w-44 animate-in fade-in slide-in-from-top-1 duration-150"
@@ -1015,11 +1024,15 @@ const EditorContent = React.memo(function EditorContent({
                   )}
                 </div>
 
-                <div className="relative">
-                  <ToolbarButton
-                    onClick={() => {
-                      setActiveMenu(activeMenu === "Highlight" ? null : "Highlight");
-                    }}
+                  <div className="relative" ref={highlightButtonRef}>
+                    <ToolbarButton
+                      onClick={() => {
+                        if (activeMenu !== "Highlight" && highlightButtonRef.current) {
+                          const rect = highlightButtonRef.current.getBoundingClientRect();
+                          setHighlightPos({ top: rect.bottom + 4, left: rect.left });
+                        }
+                        setActiveMenu(activeMenu === "Highlight" ? null : "Highlight");
+                      }}
                     active={activeMenu === "Highlight"}
                     title="Highlight"
                   >
@@ -1030,15 +1043,15 @@ const EditorContent = React.memo(function EditorContent({
                         style={{ backgroundColor: editor.getAttributes('highlight').color || 'transparent' }}
                       />
                     </div>
-                  </ToolbarButton>
-                  {activeMenu === "Highlight" && createPortal(
-                    <div
-                      style={{
-                        position: 'fixed',
-                        top: (linkButtonRef.current?.getBoundingClientRect().bottom ?? 0) + 48,
-                        left: (linkButtonRef.current?.getBoundingClientRect().left ?? 0) + 40,
-                        zIndex: 9999
-                      }}
+                    </ToolbarButton>
+                    {activeMenu === "Highlight" && createPortal(
+                      <div
+                        style={{
+                          position: 'fixed',
+                          top: highlightPos.top,
+                          left: highlightPos.left,
+                          zIndex: 9999
+                        }}
                       className="bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl p-3 w-44 animate-in fade-in slide-in-from-top-1 duration-150"
                       onMouseDown={(e) => e.stopPropagation()}
                     >

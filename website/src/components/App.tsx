@@ -197,7 +197,7 @@ export default function App() {
     } else {
       handleGoHome();
     }
-  }, [currentProjectId, navigateTo, navigateToHome]);
+  }, [currentProjectId, navigateTo, handleGoHome]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -249,7 +249,7 @@ export default function App() {
       unsubLogin();
       unsubSessionExpired();
     };
-  }, []);
+  }, [onSignOutGithub]);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setMounted(true));
