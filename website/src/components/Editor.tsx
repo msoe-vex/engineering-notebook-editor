@@ -718,6 +718,8 @@ const EditorContent = React.memo(function EditorContent({
   viewMode,
   onSetViewMode,
   setPendingSave,
+  isSavingGlobal,
+  isPendingSaveGlobal,
   onOpenHelp,
 }: EditorProps & {
   openFile: NonNullable<ReturnType<typeof useWorkspace>['openFile']>;
@@ -728,6 +730,8 @@ const EditorContent = React.memo(function EditorContent({
   setEntryValidity: ReturnType<typeof useWorkspace>['setEntryValidity'];
   exportEntries: ReturnType<typeof useWorkspace>['exportEntries'];
   setPendingSave: (val: boolean) => void;
+  isSavingGlobal: boolean;
+  isPendingSaveGlobal: boolean;
 }) {
   const {
     path: filename,
@@ -840,8 +844,7 @@ const EditorContent = React.memo(function EditorContent({
     }
   }, [viewMode]);
 
-  const [isSaving, setIsSaving] = useState(false);
-  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [isManualSaving, setIsManualSaving] = useState(false);
   const editorPanelRef = useRef<import("react-resizable-panels").ImperativePanelHandle>(null);
   const previewPanelRef = useRef<import("react-resizable-panels").ImperativePanelHandle>(null);
   const phaseButtonRef = useRef<HTMLDivElement>(null);
@@ -905,9 +908,13 @@ const EditorContent = React.memo(function EditorContent({
   }, 500), []);
 
   const handleEditorChange = useCallback((newVal: string) => {
+    const contentStr = typeof latestContentRef.current === 'string' ? latestContentRef.current : JSON.stringify(latestContentRef.current);
+    if (newVal === contentStr) return;
+
+    setPendingSave(true);
     latestContentRef.current = newVal;
     debouncedSetContent(newVal);
-  }, [debouncedSetContent]);
+  }, [debouncedSetContent, setPendingSave]);
 
   const generateLatex = useCallback((cnt: TipTapNode | string, t: string, a: string, p: number | null, d: string) => {
     const id = filename.split('/').pop()?.replace('.json', '') || "";
@@ -980,7 +987,6 @@ const EditorContent = React.memo(function EditorContent({
       date !== lastAutoSavedRef.current.date;
 
     if (isContentChanged || isMetadataChanged) {
-      setIsAutoSaving(true);
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
       } else {
@@ -1005,18 +1011,17 @@ const EditorContent = React.memo(function EditorContent({
         lastAutoSavedRef.current.date = date;
 
         setPendingSave(false);
-        setIsAutoSaving(false);
         autoSaveTimerRef.current = null;
       }, 800);
     } else {
       // No changes detected, ensure we aren't stuck in a saving state
-      setIsAutoSaving(false);
+      setPendingSave(false);
     }
 
     return () => {
+      setPendingSave(false);
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
-        setPendingSave(false);
         autoSaveTimerRef.current = null;
       }
     };
@@ -1030,7 +1035,8 @@ const EditorContent = React.memo(function EditorContent({
     }
 
     setValidationErrors([]);
-    setIsSaving(true);
+    setPendingSave(true);
+    setIsManualSaving(true);
 
     // Clear auto-save timer if it exists to avoid redundant saves
     if (autoSaveTimerRef.current) {
@@ -1043,10 +1049,9 @@ const EditorContent = React.memo(function EditorContent({
 
     await updateEntry(entryId, latex, contentStr, { title, author, phase, date });
     lastSyncedRef.current = { title, author, phase, date, contentStr };
-    setIsAutoSaving(false);
-
-    setIsSaving(false);
-  }, [content, title, author, phase, date, generateLatex, validate, updateEntry, entryId]);
+    setPendingSave(false);
+    setIsManualSaving(false);
+  }, [content, title, author, phase, date, generateLatex, validate, updateEntry, entryId, setPendingSave]);
 
   const handleDownload = () => {
     const latex = generateLatex(content, title, author, phase, date);
@@ -1258,7 +1263,7 @@ const EditorContent = React.memo(function EditorContent({
 
 
             <div className="flex items-center gap-2 mr-2">
-              {isAutoSaving || isSaving ? (
+              {isPendingSaveGlobal || isSavingGlobal || isManualSaving ? (
                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-primary animate-pulse">
                   <Loader2 size={12} className="animate-spin" />
                   <span>SAVING...</span>
@@ -1484,6 +1489,8 @@ const Editor = (props: EditorProps) => {
     setEntryValidity,
     exportEntries,
     setPendingSave,
+    isSaving,
+    isPendingSave,
   } = useWorkspace();
 
   if (!openFile) return null;
@@ -1499,6 +1506,8 @@ const Editor = (props: EditorProps) => {
       setEntryValidity={setEntryValidity}
       exportEntries={exportEntries}
       setPendingSave={setPendingSave}
+      isSavingGlobal={isSaving}
+      isPendingSaveGlobal={isPendingSave}
       onOpenHelp={props.onOpenHelp}
       {...props}
     />
