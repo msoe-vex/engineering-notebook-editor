@@ -268,7 +268,7 @@ const MenuAction = ({ icon, label, onClick, disabled, setActiveMenu }: { icon: R
   </button>
 );
 
-const EditorToolbar = React.memo(({
+const EditorToolbar = React.memo(function EditorToolbar({
   editor,
   activeMenu,
   setActiveMenu,
@@ -300,7 +300,7 @@ const EditorToolbar = React.memo(({
   setGridPos: React.Dispatch<React.SetStateAction<{ top: number, left: number }>>;
   showTableGrid: boolean;
   setShowTableGrid: React.Dispatch<React.SetStateAction<boolean>>;
-}) => {
+}) {
   const [, setSelectionUpdate] = useState(0);
 
   const textColorButtonRef = useRef<HTMLDivElement>(null);
@@ -328,9 +328,8 @@ const EditorToolbar = React.memo(({
     };
     window.addEventListener("mousedown", handleOutsideClick);
     return () => window.removeEventListener("mousedown", handleOutsideClick);
-  }, [showTableGrid]);
+  }, [showTableGrid, setShowTableGrid]);
 
-  const isInTable = editor.isActive("tableCell") || editor.isActive("tableHeader") || false;
 
   return (
     <div className="border-t border-nb-outline-variant/30 bg-nb-surface-mid/50 shrink-0 overflow-x-auto scrollbar-hide w-full">
@@ -867,14 +866,13 @@ const EditorContent = React.memo(function EditorContent({
     };
     window.addEventListener("mousedown", handleOutsideClick);
     return () => window.removeEventListener("mousedown", handleOutsideClick);
-  }, [showTableGrid]);
+  }, [showTableGrid, setShowTableGrid]);
 
   // Dynamic Phase Logic
   const availablePhases = getPhases(metadata?.phases);
   const phaseConfig = getPhaseConfig(availablePhases);
   const activePhaseCfg = phase && phaseConfig[phase] ? phaseConfig[phase] : null;
 
-  const [, setSelectionUpdate] = useState(0);
 
   const otherAuthors = React.useMemo(() => {
     const authors = new Set<string>();
