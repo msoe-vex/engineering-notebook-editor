@@ -139,6 +139,16 @@ export function LinkReferencePopup({
     ).slice(0, 50);
   }, [allResources, query]);
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleApply();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      onClose();
+    }
+  };
+
   const handleApply = () => {
     const trimmedText = text.trim();
     let finalLink = selectedResource ? `#${selectedResource.id}` : link.trim();
@@ -173,9 +183,12 @@ export function LinkReferencePopup({
           text: trimmedText || (finalLink.startsWith('#') ? (selectedResource?.title || finalLink) : finalLink),
           marks: marks.map(m => m.toJSON())
         })
+        .unsetMark('link')
+        .unsetMark('underline')
+        .unsetColor()
         .run();
     } else {
-      editor.chain().focus().extendMarkRange('link').unsetLink().unsetMark('underline').run();
+      editor.chain().focus().extendMarkRange('link').unsetLink().unsetMark('underline').unsetColor().run();
     }
     onClose();
   };
@@ -233,6 +246,7 @@ export function LinkReferencePopup({
             type="text"
             value={text}
             onChange={e => setText(e.target.value)}
+            onKeyDown={handleKeyDown}
             className="w-full px-3 py-2 bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg outline-none text-sm focus:border-nb-primary transition-all"
             placeholder="Text to display..."
           />
@@ -252,6 +266,7 @@ export function LinkReferencePopup({
                 setSelectedResource(null);
                 setQuery(e.target.value);
               }}
+              onKeyDown={handleKeyDown}
               className="w-full px-3 py-2 bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg outline-none text-sm focus:border-nb-primary transition-all"
               placeholder="URL or search resource..."
             />
@@ -337,7 +352,7 @@ export function LinkReferencePopup({
 
           {editor.isActive('link') && (
             <button
-              onClick={() => { editor.chain().focus().unsetLink().unsetMark('underline').run(); onClose(); }}
+              onClick={() => { editor.chain().focus().unsetLink().unsetMark('underline').unsetColor().run(); onClose(); }}
               title="Remove Link"
               className="px-3 py-2 bg-nb-surface-low text-red-500 rounded-lg hover:bg-red-50 transition-all border border-nb-outline-variant/30"
             >

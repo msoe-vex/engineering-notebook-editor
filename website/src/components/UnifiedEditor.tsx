@@ -363,12 +363,13 @@ const UnifiedEditor = ({
                 const { from, to } = editor.state.selection;
                 if (from !== to) {
                   const text = editor.state.doc.textBetween(from, to, " ");
-                  const startOffset = text.search(/\S/);
-                  const endOffset = text.trimEnd().length;
-                  if (startOffset !== -1) {
+                  const leadingWhitespace = text.length - text.trimStart().length;
+                  const trailingWhitespace = text.length - text.trimEnd().length;
+                  
+                  if (text.trim().length > 0) {
                     editor.chain().setTextSelection({
-                      from: from + startOffset,
-                      to: from + endOffset
+                      from: from + leadingWhitespace,
+                      to: to - trailingWhitespace
                     }).run();
                   }
                 }
@@ -382,6 +383,55 @@ const UnifiedEditor = ({
             },
           };
         },
+      }),
+      Extension.create({
+        name: 'linkStyleReseter',
+        addProseMirrorPlugins() {
+          return [
+            new Plugin({
+              appendTransaction(transactions, oldState, newState) {
+                if (!newState.selection.empty) return null;
+
+                const linkType = newState.schema.marks.link;
+                if (!linkType) return null;
+
+                const { from } = newState.selection;
+                
+                // Since Link is non-inclusive, typing at the end of a link (from-1) 
+                // should not continue the link. However, underline/color are inclusive 
+                // and will stick. We check if we are at the end boundary of a link.
+                const hasLinkBefore = from > 0 && newState.doc.rangeHasMark(from - 1, from, linkType);
+                const hasLinkAfter = from < newState.doc.content.size && newState.doc.rangeHasMark(from, from + 1, linkType);
+                
+                // If we have a link before but NOT after, we are at the exit boundary.
+                // Or if we have no link at all around us.
+                const isExitingLink = hasLinkBefore && !hasLinkAfter;
+                const isNotInLink = !hasLinkBefore && !hasLinkAfter;
+
+                if (isExitingLink || isNotInLink) {
+                  const stored = newState.storedMarks || [];
+                  const hasStickyStyles = stored.some(m => 
+                    m.type.name === 'underline' || 
+                    (m.type.name === 'textStyle' && m.attrs.color === '#3b82f6')
+                  );
+
+                  if (hasStickyStyles) {
+                    const tr = newState.tr;
+                    // Filter out link-related marks from stored marks
+                    const filteredMarks = stored.filter(m => 
+                      m.type.name !== 'link' && 
+                      m.type.name !== 'underline' && 
+                      !(m.type.name === 'textStyle' && m.attrs.color === '#3b82f6')
+                    );
+                    tr.setStoredMarks(filteredMarks);
+                    return tr;
+                  }
+                }
+                return null;
+              }
+            })
+          ];
+        }
       }),
       Extension.create({
         name: 'mentionTrigger',
@@ -636,12 +686,13 @@ const UnifiedEditor = ({
           const { from, to } = editor.state.selection;
           if (from !== to) {
             const text = editor.state.doc.textBetween(from, to, " ");
-            const startOffset = text.search(/\S/);
-            const endOffset = text.trimEnd().length;
-            if (startOffset !== -1) {
+            const leadingWhitespace = text.length - text.trimStart().length;
+            const trailingWhitespace = text.length - text.trimEnd().length;
+            
+            if (text.trim().length > 0) {
               editor.chain().setTextSelection({
-                from: from + startOffset,
-                to: from + endOffset
+                from: from + leadingWhitespace,
+                to: to - trailingWhitespace
               }).run();
             }
           }
