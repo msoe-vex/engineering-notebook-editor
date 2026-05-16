@@ -758,6 +758,7 @@ export default function App() {
                 viewMode={viewMode}
                 onSetViewMode={handleSetViewMode}
                 pdfUrl={pdfUrl || undefined}
+                onOpenHelp={() => navigateTo({}, '/workspace/help/editor')}
               />
             )}
           </div>

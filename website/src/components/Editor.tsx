@@ -11,7 +11,7 @@ import {
   Undo2, Redo2, ImagePlus, ChevronDown, ChevronUp, List, ListOrdered,
   Code, Table as TableIcon, Heading, Bold, Italic, Check, Image as ImageIcon,
   Terminal, Link as LinkIcon, Underline as UnderlineIcon, Sigma,
-  FileJson, Strikethrough, Palette, Highlighter, Superscript, Subscript
+  FileJson, Strikethrough, Palette, Highlighter, Superscript, Subscript, HelpCircle
 } from "lucide-react";
 import ValidationTooltip from "./ValidationTooltip";
 import * as LucideIcons from "lucide-react";
@@ -170,6 +170,7 @@ interface EditorProps {
   viewMode: ViewMode;
   onSetViewMode: (mode: ViewMode) => void;
   pdfUrl?: string;
+  onOpenHelp?: () => void;
 }
 
 const parseInitialContent = (raw: unknown): TipTapNode | string => {
@@ -280,6 +281,7 @@ const EditorContent = React.memo(function EditorContent({
   viewMode,
   onSetViewMode,
   setPendingSave,
+  onOpenHelp,
 }: EditorProps & {
   openFile: NonNullable<ReturnType<typeof useWorkspace>['openFile']>;
   metadata: ReturnType<typeof useWorkspace>['metadata'];
@@ -835,6 +837,14 @@ const EditorContent = React.memo(function EditorContent({
                 </div>
               )}
             </div>
+
+            <button
+              onClick={onOpenHelp}
+              title="Help & Guide"
+              className="p-1.5 ml-2 rounded-lg bg-nb-surface-low hover:bg-nb-primary/10 text-nb-on-surface-variant hover:text-nb-primary transition-all border border-nb-outline-variant/30 hover:border-nb-primary/30 group cursor-pointer"
+            >
+              <HelpCircle size={16} className="group-hover:scale-110 transition-transform" />
+            </button>
 
             <button
               onClick={onClose}
@@ -1410,6 +1420,7 @@ const Editor = (props: EditorProps) => {
       setEntryValidity={setEntryValidity}
       exportEntries={exportEntries}
       setPendingSave={setPendingSave}
+      onOpenHelp={props.onOpenHelp}
       {...props}
     />
   );

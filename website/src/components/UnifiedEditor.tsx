@@ -216,10 +216,10 @@ export default function UnifiedEditor({
       }),
       CustomHeading.configure({ levels: [1, 2] }),
       BulletList.configure({
-        HTMLAttributes: { class: "list-disc" },
+        HTMLAttributes: { class: "bullet-list" },
       }),
       OrderedList.configure({
-        HTMLAttributes: { class: "list-decimal" },
+        HTMLAttributes: { class: "ordered-list" },
       }),
       RestrictedListItem,
       Highlight.configure({ multicolor: true }),
