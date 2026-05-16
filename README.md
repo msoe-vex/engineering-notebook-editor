@@ -1,4 +1,4 @@
-# Engineering Notebook Editor
+﻿# Engineering Notebook Editor
 
 This repository contains two related parts of the VEX engineering notebook system:
 
@@ -58,58 +58,19 @@ The `website/` app is designed to deploy on Vercel:
 
 For notebook/PDF work, see `notebook/README.md`.
 
-## LaTeX Engine & Assets
+## Release Workflow (For Web Editor)
 
-The in-browser PDF compilation is powered by **BusyTeX** (a WebAssembly build of XeTeX).
+To ensure the web editor can compile PDFs efficiently without hitting GitHub LFS limits, we host the LaTeX engine and template dependencies as GitHub Release assets.
 
-### Asset Origin
-The assets in `website/public/busytex` are sourced from the [TeXlyre/texlyre-busytex](https://github.com/TeXlyre/texlyre-busytex) project. They consist of:
-- **`busytex.wasm / .js`**: The core LaTeX engine compiled to WASM.
-- **`texlive-*.js / .data`**: Virtual filesystem bundles containing the standard TeX Live distribution.
+### 1. Prepare Assets
+Run the following from the `website/` directory:
+- `npm run download:busytex`: Downloads the engine WASM and TeX Live `.data` files into `website/busytex/`.
+- `npm run bundle:latex`: Gathers the template `.sty`, `.cls`, and font dependencies into `website/public/latex/`.
 
-These files were originally downloaded via the `texlyre-busytex` toolchain and are committed to the repository to ensure reliable local serving. Downloaded from [https://github.com/TeXlyre/texlyre-busytex/releases](https://github.com/TeXlyre/texlyre-busytex/releases).
+### 2. Upload to Release
+1. Create a new release on GitHub (e.g., `v0.1.0`).
+2. Upload **all** files from both `website/busytex/` and `website/public/latex/` to the release assets area.
+3. You can then delete the local copies from `website/public/latex/` if you want to keep the repository clean.
 
-### Hosting Large Assets (GitHub Releases)
-To bypass Vercel Hobby plan limits and GitHub LFS bandwidth restrictions, the largest assets (like `texlive-recommended.js`) are hosted as **GitHub Release Assets** and served via an **Edge Proxy**.
-
-**To update or move these assets:**
-1.  **Download the assets locally**:
-    ```bash
-    cd website
-    npx texlyre-busytex download-assets ./public/busytex
-    ```
-2.  **Create a New Release**:
-    Go to your repository on GitHub -> **Releases** -> **Draft a new release**. Tag it (e.g., `v0.1.0`).
-3.  **Upload Assets**:
-    Drag and drop **both** `texlive-recommended.js` and `texlive-recommended.data` from `website/public/busytex/` into the release's binary assets area. Both files are required; the `.js` file acts as the loader and metadata, while the `.data` file contains the actual TeX Live assets.
-4.  **Update the Proxy URL**:
-    In `website/src/lib/busytex.ts`, update the `GITHUB_PACKAGE_URL` constant to point to your new release:
-    ```typescript
-    const GITHUB_PACKAGE_URL = 'https://github.com/your-org/your-repo/releases/download/v0.1.0/texlive-recommended.js';
-    ```
-    The app will automatically use the `/api/busytex-proxy` to fetch these assets with the correct CORS headers.
-
-## Updating LaTeX Dependencies
-
-If you add new LaTeX packages to the notebook templates, you must update the bundled assets in the website's public directory so the browser-based compiler can find them.
-
-### Using `notebook/bundle.bat`
-This script automates the process of gathering dependencies from your local TeX distribution and copying them to the website.
-
-**Prerequisites:**
-- A local LaTeX distribution (e.g., MiKTeX or TeX Live) installed and in your PATH.
-- PowerShell (available by default on Windows).
-
-**Usage:**
-1. Open a terminal in the `notebook/` directory.
-2. Run the bundling script:
-   ```bash
-   ./bundle.bat
-   ```
-3. The script will:
-   - Compile `main.tex` once to record all file access.
-   - Locate every `.sty`, `.cls`, and font dependency on your system.
-   - Copy the required files to `website/public/latex/`.
-   - Update `website/public/latex/manifest.json`.
-4. Commit the updated files in `website/public/latex/` to your repository.
-
+### 3. Update the App
+Update the `GITHUB_RELEASE_URL` constant in `website/src/lib/busytex.ts` to point to your new release tag (e.g., `.../download/v0.1.0`). The app will automatically handle fetching the engine assets, the manifest, and all `.sty` dependencies from this root URL.

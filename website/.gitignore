@@ -1,6 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 lint_output.txt
+busytex/
+busytex-assets.tar.gz
 
 # dependencies
 /node_modules
@@ -41,3 +43,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# busytex bundle
+busytex/

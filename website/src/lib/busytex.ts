@@ -5,7 +5,7 @@ import { DATA_DIR, LATEX_DIR } from './constants';
 let runner: BusyTexRunner | null = null;
 let xelatex: XeLatex | null = null;
 
-const GITHUB_PACKAGE_URL = 'https://github.com/msoe-vex/engineering-notebook-editor/releases/download/v0.1.0/texlive-recommended.js';
+const GITHUB_RELEASE_URL = 'https://github.com/msoe-vex/engineering-notebook-editor/releases/download/v0.1.0';
 
 export async function initBusyTex() {
   if (runner && runner.isInitialized()) return;
@@ -15,16 +15,14 @@ export async function initBusyTex() {
     : '/busytex';
 
   // Use the CORS proxy to fetch the remote package.
-  // The proxy also fixes the MIME type so the browser can execute the script.
+  const packageUrl = `${GITHUB_RELEASE_URL}/texlive-recommended.js`;
   const proxiedPackageUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/api/busytex-proxy?url=${encodeURIComponent(GITHUB_PACKAGE_URL)}`
-    : GITHUB_PACKAGE_URL;
+    ? `${window.location.origin}/api/busytex-proxy?url=${encodeURIComponent(packageUrl)}`
+    : packageUrl;
 
   runner = new BusyTexRunner({
     busytexBasePath: basePath,
     engineMode: 'combined',
-    // By providing the proxied URL to the .js file, BusyTeX will 
-    // automatically use the same proxy for the .data file.
     preloadDataPackages: [proxiedPackageUrl],
     verbose: true,
   });
@@ -33,9 +31,25 @@ export async function initBusyTex() {
   xelatex = new XeLatex(runner);
 }
 
-async function fetchPublicFile(path: string): Promise<Uint8Array> {
-  const response = await fetch(path);
-  if (!response.ok) throw new Error(`Failed to fetch ${path}`);
+async function fetchAsset(path: string): Promise<Uint8Array> {
+  // Try local first, then fallback to remote release
+  try {
+    const response = await fetch(path);
+    if (response.ok) {
+      const buffer = await response.arrayBuffer();
+      return new Uint8Array(buffer);
+    }
+  } catch (e) {
+    // Ignore local failure and try remote
+  }
+
+  // Fallback to remote release via proxy
+  const filename = path.split('/').pop();
+  const remoteUrl = `${GITHUB_RELEASE_URL}/${filename}`;
+  const proxiedUrl = `${window.location.origin}/api/busytex-proxy?url=${encodeURIComponent(remoteUrl)}`;
+  
+  const response = await fetch(proxiedUrl);
+  if (!response.ok) throw new Error(`Failed to fetch asset from ${path} or ${remoteUrl}`);
   const buffer = await response.arrayBuffer();
   return new Uint8Array(buffer);
 }
@@ -52,7 +66,6 @@ export type CompileStatusCallback = (status: string, step: number, totalSteps: n
 export async function compileNotebook(onStatus?: CompileStatusCallback): Promise<CompileResult> {
   const TOTAL_STEPS = 7;
 
-  // 0. Ensure LaTeX metadata (entries.tex, etc.) is up to date in the store
   onStatus?.("Updating project metadata...", 1, TOTAL_STEPS, 10);
   await store.updateLatexMetadata();
 
@@ -62,32 +75,41 @@ export async function compileNotebook(onStatus?: CompileStatusCallback): Promise
 
   const files: FileInput[] = [];
 
-  // 1. Map public dependencies (/latex/*) and user overrides
+  // 1. Map public dependencies (manifest.json + .sty files)
   onStatus?.("Loading LaTeX dependencies...", 3, TOTAL_STEPS, 35);
   try {
-    const manifestResponse = await fetch('/latex/manifest.json');
-    if (manifestResponse.ok) {
-      const packageFiles = await manifestResponse.json() as string[];
-      for (const pkg of packageFiles) {
-        try {
-          // Try to pull main.tex and engineering_notebook.sty from workspace first
-          if (pkg === 'main.tex' || pkg === 'engineering_notebook.sty') {
-            const userContent = await store.getFileContent(pkg);
-            if (userContent) {
-              files.push({ path: pkg, content: userContent });
-              continue;
-            }
-          }
+    // Fetch manifest.json (try local first, then remote)
+    let packageFiles: string[] = [];
+    try {
+      const res = await fetch('/latex/manifest.json');
+      if (res.ok) packageFiles = await res.json();
+      else throw new Error();
+    } catch (e) {
+      const remoteManifestUrl = `${GITHUB_RELEASE_URL}/manifest.json`;
+      const proxiedUrl = `${window.location.origin}/api/busytex-proxy?url=${encodeURIComponent(remoteManifestUrl)}`;
+      const res = await fetch(proxiedUrl);
+      if (res.ok) packageFiles = await res.json();
+    }
 
-          const content = await fetchPublicFile(`/latex/${pkg}`);
-          files.push({ path: pkg, content });
-        } catch (e) {
-          console.warn(`Failed to pre-load ${pkg}`, e);
+    for (const pkg of packageFiles) {
+      try {
+        // Try to pull main.tex and engineering_notebook.sty from workspace first
+        if (pkg === 'main.tex' || pkg === 'engineering_notebook.sty') {
+          const userContent = await store.getFileContent(pkg);
+          if (userContent) {
+            files.push({ path: pkg, content: userContent });
+            continue;
+          }
         }
+
+        const content = await fetchAsset(`/latex/${pkg}`);
+        files.push({ path: pkg, content });
+      } catch (e) {
+        console.warn(`Failed to pre-load ${pkg}`, e);
       }
     }
   } catch (e) {
-    console.error("Failed to load manifest.json", e);
+    console.error("Failed to load LaTeX dependencies", e);
   }
 
   // 2. Map fonts (/fonts/*)
@@ -99,7 +121,7 @@ export async function compileNotebook(onStatus?: CompileStatusCallback): Promise
 
   for (const font of fontFiles) {
     try {
-      const content = await fetchPublicFile(`/fonts/${font}`);
+      const content = await fetchAsset(`/fonts/${font}`);
       files.push({ path: `fonts/${font}`, content });
     } catch (e) {
       console.warn(`Failed to pre-load font ${font}`, e);
