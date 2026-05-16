@@ -309,6 +309,8 @@ const EditorContent = React.memo(function EditorContent({
   const [phase, setPhase] = useState<number | null>(initialPhase);
   const [date, setDate] = useState(initialDate || getLocalDateString());
   const [content, setContent] = useState<TipTapNode | string>(() => parseInitialContent(initialContent));
+  const [stableContentForPreview, setStableContentForPreview] = useState(content);
+  const [stableMetadataForPreview, setStableMetadataForPreview] = useState({ title: initialTitle, author: initialAuthor, phase: initialPhase, date: initialDate || getLocalDateString() });
   const [editor, setEditor] = useState<import("@tiptap/react").Editor | null>(null);
 
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -364,17 +366,18 @@ const EditorContent = React.memo(function EditorContent({
 
 
 
-  // Local metadata validation (immediate for UI)
+  // Local metadata validation (debounced for performance)
   useEffect(() => {
-    const { valid, errors } = validate();
-    if (valid !== localIsValid || JSON.stringify(errors) !== JSON.stringify(validationErrors)) {
-      requestAnimationFrame(() => {
+    const timer = setTimeout(() => {
+      const { valid, errors } = validate();
+      if (valid !== localIsValid || JSON.stringify(errors) !== JSON.stringify(validationErrors)) {
         setLocalIsValid(valid);
         setValidationErrors(errors);
         setEntryValidity(entryId, valid, errors);
-      });
-    }
-  }, [title, author, phase, date, editor?.state.doc.content, validate, localIsValid, validationErrors, currentProjectId, entryId, setEntryValidity]);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [title, author, phase, date, editor?.state.doc.content, validate, localIsValid, validationErrors, entryId, setEntryValidity]);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -498,6 +501,10 @@ const EditorContent = React.memo(function EditorContent({
     return generateEntryLatex(cnt, t, a, p === null ? "" : p, initialCreatedAt, id, resourceTypes, d);
   }, [filename, initialCreatedAt, metadata.entries]);
 
+  const previewLatex = React.useMemo(() => {
+    return generateLatex(stableContentForPreview, stableMetadataForPreview.title, stableMetadataForPreview.author, stableMetadataForPreview.phase, stableMetadataForPreview.date);
+  }, [stableContentForPreview, stableMetadataForPreview, generateLatex]);
+
 
 
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -556,6 +563,9 @@ const EditorContent = React.memo(function EditorContent({
 
         const latex = generateLatexRef.current(currentContent, title, author, phase, date);
         updateEntry(entryId, latex, contentStr, { title, author, phase, date });
+
+        setStableContentForPreview(currentContent);
+        setStableMetadataForPreview({ title, author, phase, date });
 
         lastAutoSavedRef.current.contentStr = contentStr;
         lastAutoSavedRef.current.title = title;
@@ -1380,7 +1390,7 @@ const EditorContent = React.memo(function EditorContent({
             defaultSize={viewMode === "preview" ? 100 : (viewMode === "editor" ? 0 : 50)}
             className={`flex flex-col h-full bg-nb-surface-low transition-all duration-500 ease-in-out ${viewMode === "editor" ? "opacity-0 scale-[0.98] pointer-events-none" : "opacity-100 scale-100"}`}
           >
-            <Preview latexContent={generateLatex(content, title, author, phase, date)} />
+            <Preview latexContent={previewLatex} />
           </Panel>
         </PanelGroup>
       </div>

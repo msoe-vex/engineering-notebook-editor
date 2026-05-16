@@ -98,7 +98,16 @@ export default function Preview({ latexContent, pdfUrl }: PreviewProps) {
 
   useEffect(() => {
     if (rawCodeRef.current && !pdfUrl) {
-      Prism.highlightElement(rawCodeRef.current);
+      // For very large documents, syntax highlighting can be a performance bottleneck
+      if (latexContent.length > 50000) {
+        rawCodeRef.current.textContent = latexContent;
+        return;
+      }
+      
+      const timer = setTimeout(() => {
+        if (rawCodeRef.current) Prism.highlightElement(rawCodeRef.current);
+      }, 50);
+      return () => clearTimeout(timer);
     }
   }, [latexContent, pdfUrl]);
 
