@@ -720,6 +720,7 @@ const EditorContent = React.memo(function EditorContent({
   setPendingSave,
   isSavingGlobal,
   isPendingSaveGlobal,
+  workspaceVersion,
   onOpenHelp,
 }: EditorProps & {
   openFile: NonNullable<ReturnType<typeof useWorkspace>['openFile']>;
@@ -732,6 +733,7 @@ const EditorContent = React.memo(function EditorContent({
   setPendingSave: (val: boolean) => void;
   isSavingGlobal: boolean;
   isPendingSaveGlobal: boolean;
+  workspaceVersion: number;
 }) {
   const {
     path: filename,
@@ -1446,7 +1448,7 @@ const EditorContent = React.memo(function EditorContent({
             <div className="flex-1 overflow-hidden relative">
               <div className="absolute inset-0 flex flex-col overflow-y-auto custom-scrollbar">
                 <UnifiedEditor
-                  key={filename}
+                  key={`${filename}-${workspaceVersion}`}
                   filename={filename}
                   content={parseInitialContent(openFile.tiptapContent)} // Initial load only
                   onChange={handleEditorChange}
@@ -1491,6 +1493,7 @@ const Editor = (props: EditorProps) => {
     setPendingSave,
     isSaving,
     isPendingSave,
+    workspaceVersion,
   } = useWorkspace();
 
   if (!openFile) return null;
@@ -1508,7 +1511,7 @@ const Editor = (props: EditorProps) => {
       setPendingSave={setPendingSave}
       isSavingGlobal={isSaving}
       isPendingSaveGlobal={isPendingSave}
-      onOpenHelp={props.onOpenHelp}
+      workspaceVersion={workspaceVersion}
       {...props}
     />
   );
