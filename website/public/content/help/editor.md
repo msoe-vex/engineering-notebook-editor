@@ -23,6 +23,7 @@ Speed up your documentation with these shortcuts:
 - **Strike-through**: `Ctrl + Shift + X` or `Ctrl + Shift + S`
 - **Superscript**: `Ctrl + Shift + =` or `Ctrl + +`
 - **Subscript**: `Ctrl + Shift + -` or `Ctrl + _`
+- **Clear Formatting**: `Ctrl + \`
 - **Undo / Redo**: `Ctrl + Z` / `Ctrl + Y`
 - **Save**: `Ctrl + S`
 - **Code**: Type `code` to format text as inline code, or type ``` followed by a space to start a code block.
