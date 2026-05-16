@@ -90,15 +90,25 @@ button {
 }
 
 ::selection {
-  background-color: #f8e1e1;
+  background-color: rgba(217, 40, 47, 0.15) !important; /* Semi-transparent nb-primary */
 }
 
 .dark ::selection {
-  background-color: #43181a;
+  background-color: rgba(217, 40, 47, 0.3) !important;
 }
 
 button:disabled {
   cursor: default;
+}
+
+/* Fix for react-pdf selection being opaque */
+.react-pdf__Page__textContent ::selection {
+  background-color: rgba(217, 40, 47, 0.2) !important;
+  color: transparent !important;
+}
+
+.dark .react-pdf__Page__textContent ::selection {
+  background-color: rgba(217, 40, 47, 0.4) !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════
