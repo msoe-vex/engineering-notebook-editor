@@ -113,9 +113,9 @@ interface UnifiedEditorProps {
   entryId?: string;
 }
 
-export default function UnifiedEditor({
+const UnifiedEditor = ({
   content, onChange, onImageUpload, filename, onEditorInit, onToggleLink, entryId
-}: UnifiedEditorProps) {
+}: UnifiedEditorProps) => {
   const { currentProjectId, metadata } = useWorkspace();
   const dbName = currentProjectId ? `notebook-project-${currentProjectId}` : "notebook-default";
   const parseContent = (raw: string | import("@/lib/metadata").TipTapNode) => {
@@ -216,10 +216,10 @@ export default function UnifiedEditor({
       }),
       CustomHeading.configure({ levels: [1, 2] }),
       BulletList.configure({
-        HTMLAttributes: { class: "list-disc" },
+        HTMLAttributes: { class: "bullet-list" },
       }),
       OrderedList.configure({
-        HTMLAttributes: { class: "list-decimal" },
+        HTMLAttributes: { class: "ordered-list" },
       }),
       RestrictedListItem,
       Highlight.configure({ multicolor: true }),
@@ -374,6 +374,10 @@ export default function UnifiedEditor({
                 }
               }
               setShowLinkPopup(true);
+              return true;
+            },
+            'Mod-\\': ({ editor }) => {
+              editor.chain().focus().unsetAllMarks().clearNodes().run();
               return true;
             },
           };
@@ -700,6 +704,8 @@ export default function UnifiedEditor({
       </div>
     </div>
   );
-}
+};
+
+export default React.memo(UnifiedEditor);
 
 
