@@ -882,6 +882,7 @@ class WorkspaceStore {
     }
 
     const dbName = this.getDBName();
+    await this.#queue;
     const previousOpenId = this.openFile?.id ?? null;
 
     const { clearAllPending } = await import("./db");
@@ -1017,6 +1018,7 @@ class WorkspaceStore {
   }
 
   async commitAll(config: GitHubConfig, customMessage?: string) {
+    await this.#queue;
     const dbName = this.getDBName();
     const all = await getAllPending(dbName);
     const { commitChanges } = await import("./github");
