@@ -356,6 +356,26 @@ export default function UnifiedEditor({
             },
             'Mod-Shift-s': ({ editor }) => { editor.chain().focus().toggleStrike().run(); return true; },
             'Mod-Shift-x': ({ editor }) => { editor.chain().focus().toggleStrike().run(); return true; },
+            'Mod-k': ({ editor }) => {
+              if (editor.isActive('link')) {
+                editor.commands.extendMarkRange('link');
+              } else {
+                const { from, to } = editor.state.selection;
+                if (from !== to) {
+                  const text = editor.state.doc.textBetween(from, to, " ");
+                  const startOffset = text.search(/\S/);
+                  const endOffset = text.trimEnd().length;
+                  if (startOffset !== -1) {
+                    editor.chain().setTextSelection({
+                      from: from + startOffset,
+                      to: from + endOffset
+                    }).run();
+                  }
+                }
+              }
+              setShowLinkPopup(true);
+              return true;
+            },
           };
         },
       }),
