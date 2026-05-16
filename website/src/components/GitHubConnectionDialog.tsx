@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { X, Loader2, Search, Check, Folder, Plus, ExternalLink, HardDrive } from "lucide-react";
 import GithubIcon from "./ui/GithubIcon";
-import { GitHubConfig, GitHubRepo, fetchUserRepositories, fetchRepoFolders } from "@/lib/github";
+import { GitHubConfig, GitHubRepo, fetchUserRepositories, fetchRepoFolders, isGitHub401 } from "@/lib/github";
 import { GITHUB_APP_INSTALL_URL } from "@/lib/constants";
 import { Project } from "@/lib/db";
 
@@ -55,13 +55,16 @@ export default function GitHubConnectionDialog({
           setUserRepos(repos);
         } catch (e) {
           console.error("Failed to fetch GitHub repos", e);
+          if (isGitHub401(e)) {
+            onSignOut();
+          }
         } finally {
           setIsLoadingRepos(false);
         }
       };
       loadRepos();
     }
-  }, [isOpen, githubToken, mode]);
+  }, [isOpen, githubToken, mode, onSignOut]);
 
   useEffect(() => {
     const fetchFolders = async () => {
@@ -72,6 +75,9 @@ export default function GitHubConnectionDialog({
           setAvailableFolders(folders);
         } catch (e) {
           console.error("Failed to fetch folders", e);
+          if (isGitHub401(e)) {
+            onSignOut();
+          }
         } finally {
           setIsLoadingFolders(false);
         }
@@ -80,7 +86,7 @@ export default function GitHubConnectionDialog({
       }
     };
     fetchFolders();
-  }, [githubToken, selectedRepo, browsingPath, showExplorer]);
+  }, [githubToken, selectedRepo, browsingPath, showExplorer, onSignOut]);
 
   const filteredRepos = useMemo(() => {
     if (!repoSearch) return userRepos;
@@ -93,12 +99,12 @@ export default function GitHubConnectionDialog({
 
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-      <div 
-        className="absolute inset-0 bg-nb-bg/80 backdrop-blur-md animate-in fade-in duration-300" 
-        onClick={onClose} 
+      <div
+        className="absolute inset-0 bg-nb-bg/80 backdrop-blur-md animate-in fade-in duration-300"
+        onClick={onClose}
       />
       <div className={`relative w-full ${isSetup && githubToken ? 'max-w-xl' : 'max-w-sm'} bg-nb-surface border border-nb-outline-variant/30 rounded-[32px] shadow-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-300 flex flex-col max-h-[90vh]`}>
-        
+
         {/* Header */}
         <div className="p-8 pb-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -112,8 +118,8 @@ export default function GitHubConnectionDialog({
               </p>
             </div>
           </div>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="p-2 rounded-xl hover:bg-nb-surface-low text-nb-on-surface-variant transition-colors cursor-pointer"
           >
             <X size={20} />
@@ -129,8 +135,8 @@ export default function GitHubConnectionDialog({
               <div className="space-y-2">
                 <h3 className="font-bold text-nb-on-surface">{isExchangingCode ? 'Signing in...' : 'Sign in Required'}</h3>
                 <p className="text-xs text-nb-on-surface-variant max-w-[280px] mx-auto">
-                  {isExchangingCode 
-                    ? 'Completing GitHub authentication. This will only take a moment.' 
+                  {isExchangingCode
+                    ? 'Completing GitHub authentication. This will only take a moment.'
                     : 'Authenticate with GitHub to discover your repositories and enable cloud synchronization.'}
                 </p>
               </div>
@@ -206,12 +212,12 @@ export default function GitHubConnectionDialog({
                             </div>
                           ) : (
                             filteredRepos.map(repo => {
-                              const isAlreadyUsed = projects.some(p => 
-                                p.type === "github" && 
-                                p.githubConfig?.owner === repo.owner.login && 
+                              const isAlreadyUsed = projects.some(p =>
+                                p.type === "github" &&
+                                p.githubConfig?.owner === repo.owner.login &&
                                 p.githubConfig?.repo === repo.name
                               );
-                              
+
                               return (
                                 <button
                                   key={repo.id}
@@ -221,13 +227,12 @@ export default function GitHubConnectionDialog({
                                     setBrowsingPath("");
                                     setFolderPath("");
                                   }}
-                                  className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xl transition-all text-left ${
-                                    selectedRepo?.repo === repo.name 
-                                      ? "bg-nb-primary text-white shadow-lg shadow-nb-primary/20 cursor-pointer" 
-                                      : isAlreadyUsed 
-                                        ? "opacity-50 grayscale-[0.5] cursor-not-allowed" 
+                                  className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xl transition-all text-left ${selectedRepo?.repo === repo.name
+                                      ? "bg-nb-primary text-white shadow-lg shadow-nb-primary/20 cursor-pointer"
+                                      : isAlreadyUsed
+                                        ? "opacity-50 grayscale-[0.5] cursor-not-allowed"
                                         : "hover:bg-nb-surface-mid text-nb-on-surface cursor-pointer"
-                                  }`}
+                                    }`}
                                 >
                                   <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${selectedRepo?.repo === repo.name ? "bg-white/20" : "bg-nb-surface-low border border-nb-outline-variant/20"}`}>
                                     <GithubIcon size={12} />

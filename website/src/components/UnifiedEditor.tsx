@@ -18,6 +18,11 @@ import {
   IdRemapper,
   CustomHeading,
 } from "@/lib/editor/extensions";
+import { Color } from "@tiptap/extension-color";
+import { TextStyle } from "@tiptap/extension-text-style";
+import { Highlight } from "@tiptap/extension-highlight";
+import { Superscript } from "@tiptap/extension-superscript";
+import { Subscript } from "@tiptap/extension-subscript";
 
 import {
   ImageWithCaption,
@@ -40,10 +45,57 @@ import Underline from "@tiptap/extension-underline";
 
 
 
+import BulletList from "@tiptap/extension-bullet-list";
+import OrderedList from "@tiptap/extension-ordered-list";
 import ListItem from "@tiptap/extension-list-item";
 
 const RestrictedListItem = ListItem.extend({
-  content: "paragraph+",
+  name: 'listItem',
+  content: "paragraph block*",
+  addKeyboardShortcuts() {
+    return {
+      Enter: () => this.editor.commands.splitListItem(this.name),
+      Tab: () => {
+        // Limit depth to 8 levels to match LaTeX export constraints
+        const { state } = this.editor;
+        const { $from } = state.selection;
+        let listDepth = 0;
+        for (let i = 0; i <= $from.depth; i++) {
+          const node = $from.node(i);
+          if (node.type.name === 'bulletList' || node.type.name === 'orderedList') {
+            listDepth++;
+          }
+        }
+        if (listDepth >= 8) return true; // Consume the event but do not indent further
+        return this.editor.commands.sinkListItem(this.name);
+      },
+      "Shift-Tab": () => this.editor.commands.liftListItem(this.name),
+    };
+  },
+});
+
+const CustomSuperscript = Superscript.extend({
+  excludes: 'subscript',
+  addKeyboardShortcuts() {
+    return {
+      ...this.parent?.(),
+      'Mod-Shift-=': () => { this.editor.chain().focus().toggleSuperscript().run(); return true; },
+      'Mod-+': () => { this.editor.chain().focus().toggleSuperscript().run(); return true; },
+      'Mod-=': () => { this.editor.chain().focus().toggleSuperscript().run(); return true; },
+    };
+  },
+});
+
+const CustomSubscript = Subscript.extend({
+  excludes: 'superscript',
+  addKeyboardShortcuts() {
+    return {
+      ...this.parent?.(),
+      'Mod-Shift--': () => { this.editor.chain().focus().toggleSubscript().run(); return true; },
+      'Mod--': () => { this.editor.chain().focus().toggleSubscript().run(); return true; },
+      'Mod-_': () => { this.editor.chain().focus().toggleSubscript().run(); return true; },
+    };
+  },
 });
 
 /* ─────────────────────────────────────────────────────────────────
@@ -147,19 +199,32 @@ export default function UnifiedEditor({
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
+      TextStyle.configure(),
+      Color.configure(),
       StarterKit.configure({
         codeBlock: false,
         link: false,
         underline: false,
         listItem: false,
+        bulletList: false,
+        orderedList: false,
         heading: false,
         dropcursor: {
           color: '#d9282f',
           width: 3,
         }
       }),
-      CustomHeading,
+      CustomHeading.configure({ levels: [1, 2] }),
+      BulletList.configure({
+        HTMLAttributes: { class: "list-disc" },
+      }),
+      OrderedList.configure({
+        HTMLAttributes: { class: "list-decimal" },
+      }),
       RestrictedListItem,
+      Highlight.configure({ multicolor: true }),
+      CustomSuperscript,
+      CustomSubscript,
       ImageWithCaption.configure({ inline: false, allowBase64: true, dbName }),
       TableWithCaption.configure({ resizable: true }),
       TableRow,
@@ -167,8 +232,28 @@ export default function UnifiedEditor({
       RestrictedTableCell,
       CustomCodeBlock,
       CustomRawLatex,
-      InlineMathNode,
       MathBlockNode,
+      InlineMathNode,
+      Extension.create({
+        name: 'globalTabHandler',
+        priority: 1,
+        addKeyboardShortcuts() {
+          return {
+            Tab: () => {
+              // If we are in a list, sinkListItem is already handled by RestrictedListItem
+              // and it returns true if successful. If it returns false, it will fall through to here.
+              // We return true here to prevent focus jumping, but only if we haven't already handled it.
+              
+              // In Tiptap, shortcuts are tried in reverse order of the extensions array.
+              // So this should be AFTER RestrictedListItem to act as a fallback.
+              return true;
+            },
+            "Shift-Tab": () => {
+              return true;
+            },
+          };
+        },
+      }),
       Extension.create({
         name: 'mathCodeMutualExclusion',
         addProseMirrorPlugins() {
@@ -209,13 +294,45 @@ export default function UnifiedEditor({
         name: 'integrityExtension',
         addProseMirrorPlugins: () => [IntegrityPlugin()]
       }),
+      Extension.create({
+        name: 'initialLinkStyler',
+        addProseMirrorPlugins() {
+          return [
+            new Plugin({
+              appendTransaction(transactions, oldState, newState) {
+                const { tr } = newState;
+                let modified = false;
+
+                newState.doc.descendants((node, pos) => {
+                  if (node.isText) {
+                    const linkMark = node.marks.find(m => m.type.name === 'link');
+                    if (linkMark && !linkMark.attrs.autoStyled) {
+                      // Apply default styling (underline and light blue color)
+                      tr.addMark(pos, pos + node.nodeSize, newState.schema.marks.underline.create());
+                      tr.addMark(pos, pos + node.nodeSize, newState.schema.marks.textStyle.create({ color: '#3b82f6' }));
+
+                      // Mark as autoStyled so we don't re-apply if the user manually changes it
+                      const newAttrs = { ...linkMark.attrs, autoStyled: true };
+                      tr.removeMark(pos, pos + node.nodeSize, newState.schema.marks.link);
+                      tr.addMark(pos, pos + node.nodeSize, newState.schema.marks.link.create(newAttrs));
+                      modified = true;
+                    }
+                  }
+                });
+
+                return modified ? tr : null;
+              }
+            })
+          ];
+        }
+      }),
       Underline,
       CustomLink.configure({
         openOnClick: false,
         autolink: true,
         linkOnPaste: true,
         HTMLAttributes: {
-          class: 'text-nb-primary underline decoration-nb-primary/30 underline-offset-[3px] hover:decoration-nb-primary transition-all cursor-text',
+          class: 'transition-all cursor-text',
         },
       }),
       Placeholder.configure({
@@ -225,7 +342,7 @@ export default function UnifiedEditor({
         },
       }),
       Extension.create({
-        name: 'customEnterBehavior',
+        name: 'customShortcuts',
         addKeyboardShortcuts() {
           return {
             Enter: ({ editor }) => {
@@ -233,10 +350,12 @@ export default function UnifiedEditor({
                 return editor.chain().splitBlock().unsetMark('code').run();
               }
               if (editor.isActive('link')) {
-                return editor.chain().splitBlock().unsetMark('link').unsetMark('underline').run();
+                return editor.chain().splitBlock().unsetMark('link').unsetMark('underline').unsetColor().run();
               }
               return false;
             },
+            'Mod-Shift-s': ({ editor }) => { editor.chain().focus().toggleStrike().run(); return true; },
+            'Mod-Shift-x': ({ editor }) => { editor.chain().focus().toggleStrike().run(); return true; },
           };
         },
       }),
@@ -439,10 +558,10 @@ export default function UnifiedEditor({
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
         // Highlight
-        element.classList.add('ring-4', 'ring-nb-primary', 'ring-offset-2', 'transition-all', 'duration-1000', 'z-50');
+        element.classList.add('ring-4', 'ring-nb-primary', 'ring-offset-2', 'transition-all', 'duration-500', 'z-50');
         setTimeout(() => {
           if (element) element.classList.remove('ring-4', 'ring-nb-primary', 'ring-offset-2', 'z-50');
-        }, 3000);
+        }, 1500);
         return true;
       }
 

@@ -18,14 +18,13 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
   const inputRef = useRef<HTMLSpanElement>(null);
   const renderRef = useRef<HTMLSpanElement>(null);
 
-  // Sync isEditing with selected state
+  // Automatically enter edit mode if the node is selected AND empty (e.g. just created)
   useEffect(() => {
-    if (selected) {
-      // Use a timeout to avoid cascading render warning by pushing the update to the next tick
+    if (selected && !node.attrs.latex) {
       const timer = setTimeout(() => setIsEditing(true), 0);
       return () => clearTimeout(timer);
     }
-  }, [selected]);
+  }, [selected, node.attrs.latex]);
 
   const prevSelectionPos = useRef(editor.state.selection.from);
 
@@ -73,6 +72,7 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
         katex.render(node.attrs.latex || "", renderRef.current, {
           throwOnError: false,
           displayMode: false,
+          strict: false,
         });
       } catch {
         renderRef.current.textContent = node.attrs.latex;
@@ -81,7 +81,7 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
   }, [node.attrs.latex, isEditing]);
 
   return (
-    <NodeViewWrapper as="span" className="nb-inline-math-node mx-0.5 px-0.5 rounded transition-colors inline-flex items-center align-middle relative">
+    <NodeViewWrapper as="span" className={`nb-inline-math-node mx-0.5 px-0.5 rounded transition-all inline-flex items-center align-middle relative ${selected ? 'ring-2 ring-nb-primary bg-nb-primary/10 shadow-sm' : ''}`}>
       {isEditing ? (
         <span key="edit" className="flex items-center bg-nb-outline-variant/15 text-nb-on-surface border-b border-nb-outline-variant/50 px-1 py-0.5 font-mono text-[1.0em] rounded-t-sm">
           <span className="opacity-40 font-bold mr-0.5">$</span>
@@ -147,10 +147,25 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
           ref={renderRef}
           contentEditable={false}
           className="cursor-pointer hover:ring-2 hover:ring-nb-tertiary/20 rounded px-1 transition-all"
-          onClick={() => {
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const pos = getPos();
+            if (typeof pos === 'number') {
+              if (selected) {
+                setIsEditing(true);
+              } else {
+                editor.commands.setNodeSelection(pos);
+              }
+            }
+          }}
+          onDoubleClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
             const pos = getPos();
             if (typeof pos === 'number') {
               editor.commands.setNodeSelection(pos);
+              setIsEditing(true);
             }
           }}
         />
@@ -260,12 +275,21 @@ export const InlineMathNode = Node.create({
   addInputRules() {
     return [
       new InputRule({
-        find: /\$([^$]+)\$$/,
+        find: /(?:^|[^$])\$([^$]+)\$$/,
         handler: ({ range, match, chain }) => {
-          const [latex] = match;
+          const fullMatch = match[0];
+          const latex = match[1];
+          
           if (latex) {
+            // If the match starts with a character before $, we need to keep that character
+            const hasLeadingChar = !fullMatch.startsWith('$');
+            const actualRange = {
+              from: hasLeadingChar ? range.from + 1 : range.from,
+              to: range.to
+            };
+
             chain()
-              .deleteRange(range)
+              .deleteRange(actualRange)
               .insertContent({
                 type: this.name,
                 attrs: { latex: latex.trim() },

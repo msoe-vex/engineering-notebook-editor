@@ -202,8 +202,8 @@ export function extractResources(doc: TipTapDoc): Record<string, { title: string
         .trim() || "Untitled Header";
       resources[id] = {
         title: headingText,
-        caption: "",
-        type: "header"
+        caption: headingText,
+        type: "heading"
       };
     }
 
@@ -432,9 +432,9 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
     const TYPE_LABELS: Record<string, string> = {
       image: "image",
       table: "table",
-      codeBlock: "code block",
-      rawLatex: "LaTeX block",
-      header: "header"
+      codeBlock: "codeBlock",
+      rawLatex: "latexBlock",
+      heading: "heading"
     };
 
     // Check basic metadata
@@ -453,7 +453,7 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
       for (const res of Object.values(entry.resources)) {
         const label = TYPE_LABELS[res.type] || res.type;
         if (!res.title?.trim()) errors.push(`Title missing for ${label}.`);
-        if (res.type !== "header" && !res.caption?.trim()) {
+        if (!res.caption?.trim()) {
           errors.push(`Caption missing for ${label}.`);
         }
       }
