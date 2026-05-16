@@ -64,7 +64,6 @@ class WorkspaceStore {
   #queue = Promise.resolve();
   #lastSavedContents = new Map<string, string>();
   #savingCount = 0;
-  #pendingSaveCount = 0;
 
   constructor() {
     if (typeof window !== "undefined") {
@@ -1436,12 +1435,8 @@ class WorkspaceStore {
   }
 
   public setPendingSave(val: boolean) {
-    if (val) this.#pendingSaveCount++;
-    else this.#pendingSaveCount = Math.max(0, this.#pendingSaveCount - 1);
-
-    const next = this.#pendingSaveCount > 0;
-    if (next !== this.isPendingSave) {
-      this.isPendingSave = next;
+    if (this.isPendingSave !== val) {
+      this.isPendingSave = val;
       this.notifyStateChange();
     }
   }

@@ -203,13 +203,16 @@ export default function App() {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isSaving || isPendingSave) {
         e.preventDefault();
-        e.returnValue = "You have unsaved changes that are currently being saved. Are you sure you want to leave?";
-        return e.returnValue;
+        return "You have changes that are currently being saved. If you leave now, some changes might be lost. Are you sure you want to proceed?";
+      }
+      if (mode === "temporary") {
+        e.preventDefault();
+        return "All changes in this temporary workspace will be lost on reload. Are you sure you want to leave?";
       }
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [isSaving, isPendingSave]);
+  }, [isSaving, isPendingSave, mode]);
 
   const onSignOutGithub = useCallback(() => {
     localStorage.removeItem("nb-github-token");
@@ -364,16 +367,6 @@ export default function App() {
     }
   }, [isInitialized, currentProjectId, getCompiledPdfUrl]);
 
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (mode === "temporary") {
-        e.preventDefault();
-        return "";
-      }
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [mode]);
 
   useEffect(() => {
     if (!sidebarPanelRef.current || isMobile) return;
@@ -753,7 +746,7 @@ export default function App() {
             {openFile && (
               <Editor
                 key={openFile.path}
-                onClose={() => navigateTo({ entry: null, resource: null })}
+                onClose={() => checkUnsaved(() => navigateTo({ entry: null, resource: null }))}
                 showConfirm={showConfirm}
                 viewMode={viewMode}
                 onSetViewMode={handleSetViewMode}
