@@ -237,6 +237,8 @@ export default function Preview({ latexContent, pdfUrl }: PreviewProps) {
               <Document
                 file={pdfUrl}
                 onLoadSuccess={onDocumentLoadSuccess}
+                externalLinkTarget="_blank"
+                externalLinkRel="noopener noreferrer"
                 loading={
                   <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
                     <Loader2 size={32} className="animate-spin-stable text-nb-primary" />

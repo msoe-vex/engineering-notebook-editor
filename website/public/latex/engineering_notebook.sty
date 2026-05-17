@@ -25,7 +25,7 @@
 % ==============================================================================
 
 % Ensure hyperref uses colored link text even if other packages load it early
-\PassOptionsToPackage{colorlinks=true}{hyperref}
+\PassOptionsToPackage{colorlinks=true,pdfnewwindow=true}{hyperref}
 
 \RequirePackage{geometry}
 \RequirePackage{fancyhdr}
@@ -638,7 +638,7 @@
 % Supported types: entry, heading, image, table, codeBlock, url
 \newcommand{\notebooklink}[3]{%
     \ifboolexpr{test {\ifstrequal{#2}{url}}}{%
-        \href{\detokenize{#3}}{#1\ \lbrack\nolinkurl{\detokenize{#3}}\rbrack}%
+        \href[pdfnewwindow=true]{\detokenize{#3}}{#1\ \lbrack\nolinkurl{\detokenize{#3}}\rbrack}%
     }{%
     \ifboolexpr{test {\ifstrequal{#2}{entry}} or test {\ifstrequal{#2}{heading}}}{%
         \hyperref[#3]{#1\ \lbrack\nameref*{#3},~p.\,\pageref*{#3}\rbrack}%

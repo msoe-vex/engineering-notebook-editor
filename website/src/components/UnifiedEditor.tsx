@@ -307,6 +307,8 @@ const UnifiedEditor = ({
         linkOnPaste: true,
         HTMLAttributes: {
           class: 'transition-all cursor-text',
+          target: '_blank',
+          rel: 'noopener noreferrer',
         },
       }),
       Placeholder.configure({
