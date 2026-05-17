@@ -916,6 +916,25 @@ pre[class*="language-"],
   background-color: transparent !important;
 }
 
+/* Code block pre/code resets to ensure exact wrapping and alignment */
+.ProseMirror [data-node-view-content] {
+  white-space: pre !important;
+}
+
+.ProseMirror [data-node-view-content] pre,
+.ProseMirror [data-node-view-content] code {
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+  white-space: pre !important;
+  word-wrap: normal !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+}
+
 .ProseMirror img {
   max-width: 100%;
   height: auto;
