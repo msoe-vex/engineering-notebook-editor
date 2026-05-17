@@ -657,6 +657,48 @@ export function ensureHeadingIds(doc: TipTapDoc | TipTapNode): TipTapDoc | TipTa
 }
 
 /**
+ * Safely sanitizes a TipTap JSON node using a dynamic set of valid node types.
+ * Automatically recovers raw text content from any unknown or invalid node type,
+ * converting them to standard paragraphs and keeping the document structure clean.
+ */
+export function sanitizeTipTapDoc(node: any, validTypes: Set<string>): any {
+  if (!node || typeof node !== "object") return node;
+
+  function walk(n: any): any {
+    if (!n || typeof n !== "object") return n;
+
+    // If the node type is invalid/unknown, generically extract its text contents
+    if (n.type && !validTypes.has(n.type)) {
+      const textNodes: any[] = [];
+      
+      // Recursive helper to gather text
+      function collectText(item: any) {
+        if (!item || typeof item !== "object") return;
+        if (item.type === "text") {
+          textNodes.push({ type: "text", text: item.text, marks: item.marks });
+        } else if (Array.isArray(item.content)) {
+          item.content.forEach(collectText);
+        }
+      }
+      collectText(n);
+
+      return {
+        type: "paragraph",
+        content: textNodes.length > 0 ? textNodes : [{ type: "text", text: "" }]
+      };
+    }
+
+    // Otherwise, standard recursive walk for valid types
+    if (Array.isArray(n.content)) {
+      n.content = n.content.map(walk).filter(Boolean);
+    }
+    return n;
+  }
+
+  return walk(node);
+}
+
+/**
  * Remaps IDs in the entry metadata's resources and references fields.
  */
 export function remapEntryMetadataIds(entry: EntryMetadata, idMap: Map<string, string>): EntryMetadata {

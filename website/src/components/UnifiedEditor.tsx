@@ -40,7 +40,7 @@ import { LinkReferencePopup } from "@/components/editor/LinkReferencePopup";
 
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng } from "@/lib/utils";
 import { ASSETS_DIR } from "@/lib/constants";
-import { ensureHeadingIds } from "@/lib/metadata";
+import { ensureHeadingIds, sanitizeTipTapDoc } from "@/lib/metadata";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 
@@ -92,15 +92,318 @@ const UnifiedEditor = ({
 }: UnifiedEditorProps) => {
   const { currentProjectId, metadata } = useWorkspace();
   const dbName = currentProjectId ? `notebook-project-${currentProjectId}` : "notebook-default";
+
+  const [, setSelectionUpdate] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [showLinkPopup, setShowLinkPopup] = useState(false);
+  const [isMentionMode, setIsMentionMode] = useState(false);
+  const [isCtrlPressed, setIsCtrlPressed] = useState(false);
+
+  const extensions = [
+    TextStyle.configure(),
+    Color.configure(),
+    StarterKit.configure({
+      codeBlock: false,
+      link: false,
+      underline: false,
+      listItem: false,
+      bulletList: false,
+      orderedList: false,
+      heading: false,
+      dropcursor: {
+        color: '#d9282f',
+        width: 3,
+      }
+    }),
+    CustomHeading.configure({ levels: [1, 2] }),
+    NotebookListItem,
+    Highlight.configure({ multicolor: true }),
+    CustomSuperscript,
+    CustomSubscript,
+    ImageWithCaption.configure({ inline: false, allowBase64: true, dbName }),
+    TableWithCaption.configure({ resizable: true }),
+    TableRow,
+    RestrictedTableHeader,
+    RestrictedTableCell,
+    CustomCodeBlock,
+    CustomRawLatex,
+    MathBlockNode,
+    InlineMathNode,
+    Extension.create({
+      name: 'globalTabHandler',
+      priority: 1,
+      addKeyboardShortcuts() {
+        return {
+          Tab: () => {
+            // If we are in a list, sinkListItem is already handled by RestrictedListItem
+            // and it returns true if successful. If it returns false, it will fall through to here.
+            // We return true here to prevent focus jumping, but only if we haven't already handled it.
+            
+            // In Tiptap, shortcuts are tried in reverse order of the extensions array.
+            // So this should be AFTER RestrictedListItem to act as a fallback.
+            return true;
+          },
+          "Shift-Tab": () => {
+            return true;
+          },
+        };
+      },
+    }),
+    Extension.create({
+      name: 'mathCodeMutualExclusion',
+      addProseMirrorPlugins() {
+        return [
+          new Plugin({
+            appendTransaction(transactions: readonly Transaction[], oldState: EditorState, newState: EditorState) {
+              const { tr } = newState;
+              let modified = false;
+
+              // If code mark was just added to a range containing math, convert math to code text
+              if (transactions.some(t => t.docChanged || t.storedMarks)) {
+                newState.doc.descendants((node, pos) => {
+                  if (node.type.name === 'inlineMath') {
+                    const hasCodeMark = node.marks.some((m) => m.type.name === 'code');
+
+                    if (hasCodeMark) {
+                      const latex = node.attrs.latex || "";
+                      if (latex) {
+                        tr.replaceWith(pos, pos + node.nodeSize, newState.schema.text(latex));
+                        tr.addMark(pos, pos + latex.length, newState.schema.marks.code.create());
+                      } else {
+                        tr.delete(pos, pos + node.nodeSize);
+                      }
+                      modified = true;
+                    } else if (node.marks.length > 0) {
+                      // Strip any other marks (color, underline, strike, highlight, etc.) from the inline math node
+                      node.marks.forEach((mark) => {
+                        tr.removeMark(pos, pos + node.nodeSize, mark.type);
+                      });
+                      modified = true;
+                    }
+                  }
+                });
+              }
+
+              return modified ? tr : null;
+            }
+          })
+        ];
+      }
+    }),
+    PrismHighlightExtension,
+    Extension.create({
+      name: 'integrityExtension',
+      addProseMirrorPlugins: () => [IntegrityPlugin()]
+    }),
+    Extension.create({
+      name: 'initialLinkStyler',
+      addProseMirrorPlugins() {
+        return [
+          new Plugin({
+            appendTransaction(transactions, oldState, newState) {
+              const { tr } = newState;
+              let modified = false;
+
+              newState.doc.descendants((node, pos) => {
+                if (node.isText) {
+                  const linkMark = node.marks.find(m => m.type.name === 'link');
+                  if (linkMark && !linkMark.attrs.autoStyled) {
+                    // Apply default styling (underline and light blue color)
+                    tr.addMark(pos, pos + node.nodeSize, newState.schema.marks.underline.create());
+                    tr.addMark(pos, pos + node.nodeSize, newState.schema.marks.textStyle.create({ color: '#3b82f6' }));
+
+                    // Mark as autoStyled so we don't re-apply if the user manually changes it
+                    const newAttrs = { ...linkMark.attrs, autoStyled: true };
+                    tr.removeMark(pos, pos + node.nodeSize, newState.schema.marks.link);
+                    tr.addMark(pos, pos + node.nodeSize, newState.schema.marks.link.create(newAttrs));
+                    modified = true;
+                  }
+                }
+              });
+
+              return modified ? tr : null;
+            }
+          })
+        ];
+      }
+    }),
+    Underline,
+    CustomLink.configure({
+      openOnClick: false,
+      autolink: true,
+      linkOnPaste: true,
+      HTMLAttributes: {
+        class: 'transition-all cursor-text',
+        target: '_blank',
+        rel: 'noopener noreferrer',
+      },
+    }),
+    Placeholder.configure({
+      placeholder: ({ node }) => {
+        if (['codeBlock', 'rawLatex', 'mathBlock'].includes(node.type.name)) return "";
+        return "Start writing...";
+      },
+    }),
+    Extension.create({
+      name: 'customShortcuts',
+      addKeyboardShortcuts() {
+        return {
+          Enter: ({ editor }) => {
+            if (editor.isActive('code')) {
+              return editor.chain().splitBlock().unsetMark('code').run();
+            }
+            if (editor.isActive('link')) {
+              return editor.chain().splitBlock().unsetMark('link').unsetMark('underline').unsetColor().run();
+            }
+            return false;
+          },
+          'Mod-Shift-s': ({ editor }) => { editor.chain().focus().toggleStrike().run(); return true; },
+          'Mod-Shift-x': ({ editor }) => { editor.chain().focus().toggleStrike().run(); return true; },
+          'Mod-k': ({ editor }) => {
+            if (editor.isActive('link')) {
+              editor.commands.extendMarkRange('link');
+            } else {
+              const { from, to } = editor.state.selection;
+              if (from !== to) {
+                const text = editor.state.doc.textBetween(from, to, " ");
+                const leadingWhitespace = text.length - text.trimStart().length;
+                const trailingWhitespace = text.length - text.trimEnd().length;
+                
+                if (text.trim().length > 0) {
+                  editor.chain().setTextSelection({
+                    from: from + leadingWhitespace,
+                    to: to - trailingWhitespace
+                  }).run();
+                }
+              }
+            }
+            setShowLinkPopup(true);
+            return true;
+          },
+          'Mod-\\': ({ editor }) => {
+            const { state, view } = editor;
+            const tr = state.tr;
+            const { from, to } = state.selection;
+
+            // 1. Strip all inline marks across the selection in a single step
+            tr.removeMark(from, to, null);
+
+            // 2. Clear any active stored marks so next character typed is unstyled
+            tr.setStoredMarks([]);
+
+            const nodesToFlatten: { pos: number; node: import("@tiptap/pm/model").Node }[] = [];
+
+            // 3. Traverse selection to locate custom list items and headings to modify
+            state.doc.nodesBetween(from, to, (node, pos) => {
+              const name = node.type.name;
+              if (name === 'notebookListItem' || name === 'heading') {
+                nodesToFlatten.push({ pos, node });
+              }
+              return true;
+            });
+
+            // Process nodes in REVERSE order to ensure node positions remain stable
+            nodesToFlatten.reverse().forEach(({ pos }) => {
+              const mappedPos = tr.mapping.map(pos);
+              const resolvedNode = tr.doc.nodeAt(mappedPos);
+              if (resolvedNode && (resolvedNode.type.name === 'notebookListItem' || resolvedNode.type.name === 'heading')) {
+                tr.setNodeMarkup(mappedPos, state.schema.nodes.paragraph);
+              }
+            });
+
+            // Dispatch the complete, single, atomic, undoable transaction
+            if (tr.docChanged || tr.storedMarks) {
+              view.dispatch(tr);
+            }
+            return true;
+          },
+        };
+      },
+    }),
+    Extension.create({
+      name: 'linkStyleReseter',
+      addProseMirrorPlugins() {
+        return [
+          new Plugin({
+            appendTransaction(transactions, oldState, newState) {
+              if (!newState.selection.empty) return null;
+
+              const linkType = newState.schema.marks.link;
+              if (!linkType) return null;
+
+              const { from } = newState.selection;
+              
+              // Since Link is non-inclusive, typing at the end of a link (from-1) 
+              // should not continue the link. However, underline/color are inclusive 
+              // and will stick. We check if we are at the end boundary of a link.
+              const hasLinkBefore = from > 0 && newState.doc.rangeHasMark(from - 1, from, linkType);
+              const hasLinkAfter = from < newState.doc.content.size && newState.doc.rangeHasMark(from, from + 1, linkType);
+              
+              // If we have a link before but NOT after, we are at the exit boundary.
+              // Or if we have no link at all around us.
+              const isExitingLink = hasLinkBefore && !hasLinkAfter;
+              const isNotInLink = !hasLinkBefore && !hasLinkAfter;
+
+              if (isExitingLink || isNotInLink) {
+                const stored = newState.storedMarks || [];
+                const hasStickyStyles = stored.some(m => 
+                  m.type.name === 'underline' || 
+                  (m.type.name === 'textStyle' && m.attrs.color === '#3b82f6')
+                );
+
+                if (hasStickyStyles) {
+                  const tr = newState.tr;
+                  // Filter out link-related marks from stored marks
+                  const filteredMarks = stored.filter(m => 
+                    m.type.name !== 'link' && 
+                    m.type.name !== 'underline' && 
+                    !(m.type.name === 'textStyle' && m.attrs.color === '#3b82f6')
+                  );
+                  tr.setStoredMarks(filteredMarks);
+                  return tr;
+                }
+              }
+              return null;
+            }
+          })
+        ];
+      }
+    }),
+    Extension.create({
+      name: 'mentionTrigger',
+      addInputRules: () => [
+        new InputRule({
+          find: /(?:^|\s)@$/,
+          handler: () => {
+            setIsMentionMode(true);
+            setShowLinkPopup(true);
+            return null; // Keep @ for now, we'll delete it on apply or just leave it if cancelled
+          }
+        })
+      ]
+    }),
+    IdRemapper,
+  ];
+
   const parseContent = (raw: string | import("@/lib/metadata").TipTapNode) => {
     if (!raw) return "";
     try {
       const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-      // Ensure all headings have UUIDs
-      return ensureHeadingIds(parsed);
-    } catch { return raw; }
-  };
 
+      // Extract node type names from configured extensions dynamically
+      const validNodes = new Set([
+        "doc", "text", "paragraph", "blockquote", "horizontalRule",
+        ...extensions
+          .filter(ext => ext && (ext as any).type === "node")
+          .map(ext => (ext as any).name)
+      ]);
+
+      const cleanDoc = sanitizeTipTapDoc(parsed, validNodes);
+      return ensureHeadingIds(cleanDoc);
+    } catch {
+      return raw;
+    }
+  };
 
   const handleImageFile = (file: File) => {
     const reader = new FileReader();
@@ -151,12 +454,6 @@ const UnifiedEditor = ({
     reader.readAsDataURL(file);
   };
 
-  const [, setSelectionUpdate] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [showLinkPopup, setShowLinkPopup] = useState(false);
-  const [isMentionMode, setIsMentionMode] = useState(false);
-  const [isCtrlPressed, setIsCtrlPressed] = useState(false);
-
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => setIsCtrlPressed(e.ctrlKey || e.metaKey);
     const handleBlur = () => setIsCtrlPressed(false);
@@ -172,291 +469,7 @@ const UnifiedEditor = ({
 
   const editor = useEditor({
     immediatelyRender: false,
-    extensions: [
-      TextStyle.configure(),
-      Color.configure(),
-      StarterKit.configure({
-        codeBlock: false,
-        link: false,
-        underline: false,
-        listItem: false,
-        bulletList: false,
-        orderedList: false,
-        heading: false,
-        dropcursor: {
-          color: '#d9282f',
-          width: 3,
-        }
-      }),
-      CustomHeading.configure({ levels: [1, 2] }),
-      NotebookListItem,
-      Highlight.configure({ multicolor: true }),
-      CustomSuperscript,
-      CustomSubscript,
-      ImageWithCaption.configure({ inline: false, allowBase64: true, dbName }),
-      TableWithCaption.configure({ resizable: true }),
-      TableRow,
-      RestrictedTableHeader,
-      RestrictedTableCell,
-      CustomCodeBlock,
-      CustomRawLatex,
-      MathBlockNode,
-      InlineMathNode,
-      Extension.create({
-        name: 'globalTabHandler',
-        priority: 1,
-        addKeyboardShortcuts() {
-          return {
-            Tab: () => {
-              // If we are in a list, sinkListItem is already handled by RestrictedListItem
-              // and it returns true if successful. If it returns false, it will fall through to here.
-              // We return true here to prevent focus jumping, but only if we haven't already handled it.
-              
-              // In Tiptap, shortcuts are tried in reverse order of the extensions array.
-              // So this should be AFTER RestrictedListItem to act as a fallback.
-              return true;
-            },
-            "Shift-Tab": () => {
-              return true;
-            },
-          };
-        },
-      }),
-      Extension.create({
-        name: 'mathCodeMutualExclusion',
-        addProseMirrorPlugins() {
-          return [
-            new Plugin({
-              appendTransaction(transactions: readonly Transaction[], oldState: EditorState, newState: EditorState) {
-                const { tr } = newState;
-                let modified = false;
-
-                // If code mark was just added to a range containing math, convert math to code text
-                if (transactions.some(t => t.docChanged || t.storedMarks)) {
-                  newState.doc.descendants((node, pos) => {
-                    if (node.type.name === 'inlineMath') {
-                      const hasCodeMark = node.marks.some((m) => m.type.name === 'code');
-
-                      if (hasCodeMark) {
-                        const latex = node.attrs.latex || "";
-                        if (latex) {
-                          tr.replaceWith(pos, pos + node.nodeSize, newState.schema.text(latex));
-                          tr.addMark(pos, pos + latex.length, newState.schema.marks.code.create());
-                        } else {
-                          tr.delete(pos, pos + node.nodeSize);
-                        }
-                        modified = true;
-                      } else if (node.marks.length > 0) {
-                        // Strip any other marks (color, underline, strike, highlight, etc.) from the inline math node
-                        node.marks.forEach((mark) => {
-                          tr.removeMark(pos, pos + node.nodeSize, mark.type);
-                        });
-                        modified = true;
-                      }
-                    }
-                  });
-                }
-
-                return modified ? tr : null;
-              }
-            })
-          ];
-        }
-      }),
-      PrismHighlightExtension,
-      Extension.create({
-        name: 'integrityExtension',
-        addProseMirrorPlugins: () => [IntegrityPlugin()]
-      }),
-      Extension.create({
-        name: 'initialLinkStyler',
-        addProseMirrorPlugins() {
-          return [
-            new Plugin({
-              appendTransaction(transactions, oldState, newState) {
-                const { tr } = newState;
-                let modified = false;
-
-                newState.doc.descendants((node, pos) => {
-                  if (node.isText) {
-                    const linkMark = node.marks.find(m => m.type.name === 'link');
-                    if (linkMark && !linkMark.attrs.autoStyled) {
-                      // Apply default styling (underline and light blue color)
-                      tr.addMark(pos, pos + node.nodeSize, newState.schema.marks.underline.create());
-                      tr.addMark(pos, pos + node.nodeSize, newState.schema.marks.textStyle.create({ color: '#3b82f6' }));
-
-                      // Mark as autoStyled so we don't re-apply if the user manually changes it
-                      const newAttrs = { ...linkMark.attrs, autoStyled: true };
-                      tr.removeMark(pos, pos + node.nodeSize, newState.schema.marks.link);
-                      tr.addMark(pos, pos + node.nodeSize, newState.schema.marks.link.create(newAttrs));
-                      modified = true;
-                    }
-                  }
-                });
-
-                return modified ? tr : null;
-              }
-            })
-          ];
-        }
-      }),
-      Underline,
-      CustomLink.configure({
-        openOnClick: false,
-        autolink: true,
-        linkOnPaste: true,
-        HTMLAttributes: {
-          class: 'transition-all cursor-text',
-          target: '_blank',
-          rel: 'noopener noreferrer',
-        },
-      }),
-      Placeholder.configure({
-        placeholder: ({ node }) => {
-          if (['codeBlock', 'rawLatex', 'mathBlock'].includes(node.type.name)) return "";
-          return "Start writing...";
-        },
-      }),
-      Extension.create({
-        name: 'customShortcuts',
-        addKeyboardShortcuts() {
-          return {
-            Enter: ({ editor }) => {
-              if (editor.isActive('code')) {
-                return editor.chain().splitBlock().unsetMark('code').run();
-              }
-              if (editor.isActive('link')) {
-                return editor.chain().splitBlock().unsetMark('link').unsetMark('underline').unsetColor().run();
-              }
-              return false;
-            },
-            'Mod-Shift-s': ({ editor }) => { editor.chain().focus().toggleStrike().run(); return true; },
-            'Mod-Shift-x': ({ editor }) => { editor.chain().focus().toggleStrike().run(); return true; },
-            'Mod-k': ({ editor }) => {
-              if (editor.isActive('link')) {
-                editor.commands.extendMarkRange('link');
-              } else {
-                const { from, to } = editor.state.selection;
-                if (from !== to) {
-                  const text = editor.state.doc.textBetween(from, to, " ");
-                  const leadingWhitespace = text.length - text.trimStart().length;
-                  const trailingWhitespace = text.length - text.trimEnd().length;
-                  
-                  if (text.trim().length > 0) {
-                    editor.chain().setTextSelection({
-                      from: from + leadingWhitespace,
-                      to: to - trailingWhitespace
-                    }).run();
-                  }
-                }
-              }
-              setShowLinkPopup(true);
-              return true;
-            },
-            'Mod-\\': ({ editor }) => {
-              const { state, view } = editor;
-              const tr = state.tr;
-              const { from, to } = state.selection;
-
-              // 1. Strip all inline marks across the selection in a single step
-              tr.removeMark(from, to, null);
-
-              // 2. Clear any active stored marks so next character typed is unstyled
-              tr.setStoredMarks([]);
-
-              const nodesToFlatten: { pos: number; node: import("@tiptap/pm/model").Node }[] = [];
-
-              // 3. Traverse selection to locate custom list items and headings to modify
-              state.doc.nodesBetween(from, to, (node, pos) => {
-                const name = node.type.name;
-                if (name === 'notebookListItem' || name === 'heading') {
-                  nodesToFlatten.push({ pos, node });
-                }
-                return true;
-              });
-
-              // Process nodes in REVERSE order to ensure node positions remain stable
-              nodesToFlatten.reverse().forEach(({ pos }) => {
-                const mappedPos = tr.mapping.map(pos);
-                const resolvedNode = tr.doc.nodeAt(mappedPos);
-                if (resolvedNode && (resolvedNode.type.name === 'notebookListItem' || resolvedNode.type.name === 'heading')) {
-                  tr.setNodeMarkup(mappedPos, state.schema.nodes.paragraph);
-                }
-              });
-
-              // Dispatch the complete, single, atomic, undoable transaction
-              if (tr.docChanged || tr.storedMarks) {
-                view.dispatch(tr);
-              }
-              return true;
-            },
-          };
-        },
-      }),
-      Extension.create({
-        name: 'linkStyleReseter',
-        addProseMirrorPlugins() {
-          return [
-            new Plugin({
-              appendTransaction(transactions, oldState, newState) {
-                if (!newState.selection.empty) return null;
-
-                const linkType = newState.schema.marks.link;
-                if (!linkType) return null;
-
-                const { from } = newState.selection;
-                
-                // Since Link is non-inclusive, typing at the end of a link (from-1) 
-                // should not continue the link. However, underline/color are inclusive 
-                // and will stick. We check if we are at the end boundary of a link.
-                const hasLinkBefore = from > 0 && newState.doc.rangeHasMark(from - 1, from, linkType);
-                const hasLinkAfter = from < newState.doc.content.size && newState.doc.rangeHasMark(from, from + 1, linkType);
-                
-                // If we have a link before but NOT after, we are at the exit boundary.
-                // Or if we have no link at all around us.
-                const isExitingLink = hasLinkBefore && !hasLinkAfter;
-                const isNotInLink = !hasLinkBefore && !hasLinkAfter;
-
-                if (isExitingLink || isNotInLink) {
-                  const stored = newState.storedMarks || [];
-                  const hasStickyStyles = stored.some(m => 
-                    m.type.name === 'underline' || 
-                    (m.type.name === 'textStyle' && m.attrs.color === '#3b82f6')
-                  );
-
-                  if (hasStickyStyles) {
-                    const tr = newState.tr;
-                    // Filter out link-related marks from stored marks
-                    const filteredMarks = stored.filter(m => 
-                      m.type.name !== 'link' && 
-                      m.type.name !== 'underline' && 
-                      !(m.type.name === 'textStyle' && m.attrs.color === '#3b82f6')
-                    );
-                    tr.setStoredMarks(filteredMarks);
-                    return tr;
-                  }
-                }
-                return null;
-              }
-            })
-          ];
-        }
-      }),
-      Extension.create({
-        name: 'mentionTrigger',
-        addInputRules: () => [
-          new InputRule({
-            find: /(?:^|\s)@$/,
-            handler: () => {
-              setIsMentionMode(true);
-              setShowLinkPopup(true);
-              return null; // Keep @ for now, we'll delete it on apply or just leave it if cancelled
-            }
-          })
-        ]
-      }),
-      IdRemapper,
-    ],
+    extensions,
     content: parseContent(content),
     onUpdate: ({ editor }) => {
       onChange(JSON.stringify(editor.getJSON()));
