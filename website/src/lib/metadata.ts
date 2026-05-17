@@ -661,18 +661,18 @@ export function ensureHeadingIds(doc: TipTapDoc | TipTapNode): TipTapDoc | TipTa
  * Automatically recovers raw text content from any unknown or invalid node type,
  * converting them to standard paragraphs and keeping the document structure clean.
  */
-export function sanitizeTipTapDoc(node: any, validTypes: Set<string>): any {
+export function sanitizeTipTapDoc(node: TipTapNode | null | undefined, validTypes: Set<string>): TipTapNode | null | undefined {
   if (!node || typeof node !== "object") return node;
 
-  function walk(n: any): any {
+  function walk(n: TipTapNode | null | undefined): TipTapNode | null | undefined {
     if (!n || typeof n !== "object") return n;
 
     // If the node type is invalid/unknown, generically extract its text contents
     if (n.type && !validTypes.has(n.type)) {
-      const textNodes: any[] = [];
+      const textNodes: TipTapNode[] = [];
       
       // Recursive helper to gather text
-      function collectText(item: any) {
+      function collectText(item: TipTapNode | null | undefined) {
         if (!item || typeof item !== "object") return;
         if (item.type === "text") {
           textNodes.push({ type: "text", text: item.text, marks: item.marks });
@@ -690,7 +690,7 @@ export function sanitizeTipTapDoc(node: any, validTypes: Set<string>): any {
 
     // Otherwise, standard recursive walk for valid types
     if (Array.isArray(n.content)) {
-      n.content = n.content.map(walk).filter(Boolean);
+      n.content = n.content.map(walk).filter((item): item is TipTapNode => !!item);
     }
     return n;
   }

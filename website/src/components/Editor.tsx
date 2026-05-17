@@ -268,15 +268,20 @@ const MenuAction = ({ icon, label, onClick, disabled, setActiveMenu }: { icon: R
   </button>
 );
 
-const isListActive = (editor: any, listType: 'bullet' | 'ordered') => {
+interface ConvertibleAttrs {
+  listType?: string;
+  [key: string]: unknown;
+}
+
+const isListActive = (editor: TiptapEditor | null, listType: 'bullet' | 'ordered') => {
   if (!editor) return false;
   if (editor.isActive("notebookListItem", { listType })) return true;
 
   const { selection } = editor.state;
   let firstConvertibleType: string | null = null;
-  let firstConvertibleAttrs: any = null;
+  let firstConvertibleAttrs: unknown = null;
 
-  editor.state.doc.nodesBetween(selection.from, selection.to, (node: any, pos: number) => {
+  editor.state.doc.nodesBetween(selection.from, selection.to, (node: import("@tiptap/pm/model").Node, pos: number) => {
     if (firstConvertibleType) return false;
     if (node.type.name === 'table' || node.type.name === 'codeBlock') {
       return false;
@@ -295,7 +300,7 @@ const isListActive = (editor: any, listType: 'bullet' | 'ordered') => {
     }
   });
 
-  return firstConvertibleType === 'notebookListItem' && firstConvertibleAttrs?.listType === listType;
+  return firstConvertibleType === 'notebookListItem' && (firstConvertibleAttrs as ConvertibleAttrs | null)?.listType === listType;
 };
 
 const EditorToolbar = React.memo(function EditorToolbar({
@@ -576,7 +581,6 @@ const EditorToolbar = React.memo(function EditorToolbar({
                 attrs: { listType: 'bullet', indent: 1 }
               }).run();
             } else {
-              // @ts-ignore
               editor.chain().focus().toggleNotebookList("bullet").run();
             }
           }}
@@ -599,7 +603,6 @@ const EditorToolbar = React.memo(function EditorToolbar({
                 attrs: { listType: 'ordered', indent: 1 }
               }).run();
             } else {
-              // @ts-ignore
               editor.chain().focus().toggleNotebookList("ordered").run();
             }
           }}

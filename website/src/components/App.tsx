@@ -108,7 +108,8 @@ export default function App() {
   const [showGitHubLoginOnly, setShowGitHubLoginOnly] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
-  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const pendingActionRef = useRef<(() => void) | null>(null);
+  const [isSaveLocked, setIsSaveLocked] = useState(false);
 
 
 
@@ -180,7 +181,8 @@ export default function App() {
   const checkUnsaved = useCallback(
     (action: () => void) => {
       if (isSaving || isPendingSave) {
-        setPendingAction(() => action);
+        pendingActionRef.current = action;
+        setIsSaveLocked(true);
       } else {
         action();
       }
@@ -201,11 +203,13 @@ export default function App() {
   }, [currentProjectId, navigateTo, handleGoHome]);
 
   useEffect(() => {
-    if (pendingAction && !isSaving && !isPendingSave) {
-      pendingAction();
-      setPendingAction(null);
+    if (!isSaving && !isPendingSave && pendingActionRef.current) {
+      const action = pendingActionRef.current;
+      pendingActionRef.current = null;
+      setIsSaveLocked(false);
+      action();
     }
-  }, [pendingAction, isSaving, isPendingSave]);
+  }, [isSaving, isPendingSave]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -893,10 +897,10 @@ export default function App() {
       />
 
       {/* Global Loading Overlay */}
-      {(!isInitialized || (isLoading && mode === "none") || isGlobalLoading || pendingAction !== null) && (
+      {(!isInitialized || (isLoading && mode === "none") || isGlobalLoading || isSaveLocked) && (
         <LoadingOverlay
-          label={pendingAction !== null ? "Saving changes..." : (isGlobalLoading ? loadingLabel : "ENGen")}
-          subtitle={pendingAction !== null ? "Please wait for save to complete." : (isGlobalLoading ? "Please wait..." : "Engineering Notebook Generator")}
+          label={isSaveLocked ? "Saving changes..." : (isGlobalLoading ? loadingLabel : "ENGen")}
+          subtitle={isSaveLocked ? "Please wait for save to complete." : (isGlobalLoading ? "Please wait..." : "Engineering Notebook Generator")}
         />
       )}
       {/* Toast Container */}

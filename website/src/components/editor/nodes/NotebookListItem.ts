@@ -465,9 +465,10 @@ function buildDecorations(doc: PMNode): DecorationSet {
       }
 
       if (typeof window !== 'undefined') {
-        const logs = (window as any).listDebugLogs || [];
+        const globalWindow = window as unknown as Record<string, unknown>;
+        const logs = (globalWindow.listDebugLogs as string[]) || [];
         logs.push(`Node "${node.textContent}" (level ${indent}, ${listType}): orderedCounters=[${orderedCounters.slice(1, 4).join(',')}], bulletCounters=[${bulletCounters.slice(1, 4).join(',')}]`);
-        (window as any).listDebugLogs = logs;
+        globalWindow.listDebugLogs = logs;
       }
 
       let marker = '';

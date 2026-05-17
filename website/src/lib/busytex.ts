@@ -38,7 +38,7 @@ async function fetchAsset(path: string): Promise<Uint8Array> {
       const buffer = await response.arrayBuffer();
       return new Uint8Array(buffer);
     }
-  } catch (e) {
+  } catch {
     // Ignore local failure and try remote
   }
 
@@ -46,7 +46,7 @@ async function fetchAsset(path: string): Promise<Uint8Array> {
   const filename = path.split('/').pop();
   const remoteUrl = `${GITHUB_RELEASE_URL}/${filename}`;
   const proxiedUrl = `${window.location.origin}/api/busytex-proxy?url=${encodeURIComponent(remoteUrl)}`;
-  
+
   const response = await fetch(proxiedUrl);
   if (!response.ok) throw new Error(`Failed to fetch asset from ${path} or ${remoteUrl}`);
   const buffer = await response.arrayBuffer();
@@ -83,7 +83,7 @@ export async function compileNotebook(onStatus?: CompileStatusCallback): Promise
       const res = await fetch('/latex/manifest.json');
       if (res.ok) packageFiles = await res.json();
       else throw new Error();
-    } catch (e) {
+    } catch {
       const remoteManifestUrl = `${GITHUB_RELEASE_URL}/manifest.json`;
       const proxiedUrl = `${window.location.origin}/api/busytex-proxy?url=${encodeURIComponent(remoteManifestUrl)}`;
       const res = await fetch(proxiedUrl);

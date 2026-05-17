@@ -16,10 +16,10 @@ function bundle() {
   try {
     // 1. Run xelatex to generate .fls record in the notebook directory
     console.log('Running xelatex -recorder main.tex...');
-    execSync('xelatex -interaction=batchmode -recorder main.tex', { 
+    execSync('xelatex -interaction=batchmode -recorder main.tex', {
       cwd: NOTEBOOK_DIR,
       stdio: 'inherit'
-    } as any);
+    });
 
     // 2. Parse main.fls
     const flsFile = path.join(NOTEBOOK_DIR, 'main.fls');
@@ -62,7 +62,7 @@ function bundle() {
       try {
         // Try to find the file in the TeX distribution
         const absPath = execSync(`kpsewhich ${file}`, { encoding: 'utf8' }).trim();
-        
+
         if (absPath && fs.existsSync(absPath)) {
           // Check if it's already in the notebook dir (custom template files)
           // or in the TeX live tree.
@@ -70,15 +70,15 @@ function bundle() {
           fs.copyFileSync(absPath, path.join(DEST_DIR, file));
           manifest.push(file);
         }
-      } catch (e) {
+      } catch {
         // If kpsewhich fails, it might be a local file in the notebook dir
         const localPath = path.join(NOTEBOOK_DIR, file);
         if (fs.existsSync(localPath)) {
-           console.log(`  [+] ${file} (local)`);
-           fs.copyFileSync(localPath, path.join(DEST_DIR, file));
-           manifest.push(file);
+          console.log(`  [+] ${file} (local)`);
+          fs.copyFileSync(localPath, path.join(DEST_DIR, file));
+          manifest.push(file);
         } else {
-           console.warn(`  [!] Warning: Could not find ${file}`);
+          console.warn(`  [!] Warning: Could not find ${file}`);
         }
       }
     }

@@ -19,8 +19,8 @@ function run() {
     // Use the official texlyre-busytex CLI to fetch the latest WASM/Data assets
     execSync(`npx texlyre-busytex download-assets "${DEST_DIR}"`, { 
       stdio: 'inherit',
-      shell: true 
-    } as any);
+      shell: true as unknown as string
+    });
 
     console.log(`\nSuccessfully downloaded BusyTeX assets to ${path.join(DEST_DIR, 'busytex')}`);
     console.log(`Reminder: The 'busytex' directory is gitignored to avoid LFS limits.`);

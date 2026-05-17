@@ -394,11 +394,12 @@ const UnifiedEditor = ({
       const validNodes = new Set([
         "doc", "text", "paragraph", "blockquote", "horizontalRule",
         ...extensions
-          .filter(ext => ext && (ext as any).type === "node")
-          .map(ext => (ext as any).name)
+          .filter(ext => ext && (ext as unknown as Record<string, unknown>).type === "node")
+          .map(ext => (ext as unknown as Record<string, unknown>).name as string)
       ]);
 
       const cleanDoc = sanitizeTipTapDoc(parsed, validNodes);
+      if (!cleanDoc) return "";
       return ensureHeadingIds(cleanDoc);
     } catch {
       return raw;
