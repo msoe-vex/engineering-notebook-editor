@@ -256,17 +256,23 @@
 
 % Advanced List Configuration
 \setlistdepth{8}
-\setlist{leftmargin=1.5em} % Consistent indentation for all levels
+\setlist{
+    leftmargin=1.5em,
+    nosep,
+    itemsep=0.3em,
+    topsep=0.3em,
+    parsep=0pt
+}
 
 \newlist{notebookunorderedlist}{itemize}{8}
 \setlist[notebookunorderedlist,1]{label=\textbullet}
-\setlist[notebookunorderedlist,2]{label=\textendash}
-\setlist[notebookunorderedlist,3]{label=\textasteriskcentered}
-\setlist[notebookunorderedlist,4]{label=\textperiodcentered}
+\setlist[notebookunorderedlist,2]{label=\ensuremath{\circ}}
+\setlist[notebookunorderedlist,3]{label=\ensuremath{\vcenter{\hbox{\tiny$\blacksquare$}}}}
+\setlist[notebookunorderedlist,4]{label=\textendash}
 \setlist[notebookunorderedlist,5]{label=\textbullet}
-\setlist[notebookunorderedlist,6]{label=\textendash}
-\setlist[notebookunorderedlist,7]{label=\textasteriskcentered}
-\setlist[notebookunorderedlist,8]{label=\textperiodcentered}
+\setlist[notebookunorderedlist,6]{label=\ensuremath{\circ}}
+\setlist[notebookunorderedlist,7]{label=\ensuremath{\vcenter{\hbox{\tiny$\blacksquare$}}}}
+\setlist[notebookunorderedlist,8]{label=\textendash}
 
 \newlist{notebookorderedlist}{enumerate}{8}
 \setlist[notebookorderedlist,1]{label=\arabic*.}

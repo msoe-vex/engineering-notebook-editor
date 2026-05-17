@@ -472,7 +472,7 @@ function buildDecorations(doc: PMNode): DecorationSet {
 
       let marker = '';
       if (listType === 'bullet') {
-        const bullets = ['•', '–', '∗', '·', '•', '–', '∗', '·'];
+        const bullets = ['•', '◦', '▪', '–', '•', '◦', '▪', '–'];
         marker = bullets[(indent - 1) % bullets.length];
       } else {
         const val = orderedCounters[indent];
