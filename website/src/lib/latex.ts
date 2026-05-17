@@ -56,6 +56,67 @@ const cssColorToHex = (colorStr: string | undefined): string => {
   return str.replace("#", "");
 };
 
+export const convertBlockChildrenToLatex = (
+  content: TipTapNode[],
+  resourceTypes?: Record<string, string>
+): string => {
+  let result = "";
+  const stack: ("bullet" | "ordered")[] = [];
+
+  const closeStackToLevel = (level: number) => {
+    while (stack.length > level) {
+      const type = stack.pop();
+      if (type === "bullet") {
+        result += "\\end{notebookunorderedlist}\n";
+      } else if (type === "ordered") {
+        result += "\\end{notebookorderedlist}\n";
+      }
+    }
+  };
+
+  content.forEach((child) => {
+    if (child.type === "notebookListItem") {
+      const attrs = child.attrs || {};
+      const indent = typeof attrs.indent === "number" ? attrs.indent : 1;
+      const listType = (attrs.listType ?? "bullet") as "bullet" | "ordered";
+
+      // 1. If we are deeper than the target indent, pop/close environments
+      if (stack.length > indent) {
+        closeStackToLevel(indent);
+      }
+
+      // 2. If the list type at the current level differs, pop/close it
+      if (stack.length === indent && stack[indent - 1] !== listType) {
+        closeStackToLevel(indent - 1);
+      }
+
+      // 3. If we are shallower than the target indent, open new environments
+      while (stack.length < indent) {
+        stack.push(listType);
+        if (listType === "bullet") {
+          result += "\\begin{notebookunorderedlist}\n";
+        } else {
+          result += "\\begin{notebookorderedlist}\n";
+        }
+      }
+
+      // 4. Render the list item inline content
+      const innerText = (child.content || [])
+        .map((n) => convertNodeToLatex(n, resourceTypes))
+        .join("");
+      result += `  \\item ${innerText.trim()}\n`;
+    } else {
+      // Non-list item: close all open list environments first!
+      closeStackToLevel(0);
+      result += convertNodeToLatex(child, resourceTypes);
+    }
+  });
+
+  // Close any remaining list environments at the end
+  closeStackToLevel(0);
+  return result;
+};
+
 export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<string, string>): string => {
   if (!node) return "";
 
@@ -69,7 +130,7 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
 
   switch (node.type) {
     case "doc":
-      return children();
+      return convertBlockChildrenToLatex(node.content || [], resourceTypes);
 
     case "text": {
       let t = escapeLaTeX(node.text ?? "");
@@ -167,21 +228,9 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
       }
     }
 
-    case "bulletList":
-      return `\\begin{notebookunorderedlist}\n${children()}\\end{notebookunorderedlist}\n\n`;
-
-    case "orderedList":
-      return `\\begin{notebookorderedlist}\n${children()}\\end{notebookorderedlist}\n\n`;
-
-    case "listItem": {
-      // listItem wraps content in a paragraph; extract raw text
-      const parts = (node.content || []).map((child) => {
-        if (child.type === "paragraph") {
-          return (child.content || []).map(n => convertNodeToLatex(n, resourceTypes)).join("");
-        }
-        return convertNodeToLatex(child, resourceTypes);
-      });
-      return `  \\item ${parts.join("\n").trim()}\n`;
+    case "notebookListItem": {
+      const innerText = children();
+      return `  \\item ${innerText.trim()}\n`;
     }
 
     case "codeBlock": {
@@ -233,7 +282,7 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
 
       const body = rows.map((row) => {
         const cells = (row.content ?? []).map((cell) =>
-          (cell.content ?? []).map(n => convertNodeToLatex(n, resourceTypes)).join("").replace(/\n+$/, "").trim()
+          convertBlockChildrenToLatex(cell.content ?? [], resourceTypes).replace(/\n+$/, "").trim()
         );
         return cells.join(" & ") + " \\\\ \\hline";
       }).join("\n");

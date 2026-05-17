@@ -33,6 +33,7 @@ import {
   CustomRawLatex,
   InlineMathNode,
   MathBlockNode,
+  NotebookListItem,
 } from "@/components/editor/nodes";
 
 import { LinkReferencePopup } from "@/components/editor/LinkReferencePopup";
@@ -45,34 +46,7 @@ import Underline from "@tiptap/extension-underline";
 
 
 
-import BulletList from "@tiptap/extension-bullet-list";
-import OrderedList from "@tiptap/extension-ordered-list";
-import ListItem from "@tiptap/extension-list-item";
 
-const RestrictedListItem = ListItem.extend({
-  name: 'listItem',
-  content: "paragraph block*",
-  addKeyboardShortcuts() {
-    return {
-      Enter: () => this.editor.commands.splitListItem(this.name),
-      Tab: () => {
-        // Limit depth to 8 levels to match LaTeX export constraints
-        const { state } = this.editor;
-        const { $from } = state.selection;
-        let listDepth = 0;
-        for (let i = 0; i <= $from.depth; i++) {
-          const node = $from.node(i);
-          if (node.type.name === 'bulletList' || node.type.name === 'orderedList') {
-            listDepth++;
-          }
-        }
-        if (listDepth >= 8) return true; // Consume the event but do not indent further
-        return this.editor.commands.sinkListItem(this.name);
-      },
-      "Shift-Tab": () => this.editor.commands.liftListItem(this.name),
-    };
-  },
-});
 
 const CustomSuperscript = Superscript.extend({
   excludes: 'subscript',
@@ -215,13 +189,7 @@ const UnifiedEditor = ({
         }
       }),
       CustomHeading.configure({ levels: [1, 2] }),
-      BulletList.configure({
-        HTMLAttributes: { class: "bullet-list" },
-      }),
-      OrderedList.configure({
-        HTMLAttributes: { class: "ordered-list" },
-      }),
-      RestrictedListItem,
+      NotebookListItem,
       Highlight.configure({ multicolor: true }),
       CustomSuperscript,
       CustomSubscript,
@@ -378,7 +346,40 @@ const UnifiedEditor = ({
               return true;
             },
             'Mod-\\': ({ editor }) => {
-              editor.chain().focus().unsetAllMarks().clearNodes().run();
+              const { state, view } = editor;
+              const tr = state.tr;
+              const { from, to } = state.selection;
+
+              // 1. Strip all inline marks across the selection in a single step
+              tr.removeMark(from, to, null);
+
+              // 2. Clear any active stored marks so next character typed is unstyled
+              tr.setStoredMarks([]);
+
+              const nodesToFlatten: { pos: number; node: import("@tiptap/pm/model").Node }[] = [];
+
+              // 3. Traverse selection to locate custom list items and headings to modify
+              state.doc.nodesBetween(from, to, (node, pos) => {
+                const name = node.type.name;
+                if (name === 'notebookListItem' || name === 'heading') {
+                  nodesToFlatten.push({ pos, node });
+                }
+                return true;
+              });
+
+              // Process nodes in REVERSE order to ensure node positions remain stable
+              nodesToFlatten.reverse().forEach(({ pos }) => {
+                const mappedPos = tr.mapping.map(pos);
+                const resolvedNode = tr.doc.nodeAt(mappedPos);
+                if (resolvedNode && (resolvedNode.type.name === 'notebookListItem' || resolvedNode.type.name === 'heading')) {
+                  tr.setNodeMarkup(mappedPos, state.schema.nodes.paragraph);
+                }
+              });
+
+              // Dispatch the complete, single, atomic, undoable transaction
+              if (tr.docChanged || tr.storedMarks) {
+                view.dispatch(tr);
+              }
               return true;
             },
           };

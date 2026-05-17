@@ -5,3 +5,4 @@ export * from "./RawLatexNodeView";
 export * from "./InlineMathNodeView";
 export * from "./MathBlockNodeView";
 export * from "./types";
+export * from "./NotebookListItem";

@@ -541,14 +541,15 @@ const EditorToolbar = React.memo(function EditorToolbar({
 
             if (safePos !== null) {
               editor.chain().focus().insertContentAt(safePos, {
-                type: 'bulletList',
-                content: [{ type: 'listItem', content: [{ type: 'paragraph' }] }]
+                type: 'notebookListItem',
+                attrs: { listType: 'bullet', indent: 1 }
               }).run();
             } else {
-              editor.chain().focus().toggleBulletList().run();
+              // @ts-ignore
+              editor.chain().focus().toggleNotebookList("bullet").run();
             }
           }}
-          active={editor.isActive("bulletList")}
+          active={editor.isActive("notebookListItem", { listType: "bullet" })}
           title="Bullet List"
         >
           <List size={16} />
@@ -562,14 +563,15 @@ const EditorToolbar = React.memo(function EditorToolbar({
 
             if (safePos !== null) {
               editor.chain().focus().insertContentAt(safePos, {
-                type: 'orderedList',
-                content: [{ type: 'listItem', content: [{ type: 'paragraph' }] }]
+                type: 'notebookListItem',
+                attrs: { listType: 'ordered', indent: 1 }
               }).run();
             } else {
-              editor.chain().focus().toggleOrderedList().run();
+              // @ts-ignore
+              editor.chain().focus().toggleNotebookList("ordered").run();
             }
           }}
-          active={editor.isActive("orderedList")}
+          active={editor.isActive("notebookListItem", { listType: "ordered" })}
           title="Ordered List"
         >
           <ListOrdered size={16} />
