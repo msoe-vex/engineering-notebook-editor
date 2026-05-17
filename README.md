@@ -1,4 +1,4 @@
-﻿# Engineering Notebook Editor
+# Engineering Notebook Editor
 
 This repository contains two related parts of the VEX engineering notebook system:
 
@@ -64,13 +64,16 @@ To ensure the web editor can compile PDFs efficiently without hitting GitHub LFS
 
 ### 1. Prepare Assets
 Run the following from the `website/` directory:
-- `npm run download:busytex`: Downloads the engine WASM and TeX Live `.data` files into `website/busytex/`.
+- `npm run download:busytex`: Downloads the engine WASM and TeX Live `.data` files into `website/public/busytex/`.
 - `npm run bundle:latex`: Gathers the template `.sty`, `.cls`, and font dependencies into `website/public/latex/`.
 
 ### 2. Upload to Release
 1. Create a new release on GitHub (e.g., `v0.1.0`).
-2. Upload **all** files from both `website/busytex/` and `website/public/latex/` to the release assets area.
-3. You can then delete the local copies from `website/public/latex/` if you want to keep the repository clean.
+2. Upload **all** files from `website/public/busytex/` to the release assets area.
+3. You can then delete the local copies from `website/public/busytex/` if you want to keep your workspace clean.
+   > [!NOTE]
+   > Keeping `website/public/busytex/` locally enables **100% offline-ready local development**!
 
-### 3. Update the App
-Update the `GITHUB_RELEASE_URL` constant in `website/src/lib/busytex.ts` to point to your new release tag (e.g., `.../download/v0.1.0`). The app will automatically handle fetching the engine assets, the manifest, and all `.sty` dependencies from this root URL.
+### 3. How it Works (Development vs. Production)
+* **Local Development**: The app automatically detects development mode and serves the WASM engine and TeX Live package entirely from your local `website/public/busytex/` folder.
+* **Production / Deployment**: Next.js automatically proxies all `/busytex/...` routes via an edge function to the official GitHub Release `GITHUB_RELEASE_URL` (configured in `website/src/lib/busytex.ts`), meaning you never have to commit huge WASM/data assets to git!

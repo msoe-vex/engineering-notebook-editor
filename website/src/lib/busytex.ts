@@ -14,11 +14,10 @@ export async function initBusyTex() {
     ? window.location.origin + '/busytex'
     : '/busytex';
 
-  // Use the CORS proxy to fetch the remote package.
-  const packageUrl = `${GITHUB_RELEASE_URL}/texlive-recommended.js`;
+  // Load the package via the base path. Next.js handles proxying in production.
   const proxiedPackageUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/api/busytex-proxy?url=${encodeURIComponent(packageUrl)}`
-    : packageUrl;
+    ? `${window.location.origin}/busytex/texlive-recommended.js`
+    : '/busytex/texlive-recommended.js';
 
   runner = new BusyTexRunner({
     busytexBasePath: basePath,
