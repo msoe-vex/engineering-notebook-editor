@@ -108,6 +108,7 @@ export default function App() {
   const [showGitHubLoginOnly, setShowGitHubLoginOnly] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
 
 
@@ -174,17 +175,12 @@ export default function App() {
   const checkUnsaved = useCallback(
     (action: () => void) => {
       if (isSaving || isPendingSave) {
-        showConfirm(
-          "Unsaved Changes",
-          "You have changes that are currently being saved. If you leave now, some changes might be lost. Are you sure you want to proceed?",
-          action,
-          "warning"
-        );
+        setPendingAction(() => action);
       } else {
         action();
       }
     },
-    [isSaving, isPendingSave, showConfirm]
+    [isSaving, isPendingSave]
   );
 
   const handleGoHome = useCallback(() => {
@@ -198,6 +194,13 @@ export default function App() {
       handleGoHome();
     }
   }, [currentProjectId, navigateTo, handleGoHome]);
+
+  useEffect(() => {
+    if (pendingAction && !isSaving && !isPendingSave) {
+      pendingAction();
+      setPendingAction(null);
+    }
+  }, [pendingAction, isSaving, isPendingSave]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -883,10 +886,10 @@ export default function App() {
       />
 
       {/* Global Loading Overlay */}
-      {(!isInitialized || (isLoading && mode === "none") || isGlobalLoading) && (
+      {(!isInitialized || (isLoading && mode === "none") || isGlobalLoading || pendingAction !== null) && (
         <LoadingOverlay
-          label={isGlobalLoading ? loadingLabel : "ENGen"}
-          subtitle={isGlobalLoading ? "Please wait..." : "Engineering Notebook Generator"}
+          label={pendingAction !== null ? "Saving changes..." : (isGlobalLoading ? loadingLabel : "ENGen")}
+          subtitle={pendingAction !== null ? "Please wait for save to complete." : (isGlobalLoading ? "Please wait..." : "Engineering Notebook Generator")}
         />
       )}
       {/* Toast Container */}
