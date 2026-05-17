@@ -6,6 +6,7 @@ import katex from "katex";
 import "katex/dist/katex.min.css";
 
 import { NodeViewProps } from "./types";
+import { generateUUID } from "../../../lib/utils";
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
@@ -35,15 +36,20 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
 
   // Handle focus when entering edit mode
   React.useLayoutEffect(() => {
-    if (isEditing && inputRef.current && document.activeElement !== inputRef.current) {
-      inputRef.current.focus();
-      // Move cursor to end
-      inputRef.current.selectionStart = inputRef.current.value.length;
-      inputRef.current.selectionEnd = inputRef.current.value.length;
+    if (isEditing && inputRef.current) {
+      const frameId = requestAnimationFrame(() => {
+        if (inputRef.current && document.activeElement !== inputRef.current) {
+          inputRef.current.focus();
+          // Move cursor to end
+          inputRef.current.selectionStart = inputRef.current.value.length;
+          inputRef.current.selectionEnd = inputRef.current.value.length;
 
-      // Initial auto-resize
-      inputRef.current.style.height = 'auto';
-      inputRef.current.style.height = inputRef.current.scrollHeight + 'px';
+          // Initial auto-resize
+          inputRef.current.style.height = 'auto';
+          inputRef.current.style.height = inputRef.current.scrollHeight + 'px';
+        }
+      });
+      return () => cancelAnimationFrame(frameId);
     }
   }, [isEditing]);
 
@@ -230,11 +236,27 @@ export const MathBlockNode = Node.create({
 
   addCommands() {
     return {
-      setMathBlock: (latex: string) => ({ commands }: import("@tiptap/core").CommandProps) => {
-        return commands.insertContent({
-          type: this.name,
-          attrs: { latex, id: crypto.randomUUID() },
-        });
+      setMathBlock: (latex: string) => ({ chain }: import("@tiptap/core").CommandProps) => {
+        const id = generateUUID();
+        return chain()
+          .insertContent({
+            type: this.name,
+            attrs: { latex, id },
+          })
+          .command(({ state, commands }) => {
+            let newPos = -1;
+            state.doc.descendants((node, pos) => {
+              if (node.attrs.id === id) {
+                newPos = pos;
+                return false;
+              }
+            });
+            if (newPos >= 0) {
+              commands.setNodeSelection(newPos);
+            }
+            return true;
+          })
+          .run();
       },
     } as unknown as import("@tiptap/core").RawCommands;
   },
@@ -254,11 +276,25 @@ export const MathBlockNode = Node.create({
       new InputRule({
         find: /^\$\$\$\s$/,
         handler: ({ range, chain }) => {
+          const id = generateUUID();
           chain()
             .deleteRange(range)
             .insertContent({
               type: this.name,
-              attrs: { latex: "", id: crypto.randomUUID() },
+              attrs: { latex: "", id },
+            })
+            .command(({ state, commands }) => {
+              let newPos = -1;
+              state.doc.descendants((node, pos) => {
+                if (node.attrs.id === id) {
+                  newPos = pos;
+                  return false;
+                }
+              });
+              if (newPos >= 0) {
+                commands.setNodeSelection(newPos);
+              }
+              return true;
             })
             .run();
         },

@@ -649,10 +649,41 @@ const EditorToolbar = React.memo(function EditorToolbar({
               (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
                 (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
 
+            const id = generateUUID();
             if (safePos !== null) {
-              editor.chain().focus().insertContentAt(safePos, { type: 'mathBlock', attrs: { id: generateUUID() } }).run();
+              editor.chain().focus()
+                .insertContentAt(safePos, { type: 'mathBlock', attrs: { id } })
+                .command(({ state, commands }) => {
+                  let newPos = -1;
+                  state.doc.descendants((node, pos) => {
+                    if (node.attrs.id === id) {
+                      newPos = pos;
+                      return false;
+                    }
+                  });
+                  if (newPos >= 0) {
+                    commands.setNodeSelection(newPos);
+                  }
+                  return true;
+                })
+                .run();
             } else {
-              editor.chain().focus().insertContent({ type: 'mathBlock', attrs: { id: generateUUID() } }).run();
+              editor.chain().focus()
+                .insertContent({ type: 'mathBlock', attrs: { id } })
+                .command(({ state, commands }) => {
+                  let newPos = -1;
+                  state.doc.descendants((node, pos) => {
+                    if (node.attrs.id === id) {
+                      newPos = pos;
+                      return false;
+                    }
+                  });
+                  if (newPos >= 0) {
+                    commands.setNodeSelection(newPos);
+                  }
+                  return true;
+                })
+                .run();
             }
           }}
           active={editor.isActive("mathBlock")}

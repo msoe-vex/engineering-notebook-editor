@@ -47,28 +47,33 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
 
   // Handle focus when entering edit mode
   React.useLayoutEffect(() => {
-    if (isEditing && inputRef.current && document.activeElement !== inputRef.current) {
-      const initialText = node.attrs.latex || "\u200B";
-      if (inputRef.current.textContent !== initialText) {
-        inputRef.current.textContent = initialText;
-      }
+    if (isEditing && inputRef.current) {
+      const frameId = requestAnimationFrame(() => {
+        if (!inputRef.current || document.activeElement === inputRef.current) return;
 
-      const pos = getPos();
-      const isComingFromRight = typeof pos === 'number' && prevSelectionPos.current >= pos + 1;
+        const initialText = node.attrs.latex || "\u200B";
+        if (inputRef.current.textContent !== initialText) {
+          inputRef.current.textContent = initialText;
+        }
 
-      inputRef.current.focus();
-      const sel = window.getSelection();
-      const range = document.createRange();
+        const pos = getPos();
+        const isComingFromRight = typeof pos === 'number' && prevSelectionPos.current >= pos + 1;
 
-      if (sel && inputRef.current.childNodes.length > 0) {
-        const textNode = inputRef.current.childNodes[0];
-        const offset = isComingFromRight ? (node.attrs.latex?.length || 0) : 0;
-        const actualOffset = node.attrs.latex ? offset : 0;
-        range.setStart(textNode, Math.min(actualOffset, textNode.textContent?.length || 0));
-        range.collapse(true);
-        sel.removeAllRanges();
-        sel.addRange(range);
-      }
+        inputRef.current.focus();
+        const sel = window.getSelection();
+        const range = document.createRange();
+
+        if (sel && inputRef.current.childNodes.length > 0) {
+          const textNode = inputRef.current.childNodes[0];
+          const offset = isComingFromRight ? (node.attrs.latex?.length || 0) : 0;
+          const actualOffset = node.attrs.latex ? offset : 0;
+          range.setStart(textNode, Math.min(actualOffset, textNode.textContent?.length || 0));
+          range.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      });
+      return () => cancelAnimationFrame(frameId);
     }
   }, [isEditing, node.attrs.latex, getPos]);
 
@@ -225,11 +230,27 @@ export const InlineMathNode = Node.create({
 
   addCommands() {
     return {
-      setInlineMath: (latex: string) => ({ commands }: import("@tiptap/core").CommandProps) => {
-        return commands.insertContent({
-          type: this.name,
-          attrs: { latex },
-        });
+      setInlineMath: (latex: string) => ({ chain, state }: import("@tiptap/core").CommandProps) => {
+        const { from } = state.selection;
+        return chain()
+          .insertContent({
+            type: this.name,
+            attrs: { latex },
+          })
+          .command(({ state, commands }) => {
+            let foundPos = -1;
+            state.doc.nodesBetween(from, from + 2, (node, pos) => {
+              if (node.type.name === 'inlineMath') {
+                foundPos = pos;
+                return false;
+              }
+            });
+            if (foundPos >= 0) {
+              commands.setNodeSelection(foundPos);
+            }
+            return true;
+          })
+          .run();
       },
       toggleInlineMath: () => ({ chain, editor }: import("@tiptap/core").CommandProps) => {
         const { from, to, $from } = editor.state.selection;
@@ -277,7 +298,19 @@ export const InlineMathNode = Node.create({
             type: this.name,
             attrs: { latex: text },
           })
-          .setNodeSelection(from)
+          .command(({ state, commands }) => {
+            let foundPos = -1;
+            state.doc.nodesBetween(from, from + 2, (node, pos) => {
+              if (node.type.name === 'inlineMath') {
+                foundPos = pos;
+                return false;
+              }
+            });
+            if (foundPos >= 0) {
+              commands.setNodeSelection(foundPos);
+            }
+            return true;
+          })
           .run();
       },
     } as unknown as import("@tiptap/core").RawCommands;
