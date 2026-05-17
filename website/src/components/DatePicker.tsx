@@ -11,17 +11,37 @@ interface DatePickerProps {
 export default function DatePicker({ value, onChange, className = "" }: DatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
 
+  // Robust date parser for YYYY-MM-DD or YYYY-M-D format in local time
+  const parseDateString = (str: string): Date => {
+    if (!str) return new Date();
+    const match = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (match) {
+      const y = parseInt(match[1], 10);
+      const m = parseInt(match[2], 10) - 1;
+      const d = parseInt(match[3], 10);
+      const tempDate = new Date(y, m, d, 12, 0, 0);
+      if (!isNaN(tempDate.getTime())) return tempDate;
+    }
+    const fallback = new Date(str + "T12:00:00");
+    return isNaN(fallback.getTime()) ? new Date() : fallback;
+  };
+
   // Parse current value or default to today
-  const selectedDate = value ? new Date(value + "T12:00:00") : new Date();
+  const selectedDate = parseDateString(value);
 
   // State for the calendar view (month/year)
   const [viewDate, setViewDate] = useState(new Date(selectedDate.getTime()));
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node) &&
+        (!popupRef.current || !popupRef.current.contains(event.target as Node))
+      ) {
         setIsOpen(false);
       }
     };
@@ -124,16 +144,30 @@ export default function DatePicker({ value, onChange, className = "" }: DatePick
     const val = e.target.value;
     setInputValue(val);
 
-    const d = new Date(val + "T12:00:00");
-    if (!isNaN(d.getTime()) && d.getFullYear() > 1900) {
-      setViewDate(new Date(d.getFullYear(), d.getMonth(), 1));
-      if (val.length >= 10 || /^\d{4}-\d{1,2}-\d{1,2}$/.test(val)) {
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        const ISO = `${year}-${month}-${day}`;
-        if (ISO !== value) onChange(ISO);
+    const match = val.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    let d: Date | null = null;
+    if (match) {
+      const y = parseInt(match[1], 10);
+      const m = parseInt(match[2], 10) - 1;
+      const day = parseInt(match[3], 10);
+      const tempDate = new Date(y, m, day, 12, 0, 0);
+      if (!isNaN(tempDate.getTime()) && tempDate.getFullYear() > 1900) {
+        d = tempDate;
       }
+    } else {
+      const tempDate = new Date(val + "T12:00:00");
+      if (!isNaN(tempDate.getTime()) && tempDate.getFullYear() > 1900) {
+        d = tempDate;
+      }
+    }
+
+    if (d) {
+      setViewDate(new Date(d.getFullYear(), d.getMonth(), 1));
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const ISO = `${year}-${month}-${day}`;
+      if (ISO !== value) onChange(ISO);
     }
   };
 
@@ -152,11 +186,12 @@ export default function DatePicker({ value, onChange, className = "" }: DatePick
     >
       <CalendarIcon size={18} className="text-nb-primary shrink-0 drop-shadow-sm" />
       <span className="text-[11px] font-bold text-nb-on-surface-variant tracking-tight flex-1 truncate">
-        {value ? new Date(value + "T12:00:00").toLocaleDateString(undefined, { dateStyle: 'medium' }) : "Select Date"}
+        {value ? parseDateString(value).toLocaleDateString(undefined, { dateStyle: 'medium' }) : "Select Date"}
       </span>
 
       {isOpen && createPortal(
         <div
+          ref={popupRef}
           style={{
             position: 'fixed',
             top: coords.top + 8,
