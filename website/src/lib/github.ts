@@ -9,15 +9,8 @@ export interface GitHubRepo {
   updated_at?: string | null;
 }
 
-export interface GitHubConfig {
-  token: string;
-  owner: string;
-  repo: string;
-  branch: string;
-  baseDir: string;
-  entriesDir: string;
-  resourcesDir: string;
-}
+import { GitHubConfig } from "./types";
+export type { GitHubConfig };
 
 export interface GitChange {
   path: string;
@@ -48,6 +41,15 @@ export const getOctokit = (token: string) => {
   });
 
   return octokit;
+};
+
+export const isGitHub401 = (error: unknown): boolean => {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    (error as { status: number }).status === 401
+  );
 };
 
 
@@ -154,6 +156,50 @@ export const fetchFileContent = async (config: GitHubConfig, path: string) => {
     } catch {
       throw new Error("Failed to decode file content. It may not be a valid UTF-8 encoded text file.");
     }
+  }
+  throw new Error("Not a file");
+};
+
+export const checkGitHubFileExists = async (config: GitHubConfig, path: string): Promise<boolean> => {
+  const octokit = getOctokit(config.token);
+  try {
+    const response = await octokit.rest.repos.getContent({
+      owner: config.owner,
+      repo: config.repo,
+      path,
+      ref: config.branch,
+      headers: { 'If-None-Match': '' }
+    });
+    return !Array.isArray(response.data) && response.data.type === "file";
+  } catch {
+    return false;
+  }
+};
+
+export const fetchRawFileContent = async (config: GitHubConfig, path: string) => {
+  const octokit = getOctokit(config.token);
+  const response = await octokit.rest.repos.getContent({
+    owner: config.owner,
+    repo: config.repo,
+    path,
+    ref: config.branch,
+    headers: { 'If-None-Match': '' } // Cache busting
+  });
+
+  if (!Array.isArray(response.data) && response.data.type === "file") {
+    if (response.data.content) {
+      const content = response.data.content.replace(/\s/g, '');
+      return content;
+    }
+
+    // If content is missing, it's likely too large (> 1MB). Fetch blob directly.
+    const blobResponse = await octokit.rest.git.getBlob({
+      owner: config.owner,
+      repo: config.repo,
+      file_sha: response.data.sha,
+    });
+    const content = blobResponse.data.content.replace(/\s/g, '');
+    return content;
   }
   throw new Error("Not a file");
 };
@@ -406,6 +452,7 @@ export const fetchUserRepositories = async (token: string) => {
     });
   } catch (e) {
     console.error("Failed to fetch repositories via installations:", e);
+    if (isGitHub401(e)) throw e;
     // If the installation check fails, we return an empty list to stay strict
     return [];
   }
@@ -427,6 +474,7 @@ export const fetchRepoFolders = async (token: string, owner: string, repo: strin
     return [];
   } catch (e) {
     console.error("Failed to fetch folders", e);
+    if (isGitHub401(e)) throw e;
     return [];
   }
 };
@@ -435,5 +483,18 @@ export const fetchGitHubUser = async (token: string) => {
   const octokit = getOctokit(token);
   const response = await octokit.rest.users.getAuthenticated();
   return response.data;
+};
+
+export const initiateGitHubLogin = (clientId: string | undefined, redirectUri: string, state?: string) => {
+  if (!clientId) {
+    alert("GitHub Client ID not configured in .env.local");
+    return;
+  }
+  const scope = ""; // No 'repo' scope so we respect GitHub App installations
+  let url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}`;
+  if (state) {
+    url += `&state=${encodeURIComponent(state)}`;
+  }
+  window.location.href = url;
 };
 

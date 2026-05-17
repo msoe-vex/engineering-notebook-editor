@@ -43,11 +43,26 @@ export async function hashContent(content: string | ArrayBuffer): Promise<string
 }
 
 /**
+ * Generates a deterministic UUID based on the hash of an input string.
+ */
+export async function generateDeterministicUUID(input: string): Promise<string> {
+  const hash = await hashContent(input);
+  const s = hash.substring(0, 32);
+  return `${s.substring(0, 8)}-${s.substring(8, 12)}-${s.substring(12, 16)}-${s.substring(16, 20)}-${s.substring(20)}`;
+}
+
+/**
  * Extracts the file extension from a base64 data URL.
  */
 export function getExtensionFromDataUrl(dataUrl: string): string {
-  const match = dataUrl.match(/^data:image\/(\w+);base64,/);
-  return match ? match[1] : "png";
+  const match = dataUrl.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,/);
+  if (match) {
+    const type = match[1].toLowerCase();
+    if (type === "svg+xml") return "svg";
+    if (type === "jpeg") return "jpg";
+    return type;
+  }
+  return "png";
 }
 /**
  * Simple debounce utility.
@@ -61,4 +76,66 @@ export function debounce<Args extends unknown[], R>(
     if (timeout) clearTimeout(timeout);
     timeout = setTimeout(() => func(...args), wait);
   };
+}
+/**
+ * Maps a file path or extension to a proper mime type.
+ */
+export function getMimeTypeFromExtension(path: string): string {
+  const ext = path.split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case "svg": return "image/svg+xml";
+    case "jpg":
+    case "jpeg": return "image/jpeg";
+    case "png": return "image/png";
+    case "gif": return "image/gif";
+    case "webp": return "image/webp";
+    default: return "image/png"; // Fallback
+  }
+}
+
+/**
+ * Converts an SVG data URL to a PNG data URL in the browser.
+ */
+export async function convertSvgToPng(svgDataUrl: string, scale: number = 2): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      // Use scale to ensure high quality (SVGs are vectors, so we can upscale)
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error("Could not get canvas context"));
+        return;
+      }
+      // Draw image directly to canvas (supports transparency if SVG is transparent)
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => reject(new Error("Failed to load SVG image for conversion"));
+    img.src = svgDataUrl;
+  });
+}
+
+/**
+ * Formats a date string into "Month YYYY" (e.g. "September 2024")
+ */
+export function formatDateMonthYear(dateStr: string): string {
+  if (!dateStr) return "";
+  try {
+    // Handle YYYY-MM-DD format carefully to avoid timezone shifts
+    const parts = dateStr.split('-');
+    if (parts.length >= 2) {
+      const year = parseInt(parts[0]);
+      const month = parseInt(parts[1]) - 1;
+      const date = new Date(year, month);
+      return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    }
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return dateStr;
+    return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  } catch {
+    return dateStr;
+  }
 }

@@ -6,66 +6,73 @@
    ═══════════════════════════════════════════════════════════════ */
 
 :root {
-  /* ── Light Mode Tokens ────────────────────────────────────── */
-  --nb-bg:              #fbf9f8;
-  --nb-surface-lowest:  #ffffff;
-  --nb-surface-low:     #f5f3f3;
-  --nb-surface-mid:     #eeeeee;
-  --nb-surface-high:    #e6e5e5;
+  /* ... previous light mode tokens ... */
+  --nb-bg: #fbf9f8;
+  --nb-surface-lowest: #ffffff;
+  --nb-surface-low: #f5f3f3;
+  --nb-surface-mid: #eeeeee;
+  --nb-surface-high: #e6e5e5;
   --nb-surface-highest: #e0dfdf;
-  --nb-on-surface:      #1c1b1b;
+  --nb-on-surface: #1c1b1b;
   --nb-on-surface-variant: #444746;
-  --nb-outline:         #747775;
+  --nb-outline: #747775;
   --nb-outline-variant: #c4c7c5;
 }
 
 .dark {
-  /* ── Dark Mode Tokens ─────────────────────────────────────── */
-  --nb-bg:              #111213;
-  --nb-surface-lowest:  #1a1c1e; /* Map dark surface to lowest */
-  --nb-surface-low:     #1f2124;
-  --nb-surface-mid:     #262a2e;
-  --nb-surface-high:    #2e3338;
+  /* ... previous dark mode tokens ... */
+  --nb-bg: #111213;
+  --nb-surface-lowest: #1a1c1e;
+  /* Map dark surface to lowest */
+  --nb-surface-low: #1f2124;
+  --nb-surface-mid: #262a2e;
+  --nb-surface-high: #2e3338;
   --nb-surface-highest: #334155;
-  --nb-on-surface:      #f1f5f9;
+  --nb-on-surface: #f1f5f9;
   --nb-on-surface-variant: #94a3b8;
-  --nb-outline:         #334155;
+  --nb-outline: #334155;
   --nb-outline-variant: #1e293b;
 }
 
 @theme inline {
   /* ── Brand (Shared) ────────────────────────────────────────── */
-  --color-nb-primary:      #d9282f;
-  --color-nb-primary-dim:  #b01f25;
-  --color-nb-tertiary:     #0076bc;
+  --color-nb-primary: #d9282f;
+  --color-nb-primary-dim: #b01f25;
+  --color-nb-tertiary: #0076bc;
   --color-nb-tertiary-dim: #005a91;
-  --color-nb-secondary:    #1e293b;
+  --color-nb-secondary: #1e293b;
 
   /* ── Semantic Tokens ───────────────────────────────────────── */
-  --color-nb-bg:              var(--nb-bg);
-  --color-nb-surface:         var(--nb-surface-lowest);
-  --color-nb-surface-lowest:  var(--nb-surface-lowest);
-  --color-nb-surface-low:     var(--nb-surface-low);
-  --color-nb-surface-mid:     var(--nb-surface-mid);
-  --color-nb-surface-high:    var(--nb-surface-high);
+  --color-nb-bg: var(--nb-bg);
+  --color-nb-surface: var(--nb-surface-lowest);
+  --color-nb-surface-lowest: var(--nb-surface-lowest);
+  --color-nb-surface-low: var(--nb-surface-low);
+  --color-nb-surface-mid: var(--nb-surface-mid);
+  --color-nb-surface-high: var(--nb-surface-high);
   --color-nb-surface-highest: var(--nb-surface-highest);
-  --color-nb-on-surface:      var(--nb-on-surface);
+  --color-nb-on-surface: var(--nb-on-surface);
   --color-nb-on-surface-variant: var(--nb-on-surface-variant);
-  --color-nb-outline:         var(--nb-outline);
+  --color-nb-outline: var(--nb-outline);
   --color-nb-outline-variant: var(--nb-outline-variant);
 
   /* ── Typography ─────────────────────────────────────────────── */
-  --font-sans:  var(--font-work-sans), "Work Sans", system-ui, sans-serif;
-  --font-mono:  ui-monospace, "Cascadia Code", "Fira Mono", "Consolas", monospace;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-inconsolata), monospace;
 }
 
 /* ═══════════════════════════════════════════════════════════════
    BASE
    ═══════════════════════════════════════════════════════════════ */
 
-*, *::before, *::after { box-sizing: border-box; }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 
-html { height: 100%; }
+html {
+  height: 100%;
+}
 
 body {
   font-family: var(--font-sans);
@@ -76,6 +83,33 @@ body {
   color: var(--color-nb-on-surface);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+button {
+  cursor: pointer;
+}
+
+::selection {
+  background-color: rgba(217, 40, 47, 0.15) !important;
+  /* Semi-transparent nb-primary */
+}
+
+.dark ::selection {
+  background-color: rgba(217, 40, 47, 0.3) !important;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+/* Fix for react-pdf selection being opaque */
+.react-pdf__Page__textContent ::selection {
+  background-color: rgba(217, 40, 47, 0.2) !important;
+  color: transparent !important;
+}
+
+.dark .react-pdf__Page__textContent ::selection {
+  background-color: rgba(217, 40, 47, 0.4) !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -92,12 +126,20 @@ body {
   scrollbar-color: var(--color-nb-outline-variant) transparent;
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 ::-webkit-scrollbar-thumb {
   background: var(--color-nb-surface-high);
   border-radius: 99px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-nb-outline-variant);
 }
@@ -105,6 +147,7 @@ body {
 .dark ::-webkit-scrollbar-thumb {
   background: var(--color-nb-outline-variant);
 }
+
 .dark ::-webkit-scrollbar-thumb:hover {
   background: var(--color-nb-on-surface-variant);
 }
@@ -120,6 +163,7 @@ body {
   font-size: 16px;
   line-height: 1.8;
   color: var(--color-nb-on-surface);
+  overflow-wrap: break-word;
 }
 
 .dark .ProseMirror {
@@ -130,7 +174,7 @@ body {
   margin-bottom: 0.75rem;
 }
 
-.ProseMirror p.is-editor-empty:first-child::before {
+.ProseMirror *:is(.is-empty, .is-editor-empty)::before {
   color: var(--color-nb-on-surface-variant);
   content: attr(data-placeholder);
   float: left;
@@ -139,33 +183,54 @@ body {
   opacity: 0.4;
 }
 
-.ProseMirror u, 
+.ProseMirror code {
+  background: var(--color-nb-surface-high);
+  color: inherit;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+  border: 1px solid var(--color-nb-outline-variant);
+}
+
+/* Hide duplicate placeholders on custom node wrappers */
+.ProseMirror [data-node-view-wrapper].is-empty::before {
+  display: none;
+}
+
+.ProseMirror u,
 .ProseMirror a {
   text-underline-offset: 4px;
   text-decoration-thickness: 1px;
 }
 
 .ProseMirror a {
-  text-decoration: none;
+  text-underline-offset: 4px;
+  transition: all 0.2s ease;
 }
 
 .ProseMirror a:hover {
-  text-decoration: underline;
+  opacity: 0.8;
 }
 
 .ProseMirror a::after {
-  content: "\2197"; /* Unicode North East Arrow */
-  font-size: 0.7em;
-  margin-left: 2px;
-  vertical-align: super;
-  opacity: 0.5;
-  color: var(--color-nb-primary);
+  content: "\2197";
+  /* Unicode North East Arrow */
+  font-size: 13px;
+  font-weight: 700;
+  margin-left: 4px;
+  vertical-align: baseline;
+  position: relative;
+  top: -1px;
+  opacity: 0.7;
+  color: currentColor;
   display: inline-block;
-  transition: opacity 0.2s;
+  transition: all 0.2s ease;
 }
 
 .ProseMirror a:hover::after {
   opacity: 1;
+  transform: translate(1px, -1px);
 }
 
 .nb-broken-link {
@@ -176,8 +241,9 @@ body {
 }
 
 .nb-broken-link::after {
-  content: " \26a0"; /* Warning symbol */
-  font-size: 1.1em;
+  content: " \26a0";
+  /* Warning symbol */
+  font-size: 1.0em;
   color: #f59e0b;
   vertical-align: middle;
 }
@@ -187,57 +253,28 @@ body {
   box-shadow: none !important;
 }
 
-.ProseMirror table,
-.ProseMirror [data-node-view-wrapper] table {
-  border-collapse: collapse;
-  table-layout: auto;
-  min-width: 100%;
-  width: max-content;
-
-
-
-
-
-  margin: 1rem 0;
-  overflow: hidden;
-  border-radius: 8px;
+/* Prevent selection highlighting of UI elements and inputs in custom resource blocks/node views */
+.ProseMirror [contenteditable="false"]::selection,
+.ProseMirror [contenteditable="false"] *::selection,
+.ProseMirror input::selection,
+.ProseMirror textarea::selection,
+.ProseMirror-selectednode *::selection {
+  background-color: transparent !important;
+  color: inherit !important;
 }
 
-.ProseMirror td,
-.ProseMirror th {
-  min-width: 120px;
-
-
-  border: 1px solid var(--color-nb-outline-variant);
-  padding: 0 !important; /* Remove padding from cell to allow child to fill */
-  vertical-align: top;
-  box-sizing: border-box;
-  position: relative;
-  background-clip: padding-box;
+/* Disable user text selection on drag handles, buttons, and captions/headers when full block is selected */
+.ProseMirror [contenteditable="false"],
+.ProseMirror [contenteditable="false"] *,
+.ProseMirror-selectednode input,
+.ProseMirror-selectednode textarea {
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
-.ProseMirror td > p,
-.ProseMirror th > p {
-  margin: 0;
-  padding: 12px 16px; /* Move padding here */
-  min-height: 1.5em; /* Ensure height for cursor */
-  width: 100%;
-}
-
-
-
-.dark .ProseMirror td,
-.dark .ProseMirror th {
-  border-color: rgba(255, 255, 255, 0.1);
-}
-
-.ProseMirror .selectedCell:after {
-  z-index: 2;
-  position: absolute;
-  content: "";
-  left: 0; right: 0; top: 0; bottom: 0;
-  background: rgba(var(--color-nb-primary-rgb), 0.1);
-  pointer-events: none;
+/* Draw a premium primary outline border on the card when selected as a node selection */
+.ProseMirror-selectednode .rounded-xl {
+  box-shadow: 0 0 0 2px var(--color-nb-primary) !important;
 }
 
 .ProseMirror h1 {
@@ -252,7 +289,7 @@ body {
 }
 
 .dark .ProseMirror h1 {
-  color: var(--color-nb-dark-on-surface);
+  color: var(--color-nb-on-surface);
 }
 
 .ProseMirror h2 {
@@ -266,7 +303,49 @@ body {
 }
 
 .dark .ProseMirror h2 {
-  color: var(--color-nb-dark-on-surface);
+  color: var(--color-nb-on-surface);
+}
+
+.ProseMirror h3 {
+  font-family: var(--font-sans);
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-top: 1rem;
+  margin-bottom: 0.4rem;
+  color: var(--color-nb-secondary);
+}
+
+.dark .ProseMirror h3 {
+  color: var(--color-nb-on-surface);
+}
+
+.ProseMirror h4 {
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin-top: 0.75rem;
+  margin-bottom: 0.25rem;
+  color: var(--color-nb-secondary);
+}
+
+.dark .ProseMirror h4 {
+  color: var(--color-nb-on-surface);
+}
+
+.ProseMirror sup,
+.ProseMirror sub {
+  font-size: 75%;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+}
+
+.ProseMirror sup {
+  top: -0.5em;
+}
+
+.ProseMirror sub {
+  bottom: -0.25em;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -283,28 +362,170 @@ pre[class*="language-"],
 
 /* Prism Style */
 /* Syntax Highlighting - Light Mode */
-.token.comment, .hljs-comment { color: #6a737d; font-style: italic; }
-.token.keyword, .token.macro, .token.selector, .hljs-keyword, .hljs-selector-tag, .hljs-tag, .hljs-built_in { color: #d73a49; font-weight: 600; }
-.token.string, .token.char, .token.attr-value, .hljs-string, .hljs-symbol, .hljs-bullet, .hljs-params { color: #032f62; }
-.token.function, .token.macro, .token.atrule, .hljs-title, .hljs-section, .hljs-function, .hljs-name, .hljs-attr { color: #6f42c1; }
-.token.number, .token.boolean, .token.constant, .token.property, .hljs-number, .hljs-literal, .hljs-type { color: #005cc5; }
-.token.operator, .token.entity, .token.url, .token.math, .token.equation, .hljs-meta, .hljs-formula { color: #d73a49; }
-.token.variable, .token.parameter, .hljs-variable, .hljs-template-variable { color: #e36209; }
-.token.attr-name, .hljs-attribute { color: #6f42c1; }
-.token.class-name, .hljs-class-name, .hljs-title.class_ { color: #22863a; font-weight: 600; }
-.token.punctuation, .hljs-punctuation { color: #24292e; opacity: 0.8; }
+.token.comment,
+.hljs-comment {
+  color: #6a737d;
+  font-style: italic;
+}
+
+.token.keyword,
+.token.macro,
+.token.selector,
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-tag,
+.hljs-built_in {
+  color: #d73a49;
+  font-weight: 600;
+}
+
+.token.string,
+.token.char,
+.token.attr-value,
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-params {
+  color: #032f62;
+}
+
+.token.function,
+.token.macro,
+.token.atrule,
+.hljs-title,
+.hljs-section,
+.hljs-function,
+.hljs-name,
+.hljs-attr {
+  color: #6f42c1;
+}
+
+.token.number,
+.token.boolean,
+.token.constant,
+.token.property,
+.hljs-number,
+.hljs-literal,
+.hljs-type {
+  color: #005cc5;
+}
+
+.token.operator,
+.token.entity,
+.token.url,
+.token.math,
+.token.equation,
+.hljs-meta,
+.hljs-formula {
+  color: #d73a49;
+}
+
+.token.variable,
+.token.parameter,
+.hljs-variable,
+.hljs-template-variable {
+  color: #e36209;
+}
+
+.token.attr-name,
+.hljs-attribute {
+  color: #6f42c1;
+}
+
+.token.class-name,
+.hljs-class-name,
+.hljs-title.class_ {
+  color: #22863a;
+  font-weight: 600;
+}
+
+.token.punctuation,
+.hljs-punctuation {
+  color: #24292e;
+  opacity: 0.8;
+}
 
 /* Syntax Highlighting - Dark Mode */
-.dark .token.comment, .dark .hljs-comment { color: #8b949e; font-style: italic; }
-.dark .token.keyword, .dark .token.macro, .dark .token.selector, .dark .hljs-keyword, .dark .dark .hljs-selector-tag, .dark .hljs-tag, .dark .hljs-built_in { color: #ff7b72; font-weight: 600; }
-.dark .token.string, .dark .token.char, .dark .token.attr-value, .dark .hljs-string, .dark .hljs-symbol, .dark .hljs-bullet, .dark .hljs-params { color: #a5d6ff; }
-.dark .token.function, .dark .token.macro, .dark .token.atrule, .dark .hljs-function, .dark .hljs-title, .dark .hljs-section, .dark .hljs-name, .dark .hljs-attr { color: #d2a8ff; }
-.dark .token.number, .dark .token.boolean, .dark .token.constant, .dark .token.property, .dark .hljs-number, .dark .dark .hljs-literal, .dark .hljs-type { color: #79c0ff; }
-.dark .token.operator, .dark .token.math, .dark .token.equation, .dark .hljs-meta, .dark .hljs-formula { color: #ff7b72; }
-.dark .token.variable, .dark .token.parameter, .dark .hljs-variable, .dark .hljs-template-variable { color: #ffa657; }
-.dark .token.attr-name, .dark .hljs-attribute { color: #d2a8ff; }
-.dark .token.class-name, .dark .hljs-class-name, .dark .hljs-title.class_ { color: #7ee787; font-weight: 600; }
-.dark .token.punctuation, .dark .hljs-punctuation { color: #c9d1d9; opacity: 0.8; }
+.dark .token.comment,
+.dark .hljs-comment {
+  color: #8b949e;
+  font-style: italic;
+}
+
+.dark .token.keyword,
+.dark .token.macro,
+.dark .token.selector,
+.dark .hljs-keyword,
+.dark .dark .hljs-selector-tag,
+.dark .hljs-tag,
+.dark .hljs-built_in {
+  color: #ff7b72;
+  font-weight: 600;
+}
+
+.dark .token.string,
+.dark .token.char,
+.dark .token.attr-value,
+.dark .hljs-string,
+.dark .hljs-symbol,
+.dark .hljs-bullet,
+.dark .hljs-params {
+  color: #a5d6ff;
+}
+
+.dark .token.function,
+.dark .token.macro,
+.dark .token.atrule,
+.dark .hljs-function,
+.dark .hljs-title,
+.dark .hljs-section,
+.dark .hljs-name,
+.dark .hljs-attr {
+  color: #d2a8ff;
+}
+
+.dark .token.number,
+.dark .token.boolean,
+.dark .token.constant,
+.dark .token.property,
+.dark .hljs-number,
+.dark .dark .hljs-literal,
+.dark .hljs-type {
+  color: #79c0ff;
+}
+
+.dark .token.operator,
+.dark .token.math,
+.dark .token.equation,
+.dark .hljs-meta,
+.dark .hljs-formula {
+  color: #ff7b72;
+}
+
+.dark .token.variable,
+.dark .token.parameter,
+.dark .hljs-variable,
+.dark .hljs-template-variable {
+  color: #ffa657;
+}
+
+.dark .token.attr-name,
+.dark .hljs-attribute {
+  color: #d2a8ff;
+}
+
+.dark .token.class-name,
+.dark .hljs-class-name,
+.dark .hljs-title.class_ {
+  color: #7ee787;
+  font-weight: 600;
+}
+
+.dark .token.punctuation,
+.dark .hljs-punctuation {
+  color: #c9d1d9;
+  opacity: 0.8;
+}
 
 
 /* TipTap Code Block */
@@ -316,62 +537,258 @@ pre[class*="language-"],
   color: var(--color-nb-on-surface);
 }
 
+.ProseMirror code {
+  background-color: var(--color-nb-surface-mid);
+  color: var(--color-nb-on-surface);
+  border: 1px solid var(--color-nb-outline-variant);
+  border-radius: 6px;
+  padding: 0.1rem 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 1em;
+  font-weight: 500;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: all 0.2s;
+}
+
+.dark .ProseMirror code {
+  background-color: var(--color-nb-outline-variant);
+  color: var(--color-nb-on-surface);
+  border-color: var(--color-nb-outline);
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+.nb-inline-math {
+  background-color: var(--color-nb-outline-variant);
+  color: var(--color-nb-on-surface);
+  border: 1px solid var(--color-nb-outline-variant);
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+  font-family: "Cambria Math", "Latin Modern Math", "Computer Modern Serif", "Times New Roman", serif;
+  font-style: italic;
+  font-size: 1.0em;
+  /* Slightly larger for math readability */
+  letter-spacing: 0.03em;
+  font-weight: 500;
+  transition: all 0.2s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.dark .nb-inline-math {
+  background-color: rgba(0, 118, 188, 0.15);
+  color: #7dd3fc;
+  /* Light blue */
+  border-color: rgba(0, 118, 188, 0.5);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.nb-inline-math::before,
+.nb-inline-math::after {
+  content: "$";
+  opacity: 0.3;
+  margin: 0 0.1rem;
+  font-family: var(--font-sans);
+  font-style: normal;
+  font-size: 0.85em;
+  vertical-align: baseline;
+  font-weight: 700;
+}
+
 .dark .ProseMirror pre {
   color: #e2e8f0;
 }
 
-.ProseMirror ul,
-.ProseMirror ol {
-  padding-left: 1.5rem !important;
-  margin-bottom: 1.25rem !important;
-  list-style-position: outside !important;
+.ProseMirror .bullet-list,
+.ProseMirror .ordered-list {
+  padding-left: 1.5rem;
+  margin-bottom: 1.25rem;
+  list-style-position: outside;
 }
 
-.ProseMirror ul {
-  list-style-type: disc !important;
-}
+/* Custom Flat Lists (notebookListItem) */
 
-.ProseMirror ol {
-  list-style-type: decimal !important;
-}
 
-.ProseMirror li {
-  margin-bottom: 0.5rem;
-  padding-left: 0.25rem;
-}
-
-.ProseMirror li > p {
+.ProseMirror .notebook-list-item {
+  position: relative;
+  display: block;
+  margin-top: 0.25rem;
   margin-bottom: 0.25rem;
+  line-height: 1.5rem;
+}
+
+/* Indentations */
+.ProseMirror .notebook-list-item.indent-level-1 {
+  padding-left: 2rem;
+}
+
+.ProseMirror .notebook-list-item.indent-level-2 {
+  padding-left: 4rem;
+}
+
+.ProseMirror .notebook-list-item.indent-level-3 {
+  padding-left: 6rem;
+}
+
+.ProseMirror .notebook-list-item.indent-level-4 {
+  padding-left: 8rem;
+}
+
+.ProseMirror .notebook-list-item.indent-level-5 {
+  padding-left: 10rem;
+}
+
+.ProseMirror .notebook-list-item.indent-level-6 {
+  padding-left: 12rem;
+}
+
+.ProseMirror .notebook-list-item.indent-level-7 {
+  padding-left: 14rem;
+}
+
+.ProseMirror .notebook-list-item.indent-level-8 {
+  padding-left: 16rem;
+}
+
+/* Pseudoelement Marker Position */
+.ProseMirror .notebook-list-item::before {
+  position: absolute;
+  text-align: right;
+  font-weight: 500;
+  color: var(--color-nb-on-surface);
+  white-space: nowrap;
+  content: attr(data-marker);
+}
+
+.ProseMirror .notebook-list-item.indent-level-1::before {
+  right: calc(100% - 1.5rem);
+}
+
+.ProseMirror .notebook-list-item.indent-level-2::before {
+  right: calc(100% - 3.5rem);
+}
+
+.ProseMirror .notebook-list-item.indent-level-3::before {
+  right: calc(100% - 5.5rem);
+}
+
+.ProseMirror .notebook-list-item.indent-level-4::before {
+  right: calc(100% - 7.5rem);
+}
+
+.ProseMirror .notebook-list-item.indent-level-5::before {
+  right: calc(100% - 9.5rem);
+}
+
+.ProseMirror .notebook-list-item.indent-level-6::before {
+  right: calc(100% - 11.5rem);
+}
+
+.ProseMirror .notebook-list-item.indent-level-7::before {
+  right: calc(100% - 13.5rem);
+}
+
+.ProseMirror .notebook-list-item.indent-level-8::before {
+  right: calc(100% - 15.5rem);
+}
+
+
+
+/* Inline Math */
+.nb-inline-math-node {
+  background-color: var(--color-nb-surface-low);
+  min-width: 1.5em;
+  min-height: 1.2em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+}
+
+.nb-inline-math-node::selection,
+.nb-inline-math-node *::selection {
+  background-color: transparent !important;
+  color: inherit !important;
+}
+
+.nb-inline-math-node:hover {
+  background-color: var(--color-nb-surface-mid);
+}
+
+.dark .nb-inline-math-node {
+  background-color: rgba(0, 118, 188, 0.08);
+}
+
+.dark .nb-inline-math-node:hover {
+  background-color: rgba(0, 118, 188, 0.15);
 }
 
 /* Tables */
 .ProseMirror table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   table-layout: auto;
-  min-width: 100%;
-  width: max-content;
-
-
-
-
-
-  margin: 1rem 0;
-  overflow: hidden;
-  border: 1.5px solid var(--color-nb-outline-variant);
-  border-radius: var(--nb-radius-sm);
+  width: fit-content;
+  max-width: 100%;
+  margin: 1.5rem auto;
+  /* Centered in block */
   font-size: 13px;
 }
 
 .ProseMirror table td,
 .ProseMirror table th {
   min-width: 120px;
-
-
-  border: 1px solid var(--color-nb-outline-variant);
-  padding: 8px 12px;
+  /* Basic grid: right and bottom borders */
+  border-right: 1px solid var(--color-nb-outline-variant);
+  border-bottom: 1px solid var(--color-nb-outline-variant);
+  padding: 12px 16px;
   vertical-align: top;
   box-sizing: border-box;
   position: relative;
+  background-clip: padding-box;
+}
+
+/* Top and Left borders provided by first row/column */
+.ProseMirror table tr:first-child td,
+.ProseMirror table tr:first-child th {
+  border-top: 1px solid var(--color-nb-outline-variant);
+}
+
+.ProseMirror table td:first-child,
+.ProseMirror table th:first-child {
+  border-left: 1px solid var(--color-nb-outline-variant);
+}
+
+/* Rounded corners for the grid itself */
+.ProseMirror table tr:first-child th:first-child,
+.ProseMirror table tr:first-child td:first-child {
+  border-top-left-radius: var(--nb-radius);
+}
+
+.ProseMirror table tr:first-child th:last-child,
+.ProseMirror table tr:first-child td:last-child {
+  border-top-right-radius: var(--nb-radius);
+}
+
+.ProseMirror table tr:last-child td:first-child {
+  border-bottom-left-radius: var(--nb-radius);
+}
+
+.ProseMirror table tr:last-child td:last-child {
+  border-bottom-right-radius: var(--nb-radius);
+}
+
+.dark .ProseMirror table td,
+.dark .ProseMirror table th,
+.dark .ProseMirror table tr:first-child td,
+.dark .ProseMirror table tr:first-child th,
+.dark .ProseMirror table td:first-child,
+.dark .ProseMirror table th:first-child {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.ProseMirror table td>p,
+.ProseMirror table th>p {
+  margin: 0;
+  min-height: 1.5em;
 }
 
 .ProseMirror table th {
@@ -381,6 +798,55 @@ pre[class*="language-"],
   color: var(--color-nb-on-surface);
   font-size: 11px;
   letter-spacing: 0.06em;
+}
+
+/* Table Cell Selection styling */
+.ProseMirror table .selectedCell {
+  background-color: rgba(217, 40, 47, 0.08) !important;
+  position: relative;
+}
+
+.dark .ProseMirror table .selectedCell {
+  background-color: rgba(217, 40, 47, 0.18) !important;
+}
+
+.ProseMirror table .selectedCell::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.dark .ProseMirror table .selectedCell::after {
+  border-color: rgba(217, 40, 47, 0.7);
+}
+
+.ProseMirror table .selectedCell::selection,
+.ProseMirror table .selectedCell *::selection {
+  background-color: transparent !important;
+}
+
+/* Code block pre/code resets to ensure exact wrapping and alignment */
+.ProseMirror [data-node-view-content] {
+  white-space: pre !important;
+}
+
+.ProseMirror [data-node-view-content] pre,
+.ProseMirror [data-node-view-content] code {
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+  white-space: pre !important;
+  word-wrap: normal !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
 }
 
 .ProseMirror img {
@@ -403,13 +869,13 @@ pre[class*="language-"],
    ═══════════════════════════════════════════════════════════════ */
 
 :root {
-  --nb-radius-sm:   4px;
-  --nb-radius:      8px;
-  --nb-radius-lg:   12px;
-  --nb-radius-xl:   16px;
-  --nb-shadow-sm:   0 1px 3px rgb(0 0 0 / 0.08);
-  --nb-shadow:      0 4px 12px rgb(0 0 0 / 0.10);
-  --nb-shadow-lg:   0 8px 24px rgb(0 0 0 / 0.12);
+  --nb-radius-sm: 4px;
+  --nb-radius: 8px;
+  --nb-radius-lg: 12px;
+  --nb-radius-xl: 16px;
+  --nb-shadow-sm: 0 1px 3px rgb(0 0 0 / 0.08);
+  --nb-shadow: 0 4px 12px rgb(0 0 0 / 0.10);
+  --nb-shadow-lg: 0 8px 24px rgb(0 0 0 / 0.12);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -417,19 +883,85 @@ pre[class*="language-"],
    ═══════════════════════════════════════════════════════════════ */
 
 @keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes zoom-in {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes slide-in-from-top {
-  from { transform: translateY(-1rem); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(-1rem);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
+
+@keyframes slide-in-from-right {
+  from {
+    transform: translateX(1rem);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes zoom-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes slide-out-to-right {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+
+  to {
+    transform: translateX(1rem);
+    opacity: 0;
+  }
+}
+
 
 .animate-in {
   animation-duration: 300ms;
@@ -437,9 +969,69 @@ pre[class*="language-"],
   animation-fill-mode: forwards;
 }
 
-.fade-in { animation-name: fade-in; }
-.zoom-in-95 { animation-name: zoom-in; }
-.slide-in-from-top-4 { animation-name: slide-in-from-top; }
+.animate-out {
+  animation-duration: 200ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  animation-fill-mode: forwards;
+}
+
+.fade-in {
+  animation-name: fade-in;
+}
+
+.fade-out {
+  animation-name: fade-out;
+}
+
+.zoom-in-95 {
+  animation-name: zoom-in;
+}
+
+.zoom-out-95 {
+  animation-name: zoom-out;
+}
+
+.slide-in-from-top-4 {
+  animation-name: slide-in-from-top;
+}
+
+.slide-in-from-right-4 {
+  animation-name: slide-in-from-right;
+}
+
+.slide-out-to-right-4 {
+  animation-name: slide-out-to-right;
+}
+
+@keyframes spin-stable {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-stable {
+  animation: spin-stable 0.8s linear infinite;
+  transform-origin: center center;
+}
+
+@keyframes spin-reverse {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+.animate-spin-reverse {
+  animation: spin-reverse 1s linear infinite;
+  transform-origin: center center;
+}
 
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
@@ -457,4 +1049,3 @@ pre[class*="language-"],
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: var(--color-nb-on-surface-variant);
 }
-
