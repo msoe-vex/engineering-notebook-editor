@@ -29,6 +29,7 @@ export const mapLanguageToLatex = (lang: string): string => {
     "go": "Go",
     "csharp": "[Sharp]C",
     "plaintext": "{}",
+    "latex": "TeX",
   };
   return mapping[lang] || lang;
 };

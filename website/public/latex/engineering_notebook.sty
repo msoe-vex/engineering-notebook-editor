@@ -188,6 +188,34 @@
 % Custom Block Header Command
 \newcommand{\blockheader}[2]{{\noindent\textbf{#1\if\relax\detokenize{#2}\relax\else: #2\fi}\par\nopagebreak\medskip}}
 
+% Custom Listings Language Definitions for Modern Languages
+\lstdefinelanguage{JavaScript}{
+    keywords={break, case, catch, class, const, continue, debugger, default, delete, do, else, export, extends, false, finally, for, function, if, import, in, instanceof, new, null, return, super, switch, this, throw, true, try, typeof, var, void, while, with, yield, let, static},
+    sensitive=true,
+    comment=[l]{//},
+    morecomment=[s]{/*}{*/},
+    morestring=[b]',
+    morestring=[b]"
+}
+
+\lstdefinelanguage{Rust}{
+    keywords={as, async, await, break, const, continue, crate, dyn, else, enum, extern, false, fn, for, if, impl, in, let, loop, match, mod, move, mut, pub, ref, return, self, Self, static, struct, super, trait, true, type, union, unsafe, use, where, while},
+    sensitive=true,
+    comment=[l]{//},
+    morecomment=[s]{/*}{*/},
+    morestring=[b]",
+    morestring=[b]'
+}
+
+\lstdefinelanguage{Go}{
+    keywords={break, default, func, interface, select, case, defer, go, map, struct, chan, else, goto, package, switch, const, fallthrough, if, range, type, continue, for, import, return, var},
+    sensitive=true,
+    comment=[l]{//},
+    morecomment=[s]{/*}{*/},
+    morestring=[b]",
+    morestring=[b]'
+}
+
 % Code Highlighting Setup
 \lstset{
     language=C++,

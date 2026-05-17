@@ -19,6 +19,7 @@ export const LANGUAGES: Record<string, string> = {
   rust: "Rust",
   go: "Go",
   csharp: "C#",
+  latex: "LaTeX",
 };
 
 export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: NodeViewProps) {

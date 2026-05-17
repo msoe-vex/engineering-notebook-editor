@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer } from "@tiptap/react";
-import { CodeBlock } from "@tiptap/extension-code-block";
+import { Node } from "@tiptap/core";
 import { GripVertical, Trash2, Terminal } from "lucide-react";
 
 import { NodeViewProps } from "./types";
@@ -53,37 +53,33 @@ export function RawLatexNodeView({ node, deleteNode, selected, editor }: NodeVie
   );
 }
 
-export const CustomRawLatex = CodeBlock.extend({
+export const CustomRawLatex = Node.create({
   name: "rawLatex",
-  addOptions() {
-    return {
-      ...this.parent!(),
-      languageClassPrefix: 'language-',
-      defaultLanguage: null,
-      exitOnTripleEnter: true,
-      exitOnArrowDown: true,
-      HTMLAttributes: {},
-    };
-  },
+  group: "block",
+  content: "text*",
+  marks: "",
+  defining: true,
+  code: true,
+
   addAttributes() {
     return {
-      ...this.parent!(),
       content: { default: "" },
       caption: { default: "" },
     };
   },
+
   parseHTML() {
     return [{ tag: 'div[data-type="raw-latex"]' }];
   },
+
   renderHTML({ HTMLAttributes }) {
     return ['div', { 'data-type': 'raw-latex', ...HTMLAttributes }, 0];
   },
+
   addNodeView() {
     return ReactNodeViewRenderer(RawLatexNodeView);
   },
-  addInputRules() {
-    return [];
-  },
+
   addKeyboardShortcuts() {
     return {
       'Mod-a': ({ editor }) => {
