@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   useEditor, EditorContent, Extension, InputRule
@@ -98,6 +98,9 @@ const UnifiedEditor = ({
   const [showLinkPopup, setShowLinkPopup] = useState(false);
   const [isMentionMode, setIsMentionMode] = useState(false);
   const [isCtrlPressed, setIsCtrlPressed] = useState(false);
+
+  const scrollFrameRef = useRef<number | null>(null);
+  const highlightTimerRef = useRef<number | null>(null);
 
   const extensions = [
     TextStyle.configure(),
@@ -540,10 +543,8 @@ const UnifiedEditor = ({
             if (event.ctrlKey || event.metaKey) {
               event.preventDefault();
               const url = anchor.href;
-              setTimeout(() => {
-                const win = window.open(url, '_blank');
-                if (win) win.focus();
-              }, 0);
+              const win = window.open(url, '_blank');
+              if (win) win.focus();
               return true;
             }
           }
@@ -614,20 +615,29 @@ const UnifiedEditor = ({
     if (!editor || !targetId) return;
 
     let attempts = 0;
-    const maxAttempts = 30; // 3 seconds total
+    const maxAttempts = 180; // ~3 seconds at 60fps
+
+    if (scrollFrameRef.current !== null) {
+      cancelAnimationFrame(scrollFrameRef.current);
+      scrollFrameRef.current = null;
+    }
+    if (highlightTimerRef.current !== null) {
+      clearTimeout(highlightTimerRef.current);
+      highlightTimerRef.current = null;
+    }
 
     const tryScroll = () => {
-      if (editor.isDestroyed) return true;
+      if (editor.isDestroyed) return;
 
       // 1. Entry level scroll (scroll the correct container)
       if (targetId === entryId) {
         const container = editor.view.dom.closest('.overflow-y-auto');
         if (container) {
           container.scrollTo({ top: 0, behavior: 'smooth' });
-          return true;
+          return;
         }
         editor.view.dom.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        return true;
+        return;
       }
 
       // 2. Node level scroll
@@ -648,37 +658,40 @@ const UnifiedEditor = ({
         element = document.querySelector(`[data-id="${targetId}"]`) as HTMLElement;
       }
 
-      if (element) {
-        // Check if element is actually "ready" (has dimensions)
-        if (element.offsetHeight === 0 && attempts < 10) return false;
-
+      if (element && element.offsetHeight > 0) {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
         // Highlight
         element.classList.add('ring-4', 'ring-nb-primary', 'ring-offset-2', 'transition-all', 'duration-500', 'z-50');
-        setTimeout(() => {
+        highlightTimerRef.current = window.setTimeout(() => {
           if (element) element.classList.remove('ring-4', 'ring-nb-primary', 'ring-offset-2', 'z-50');
+          highlightTimerRef.current = null;
         }, 1500);
-        return true;
+        return;
       }
 
-      return false;
+      attempts++;
+      if (attempts < maxAttempts) {
+        scrollFrameRef.current = requestAnimationFrame(tryScroll);
+      }
     };
 
-    // Initial delay to allow rendering
-    const timeout = setTimeout(() => {
-      if (!tryScroll()) {
-        const interval = setInterval(() => {
-          attempts++;
-          if (tryScroll() || attempts >= maxAttempts) {
-            clearInterval(interval);
-          }
-        }, 100);
-      }
-    }, isInitial ? 200 : 100);
-
-    return () => clearTimeout(timeout);
+    if (isInitial) {
+      highlightTimerRef.current = window.setTimeout(() => {
+        scrollFrameRef.current = requestAnimationFrame(tryScroll);
+      }, 150);
+    } else {
+      scrollFrameRef.current = requestAnimationFrame(tryScroll);
+    }
   }, [editor, entryId]);
+
+  // Master cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollFrameRef.current !== null) cancelAnimationFrame(scrollFrameRef.current);
+      if (highlightTimerRef.current !== null) clearTimeout(highlightTimerRef.current);
+    };
+  }, []);
 
   // Handle Global Scroll Events
   useEffect(() => {

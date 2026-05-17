@@ -21,8 +21,13 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
   // Automatically enter edit mode if the node is selected AND empty (e.g. just created)
   useEffect(() => {
     if (selected && !node.attrs.latex) {
-      const timer = setTimeout(() => setIsEditing(true), 0);
-      return () => clearTimeout(timer);
+      let active = true;
+      queueMicrotask(() => {
+        if (active) setIsEditing(true);
+      });
+      return () => {
+        active = false;
+      };
     }
   }, [selected, node.attrs.latex]);
 
@@ -43,8 +48,9 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
   // Handle focus when entering edit mode
   React.useLayoutEffect(() => {
     if (isEditing && inputRef.current && document.activeElement !== inputRef.current) {
-      if (inputRef.current.textContent !== node.attrs.latex) {
-        inputRef.current.textContent = node.attrs.latex;
+      const initialText = node.attrs.latex || "\u200B";
+      if (inputRef.current.textContent !== initialText) {
+        inputRef.current.textContent = initialText;
       }
 
       const pos = getPos();
@@ -57,7 +63,8 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
       if (sel && inputRef.current.childNodes.length > 0) {
         const textNode = inputRef.current.childNodes[0];
         const offset = isComingFromRight ? (node.attrs.latex?.length || 0) : 0;
-        range.setStart(textNode, Math.min(offset, textNode.textContent?.length || 0));
+        const actualOffset = node.attrs.latex ? offset : 0;
+        range.setStart(textNode, Math.min(actualOffset, textNode.textContent?.length || 0));
         range.collapse(true);
         sel.removeAllRanges();
         sel.addRange(range);
@@ -81,7 +88,7 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
   }, [node.attrs.latex, isEditing]);
 
   return (
-    <NodeViewWrapper as="span" className={`nb-inline-math-node mx-0.5 px-0.5 rounded transition-all inline-flex items-center align-middle relative ${selected ? 'ring-2 ring-nb-primary bg-nb-primary/10 shadow-sm' : ''}`}>
+    <NodeViewWrapper as="span" className={`nb-inline-math-node mx-0.5 px-0.5 rounded transition-all inline-flex items-center align-middle relative ${selected && !isEditing ? 'ring-2 ring-nb-primary bg-nb-primary/10 shadow-sm' : ''}`}>
       {isEditing ? (
         <span key="edit" className="flex items-center bg-nb-outline-variant/15 text-nb-on-surface border-b border-nb-outline-variant/50 px-1 py-0.5 font-mono text-[1.0em] rounded-t-sm">
           <span className="opacity-40 font-bold mr-0.5">$</span>
@@ -93,20 +100,23 @@ export function InlineMathNodeView({ node, updateAttributes, selected, editor, g
             autoCapitalize="off"
             suppressContentEditableWarning
             className="outline-none min-w-[1ch] focus:ring-0"
+            onKeyUp={(e) => e.stopPropagation()}
             onInput={(e) => {
-              const text = e.currentTarget.textContent || "";
+              let text = e.currentTarget.textContent || "";
+              text = text.replace(/\u200B/g, "");
               updateAttributes({ latex: text });
             }}
             onBlur={() => {
               setIsEditing(false);
             }}
             onKeyDown={(e) => {
+              e.stopPropagation();
               if (e.key === 'Enter') {
                 e.preventDefault();
                 setIsEditing(false);
                 editor.commands.focus();
               }
-              if (e.key === 'Backspace' && node.attrs.latex === "") {
+              if (e.key === 'Backspace' && (node.attrs.latex === "" || node.attrs.latex === "\u200B")) {
                 e.preventDefault();
                 const pos = getPos();
                 if (typeof pos === 'number') {
@@ -207,8 +217,9 @@ export const InlineMathNode = Node.create({
     return ReactNodeViewRenderer(InlineMathNodeView, {
       stopEvent: ({ event }) => {
         const target = event.target as HTMLElement;
-        return !!target?.closest('.nb-inline-math-node [contenteditable="true"]');
+        return !!(target?.closest('[contenteditable]') || target?.closest('input') || target?.closest('textarea'));
       },
+      ignoreMutation: () => true,
     });
   },
 

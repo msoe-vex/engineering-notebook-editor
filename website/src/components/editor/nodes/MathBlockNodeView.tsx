@@ -23,8 +23,13 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
   // Automatically enter edit mode if the node is selected AND empty (e.g. just created)
   useEffect(() => {
     if (selected && !node.attrs.latex) {
-      const timer = setTimeout(() => setIsEditing(true), 0);
-      return () => clearTimeout(timer);
+      let active = true;
+      queueMicrotask(() => {
+        if (active) setIsEditing(true);
+      });
+      return () => {
+        active = false;
+      };
     }
   }, [selected, node.attrs.latex]);
 
@@ -139,7 +144,9 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
               autoCapitalize="off"
               className="w-full bg-transparent text-nb-on-surface font-mono text-[14px] outline-none resize-none overflow-hidden text-center placeholder:text-nb-on-surface-variant/20"
               style={{ height: 'auto' }}
+              onKeyUp={(e) => e.stopPropagation()}
               onKeyDown={(e) => {
+                e.stopPropagation();
                 if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                   e.preventDefault();
                   setIsEditing(false);
@@ -154,7 +161,6 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
                   deleteNode();
                   editor.commands.focus();
                 }
-                e.stopPropagation();
               }}
             />
           </div>
@@ -234,7 +240,13 @@ export const MathBlockNode = Node.create({
   },
 
   addNodeView() {
-    return ReactNodeViewRenderer(MathBlockNodeView);
+    return ReactNodeViewRenderer(MathBlockNodeView, {
+      stopEvent: ({ event }) => {
+        const target = event.target as HTMLElement;
+        return !!(target?.closest('[contenteditable]') || target?.closest('input') || target?.closest('textarea'));
+      },
+      ignoreMutation: () => true,
+    });
   },
 
   addInputRules() {

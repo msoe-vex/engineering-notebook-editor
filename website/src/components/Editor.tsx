@@ -355,16 +355,6 @@ const EditorToolbar = React.memo(function EditorToolbar({
     };
   }, [editor]);
 
-  // Dismiss table grid on click away
-  useEffect(() => {
-    if (!showTableGrid) return;
-    const handleOutsideClick = () => {
-      setTimeout(() => setShowTableGrid(false), 0);
-    };
-    window.addEventListener("mousedown", handleOutsideClick);
-    return () => window.removeEventListener("mousedown", handleOutsideClick);
-  }, [showTableGrid, setShowTableGrid]);
-
 
   return (
     <div className="border-t border-nb-outline-variant/30 bg-nb-surface-mid/50 shrink-0 overflow-x-auto scrollbar-hide w-full">
@@ -671,7 +661,7 @@ const EditorToolbar = React.memo(function EditorToolbar({
           <Sigma size={16} className="scale-110" />
         </ToolbarButton>
 
-        <div className="relative" ref={tableButtonRef}>
+        <div className="relative" ref={tableButtonRef} data-table-trigger="true">
           <ToolbarButton
             onClick={(e) => {
               e?.stopPropagation();
@@ -679,6 +669,7 @@ const EditorToolbar = React.memo(function EditorToolbar({
                 const rect = tableButtonRef.current.getBoundingClientRect();
                 setGridPos({ top: rect.bottom + 8, left: rect.right - 204 });
                 setShowTableGrid(true);
+                setActiveMenu(null);
               } else {
                 setShowTableGrid(false);
               }
@@ -697,6 +688,7 @@ const EditorToolbar = React.memo(function EditorToolbar({
                 zIndex: 9999
               }}
               className="shadow-2xl rounded-xl animate-in fade-in zoom-in-95 duration-200"
+              data-table-dropdown="true"
               onMouseDown={(e) => e.stopPropagation()}
             >
               <TableGridSelector
@@ -895,15 +887,27 @@ const EditorContent = React.memo(function EditorContent({
   const [headingPos, setHeadingPos] = useState({ top: 0, left: 0 });
   const [gridPos, setGridPos] = useState({ top: 0, left: 0 });
 
+  const handleSetActiveMenu = useCallback((menu: string | null) => {
+    setActiveMenu(menu);
+    if (menu) {
+      setShowTableGrid(false);
+    }
+  }, []);
+
   // Dismiss table grid on click away
   useEffect(() => {
     if (!showTableGrid) return;
-    const handleOutsideClick = () => {
-      setTimeout(() => setShowTableGrid(false), 0);
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('[data-table-trigger="true"]') || target?.closest('[data-table-dropdown="true"]')) {
+        return;
+      }
+      setShowTableGrid(false);
     };
     window.addEventListener("mousedown", handleOutsideClick);
     return () => window.removeEventListener("mousedown", handleOutsideClick);
   }, [showTableGrid, setShowTableGrid]);
+
 
   // Dynamic Phase Logic
   const availablePhases = getPhases(metadata?.phases);
@@ -1194,19 +1198,19 @@ const EditorContent = React.memo(function EditorContent({
             </button>
 
 
-            <MenuItem label="File" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
-              <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} setActiveMenu={setActiveMenu} />
+            <MenuItem label="File" activeMenu={activeMenu} setActiveMenu={handleSetActiveMenu}>
+              <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} setActiveMenu={handleSetActiveMenu} />
               <MenuAction
                 icon={<FileJson size={14} />}
                 label="Download JSON"
                 onClick={async () => {
                   await exportEntries([entryId]);
                 }}
-                setActiveMenu={setActiveMenu}
+                setActiveMenu={handleSetActiveMenu}
               />
-              <MenuAction icon={<FileCode size={14} />} label="Download LaTeX" onClick={handleDownload} setActiveMenu={setActiveMenu} />
+              <MenuAction icon={<FileCode size={14} />} label="Download LaTeX" onClick={handleDownload} setActiveMenu={handleSetActiveMenu} />
               <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
-              <MenuAction icon={<X size={14} />} label="Close" onClick={onClose || (() => { })} setActiveMenu={setActiveMenu} />
+              <MenuAction icon={<X size={14} />} label="Close" onClick={onClose || (() => { })} setActiveMenu={handleSetActiveMenu} />
               <MenuAction icon={<Trash2 size={14} />} label="Delete" onClick={() => {
                 showConfirm(
                   "Delete Entry",
@@ -1217,28 +1221,28 @@ const EditorContent = React.memo(function EditorContent({
                   },
                   "danger"
                 );
-              }} setActiveMenu={setActiveMenu} />
+              }} setActiveMenu={handleSetActiveMenu} />
             </MenuItem>
 
-            <MenuItem label="Edit" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
+            <MenuItem label="Edit" activeMenu={activeMenu} setActiveMenu={handleSetActiveMenu}>
               <MenuAction
                 icon={<Undo2 size={14} />}
                 label="Undo"
                 onClick={() => editor?.chain().focus().undo().run()}
                 disabled={!editor?.can().undo()}
-                setActiveMenu={setActiveMenu}
+                setActiveMenu={handleSetActiveMenu}
               />
               <MenuAction
                 icon={<Redo2 size={14} />}
                 label="Redo"
                 onClick={() => editor?.chain().focus().redo().run()}
                 disabled={!editor?.can().redo()}
-                setActiveMenu={setActiveMenu}
+                setActiveMenu={handleSetActiveMenu}
               />
             </MenuItem>
 
-            <MenuItem label="Insert" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
-              <MenuAction icon={<ImagePlus size={14} />} label="Image" onClick={insertImage} setActiveMenu={setActiveMenu} />
+            <MenuItem label="Insert" activeMenu={activeMenu} setActiveMenu={handleSetActiveMenu}>
+              <MenuAction icon={<ImagePlus size={14} />} label="Image" onClick={insertImage} setActiveMenu={handleSetActiveMenu} />
               <MenuAction
                 icon={<TableIcon size={14} />}
                 label="Table"
@@ -1249,9 +1253,10 @@ const EditorContent = React.memo(function EditorContent({
                     // Position below the "Insert" menu button
                     setGridPos({ top: rect.bottom + 4, left: rect.left });
                     setShowTableGrid(true);
+                    setActiveMenu(null);
                   }
                 }}
-                setActiveMenu={setActiveMenu}
+                setActiveMenu={handleSetActiveMenu}
               />
               <MenuAction
                 icon={<Code size={14} />}
@@ -1269,7 +1274,7 @@ const EditorContent = React.memo(function EditorContent({
                     editor.chain().focus().insertContent({ type: 'codeBlock', attrs: { id: generateUUID() } }).run();
                   }
                 }}
-                setActiveMenu={setActiveMenu}
+                setActiveMenu={handleSetActiveMenu}
               />
               <MenuAction
                 icon={<Terminal size={14} />}
@@ -1287,7 +1292,7 @@ const EditorContent = React.memo(function EditorContent({
                     editor.chain().focus().insertContent({ type: 'rawLatex', attrs: { id: generateUUID() } }).run();
                   }
                 }}
-                setActiveMenu={setActiveMenu}
+                setActiveMenu={handleSetActiveMenu}
               />
             </MenuItem>
 
@@ -1451,7 +1456,7 @@ const EditorContent = React.memo(function EditorContent({
                   <EditorToolbar
                     editor={editor}
                     activeMenu={activeMenu}
-                    setActiveMenu={setActiveMenu}
+                    setActiveMenu={handleSetActiveMenu}
                     insertImage={insertImage}
                     toggleLinkFn={toggleLinkFn}
                     textColorPos={textColorPos}

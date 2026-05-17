@@ -7,9 +7,9 @@ export default function CatchAll() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    // Avoid synchronous cascading render warning
-    const timeout = setTimeout(() => setMounted(true), 0);
-    return () => clearTimeout(timeout);
+    queueMicrotask(() => {
+      setMounted(true);
+    });
   }, []);
 
   if (!mounted) {

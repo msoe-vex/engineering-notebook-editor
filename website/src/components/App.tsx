@@ -267,8 +267,9 @@ export default function App() {
   }, [onSignOutGithub]);
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => setMounted(true));
-    return () => cancelAnimationFrame(frame);
+    queueMicrotask(() => {
+      setMounted(true);
+    });
   }, []);
 
   useEffect(() => {

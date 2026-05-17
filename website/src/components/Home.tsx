@@ -74,7 +74,7 @@ export default function Home({
   };
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => {
+    queueMicrotask(() => {
       setMounted(true);
       const savedType = localStorage.getItem("nb-create-type");
       if (savedType === "github") {
@@ -82,12 +82,13 @@ export default function Home({
         localStorage.removeItem("nb-create-type");
       }
     });
-    return () => cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {
     if (autoOpenGithubModal) {
-      requestAnimationFrame(() => setIsGithubModalOpen(true));
+      queueMicrotask(() => {
+        setIsGithubModalOpen(true);
+      });
     }
   }, [autoOpenGithubModal]);
 
