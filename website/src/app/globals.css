@@ -253,6 +253,30 @@ button:disabled {
   box-shadow: none !important;
 }
 
+/* Prevent selection highlighting of UI elements and inputs in custom resource blocks/node views */
+.ProseMirror [contenteditable="false"]::selection,
+.ProseMirror [contenteditable="false"] *::selection,
+.ProseMirror input::selection,
+.ProseMirror textarea::selection,
+.ProseMirror-selectednode *::selection {
+  background-color: transparent !important;
+  color: inherit !important;
+}
+
+/* Disable user text selection on drag handles, buttons, and captions/headers when full block is selected */
+.ProseMirror [contenteditable="false"],
+.ProseMirror [contenteditable="false"] *,
+.ProseMirror-selectednode input,
+.ProseMirror-selectednode textarea {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+/* Draw a premium primary outline border on the card when selected as a node selection */
+.ProseMirror-selectednode .rounded-xl {
+  box-shadow: 0 0 0 2px var(--color-nb-primary) !important;
+}
+
 .ProseMirror h1 {
   font-family: var(--font-sans);
   font-size: 1.875rem;
