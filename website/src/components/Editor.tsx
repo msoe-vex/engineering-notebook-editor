@@ -535,9 +535,10 @@ const EditorToolbar = React.memo(function EditorToolbar({
         <ToolbarButton
           onClick={() => {
             const { selection } = editor.state;
-            const safePos = (selection instanceof NodeSelection) ? selection.to :
+            const safePos = selection.empty ? (
               (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+                (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null
+            ) : null;
 
             if (safePos !== null) {
               editor.chain().focus().insertContentAt(safePos, {
@@ -557,9 +558,10 @@ const EditorToolbar = React.memo(function EditorToolbar({
         <ToolbarButton
           onClick={() => {
             const { selection } = editor.state;
-            const safePos = (selection instanceof NodeSelection) ? selection.to :
+            const safePos = selection.empty ? (
               (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+                (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null
+            ) : null;
 
             if (safePos !== null) {
               editor.chain().focus().insertContentAt(safePos, {

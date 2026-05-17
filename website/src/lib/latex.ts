@@ -93,8 +93,8 @@ export const convertBlockChildrenToLatex = (
         closeStackToLevel(indent);
       }
 
-      // 2. If the list type at the current level differs, pop/close it
-      if (stack.length === indent && stack[indent - 1] !== listType) {
+      // 2. If the list type at the current level differs, OR if we explicitly restart, close the level
+      if (attrs.restart || (stack.length === indent && stack[indent - 1] !== listType)) {
         closeStackToLevel(indent - 1);
       }
 

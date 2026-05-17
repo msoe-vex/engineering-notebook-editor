@@ -1,4 +1,7 @@
 import { Node, mergeAttributes } from "@tiptap/core";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import { Node as PMNode } from "@tiptap/pm/model";
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -6,6 +9,7 @@ declare module '@tiptap/core' {
       indentNotebookListItem: () => ReturnType;
       outdentNotebookListItem: () => ReturnType;
       toggleNotebookList: (listType: 'bullet' | 'ordered') => ReturnType;
+      toggleListRestart: () => ReturnType;
     };
   }
 }
@@ -23,7 +27,7 @@ export const NotebookListItem = Node.create({
         parseHTML: element => parseInt(element.getAttribute('data-indent') || '1', 10),
         renderHTML: attributes => ({
           'data-indent': attributes.indent,
-          class: `notebook-list-item indent-level-${attributes.indent} list-type-${attributes.listType}`,
+          class: `notebook-list-item indent-level-${attributes.indent} list-type-${attributes.listType}${attributes.restart ? ' restart-list' : ''}`,
         }),
       },
       listType: {
@@ -32,6 +36,16 @@ export const NotebookListItem = Node.create({
         renderHTML: attributes => ({
           'data-list-type': attributes.listType,
         }),
+      },
+      restart: {
+        default: false,
+        parseHTML: element => element.getAttribute('data-restart') === 'true' || element.classList.contains('restart-list'),
+        renderHTML: attributes => {
+          if (!attributes.restart) return {};
+          return {
+            'data-restart': 'true',
+          };
+        },
       },
     };
   },
@@ -44,8 +58,11 @@ export const NotebookListItem = Node.create({
     ];
   },
 
-  renderHTML({ HTMLAttributes }) {
-    return ['div', mergeAttributes(HTMLAttributes), 0];
+  renderHTML({ node, HTMLAttributes }) {
+    const isRestart = node.attrs.restart === true;
+    return ['div', mergeAttributes(HTMLAttributes, {
+      class: `${HTMLAttributes.class || ''}${isRestart ? ' restart-list' : ''}`
+    }), 0];
   },
 
   addCommands() {
@@ -93,26 +110,86 @@ export const NotebookListItem = Node.create({
         let hasChanges = false;
         const { selection } = state;
 
-        let allTargetType = true;
+        // 1. Pre-pass to count convertible blocks and check for active list items
         let hasListItems = false;
-
-        tr.doc.nodesBetween(selection.from, selection.to, (node) => {
+        let totalConvertibleBlocks = 0;
+        tr.doc.nodesBetween(selection.from, selection.to, (node, pos) => {
+          if (node.type.name === 'table' || node.type.name === 'codeBlock') {
+            return false;
+          }
           if (node.isBlock && node.type.name !== 'doc') {
-            if (node.type.name === 'notebookListItem') {
-              hasListItems = true;
-              if (node.attrs.listType !== listType) {
+            const startsAtOrAfterTo = pos >= selection.to;
+            const endsAtOrBeforeFrom = pos + node.nodeSize <= selection.from;
+            if (startsAtOrAfterTo || endsAtOrBeforeFrom) {
+              return;
+            }
+            const isConvertible = node.type.name === 'paragraph' || node.type.name === 'heading' || node.type.name === 'notebookListItem';
+            if (isConvertible) {
+              totalConvertibleBlocks++;
+              if (node.type.name === 'notebookListItem') {
+                hasListItems = true;
+              }
+            }
+          }
+        });
+
+        // 2. Main pass to compute targetType
+        let allTargetType = true;
+        tr.doc.nodesBetween(selection.from, selection.to, (node, pos) => {
+          if (node.type.name === 'table' || node.type.name === 'codeBlock') {
+            return false;
+          }
+          if (node.isBlock && node.type.name !== 'doc') {
+            const startsAtOrAfterTo = pos >= selection.to;
+            const endsAtOrBeforeFrom = pos + node.nodeSize <= selection.from;
+            if (startsAtOrAfterTo || endsAtOrBeforeFrom) {
+              return;
+            }
+
+            // Skip empty paragraph/heading at the end of selection if it's a multi-line selection
+            const isEmptyParagraphAtEnd = (node.type.name === 'paragraph' || node.type.name === 'heading') &&
+              node.content.size === 0 &&
+              (pos + node.nodeSize >= selection.to);
+
+            if (isEmptyParagraphAtEnd && totalConvertibleBlocks > 1) {
+              return;
+            }
+
+            const isConvertible = node.type.name === 'paragraph' || node.type.name === 'heading' || node.type.name === 'notebookListItem';
+            if (isConvertible) {
+              if (node.type.name === 'notebookListItem') {
+                if (node.attrs.listType !== listType) {
+                  allTargetType = false;
+                }
+              } else {
                 allTargetType = false;
               }
-            } else {
-              allTargetType = false;
             }
           }
         });
 
         const targetType = (hasListItems && allTargetType) ? 'paragraph' : 'notebookListItem';
 
+        // 3. Transformation pass
         tr.doc.nodesBetween(selection.from, selection.to, (node, pos) => {
+          if (node.type.name === 'table' || node.type.name === 'codeBlock') {
+            return false;
+          }
           if (node.isBlock && node.type.name !== 'doc') {
+            const startsAtOrAfterTo = pos >= selection.to;
+            const endsAtOrBeforeFrom = pos + node.nodeSize <= selection.from;
+            if (startsAtOrAfterTo || endsAtOrBeforeFrom) {
+              return;
+            }
+
+            const isEmptyParagraphAtEnd = (node.type.name === 'paragraph' || node.type.name === 'heading') &&
+              node.content.size === 0 &&
+              (pos + node.nodeSize >= selection.to);
+
+            if (isEmptyParagraphAtEnd && totalConvertibleBlocks > 1) {
+              return;
+            }
+
             const name = node.type.name;
             if (targetType === 'paragraph') {
               if (name === 'notebookListItem') {
@@ -138,6 +215,28 @@ export const NotebookListItem = Node.create({
           dispatch(tr);
           return true;
         }
+
+        return false;
+      },
+      toggleListRestart: () => ({ tr, state, dispatch }) => {
+        let hasChanges = false;
+        const { selection } = state;
+        tr.doc.nodesBetween(selection.from, selection.to, (node, pos) => {
+          if (node.type.name === 'notebookListItem') {
+            const startsAtOrAfterTo = pos >= selection.to;
+            const endsAtOrBeforeFrom = pos + node.nodeSize <= selection.from;
+            if (startsAtOrAfterTo || endsAtOrBeforeFrom) {
+              return;
+            }
+            const currentRestart = node.attrs.restart ?? false;
+            tr.setNodeMarkup(pos, undefined, { ...node.attrs, restart: !currentRestart });
+            hasChanges = true;
+          }
+        });
+        if (hasChanges && dispatch) {
+          dispatch(tr);
+          return true;
+        }
         return false;
       }
     };
@@ -147,6 +246,7 @@ export const NotebookListItem = Node.create({
     return {
       Tab: () => this.editor.commands.indentNotebookListItem(),
       "Shift-Tab": () => this.editor.commands.outdentNotebookListItem(),
+      "Alt-r": () => this.editor.commands.toggleListRestart(),
       Enter: () => {
         const { state, view } = this.editor;
         const { $from } = state.selection;
@@ -176,4 +276,160 @@ export const NotebookListItem = Node.create({
       }
     };
   },
+
+  addProseMirrorPlugins() {
+    return [
+      NotebookListMarkersPlugin(),
+    ];
+  },
 });
+
+// Helper to convert number to lower-alpha representation (a, b, c, ..., z, aa, ab)
+function toAlpha(num: number): string {
+  if (num <= 0) return 'a';
+  let result = '';
+  let temp = num;
+  while (temp > 0) {
+    const modulo = (temp - 1) % 26;
+    result = String.fromCharCode(97 + modulo) + result;
+    temp = Math.floor((temp - modulo) / 26);
+  }
+  return result;
+}
+
+// Helper to convert number to roman numerals (lower-case)
+function toRoman(num: number): string {
+  if (num <= 0) return 'i';
+  const romanMap = [
+    { value: 100, symbol: 'c' },
+    { value: 90, symbol: 'xc' },
+    { value: 50, symbol: 'l' },
+    { value: 40, symbol: 'xl' },
+    { value: 10, symbol: 'x' },
+    { value: 9, symbol: 'ix' },
+    { value: 5, symbol: 'v' },
+    { value: 4, symbol: 'iv' },
+    { value: 1, symbol: 'i' },
+  ];
+  let result = '';
+  let temp = num;
+  for (const { value, symbol } of romanMap) {
+    while (temp >= value) {
+      result += symbol;
+      temp -= value;
+    }
+  }
+  return result;
+}
+
+// Traverser to calculate list markers sequentially and build the decoration set
+function buildDecorations(doc: PMNode): DecorationSet {
+  const decorations: Decoration[] = [];
+  const bulletCounters = [0, 0, 0, 0, 0, 0, 0, 0, 0]; // 1-indexed counters for level 1 to 8
+  const orderedCounters = [0, 0, 0, 0, 0, 0, 0, 0, 0]; // 1-indexed counters for level 1 to 8
+  let lastParent: PMNode | null = null;
+
+  doc.descendants((node, pos, parent) => {
+    // Reset counters when entering a new parent node (e.g. table cell)
+    if (parent !== lastParent) {
+      for (let i = 1; i <= 8; i++) {
+        bulletCounters[i] = 0;
+        orderedCounters[i] = 0;
+      }
+      lastParent = parent;
+    }
+
+    if (node.type.name === 'notebookListItem') {
+      const indent = node.attrs.indent || 1;
+      const listType = node.attrs.listType || 'bullet';
+      const restart = node.attrs.restart || false;
+
+      // Reset sub-counters for all deeper levels on both lists
+      for (let i = indent + 1; i <= 8; i++) {
+        bulletCounters[i] = 0;
+        orderedCounters[i] = 0;
+      }
+
+      // Decouple list counters:
+      // Starting a bullet list item at level `indent` breaks/resets any active ordered list at level `indent` (and vice-versa)
+      if (listType === 'bullet') {
+        orderedCounters[indent] = 0;
+        if (restart) {
+          bulletCounters[indent] = 1;
+        } else {
+          bulletCounters[indent]++;
+        }
+      } else {
+        bulletCounters[indent] = 0;
+        if (restart) {
+          orderedCounters[indent] = 1;
+        } else {
+          orderedCounters[indent]++;
+        }
+      }
+
+      if (typeof window !== 'undefined') {
+        const logs = (window as any).listDebugLogs || [];
+        logs.push(`Node "${node.textContent}" (level ${indent}, ${listType}): orderedCounters=[${orderedCounters.slice(1, 4).join(',')}], bulletCounters=[${bulletCounters.slice(1, 4).join(',')}]`);
+        (window as any).listDebugLogs = logs;
+      }
+
+      let marker = '';
+      if (listType === 'bullet') {
+        const bullets = ['•', '◦', '▪', '•', '◦', '▪', '•', '◦'];
+        marker = bullets[(indent - 1) % bullets.length];
+      } else {
+        const val = orderedCounters[indent];
+        if (indent === 1 || indent === 4 || indent === 7) {
+          marker = `${val}.`;
+        } else if (indent === 2 || indent === 5 || indent === 8) {
+          marker = `${toAlpha(val)}.`;
+        } else {
+          marker = `${toRoman(val)}.`;
+        }
+      }
+
+      decorations.push(
+        Decoration.node(pos, pos + node.nodeSize, {
+          'data-marker': marker,
+        })
+      );
+    } else if (node.isBlock) {
+      // Split list by text or another block type: reset all counters under this parent
+      for (let i = 1; i <= 8; i++) {
+        bulletCounters[i] = 0;
+        orderedCounters[i] = 0;
+      }
+    }
+
+    // Do not descend into inline elements of a list item
+    return node.type.name !== 'notebookListItem';
+  });
+
+  return DecorationSet.create(doc, decorations);
+}
+
+const notebookListKey = new PluginKey('notebookListMarkers');
+
+export const NotebookListMarkersPlugin = () => {
+  return new Plugin({
+    key: notebookListKey,
+    state: {
+      init(_, state) {
+        return buildDecorations(state.doc);
+      },
+      apply(tr, oldState) {
+        if (tr.docChanged) {
+          return buildDecorations(tr.doc);
+        }
+        return oldState.map(tr.mapping, tr.doc);
+      },
+    },
+    props: {
+      decorations(state) {
+        return notebookListKey.getState(state);
+      },
+    },
+  });
+};
+

@@ -581,54 +581,7 @@ pre[class*="language-"],
 }
 
 /* Custom Flat Lists (notebookListItem) */
-.ProseMirror {
-  counter-reset: nb-list-1 nb-list-2 nb-list-3 nb-list-4 nb-list-5 nb-list-6 nb-list-7 nb-list-8;
-}
 
-/* Reset all list counters back to 0 when entering a new list block after a non-list block */
-.ProseMirror>*:not(.notebook-list-item)+.notebook-list-item {
-  counter-reset: nb-list-1 nb-list-2 nb-list-3 nb-list-4 nb-list-5 nb-list-6 nb-list-7 nb-list-8;
-}
-
-/* Reset sub-counters whenever a shallower list item is encountered */
-.ProseMirror .notebook-list-item.indent-level-1 {
-  counter-increment: nb-list-1;
-  counter-reset: nb-list-2 nb-list-3 nb-list-4 nb-list-5 nb-list-6 nb-list-7 nb-list-8;
-}
-
-.ProseMirror .notebook-list-item.indent-level-2 {
-  counter-increment: nb-list-2;
-  counter-reset: nb-list-3 nb-list-4 nb-list-5 nb-list-6 nb-list-7 nb-list-8;
-}
-
-.ProseMirror .notebook-list-item.indent-level-3 {
-  counter-increment: nb-list-3;
-  counter-reset: nb-list-4 nb-list-5 nb-list-6 nb-list-7 nb-list-8;
-}
-
-.ProseMirror .notebook-list-item.indent-level-4 {
-  counter-increment: nb-list-4;
-  counter-reset: nb-list-5 nb-list-6 nb-list-7 nb-list-8;
-}
-
-.ProseMirror .notebook-list-item.indent-level-5 {
-  counter-increment: nb-list-5;
-  counter-reset: nb-list-6 nb-list-7 nb-list-8;
-}
-
-.ProseMirror .notebook-list-item.indent-level-6 {
-  counter-increment: nb-list-6;
-  counter-reset: nb-list-7 nb-list-8;
-}
-
-.ProseMirror .notebook-list-item.indent-level-7 {
-  counter-increment: nb-list-7;
-  counter-reset: nb-list-8;
-}
-
-.ProseMirror .notebook-list-item.indent-level-8 {
-  counter-increment: nb-list-8;
-}
 
 .ProseMirror .notebook-list-item {
   position: relative;
@@ -678,6 +631,7 @@ pre[class*="language-"],
   font-weight: 500;
   color: var(--color-nb-on-surface);
   white-space: nowrap;
+  content: attr(data-marker);
 }
 
 .ProseMirror .notebook-list-item.indent-level-1::before {
@@ -712,71 +666,7 @@ pre[class*="language-"],
   right: calc(100% - 15.5rem);
 }
 
-/* Bullet Markers */
-.ProseMirror .notebook-list-item.list-type-bullet.indent-level-1::before {
-  content: "•";
-}
 
-.ProseMirror .notebook-list-item.list-type-bullet.indent-level-2::before {
-  content: "◦";
-}
-
-.ProseMirror .notebook-list-item.list-type-bullet.indent-level-3::before {
-  content: "▪";
-}
-
-.ProseMirror .notebook-list-item.list-type-bullet.indent-level-4::before {
-  content: "•";
-}
-
-.ProseMirror .notebook-list-item.list-type-bullet.indent-level-5::before {
-  content: "◦";
-}
-
-.ProseMirror .notebook-list-item.list-type-bullet.indent-level-6::before {
-  content: "▪";
-}
-
-.ProseMirror .notebook-list-item.list-type-bullet.indent-level-7::before {
-  content: "•";
-}
-
-.ProseMirror .notebook-list-item.list-type-bullet.indent-level-8::before {
-  content: "◦";
-}
-
-/* Ordered Markers */
-.ProseMirror .notebook-list-item.list-type-ordered.indent-level-1::before {
-  content: counter(nb-list-1) ".";
-}
-
-.ProseMirror .notebook-list-item.list-type-ordered.indent-level-2::before {
-  content: counter(nb-list-2, lower-alpha) ".";
-}
-
-.ProseMirror .notebook-list-item.list-type-ordered.indent-level-3::before {
-  content: counter(nb-list-3, lower-roman) ".";
-}
-
-.ProseMirror .notebook-list-item.list-type-ordered.indent-level-4::before {
-  content: counter(nb-list-4) ".";
-}
-
-.ProseMirror .notebook-list-item.list-type-ordered.indent-level-5::before {
-  content: counter(nb-list-5, lower-alpha) ".";
-}
-
-.ProseMirror .notebook-list-item.list-type-ordered.indent-level-6::before {
-  content: counter(nb-list-6, lower-roman) ".";
-}
-
-.ProseMirror .notebook-list-item.list-type-ordered.indent-level-7::before {
-  content: counter(nb-list-7) ".";
-}
-
-.ProseMirror .notebook-list-item.list-type-ordered.indent-level-8::before {
-  content: counter(nb-list-8, lower-alpha) ".";
-}
 
 /* Inline Math */
 .nb-inline-math-node {
