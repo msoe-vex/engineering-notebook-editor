@@ -3,7 +3,7 @@ import FileExplorer from "./FileExplorer";
 import PendingChangesPanel from "./PendingChangesPanel";
 import { ExplorerFile, TeamTab } from "@/lib/types";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { LATEX_DIR } from "@/lib/constants";
+import { LATEX_DIR, ENTRIES_DIR } from "@/lib/constants";
 import { showNotification } from "./Notification";
 
 interface SidebarProps {
@@ -64,7 +64,18 @@ export default function Sidebar({
     );
   }, [showConfirm, deleteEntry]);
 
-  const pendingPaths = useMemo(() => new Set((pendingChanges || []).map(p => p.path)), [pendingChanges]);
+  const pendingPaths = useMemo(() => {
+    const paths = new Set<string>();
+    for (const p of pendingChanges || []) {
+      paths.add(p.path);
+      // If the LaTeX file of an entry has pending changes, mark the entry JSON as pending too
+      if (p.path.startsWith(`${LATEX_DIR}/`) && p.path.endsWith(".tex")) {
+        const entryId = p.path.replace(`${LATEX_DIR}/`, "").replace(".tex", "");
+        paths.add(`${ENTRIES_DIR}/${entryId}.json`);
+      }
+    }
+    return paths;
+  }, [pendingChanges]);
   const deletedPaths = useMemo(() => new Set((pendingChanges || []).filter(p => p.operation === "delete").map(p => p.path)), [pendingChanges]);
 
   const augmentedEntries = useMemo(() => {
