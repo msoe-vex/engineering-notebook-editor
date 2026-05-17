@@ -246,6 +246,12 @@ const UnifiedEditor = ({
                           tr.delete(pos, pos + node.nodeSize);
                         }
                         modified = true;
+                      } else if (node.marks.length > 0) {
+                        // Strip any other marks (color, underline, strike, highlight, etc.) from the inline math node
+                        node.marks.forEach((mark) => {
+                          tr.removeMark(pos, pos + node.nodeSize, mark.type);
+                        });
+                        modified = true;
                       }
                     }
                   });

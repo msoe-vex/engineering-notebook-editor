@@ -789,6 +789,12 @@ pre[class*="language-"],
   transition: background-color 0.2s ease;
 }
 
+.nb-inline-math-node::selection,
+.nb-inline-math-node *::selection {
+  background-color: transparent !important;
+  color: inherit !important;
+}
+
 .nb-inline-math-node:hover {
   background-color: var(--color-nb-surface-mid);
 }
@@ -878,6 +884,36 @@ pre[class*="language-"],
   color: var(--color-nb-on-surface);
   font-size: 11px;
   letter-spacing: 0.06em;
+}
+
+/* Table Cell Selection styling */
+.ProseMirror table .selectedCell {
+  background-color: rgba(217, 40, 47, 0.08) !important;
+  position: relative;
+}
+
+.dark .ProseMirror table .selectedCell {
+  background-color: rgba(217, 40, 47, 0.18) !important;
+}
+
+.ProseMirror table .selectedCell::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.dark .ProseMirror table .selectedCell::after {
+  border-color: rgba(217, 40, 47, 0.7);
+}
+
+.ProseMirror table .selectedCell::selection,
+.ProseMirror table .selectedCell *::selection {
+  background-color: transparent !important;
 }
 
 .ProseMirror img {
