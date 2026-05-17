@@ -376,16 +376,19 @@ function buildDecorations(doc: PMNode): DecorationSet {
 
       let marker = '';
       if (listType === 'bullet') {
-        const bullets = ['•', '◦', '▪', '•', '◦', '▪', '•', '◦'];
+        const bullets = ['•', '–', '∗', '·', '•', '–', '∗', '·'];
         marker = bullets[(indent - 1) % bullets.length];
       } else {
         const val = orderedCounters[indent];
-        if (indent === 1 || indent === 4 || indent === 7) {
+        const lvl = (indent - 1) % 4; // 0, 1, 2, 3
+        if (lvl === 0) {
           marker = `${val}.`;
-        } else if (indent === 2 || indent === 5 || indent === 8) {
+        } else if (lvl === 1) {
           marker = `${toAlpha(val)}.`;
-        } else {
+        } else if (lvl === 2) {
           marker = `${toRoman(val)}.`;
+        } else {
+          marker = `${toAlpha(val).toUpperCase()}.`;
         }
       }
 

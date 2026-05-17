@@ -268,6 +268,36 @@ const MenuAction = ({ icon, label, onClick, disabled, setActiveMenu }: { icon: R
   </button>
 );
 
+const isListActive = (editor: any, listType: 'bullet' | 'ordered') => {
+  if (!editor) return false;
+  if (editor.isActive("notebookListItem", { listType })) return true;
+
+  const { selection } = editor.state;
+  let firstConvertibleType: string | null = null;
+  let firstConvertibleAttrs: any = null;
+
+  editor.state.doc.nodesBetween(selection.from, selection.to, (node: any, pos: number) => {
+    if (firstConvertibleType) return false;
+    if (node.type.name === 'table' || node.type.name === 'codeBlock') {
+      return false;
+    }
+    if (node.isBlock && node.type.name !== 'doc') {
+      const startsAtOrAfterTo = pos >= selection.to;
+      const endsAtOrBeforeFrom = pos + node.nodeSize <= selection.from;
+      if (startsAtOrAfterTo || endsAtOrBeforeFrom) {
+        return;
+      }
+      const isConvertible = node.type.name === 'paragraph' || node.type.name === 'heading' || node.type.name === 'notebookListItem';
+      if (isConvertible) {
+        firstConvertibleType = node.type.name;
+        firstConvertibleAttrs = node.attrs;
+      }
+    }
+  });
+
+  return firstConvertibleType === 'notebookListItem' && firstConvertibleAttrs?.listType === listType;
+};
+
 const EditorToolbar = React.memo(function EditorToolbar({
   editor,
   activeMenu,
@@ -550,7 +580,7 @@ const EditorToolbar = React.memo(function EditorToolbar({
               editor.chain().focus().toggleNotebookList("bullet").run();
             }
           }}
-          active={editor.isActive("notebookListItem", { listType: "bullet" })}
+          active={isListActive(editor, "bullet")}
           title="Bullet List"
         >
           <List size={16} />
@@ -573,7 +603,7 @@ const EditorToolbar = React.memo(function EditorToolbar({
               editor.chain().focus().toggleNotebookList("ordered").run();
             }
           }}
-          active={editor.isActive("notebookListItem", { listType: "ordered" })}
+          active={isListActive(editor, "ordered")}
           title="Ordered List"
         >
           <ListOrdered size={16} />

@@ -106,6 +106,12 @@ export const convertBlockChildrenToLatex = (
         } else {
           result += "\\begin{notebookorderedlist}\n";
         }
+        // If we are still shallower than the target indent, it means we just opened
+        // a parent environment that won't have its own direct item.
+        // We MUST output an empty \item[] to prevent LaTeX's "missing \item" error!
+        if (stack.length < indent) {
+          result += "  \\item[]\n";
+        }
       }
 
       // 4. Render the list item inline content
