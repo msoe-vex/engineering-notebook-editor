@@ -322,9 +322,6 @@
         \centering
         \vspace{0.5cm}
         \ifx&#3&
-        \begin{adjustbox}{minipage=[c][6cm][c]{5cm}, frame}
-            \centering\small No Photo
-        \end{adjustbox}
         \else
         % Render at width=5cm, measure resulting height
         \savebox{\@memberboxA}{\includegraphics[width=5cm]{#3}}%
@@ -342,9 +339,9 @@
             \divide\@memberclip by 2
             \clipbox{\the\@memberclip{} 0pt \the\@memberclip{} 0pt}{\usebox{\@memberboxB}}%
         \fi
-        \fi
         \par
         \vspace{0.3cm}
+        \fi
         {\large\textbf{#1}}\par
         {\small\textit{#2}}\par
         \vspace{0.5cm}
