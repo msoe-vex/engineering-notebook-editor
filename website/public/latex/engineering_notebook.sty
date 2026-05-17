@@ -601,11 +601,13 @@
         \blockheader{Table \thetable}{#2}
         \label{#5}
         \centering
+        \begin{adjustbox}{max width=\linewidth}
         \begin{tabular}{#1}
             \hline
             #3
             \hline
         \end{tabular}
+        \end{adjustbox}
         \caption*{#4}
     \end{table}
 }
