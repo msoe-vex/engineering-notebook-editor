@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useTheme } from "next-themes";
 import {
   fetchGitHubUser, initiateGitHubLogin, checkGitHubFileExists
@@ -152,6 +152,11 @@ export default function App() {
 
   const [mounted, setMounted] = useState(false);
   const isMobile = useIsMobile();
+  const initialPercentSize = useMemo(() => {
+    if (typeof window === "undefined") return 20;
+    const fixedWidthPx = 300;
+    return Math.max(15, Math.min(40, (fixedWidthPx / window.innerWidth) * 100));
+  }, []);
   const [userSidebarPreference, setUserSidebarPreference] = useState<boolean | null>(null);
   const isSidebarOpen = userSidebarPreference ?? !isMobile;
   const [viewMode, setViewMode] = useState<ViewMode>("editor");
@@ -376,7 +381,9 @@ export default function App() {
     if (isSidebarOpen) {
       if (isToggleFromButton.current) {
         sidebarPanelRef.current.expand();
-        sidebarPanelRef.current.resize(20);
+        const fixedWidthPx = 300;
+        const percent = Math.max(15, Math.min(40, (fixedWidthPx / window.innerWidth) * 100));
+        sidebarPanelRef.current.resize(percent);
       } else {
         sidebarPanelRef.current.expand();
       }
@@ -817,7 +824,7 @@ export default function App() {
           ) : (
             <PanelGroup direction="horizontal" className="w-full h-full" id="main-layout-group">
               <Panel
-                id="sidebar-panel" order={1} ref={sidebarPanelRef} defaultSize={20} minSize={15} maxSize={40} collapsible={true}
+                id="sidebar-panel" order={1} ref={sidebarPanelRef} defaultSize={initialPercentSize} minSize={15} maxSize={40} collapsible={true}
                 onCollapse={() => setUserSidebarPreference(false)} onExpand={() => setUserSidebarPreference(true)}
                 className="flex flex-col transition-all duration-300 ease-out"
               >
@@ -826,7 +833,7 @@ export default function App() {
                 </div>
               </Panel>
               <PanelResizeHandle id="sidebar-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${!isSidebarOpen ? 'hidden' : ''}`} />
-              <Panel id="main-panel" order={2} defaultSize={isSidebarOpen ? 80 : 100} minSize={30} className="flex flex-col">
+              <Panel id="main-panel" order={2} defaultSize={isSidebarOpen ? 100 - initialPercentSize : 100} minSize={30} className="flex flex-col">
                 {main}
               </Panel>
             </PanelGroup>

@@ -55,13 +55,10 @@ export default function PendingChangesPanel({
             <button
               onClick={onDiscard}
               disabled={isDiscarding}
-              className="flex items-center gap-1.5 text-[8px] font-black tracking-widest text-nb-on-surface-variant hover:text-red-500 uppercase transition-colors cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-1.5 text-[8px] font-black tracking-widest text-nb-on-surface-variant hover:text-nb-on-surface uppercase transition-colors cursor-pointer disabled:opacity-50"
             >
               {isDiscarding ? (
-                <>
-                  <Loader2 size={10} className="animate-spin-stable" />
-                  <span>Discarding...</span>
-                </>
+                <Loader2 size={10} className="animate-spin-stable" />
               ) : (
                 "Discard"
               )}
