@@ -352,6 +352,8 @@
 
 % Title Page Generation
 \newcommand{\maketeamtitle}{
+    \phantomsection
+    \pdfbookmark[1]{Title Page}{titlepage}
     \thispagestyle{empty}
     \begin{center}
         \vspace*{2cm}
@@ -378,6 +380,8 @@
 % Team Page Generation
 \newcommand{\teampage}{
     \newpage
+    \phantomsection
+    \pdfbookmark[1]{Meet the Team}{teampage}
     \section*{Meet the Team}
     \begin{center}
         \@teammembers
@@ -413,6 +417,17 @@
 
 \cftsetpnumwidth{2.5em}
 \cftsetrmarg{3.5em}
+
+% Automatically add Table of Contents to the PDF bookmarks (but not the printed TOC)
+\AtBeginDocument{%
+    \let\oldtableofcontents\tableofcontents
+    \renewcommand{\tableofcontents}{%
+        \clearpage
+        \phantomsection
+        \pdfbookmark[1]{Table of Contents}{tocbookmark}%
+        \oldtableofcontents
+    }%
+}
 
 % Section Header Styling with Phase Colors
 \titleformat{\subsection}[display]
@@ -488,6 +503,8 @@
 % Legend Page
 \newcommand{\phaselegend}{
     \newpage
+    \phantomsection
+    \pdfbookmark[1]{Design Process Phases and Formatting Guide}{legend}
     \section*{Design Process Phases \& Formatting Guide}
 
     This notebook is color-coded by the phase of the engineering design process. The table of contents and the header of each entry will reflect these phases.
