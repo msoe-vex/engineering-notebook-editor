@@ -83,7 +83,33 @@ function bundle() {
       }
     }
 
-    // 5. Generate manifest.json
+    // 5. Clean up unused files in destination directory
+    console.log('\nCleaning up unused files in destination...');
+    const manifestSet = new Set(manifest);
+    if (fs.existsSync(DEST_DIR)) {
+      const existingFiles = fs.readdirSync(DEST_DIR);
+      let deletedCount = 0;
+      for (const file of existingFiles) {
+        if (file === 'manifest.json') {
+          continue;
+        }
+        const filePath = path.join(DEST_DIR, file);
+        if (fs.statSync(filePath).isFile()) {
+          if (!manifestSet.has(file)) {
+            console.log(`  [-] Removing: ${file}`);
+            fs.unlinkSync(filePath);
+            deletedCount++;
+          }
+        }
+      }
+      if (deletedCount > 0) {
+        console.log(`Removed ${deletedCount} unused files.`);
+      } else {
+        console.log('No unused files to remove.');
+      }
+    }
+
+    // 6. Generate manifest.json
     fs.writeFileSync(
       path.join(DEST_DIR, 'manifest.json'),
       JSON.stringify(manifest.sort(), null, 2),
