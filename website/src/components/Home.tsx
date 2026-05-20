@@ -167,7 +167,13 @@ export default function Home({
               </button>
 
               <button
-                onClick={() => setIsGithubModalOpen(true)}
+                onClick={() => {
+                  if (githubToken) {
+                    setIsGithubModalOpen(true);
+                  } else {
+                    handleGithubLogin();
+                  }
+                }}
                 className="group flex items-center gap-4 p-4 rounded-2xl border transition-all text-left shadow-nb-sm bg-nb-surface border-nb-outline-variant/30 hover:border-nb-tertiary/50 hover:bg-nb-tertiary/5 cursor-pointer"
               >
                 <div className="w-10 h-10 rounded-xl bg-nb-tertiary/10 text-nb-tertiary flex items-center justify-center group-hover:scale-110 transition-transform">

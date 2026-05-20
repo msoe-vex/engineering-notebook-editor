@@ -245,9 +245,18 @@ export default function App() {
 
     const unsubLogin = events.on(EventNames.SHOW_GITHUB_LOGIN, (data: unknown) => {
       const options = data as { loginOnly?: boolean; projectId?: string } | undefined;
-      if (options?.projectId) {
-        setPendingProjectId(options.projectId);
+      const pId = options?.projectId || pendingProjectId;
+      if (pId) {
+        setPendingProjectId(pId);
       }
+      
+      const token = localStorage.getItem("nb-github-token");
+      if (!token) {
+        const state = pId ? `?project=${pId}` : window.location.search;
+        initiateGitHubLogin(process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID, window.location.origin, state);
+        return;
+      }
+
       if (options?.loginOnly) {
         setShowGitHubLoginOnly(true);
       } else {
@@ -898,10 +907,10 @@ export default function App() {
       />
 
       {/* Global Loading Overlay */}
-      {(!isInitialized || (isLoading && mode === "none") || isGlobalLoading || isSaveLocked) && (
+      {(!isInitialized || (isLoading && mode === "none") || isGlobalLoading || isSaveLocked || isExchangingCode) && (
         <LoadingOverlay
-          label={isSaveLocked ? "Saving changes..." : (isGlobalLoading ? loadingLabel : "ENGen")}
-          subtitle={isSaveLocked ? "Please wait for save to complete." : (isGlobalLoading ? "Please wait..." : "Engineering Notebook Generator")}
+          label={isSaveLocked ? "Saving changes..." : (isExchangingCode ? "Signing in with GitHub..." : (isGlobalLoading ? loadingLabel : "ENGen"))}
+          subtitle={isSaveLocked ? "Please wait for save to complete." : (isExchangingCode ? "Completing authentication..." : (isGlobalLoading ? "Please wait..." : "Engineering Notebook Generator"))}
         />
       )}
       {/* Toast Container */}
