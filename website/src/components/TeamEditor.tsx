@@ -415,7 +415,10 @@ export default function TeamEditor({
 }: TeamEditorProps) {
   const {
     metadata,
-    saveTeam
+    saveTeam,
+    isSaving,
+    isPendingSave,
+    setPendingSave
   } = useWorkspace();
 
   const initialData = useMemo(() => {
@@ -444,7 +447,7 @@ export default function TeamEditor({
       end: formatDateMonthYear(entryDates[entryDates.length - 1])
     };
   }, [metadata.entries]);
-  const [isSaving, setIsSaving] = useState(false);
+  // use global saving state from store
 
   const hasChanges = useMemo(() => {
     return JSON.stringify(teamData) !== JSON.stringify(initialData) ||
@@ -465,11 +468,11 @@ export default function TeamEditor({
   useEffect(() => {
     const timer = setTimeout(() => {
       if (hasChanges) {
-        setIsSaving(true);
+        setPendingSave(true);
         saveTeam(teamData, phases).then(() => {
           setSaveSuccess(true);
-          setIsSaving(false);
-        }).catch(() => setIsSaving(false));
+          setPendingSave(false);
+        }).catch(() => setPendingSave(false));
       }
     }, 1000);
     return () => clearTimeout(timer);
@@ -631,15 +634,15 @@ export default function TeamEditor({
 
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 mr-2 shrink-0">
-              {isSaving || hasChanges ? (
+              {isSaving || isPendingSave || hasChanges ? (
                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-primary animate-pulse">
                   <Loader2 size={12} className="animate-spin" />
-                  <span className="hidden xs:inline">SAVING...</span>
+                  <span className="inline">SAVING...</span>
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-on-surface-variant/40">
                   <Check size={12} />
-                  <span className="hidden xs:inline">SAVED</span>
+                  <span className="inline">SAVED</span>
                 </div>
               )}
             </div>

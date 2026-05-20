@@ -1007,7 +1007,7 @@ class WorkspaceStore {
     this.metadata = { ...updatedMeta, team: cleanTeam }; // Metadata stays CLEAN
     this.notifyStateChange();
 
-    this.enqueue(async () => {
+    return this.enqueue(async () => {
       for (const asset of newAssets) {
         await this.persistFile(asset.path, asset.base64, `Team asset`, true);
       }
@@ -1328,14 +1328,14 @@ class WorkspaceStore {
     return `notebook-project-${id}`;
   }
 
-  private enqueue(op: () => Promise<void>) {
+  private enqueue(op: () => Promise<void>): Promise<void> {
     this.#savingCount++;
     if (!this.isSaving) {
       this.isSaving = true;
       this.notifyStateChange();
     }
 
-    this.#queue = this.#queue.then(async () => {
+    const p = this.#queue = this.#queue.then(async () => {
       try {
         await op();
       } catch (e) {
@@ -1349,6 +1349,8 @@ class WorkspaceStore {
         }
       }
     });
+
+    return p;
   }
 
   private async getCommittedFileContent(path: string, isBase64 = false): Promise<string | null> {
