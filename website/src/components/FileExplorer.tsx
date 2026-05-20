@@ -87,8 +87,31 @@ function FileRow({
         </span>
         <span className={`text-[9px] font-mono truncate mt-0.5 ${isOpened ? 'text-white/70' : 'opacity-40'}`}>
           {(() => {
-            const dateStr = file.date || file.timestamp?.split('T')[0] || "Unknown Date";
-            return "Date: " + dateStr;
+            const dateStr = file.date || file.timestamp?.split('T')[0];
+            if (!dateStr) return "Unknown Date";
+            const match = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+            if (match) {
+              const y = parseInt(match[1], 10);
+              const m = parseInt(match[2], 10) - 1;
+              const d = parseInt(match[3], 10);
+              const localDate = new Date(y, m, d);
+              if (!isNaN(localDate.getTime())) {
+                return localDate.toLocaleDateString("en-US", {
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric"
+                });
+              }
+            }
+            const parsed = new Date(dateStr);
+            if (!isNaN(parsed.getTime())) {
+              return parsed.toLocaleDateString("en-US", {
+                month: "long",
+                day: "numeric",
+                year: "numeric"
+              });
+            }
+            return dateStr;
           })()}
         </span>
       </div>

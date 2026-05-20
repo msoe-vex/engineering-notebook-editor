@@ -1325,6 +1325,55 @@ const EditorContent = React.memo(function EditorContent({
                 }}
                 setActiveMenu={handleSetActiveMenu}
               />
+              <MenuAction
+                icon={<Sigma size={14} />}
+                label="Math Block"
+                onClick={() => {
+                  if (!editor) return;
+                  const { selection } = editor.state;
+                  const safePos = (selection instanceof NodeSelection) ? selection.to :
+                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
+                      (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
+
+                  const id = generateUUID();
+                  if (safePos !== null) {
+                    editor.chain().focus()
+                      .insertContentAt(safePos, { type: 'mathBlock', attrs: { id } })
+                      .command(({ state, commands }) => {
+                        let newPos = -1;
+                        state.doc.descendants((node, pos) => {
+                          if (node.attrs.id === id) {
+                            newPos = pos;
+                            return false;
+                          }
+                        });
+                        if (newPos >= 0) {
+                          commands.setNodeSelection(newPos);
+                        }
+                        return true;
+                      })
+                      .run();
+                  } else {
+                    editor.chain().focus()
+                      .insertContent({ type: 'mathBlock', attrs: { id } })
+                      .command(({ state, commands }) => {
+                        let newPos = -1;
+                        state.doc.descendants((node, pos) => {
+                          if (node.attrs.id === id) {
+                            newPos = pos;
+                            return false;
+                          }
+                        });
+                        if (newPos >= 0) {
+                          commands.setNodeSelection(newPos);
+                        }
+                        return true;
+                      })
+                      .run();
+                  }
+                }}
+                setActiveMenu={handleSetActiveMenu}
+              />
             </MenuItem>
 
 
@@ -1423,7 +1472,7 @@ const EditorContent = React.memo(function EditorContent({
 
                     <div
                       ref={phaseButtonRef}
-                      className="relative h-9 flex-1 min-w-[180px] flex items-center gap-2.5 px-3 rounded-xl border border-nb-outline-variant/30 bg-nb-surface-low transition-all"
+                      className="relative h-9 flex-1 min-w-[240px] flex items-center gap-2.5 px-3 rounded-xl border border-nb-outline-variant/30 bg-nb-surface-low transition-all"
                     >
                       <div
                         className="absolute inset-0 z-10 cursor-pointer"
