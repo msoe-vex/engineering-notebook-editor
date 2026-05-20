@@ -476,7 +476,7 @@ export default function TeamEditor({
       }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [teamData, phases, hasChanges, saveTeam]);
+  }, [teamData, phases, hasChanges, saveTeam, setPendingSave]);
 
   useEffect(() => {
     if (saveSuccess) {
@@ -491,21 +491,29 @@ export default function TeamEditor({
 
   // Sync state with latest metadata after external discard/load
   useEffect(() => {
+    let cancelled = false;
     if (initialData !== lastInitialDataRef.current) {
       if (JSON.stringify(initialData) !== JSON.stringify(teamData)) {
-        setTeamData(initialData);
+        queueMicrotask(() => {
+          if (!cancelled) setTeamData(initialData);
+        });
       }
       lastInitialDataRef.current = initialData;
     }
+    return () => { cancelled = true; };
   }, [initialData, teamData]);
 
   useEffect(() => {
+    let cancelled = false;
     if (initialPhases !== lastInitialPhasesRef.current) {
       if (JSON.stringify(initialPhases) !== JSON.stringify(phases)) {
-        setPhases(initialPhases);
+        queueMicrotask(() => {
+          if (!cancelled) setPhases(initialPhases);
+        });
       }
       lastInitialPhasesRef.current = initialPhases;
     }
+    return () => { cancelled = true; };
   }, [initialPhases, phases]);
 
   const handleFieldChange = (field: keyof TeamMetadata, value: string) => {

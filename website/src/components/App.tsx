@@ -273,7 +273,7 @@ export default function App() {
       unsubLogin();
       unsubSessionExpired();
     };
-  }, [onSignOutGithub]);
+  }, [onSignOutGithub, pendingProjectId]);
 
   useEffect(() => {
     queueMicrotask(() => {

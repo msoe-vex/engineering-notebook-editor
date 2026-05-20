@@ -8,7 +8,6 @@ import {
   Table,
   Code,
   Heading,
-  Calendar,
   Filter,
   Search
 } from "lucide-react";
