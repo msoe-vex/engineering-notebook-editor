@@ -202,13 +202,6 @@ export default function Home({
             </div>
           </div>
 
-          <button
-            onClick={() => setTheme(isDarkMode ? "light" : "dark")}
-            className="flex items-center gap-3 text-[10px] font-bold tracking-widest text-nb-on-surface-variant hover:text-nb-primary transition-colors uppercase mt-4 cursor-pointer"
-          >
-            {isDarkMode ? <Sun size={14} /> : <Moon size={14} />}
-            <span>Switch to {isDarkMode ? "Light" : "Dark"} Mode</span>
-          </button>
 
         </div>
 
@@ -403,6 +396,13 @@ export default function Home({
           <AlertCircle size={14} />
           Report Issue
         </a>
+                <button
+          onClick={() => setTheme(isDarkMode ? "light" : "dark")}
+          className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-3 md:px-4 md:py-2 rounded-xl bg-nb-surface border border-nb-outline-variant/30 text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary/50 transition-all shadow-nb-sm cursor-pointer"
+        >
+          {isDarkMode ? <Sun size={14} /> : <Moon size={14} />}
+          <span>Switch to {isDarkMode ? "Light" : "Dark"} Mode</span>
+        </button>
       </div>
     </div>
   );
