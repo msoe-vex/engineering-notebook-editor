@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, memo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, memo, useCallback, useRef } from "react";
 import {
   Hash, User, Briefcase, Image as ImageIcon,
   Loader2, Check, X, Camera, Building2, Plus, Trash2, Users,
@@ -415,7 +415,10 @@ export default function TeamEditor({
 }: TeamEditorProps) {
   const {
     metadata,
-    saveTeam
+    saveTeam,
+    isSaving,
+    isPendingSave,
+    setPendingSave
   } = useWorkspace();
 
   const initialData = useMemo(() => {
@@ -444,8 +447,12 @@ export default function TeamEditor({
       end: formatDateMonthYear(entryDates[entryDates.length - 1])
     };
   }, [metadata.entries]);
-  const [isSaving, setIsSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
+  // use global saving state from store
+
+  const hasChanges = useMemo(() => {
+    return JSON.stringify(teamData) !== JSON.stringify(initialData) ||
+           JSON.stringify(phases) !== JSON.stringify(initialPhases);
+  }, [teamData, initialData, phases, initialPhases]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -461,16 +468,15 @@ export default function TeamEditor({
   useEffect(() => {
     const timer = setTimeout(() => {
       if (hasChanges) {
-        setIsSaving(true);
+        setPendingSave(true);
         saveTeam(teamData, phases).then(() => {
           setSaveSuccess(true);
-          setHasChanges(false);
-          setIsSaving(false);
-        }).catch(() => setIsSaving(false));
+          setPendingSave(false);
+        }).catch(() => setPendingSave(false));
       }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [teamData, phases, hasChanges, saveTeam]);
+  }, [teamData, phases, hasChanges, saveTeam, setPendingSave]);
 
   useEffect(() => {
     if (saveSuccess) {
@@ -479,9 +485,39 @@ export default function TeamEditor({
     }
   }, [saveSuccess]);
 
+  // Keep track of baseline initialData/initialPhases to detect external database changes (e.g. discarding pending changes)
+  const lastInitialDataRef = useRef(initialData);
+  const lastInitialPhasesRef = useRef(initialPhases);
+
+  // Sync state with latest metadata after external discard/load
+  useEffect(() => {
+    let cancelled = false;
+    if (initialData !== lastInitialDataRef.current) {
+      if (JSON.stringify(initialData) !== JSON.stringify(teamData)) {
+        queueMicrotask(() => {
+          if (!cancelled) setTeamData(initialData);
+        });
+      }
+      lastInitialDataRef.current = initialData;
+    }
+    return () => { cancelled = true; };
+  }, [initialData, teamData]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (initialPhases !== lastInitialPhasesRef.current) {
+      if (JSON.stringify(initialPhases) !== JSON.stringify(phases)) {
+        queueMicrotask(() => {
+          if (!cancelled) setPhases(initialPhases);
+        });
+      }
+      lastInitialPhasesRef.current = initialPhases;
+    }
+    return () => { cancelled = true; };
+  }, [initialPhases, phases]);
+
   const handleFieldChange = (field: keyof TeamMetadata, value: string) => {
     setTeamData(prev => ({ ...prev, [field]: value }));
-    setHasChanges(true);
   };
 
   const handleMemberChange = (id: string, field: keyof TeamMember, value: string) => {
@@ -492,7 +528,6 @@ export default function TeamEditor({
       newMembers[index] = { ...newMembers[index], [field]: value };
       return { ...prev, members: newMembers };
     });
-    setHasChanges(true);
   };
 
   const addMember = () => {
@@ -500,7 +535,6 @@ export default function TeamEditor({
       ...prev,
       members: [...prev.members, { id: generateUUID(), name: "", role: "", image: "" }]
     }));
-    setHasChanges(true);
   };
 
   const removeMember = (id: string) => {
@@ -508,7 +542,6 @@ export default function TeamEditor({
       ...prev,
       members: prev.members.filter(m => m.id !== id)
     }));
-    setHasChanges(true);
   };
 
   const handlePhaseChange = useCallback((id: string, field: keyof ProjectPhase, value: string) => {
@@ -525,7 +558,6 @@ export default function TeamEditor({
       newPhases[index] = { ...newPhases[index], [field]: value };
       return newPhases;
     });
-    setHasChanges(true);
   }, []);
 
   const addPhase = useCallback(() => {
@@ -540,7 +572,6 @@ export default function TeamEditor({
         color: "#94a3b8"
       }];
     });
-    setHasChanges(true);
   }, []);
 
   const removePhase = useCallback((id: string) => {
@@ -548,7 +579,6 @@ export default function TeamEditor({
       const filtered = prev.filter(p => p.id !== id);
       return filtered.map((p, i) => ({ ...p, index: i + 1 }));
     });
-    setHasChanges(true);
   }, []);
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -574,14 +604,12 @@ export default function TeamEditor({
           return { ...prev, members: moved };
         });
       }
-      setHasChanges(true);
     }
     setActiveId(null);
   };
 
   const restoreDefaultPhases = useCallback(() => {
     setPhases(DEFAULT_PHASES.map(p => ({ ...p })));
-    setHasChanges(true);
   }, []);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, callback: (base64: string) => void) => {
@@ -614,15 +642,15 @@ export default function TeamEditor({
 
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 mr-2 shrink-0">
-              {isSaving || hasChanges ? (
+              {isSaving || isPendingSave || hasChanges ? (
                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-primary animate-pulse">
                   <Loader2 size={12} className="animate-spin" />
-                  <span className="hidden xs:inline">SAVING...</span>
+                  <span className="inline">SAVING...</span>
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-on-surface-variant/40">
                   <Check size={12} />
-                  <span className="hidden xs:inline">SAVED</span>
+                  <span className="inline">SAVED</span>
                 </div>
               )}
             </div>
