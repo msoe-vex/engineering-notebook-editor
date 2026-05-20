@@ -1,5 +1,17 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { X, ExternalLink, Link2Off } from "lucide-react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import {
+  X,
+  ExternalLink,
+  Link2Off,
+  FileText,
+  Image as ImageIcon,
+  Table,
+  Code,
+  Heading,
+  Calendar,
+  Filter,
+  Search
+} from "lucide-react";
 import { extractResources, NotebookMetadata, EntryMetadata } from "@/lib/metadata";
 
 interface LinkReferencePopupProps {
@@ -23,33 +35,23 @@ export function LinkReferencePopup({
   const [text, setText] = useState("");
   const [link, setLink] = useState("");
   const [selectedResource, setSelectedResource] = useState<{ id: string, title: string, type: string, entryTitle?: string, entryDate?: string, entryId?: string } | null>(null);
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const searchInputRef = React.useRef<HTMLInputElement>(null);
-  const popupRef = React.useRef<HTMLDivElement>(null);
-  const [popupHeight, setPopupHeight] = useState(400); // Default estimate
+  
+  // Filters
+  const [resourceType, setResourceType] = useState<string>("all");
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
 
-  useEffect(() => {
-    if (popupRef.current) {
-      const resizeObserver = new ResizeObserver((entries) => {
-        for (const entry of entries) {
-          setPopupHeight(entry.contentRect.height);
-        }
-      });
-      resizeObserver.observe(popupRef.current);
-      return () => resizeObserver.disconnect();
-    }
-  }, [showLinkPopup]);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-focus search input when opening
   useEffect(() => {
-    if (showLinkPopup) {
-      // Small timeout to ensure the popup is rendered and visible
+    if (showLinkPopup && !selectedResource) {
       const timer = setTimeout(() => {
         searchInputRef.current?.focus();
       }, 50);
       return () => clearTimeout(timer);
     }
-  }, [showLinkPopup]);
+  }, [showLinkPopup, selectedResource]);
 
   const getResourceTypeLabel = (type: string) => {
     const normalizedType = (type || "").trim();
@@ -70,6 +72,36 @@ export function LinkReferencePopup({
       .replace(/([a-z])([A-Z])/g, "$1 $2")
       .replace(/[_-]+/g, " ")
       .replace(/\b\w/g, ch => ch.toUpperCase());
+  };
+
+  const getResourceIcon = (type: string) => {
+    switch (type) {
+      case "entry":
+        return FileText;
+      case "image":
+        return ImageIcon;
+      case "table":
+        return Table;
+      case "codeBlock":
+        return Code;
+      default:
+        return Heading;
+    }
+  };
+
+  const getResourceColorClass = (type: string) => {
+    switch (type) {
+      case "entry":
+        return { bg: "bg-blue-500/10", border: "border-blue-500/20", text: "text-blue-500" };
+      case "image":
+        return { bg: "bg-purple-500/10", border: "border-purple-500/20", text: "text-purple-500" };
+      case "table":
+        return { bg: "bg-emerald-500/10", border: "border-emerald-500/20", text: "text-emerald-500" };
+      case "codeBlock":
+        return { bg: "bg-orange-500/10", border: "border-orange-500/20", text: "text-orange-500" };
+      default:
+        return { bg: "bg-pink-500/10", border: "border-pink-500/20", text: "text-pink-500" };
+    }
   };
 
   useEffect(() => {
@@ -131,13 +163,41 @@ export function LinkReferencePopup({
   }, [metadata, editor, filename]);
 
   const filtered = useMemo(() => {
-    if (!query.trim()) return [];
-    const q = query.toLowerCase();
-    return allResources.filter(r =>
-      (r.title || "").toLowerCase().includes(q) ||
-      (r.entryTitle || "").toLowerCase().includes(q)
-    ).slice(0, 50);
-  }, [allResources, query]);
+    let list = allResources;
+
+    // Filter by type
+    if (resourceType !== "all") {
+      list = list.filter(r => r.type === resourceType);
+    }
+
+    // Filter by date
+    if (startDate) {
+      const start = new Date(startDate);
+      list = list.filter(r => {
+        if (!r.entryDate) return false;
+        return new Date(r.entryDate) >= start;
+      });
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      list = list.filter(r => {
+        if (!r.entryDate) return false;
+        return new Date(r.entryDate) <= end;
+      });
+    }
+
+    // Filter by text query
+    if (query.trim()) {
+      const q = query.toLowerCase();
+      list = list.filter(r =>
+        (r.title || "").toLowerCase().includes(q) ||
+        (r.entryTitle || "").toLowerCase().includes(q)
+      );
+    }
+
+    return list.slice(0, 50);
+  }, [allResources, resourceType, startDate, endDate, query]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -193,172 +253,211 @@ export function LinkReferencePopup({
     onClose();
   };
 
-  const rect = editor.view.coordsAtPos(editor.state.selection.from);
-
   return (
-    <div
-      ref={popupRef}
-      className="fixed z-[1000] w-80 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-2xl p-5 animate-in zoom-in-95 fade-in duration-200"
-      style={(() => {
-        const anchor = rect;
-        const padding = 8;
-        const popupWidth = 320;
-        
-        // Determine vertical placement
-        const spaceBelow = window.innerHeight - anchor.bottom - padding;
-        const spaceAbove = anchor.top - padding;
-        
-        let y: number;
-        if (spaceBelow >= popupHeight || spaceBelow > spaceAbove) {
-          // Try below first
-          y = anchor.bottom + padding;
-        } else {
-          // Flip above
-          y = anchor.top - padding - popupHeight;
-        }
-
-        // Final safety clamp for vertical
-        y = Math.max(10, Math.min(y, window.innerHeight - popupHeight - 10));
-
-        // Horizontal placement with safety clamp
-        let x = anchor.left;
-        x = Math.max(20, Math.min(x, window.innerWidth - popupWidth - 20));
-
-        return {
-          top: y,
-          left: x,
-          maxHeight: 'min(calc(100vh - 40px), 800px)',
-          transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-          pointerEvents: showLinkPopup ? 'auto' : 'none'
-        } as React.CSSProperties;
-      })()}
-      onClick={e => e.stopPropagation()}
+    <div 
+      className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-200"
+      onMouseDown={onClose}
     >
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-[10px] font-black tracking-widest text-nb-secondary">Insert Link/Reference</span>
-        <button onClick={onClose} className="p-1.5 hover:bg-nb-surface-low rounded-lg transition-colors"><X size={16} /></button>
-      </div>
-
-      <div className="space-y-4">
-        <div>
-          <label className="block text-[10px] font-bold text-nb-on-surface-variant/50 mb-1.5">Display Text</label>
-          <input
-            type="text"
-            value={text}
-            onChange={e => setText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="w-full px-3 py-2 bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg outline-none text-sm focus:border-nb-primary transition-all"
-            placeholder="Text to display..."
-          />
+      <div
+        className="w-[360px] max-h-[90vh] bg-nb-surface border border-nb-outline-variant shadow-nb-3xl rounded-2xl p-5 animate-in zoom-in-95 duration-200 flex flex-col overflow-y-auto custom-scrollbar"
+        onMouseDown={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-[10px] font-black tracking-widest text-nb-secondary uppercase">Insert Link/Reference</span>
+          <button onClick={onClose} className="p-1.5 hover:bg-nb-surface-low rounded-lg transition-colors cursor-pointer text-nb-on-surface-variant"><X size={16} /></button>
         </div>
 
-        <div>
-          <label className="block text-[10px] font-bold text-nb-on-surface-variant/50 mb-1.5">Link or Resource</label>
-          <div className="relative">
+        <div className="space-y-4">
+          {/* Display Text Field */}
+          <div>
+            <label className="block text-[9px] font-black uppercase tracking-wider text-nb-on-surface-variant/50 mb-1.5">Display Text</label>
             <input
-              ref={searchInputRef}
               type="text"
-              value={selectedResource ? selectedResource.title : link}
-              onFocus={() => setIsSearchFocused(true)}
-              onBlur={() => setIsSearchFocused(false)}
-              onChange={e => {
-                setLink(e.target.value);
-                setSelectedResource(null);
-                setQuery(e.target.value);
-              }}
+              value={text}
+              onChange={e => setText(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="w-full px-3 py-2 bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg outline-none text-sm focus:border-nb-primary transition-all"
-              placeholder="URL or search resource..."
+              className="w-full px-3 py-2 bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg outline-none text-xs focus:border-nb-primary focus:ring-1 focus:ring-nb-primary/20 transition-all font-medium text-nb-on-surface"
+              placeholder="Text to display..."
             />
-            {isSearchFocused && query && !selectedResource && filtered.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-nb-surface border border-nb-outline-variant shadow-nb-2xl rounded-xl overflow-hidden z-50 max-h-[300px] overflow-y-auto custom-scrollbar ring-1 ring-nb-primary/10">
-                {filtered.map(r => (
+          </div>
+
+          {/* Link / Resource Selector Area */}
+          <div className="border-t border-nb-outline-variant/30 pt-3.5">
+            {selectedResource ? (
+              /* Selected Resource Card */
+              <div className="space-y-2">
+                <label className="block text-[9px] font-black uppercase tracking-wider text-nb-on-surface-variant/50">Target Resource</label>
+                <div className="p-3 bg-nb-surface-low border border-nb-outline-variant/30 rounded-xl flex items-center justify-between gap-3 animate-in zoom-in-95 duration-200">
+                  <div className="flex-1 min-w-0 flex items-start gap-2.5">
+                    <div className={`p-1.5 rounded-lg shrink-0 ${getResourceColorClass(selectedResource.type).bg} ${getResourceColorClass(selectedResource.type).text}`}>
+                      {React.createElement(getResourceIcon(selectedResource.type), { size: 12 })}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[8px] font-black tracking-widest text-nb-primary uppercase mb-0.5">{getResourceTypeLabel(selectedResource.type)}</div>
+                      <div className="text-xs font-bold text-nb-on-surface truncate leading-snug">{selectedResource.title}</div>
+                      <div className="text-[9px] text-nb-on-surface-variant/60 truncate mt-0.5 font-medium">
+                        {selectedResource.entryTitle} • {selectedResource.entryDate}
+                      </div>
+                    </div>
+                  </div>
                   <button
-                    key={r.id}
-                    onMouseDown={e => e.preventDefault()}
                     onClick={() => {
-                      setSelectedResource(r);
+                      setSelectedResource(null);
                       setQuery("");
                     }}
-                    className="w-full px-4 py-3 text-left hover:bg-nb-primary/5 transition-colors border-b border-nb-outline-variant/5 last:border-0 group/res"
+                    className="p-1.5 hover:bg-red-50 text-nb-on-surface-variant hover:text-red-500 rounded-lg border border-nb-outline-variant/30 transition-all shrink-0 cursor-pointer"
+                    title="Clear Selection"
                   >
-                    <div className="text-[13px] font-bold text-nb-on-surface truncate group-hover/res:text-nb-primary transition-colors">{r.title}</div>
-                    <div className="text-[10px] font-medium text-nb-on-surface-variant/50 truncate flex items-center gap-1.5 mt-0.5">
-                      <span className="px-1.5 py-0.5 rounded-md bg-nb-surface-low border border-nb-outline-variant/30 text-nb-primary font-black uppercase text-[8px] tracking-widest">{getResourceTypeLabel(r.type)}</span>
-                      <span>{r.entryTitle}</span>
-                      <span className="w-1 h-1 rounded-full bg-nb-outline-variant/50" />
-                      <span>{r.entryDate}</span>
-                    </div>
+                    <X size={12} />
                   </button>
-                ))}
+                </div>
+              </div>
+            ) : (
+              /* Search, Filters, and List */
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[9px] font-black uppercase tracking-wider text-nb-on-surface-variant/50">Link or Search Resource</label>
+                  {link.trim() && !link.startsWith("#") && (
+                    <div className="text-[8px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      <ExternalLink size={8} />
+                      <span>External URL detected</span>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Search Bar */}
+                <div className="relative">
+                  <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-nb-on-surface-variant/40" />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={link}
+                    onChange={e => {
+                      setLink(e.target.value);
+                      setQuery(e.target.value);
+                    }}
+                    onKeyDown={handleKeyDown}
+                    className="w-full pl-8 pr-3 py-2 bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg outline-none text-xs focus:border-nb-primary focus:ring-1 focus:ring-nb-primary/20 transition-all font-medium text-nb-on-surface"
+                    placeholder="Paste URL or type to search..."
+                  />
+                </div>
+
+                {/* Filters Block */}
+                <div className="bg-nb-surface-low/30 border border-nb-outline-variant/10 rounded-xl p-2.5 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Filter size={10} className="text-nb-on-surface-variant/50" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-nb-on-surface-variant/60">Filters</span>
+                  </div>
+                  
+                  {/* Resource Type Dropdown */}
+                  <div>
+                    <select
+                      value={resourceType}
+                      onChange={e => setResourceType(e.target.value)}
+                      className="w-full text-[10px] font-bold px-2 py-1 bg-nb-surface-low border border-nb-outline-variant/20 rounded-md outline-none focus:border-nb-primary transition-all text-nb-on-surface"
+                    >
+                      <option value="all">All Types</option>
+                      <option value="entry">Entries</option>
+                      <option value="image">Images</option>
+                      <option value="table">Tables</option>
+                      <option value="codeBlock">Code Blocks</option>
+                      <option value="heading">Headers</option>
+                    </select>
+                  </div>
+
+                  {/* Date Filters Grid */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[8px] font-black uppercase tracking-wider text-nb-on-surface-variant/40">Filter by Date</span>
+                      {(startDate || endDate) && (
+                        <button
+                          onClick={() => { setStartDate(""); setEndDate(""); }}
+                          className="text-[8px] font-black uppercase text-red-500 hover:underline tracking-wider"
+                        >
+                          Reset Dates
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <input
+                          type="date"
+                          value={startDate}
+                          onChange={e => setStartDate(e.target.value)}
+                          className="w-full text-[9px] font-medium p-1 bg-nb-surface-low border border-nb-outline-variant/20 rounded-md outline-none focus:border-nb-primary transition-all text-nb-on-surface"
+                        />
+                      </div>
+                      <div>
+                        <input
+                          type="date"
+                          value={endDate}
+                          onChange={e => setEndDate(e.target.value)}
+                          className="w-full text-[9px] font-medium p-1 bg-nb-surface-low border border-nb-outline-variant/20 rounded-md outline-none focus:border-nb-primary transition-all text-nb-on-surface"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Scrollable List */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-black uppercase tracking-wider text-nb-on-surface-variant/50">Matching Options ({filtered.length})</span>
+                  </div>
+                  <div className="h-[150px] overflow-y-auto border border-nb-outline-variant/20 rounded-xl bg-nb-surface-low/50 p-1.5 space-y-1 custom-scrollbar">
+                    {filtered.length === 0 ? (
+                      <div className="h-full flex flex-col items-center justify-center text-center p-4">
+                        <span className="text-[10px] font-bold text-nb-on-surface-variant/30">No resources found</span>
+                      </div>
+                    ) : (
+                      filtered.map(r => {
+                        const Icon = getResourceIcon(r.type);
+                        const colorClass = getResourceColorClass(r.type);
+                        return (
+                          <button
+                            key={r.id}
+                            onClick={() => setSelectedResource(r)}
+                            className="w-full text-left p-2 rounded-lg hover:bg-nb-primary/5 border border-transparent hover:border-nb-primary/10 transition-all flex items-start gap-2.5 group cursor-pointer"
+                          >
+                            <div className={`p-1.5 rounded-lg shrink-0 ${colorClass.bg} ${colorClass.text}`}>
+                              <Icon size={10} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-bold text-nb-on-surface group-hover:text-nb-primary transition-colors truncate leading-tight">{r.title}</div>
+                              <div className="text-[9px] font-medium text-nb-on-surface-variant/40 truncate mt-0.5">
+                                {r.entryTitle} • {r.entryDate}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>
 
-          {(selectedResource || link.trim()) && (
-            <div className="mt-3 p-3 bg-nb-surface-low border border-nb-outline-variant/20 rounded-xl flex items-center justify-between gap-3 animate-in slide-in-from-top-1 duration-200">
-              <div className="flex-1 min-w-0">
-                <div className={`text-[9px] font-black mb-0.5 tracking-tighter ${link.startsWith('#') && !selectedResource ? "text-amber-500" : "text-nb-primary"}`}>
-                  {selectedResource ? "Linked Resource" : (link.startsWith('#') ? "Broken Resource" : "External Link")}
-                </div>
-                <div className={`text-sm font-bold truncate ${link.startsWith('#') && !selectedResource ? "text-amber-600" : "text-nb-on-surface"}`}>
-                  {selectedResource ? selectedResource.title : link}
-                </div>
-                {selectedResource && (
-                  <div className="text-[11px] text-nb-on-surface-variant/60 truncate">
-                    {getResourceTypeLabel(selectedResource.type)} • {selectedResource.entryTitle} • {selectedResource.entryDate}
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={() => {
-                  if (link.startsWith('#') && !selectedResource) return;
-                  let url = "";
-                  if (selectedResource) {
-                    const params = new URLSearchParams(window.location.search);
-                    params.set('entry', selectedResource.entryId!);
-                    params.set('resource', selectedResource.id);
-                    url = `?${params.toString()}`;
-                  } else {
-                    url = link.trim();
-                    if (url && !url.startsWith('#')) {
-                      const hasProtocol = /^[a-z]+:/i.test(url);
-                      const isDomain = url.includes('.') && !url.includes(' ');
-                      if (!hasProtocol && isDomain) url = `https://${url}`;
-                    }
-                  }
-                  window.open(url, '_blank');
-                }}
-                disabled={link.startsWith('#') && !selectedResource}
-                title={link.startsWith('#') && !selectedResource ? "Broken Reference" : "Go to Link"}
-                className={`p-2 rounded-lg transition-colors shrink-0 border border-nb-outline-variant/30 shadow-sm ${link.startsWith('#') && !selectedResource
-                  ? "bg-nb-surface-low text-nb-on-surface-variant/20 cursor-not-allowed"
-                  : "bg-nb-surface text-nb-primary hover:bg-nb-primary/10"
-                  }`}
-              >
-                <ExternalLink size={14} />
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="flex gap-2 pt-2">
-          <button
-            onClick={handleApply}
-            className="flex-1 py-2.5 bg-nb-primary text-white text-[11px] font-bold tracking-widest rounded-lg hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20"
-          >
-            Apply Link
-          </button>
-
-          {editor.isActive('link') && (
+          {/* Footer Actions */}
+          <div className="flex gap-2 pt-2 border-t border-nb-outline-variant/30">
             <button
-              onClick={() => { editor.chain().focus().unsetLink().unsetMark('underline').unsetColor().run(); onClose(); }}
-              title="Remove Link"
-              className="px-3 py-2 bg-nb-surface-low text-red-500 rounded-lg hover:bg-red-50 transition-all border border-nb-outline-variant/30"
+              onClick={handleApply}
+              className="flex-1 py-2.5 bg-nb-primary text-white text-[10px] font-bold tracking-widest uppercase rounded-lg hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20 cursor-pointer"
             >
-              <Link2Off size={14} />
+              Apply Link
             </button>
-          )}
+
+            {editor.isActive('link') && (
+              <button
+                onClick={() => { editor.chain().focus().unsetLink().unsetMark('underline').unsetColor().run(); onClose(); }}
+                title="Remove Link"
+                className="px-3 py-2 bg-nb-surface-low text-red-500 rounded-lg hover:bg-red-50 hover:text-red-600 transition-all border border-nb-outline-variant/30 cursor-pointer"
+              >
+                <Link2Off size={14} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
