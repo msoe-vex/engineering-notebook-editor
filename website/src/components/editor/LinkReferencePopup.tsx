@@ -12,6 +12,7 @@ import {
   Search
 } from "lucide-react";
 import { extractResources, NotebookMetadata, EntryMetadata } from "@/lib/metadata";
+import { store } from "@/lib/store";
 
 interface LinkReferencePopupProps {
   editor: import("@tiptap/react").Editor;
@@ -34,6 +35,7 @@ export function LinkReferencePopup({
   const [text, setText] = useState("");
   const [link, setLink] = useState("");
   const [selectedResource, setSelectedResource] = useState<{ id: string, title: string, type: string, entryTitle?: string, entryDate?: string, entryId?: string } | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
   
   // Filters
   const [resourceType, setResourceType] = useState<string>("all");
@@ -61,6 +63,7 @@ export function LinkReferencePopup({
       codeBlock: "Code Block",
       header: "Header",
       heading: "Header",
+      external: "External URL",
     };
 
     if (labels[normalizedType]) {
@@ -83,6 +86,8 @@ export function LinkReferencePopup({
         return Table;
       case "codeBlock":
         return Code;
+      case "external":
+        return ExternalLink;
       default:
         return Heading;
     }
@@ -98,6 +103,8 @@ export function LinkReferencePopup({
         return { bg: "bg-emerald-500/10", border: "border-emerald-500/20", text: "text-emerald-500" };
       case "codeBlock":
         return { bg: "bg-orange-500/10", border: "border-orange-500/20", text: "text-orange-500" };
+      case "external":
+        return { bg: "bg-teal-500/10", border: "border-teal-500/20", text: "text-teal-500" };
       default:
         return { bg: "bg-pink-500/10", border: "border-pink-500/20", text: "text-pink-500" };
     }
@@ -111,7 +118,9 @@ export function LinkReferencePopup({
 
       if (editor.isActive('link')) {
         const attrs = editor.getAttributes('link');
-        setLink(attrs.href || "");
+        const href = attrs.href || "";
+        setLink(href);
+        setQuery(href);
         if (attrs.resourceId) {
           let found = null;
           for (const entry of Object.values(metadata?.entries || {})) {
@@ -128,6 +137,13 @@ export function LinkReferencePopup({
             }
           }
           if (found) setSelectedResource(found);
+        } else if (href && !href.startsWith('#')) {
+          setSelectedResource({
+            id: href,
+            title: href,
+            type: 'external',
+            entryTitle: 'External Website'
+          });
         }
       }
     };
@@ -210,11 +226,23 @@ export function LinkReferencePopup({
 
   const handleApply = () => {
     const trimmedText = text.trim();
-    let finalLink = selectedResource ? `#${selectedResource.id}` : link.trim();
-    const resourceId = selectedResource?.id;
-    const entryId = selectedResource?.entryId;
+    let finalLink = "";
+    let resourceId: string | undefined = undefined;
+    let entryId: string | undefined = undefined;
 
-    if (!selectedResource && finalLink && !finalLink.startsWith('#')) {
+    if (selectedResource) {
+      if (selectedResource.type === 'external') {
+        finalLink = selectedResource.id;
+      } else {
+        finalLink = `#${selectedResource.id}`;
+        resourceId = selectedResource.id;
+        entryId = selectedResource.entryId;
+      }
+    } else {
+      finalLink = link.trim();
+    }
+
+    if ((!selectedResource || selectedResource.type === 'external') && finalLink && !finalLink.startsWith('#')) {
       const hasProtocol = /^[a-z]+:/i.test(finalLink);
       const isDomain = finalLink.includes('.') && !finalLink.includes(' ');
       if (!hasProtocol && isDomain) {
@@ -296,20 +324,50 @@ export function LinkReferencePopup({
                       <div className="text-[8px] font-black tracking-widest text-nb-primary uppercase mb-0.5">{getResourceTypeLabel(selectedResource.type)}</div>
                       <div className="text-xs font-bold text-nb-on-surface truncate leading-snug">{selectedResource.title}</div>
                       <div className="text-[9px] text-nb-on-surface-variant/60 truncate mt-0.5 font-medium">
-                        {selectedResource.entryTitle} • {selectedResource.entryDate}
+                        {selectedResource.entryTitle}{selectedResource.entryDate ? ` • ${selectedResource.entryDate}` : ""}
                       </div>
                     </div>
                   </div>
-                  <button
-                    onClick={() => {
-                      setSelectedResource(null);
-                      setQuery("");
-                    }}
-                    className="p-1.5 hover:bg-red-50 text-nb-on-surface-variant hover:text-red-500 rounded-lg border border-nb-outline-variant/30 transition-all shrink-0 cursor-pointer"
-                    title="Clear Selection"
-                  >
-                    <X size={12} />
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => {
+                        if (selectedResource.type === 'external') {
+                          let finalLink = selectedResource.id.trim();
+                          const hasProtocol = /^[a-z]+:/i.test(finalLink);
+                          const isDomain = finalLink.includes('.') && !finalLink.includes(' ');
+                          if (!hasProtocol && isDomain) {
+                            finalLink = `https://${finalLink}`;
+                          }
+                          const win = window.open(finalLink, '_blank');
+                          if (win) win.focus();
+                        } else {
+                          const isLinkingToEntry = selectedResource.id === selectedResource.entryId;
+                          const navParams: Record<string, string | null> = { entry: selectedResource.entryId || null };
+                          if (!isLinkingToEntry) {
+                            navParams.resource = selectedResource.id;
+                          }
+                          store.navigateTo(navParams);
+                          onClose();
+                        }
+                      }}
+                      className="p-1.5 hover:bg-nb-primary/5 text-nb-on-surface-variant hover:text-nb-primary rounded-lg border border-nb-outline-variant/30 transition-all cursor-pointer flex items-center justify-center"
+                      title="Open Resource Link"
+                    >
+                      <ExternalLink size={12} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedResource(null);
+                        setLink("");
+                        setQuery("");
+                        setIsDirty(true);
+                      }}
+                      className="p-1.5 hover:bg-red-50 text-nb-on-surface-variant hover:text-red-500 rounded-lg border border-nb-outline-variant/30 transition-all cursor-pointer flex items-center justify-center"
+                      title="Clear Selection"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -318,9 +376,27 @@ export function LinkReferencePopup({
                 <div className="flex items-center justify-between">
                   <label className="block text-[9px] font-black uppercase tracking-wider text-nb-on-surface-variant/50">Link or Search Resource</label>
                   {link.trim() && !link.startsWith("#") && (
-                    <div className="text-[8px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                      <ExternalLink size={8} />
-                      <span>External URL detected</span>
+                    <div className="flex items-center gap-1.5">
+                      <div className="text-[8px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                        <ExternalLink size={8} />
+                        <span>External URL</span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          let finalLink = link.trim();
+                          const hasProtocol = /^[a-z]+:/i.test(finalLink);
+                          const isDomain = finalLink.includes('.') && !finalLink.includes(' ');
+                          if (!hasProtocol && isDomain) {
+                            finalLink = `https://${finalLink}`;
+                          }
+                          const win = window.open(finalLink, '_blank');
+                          if (win) win.focus();
+                        }}
+                        className="px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-nb-primary hover:bg-nb-primary/5 rounded border border-nb-outline-variant/30 hover:border-nb-primary/30 transition-all flex items-center gap-1 cursor-pointer"
+                        title="Open External URL"
+                      >
+                        <span>Open Link</span>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -335,6 +411,7 @@ export function LinkReferencePopup({
                     onChange={e => {
                       setLink(e.target.value);
                       setQuery(e.target.value);
+                      setIsDirty(true);
                     }}
                     onKeyDown={handleKeyDown}
                     className="w-full pl-8 pr-3 py-2 bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg outline-none text-xs focus:border-nb-primary focus:ring-1 focus:ring-nb-primary/20 transition-all font-medium text-nb-on-surface"
@@ -416,7 +493,10 @@ export function LinkReferencePopup({
                         return (
                           <button
                             key={r.id}
-                            onClick={() => setSelectedResource(r)}
+                            onClick={() => {
+                              setSelectedResource(r);
+                              setIsDirty(true);
+                            }}
                             className="w-full text-left p-2 rounded-lg hover:bg-nb-primary/5 border border-transparent hover:border-nb-primary/10 transition-all flex items-start gap-2.5 group cursor-pointer"
                           >
                             <div className={`p-1.5 rounded-lg shrink-0 ${colorClass.bg} ${colorClass.text}`}>
@@ -425,7 +505,7 @@ export function LinkReferencePopup({
                             <div className="flex-1 min-w-0">
                               <div className="text-xs font-bold text-nb-on-surface group-hover:text-nb-primary transition-colors truncate leading-tight">{r.title}</div>
                               <div className="text-[9px] font-medium text-nb-on-surface-variant/40 truncate mt-0.5">
-                                {r.entryTitle} • {r.entryDate}
+                                {r.entryTitle}{r.entryDate ? ` • ${r.entryDate}` : ""}
                               </div>
                             </div>
                           </button>
@@ -440,20 +520,25 @@ export function LinkReferencePopup({
 
           {/* Footer Actions */}
           <div className="flex gap-2 pt-2 border-t border-nb-outline-variant/30">
-            <button
-              onClick={handleApply}
-              className="flex-1 py-2.5 bg-nb-primary text-white text-[10px] font-bold tracking-widest uppercase rounded-lg hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20 cursor-pointer"
-            >
-              Apply Link
-            </button>
+            {(!editor.isActive('link') || isDirty) && (
+              <button
+                onClick={handleApply}
+                className="flex-1 py-2.5 bg-nb-primary text-white text-[10px] font-bold tracking-widest uppercase rounded-lg hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20 cursor-pointer"
+              >
+                Apply Link
+              </button>
+            )}
 
             {editor.isActive('link') && (
               <button
                 onClick={() => { editor.chain().focus().unsetLink().unsetMark('underline').unsetColor().run(); onClose(); }}
                 title="Remove Link"
-                className="px-3 py-2 bg-nb-surface-low text-red-500 rounded-lg hover:bg-red-50 hover:text-red-600 transition-all border border-nb-outline-variant/30 cursor-pointer"
+                className={`py-2 px-3 bg-nb-surface-low text-red-500 rounded-lg hover:bg-red-50 hover:text-red-600 transition-all border border-nb-outline-variant/30 cursor-pointer flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-widest uppercase ${
+                  (!editor.isActive('link') || isDirty) ? "" : "flex-1"
+                }`}
               >
                 <Link2Off size={14} />
+                {(!editor.isActive('link') || isDirty) ? null : <span>Remove Link</span>}
               </button>
             )}
           </div>

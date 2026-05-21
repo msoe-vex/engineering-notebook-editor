@@ -1,4 +1,4 @@
-import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds, TipTapNode, buildResourceTypeIndex, getLocalDateString } from "./metadata";
+import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds, TipTapNode, buildResourceTypeIndex, getLocalDateString, ensureResourceIds } from "./metadata";
 import { generateAllEntriesLatex, generateEntryLatex, generateTeamLatex, generatePhasesLatex } from "./latex";
 import { ExplorerFile, GitHubConfig, TeamTab } from "./types";
 import { getProjects, getProject, Project, getAllPending, getPending, stageChange, removeStaged, getResource, putResource, saveProject, getProjectHandle, saveProjectHandle, PendingChange } from "./db";
@@ -713,14 +713,6 @@ class WorkspaceStore {
   }
 
   async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null; date: string }) {
-    // 1. Update memory immediately (Source of Truth)
-    if (this.openFile && this.openFile.id === id) {
-      this.openFile = { ...this.openFile, ...info, tiptapContent, latex, updatedAt: new Date().toISOString() };
-    }
-
-    const existingEntry = this.metadata.entries[id];
-    if (!existingEntry) return;
-
     let contentJson = JSON.parse(tiptapContent);
     // Handle double-stringification and wrapping
     if (typeof contentJson === 'string') {
@@ -729,6 +721,18 @@ class WorkspaceStore {
     if (contentJson && contentJson.content && !contentJson.type) {
       contentJson = contentJson.content;
     }
+
+    // Ensure all tables, headings, codeBlocks, etc. have IDs!
+    contentJson = ensureResourceIds(contentJson) as TipTapNode;
+    tiptapContent = JSON.stringify(contentJson);
+
+    // 1. Update memory immediately (Source of Truth)
+    if (this.openFile && this.openFile.id === id) {
+      this.openFile = { ...this.openFile, ...info, tiptapContent, latex, updatedAt: new Date().toISOString() };
+    }
+
+    const existingEntry = this.metadata.entries[id];
+    if (!existingEntry) return;
 
     const discoveredResources = extractResources(contentJson);
     const mergedResources: Record<string, { type: string; title: string; caption: string }> = {};
@@ -1218,6 +1222,9 @@ class WorkspaceStore {
         // Remap content IDs
         const { doc: remappedDoc } = remapContentIds((content || {}) as TipTapNode, idMap);
 
+        // Ensure resource node IDs exist (in case imported content lacks them)
+        const docWithIds = ensureResourceIds(remappedDoc as TipTapNode) as TipTapNode;
+
         // Remap metadata IDs (resources, references)
         const remappedMeta = remapEntryMetadataIds(entryMetadata as unknown as EntryMetadata, idMap);
         remappedMeta.id = newId;
@@ -1227,7 +1234,20 @@ class WorkspaceStore {
           remappedMeta.date = remappedMeta.createdAt?.split('T')[0] || getLocalDateString();
         }
 
-        remappedEntries.push({ id: newId, doc: remappedDoc as TipTapNode, meta: remappedMeta });
+        // Re-extract resources using the fully ID'ed document to ensure no tables or resources are missed
+        const discoveredResources = extractResources(docWithIds);
+        const mergedResources: Record<string, { type: string; title: string; caption: string }> = {};
+        const oldResources = remappedMeta.resources || {};
+        for (const [resId, resInfo] of Object.entries(discoveredResources)) {
+          mergedResources[resId] = {
+            type: resInfo.type,
+            title: resInfo.title || oldResources[resId]?.title || "",
+            caption: resInfo.caption || oldResources[resId]?.caption || "",
+          };
+        }
+        remappedMeta.resources = mergedResources;
+
+        remappedEntries.push({ id: newId, doc: docWithIds, meta: remappedMeta });
         newEntriesMap[newId] = remappedMeta;
       }
 

@@ -62,10 +62,7 @@ export const CustomRawLatex = Node.create({
   code: true,
 
   addAttributes() {
-    return {
-      content: { default: "" },
-      caption: { default: "" },
-    };
+    return {};
   },
 
   parseHTML() {

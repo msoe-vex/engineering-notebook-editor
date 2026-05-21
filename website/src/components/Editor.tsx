@@ -38,7 +38,7 @@ import { generateEntryLatex } from "@/lib/latex";
 import { getPhases, getPhaseConfig } from "@/lib/phases";
 import AutocompleteInput from "./AutocompleteInput";
 import DatePicker from "./DatePicker";
-import { extractResources, extractReferences, TipTapNode, ensureHeadingIds, buildResourceTypeIndex } from "@/lib/metadata";
+import { extractResources, extractReferences, TipTapNode, ensureResourceIds, buildResourceTypeIndex } from "@/lib/metadata";
 import { ASSETS_DIR } from "@/lib/constants";
 import { NodeSelection } from "@tiptap/pm/state";
 
@@ -177,7 +177,7 @@ const parseInitialContent = (raw: unknown): TipTapNode | string => {
   if (!raw) return "";
   if (typeof raw === 'object' && raw !== null) {
     // Ensure heading IDs for loaded content
-    return ensureHeadingIds(raw as TipTapNode);
+    return ensureResourceIds(raw as TipTapNode);
   }
   if (typeof raw !== 'string') return String(raw);
 
@@ -195,7 +195,7 @@ const parseInitialContent = (raw: unknown): TipTapNode | string => {
 
       // Ensure heading IDs for loaded content
       if (parsed && typeof parsed === 'object') {
-        parsed = ensureHeadingIds(parsed as TipTapNode);
+        parsed = ensureResourceIds(parsed as TipTapNode);
       }
 
       return parsed as TipTapNode | string;
@@ -631,9 +631,9 @@ const EditorToolbar = React.memo(function EditorToolbar({
                 (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
 
             if (safePos !== null) {
-              editor.chain().focus().insertContentAt(safePos, { type: 'rawLatex', attrs: { id: generateUUID() } }).run();
+              editor.chain().focus().insertContentAt(safePos, { type: 'rawLatex' }).run();
             } else {
-              editor.chain().focus().insertContent({ type: 'rawLatex', attrs: { id: generateUUID() } }).run();
+              editor.chain().focus().insertContent({ type: 'rawLatex' }).run();
             }
           }}
           active={editor.isActive("rawLatex")}
@@ -1318,9 +1318,9 @@ const EditorContent = React.memo(function EditorContent({
                       (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
 
                   if (safePos !== null) {
-                    editor.chain().focus().insertContentAt(safePos, { type: 'rawLatex', attrs: { id: generateUUID() } }).run();
+                    editor.chain().focus().insertContentAt(safePos, { type: 'rawLatex' }).run();
                   } else {
-                    editor.chain().focus().insertContent({ type: 'rawLatex', attrs: { id: generateUUID() } }).run();
+                    editor.chain().focus().insertContent({ type: 'rawLatex' }).run();
                   }
                 }}
                 setActiveMenu={handleSetActiveMenu}

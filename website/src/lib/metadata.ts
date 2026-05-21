@@ -451,6 +451,9 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
     // Check local resources
     if (entry.resources) {
       for (const res of Object.values(entry.resources)) {
+        // rawLatex resources are not referenceable and shouldn't require title/caption
+        if (res.type === 'rawLatex') continue;
+
         const label = TYPE_LABELS[res.type] || res.type;
         if (!res.title?.trim()) errors.push(`Title missing for ${label}.`);
         if (!res.caption?.trim()) {
@@ -632,17 +635,29 @@ export function remapContentIds(doc: TipTapDoc | TipTapNode[], globalIdMap: Map<
 }
 
 /**
- * Ensures all heading nodes have UUIDs in attrs.id
+ * Ensures all referenceable resource nodes (headings, tables, code blocks, images, math blocks) have UUIDs in attrs.id.
+ * Note: rawLatex is deliberately omitted as it is not referenceable.
  * Returns the modified document (mutates in place)
  */
-export function ensureHeadingIds(doc: TipTapDoc | TipTapNode): TipTapDoc | TipTapNode {
+export function ensureResourceIds(doc: TipTapDoc | TipTapNode): TipTapDoc | TipTapNode {
   if (!doc || typeof doc !== "object") return doc;
 
   function walk(node: TipTapNode | undefined) {
     if (!node) return;
 
-    // Assign UUID to headings without IDs
-    if (node.type === "heading" && !node.attrs?.id) {
+    // Determine whether this node should be treated as a referenceable resource.
+    // Instead of a hard-coded set, detect resource-like nodes by:
+    // - nodes that expose caption/title attrs (image/table/code blocks usually do),
+    // - headings (they become reference targets), or
+    // - well-known structural types that don't normally carry title/caption but must be ids.
+    const hasTitleOrCaption = !!(node.attrs && (node.attrs.title !== undefined || node.attrs.caption !== undefined));
+    const isHeading = node.type === "heading";
+    const isStructuralResource = node.type === "image" || node.type === "table" || node.type === "codeBlock" || node.type === "mathBlock";
+
+    const isResourceNode = hasTitleOrCaption || isHeading || isStructuralResource;
+
+    // Assign UUID to resource nodes without IDs
+    if (node.type && isResourceNode && !node.attrs?.id) {
       if (!node.attrs) node.attrs = {};
       (node.attrs as Record<string, unknown>).id = generateUUID();
     }

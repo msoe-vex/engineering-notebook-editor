@@ -40,7 +40,7 @@ import { LinkReferencePopup } from "@/components/editor/LinkReferencePopup";
 
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng } from "@/lib/utils";
 import { ASSETS_DIR } from "@/lib/constants";
-import { ensureHeadingIds, sanitizeTipTapDoc } from "@/lib/metadata";
+import { ensureResourceIds, sanitizeTipTapDoc } from "@/lib/metadata";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 
@@ -403,7 +403,7 @@ const UnifiedEditor = ({
 
       const cleanDoc = sanitizeTipTapDoc(parsed, validNodes);
       if (!cleanDoc) return "";
-      return ensureHeadingIds(cleanDoc);
+      return ensureResourceIds(cleanDoc);
     } catch {
       return raw;
     }
