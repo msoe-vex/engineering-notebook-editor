@@ -119,6 +119,70 @@ export async function convertSvgToPng(svgDataUrl: string, scale: number = 2): Pr
 }
 
 /**
+ * Compress an image (given as a data URL) to a JPEG data URL.
+ * - Resizes to `maxWidth` if image is wider than that.
+ * - Fills a white background to flatten transparency (useful for PDFs on white paper).
+ * - Returns both the JPEG data URL and the raw base64 payload.
+ */
+export async function compressImageToJpeg(dataUrl: string, maxWidth = 1920, quality = 0.8): Promise<{ dataUrl: string; base64: string }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, maxWidth / img.width);
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Could not get canvas context'));
+          return;
+        }
+        // White background to flatten transparency for PDF/print
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        const out = canvas.toDataURL('image/jpeg', quality);
+        resolve({ dataUrl: out, base64: out.split(',')[1] });
+      } catch (err) {
+        reject(err);
+      }
+    };
+    img.onerror = () => reject(new Error('Failed to load image for compression'));
+    img.crossOrigin = 'anonymous';
+    img.src = dataUrl;
+  });
+}
+
+export interface PreparedImageAssets {
+  originalDataUrl: string;
+  compressedDataUrl: string;
+  originalBase64: string;
+  compressedBase64: string;
+  originalPath: string;
+  compressedPath: string;
+}
+
+/**
+ * Prepare original + compressed variants for an uploaded image.
+ * The original variant keeps the input encoding, while the compressed variant is JPEG.
+ */
+export async function prepareImageAssets(dataUrl: string, originalExt: string, originalHash: string, compressedHash: string, options: { maxWidth?: number; quality?: number } = {}): Promise<PreparedImageAssets> {
+  const { maxWidth = 1920, quality = 0.8 } = options;
+  const compressed = await compressImageToJpeg(dataUrl, maxWidth, quality);
+  return {
+    originalDataUrl: dataUrl,
+    compressedDataUrl: compressed.dataUrl,
+    originalBase64: dataUrl.split(",")[1],
+    compressedBase64: compressed.base64,
+    originalPath: `${"data/assets/original"}/${originalHash}.${originalExt}`,
+    compressedPath: `${"data/assets/compressed"}/${compressedHash}.jpg`,
+  };
+}
+
+/**
  * Formats a date string into "Month YYYY" (e.g. "September 2024")
  */
 export function formatDateMonthYear(dateStr: string): string {

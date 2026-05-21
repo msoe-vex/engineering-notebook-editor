@@ -97,6 +97,7 @@ export function useWorkspace() {
   const exportNotebook = useCallback(() => store.exportNotebook(), []);
   const exportEntries = useCallback((entryIds?: string[]) => store.exportEntries(entryIds), []);
   const importNotebook = useCallback((data: Record<string, unknown>) => store.importNotebook(data), []);
+  const importNotebookArchive = useCallback((file: File) => store.importNotebookArchive(file), []);
   const setSelectedPaths = useCallback((pathsOrUpdater: Set<string> | ((prev: Set<string>) => Set<string>)) => store.setSelectedPaths(pathsOrUpdater), []);
   const getCompiledPdfUrl = useCallback(() => store.getCompiledPdfUrl(), []);
   const saveCompiledPdf = useCallback((pdf: Uint8Array) => store.saveCompiledPdf(pdf), []);
@@ -125,6 +126,7 @@ export function useWorkspace() {
     exportNotebook,
     exportEntries,
     importNotebook,
+    importNotebookArchive,
     setSelectedPaths,
     getCompiledPdfUrl,
     saveCompiledPdf,

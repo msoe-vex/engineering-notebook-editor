@@ -435,7 +435,7 @@ export default function FileExplorer({
                   className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-nb-on-surface hover:bg-nb-surface-low transition-colors cursor-pointer"
                 >
                   <FileJson size={14} className="text-nb-tertiary" />
-                  Download JSON
+                  Download ZIP
                 </button>
 
                 <button

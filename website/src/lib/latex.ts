@@ -1,8 +1,8 @@
 import { ASSETS_DIR, DATA_DIR } from "./constants";
 import { TipTapNode, ProjectPhase } from "./metadata";
 
-export const escapeLaTeX = (text: string) =>
-  text
+export const escapeLaTeX = (text?: string) =>
+  (text || "")
     .replace(/\\/g, "\\textbackslash{}")
     .replace(/&/g, "\\&")
     .replace(/%/g, "\\%")
@@ -260,10 +260,12 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
     case "image": {
       const attrs = (node.attrs || {}) as Record<string, string | undefined>;
       const filePath = attrs.filePath;
+      const originalFilePath = attrs.originalFilePath || filePath;
       const src = attrs.src ?? "";
       let imgSrc = filePath
         ? filePath
         : src.startsWith("data:") ? `${ASSETS_DIR}/embedded_image.png` : src;
+      const qualitySrc = originalFilePath || imgSrc;
 
       // Remove redundant resources/ or assets/ prefix if graphicspath already includes it
       if (imgSrc.startsWith("resources/")) {
@@ -282,7 +284,7 @@ export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<stri
       const latexWidth = isNaN(widthNum) ? "1" : (widthNum / 100).toFixed(2);
 
       const labelId = attrs.id || "";
-      return `\\notebookimage{${imgSrc}}{${title}}{${caption}}{${latexWidth}\\textwidth}{${labelId}}\n\n`;
+      return `\\notebookimage{${imgSrc}}{${qualitySrc}}{${title}}{${caption}}{${latexWidth}\\textwidth}{${labelId}}\n\n`;
     }
 
     case "table": {
@@ -420,11 +422,12 @@ export const generateTeamLatex = (team: TeamMetadata): string => {
   latex += `\\startdate{${escapeLaTeX(team.startDate || "")}}\n`;
   latex += `\\projectenddate{${escapeLaTeX(team.endDate || "")}}\n`;
   latex += `\\organization{${escapeLaTeX(team.organization || "")}}\n`;
-  latex += `\\teamlogo{${cleanImg(team.logo)}}\n\n`;
+  const teamWithOriginal = team as TeamMetadata & { logoOriginal?: string; members: Array<TeamMetadata["members"][number] & { imageOriginal?: string }> };
+  latex += `\\teamlogo{${cleanImg(teamWithOriginal.logo)}}{${cleanImg(teamWithOriginal.logoOriginal || teamWithOriginal.logo)}}\n\n`;
 
   latex += `\\teammembers{\n`;
   team.members.forEach((m, i) => {
-    latex += `    \\teammember{${escapeLaTeX(m.name)}}{${escapeLaTeX(m.role)}}{${cleanImg(m.image)}}`;
+    latex += `    \\teammember{${escapeLaTeX(m.name)}}{${escapeLaTeX(m.role)}}{${cleanImg(m.image)}}{${cleanImg((m as TeamMetadata["members"][number] & { imageOriginal?: string }).imageOriginal || m.image)}}`;
     if (i % 2 === 0 && i < team.members.length - 1) {
       latex += ` \\hfill`;
     } else if (i < team.members.length - 1) {

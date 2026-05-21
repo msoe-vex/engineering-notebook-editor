@@ -299,6 +299,12 @@
 % Graphic path setup: Images can be placed in ./data/assets/
 \graphicspath{{./data/assets/}}
 
+% Compile mode flag:
+%   \notebookqualityimagesfalse -> use compressed images
+%   \notebookqualityimagestrue  -> use original images
+\newif\ifnotebookqualityimages
+\notebookqualityimagesfalse
+
 % Variables setup
 \newcommand{\@teamname}{}
 \newcommand{\@teamnumber}{}
@@ -316,21 +322,25 @@
 \newcommand{\projectenddate}[1]{\gdef\@projectenddate{#1}}
 \newcommand{\organization}[1]{\gdef\@organization{#1}}
 \newcommand{\teammembers}[1]{\gdef\@teammembers{#1}}
-\newcommand{\teamlogo}[1]{\gdef\@teamlogo{#1}}
+\newcommand{\teamlogo}[2]{\gdef\@teamlogo{#1}\gdef\@teamlogoOriginal{#2}}
 
 % Member formatting command
 \newsavebox{\@memberboxA}
 \newsavebox{\@memberboxB}
 \newdimen\@memberclip
 
-\newcommand{\teammember}[3]{%
+\newcommand{\teammember}[4]{%
     \begin{minipage}[t]{0.45\linewidth}
         \centering
         \vspace{0.5cm}
         \ifx&#3&
         \else
         % Render at width=5cm, measure resulting height
-        \savebox{\@memberboxA}{\includegraphics[width=5cm]{#3}}%
+        \ifnotebookqualityimages
+            \savebox{\@memberboxA}{\includegraphics[width=5cm]{#4}}%
+        \else
+            \savebox{\@memberboxA}{\includegraphics[width=5cm]{#3}}%
+        \fi
         \@memberclip=\ht\@memberboxA
         \ifdim\@memberclip>6cm
             % Wide image: scale by width, clip top & bottom symmetrically
@@ -339,7 +349,11 @@
             \clipbox{0pt \the\@memberclip{} 0pt \the\@memberclip}{\usebox{\@memberboxA}}%
         \else
             % Tall/square image: scale by height, clip left & right symmetrically
-            \savebox{\@memberboxB}{\includegraphics[height=6cm]{#3}}%
+            \ifnotebookqualityimages
+                \savebox{\@memberboxB}{\includegraphics[height=6cm]{#4}}%
+            \else
+                \savebox{\@memberboxB}{\includegraphics[height=6cm]{#3}}%
+            \fi
             \@memberclip=\wd\@memberboxB
             \advance\@memberclip by -5cm
             \divide\@memberclip by 2
@@ -373,7 +387,11 @@
         \vfill
         \begin{center}
             \ifx\@teamlogo\@empty\else
-                \includegraphics[width=4cm]{\@teamlogo}
+                \ifnotebookqualityimages
+                    \includegraphics[width=4cm]{\@teamlogoOriginal}
+                \else
+                    \includegraphics[width=4cm]{\@teamlogo}
+                \fi
             \fi
         \end{center}
         \vspace{1cm}
@@ -534,15 +552,19 @@
 
 % \notebookentry{Title}{Date}{Author}{Phase}
 
-% \notebookimage{filename}{title}{caption}{width_percent}{label}
-\newcommand{\notebookimage}[5]{
+% \notebookimage{compressed}{original}{title}{caption}{width_percent}{label}
+\newcommand{\notebookimage}[6]{
     \begin{figure}[H]
         \refstepcounter{figure}
-        \blockheader{Figure \thefigure}{#2}
-        \label{#5}
+        \blockheader{Figure \thefigure}{#3}
+        \label{#6}
         \centering
-        \includegraphics[width=#4, max height=0.4\textheight, keepaspectratio]{#1}
-        \caption*{#3}
+        \ifnotebookqualityimages
+            \includegraphics[width=#5, max height=0.4\textheight, keepaspectratio]{#2}
+        \else
+            \includegraphics[width=#5, max height=0.4\textheight, keepaspectratio]{#1}
+        \fi
+        \caption*{#4}
     \end{figure}
 }
 

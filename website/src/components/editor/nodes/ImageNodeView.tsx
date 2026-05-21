@@ -2,8 +2,12 @@ import React, { useState, useEffect } from "react";
 import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import { Image as TiptapImage, type ImageOptions } from "@tiptap/extension-image";
 import Image from "next/image";
-import { GripVertical, Trash2, Image as ImageIcon } from "lucide-react";
+import { GripVertical, Trash2, Image as ImageIcon, Upload } from "lucide-react";
 import { getResource } from "@/lib/db";
+import { events, EventNames } from "@/lib/events";
+
+import { compressImageToJpeg, hashContent, convertSvgToPng, getExtensionFromDataUrl } from "@/lib/utils";
+import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
 
 import { NodeViewProps } from "./types";
 
@@ -11,6 +15,7 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, ed
   const [resolvedSrc, setResolvedSrc] = useState(node.attrs.src);
   const [dragEnabled, setDragEnabled] = useState(false);
   const [, setIsResizing] = useState(false);
+  const fileInputId = `replace-image-${node.attrs.id}`;
 
   useEffect(() => {
     let active = true;
@@ -89,6 +94,47 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, ed
               className="flex-1 bg-transparent border-none outline-none text-[12px] font-bold tracking-wider text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
             />
           </div>
+          <div className="flex items-center gap-2">
+            <input id={fileInputId} type="file" accept="image/*" className="hidden" onChange={async (ev) => {
+              const f = (ev.target as HTMLInputElement).files?.[0];
+              if (!f) return;
+              try {
+                const readAsDataUrl = (file: File) => new Promise<string>((res, rej) => {
+                  const r = new FileReader();
+                  r.onload = () => res(r.result as string);
+                  r.onerror = rej;
+                  r.readAsDataURL(file);
+                });
+
+                let dataUrl = await readAsDataUrl(f);
+                if (f.type === 'image/svg+xml' || f.name.toLowerCase().endsWith('.svg')) {
+                  try { dataUrl = await convertSvgToPng(dataUrl); } catch {}
+                }
+
+                const compressed = await compressImageToJpeg(dataUrl, 1600, 0.8).catch(() => ({ dataUrl, base64: dataUrl.split(',')[1] }));
+                const originalBase64 = dataUrl.split(',')[1];
+                const originalHash = await hashContent(originalBase64);
+                const compressedHash = await hashContent(compressed.base64);
+                const originalExt = getExtensionFromDataUrl(dataUrl);
+                const originalPath = `${ASSETS_ORIGINAL_DIR}/${originalHash}.${originalExt}`;
+                const newPath = `${ASSETS_COMPRESSED_DIR}/${compressedHash}.jpg`;
+
+                // Update node attrs and preview
+                updateAttributes({ src: compressed.dataUrl, originalSrc: dataUrl, filePath: newPath, originalFilePath: originalPath });
+                setResolvedSrc(compressed.dataUrl);
+                events.emit(EventNames.SHOW_NOTIFICATION, { message: 'Image replaced', type: 'success' });
+              } catch (err) {
+                console.error('Replace image failed', err);
+                events.emit(EventNames.SHOW_NOTIFICATION, { message: 'Failed to replace image', type: 'error' });
+              } finally {
+                (ev.target as HTMLInputElement).value = '';
+              }
+            }} />
+            <label htmlFor={fileInputId} className="flex items-center gap-2 cursor-pointer p-1 rounded-md hover:bg-nb-surface-low">
+              <Upload size={12} className="text-nb-on-surface-variant" />
+              <span className="text-xs text-nb-on-surface-variant">Replace</span>
+            </label>
+          </div>
         </div>
 
         <div className="relative flex justify-center">
@@ -145,6 +191,8 @@ export const ImageWithCaption = TiptapImage.extend<ImageOptions & { dbName: stri
       alt: { default: "" },
       title: { default: "" },
       filePath: { default: null },
+      originalFilePath: { default: null },
+      originalSrc: { default: null },
       caption: { default: "" },
       width: { default: "100%" },
     };

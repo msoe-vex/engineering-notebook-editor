@@ -1,4 +1,4 @@
-import { ASSETS_DIR } from "./constants";
+import { ASSETS_DIR, ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "./constants";
 import { generateUUID } from "./utils";
 
 export const getLocalDateString = () => {
@@ -48,6 +48,7 @@ export interface TeamMember {
   name: string;
   role: string;
   image?: string; // Path to asset
+  imageOriginal?: string; // Path to original asset
 }
 
 export interface TeamMetadata {
@@ -57,6 +58,7 @@ export interface TeamMetadata {
   endDate?: string;
   organization: string;
   logo?: string; // Path to asset
+  logoOriginal?: string; // Path to original asset
   members: TeamMember[];
 }
 
@@ -162,9 +164,13 @@ export function extractImagePaths(doc: TipTapDoc): string[] {
   function walk(node: TipTapNode | undefined) {
     if (!node) return;
     if (node.type === "image") {
-      const path = (node.attrs?.filePath as string) || (node.attrs?.src as string);
-      if (path && path.startsWith(`${ASSETS_DIR}/`)) {
-        paths.push(path);
+      const compressedPath = (node.attrs?.filePath as string) || (node.attrs?.src as string);
+      const originalPath = node.attrs?.originalFilePath as string | undefined;
+      if (compressedPath && compressedPath.startsWith(`${ASSETS_DIR}/`)) {
+        paths.push(compressedPath);
+      }
+      if (originalPath && originalPath.startsWith(`${ASSETS_DIR}/`) && originalPath !== compressedPath) {
+        paths.push(originalPath);
       }
     }
     (node.content ?? []).forEach(walk);
@@ -324,15 +330,30 @@ export async function dehydrateAssets(doc: TipTapDoc): Promise<{ cleanDoc: TipTa
     if (!node) return node;
     if (node.type === "image") {
       const attrs = (node.attrs || {}) as Record<string, string | undefined>;
-      if (attrs.src?.startsWith("data:")) {
-        const base64 = attrs.src.split(",")[1]?.trim();
-        if (!base64) return node; // Skip if malformed
-        const hash = await hashContent(base64);
-        const ext = getExtensionFromDataUrl(attrs.src);
-        const assetPath = `${ASSETS_DIR}/${hash}.${ext}`;
+      const compressedSrc = attrs.src;
+      const originalSrc = attrs.originalSrc;
+      const compressedBase64 = compressedSrc?.startsWith("data:") ? compressedSrc.split(",")[1]?.trim() : undefined;
+      const originalBase64 = originalSrc?.startsWith("data:") ? originalSrc.split(",")[1]?.trim() : undefined;
 
-        assets.push({ path: assetPath, base64 });
-        return { ...node, attrs: { ...node.attrs, src: assetPath, filePath: assetPath } };
+      if (compressedBase64 || originalBase64) {
+        const compressedHash = compressedBase64 ? await hashContent(compressedBase64) : undefined;
+        const originalHash = originalBase64 ? await hashContent(originalBase64) : undefined;
+        const compressedPath = attrs.filePath || (compressedHash ? `${ASSETS_COMPRESSED_DIR}/${compressedHash}.jpg` : undefined);
+        const originalExt = originalSrc ? getExtensionFromDataUrl(originalSrc) : "jpg";
+        const originalPath = attrs.originalFilePath || (originalHash ? `${ASSETS_ORIGINAL_DIR}/${originalHash}.${originalExt}` : compressedPath);
+
+        if (originalBase64 && originalPath) assets.push({ path: originalPath, base64: originalBase64 });
+        if (compressedBase64 && compressedPath) assets.push({ path: compressedPath, base64: compressedBase64 });
+
+        const nextAttrs = { ...node.attrs } as Record<string, unknown>;
+        if (compressedPath) {
+          nextAttrs.src = compressedPath;
+          nextAttrs.filePath = compressedPath;
+        }
+        if (originalPath) nextAttrs.originalFilePath = originalPath;
+        delete nextAttrs.originalSrc;
+
+        return { ...node, attrs: nextAttrs };
       }
     }
     if (node.content) {
@@ -407,8 +428,10 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
   // 1. Collect assets from team
   if (metadata.team) {
     if (metadata.team.logo) trackAsset(metadata.team.logo, "team");
+    if (metadata.team.logoOriginal) trackAsset(metadata.team.logoOriginal, "team");
     metadata.team.members.forEach(m => {
       if (m.image) trackAsset(m.image, "team");
+      if (m.imageOriginal) trackAsset(m.imageOriginal, "team");
     });
   }
 
@@ -746,22 +769,24 @@ export async function dehydrateTeamAssets(team: TeamMetadata): Promise<{ cleanTe
 
   const cleanTeam = JSON.parse(JSON.stringify(team)) as TeamMetadata;
 
-  const processImg = async (src: string | undefined) => {
+  const processImg = async (src: string | undefined, targetDir: string, forceJpeg = false) => {
     if (src?.startsWith("data:")) {
       const base64 = src.split(",")[1]?.trim();
       if (!base64) return src;
       const hash = await hashContent(base64);
-      const ext = getExtensionFromDataUrl(src);
-      const assetPath = `${ASSETS_DIR}/${hash}.${ext}`;
+      const ext = forceJpeg ? "jpg" : getExtensionFromDataUrl(src);
+      const assetPath = `${targetDir}/${hash}.${ext}`;
       assets.push({ path: assetPath, base64 });
       return assetPath;
     }
     return src;
   };
 
-  if (cleanTeam.logo) cleanTeam.logo = await processImg(cleanTeam.logo);
+  if (cleanTeam.logo) cleanTeam.logo = await processImg(cleanTeam.logo, ASSETS_COMPRESSED_DIR, true);
+  if (cleanTeam.logoOriginal) cleanTeam.logoOriginal = await processImg(cleanTeam.logoOriginal, ASSETS_ORIGINAL_DIR);
   for (const member of cleanTeam.members) {
-    if (member.image) member.image = await processImg(member.image);
+    if (member.image) member.image = await processImg(member.image, ASSETS_COMPRESSED_DIR, true);
+    if (member.imageOriginal) member.imageOriginal = await processImg(member.imageOriginal, ASSETS_ORIGINAL_DIR);
   }
 
   return { cleanTeam, newAssets: assets };
@@ -775,14 +800,15 @@ export function hydrateTeamAssets(team: TeamMetadata, assetCache: Map<string, st
   const processImg = (src: string | undefined) => {
     if (src && !src.startsWith("data:")) {
       const cached = assetCache.get(src);
-      if (!cached) console.warn(`[Hydrate] Asset not found in cache: ${src}`);
       return cached || src;
     }
     return src;
   };
   if (hydrated.logo) hydrated.logo = processImg(hydrated.logo);
+  if (hydrated.logoOriginal) hydrated.logoOriginal = processImg(hydrated.logoOriginal);
   for (const member of hydrated.members) {
     if (member.image) member.image = processImg(member.image);
+    if (member.imageOriginal) member.imageOriginal = processImg(member.imageOriginal);
   }
   return hydrated;
 }

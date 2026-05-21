@@ -22,7 +22,6 @@ import {
 } from "react-resizable-panels";
 import ViewToggle, { ViewMode } from "./ViewToggle";
 import dynamic from "next/dynamic";
-import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng, debounce } from "@/lib/utils";
 
 const Preview = dynamic(() => import("./Preview"), {
   ssr: false,
@@ -39,7 +38,8 @@ import { getPhases, getPhaseConfig } from "@/lib/phases";
 import AutocompleteInput from "./AutocompleteInput";
 import DatePicker from "./DatePicker";
 import { extractResources, extractReferences, TipTapNode, ensureResourceIds, buildResourceTypeIndex } from "@/lib/metadata";
-import { ASSETS_DIR } from "@/lib/constants";
+import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
+import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng, debounce, compressImageToJpeg } from "@/lib/utils";
 import { NodeSelection } from "@tiptap/pm/state";
 
 // ─── Sub-components for Performance ──────────────────────────────────────────
@@ -1175,10 +1175,13 @@ const EditorContent = React.memo(function EditorContent({
             }
           }
 
-          const base64 = dataUrl.split(",")[1];
-          const hash = await hashContent(base64);
-          const ext = getExtensionFromDataUrl(dataUrl);
-          const newPath = `${ASSETS_DIR}/${hash}.${ext}`;
+          const originalBase64 = dataUrl.split(",")[1];
+          const originalHash = await hashContent(originalBase64);
+          const originalExt = getExtensionFromDataUrl(dataUrl);
+          const compressed = await compressImageToJpeg(dataUrl, 1920, 0.8).catch(() => ({ dataUrl, base64: originalBase64 }));
+          const compressedHash = await hashContent(compressed.base64);
+          const originalPath = `${ASSETS_ORIGINAL_DIR}/${originalHash}.${originalExt}`;
+          const newPath = `${ASSETS_COMPRESSED_DIR}/${compressedHash}.jpg`;
 
           const safePos = (() => {
             const { selection } = editor.state;
@@ -1192,12 +1195,12 @@ const EditorContent = React.memo(function EditorContent({
           if (safePos !== null) {
             editor.chain().focus().insertContentAt(safePos, {
               type: "image",
-              attrs: { id: generateUUID(), src: dataUrl, filePath: newPath, title: "" }
+              attrs: { id: generateUUID(), src: compressed.dataUrl, originalSrc: dataUrl, filePath: newPath, originalFilePath: originalPath, title: "" }
             }).run();
           } else {
             editor.chain().focus().insertContent({
               type: "image",
-              attrs: { id: generateUUID(), src: dataUrl, filePath: newPath, title: "" }
+              attrs: { id: generateUUID(), src: compressed.dataUrl, originalSrc: dataUrl, filePath: newPath, originalFilePath: originalPath, title: "" }
             }).run();
           }
 
@@ -1233,7 +1236,7 @@ const EditorContent = React.memo(function EditorContent({
               <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} setActiveMenu={handleSetActiveMenu} />
               <MenuAction
                 icon={<FileJson size={14} />}
-                label="Download JSON"
+                label="Download ZIP"
                 onClick={async () => {
                   await exportEntries([entryId]);
                 }}
