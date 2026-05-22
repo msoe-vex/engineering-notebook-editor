@@ -474,23 +474,23 @@ function PdfMockup() {
         {/* PDF Header */}
         <div className="border-b-[1px] border-nb-primary/20 pb-2 mb-4 flex justify-between items-end shrink-0">
           <div>
-            <div className="text-[8px] lg:text-[10px] font-black text-nb-primary uppercase tracking-tighter">Chassis Assembly</div>
-            <div className="text-[6px] lg:text-[8px] text-gray-400 font-bold uppercase">Engineering Notebook</div>
+            <div className="text-[8px] lg:text-[10px] font-black text-gray-900 uppercase tracking-tighter">Chassis Assembly</div>
+            <div className="text-[6px] lg:text-[8px] text-gray-500 font-bold uppercase">Engineering Notebook</div>
           </div>
           <div className="text-[6px] lg:text-[8px] font-bold text-gray-500">Page 1</div>
         </div>
 
         {/* PDF Content */}
         <div className="flex-1 flex flex-col gap-3 min-h-0">
-          <div className="text-[10px] font-black text-nb-primary shrink-0">Structural Integrity</div>
-          <div className="text-[7px] text-nb-on-surface leading-tight">
+          <div className="text-[10px] font-black text-gray-900 shrink-0">Structural Integrity</div>
+          <div className="text-[7px] text-gray-700 leading-tight">
             The main chassis was constructed using aircraft-grade aluminum. All joints were reinforced with 1/8&quot; gusset plates to ensure maximum rigidity during high-stress testing.
           </div>
           <div className="mt-2 p-3 border border-gray-100 rounded bg-gray-50/50 flex flex-col items-center shrink-0">
             <div className="w-full aspect-video bg-gray-200 rounded flex items-center justify-center text-gray-400">
               <Download size={20} className="opacity-20" />
             </div>
-            <div className="mt-2 text-[6px] font-bold text-gray-400">Figure 1.1: Structural Analysis</div>
+            <div className="mt-2 text-[6px] font-bold text-gray-500">Figure 1.1: Structural Analysis</div>
           </div>
         </div>
 
