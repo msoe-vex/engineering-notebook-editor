@@ -1,11 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
-import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
+import { NodeViewWrapper, ReactNodeViewRenderer, NodeViewProps } from "@tiptap/react";
 import { Node, InputRule } from "@tiptap/core";
 import { GripVertical, Trash2, Sigma, Edit3 } from "lucide-react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
-
-import { NodeViewProps } from "./types";
 import { generateUUID } from "../../../lib/utils";
 
 declare module "@tiptap/core" {
