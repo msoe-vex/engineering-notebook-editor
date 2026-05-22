@@ -888,6 +888,7 @@ const EditorContent = React.memo(function EditorContent({
 
   const editorPanelRef = useRef<import("react-resizable-panels").ImperativePanelHandle>(null);
   const previewPanelRef = useRef<import("react-resizable-panels").ImperativePanelHandle>(null);
+  const [isResizing, setIsResizing] = useState(false);
   const phaseButtonRef = useRef<HTMLDivElement>(null);
   const [phasePos, setPhasePos] = useState({ top: 0, left: 0, width: 0 });
   const toggleLinkFn = useRef<(() => void) | null>(null);
@@ -1420,7 +1421,7 @@ const EditorContent = React.memo(function EditorContent({
           <Panel
             id="editor-panel" order={1} minSize={30} collapsible={true} ref={editorPanelRef}
             defaultSize={viewMode === "editor" ? 100 : (viewMode === "preview" ? 0 : 50)}
-            className={`flex flex-col h-full transition-all duration-500 ease-in-out ${viewMode === "preview" ? "opacity-0 scale-[0.98] pointer-events-none" : "opacity-100 scale-100"}`}
+            className={`flex flex-col h-full ${isResizing ? "pointer-events-none select-none" : "transition-all duration-500 ease-in-out"} ${viewMode === "preview" ? "opacity-0 scale-[0.98] pointer-events-none" : "opacity-100 scale-100"}`}
           >
             <div className="flex-1 overflow-hidden relative">
               <div className="absolute inset-0 flex flex-col overflow-y-auto custom-scrollbar">
@@ -1437,11 +1438,15 @@ const EditorContent = React.memo(function EditorContent({
               </div>
             </div>
           </Panel>
-          <PanelResizeHandle id="editor-preview-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${viewMode !== 'split' ? 'hidden' : ''}`} />
+          <PanelResizeHandle
+            id="editor-preview-resizer"
+            onDragging={setIsResizing}
+            className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${viewMode !== 'split' ? 'hidden' : ''}`}
+          />
           <Panel
             id="preview-panel" order={2} collapsible={true} minSize={30} ref={previewPanelRef}
             defaultSize={viewMode === "preview" ? 100 : (viewMode === "editor" ? 0 : 50)}
-            className={`flex flex-col h-full bg-nb-surface-low transition-all duration-500 ease-in-out ${viewMode === "editor" ? "opacity-0 scale-[0.98] pointer-events-none" : "opacity-100 scale-100"}`}
+            className={`flex flex-col h-full bg-nb-surface-low ${isResizing ? "pointer-events-none select-none" : "transition-all duration-500 ease-in-out"} ${viewMode === "editor" ? "opacity-0 scale-[0.98] pointer-events-none" : "opacity-100 scale-100"}`}
           >
             <LatexPreview latexContent={previewLatex} />
           </Panel>

@@ -111,6 +111,7 @@ export default function App() {
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
   const pendingActionRef = useRef<(() => void) | null>(null);
   const [isSaveLocked, setIsSaveLocked] = useState(false);
+  const [isSidebarDragging, setIsSidebarDragging] = useState(false);
 
 
 
@@ -858,13 +859,17 @@ export default function App() {
               <Panel
                 id="sidebar-panel" order={1} ref={sidebarPanelRef} defaultSize={initialPercentSize} minSize={15} maxSize={40} collapsible={true}
                 onCollapse={() => setUserSidebarPreference(false)} onExpand={() => setUserSidebarPreference(true)}
-                className="flex flex-col transition-all duration-300 ease-out"
+                className={`flex flex-col ${isSidebarDragging ? "pointer-events-none select-none" : "transition-all duration-300 ease-out"}`}
               >
-                <div className={`flex-1 flex flex-col min-h-0 transition-all duration-300 ease-out ${!isSidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                <div className={`flex-1 flex flex-col min-h-0 ${isSidebarDragging ? "" : "transition-all duration-300 ease-out"} ${!isSidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                   {sidebar}
                 </div>
               </Panel>
-              <PanelResizeHandle id="sidebar-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${!isSidebarOpen ? 'hidden' : ''}`} />
+              <PanelResizeHandle
+                id="sidebar-resizer"
+                onDragging={setIsSidebarDragging}
+                className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${!isSidebarOpen ? 'hidden' : ''}`}
+              />
               <Panel id="main-panel" order={2} defaultSize={isSidebarOpen ? 100 - initialPercentSize : 100} minSize={30} className="flex flex-col">
                 {main}
               </Panel>
