@@ -82,6 +82,7 @@ export function useWorkspace() {
   const selectProject = useCallback((id: string) => store.selectProject(id), []);
   const createEntry = useCallback(() => store.createEntry(), []);
   const deleteEntry = useCallback((file: ExplorerFile) => store.deleteEntry(file), []);
+  const updateDraft = useCallback((tiptapContent: string | null, info: { title?: string; author?: string; phase?: number | null; date?: string }) => store.updateDraft(tiptapContent, info), []);
   const updateEntry = useCallback((id: string, latex: string, content: string, info: { title: string; author: string; phase: number | null; date: string }) => store.updateEntry(id, latex, content, info), []);
   const saveTeam = useCallback((team: TeamMetadata, phases: ProjectPhase[]) => store.saveTeam(team, phases), []);
   const createGithubProject = useCallback((config: { owner: string; repo: string; branch: string; folderPath: string; name: string }) => store.createGithubProject(config), []);
@@ -111,6 +112,7 @@ export function useWorkspace() {
     selectProject,
     createEntry,
     deleteEntry,
+    updateDraft,
     updateEntry,
     saveTeam,
     createGithubProject,

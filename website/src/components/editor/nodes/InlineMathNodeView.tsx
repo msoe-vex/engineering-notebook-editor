@@ -1,11 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
-import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
+import { NodeViewWrapper, ReactNodeViewRenderer, NodeViewProps } from "@tiptap/react";
 import { Node, InputRule } from "@tiptap/core";
 import katex from "katex";
 import "katex/dist/katex.min.css";
-
-import { NodeViewProps } from "./types";
-
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     setInlineMath: (latex: string) => ReturnType;

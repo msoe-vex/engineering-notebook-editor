@@ -1,8 +1,8 @@
 "use client";
 
 import { Users, BookOpen, FolderOpen, HardDrive, Plus, ArrowLeftRight, Upload, Play } from "lucide-react";
-import GithubIcon from "./ui/GithubIcon";
-import Logo from "./ui/Logo";
+import GithubIcon from "./GithubIcon";
+import Logo from "./Logo";
 
 interface WorkspaceInfo {
   mode: "github" | "local" | "temporary";

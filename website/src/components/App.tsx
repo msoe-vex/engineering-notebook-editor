@@ -13,7 +13,7 @@ import {
   getProjectDBName
 } from "@/lib/db";
 import Home from "./Home";
-import Editor from "./Editor";
+import Editor from "./editor/Editor";
 import WelcomePage from "./WelcomePage";
 import Sidebar from "./Sidebar";
 import TeamEditor from "./TeamEditor";
@@ -22,11 +22,11 @@ import HelpPage from "./HelpPage";
 import ProjectHeader from "./ProjectHeader";
 import AboutPage from "./AboutPage";
 import LoadingOverlay from "./LoadingOverlay";
-import Logo from "./ui/Logo";
-import { ViewMode } from "./ViewToggle";
+import Logo from "./Logo";
+import { ViewMode } from "./editor/ui/ViewToggle";
 import ConfirmationDialog from "./ConfirmationDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { HardDrive, X, Loader2 } from "lucide-react";
+import { HardDrive, X, Loader2, ArrowLeftRight, Sun, Moon } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { ENTRIES_DIR, } from "@/lib/constants";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -111,6 +111,7 @@ export default function App() {
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
   const pendingActionRef = useRef<(() => void) | null>(null);
   const [isSaveLocked, setIsSaveLocked] = useState(false);
+  const [isSidebarDragging, setIsSidebarDragging] = useState(false);
 
 
 
@@ -486,9 +487,9 @@ export default function App() {
 
   const handleOpenEntry = useCallback((file: ExplorerFile) => {
     const id = file.name.replace('.json', '');
-    checkUnsaved(() => navigateTo({ entry: id, resource: null }, '/workspace/editor'));
+    navigateTo({ entry: id, resource: null }, '/workspace/editor');
     if (isMobile) setUserSidebarPreference(false);
-  }, [checkUnsaved, isMobile, navigateTo]);
+  }, [isMobile, navigateTo]);
 
   const handleOpenTeamEditor = (tab: TeamTab = "identity") => {
     navigateTo({}, `/workspace/team/${tab}`);
@@ -673,6 +674,20 @@ export default function App() {
           </div>
         </div>
         <div className="flex items-center gap-1">
+          <button
+            onClick={handleDisconnect}
+            className="p-1.5 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-tertiary transition-colors cursor-pointer"
+            title="Change Workspace"
+          >
+            <ArrowLeftRight size={16} />
+          </button>
+          <button
+            onClick={() => setTheme(isDarkMode ? "light" : "dark")}
+            className="p-1.5 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer"
+            title="Toggle Theme"
+          >
+            {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
           {isMobile && (
             <button
               onClick={(e) => {
@@ -713,8 +728,6 @@ export default function App() {
         onSetProjectRenameValue={setProjectRenameValue}
         onStartRename={() => { if (currentProject) { setProjectRenameValue(currentProject.name); setIsRenamingProject(true); } }}
         onEndRename={(save) => { if (save && currentProjectId) handleRenameProject(currentProjectId, projectRenameValue); setIsRenamingProject(false); }}
-        isDarkMode={isDarkMode}
-        onToggleTheme={() => setTheme(isDarkMode ? "light" : "dark")}
         onOpenHelp={() => navigateTo({}, '/workspace/help')}
         onOpenTeam={handleOpenTeamEditor}
         onOpenCompiler={() => navigateTo({}, '/workspace/compile')}
@@ -722,7 +735,6 @@ export default function App() {
         onExport={handleExportNotebook}
         onDisconnect={handleDisconnect}
         onGoHome={handleGoHome}
-        mounted={mounted}
       />
 
       <div className="flex-1 overflow-hidden relative bg-nb-bg">
@@ -777,7 +789,7 @@ export default function App() {
             {openFile && (
               <Editor
                 key={openFile.path}
-                onClose={() => checkUnsaved(() => navigateTo({ entry: null, resource: null }))}
+                onClose={() => navigateTo({ entry: null, resource: null })}
                 showConfirm={showConfirm}
                 viewMode={viewMode}
                 onSetViewMode={handleSetViewMode}
@@ -847,13 +859,17 @@ export default function App() {
               <Panel
                 id="sidebar-panel" order={1} ref={sidebarPanelRef} defaultSize={initialPercentSize} minSize={15} maxSize={40} collapsible={true}
                 onCollapse={() => setUserSidebarPreference(false)} onExpand={() => setUserSidebarPreference(true)}
-                className="flex flex-col transition-all duration-300 ease-out"
+                className={`flex flex-col ${isSidebarDragging ? "pointer-events-none select-none" : "transition-all duration-300 ease-out"}`}
               >
-                <div className={`flex-1 flex flex-col min-h-0 transition-all duration-300 ease-out ${!isSidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                <div className={`flex-1 flex flex-col min-h-0 ${isSidebarDragging ? "" : "transition-all duration-300 ease-out"} ${!isSidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                   {sidebar}
                 </div>
               </Panel>
-              <PanelResizeHandle id="sidebar-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${!isSidebarOpen ? 'hidden' : ''}`} />
+              <PanelResizeHandle
+                id="sidebar-resizer"
+                onDragging={setIsSidebarDragging}
+                className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${!isSidebarOpen ? 'hidden' : ''}`}
+              />
               <Panel id="main-panel" order={2} defaultSize={isSidebarOpen ? 100 - initialPercentSize : 100} minSize={30} className="flex flex-col">
                 {main}
               </Panel>

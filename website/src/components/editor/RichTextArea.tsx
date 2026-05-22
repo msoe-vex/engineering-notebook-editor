@@ -34,19 +34,15 @@ import {
   InlineMathNode,
   MathBlockNode,
   NotebookListItem,
-} from "@/components/editor/nodes";
+} from "./nodes";
 
-import { LinkReferencePopup } from "@/components/editor/LinkReferencePopup";
+import { LinkReferencePopup } from "./ui/LinkReferencePopup";
 
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng, compressImageToJpeg } from "@/lib/utils";
 import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
 import { ensureResourceIds, sanitizeTipTapDoc } from "@/lib/metadata";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
-
-
-
-
 
 const CustomSuperscript = Superscript.extend({
   excludes: 'subscript',
@@ -76,7 +72,7 @@ const CustomSubscript = Subscript.extend({
    Main Component
    ───────────────────────────────────────────────────────────────── */
 
-interface UnifiedEditorProps {
+interface RichTextAreaProps {
   content: string | import("@/lib/metadata").TipTapNode;
   onChange: (content: string) => void;
   onImageUpload?: (path: string, base64: string) => void;
@@ -87,9 +83,9 @@ interface UnifiedEditorProps {
   entryId?: string;
 }
 
-const UnifiedEditor = ({
+const RichTextArea = ({
   content, onChange, onImageUpload, filename, onEditorInit, onToggleLink, entryId
-}: UnifiedEditorProps) => {
+}: RichTextAreaProps) => {
   const { currentProjectId, metadata } = useWorkspace();
   const dbName = currentProjectId ? `notebook-project-${currentProjectId}` : "notebook-default";
 
@@ -423,8 +419,6 @@ const UnifiedEditor = ({
         }
       }
 
-      // Use shared compressor for JPEG conversion
-
       if (editor?.isActive('tableCell') || editor?.isActive('tableHeader')) {
         // Prevent image insertion inside tables as LaTeX cannot render them
         return;
@@ -756,26 +750,10 @@ const UnifiedEditor = ({
 
   const isInTable = editor?.isActive("tableCell") || editor?.isActive("tableHeader") || false;
 
-
-
-  const [showTableGrid, setShowTableGrid] = useState(false);
-
-  // Dismiss table grid on click away
-  React.useEffect(() => {
-    if (!showTableGrid) return;
-    const handleOutsideClick = () => setShowTableGrid(false);
-    window.addEventListener("mousedown", handleOutsideClick);
-    return () => window.removeEventListener("mousedown", handleOutsideClick);
-  }, [showTableGrid]);
-
-
-
   if (!editor) return null;
-
 
   return (
     <div className="flex flex-col gap-4">
-
       <div className="relative group/editor">
         {/* Table Controls (Now embedded in NodeView, keeping this for fallback/external interaction) */}
         {isInTable && !editor.isActive('table') && (
@@ -808,6 +786,4 @@ const UnifiedEditor = ({
   );
 };
 
-export default React.memo(UnifiedEditor);
-
-
+export default React.memo(RichTextArea);

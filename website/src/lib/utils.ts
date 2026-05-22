@@ -203,3 +203,96 @@ export function formatDateMonthYear(dateStr: string): string {
     return dateStr;
   }
 }
+
+export interface DebouncedFunction<T extends (...args: unknown[]) => unknown> {
+  (...args: Parameters<T>): void;
+  flush(): void;
+  cancel(): void;
+}
+
+/**
+ * Advanced debounce utility that supports flushing and cancellation.
+ */
+export function debounceWithFlush<T extends (...args: unknown[]) => unknown>(
+  func: T,
+  wait: number
+): DebouncedFunction<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let lastArgs: Parameters<T> | null = null;
+
+  const debounced = function (...args: Parameters<T>) {
+    lastArgs = args;
+
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+    }
+
+    timeoutId = setTimeout(() => {
+      const argsToUse = lastArgs;
+      timeoutId = null;
+      lastArgs = null;
+      if (argsToUse) {
+        func(...argsToUse);
+      }
+    }, wait);
+  };
+
+  debounced.flush = () => {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+    const argsToUse = lastArgs;
+    lastArgs = null;
+    if (argsToUse) {
+      func(...argsToUse);
+    }
+  };
+
+  debounced.cancel = () => {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+    lastArgs = null;
+  };
+
+  return debounced;
+}
+
+/**
+ * Normalize base64 payloads: strip non-base64 chars and pad with '=' to valid length.
+ */
+export const normalizeBase64 = (s: string | null | undefined): string | null => {
+  if (!s) return null;
+  // Remove data:... prefix if present
+  const raw = s.includes(',') ? s.split(',')[1] : s;
+  if (!raw || typeof raw !== 'string') return null;
+  // Remove whitespace and any characters outside base64 alphabet
+  let cleaned = raw.replace(/\s+/g, '').replace(/[^A-Za-z0-9+/=]/g, '');
+  // Pad with '=' to make length a multiple of 4
+  const mod = cleaned.length % 4;
+  if (mod !== 0) {
+    cleaned += '='.repeat(4 - mod);
+  }
+  return cleaned;
+};
+
+/**
+ * Creates a Blob Object URL from a base64 encoded PDF payload.
+ */
+export function blobFromBase64(base64: string): string | null {
+  try {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    return URL.createObjectURL(blob);
+  } catch (e) {
+    console.error("Failed to create blob URL for PDF", e);
+    return null;
+  }
+}
+

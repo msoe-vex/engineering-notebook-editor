@@ -1,12 +1,9 @@
 import React, { useState } from "react";
-import { NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer } from "@tiptap/react";
+import { NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer, NodeViewProps } from "@tiptap/react";
 import { Table } from "@tiptap/extension-table";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { GripVertical, Trash2, Table as TableIcon, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Rows3, Columns3 } from "lucide-react";
-
-import { NodeViewProps } from "./types";
-
 export function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: NodeViewProps) {
   const [isCursorInside, setIsCursorInside] = useState(false);
   const [isHoveringToolbar, setIsHoveringToolbar] = useState(false);

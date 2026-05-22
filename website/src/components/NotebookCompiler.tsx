@@ -7,7 +7,7 @@ import { compileNotebook, CompileResult, CompileMode } from "@/lib/busytex";
 import { showNotification } from "./Notification";
 import { Play, Loader2, Calendar, FileText, X, RefreshCcw, Download, ChevronDown } from "lucide-react";
 
-const Preview = dynamic(() => import("./Preview"), {
+const LatexPreview = dynamic(() => import("./editor/LatexPreview"), {
   ssr: false,
   loading: () => (
     <div className="flex flex-col items-center justify-center h-full gap-4 bg-nb-bg/50 backdrop-blur-sm">
@@ -267,7 +267,7 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant animate-pulse">Loading last version...</span>
           </div>
         ) : pdfUrl ? (
-          <Preview latexContent="" pdfUrl={pdfUrl} />
+          <LatexPreview latexContent="" pdfUrl={pdfUrl} />
         ) : (
           <div className="flex flex-col items-center justify-center h-full gap-6 p-8 text-center max-w-md mx-auto">
             <div className="w-20 h-20 rounded-3xl bg-nb-surface-low flex items-center justify-center text-nb-on-surface-variant/20 border border-nb-outline-variant/30">

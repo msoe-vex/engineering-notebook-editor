@@ -1,10 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer } from "@tiptap/react";
+import { NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer, NodeViewProps } from "@tiptap/react";
 import { CodeBlock, type CodeBlockOptions } from "@tiptap/extension-code-block";
 import { GripVertical, Trash2, Code2, ChevronDown, Check } from "lucide-react";
-
-import { NodeViewProps } from "./types";
 
 export const LANGUAGES: Record<string, string> = {
   plaintext: "Plain Text",

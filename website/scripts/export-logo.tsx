@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import fs from 'fs';
 import path from 'path';
-import Logo from '../src/components/ui/Logo';
+import Logo from '../src/components/Logo';
 
 // Render the component to a string
 // We pass a className that won't do much in a raw SVG, 

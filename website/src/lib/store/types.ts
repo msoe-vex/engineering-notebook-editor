@@ -1,0 +1,101 @@
+import { NotebookMetadata, TeamMetadata, ProjectPhase } from "../metadata";
+import { ExplorerFile, GitHubConfig, TeamTab } from "../types";
+import { Project, PendingChange } from "../db";
+import { DebouncedFunction } from "../utils";
+
+export type { DebouncedFunction };
+
+export type WorkspaceMode = "local" | "github" | "temporary" | "none";
+
+export interface OpenFileState {
+  path: string;
+  name: string;
+  id: string;
+  tiptapContent: string;
+  latex: string;
+  title: string;
+  author: string;
+  phase: number | null;
+  createdAt: string;
+  updatedAt: string;
+  date: string;
+}
+
+export interface IWorkspaceStore {
+  // ─── State ──────────────────────────────────────────────────────────────────
+  mode: WorkspaceMode;
+  config: GitHubConfig | null;
+  dirHandle: FileSystemDirectoryHandle | null;
+  entries: ExplorerFile[];
+  workspaceVersion: number;
+  metadata: NotebookMetadata;
+  currentProjectId: string | null;
+  currentProject: Project | null;
+  hasEntryInUrl: boolean;
+  showTeamEditor: boolean;
+  teamTab: TeamTab;
+  showHelp: boolean;
+  helpPath: string | null;
+  showCompiler: boolean;
+  showAbout: boolean;
+  openFile: OpenFileState | null;
+  isLoading: boolean;
+  loadingLabel: string;
+  isInitialized: boolean;
+  projects: Project[];
+  pendingChanges: PendingChange[];
+  isMainTexPresent: boolean;
+  assetCache: Map<string, string>;
+  selectedPaths: Set<string>;
+  isSaving: boolean;
+  isPendingSave: boolean;
+  debouncedPersist: DebouncedFunction<() => Promise<void>>;
+  queue: Promise<void>;
+  lastSavedContents: Map<string, string>;
+  savingCount: number;
+
+  // ─── Core Helpers ───────────────────────────────────────────────────────────
+  getDBName(): string;
+  getFullPath(path: string): string;
+  setLoading(val: boolean, label?: string): void;
+  notifyStateChange(): void;
+  setPendingSave(val: boolean): void;
+  enqueue(op: () => Promise<void>): Promise<void>;
+  persistFile(path: string, content: string, label: string, isBase64?: boolean): Promise<void>;
+  reconcileAssetRefs(oldRefs: string[] | Record<string, string[]>, newRefs: string[] | Record<string, string[]>): Promise<void>;
+  shouldStageDelete(path: string): Promise<boolean>;
+  getCommittedFileContent(path: string, isBase64?: boolean): Promise<string | null>;
+  reloadWorkspace(): Promise<void>;
+
+  // ─── Public API ─────────────────────────────────────────────────────────────
+  initialize(): Promise<void>;
+  handleUrlChange(url?: URL): Promise<void>;
+  setSelectedPaths(pathsOrUpdater: Set<string> | ((prev: Set<string>) => Set<string>)): void;
+  navigateTo(params: Record<string, string | null>, pathname?: string): void;
+  refreshProjects(): Promise<void>;
+  renameProject(id: string, name: string): Promise<void>;
+  createGithubProject(config: { owner: string; repo: string; branch: string; folderPath: string; name: string }): Promise<string>;
+  createLocalProject(handle: FileSystemDirectoryHandle, name: string): Promise<string>;
+  createTemporaryProject(): Promise<string>;
+  selectProject(id: string): Promise<void>;
+  openEntry(id: string): Promise<void>;
+  updateDraft(tiptapContent: string | null, info: { title?: string; author?: string; phase?: number | null; date?: string }): void;
+  updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null; date: string }): Promise<void>;
+  createEntry(): Promise<string>;
+  refreshPending(): Promise<PendingChange[]>;
+  setEntryValidity(id: string, isValid: boolean, validationErrors?: string[]): void;
+  discardPendingChanges(): Promise<void>;
+  deleteEntry(file: ExplorerFile): Promise<void>;
+  updateLatexMetadata(): Promise<void>;
+  saveTeam(team: TeamMetadata, phases?: ProjectPhase[]): Promise<void>;
+  commitAll(config: GitHubConfig, customMessage?: string): Promise<void>;
+  getFileContent(path: string): Promise<string | null>;
+  exportEntries(entryIds?: string[]): Promise<void>;
+  importNotebook(data: Record<string, unknown>): Promise<void>;
+  importNotebookArchive(file: File): Promise<void>;
+  getAssetBase64(path: string): Promise<string | null>;
+  exportNotebook(): Promise<void>;
+  disconnect(): Promise<void>;
+  saveCompiledPdf(pdfData: Uint8Array): Promise<void>;
+  getCompiledPdfUrl(): Promise<string | null>;
+}

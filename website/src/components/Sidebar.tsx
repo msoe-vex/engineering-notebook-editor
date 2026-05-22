@@ -178,17 +178,24 @@ export default function Sidebar({
     }
   };
 
-  const handleDiscard = async () => {
-    try {
-      setIsDiscarding(true);
-      await discardPendingChanges();
-      showNotification("Discarded all pending changes.", "info");
-    } catch (e) {
-      console.error("Discard failed", e);
-      showNotification("Failed to discard changes.", "error");
-    } finally {
-      setIsDiscarding(false);
-    }
+  const handleDiscard = () => {
+    showConfirm(
+      "Discard All Changes",
+      "Are you sure you want to discard all pending changes? This action cannot be undone and you will lose all uncommitted edits.",
+      async () => {
+        try {
+          setIsDiscarding(true);
+          await discardPendingChanges();
+          showNotification("Discarded all pending changes.", "info");
+        } catch (e) {
+          console.error("Discard failed", e);
+          showNotification("Failed to discard changes.", "error");
+        } finally {
+          setIsDiscarding(false);
+        }
+      },
+      "danger"
+    );
   };
 
   const handleCommit = async (message?: string) => {

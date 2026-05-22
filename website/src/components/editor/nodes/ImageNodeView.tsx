@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
+import { NodeViewWrapper, ReactNodeViewRenderer, NodeViewProps } from "@tiptap/react";
 import { Image as TiptapImage, type ImageOptions } from "@tiptap/extension-image";
 import Image from "next/image";
 import { GripVertical, Trash2, Image as ImageIcon, Upload } from "lucide-react";
@@ -8,9 +8,6 @@ import { events, EventNames } from "@/lib/events";
 
 import { compressImageToJpeg, hashContent, convertSvgToPng, getExtensionFromDataUrl } from "@/lib/utils";
 import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
-
-import { NodeViewProps } from "./types";
-
 export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, editor, dbName }: NodeViewProps & { dbName: string }) => {
   const [resolvedSrc, setResolvedSrc] = useState(node.attrs.src);
   const [dragEnabled, setDragEnabled] = useState(false);

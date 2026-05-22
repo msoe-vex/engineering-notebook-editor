@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, memo, useCallback, useRef } from "react";
 import {
   Hash, User, Briefcase, Image as ImageIcon,
-  Loader2, Check, X, Camera, Building2, Plus, Trash2, Users,
+   Check, X, Camera, Building2, Plus, Trash2, Users,
   Palette, Shapes, Search, GripVertical, LucideIcon
 } from "lucide-react";
 import * as LucideIcons from "lucide-react";
@@ -428,8 +428,6 @@ export default function TeamEditor({
   const {
     metadata,
     saveTeam,
-    isSaving,
-    isPendingSave,
     setPendingSave
   } = useWorkspace();
 
@@ -478,9 +476,14 @@ export default function TeamEditor({
   );
 
   useEffect(() => {
+    if (hasChanges) {
+      setPendingSave(true);
+    }
+  }, [hasChanges, setPendingSave]);
+
+  useEffect(() => {
     const timer = setTimeout(() => {
       if (hasChanges) {
-        setPendingSave(true);
         saveTeam(teamData, phases).then(() => {
           setSaveSuccess(true);
           setPendingSave(false);
@@ -489,6 +492,34 @@ export default function TeamEditor({
     }, 1000);
     return () => clearTimeout(timer);
   }, [teamData, phases, hasChanges, saveTeam, setPendingSave]);
+
+  const latestDataRef = useRef({ teamData, phases, hasChanges });
+  useEffect(() => {
+    latestDataRef.current = { teamData, phases, hasChanges };
+  }, [teamData, phases, hasChanges]);
+
+  // Save immediately when switching tabs
+  const lastTabRef = useRef(initialTab);
+  useEffect(() => {
+    if (initialTab !== lastTabRef.current) {
+      const { teamData: latestData, phases: latestPhases, hasChanges: changesExist } = latestDataRef.current;
+      if (changesExist) {
+        saveTeam(latestData, latestPhases);
+        setPendingSave(false);
+      }
+      lastTabRef.current = initialTab;
+    }
+  }, [initialTab, saveTeam, setPendingSave]);
+
+  useEffect(() => {
+    return () => {
+      const { teamData: latestData, phases: latestPhases, hasChanges: changesExist } = latestDataRef.current;
+      if (changesExist) {
+        saveTeam(latestData, latestPhases);
+        setPendingSave(false);
+      }
+    };
+  }, [saveTeam, setPendingSave]);
 
   useEffect(() => {
     if (saveSuccess) {
@@ -504,7 +535,10 @@ export default function TeamEditor({
   // Sync state with latest metadata after external discard/load
   useEffect(() => {
     let cancelled = false;
-    if (initialData !== lastInitialDataRef.current) {
+    const initialDataStr = JSON.stringify(initialData);
+    const lastInitialDataStr = JSON.stringify(lastInitialDataRef.current);
+
+    if (initialDataStr !== lastInitialDataStr) {
       if (JSON.stringify(initialData) !== JSON.stringify(teamData)) {
         queueMicrotask(() => {
           if (!cancelled) setTeamData(initialData);
@@ -517,7 +551,10 @@ export default function TeamEditor({
 
   useEffect(() => {
     let cancelled = false;
-    if (initialPhases !== lastInitialPhasesRef.current) {
+    const initialPhasesStr = JSON.stringify(initialPhases);
+    const lastInitialPhasesStr = JSON.stringify(lastInitialPhasesRef.current);
+
+    if (initialPhasesStr !== lastInitialPhasesStr) {
       if (JSON.stringify(initialPhases) !== JSON.stringify(phases)) {
         queueMicrotask(() => {
           if (!cancelled) setPhases(initialPhases);
@@ -661,23 +698,9 @@ export default function TeamEditor({
             </div>
           </div>
 
+
+
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 mr-2 shrink-0">
-              {isSaving || isPendingSave || hasChanges ? (
-                <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-primary animate-pulse">
-                  <Loader2 size={12} className="animate-spin" />
-                  <span className="inline">SAVING...</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-on-surface-variant/40">
-                  <Check size={12} />
-                  <span className="inline">SAVED</span>
-                </div>
-              )}
-            </div>
-
-            <div className="w-px h-6 bg-nb-outline-variant/30" />
-
             <button
               onClick={onClose}
               className="p-2 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer"

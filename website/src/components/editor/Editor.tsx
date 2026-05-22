@@ -1,29 +1,30 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import UnifiedEditor from "./UnifiedEditor";
+import RichTextArea from "./RichTextArea";
 import { Editor as TiptapEditor } from "@tiptap/react";
-import { ToolbarButton, TableGridSelector } from "./editor/EditorUI";
+import { ToolbarButton } from "./ui/ToolbarButton";
+import { TableGridSelector } from "./ui/TableGridSelector";
 import { createPortal } from "react-dom";
 import { saveAs } from "file-saver";
 import {
   Save, Trash2, Loader2, User, X, FileCode,
   Undo2, Redo2, ImagePlus, ChevronDown, ChevronUp, List, ListOrdered,
-  Code, Table as TableIcon, Heading, Bold, Italic, Check, Image as ImageIcon,
+  Code, Table as TableIcon, Heading, Bold, Italic, Image as ImageIcon,
   Terminal, Link as LinkIcon, Underline as UnderlineIcon, Sigma,
   FileJson, Strikethrough, Palette, Highlighter, Superscript, Subscript, HelpCircle
 } from "lucide-react";
-import ValidationTooltip from "./ValidationTooltip";
+import ValidationTooltip from "./ui/ValidationTooltip";
 import * as LucideIcons from "lucide-react";
 import {
   Panel,
   PanelGroup,
   PanelResizeHandle
 } from "react-resizable-panels";
-import ViewToggle, { ViewMode } from "./ViewToggle";
+import ViewToggle, { ViewMode } from "./ui/ViewToggle";
 import dynamic from "next/dynamic";
 
-const Preview = dynamic(() => import("./Preview"), {
+const LatexPreview = dynamic(() => import("./LatexPreview"), {
   ssr: false,
   loading: () => (
     <div className="flex flex-col items-center justify-center h-full gap-4 bg-nb-bg/50 backdrop-blur-sm">
@@ -35,11 +36,11 @@ const Preview = dynamic(() => import("./Preview"), {
 import { getLocalDateString } from "@/lib/metadata";
 import { generateEntryLatex } from "@/lib/latex";
 import { getPhases, getPhaseConfig } from "@/lib/phases";
-import AutocompleteInput from "./AutocompleteInput";
-import DatePicker from "./DatePicker";
+import AutocompleteInput from "./ui/AutocompleteInput";
+import DatePicker from "./ui/DatePicker";
 import { extractResources, extractReferences, TipTapNode, ensureResourceIds, buildResourceTypeIndex } from "@/lib/metadata";
 import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
-import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng, debounce, compressImageToJpeg } from "@/lib/utils";
+import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng, compressImageToJpeg } from "@/lib/utils";
 import { NodeSelection } from "@tiptap/pm/state";
 
 // ─── Sub-components for Performance ──────────────────────────────────────────
@@ -210,7 +211,6 @@ const MenuItem = ({ label, children, activeMenu, setActiveMenu }: { label: strin
   const containerRef = useRef<HTMLDivElement>(null);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
 
-
   return (
     <div className="relative h-full flex items-center" ref={containerRef}>
       <button
@@ -354,7 +354,6 @@ const EditorToolbar = React.memo(function EditorToolbar({
       editor.off('transaction', handleUpdate);
     };
   }, [editor]);
-
 
   return (
     <div className="border-t border-nb-outline-variant/30 bg-nb-surface-mid/50 shrink-0 overflow-x-auto scrollbar-hide w-full">
@@ -776,11 +775,9 @@ const EditorContent = React.memo(function EditorContent({
   showConfirm,
   viewMode,
   onSetViewMode,
-  setPendingSave,
-  isSavingGlobal,
-  isPendingSaveGlobal,
   workspaceVersion,
   onOpenHelp,
+  updateDraft,
 }: EditorProps & {
   openFile: NonNullable<ReturnType<typeof useWorkspace>['openFile']>;
   metadata: ReturnType<typeof useWorkspace>['metadata'];
@@ -790,39 +787,24 @@ const EditorContent = React.memo(function EditorContent({
   setEntryValidity: ReturnType<typeof useWorkspace>['setEntryValidity'];
   exportEntries: ReturnType<typeof useWorkspace>['exportEntries'];
   setPendingSave: (val: boolean) => void;
-  isSavingGlobal: boolean;
-  isPendingSaveGlobal: boolean;
   workspaceVersion: number;
+  updateDraft: ReturnType<typeof useWorkspace>['updateDraft'];
 }) {
   const {
     path: filename,
-    title: initialTitle,
-    author: initialAuthor,
-    phase: initialPhase,
-    date: initialDate,
-    tiptapContent: initialContent,
     createdAt: initialCreatedAt,
     id: entryId
   } = openFile;
 
-
-  const [title, setTitle] = useState(initialTitle);
-  const [author, setAuthor] = useState(initialAuthor);
-  const [phase, setPhase] = useState<number | null>(initialPhase);
-  const [date, setDate] = useState(initialDate || getLocalDateString());
-  const [content, setContent] = useState<TipTapNode | string>(() => parseInitialContent(initialContent));
-  const [stableContentForPreview, setStableContentForPreview] = useState(content);
-  const [stableMetadataForPreview, setStableMetadataForPreview] = useState({ title: initialTitle, author: initialAuthor, phase: initialPhase, date: initialDate || getLocalDateString() });
   const [editor, setEditor] = useState<import("@tiptap/react").Editor | null>(null);
-
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   const validate = useCallback(() => {
     const errors: string[] = [];
-    if (!title.trim()) errors.push("Entry title is required.");
-    if (!author.trim()) errors.push("Author name is required.");
-    if (!date.trim()) errors.push("Date is required.");
-    if (phase === null) errors.push("Entry phase is required.");
+    if (!openFile.title?.trim()) errors.push("Entry title is required.");
+    if (!openFile.author?.trim()) errors.push("Author name is required.");
+    if (!openFile.date?.trim()) errors.push("Date is required.");
+    if (openFile.phase === null || openFile.phase === undefined) errors.push("Entry phase is required.");
 
     const TYPE_LABELS: Record<string, string> = {
       image: "image",
@@ -859,14 +841,12 @@ const EditorContent = React.memo(function EditorContent({
     }
 
     return { valid: errors.length === 0, errors };
-  }, [title, author, date, phase, editor, metadata]);
+  }, [openFile.title, openFile.author, openFile.date, openFile.phase, editor, metadata]);
 
   // Local validation state for immediate UI feedback.
   // Editor is the sole authority on validity while open — parent isValid is only used for initial value.
   // This prevents flickering caused by stale metadata flowing back down during debounced saves.
   const [localIsValid, setLocalIsValid] = useState(metadata.entries[entryId]?.isValid !== false);
-
-
 
   // Local metadata validation (debounced for performance)
   useEffect(() => {
@@ -879,7 +859,7 @@ const EditorContent = React.memo(function EditorContent({
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [title, author, phase, date, editor?.state.doc.content, validate, localIsValid, validationErrors, entryId, setEntryValidity]);
+  }, [openFile.title, openFile.author, openFile.phase, openFile.date, openFile.tiptapContent, editor?.state.doc.content, validate, localIsValid, validationErrors, entryId, setEntryValidity]);
 
   const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -905,9 +885,10 @@ const EditorContent = React.memo(function EditorContent({
     }
   }, [viewMode]);
 
-  const [isManualSaving, setIsManualSaving] = useState(false);
+
   const editorPanelRef = useRef<import("react-resizable-panels").ImperativePanelHandle>(null);
   const previewPanelRef = useRef<import("react-resizable-panels").ImperativePanelHandle>(null);
+  const [isResizing, setIsResizing] = useState(false);
   const phaseButtonRef = useRef<HTMLDivElement>(null);
   const [phasePos, setPhasePos] = useState({ top: 0, left: 0, width: 0 });
   const toggleLinkFn = useRef<(() => void) | null>(null);
@@ -939,12 +920,10 @@ const EditorContent = React.memo(function EditorContent({
     return () => window.removeEventListener("mousedown", handleOutsideClick);
   }, [showTableGrid, setShowTableGrid]);
 
-
   // Dynamic Phase Logic
   const availablePhases = getPhases(metadata?.phases);
   const phaseConfig = getPhaseConfig(availablePhases);
-  const activePhaseCfg = phase && phaseConfig[phase] ? phaseConfig[phase] : null;
-
+  const activePhaseCfg = openFile.phase !== null && openFile.phase !== undefined && phaseConfig[openFile.phase] ? phaseConfig[openFile.phase] : null;
 
   const otherAuthors = React.useMemo(() => {
     const authors = new Set<string>();
@@ -967,26 +946,9 @@ const EditorContent = React.memo(function EditorContent({
     return Array.from(titles).sort();
   }, [metadata.entries, entryId]);
 
-  const latestContentRef = useRef(content);
-  const latestMetadataRef = useRef({ title, author, phase, date });
-
-  useEffect(() => {
-    latestContentRef.current = content;
-    latestMetadataRef.current = { title, author, phase, date };
-  }, [content, title, author, phase, date]);
-
-  const debouncedSetContent = React.useMemo(() => debounce((val: TipTapNode | string) => {
-    setContent(val);
-  }, 500), []);
-
   const handleEditorChange = useCallback((newVal: string) => {
-    const contentStr = typeof latestContentRef.current === 'string' ? latestContentRef.current : JSON.stringify(latestContentRef.current);
-    if (newVal === contentStr) return;
-
-    setPendingSave(true);
-    latestContentRef.current = newVal;
-    debouncedSetContent(newVal);
-  }, [debouncedSetContent, setPendingSave]);
+    updateDraft(newVal, {});
+  }, [updateDraft]);
 
   const generateLatex = useCallback((cnt: TipTapNode | string, t: string, a: string, p: number | null, d: string) => {
     const id = filename.split('/').pop()?.replace('.json', '') || "";
@@ -1012,92 +974,8 @@ const EditorContent = React.memo(function EditorContent({
   }, [filename, initialCreatedAt, metadata.entries]);
 
   const previewLatex = React.useMemo(() => {
-    return generateLatex(stableContentForPreview, stableMetadataForPreview.title, stableMetadataForPreview.author, stableMetadataForPreview.phase, stableMetadataForPreview.date);
-  }, [stableContentForPreview, stableMetadataForPreview, generateLatex]);
-
-
-
-  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  const lastSyncedRef = useRef({
-    title: initialTitle,
-    author: initialAuthor,
-    phase: initialPhase,
-    date: initialDate,
-    contentStr: initialContent
-  });
-
-  const lastAutoSavedRef = useRef({
-    title: initialTitle,
-    author: initialAuthor,
-    phase: initialPhase,
-    date: initialDate,
-    contentStr: initialContent
-  });
-
-  // No manual reset effect needed - the component remounts when entryId changes due to the 'key' prop
-
-  // ── Callback refs (stable references to avoid resetting timers on re-render) ──
-  const generateLatexRef = useRef(generateLatex);
-  useEffect(() => {
-    generateLatexRef.current = generateLatex;
-  }, [generateLatex]);
-
-  // Metadata and content changes are now both handled by the debounced auto-save below
-  // to avoid spamming the storage layer while typing.
-
-
-  // ── Debounced content auto-save ──────────────────────────────────────────────
-  // Only content changes are debounced (800ms) since they trigger disk/GitHub I/O.
-  // Uses refs for metadata so title/author/phase keystrokes don't reset the timer.
-  useEffect(() => {
-    const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
-    const isContentChanged = contentStr !== lastAutoSavedRef.current.contentStr;
-    const isMetadataChanged = title !== lastAutoSavedRef.current.title ||
-      author !== lastAutoSavedRef.current.author ||
-      phase !== lastAutoSavedRef.current.phase ||
-      date !== lastAutoSavedRef.current.date;
-
-    if (isContentChanged || isMetadataChanged) {
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current);
-      } else {
-        setPendingSave(true);
-      }
-
-      autoSaveTimerRef.current = setTimeout(() => {
-        const { title, author, phase, date } = latestMetadataRef.current;
-        const currentContent = latestContentRef.current;
-        const contentStr = typeof currentContent === 'string' ? currentContent : JSON.stringify(currentContent);
-
-        const latex = generateLatexRef.current(currentContent, title, author, phase, date);
-        updateEntry(entryId, latex, contentStr, { title, author, phase, date });
-
-        setStableContentForPreview(currentContent);
-        setStableMetadataForPreview({ title, author, phase, date });
-
-        lastAutoSavedRef.current.contentStr = contentStr;
-        lastAutoSavedRef.current.title = title;
-        lastAutoSavedRef.current.author = author;
-        lastAutoSavedRef.current.phase = phase;
-        lastAutoSavedRef.current.date = date;
-
-        setPendingSave(false);
-        autoSaveTimerRef.current = null;
-      }, 800);
-    } else {
-      // No changes detected, ensure we aren't stuck in a saving state
-      setPendingSave(false);
-    }
-
-    return () => {
-      setPendingSave(false);
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current);
-        autoSaveTimerRef.current = null;
-      }
-    };
-  }, [content, filename, title, author, phase, date, entryId, updateEntry, setPendingSave]);
+    return generateLatex(openFile.tiptapContent, openFile.title, openFile.author, openFile.phase, openFile.date);
+  }, [openFile.tiptapContent, openFile.title, openFile.author, openFile.phase, openFile.date, generateLatex]);
 
   const handleSave = useCallback(async () => {
     const { valid, errors } = validate();
@@ -1107,30 +985,24 @@ const EditorContent = React.memo(function EditorContent({
     }
 
     setValidationErrors([]);
-    setPendingSave(true);
-    setIsManualSaving(true);
 
-    // Clear auto-save timer if it exists to avoid redundant saves
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current);
-      autoSaveTimerRef.current = null;
+    try {
+      await updateEntry(entryId, previewLatex, openFile.tiptapContent, {
+        title: openFile.title,
+        author: openFile.author,
+        phase: openFile.phase,
+        date: openFile.date
+      });
+    } catch (e) {
+      console.error(e);
     }
-
-    const latex = generateLatex(content, title, author, phase, date);
-    const contentStr = JSON.stringify(content);
-
-    await updateEntry(entryId, latex, contentStr, { title, author, phase, date });
-    lastSyncedRef.current = { title, author, phase, date, contentStr };
-    setPendingSave(false);
-    setIsManualSaving(false);
-  }, [content, title, author, phase, date, generateLatex, validate, updateEntry, entryId, setPendingSave]);
+  }, [openFile.tiptapContent, openFile.title, openFile.author, openFile.phase, openFile.date, previewLatex, validate, updateEntry, entryId]);
 
   const handleDownload = () => {
-    const latex = generateLatex(content, title, author, phase, date);
+    const latex = generateLatex(openFile.tiptapContent, openFile.title, openFile.author, openFile.phase, openFile.date);
     const blob = new Blob([latex], { type: "text/plain;charset=utf-8" });
     saveAs(blob, filename);
   };
-
 
   useEffect(() => {
     if (!activeMenu) return;
@@ -1152,8 +1024,6 @@ const EditorContent = React.memo(function EditorContent({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleSave]);
-
-
 
   const insertImage = () => {
     const input = document.createElement("input");
@@ -1231,7 +1101,6 @@ const EditorContent = React.memo(function EditorContent({
               )}
             </button>
 
-
             <MenuItem label="File" activeMenu={activeMenu} setActiveMenu={handleSetActiveMenu}>
               <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} setActiveMenu={handleSetActiveMenu} />
               <MenuAction
@@ -1248,7 +1117,7 @@ const EditorContent = React.memo(function EditorContent({
               <MenuAction icon={<Trash2 size={14} />} label="Delete" onClick={() => {
                 showConfirm(
                   "Delete Entry",
-                  `Are you sure you want to delete "${title || "Untitled Entry"}"? This action cannot be undone and will permanently remove the entry and its associated LaTeX file.`,
+                  `Are you sure you want to delete "${openFile.title || "Untitled Entry"}"? This action cannot be undone and will permanently remove the entry and its associated LaTeX file.`,
                   () => {
                     deleteEntry({ name: filename.split('/').pop() || "", path: filename });
                     onClose?.();
@@ -1379,7 +1248,6 @@ const EditorContent = React.memo(function EditorContent({
               />
             </MenuItem>
 
-
             <div className="flex-1 min-w-[20px]" />
 
             <div className="flex items-center gap-2 mr-4">
@@ -1387,19 +1255,6 @@ const EditorContent = React.memo(function EditorContent({
             </div>
 
 
-            <div className="flex items-center gap-2 mr-2">
-              {isPendingSaveGlobal || isSavingGlobal || isManualSaving ? (
-                <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-primary animate-pulse">
-                  <Loader2 size={12} className="animate-spin" />
-                  <span>SAVING...</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-on-surface-variant/40">
-                  <Check size={12} />
-                  <span>SAVED</span>
-                </div>
-              )}
-            </div>
 
             <button
               onClick={onOpenHelp}
@@ -1427,13 +1282,13 @@ const EditorContent = React.memo(function EditorContent({
                   <div className="flex-1 min-w-[280px]">
                     <AutocompleteInput
                       type="text"
-                      value={title}
+                      value={openFile.title}
                       options={otherTitles}
                       onChange={(e) => {
-                        setTitle(e.target.value);
+                        updateDraft(null, { title: e.target.value });
                       }}
                       onSelectOption={(val) => {
-                        setTitle(val);
+                        updateDraft(null, { title: val });
                       }}
                       placeholder="Entry Title..."
                       className="w-full text-xl font-bold bg-transparent text-nb-on-surface outline-none placeholder:text-nb-outline-variant"
@@ -1452,8 +1307,8 @@ const EditorContent = React.memo(function EditorContent({
 
                   <div className="flex flex-wrap items-center gap-2 md:gap-3 flex-1 md:flex-none">
                     <DatePicker
-                      value={date}
-                      onChange={(val) => setDate(val)}
+                      value={openFile.date || getLocalDateString()}
+                      onChange={(val) => updateDraft(null, { date: val })}
                       className="h-9 flex-1 min-w-[140px]"
                     />
 
@@ -1464,10 +1319,10 @@ const EditorContent = React.memo(function EditorContent({
                       <AutocompleteInput
                         type="text"
                         autoComplete="off"
-                        value={author}
+                        value={openFile.author}
                         options={otherAuthors}
-                        onChange={(e) => { setAuthor(e.target.value); }}
-                        onSelectOption={(val) => { setAuthor(val); }}
+                        onChange={(e) => { updateDraft(null, { author: e.target.value }); }}
+                        onSelectOption={(val) => { updateDraft(null, { author: val }); }}
                         placeholder="Author"
                         className="bg-transparent border-none outline-none text-[13px] font-bold text-nb-on-surface-variant tracking-tight flex-1 min-w-0 placeholder:text-nb-on-surface-variant/20"
                       />
@@ -1490,12 +1345,12 @@ const EditorContent = React.memo(function EditorContent({
                       />
 
                       {activePhaseCfg && (
-                        <activePhaseCfg.icon size={15} className="shrink-0 drop-shadow-sm" style={{ color: availablePhases.find(p => p.index === phase)?.color }} />
+                        <activePhaseCfg.icon size={15} className="shrink-0 drop-shadow-sm" style={{ color: availablePhases.find(p => p.index === openFile.phase)?.color }} />
                       )}
 
                       {/* Metadata dropdown */}
-                      <div className={`flex-1 w-full min-w-0 text-xs font-bold tracking-widest truncate ${phase !== null && phaseConfig[phase] ? phaseConfig[phase].text : "text-nb-on-surface-variant/60"}`}>
-                        {availablePhases.find(p => p.index === phase)?.name || "No Phase Selected"}
+                      <div className={`flex-1 w-full min-w-0 text-xs font-bold tracking-widest truncate ${openFile.phase !== null && phaseConfig[openFile.phase] ? phaseConfig[openFile.phase].text : "text-nb-on-surface-variant/60"}`}>
+                        {availablePhases.find(p => p.index === openFile.phase)?.name || "No Phase Selected"}
                       </div>
                       <ChevronDown size={12} className={`text-nb-on-surface-variant/40 shrink-0 transition-transform duration-200 ${activeMenu === "Phase" ? "rotate-180" : ""}`} />
 
@@ -1518,12 +1373,12 @@ const EditorContent = React.memo(function EditorContent({
                               <button
                                 key={p.id}
                                 type="button"
-                                onClick={() => { setPhase(p.index); setActiveMenu(null); }}
-                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[10px] font-bold tracking-widest transition-all text-left cursor-pointer active:scale-[0.98] ${phase === p.index ? `${cfg.bg} ${cfg.text} hover:brightness-90` : "text-nb-on-surface-variant hover:bg-nb-surface-mid hover:text-nb-on-surface hover:translate-x-1 hover:ring-1 hover:ring-nb-primary/20"}`}
+                                onClick={() => { updateDraft(null, { phase: p.index }); setActiveMenu(null); }}
+                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[10px] font-bold tracking-widest transition-all text-left cursor-pointer active:scale-[0.98] ${openFile.phase === p.index ? `${cfg.bg} ${cfg.text} hover:brightness-90` : "text-nb-on-surface-variant hover:bg-nb-surface-mid hover:text-nb-on-surface hover:translate-x-1 hover:ring-1 hover:ring-nb-primary/20"}`}
                               >
                                 <Icon size={14} style={{ color: p.color }} />
                                 <span className="flex-1">{p.name.toUpperCase()}</span>
-                                {phase === p.index && <LucideIcons.Check size={12} style={{ color: p.color }} />}
+                                {openFile.phase === p.index && <LucideIcons.Check size={12} style={{ color: p.color }} />}
                               </button>
                             );
                           })}
@@ -1566,16 +1421,16 @@ const EditorContent = React.memo(function EditorContent({
           <Panel
             id="editor-panel" order={1} minSize={30} collapsible={true} ref={editorPanelRef}
             defaultSize={viewMode === "editor" ? 100 : (viewMode === "preview" ? 0 : 50)}
-            className={`flex flex-col h-full transition-all duration-500 ease-in-out ${viewMode === "preview" ? "opacity-0 scale-[0.98] pointer-events-none" : "opacity-100 scale-100"}`}
+            className={`flex flex-col h-full ${isResizing ? "pointer-events-none select-none" : "transition-all duration-500 ease-in-out"} ${viewMode === "preview" ? "opacity-0 scale-[0.98] pointer-events-none" : "opacity-100 scale-100"}`}
           >
             <div className="flex-1 overflow-hidden relative">
               <div className="absolute inset-0 flex flex-col overflow-y-auto custom-scrollbar">
-                <UnifiedEditor
+                <RichTextArea
                   key={`${filename}-${workspaceVersion}`}
                   filename={filename}
                   content={parseInitialContent(openFile.tiptapContent)} // Initial load only
                   onChange={handleEditorChange}
-                  author={author}
+                  author={openFile.author}
                   onEditorInit={setEditor}
                   onToggleLink={(fn) => { toggleLinkFn.current = fn; }}
                   entryId={entryId}
@@ -1583,13 +1438,17 @@ const EditorContent = React.memo(function EditorContent({
               </div>
             </div>
           </Panel>
-          <PanelResizeHandle id="editor-preview-resizer" className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${viewMode !== 'split' ? 'hidden' : ''}`} />
+          <PanelResizeHandle
+            id="editor-preview-resizer"
+            onDragging={setIsResizing}
+            className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${viewMode !== 'split' ? 'hidden' : ''}`}
+          />
           <Panel
             id="preview-panel" order={2} collapsible={true} minSize={30} ref={previewPanelRef}
             defaultSize={viewMode === "preview" ? 100 : (viewMode === "editor" ? 0 : 50)}
-            className={`flex flex-col h-full bg-nb-surface-low transition-all duration-500 ease-in-out ${viewMode === "editor" ? "opacity-0 scale-[0.98] pointer-events-none" : "opacity-100 scale-100"}`}
+            className={`flex flex-col h-full bg-nb-surface-low ${isResizing ? "pointer-events-none select-none" : "transition-all duration-500 ease-in-out"} ${viewMode === "editor" ? "opacity-0 scale-[0.98] pointer-events-none" : "opacity-100 scale-100"}`}
           >
-            <Preview latexContent={previewLatex} />
+            <LatexPreview latexContent={previewLatex} />
           </Panel>
         </PanelGroup>
       </div>
@@ -1614,9 +1473,8 @@ const Editor = (props: EditorProps) => {
     setEntryValidity,
     exportEntries,
     setPendingSave,
-    isSaving,
-    isPendingSave,
     workspaceVersion,
+    updateDraft,
   } = useWorkspace();
 
   if (!openFile) return null;
@@ -1632,9 +1490,8 @@ const Editor = (props: EditorProps) => {
       setEntryValidity={setEntryValidity}
       exportEntries={exportEntries}
       setPendingSave={setPendingSave}
-      isSavingGlobal={isSaving}
-      isPendingSaveGlobal={isPendingSave}
       workspaceVersion={workspaceVersion}
+      updateDraft={updateDraft}
       {...props}
     />
   );

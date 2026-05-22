@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { X, Loader2, Search, Check, Folder, Plus, ExternalLink, HardDrive } from "lucide-react";
-import GithubIcon from "./ui/GithubIcon";
+import GithubIcon from "./GithubIcon";
 import { GitHubConfig, GitHubRepo, fetchUserRepositories, fetchRepoFolders, isGitHub401 } from "@/lib/github";
 import { GITHUB_APP_INSTALL_URL } from "@/lib/constants";
 import { Project } from "@/lib/db";

@@ -10,8 +10,8 @@ import {
   Users, Sparkles, Play,
   Lock, WifiOff, ChevronDown
 } from "lucide-react";
-import Logo from "./ui/Logo";
-import GithubIcon from "./ui/GithubIcon";
+import Logo from "./Logo";
+import GithubIcon from "./GithubIcon";
 
 const BLINK_CSS = `
   @keyframes blink {

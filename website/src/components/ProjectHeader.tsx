@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from "react";
-import GithubIcon from "./ui/GithubIcon";
+import GithubIcon from "./GithubIcon";
 import {
-  Menu, Sun, Moon, HelpCircle, Play,
+  Menu, HelpCircle, Play, Loader2, Check,
   MoreVertical, Download, Upload, ArrowLeftRight, Settings2, Edit3
 } from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { ViewMode } from "./ViewToggle";
+import { ViewMode } from "./editor/ui/ViewToggle";
 
 interface ProjectHeaderProps {
   isSidebarOpen: boolean;
@@ -18,8 +18,6 @@ interface ProjectHeaderProps {
   onSetProjectRenameValue: (val: string) => void;
   onStartRename: () => void;
   onEndRename: (save: boolean) => void;
-  isDarkMode: boolean;
-  onToggleTheme: () => void;
   onOpenHelp: () => void;
   onOpenTeam: () => void;
   onOpenCompiler: () => void;
@@ -27,7 +25,6 @@ interface ProjectHeaderProps {
   onExport: () => void;
   onDisconnect: () => void;
   onGoHome: () => void;
-  mounted: boolean;
 }
 
 export default function ProjectHeader({
@@ -38,17 +35,14 @@ export default function ProjectHeader({
   onSetProjectRenameValue,
   onStartRename,
   onEndRename,
-  isDarkMode,
-  onToggleTheme,
   onOpenHelp,
   onOpenTeam,
   onOpenCompiler,
   onImport,
   onExport,
   onDisconnect,
-  mounted
 }: ProjectHeaderProps) {
-  const { currentProject } = useWorkspace();
+  const { currentProject, isSaving, isPendingSave } = useWorkspace();
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -142,20 +136,20 @@ export default function ProjectHeader({
         )}
       </div>
 
-      <div className="flex items-center gap-2">
-        <button
-          onClick={onDisconnect}
-          className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-tertiary transition-colors cursor-pointer"
-          title="Change Workspace"
-        >
-          <ArrowLeftRight size={16} />
-        </button>
-        <button
-          onClick={onToggleTheme}
-          className="p-2 rounded-lg bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer"
-        >
-          {!mounted ? <div className="w-4 h-4" /> : isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 mr-2">
+          {isSaving || isPendingSave ? (
+            <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-primary animate-pulse">
+              <Loader2 size={12} className="animate-spin" />
+              <span>SAVING...</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-on-surface-variant/40">
+              <Check size={12} />
+              <span>SAVED</span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
