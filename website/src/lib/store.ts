@@ -800,7 +800,7 @@ class WorkspaceStore {
         } catch { /* use as is */ }
       }
 
-      const { cleanDoc, newAssets } = await dehydrateAssets(contentObj);
+      const { cleanDoc, newAssets } = await dehydrateAssets(contentObj, existingEntry.assets || []);
       const entryJsonStr = JSON.stringify({ version: 3, content: cleanDoc }, null, 2);
 
       // Save assets
@@ -954,23 +954,20 @@ class WorkspaceStore {
     // Background persistence
     this.enqueue(async () => {
       if (this.mode === "local" && this.dirHandle) {
-        await deleteLocalFileAtPath(this.dirHandle, file.path);
-        await deleteLocalFileAtPath(this.dirHandle, `${LATEX_DIR}/${id}.tex`);
+        if (await this.shouldStageDelete(file.path)) {
+          await deleteLocalFileAtPath(this.dirHandle, file.path);
+        }
+        if (await this.shouldStageDelete(`${LATEX_DIR}/${id}.tex`)) {
+          await deleteLocalFileAtPath(this.dirHandle, `${LATEX_DIR}/${id}.tex`);
+        }
       } else if (this.mode === "github" || this.mode === "temporary") {
         const dbName = this.getDBName();
 
-        const stagedEntry = await getPending(dbName, file.path);
-        const stagedLatex = await getPending(dbName, `${LATEX_DIR}/${id}.tex`);
-
-        if (stagedEntry?.operation === "upsert") {
-          await removeStaged(dbName, file.path);
-        } else {
+        if (await this.shouldStageDelete(file.path)) {
           await stageChange(dbName, { path: file.path, operation: "delete", label: "Delete entry", stagedAt: new Date().toISOString() });
         }
 
-        if (stagedLatex?.operation === "upsert") {
-          await removeStaged(dbName, `${LATEX_DIR}/${id}.tex`);
-        } else {
+        if (await this.shouldStageDelete(`${LATEX_DIR}/${id}.tex`)) {
           await stageChange(dbName, { path: `${LATEX_DIR}/${id}.tex`, operation: "delete", label: "Delete LaTeX", stagedAt: new Date().toISOString() });
         }
       }
@@ -1589,10 +1586,10 @@ class WorkspaceStore {
       const mode = (this.mode === "none" && this.config) ? "github" : this.mode;
       const dbName = this.getDBName();
       const staged = await getPending(dbName, path);
+      const committed = mode === "github" ? await this.getCommittedFileContent(path, isBase64) : null;
+      const changeType = committed === null ? "create" : "update";
 
       if (mode === "github") {
-        const committed = await this.getCommittedFileContent(path, isBase64);
-
         if (committed === content) {
           if (staged) {
             await removeStaged(dbName, path);
@@ -1606,7 +1603,7 @@ class WorkspaceStore {
         return;
       }
 
-      await stageChange(dbName, { path, content, operation: "upsert", label, stagedAt: new Date().toISOString() });
+      await stageChange(dbName, { path, content, operation: "upsert", changeType, label, stagedAt: new Date().toISOString() });
       await this.refreshPending();
     }
   }
@@ -1633,13 +1630,42 @@ class WorkspaceStore {
 
     for (const path of removed) {
       if (this.mode === "local" && this.dirHandle) {
-        await deleteLocalFileAtPath(this.dirHandle, path);
+        if (await this.shouldStageDelete(path)) {
+          await deleteLocalFileAtPath(this.dirHandle, path);
+        }
       } else if (this.mode === "github" || this.mode === "temporary") {
-        await stageChange(this.getDBName(), { path, operation: "delete", label: `Cleanup orphan: ${path}`, stagedAt: new Date().toISOString() });
+        if (await this.shouldStageDelete(path)) {
+          await stageChange(this.getDBName(), { path, operation: "delete", label: `Cleanup orphan: ${path}`, stagedAt: new Date().toISOString() });
+        }
       }
       // Also remove from global cache to prevent hydration of dead paths
       this.assetCache.delete(path);
     }
+  }
+
+  private async shouldStageDelete(path: string): Promise<boolean> {
+    const dbName = this.getDBName();
+    const staged = await getPending(dbName, path);
+
+    if (staged?.operation === "upsert") {
+      await removeStaged(dbName, path);
+      await this.refreshPending();
+      return false;
+    }
+
+    if (staged?.operation === "delete") {
+      return false;
+    }
+
+    if (this.mode === "local" && this.dirHandle) {
+      return checkLocalFileExists(this.dirHandle, path);
+    }
+
+    if (this.config && (this.mode === "github" || this.mode === "temporary" || this.mode === "none")) {
+      return checkGitHubFileExists(this.config, this.getFullPath(path));
+    }
+
+    return false;
   }
 
   // ─── State Helpers ──────────────────────────────────────────────────────────

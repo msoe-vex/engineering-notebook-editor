@@ -322,17 +322,13 @@ export function removeImageFromDoc(doc: TipTapDoc, deletedPath: string): TipTapD
  * Returns { cleanDoc, newAssets }.
  * newAssets is a list of { path, base64 } to be saved.
  */
-export async function dehydrateAssets(doc: TipTapDoc): Promise<{ cleanDoc: TipTapDoc; newAssets: { path: string; base64: string }[] }> {
+export async function dehydrateAssets(
+  doc: TipTapDoc,
+  knownAssetPaths: string[] = []
+): Promise<{ cleanDoc: TipTapDoc; newAssets: { path: string; base64: string }[] }> {
   const { hashContent, getExtensionFromDataUrl } = await import("./utils");
   const assets: { path: string; base64: string }[] = [];
-
-  const getPathHash = (path?: string) => {
-    if (!path) return undefined;
-    const fileName = path.split("/").pop() || "";
-    const dotIndex = fileName.lastIndexOf(".");
-    if (dotIndex <= 0) return undefined;
-    return fileName.slice(0, dotIndex);
-  };
+  const knownPaths = new Set(knownAssetPaths);
 
   async function walk(node: TipTapNode): Promise<TipTapNode> {
     if (!node) return node;
@@ -352,9 +348,9 @@ export async function dehydrateAssets(doc: TipTapDoc): Promise<{ cleanDoc: TipTa
         const defaultOriginalPath = originalHash ? `${ASSETS_ORIGINAL_DIR}/${originalHash}.${originalExt}` : compressedPath;
         const originalPath = attrs.originalFilePath || defaultOriginalPath;
 
-        // Skip persisting when the file already uses the same content hash.
-        const compressedUnchanged = !!(compressedBase64 && compressedHash && attrs.filePath && getPathHash(attrs.filePath) === compressedHash);
-        const originalUnchanged = !!(originalBase64 && originalHash && attrs.originalFilePath && getPathHash(attrs.originalFilePath) === originalHash);
+        // Only skip when this entry already knows the asset path and the content hash matches.
+        const compressedUnchanged = !!(compressedBase64 && compressedHash && compressedPath && knownPaths.has(compressedPath) && compressedPath.includes(compressedHash));
+        const originalUnchanged = !!(originalBase64 && originalHash && originalPath && knownPaths.has(originalPath) && originalPath.includes(originalHash));
 
         if (originalBase64 && originalPath && !originalUnchanged) assets.push({ path: originalPath, base64: originalBase64 });
         if (compressedBase64 && compressedPath && !compressedUnchanged) assets.push({ path: compressedPath, base64: compressedBase64 });

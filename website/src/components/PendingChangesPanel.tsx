@@ -70,8 +70,8 @@ export default function PendingChangesPanel({
           <div className="max-h-24 overflow-y-auto scrollbar-hide space-y-1.5 pl-4.5 border-l border-nb-tertiary/10 ml-0.5 animate-in fade-in slide-in-from-top-1 duration-200">
             {pendingChanges.map(p => (
               <div key={p.path} className="text-[8px] font-mono text-nb-on-surface-variant/60 truncate flex gap-2">
-                <span className={`uppercase font-bold ${p.operation === 'delete' ? 'text-red-500/60' : 'text-nb-tertiary/60'}`}>
-                  {p.operation === 'delete' ? 'del' : 'upd'}
+                <span className={`uppercase font-bold ${p.operation === 'delete' ? 'text-red-500/60' : p.changeType === 'create' ? 'text-emerald-500/60' : 'text-nb-tertiary/60'}`}>
+                  {p.operation === 'delete' ? 'del' : p.changeType === 'create' ? 'new' : 'upd'}
                 </span>
                 <span className="truncate">{p.path.split('/').pop()}</span>
               </div>
