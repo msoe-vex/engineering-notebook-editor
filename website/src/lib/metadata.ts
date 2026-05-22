@@ -326,6 +326,14 @@ export async function dehydrateAssets(doc: TipTapDoc): Promise<{ cleanDoc: TipTa
   const { hashContent, getExtensionFromDataUrl } = await import("./utils");
   const assets: { path: string; base64: string }[] = [];
 
+  const getPathHash = (path?: string) => {
+    if (!path) return undefined;
+    const fileName = path.split("/").pop() || "";
+    const dotIndex = fileName.lastIndexOf(".");
+    if (dotIndex <= 0) return undefined;
+    return fileName.slice(0, dotIndex);
+  };
+
   async function walk(node: TipTapNode): Promise<TipTapNode> {
     if (!node) return node;
     if (node.type === "image") {
@@ -338,12 +346,18 @@ export async function dehydrateAssets(doc: TipTapDoc): Promise<{ cleanDoc: TipTa
       if (compressedBase64 || originalBase64) {
         const compressedHash = compressedBase64 ? await hashContent(compressedBase64) : undefined;
         const originalHash = originalBase64 ? await hashContent(originalBase64) : undefined;
-        const compressedPath = attrs.filePath || (compressedHash ? `${ASSETS_COMPRESSED_DIR}/${compressedHash}.jpg` : undefined);
+        const defaultCompressedPath = compressedHash ? `${ASSETS_COMPRESSED_DIR}/${compressedHash}.jpg` : undefined;
+        const compressedPath = attrs.filePath || defaultCompressedPath;
         const originalExt = originalSrc ? getExtensionFromDataUrl(originalSrc) : "jpg";
-        const originalPath = attrs.originalFilePath || (originalHash ? `${ASSETS_ORIGINAL_DIR}/${originalHash}.${originalExt}` : compressedPath);
+        const defaultOriginalPath = originalHash ? `${ASSETS_ORIGINAL_DIR}/${originalHash}.${originalExt}` : compressedPath;
+        const originalPath = attrs.originalFilePath || defaultOriginalPath;
 
-        if (originalBase64 && originalPath) assets.push({ path: originalPath, base64: originalBase64 });
-        if (compressedBase64 && compressedPath) assets.push({ path: compressedPath, base64: compressedBase64 });
+        // Skip persisting when the file already uses the same content hash.
+        const compressedUnchanged = !!(compressedBase64 && compressedHash && attrs.filePath && getPathHash(attrs.filePath) === compressedHash);
+        const originalUnchanged = !!(originalBase64 && originalHash && attrs.originalFilePath && getPathHash(attrs.originalFilePath) === originalHash);
+
+        if (originalBase64 && originalPath && !originalUnchanged) assets.push({ path: originalPath, base64: originalBase64 });
+        if (compressedBase64 && compressedPath && !compressedUnchanged) assets.push({ path: compressedPath, base64: compressedBase64 });
 
         const nextAttrs = { ...node.attrs } as Record<string, unknown>;
         if (compressedPath) {
