@@ -238,6 +238,24 @@ export default function Sidebar({
     await exportEntries(ids);
   };
 
+  const handleCloseEntry = useCallback(() => {
+    const goHome = () => {
+      navigateTo({ entry: null, resource: null });
+    };
+
+    if (mode === "temporary") {
+      showConfirm(
+        "Leave Temporary Workspace?",
+        "All changes in this temporary workspace will be lost forever if you go back to the home page. Are you sure you want to leave?",
+        goHome,
+        "warning"
+      );
+      return;
+    }
+
+    goHome();
+  }, [mode, navigateTo, showConfirm]);
+
   return (
     <div className="flex flex-col h-full overflow-hidden min-h-0">
       <FileExplorer
@@ -248,9 +266,7 @@ export default function Sidebar({
         deletedPaths={deletedPaths}
         onSelectEntry={(file, multi, range) => onSelectEntry(file, multi, range, filteredEntries.map(e => e.path))}
         onOpenEntry={handleOpenEntry}
-        onCloseEntry={() => {
-          navigateTo({ entry: null });
-        }}
+        onCloseEntry={handleCloseEntry}
         onDownloadLatex={handleDownloadLatex}
         onDownloadJson={handleDownloadJson}
         onDeleteEntry={(file) => handleConfirmDelete([file])}

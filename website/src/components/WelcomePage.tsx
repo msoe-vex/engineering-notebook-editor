@@ -6,7 +6,7 @@ import Logo from "./ui/Logo";
 
 interface WorkspaceInfo {
   mode: "github" | "local" | "temporary";
-  label: string; // e.g. "owner/repo" or folder name or "Memory"
+  label: string; // e.g. "owner/repo" or folder name or "Temporary"
 }
 
 interface WelcomePageProps {
@@ -87,8 +87,8 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
               <Upload size={20} className="text-nb-primary" />
             </div>
             <div>
-              <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Import Entry</div>
-              <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Upload Notebook ZIP</div>
+              <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Import Data</div>
+              <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Upload ZIP file</div>
             </div>
           </button>
 

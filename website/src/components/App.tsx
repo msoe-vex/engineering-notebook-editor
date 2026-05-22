@@ -652,7 +652,7 @@ export default function App() {
   };
 
   const currentProject = projects.find(p => p.id === currentProjectId) || (currentProjectId === "temporary" ? { id: "temporary", name: "Temporary Workspace" } as Project : null);
-  const workspaceLabel = mode === "github" ? `${config?.owner}/${config?.repo}` : (mode === "local" ? (currentProject?.name ?? "Local Folder") : "Memory");
+  const workspaceLabel = mode === "github" ? `${config?.owner}/${config?.repo}` : (mode === "local" ? (currentProject?.name ?? "Local Folder") : "Temporary");
 
   if (!mounted) return null;
 
