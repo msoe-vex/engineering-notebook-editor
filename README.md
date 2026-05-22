@@ -3,7 +3,9 @@
 This repository contains two related parts of the VEX engineering notebook system:
 
 - `website/`: the Next.js editor and sync UI
+  - For more details, see the [README in the `website/` folder](website/README.md)
 - `notebook/`: the LaTeX source and generated notebook output
+  - For more details, see the [README in the `notebook/` folder](notebook/README.md)
 
 ## Quick Start
 
@@ -63,11 +65,14 @@ For notebook/PDF work, see `notebook/README.md`.
 To ensure the web editor can compile PDFs efficiently without hitting GitHub LFS limits, we host the LaTeX engine and template dependencies as GitHub Release assets.
 
 ### 1. Prepare Assets
+
 Run the following from the `website/` directory:
+
 - `npm run download:busytex`: Downloads the engine WASM and TeX Live `.data` files into `website/public/busytex/`.
 - `npm run bundle:latex`: Gathers the template `.sty`, `.cls`, and font dependencies into `website/public/latex/`.
 
 ### 2. Upload to Release
+
 1. Create a new release on GitHub (e.g., `v0.1.0`).
 2. Upload **all** files from `website/public/busytex/` to the release assets area.
 3. You can then delete the local copies from `website/public/busytex/` if you want to keep your workspace clean.
@@ -75,5 +80,6 @@ Run the following from the `website/` directory:
    > Keeping `website/public/busytex/` locally enables **100% offline-ready local development**!
 
 ### 3. How it Works (Development vs. Production)
-* **Local Development**: The app automatically detects development mode and serves the WASM engine and TeX Live package entirely from your local `website/public/busytex/` folder.
-* **Production / Deployment**: Next.js automatically proxies all `/busytex/...` routes via an edge function to the official GitHub Release `GITHUB_RELEASE_URL` (configured in `website/src/lib/busytex.ts`), meaning you never have to commit huge WASM/data assets to git!
+
+- **Local Development**: The app automatically detects development mode and serves the WASM engine and TeX Live package entirely from your local `website/public/busytex/` folder.
+- **Production / Deployment**: Next.js automatically proxies all `/busytex/...` routes via an edge function to the official GitHub Release `GITHUB_RELEASE_URL` (configured in `website/src/lib/busytex.ts`), meaning you never have to commit huge WASM/data assets to git!

@@ -127,6 +127,10 @@ export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
           <NavButton active={activeTab === 'editor'} onClick={() => setActiveTab('editor')} icon={<FileText size={16} />} label="Editor Guide" />
           <NavButton active={activeTab === 'compiler'} onClick={() => setActiveTab('compiler')} icon={<Play size={16} />} label="PDF Compilation" />
           <NavButton active={activeTab === 'data'} onClick={() => setActiveTab('data')} icon={<Layers size={16} />} label="Import / Export" />
+
+          <div className="px-4 py-2 mt-4">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant/40">Best Practices</h3>
+          </div>
           <NavButton active={activeTab === 'phases'} onClick={() => setActiveTab('phases')} icon={<Target size={16} />} label="Design Process" />
           <NavButton active={activeTab === 'tips'} onClick={() => setActiveTab('tips')} icon={<Lightbulb size={16} />} label="Notebook Tips" />
           <NavButton active={activeTab === 'resources'} onClick={() => setActiveTab('resources')} icon={<ExternalLink size={16} />} label="Resources" />
@@ -157,9 +161,30 @@ export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
                         <span>{children}</span>
                       </li>
                     ),
-                    code: ({ children }) => <code className="bg-nb-surface-mid px-1.5 py-0.5 rounded text-nb-primary font-mono text-sm border border-nb-outline-variant/30">{children}</code>,
+                    pre: ({ children }) => (
+                      <pre className="my-6 overflow-x-auto rounded-2xl border border-nb-outline-variant/30 bg-nb-surface-mid px-5 py-4 text-sm leading-relaxed shadow-sm">
+                        {children}
+                      </pre>
+                    ),
+                    code: ({ children, className }: { children?: React.ReactNode; className?: string }) => {
+                      const isBlockCode = typeof className === "string" && className.includes("language-");
+
+                      if (!isBlockCode) {
+                        return (
+                          <code className="rounded bg-nb-surface-mid px-1.5 py-0.5 font-mono text-sm text-nb-primary border border-nb-outline-variant/30">
+                            {children}
+                          </code>
+                        );
+                      }
+
+                      return (
+                        <code className="block whitespace-pre font-mono text-nb-on-surface">
+                          {children}
+                        </code>
+                      );
+                    },
                     blockquote: ({ children }) => (
-                      <div className="p-6 bg-nb-primary/5 border-l-4 border-nb-primary rounded-r-2xl my-8 italic text-nb-on-surface leading-relaxed">
+                      <div className="my-6 rounded-r-2xl border-l-4 border-nb-primary bg-nb-primary/5 px-6 py-5 italic text-nb-on-surface leading-relaxed [&>p]:mb-3 [&>p:last-child]:mb-0">
                         {children}
                       </div>
                     ),

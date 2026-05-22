@@ -238,6 +238,10 @@ export default function Sidebar({
     await exportEntries(ids);
   };
 
+  const handleCloseEntry = useCallback(() => {
+    navigateTo({ entry: null, resource: null });
+  }, [navigateTo]);
+
   return (
     <div className="flex flex-col h-full overflow-hidden min-h-0">
       <FileExplorer
@@ -248,9 +252,7 @@ export default function Sidebar({
         deletedPaths={deletedPaths}
         onSelectEntry={(file, multi, range) => onSelectEntry(file, multi, range, filteredEntries.map(e => e.path))}
         onOpenEntry={handleOpenEntry}
-        onCloseEntry={() => {
-          navigateTo({ entry: null });
-        }}
+        onCloseEntry={handleCloseEntry}
         onDownloadLatex={handleDownloadLatex}
         onDownloadJson={handleDownloadJson}
         onDeleteEntry={(file) => handleConfirmDelete([file])}
