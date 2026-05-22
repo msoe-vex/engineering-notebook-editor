@@ -1163,6 +1163,16 @@ class WorkspaceStore {
       await addTextFile("main.tex");
       await addTextFile("engineering_notebook.sty");
 
+      // Export compiled PDF if available
+      try {
+        const pdfBase64 = await this.getAssetBase64("main.pdf");
+        if (pdfBase64) {
+          zip.file("main.pdf", pdfBase64, { base64: true });
+        }
+      } catch (err) {
+        console.warn("[Export] Skipping main.pdf due to error:", err);
+      }
+
       if (exportAll) {
         zip.file(INDEX_PATH, JSON.stringify(this.metadata, null, 2));
       } else {
@@ -1263,12 +1273,14 @@ class WorkspaceStore {
         entries = {},
         assets = {},
         files = {},
-        latexFiles = {}
+        latexFiles = {},
+        pdf = ""
       } = data as {
         entries: Record<string, Record<string, unknown>>;
         assets: Record<string, unknown>;
         files?: Record<string, string>;
         latexFiles?: Record<string, string>;
+        pdf?: string;
       };
       const idMap = new Map<string, string>();
 
@@ -1362,6 +1374,11 @@ class WorkspaceStore {
         // When entries are imported/remapped, skip old generated entry .tex files from archive payloads.
         if (entryIdList.length > 0 && path.startsWith(`${LATEX_DIR}/`)) continue;
         await this.persistFile(path, content, `Import file: ${path}`);
+      }
+
+      // 4.5 Persist optional compiled PDF if provided by import payload.
+      if (pdf && typeof pdf === "string") {
+        await this.persistFile("main.pdf", pdf, "Import compiled PDF", true);
       }
 
       // 5. Import Team and Phases if present
