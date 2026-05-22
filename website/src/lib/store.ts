@@ -1,4 +1,4 @@
-import { NotebookMetadata, EMPTY_METADATA, DEFAULT_PHASES, EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds, TipTapNode, buildResourceTypeIndex, getLocalDateString, ensureResourceIds } from "./metadata";
+import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds, TipTapNode, buildResourceTypeIndex, getLocalDateString, ensureResourceIds } from "./metadata";
 import { generateAllEntriesLatex, generateEntryLatex, generateTeamLatex, generatePhasesLatex } from "./latex";
 import { ExplorerFile, GitHubConfig, TeamTab } from "./types";
 import { getProjects, getProject, Project, getAllPending, getPending, stageChange, removeStaged, getResource, putResource, saveProject, getProjectHandle, saveProjectHandle, PendingChange } from "./db";
@@ -1453,8 +1453,8 @@ class WorkspaceStore {
         const indexEntry = zip.file(INDEX_PATH);
         if (indexEntry) {
           const parsed = JSON.parse(await indexEntry.async("string")) as NotebookMetadata;
-          const importedTeam = (parsed as any).team as TeamMetadata | undefined;
-          const importedPhases = (parsed as any).phases as ProjectPhase[] | undefined;
+          const importedTeam = (parsed as { team: TeamMetadata }).team as TeamMetadata | undefined;
+          const importedPhases = (parsed as { phases: ProjectPhase[] }).phases as ProjectPhase[] | undefined;
 
           this.metadata = validateNotebookIntegrity({
             ...EMPTY_METADATA,
