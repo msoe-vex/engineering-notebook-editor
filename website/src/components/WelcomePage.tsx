@@ -88,7 +88,7 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
             </div>
             <div>
               <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Import Entry</div>
-              <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Upload JSON file</div>
+              <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Upload Notebook ZIP</div>
             </div>
           </button>
 

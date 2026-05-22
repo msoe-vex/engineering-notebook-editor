@@ -33,7 +33,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { TeamMetadata, TeamMember, ProjectPhase } from "@/lib/metadata";
 import { DEFAULT_PHASES, AVAILABLE_ICONS } from "@/lib/phases";
-import { generateUUID, formatDateMonthYear } from "@/lib/utils";
+import { generateUUID, formatDateMonthYear, compressImageToJpeg } from "@/lib/utils";
 
 // ─── Sub-components for performance ──────────────────────────────────────────
 
@@ -218,13 +218,22 @@ const MemberCard = memo(({
   listeners?: Record<string, unknown>,
   isOverlay?: boolean
 }) => {
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onloadend = () => {
-      handleMemberChange?.(member.id, "image", reader.result as string);
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      try {
+        const compressed = await compressImageToJpeg(dataUrl, 720, 0.8);
+        handleMemberChange?.(member.id, "image", compressed.dataUrl);
+        handleMemberChange?.(member.id, "imageOriginal", dataUrl);
+      } catch (err) {
+        console.warn('Image compress failed, using original', err);
+        handleMemberChange?.(member.id, "image", dataUrl);
+        handleMemberChange?.(member.id, "imageOriginal", dataUrl);
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -264,7 +273,10 @@ const MemberCard = memo(({
         <div className="absolute -bottom-2 -right-2 flex flex-col gap-1">
           {member.image && (
             <button
-              onClick={() => handleMemberChange?.(member.id, "image", "")}
+              onClick={() => {
+                handleMemberChange?.(member.id, "image", "");
+                handleMemberChange?.(member.id, "imageOriginal", "");
+              }}
               className="p-2 rounded-xl bg-red-500 text-white shadow-lg shadow-red-500/20 hover:bg-red-600 cursor-pointer transition-colors"
               title="Remove Image"
             >
@@ -422,7 +434,7 @@ export default function TeamEditor({
   } = useWorkspace();
 
   const initialData = useMemo(() => {
-    const data = metadata.team || { teamName: "", teamNumber: "", organization: "", logo: "", members: [] };
+    const data = metadata.team || { teamName: "", teamNumber: "", organization: "", logo: "", logoOriginal: "", members: [] };
     return {
       ...data,
       members: data.members.map(m => ({ ...m, id: m.id || generateUUID() }))
@@ -520,6 +532,26 @@ export default function TeamEditor({
     setTeamData(prev => ({ ...prev, [field]: value }));
   };
 
+  const handleTeamLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      try {
+        const compressed = await compressImageToJpeg(dataUrl, 720, 0.8);
+        handleFieldChange("logo", compressed.dataUrl);
+        handleFieldChange("logoOriginal", dataUrl);
+      } catch (err) {
+        console.warn("Logo compress failed, using original", err);
+        handleFieldChange("logo", dataUrl);
+        handleFieldChange("logoOriginal", dataUrl);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleMemberChange = (id: string, field: keyof TeamMember, value: string) => {
     setTeamData(prev => {
       const index = prev.members.findIndex(m => m.id === id);
@@ -533,7 +565,7 @@ export default function TeamEditor({
   const addMember = () => {
     setTeamData(prev => ({
       ...prev,
-      members: [...prev.members, { id: generateUUID(), name: "", role: "", image: "" }]
+      members: [...prev.members, { id: generateUUID(), name: "", role: "", image: "", imageOriginal: "" }]
     }));
   };
 
@@ -611,17 +643,6 @@ export default function TeamEditor({
   const restoreDefaultPhases = useCallback(() => {
     setPhases(DEFAULT_PHASES.map(p => ({ ...p })));
   }, []);
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, callback: (base64: string) => void) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      callback(reader.result as string);
-    };
-    reader.readAsDataURL(file);
-  };
 
   return (
     <div className="flex flex-col h-full bg-nb-bg animate-in fade-in duration-300">
@@ -779,7 +800,7 @@ export default function TeamEditor({
                       type="file"
                       className="hidden"
                       accept="image/*"
-                      onChange={e => handleImageUpload(e, base64 => handleFieldChange("logo", base64))}
+                      onChange={handleTeamLogoUpload}
                     />
                   </label>
                 </div>
@@ -789,7 +810,10 @@ export default function TeamEditor({
                 </div>
                 {teamData.logo && (
                   <button
-                    onClick={() => handleFieldChange("logo", "")}
+                    onClick={() => {
+                      handleFieldChange("logo", "");
+                      handleFieldChange("logoOriginal", "");
+                    }}
                     className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:underline cursor-pointer"
                   >
                     Remove Logo

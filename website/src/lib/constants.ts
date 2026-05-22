@@ -5,6 +5,8 @@
 export const DATA_DIR = "data";
 export const ENTRIES_DIR = `${DATA_DIR}/entries`;
 export const ASSETS_DIR = `${DATA_DIR}/assets`;
+export const ASSETS_ORIGINAL_DIR = `${ASSETS_DIR}/original`;
+export const ASSETS_COMPRESSED_DIR = `${ASSETS_DIR}/compressed`;
 export const LATEX_DIR = `${DATA_DIR}/latex`;
 export const INDEX_PATH = `${DATA_DIR}/notebook.json`;
 export const ENTRIES_INDEX_PATH = `${DATA_DIR}/entries.tex`;

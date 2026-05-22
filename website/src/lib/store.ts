@@ -1,4 +1,4 @@
-import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds, TipTapNode, buildResourceTypeIndex, getLocalDateString } from "./metadata";
+import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds, TipTapNode, buildResourceTypeIndex, getLocalDateString, ensureResourceIds } from "./metadata";
 import { generateAllEntriesLatex, generateEntryLatex, generateTeamLatex, generatePhasesLatex } from "./latex";
 import { ExplorerFile, GitHubConfig, TeamTab } from "./types";
 import { getProjects, getProject, Project, getAllPending, getPending, stageChange, removeStaged, getResource, putResource, saveProject, getProjectHandle, saveProjectHandle, PendingChange } from "./db";
@@ -9,6 +9,22 @@ import { events, EventNames } from "./events";
 import { generateUUID, getMimeTypeFromExtension, generateDeterministicUUID, formatDateMonthYear } from "./utils";
 
 export type WorkspaceMode = "local" | "github" | "temporary" | "none";
+
+// Normalize base64 payloads: strip non-base64 chars and pad with '=' to valid length
+const normalizeBase64 = (s: string | null | undefined): string | null => {
+  if (!s) return null;
+  // Remove data:... prefix if present
+  const raw = s.includes(',') ? s.split(',')[1] : s;
+  if (!raw || typeof raw !== 'string') return null;
+  // Remove whitespace and any characters outside base64 alphabet
+  let cleaned = raw.replace(/\s+/g, '').replace(/[^A-Za-z0-9+/=]/g, '');
+  // Pad with '=' to make length a multiple of 4
+  const mod = cleaned.length % 4;
+  if (mod !== 0) {
+    cleaned += '='.repeat(4 - mod);
+  }
+  return cleaned;
+};
 
 interface OpenFileState {
   path: string;
@@ -294,6 +310,13 @@ class WorkspaceStore {
           this.mode = "temporary";
           this.metadata = EMPTY_METADATA;
           this.entries = [];
+
+          // Persist initial LaTeX metadata files for temporary projects so exports include them
+          try {
+            await this.updateLatexMetadata();
+          } catch (err) {
+            console.warn("Failed to generate initial LaTeX files for temporary workspace:", err);
+          }
 
           // Update URL for temporary project
           const url = new URL(window.location.href);
@@ -713,14 +736,6 @@ class WorkspaceStore {
   }
 
   async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null; date: string }) {
-    // 1. Update memory immediately (Source of Truth)
-    if (this.openFile && this.openFile.id === id) {
-      this.openFile = { ...this.openFile, ...info, tiptapContent, latex, updatedAt: new Date().toISOString() };
-    }
-
-    const existingEntry = this.metadata.entries[id];
-    if (!existingEntry) return;
-
     let contentJson = JSON.parse(tiptapContent);
     // Handle double-stringification and wrapping
     if (typeof contentJson === 'string') {
@@ -729,6 +744,18 @@ class WorkspaceStore {
     if (contentJson && contentJson.content && !contentJson.type) {
       contentJson = contentJson.content;
     }
+
+    // Ensure all tables, headings, codeBlocks, etc. have IDs!
+    contentJson = ensureResourceIds(contentJson) as TipTapNode;
+    tiptapContent = JSON.stringify(contentJson);
+
+    // 1. Update memory immediately (Source of Truth)
+    if (this.openFile && this.openFile.id === id) {
+      this.openFile = { ...this.openFile, ...info, tiptapContent, latex, updatedAt: new Date().toISOString() };
+    }
+
+    const existingEntry = this.metadata.entries[id];
+    if (!existingEntry) return;
 
     const discoveredResources = extractResources(contentJson);
     const mergedResources: Record<string, { type: string; title: string; caption: string }> = {};
@@ -1095,12 +1122,74 @@ class WorkspaceStore {
   public async exportEntries(entryIds?: string[]) {
     this.setLoading(true);
     try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
       const targets = entryIds || Object.keys(this.metadata.entries);
-      const assetsData: Record<string, string> = {};
-      const entriesWithContent: Record<string, EntryMetadata & { content?: TipTapNode }> = {};
-      const relevantAssetRefs: Record<string, string[]> = {};
+      const exportAll = !entryIds;
+      const assetPaths = new Set<string>();
 
-      // 1. Process Entries and their content
+      const addAssetPath = (assetPath?: string) => {
+        if (assetPath && !assetPath.startsWith("data:")) {
+          assetPaths.add(assetPath);
+        }
+      };
+
+      const addTextFile = async (path: string) => {
+        const content = await this.getFileContent(path);
+        if (content) {
+          zip.file(path, content);
+          return;
+        }
+
+        // Only attempt fallback fetch for packaged LaTeX core files.
+        // Avoid fetching arbitrary project files (e.g., data/entries.tex) which may resolve to HTML.
+        const fallbackAllowed = path === 'main.tex' || path === 'engineering_notebook.sty' || path.startsWith(`${LATEX_DIR}/`);
+        if (!fallbackAllowed) return;
+
+        try {
+          const res = await fetch(`/latex/${encodeURIComponent(path)}`);
+          if (res.ok) {
+            const text = await res.text();
+            zip.file(path, text);
+          }
+        } catch {
+          // Ignore fetch failures; file simply won't be included
+        }
+      };
+
+      const addAssetFile = async (path: string) => {
+        const base64 = await this.getAssetBase64(path);
+        if (base64) zip.file(path, base64, { base64: true });
+      };
+
+      // Root files needed for import/compile workflows
+      await addTextFile("main.tex");
+      await addTextFile("engineering_notebook.sty");
+
+      if (exportAll) {
+        zip.file(INDEX_PATH, JSON.stringify(this.metadata, null, 2));
+      } else {
+        // For partial exports include only the selected entries.
+        // Team and phases are intentionally omitted; the importer will fall back
+        // to the project's defaults when those fields are missing.
+        const filteredEntries: Record<string, EntryMetadata> = {};
+        for (const id of targets) {
+          const meta = this.metadata.entries[id];
+          if (meta) filteredEntries[id] = meta;
+        }
+        zip.file(INDEX_PATH, JSON.stringify({
+          version: this.metadata.version,
+          entries: filteredEntries,
+        }, null, 2));
+      }
+
+      // Team/phases are shared project files and should come along with entry exports.
+      await addTextFile(TEAM_PATH);
+      await addTextFile(PHASES_PATH);
+      if (exportAll) {
+        await addTextFile(ENTRIES_INDEX_PATH);
+      }
+
       for (const id of targets) {
         const meta = this.metadata.entries[id];
         if (!meta) continue;
@@ -1108,65 +1197,50 @@ class WorkspaceStore {
         const contentStr = await this.getFileContent(meta.filename);
         if (!contentStr) continue;
 
-        let content;
+        zip.file(meta.filename, contentStr);
+
+        let content: TipTapNode;
         try {
-          const contentObj = JSON.parse(contentStr);
-          content = contentObj.content || contentObj;
+          const parsed = JSON.parse(contentStr);
+          content = parsed.content || parsed;
         } catch (e) {
           console.error(`Failed to parse content for ${id}`, e);
           continue;
         }
 
-        // Deep copy meta and add content
-        entriesWithContent[id] = { ...JSON.parse(JSON.stringify(meta)), content };
+        const latexPath = `${LATEX_DIR}/${id}.tex`;
+        const latex = await this.getFileContent(latexPath);
+        if (latex) zip.file(latexPath, latex);
 
-        // Collect assets referenced by this entry
-        const images = extractImagePaths(content);
-        for (const assetPath of images) {
-          if (!assetsData[assetPath] && !assetPath.startsWith('data:')) {
-            const base64 = await this.getAssetBase64(assetPath);
-            if (base64) assetsData[assetPath] = base64;
-          }
+        extractImagePaths(content).forEach(addAssetPath);
+      }
+
+      // Include team assets even when not exported from the full notebook.
+      if (this.metadata.team) {
+        addAssetPath(this.metadata.team.logo);
+        addAssetPath(this.metadata.team.logoOriginal);
+        this.metadata.team.members.forEach(member => {
+          addAssetPath(member.image);
+          addAssetPath(member.imageOriginal);
+        });
+      }
+
+      for (const assetPath of assetPaths) {
+        try {
+          await addAssetFile(assetPath);
+        } catch (err) {
+          console.warn(`[Export] Skipping asset due to error: ${assetPath}`, err);
         }
       }
 
-      // 2. Identify relevant AssetRefs
-      if (this.metadata.assetRefs) {
-        for (const [assetPath, owners] of Object.entries(this.metadata.assetRefs)) {
-          const filteredOwners = owners.filter(o =>
-            targets.includes(o) || (!entryIds && o === "team")
-          );
-          if (filteredOwners.length > 0) {
-            relevantAssetRefs[assetPath] = filteredOwners;
-            // Ensure team assets are also hydrated if they haven't been yet
-            if (!assetsData[assetPath] && !assetPath.startsWith('data:')) {
-              const base64 = await this.getAssetBase64(assetPath);
-              if (base64) assetsData[assetPath] = base64;
-            }
-          }
-        }
-      }
-
-      // 3. Assemble Export following notebook.json schema (excluding project identity)
-      const exportData: Record<string, unknown> = {
-        assetRefs: relevantAssetRefs,
-        entries: entriesWithContent,
-        assets: assetsData
-      };
-
-      if (!entryIds) {
-        exportData.phases = this.metadata.phases;
-        exportData.team = this.metadata.team;
-      }
-
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+      const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
       const { saveAs } = await import("file-saver");
       const name = entryIds
         ? (entryIds.length === 1
           ? (this.metadata.entries[entryIds[0]]?.title || "entry").replace(/[^a-z0-9]/gi, '_').toLowerCase()
           : "entries")
         : "notebook";
-      saveAs(blob, `${name}.json`);
+      saveAs(blob, `${name}.zip`);
 
     } catch (e) {
       console.error("Export failed", e);
@@ -1179,7 +1253,26 @@ class WorkspaceStore {
   public async importNotebook(data: Record<string, unknown>) {
     this.setLoading(true, "Importing project data...");
     try {
-      const { entries = {}, assets = {} } = data as { entries: Record<string, Record<string, unknown>>; assets: Record<string, unknown> };
+      if (this.mode === "temporary") {
+        const { clearAllPending, clearAllResources } = await import("./db");
+        const dbName = this.getDBName();
+        await clearAllPending(dbName);
+        await clearAllResources(dbName);
+        this.assetCache.clear();
+        this.entries = [];
+      }
+
+      const {
+        entries = {},
+        assets = {},
+        files = {},
+        latexFiles = {}
+      } = data as {
+        entries: Record<string, Record<string, unknown>>;
+        assets: Record<string, unknown>;
+        files?: Record<string, string>;
+        latexFiles?: Record<string, string>;
+      };
       const idMap = new Map<string, string>();
 
       // 1. Map ALL IDs first (Entries and their internal Resources)
@@ -1218,6 +1311,9 @@ class WorkspaceStore {
         // Remap content IDs
         const { doc: remappedDoc } = remapContentIds((content || {}) as TipTapNode, idMap);
 
+        // Ensure resource node IDs exist (in case imported content lacks them)
+        const docWithIds = ensureResourceIds(remappedDoc as TipTapNode) as TipTapNode;
+
         // Remap metadata IDs (resources, references)
         const remappedMeta = remapEntryMetadataIds(entryMetadata as unknown as EntryMetadata, idMap);
         remappedMeta.id = newId;
@@ -1227,7 +1323,20 @@ class WorkspaceStore {
           remappedMeta.date = remappedMeta.createdAt?.split('T')[0] || getLocalDateString();
         }
 
-        remappedEntries.push({ id: newId, doc: remappedDoc as TipTapNode, meta: remappedMeta });
+        // Re-extract resources using the fully ID'ed document to ensure no tables or resources are missed
+        const discoveredResources = extractResources(docWithIds);
+        const mergedResources: Record<string, { type: string; title: string; caption: string }> = {};
+        const oldResources = remappedMeta.resources || {};
+        for (const [resId, resInfo] of Object.entries(discoveredResources)) {
+          mergedResources[resId] = {
+            type: resInfo.type,
+            title: resInfo.title || oldResources[resId]?.title || "",
+            caption: resInfo.caption || oldResources[resId]?.caption || "",
+          };
+        }
+        remappedMeta.resources = mergedResources;
+
+        remappedEntries.push({ id: newId, doc: docWithIds, meta: remappedMeta });
         newEntriesMap[newId] = remappedMeta;
       }
 
@@ -1246,16 +1355,29 @@ class WorkspaceStore {
         await this.persistFile(`${LATEX_DIR}/${id}.tex`, latex, `Import LaTeX: ${meta.title}`);
       }
 
-      // 4. Import Team and Phases if present
+      // 4. Persist optional text files provided by import payload.
+      // This preserves customized compile templates such as main.tex and engineering_notebook.sty.
+      const extraFiles = { ...(latexFiles || {}), ...(files || {}) };
+      for (const [path, content] of Object.entries(extraFiles)) {
+        if (!path || typeof content !== "string") continue;
+        if (path === INDEX_PATH) continue;
+        if (path.startsWith(`${ENTRIES_DIR}/`) || path.startsWith(`${ASSETS_DIR}/`)) continue;
+        // When entries are imported/remapped, skip old generated entry .tex files from archive payloads.
+        if (entryIdList.length > 0 && path.startsWith(`${LATEX_DIR}/`)) continue;
+        await this.persistFile(path, content, `Import file: ${path}`);
+      }
+
+      // 5. Import Team and Phases if present
       const importedPhases = data.phases as ProjectPhase[] | undefined;
       const importedTeam = data.team as TeamMetadata | undefined;
 
-      // 5. Update project metadata
+      // 6. Update project metadata - preserve existing team/phases when import omits them
       this.metadata = validateNotebookIntegrity({
+        ...EMPTY_METADATA,
         ...this.metadata,
-        entries: { ...this.metadata.entries, ...newEntriesMap },
-        phases: importedPhases || this.metadata.phases,
-        team: importedTeam || this.metadata.team
+        entries: newEntriesMap,
+        ...(importedPhases ? { phases: importedPhases } : {}),
+        ...(importedTeam ? { team: importedTeam } : {}),
       });
 
       // Save metadata
@@ -1289,6 +1411,95 @@ class WorkspaceStore {
     }
   }
 
+  public async importNotebookArchive(file: File) {
+    this.setLoading(true, "Importing project archive...");
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = await JSZip.loadAsync(await file.arrayBuffer());
+      const filenames = Object.keys(zip.files).filter(name => !zip.files[name].dir);
+      const hasNotebookIndex = filenames.includes(INDEX_PATH);
+      const isBinaryFile = (path: string) => /\.(png|jpe?g|gif|webp|bmp|ico|tiff?|avif|heic|pdf|otf|ttf|woff2?|eot|zip|7z|rar|tar|gz|bz2|xz|mp3|wav|ogg|flac|aac|m4a|mp4|mov|avi|mkv|webm|wasm|exe|dll|so|dylib|bin)$/i.test(path);
+      const isImageAsset = (path: string) => /\.(png|jpe?g|gif|webp|bmp|ico|tiff?|avif|heic)$/i.test(path);
+
+      if (this.mode === "temporary") {
+        const { clearAllPending, clearAllResources } = await import("./db");
+        const dbName = this.getDBName();
+        await clearAllPending(dbName);
+        await clearAllResources(dbName);
+        this.assetCache.clear();
+      }
+
+      if (hasNotebookIndex) {
+        for (const filename of filenames) {
+          const entry = zip.file(filename);
+          if (!entry) continue;
+
+          if (isBinaryFile(filename)) {
+            const base64 = await entry.async("base64");
+            if (isImageAsset(filename)) {
+              const dataUrl = `data:${getMimeTypeFromExtension(filename)};base64,${base64}`;
+              this.assetCache.set(filename, dataUrl);
+              if (this.mode === "github" || this.mode === "temporary") {
+                await putResource(this.getDBName(), { path: filename, dataUrl });
+              }
+            }
+            await this.persistFile(filename, base64, `Import asset: ${filename}`, true);
+          } else {
+            const text = await entry.async("string");
+            await this.persistFile(filename, text, `Import file: ${filename}`);
+          }
+        }
+
+        const indexEntry = zip.file(INDEX_PATH);
+        if (indexEntry) {
+          const parsed = JSON.parse(await indexEntry.async("string")) as NotebookMetadata;
+          const importedTeam = (parsed as { team: TeamMetadata }).team as TeamMetadata | undefined;
+          const importedPhases = (parsed as { phases: ProjectPhase[] }).phases as ProjectPhase[] | undefined;
+
+          this.metadata = validateNotebookIntegrity({
+            ...EMPTY_METADATA,
+            ...this.metadata,
+            ...parsed,
+            ...(importedPhases ? { phases: importedPhases } : {}),
+            ...(importedTeam ? { team: importedTeam } : {}),
+          });
+        }
+
+        await this.reloadWorkspace();
+        this.notifyStateChange();
+        events.emit(EventNames.SHOW_NOTIFICATION, { message: "Notebook archive imported successfully", type: "success" });
+        return;
+      }
+
+      const entries: Record<string, Record<string, unknown>> = {};
+      const assets: Record<string, string> = {};
+      const files: Record<string, string> = {};
+
+      for (const filename of filenames) {
+        const entry = zip.file(filename);
+        if (!entry) continue;
+
+        if (filename.startsWith(`${ENTRIES_DIR}/`) && filename.endsWith(".json")) {
+          const raw = await entry.async("string");
+          const parsed = JSON.parse(raw) as Record<string, unknown>;
+          const entryId = filename.split("/").pop()?.replace(/\.json$/, "") || generateUUID();
+          entries[entryId] = parsed;
+        } else if (filename.startsWith(`${ASSETS_DIR}/`)) {
+          assets[filename] = await entry.async("base64");
+        } else if (!isBinaryFile(filename)) {
+          files[filename] = await entry.async("string");
+        }
+      }
+
+      await this.importNotebook({ entries, assets, files });
+    } catch (e) {
+      console.error("Archive import failed", e);
+      events.emit(EventNames.SHOW_NOTIFICATION, { message: "Import failed", type: "error" });
+    } finally {
+      this.setLoading(false);
+    }
+  }
+
   public async getAssetBase64(path: string): Promise<string | null> {
     const dbName = this.getDBName();
 
@@ -1296,22 +1507,27 @@ class WorkspaceStore {
     if (this.mode === "github" || this.mode === "temporary") {
       const pending = await getPending(dbName, path);
       if (pending?.operation === "upsert" && pending.content) {
-        return pending.content;
+        const c = pending.content;
+        if (typeof c === 'string') {
+          return normalizeBase64(c);
+        }
+        return null;
       }
     }
 
     // 2. Check resource cache
     const cached = await getResource(dbName, path);
     if (cached) {
-      return cached.includes(',') ? cached.split(',')[1] : cached;
+      return normalizeBase64(cached);
     }
 
     try {
       if (this.mode === "local" && this.dirHandle) {
         const res = await getLocalFileContent(this.dirHandle, path);
-        return res.base64 ? res.base64.split(',')[1] : null;
+        return normalizeBase64(res.base64 as string | null | undefined);
       } else if (this.mode === "github" && this.config) {
-        return await fetchRawFileContent(this.config, this.getFullPath(path));
+        const remote = await fetchRawFileContent(this.config, this.getFullPath(path));
+        return normalizeBase64(remote as string | null | undefined);
       }
     } catch (e) {
       console.error(`Failed to get asset base64 for ${path}`, e);

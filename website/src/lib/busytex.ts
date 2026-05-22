@@ -60,9 +60,11 @@ export interface CompileResult {
   log: string;
 }
 
+export type CompileMode = "quality" | "compressed";
+
 export type CompileStatusCallback = (status: string, step: number, totalSteps: number, percentage: number) => void;
 
-export async function compileNotebook(onStatus?: CompileStatusCallback): Promise<CompileResult> {
+export async function compileNotebook(mode: CompileMode = "quality", onStatus?: CompileStatusCallback): Promise<CompileResult> {
   const TOTAL_STEPS = 7;
 
   onStatus?.("Updating project metadata...", 1, TOTAL_STEPS, 10);
@@ -203,6 +205,10 @@ export async function compileNotebook(onStatus?: CompileStatusCallback): Promise
     log: string;
   }
 
+  const prelude = mode === "quality"
+    ? "\\newif\\ifnotebookqualityimages\\notebookqualityimagestrue\n"
+    : "\\newif\\ifnotebookqualityimages\\notebookqualityimagesfalse\n";
+
   const result = await (xelatex as unknown as {
     compile: (options: {
       input: string;
@@ -212,7 +218,7 @@ export async function compileNotebook(onStatus?: CompileStatusCallback): Promise
       cmd?: string;
     }) => Promise<BusyTexResult>
   }).compile({
-    input: finalInput || '',
+    input: `${prelude}${finalInput || ''}`,
     mainTexPath: 'main.tex',
     additionalFiles: files,
     rerun: true,

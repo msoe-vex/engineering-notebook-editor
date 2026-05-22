@@ -38,9 +38,9 @@ import {
 
 import { LinkReferencePopup } from "@/components/editor/LinkReferencePopup";
 
-import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng } from "@/lib/utils";
-import { ASSETS_DIR } from "@/lib/constants";
-import { ensureHeadingIds, sanitizeTipTapDoc } from "@/lib/metadata";
+import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng, compressImageToJpeg } from "@/lib/utils";
+import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
+import { ensureResourceIds, sanitizeTipTapDoc } from "@/lib/metadata";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 
@@ -403,7 +403,7 @@ const UnifiedEditor = ({
 
       const cleanDoc = sanitizeTipTapDoc(parsed, validNodes);
       if (!cleanDoc) return "";
-      return ensureHeadingIds(cleanDoc);
+      return ensureResourceIds(cleanDoc);
     } catch {
       return raw;
     }
@@ -423,22 +423,37 @@ const UnifiedEditor = ({
         }
       }
 
-      const base64 = dataUrl.split(",")[1];
-      const hash = await hashContent(base64);
-      const ext = getExtensionFromDataUrl(dataUrl);
-      const newPath = `${ASSETS_DIR}/${hash}.${ext}`;
+      // Use shared compressor for JPEG conversion
 
       if (editor?.isActive('tableCell') || editor?.isActive('tableHeader')) {
         // Prevent image insertion inside tables as LaTeX cannot render them
         return;
       }
 
+      // Compress to JPEG (white background) and use that for preview + upload
+      let compressed;
+      try {
+        compressed = await compressImageToJpeg(dataUrl, 1920, 0.8);
+      } catch (e) {
+        console.warn('Image compression failed, falling back to original', e);
+        compressed = { dataUrl, base64: dataUrl.split(',')[1] };
+      }
+
+      const originalBase64 = dataUrl.split(",")[1];
+      const originalHash = await hashContent(originalBase64);
+      const compressedHash = await hashContent(compressed.base64);
+      const originalExt = getExtensionFromDataUrl(dataUrl);
+      const originalPath = `${ASSETS_ORIGINAL_DIR}/${originalHash}.${originalExt}`;
+      const newPath = `${ASSETS_COMPRESSED_DIR}/${compressedHash}.jpg`;
+
       const imageAttrs = {
         id: generateUUID(),
-        src: dataUrl, // Keep dataUrl for immediate preview
+        src: compressed.dataUrl, // Use compressed preview
+        originalSrc: dataUrl,
         alt: "",
         title: "",
         filePath: newPath,
+        originalFilePath: originalPath,
       };
 
       if (editor?.state.selection instanceof NodeSelection) {
@@ -453,7 +468,7 @@ const UnifiedEditor = ({
         }).run();
       }
 
-      if (onImageUpload) onImageUpload(newPath, base64);
+      if (onImageUpload) onImageUpload(newPath, compressed.base64);
     };
     reader.readAsDataURL(file);
   };

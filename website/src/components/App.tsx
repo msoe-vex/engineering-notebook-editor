@@ -82,6 +82,7 @@ export default function App() {
     navigateTo,
     exportNotebook,
     importNotebook,
+    importNotebookArchive,
     selectedPaths,
     setSelectedPaths,
     hasEntryInUrl,
@@ -485,9 +486,9 @@ export default function App() {
 
   const handleOpenEntry = useCallback((file: ExplorerFile) => {
     const id = file.name.replace('.json', '');
-    navigateTo({ entry: id, resource: null }, '/workspace/editor');
+    checkUnsaved(() => navigateTo({ entry: id, resource: null }, '/workspace/editor'));
     if (isMobile) setUserSidebarPreference(false);
-  }, [isMobile, navigateTo]);
+  }, [checkUnsaved, isMobile, navigateTo]);
 
   const handleOpenTeamEditor = (tab: TeamTab = "identity") => {
     navigateTo({}, `/workspace/team/${tab}`);
@@ -600,6 +601,12 @@ export default function App() {
 
   const importNotebookFromFile = async (file: File) => {
     try {
+      const lowerName = file.name.toLowerCase();
+      if (lowerName.endsWith(".zip")) {
+        await importNotebookArchive(file);
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = async () => {
         try {
@@ -622,7 +629,7 @@ export default function App() {
   const handleImportNotebook = () => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = "application/json";
+    input.accept = ".zip,application/zip";
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) importNotebookFromFile(file);
@@ -800,7 +807,7 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen w-full bg-nb-bg font-sans overflow-hidden">
-      <input type="file" ref={importEntryInputRef} accept=".json" style={{ display: "none" }} onChange={(e) => { const file = e.target.files?.[0]; if (file) processImportFile(file); e.target.value = ""; }} />
+      <input type="file" ref={importEntryInputRef} accept=".zip,application/zip" style={{ display: "none" }} onChange={(e) => { const file = e.target.files?.[0]; if (file) processImportFile(file); e.target.value = ""; }} />
 
       {mode === "none" ? (
         <div className="flex-1 overflow-y-auto custom-scrollbar">

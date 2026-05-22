@@ -22,7 +22,6 @@ import {
 } from "react-resizable-panels";
 import ViewToggle, { ViewMode } from "./ViewToggle";
 import dynamic from "next/dynamic";
-import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng, debounce } from "@/lib/utils";
 
 const Preview = dynamic(() => import("./Preview"), {
   ssr: false,
@@ -38,8 +37,9 @@ import { generateEntryLatex } from "@/lib/latex";
 import { getPhases, getPhaseConfig } from "@/lib/phases";
 import AutocompleteInput from "./AutocompleteInput";
 import DatePicker from "./DatePicker";
-import { extractResources, extractReferences, TipTapNode, ensureHeadingIds, buildResourceTypeIndex } from "@/lib/metadata";
-import { ASSETS_DIR } from "@/lib/constants";
+import { extractResources, extractReferences, TipTapNode, ensureResourceIds, buildResourceTypeIndex } from "@/lib/metadata";
+import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
+import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng, debounce, compressImageToJpeg } from "@/lib/utils";
 import { NodeSelection } from "@tiptap/pm/state";
 
 // ─── Sub-components for Performance ──────────────────────────────────────────
@@ -177,7 +177,7 @@ const parseInitialContent = (raw: unknown): TipTapNode | string => {
   if (!raw) return "";
   if (typeof raw === 'object' && raw !== null) {
     // Ensure heading IDs for loaded content
-    return ensureHeadingIds(raw as TipTapNode);
+    return ensureResourceIds(raw as TipTapNode);
   }
   if (typeof raw !== 'string') return String(raw);
 
@@ -195,7 +195,7 @@ const parseInitialContent = (raw: unknown): TipTapNode | string => {
 
       // Ensure heading IDs for loaded content
       if (parsed && typeof parsed === 'object') {
-        parsed = ensureHeadingIds(parsed as TipTapNode);
+        parsed = ensureResourceIds(parsed as TipTapNode);
       }
 
       return parsed as TipTapNode | string;
@@ -631,9 +631,9 @@ const EditorToolbar = React.memo(function EditorToolbar({
                 (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
 
             if (safePos !== null) {
-              editor.chain().focus().insertContentAt(safePos, { type: 'rawLatex', attrs: { id: generateUUID() } }).run();
+              editor.chain().focus().insertContentAt(safePos, { type: 'rawLatex' }).run();
             } else {
-              editor.chain().focus().insertContent({ type: 'rawLatex', attrs: { id: generateUUID() } }).run();
+              editor.chain().focus().insertContent({ type: 'rawLatex' }).run();
             }
           }}
           active={editor.isActive("rawLatex")}
@@ -1175,10 +1175,13 @@ const EditorContent = React.memo(function EditorContent({
             }
           }
 
-          const base64 = dataUrl.split(",")[1];
-          const hash = await hashContent(base64);
-          const ext = getExtensionFromDataUrl(dataUrl);
-          const newPath = `${ASSETS_DIR}/${hash}.${ext}`;
+          const originalBase64 = dataUrl.split(",")[1];
+          const originalHash = await hashContent(originalBase64);
+          const originalExt = getExtensionFromDataUrl(dataUrl);
+          const compressed = await compressImageToJpeg(dataUrl, 1920, 0.8).catch(() => ({ dataUrl, base64: originalBase64 }));
+          const compressedHash = await hashContent(compressed.base64);
+          const originalPath = `${ASSETS_ORIGINAL_DIR}/${originalHash}.${originalExt}`;
+          const newPath = `${ASSETS_COMPRESSED_DIR}/${compressedHash}.jpg`;
 
           const safePos = (() => {
             const { selection } = editor.state;
@@ -1192,12 +1195,12 @@ const EditorContent = React.memo(function EditorContent({
           if (safePos !== null) {
             editor.chain().focus().insertContentAt(safePos, {
               type: "image",
-              attrs: { id: generateUUID(), src: dataUrl, filePath: newPath, title: "" }
+              attrs: { id: generateUUID(), src: compressed.dataUrl, originalSrc: dataUrl, filePath: newPath, originalFilePath: originalPath, title: "" }
             }).run();
           } else {
             editor.chain().focus().insertContent({
               type: "image",
-              attrs: { id: generateUUID(), src: dataUrl, filePath: newPath, title: "" }
+              attrs: { id: generateUUID(), src: compressed.dataUrl, originalSrc: dataUrl, filePath: newPath, originalFilePath: originalPath, title: "" }
             }).run();
           }
 
@@ -1233,7 +1236,7 @@ const EditorContent = React.memo(function EditorContent({
               <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} setActiveMenu={handleSetActiveMenu} />
               <MenuAction
                 icon={<FileJson size={14} />}
-                label="Download JSON"
+                label="Download ZIP"
                 onClick={async () => {
                   await exportEntries([entryId]);
                 }}
@@ -1318,9 +1321,9 @@ const EditorContent = React.memo(function EditorContent({
                       (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
 
                   if (safePos !== null) {
-                    editor.chain().focus().insertContentAt(safePos, { type: 'rawLatex', attrs: { id: generateUUID() } }).run();
+                    editor.chain().focus().insertContentAt(safePos, { type: 'rawLatex' }).run();
                   } else {
-                    editor.chain().focus().insertContent({ type: 'rawLatex', attrs: { id: generateUUID() } }).run();
+                    editor.chain().focus().insertContent({ type: 'rawLatex' }).run();
                   }
                 }}
                 setActiveMenu={handleSetActiveMenu}
