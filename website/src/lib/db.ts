@@ -34,6 +34,8 @@ export interface PendingChange {
   /** Repo-relative file path, e.g. "entries/2026-04-28T09-00-00_entry.tex" */
   path: string;
   operation: PendingOperation;
+  /** Distinguishes a brand-new file from an edit to an existing one. */
+  changeType?: "create" | "update";
   /** Text content (for .tex / .json files) or base64 string (for images).
    *  Undefined when operation === "delete". */
   content?: string;
