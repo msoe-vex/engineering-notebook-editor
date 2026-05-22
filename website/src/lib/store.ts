@@ -1,99 +1,18 @@
-import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds, TipTapNode, buildResourceTypeIndex, getLocalDateString, ensureResourceIds } from "./metadata";
-import { generateAllEntriesLatex, generateEntryLatex, generateTeamLatex, generatePhasesLatex } from "./latex";
+import { NotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, hydrateTeamAssets, TipTapNode, buildResourceTypeIndex, extractResources } from "./metadata";
+import { generateEntryLatex } from "./latex";
 import { ExplorerFile, GitHubConfig, TeamTab } from "./types";
-import { getProjects, getProject, Project, getAllPending, getPending, stageChange, removeStaged, getResource, putResource, saveProject, getProjectHandle, saveProjectHandle, PendingChange } from "./db";
-import { fetchFileContent, fetchDirectoryTree, fetchRawFileContent, GitHubFile, checkGitHubFileExists, fetchGitHubUser } from "./github";
-import { listLocalFiles, readLocalFile, writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, ensureLocalDirectory, checkLocalFileExists } from "./fs";
-import { INDEX_PATH, ENTRIES_DIR, ENTRIES_INDEX_PATH, LATEX_DIR, ASSETS_DIR, TEAM_PATH, PHASES_PATH } from "./constants";
+import { Project, getAllPending, removeStaged, PendingChange } from "./db";
 import { events, EventNames } from "./events";
-import { generateUUID, getMimeTypeFromExtension, generateDeterministicUUID, formatDateMonthYear } from "./utils";
+import { WorkspaceMode, OpenFileState, IWorkspaceStore, DebouncedFunction } from "./store/types";
+export type { WorkspaceMode, OpenFileState, DebouncedFunction };
+import { debounceWithFlush } from "./utils";
+import { ProjectManager } from "./store/projectManager";
+import { EntryManager } from "./store/entryManager";
+import { TransferManager } from "./store/transferManager";
+import { TeamManager } from "./store/teamManager";
+import { NavigationManager } from "./store/navigationManager";
 
-export interface DebouncedFunction<T extends (...args: unknown[]) => unknown> {
-  (...args: Parameters<T>): void;
-  flush(): void;
-  cancel(): void;
-}
-
-export function debounceWithFlush<T extends (...args: unknown[]) => unknown>(
-  func: T,
-  wait: number
-): DebouncedFunction<T> {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  let lastArgs: Parameters<T> | null = null;
-
-  const debounced = function (...args: Parameters<T>) {
-    lastArgs = args;
-
-    if (timeoutId !== null) {
-      clearTimeout(timeoutId);
-    }
-
-    timeoutId = setTimeout(() => {
-      const argsToUse = lastArgs;
-      timeoutId = null;
-      lastArgs = null;
-      if (argsToUse) {
-        func(...argsToUse);
-      }
-    }, wait);
-  };
-
-  debounced.flush = () => {
-    if (timeoutId !== null) {
-      clearTimeout(timeoutId);
-      timeoutId = null;
-    }
-    const argsToUse = lastArgs;
-    lastArgs = null;
-    if (argsToUse) {
-      func(...argsToUse);
-    }
-  };
-
-  debounced.cancel = () => {
-    if (timeoutId !== null) {
-      clearTimeout(timeoutId);
-      timeoutId = null;
-    }
-    lastArgs = null;
-  };
-
-  return debounced;
-}
-
-export type WorkspaceMode = "local" | "github" | "temporary" | "none";
-
-// Normalize base64 payloads: strip non-base64 chars and pad with '=' to valid length
-const normalizeBase64 = (s: string | null | undefined): string | null => {
-  if (!s) return null;
-  // Remove data:... prefix if present
-  const raw = s.includes(',') ? s.split(',')[1] : s;
-  if (!raw || typeof raw !== 'string') return null;
-  // Remove whitespace and any characters outside base64 alphabet
-  let cleaned = raw.replace(/\s+/g, '').replace(/[^A-Za-z0-9+/=]/g, '');
-  // Pad with '=' to make length a multiple of 4
-  const mod = cleaned.length % 4;
-  if (mod !== 0) {
-    cleaned += '='.repeat(4 - mod);
-  }
-  return cleaned;
-};
-
-interface OpenFileState {
-  path: string;
-  name: string;
-  id: string;
-  tiptapContent: string;
-  latex: string;
-  title: string;
-  author: string;
-  phase: number | null;
-  createdAt: string;
-  updatedAt: string;
-  date: string;
-}
-
-class WorkspaceStore {
+class WorkspaceStore implements IWorkspaceStore {
   // ─── State ──────────────────────────────────────────────────────────────────
   public mode: WorkspaceMode = "none";
   public config: GitHubConfig | null = null;
@@ -121,6 +40,18 @@ class WorkspaceStore {
   public selectedPaths: Set<string> = new Set();
   public isSaving = false;
   public isPendingSave = false;
+
+  // Internal persistence tracking
+  public lastSavedContents = new Map<string, string>();
+  public savingCount = 0;
+  public queue = Promise.resolve();
+
+  // Sub-managers
+  private projectManager: ProjectManager;
+  private entryManager: EntryManager;
+  private transferManager: TransferManager;
+  private teamManager: TeamManager;
+  private navigationManager: NavigationManager;
 
   public debouncedPersist = debounceWithFlush(async () => {
     if (!this.openFile) return;
@@ -151,7 +82,7 @@ class WorkspaceStore {
     );
 
     this.setPendingSave(false);
-    await this.saveDraft(id, latex, tiptapContent, { title, author, phase, date });
+    await this.entryManager.saveDraft(id, latex, tiptapContent, { title, author, phase, date });
   }, 800);
 
   get hydratedMetadata(): NotebookMetadata {
@@ -161,12 +92,13 @@ class WorkspaceStore {
     };
   }
 
-  // ─── Internal ───────────────────────────────────────────────────────────────
-  #queue = Promise.resolve();
-  #lastSavedContents = new Map<string, string>();
-  #savingCount = 0;
-
   constructor() {
+    this.projectManager = new ProjectManager(this);
+    this.entryManager = new EntryManager(this);
+    this.transferManager = new TransferManager(this);
+    this.teamManager = new TeamManager(this);
+    this.navigationManager = new NavigationManager(this);
+
     if (typeof window !== "undefined") {
       window.addEventListener("popstate", () => this.handleUrlChange());
     }
@@ -184,1010 +116,142 @@ class WorkspaceStore {
     }
   }
 
-  public async handleUrlChange(url: URL = new URL(window.location.href)) {
-    const path = url.pathname;
-    if (path.startsWith('/workspace/team')) {
-      this.showTeamEditor = true;
-      const tab = path.split('/').pop() as TeamTab;
-      this.teamTab = ["identity", "members", "phases"].includes(tab) ? tab : "identity";
-    } else {
-      this.showTeamEditor = false;
-    }
-
-    if (path.startsWith('/help') || path.startsWith('/workspace/help')) {
-      this.showHelp = true;
-      this.helpPath = path;
-    } else {
-      this.showHelp = false;
-      this.helpPath = null;
-    }
-
-    if (path === '/about' || path === '/workspace/about') {
-      this.showAbout = true;
-    } else {
-      this.showAbout = false;
-    }
-
-    if (path.startsWith('/workspace/compile')) {
-      this.showCompiler = true;
-    } else {
-      this.showCompiler = false;
-    }
-
-    const params = url.searchParams;
-    this.hasEntryInUrl = params.has("entry");
-    const projectId = params.get("project");
-    const entryId = params.get("entry");
-    const resourceId = params.get("resource");
-
-    if (projectId && projectId !== this.currentProjectId) {
-      await this.selectProject(projectId);
-    } else if (!projectId) {
-      this.disconnect();
-    }
-
-    if (entryId && (!this.openFile || this.openFile.id !== entryId)) {
-      await this.openEntry(entryId);
-    } else if (!entryId) {
-      this.openFile = null;
-    }
-
-    if (resourceId) {
-      events.emit(EventNames.SCROLL_TO_RESOURCE, resourceId);
-    }
-
-    // Ensure the URL matches the state if we're in a workspace
-    if (this.currentProjectId) {
-      const url = new URL(window.location.href);
-      if (url.searchParams.get('project') !== this.currentProjectId) {
-        url.searchParams.set('project', this.currentProjectId);
-        window.history.replaceState({}, '', url.toString());
-      }
-    }
-
-    this.notifyStateChange();
+  // ─── Delegated Navigation & URL Handling ────────────────────────────────────
+  public async handleUrlChange(url?: URL) {
+    return this.navigationManager.handleUrlChange(url);
   }
 
   public setSelectedPaths(pathsOrUpdater: Set<string> | ((prev: Set<string>) => Set<string>)) {
-    if (typeof pathsOrUpdater === "function") {
-      this.selectedPaths = pathsOrUpdater(this.selectedPaths);
-    } else {
-      this.selectedPaths = pathsOrUpdater;
-    }
-    this.notifyStateChange();
+    return this.navigationManager.setSelectedPaths(pathsOrUpdater);
   }
 
   public navigateTo(params: Record<string, string | null>, pathname?: string) {
-    const url = new URL(window.location.href);
-    if (pathname) url.pathname = pathname;
-
-    // Preserve current project if not specified and not navigating to root
-    if (this.currentProjectId && !params.project && url.pathname !== '/') {
-      url.searchParams.set('project', this.currentProjectId);
-    }
-
-    // Clear resource if changing entry and no new resource specified
-    if (params.entry && !params.resource) {
-      url.searchParams.delete('resource');
-    }
-
-    for (const [k, v] of Object.entries(params)) {
-      if (v === null) url.searchParams.delete(k);
-      else url.searchParams.set(k, v);
-    }
-    if (window.location.href !== url.toString()) {
-      window.history.pushState({}, '', url.toString());
-    }
-    if (params.resource) {
-      events.emit(EventNames.SCROLL_TO_RESOURCE, params.resource);
-    }
-    this.handleUrlChange(url);
+    return this.navigationManager.navigateTo(params, pathname);
   }
 
-  // ─── Project Management ─────────────────────────────────────────────────────
-  async refreshProjects() {
-    this.projects = await getProjects();
-    // Sync currentProject if it was renamed
-    if (this.currentProjectId && this.currentProject) {
-      const updated = this.projects.find(p => p.id === this.currentProjectId);
-      if (updated && updated.name !== this.currentProject.name) {
-        this.currentProject = { ...updated };
-      }
-    }
-    this.notifyStateChange();
+  // ─── Delegated Project Management ───────────────────────────────────────────
+  public async refreshProjects() {
+    return this.projectManager.refreshProjects();
   }
 
-  async renameProject(id: string, name: string) {
-    const p = await getProject(id);
-    if (p) {
-      p.name = name;
-      await saveProject(p);
-      await this.refreshProjects();
-    }
+  public async renameProject(id: string, name: string) {
+    return this.projectManager.renameProject(id, name);
   }
 
-  async createGithubProject(config: { owner: string; repo: string; branch: string; folderPath: string; name: string }) {
-    const id = await generateDeterministicUUID(`github:${config.owner}/${config.repo}:${config.folderPath}`);
-    const p: Project = {
-      id,
-      name: config.name,
-      type: "github",
-      githubConfig: {
-        owner: config.owner,
-        repo: config.repo,
-        branch: config.branch,
-        folderPath: config.folderPath
-      },
-      lastOpened: new Date().toISOString()
-    };
-    await saveProject(p);
-    await this.refreshProjects();
-    return id;
+  public async createGithubProject(config: { owner: string; repo: string; branch: string; folderPath: string; name: string }) {
+    return this.projectManager.createGithubProject(config);
   }
 
-  async createLocalProject(handle: FileSystemDirectoryHandle, name: string) {
-    // 1. Check if we already have this project by handle
-    for (const p of this.projects) {
-      if (p.type === "local") {
-        try {
-          const existingHandle = await getProjectHandle(p.id);
-          if (existingHandle && await handle.isSameEntry(existingHandle)) {
-            return p.id;
-          }
-        } catch { }
-      }
-    }
-
-    let id: string | null = null;
-    if (!id) id = generateUUID();
-
-    const p: Project = {
-      id,
-      name,
-      type: "local",
-      lastOpened: new Date().toISOString()
-    };
-    await saveProject(p);
-    await saveProjectHandle(id, handle);
-
-    // Ensure base directories
-    await ensureLocalDirectory(handle, ENTRIES_DIR);
-    await ensureLocalDirectory(handle, ASSETS_DIR);
-    await ensureLocalDirectory(handle, LATEX_DIR);
-
-
-
-    await this.refreshProjects();
-    return id;
+  public async createLocalProject(handle: FileSystemDirectoryHandle, name: string) {
+    return this.projectManager.createLocalProject(handle, name);
   }
 
-  async createTemporaryProject() {
-    const { clearAllPending, clearAllResources } = await import("./db");
-    const dbName = "notebook-project-temporary";
-    await clearAllPending(dbName);
-    await clearAllResources(dbName);
-    return "temporary";
+  public async createTemporaryProject() {
+    return this.projectManager.createTemporaryProject();
   }
 
-  async selectProject(id: string) {
-    if (this.currentProjectId === id && id !== "temporary" && this.isInitialized && !this.isLoading) return;
-
-    this.debouncedPersist.flush();
-
-    // For temporary workspaces, if this is the initial load of the session, clear the DB
-    // to fulfill the UI promise of "Lost on reload".
-    if (id === "temporary" && this.mode === "none") {
-      const { clearAllPending, clearAllResources } = await import("./db");
-      const dbName = "notebook-project-temporary";
-      await clearAllPending(dbName);
-      await clearAllResources(dbName);
-    }
-
-    this.workspaceVersion++;
-    // Ensure all pending I/O for the current project is finished before switching
-    await this.#queue;
-
-    this.selectedPaths = new Set();
-    this.setLoading(true);
-    try {
-      if (id === "temporary") {
-        if (this.currentProjectId !== "temporary") {
-          this.currentProject = { id: "temporary", name: "Temporary Project", type: "temporary", lastOpened: new Date().toISOString() };
-          this.currentProjectId = "temporary";
-          this.mode = "temporary";
-          this.metadata = EMPTY_METADATA;
-          this.entries = [];
-
-          // Persist initial LaTeX metadata files for temporary projects so exports include them
-          try {
-            await this.updateLatexMetadata();
-          } catch (err) {
-            console.warn("Failed to generate initial LaTeX files for temporary workspace:", err);
-          }
-
-          // Update URL for temporary project
-          const url = new URL(window.location.href);
-          url.searchParams.set('project', "temporary");
-          if (url.pathname === '/') url.pathname = '/workspace/editor';
-          if (window.location.href !== url.toString()) {
-            window.history.pushState({}, '', url.toString());
-          }
-        }
-        this.notifyStateChange();
-        return;
-      }
-
-      const project = await getProject(id);
-      if (!project) {
-        this.disconnect();
-        window.history.replaceState({}, '', '/');
-        this.notifyStateChange();
-        events.emit(EventNames.SHOW_NOTIFICATION, { message: "Project not found", type: "error" });
-        return;
-      }
-
-      this.currentProject = project;
-      this.currentProjectId = id;
-      const projectType = project.type as WorkspaceMode;
-
-      if (projectType === "local") {
-        const handle = await getProjectHandle(id);
-        if (handle) {
-          this.dirHandle = handle;
-          await this.loadLocalWorkspace();
-          this.mode = "local";
-        } else {
-          // Needs permission
-          this.mode = "none";
-        }
-      } else if (projectType === "github") {
-        const token = localStorage.getItem("nb-github-token");
-        if (!token) {
-          this.disconnect();
-          events.emit(EventNames.SHOW_GITHUB_LOGIN, { loginOnly: true, projectId: project.id });
-          window.history.replaceState({}, '', '/');
-          this.notifyStateChange();
-          return;
-        }
-
-        this.config = {
-          token,
-          owner: project.githubConfig!.owner,
-          repo: project.githubConfig!.repo,
-          branch: project.githubConfig!.branch,
-          baseDir: project.githubConfig!.folderPath,
-          entriesDir: ENTRIES_DIR,
-          resourcesDir: ASSETS_DIR
-        };
-
-        try {
-          // Verify token before transitioning to workspace view
-          await fetchGitHubUser(token);
-
-          await this.loadGitHubWorkspace();
-          this.mode = "github";
-        } catch (error: unknown) {
-          const err = error as { status?: number };
-          console.error("Failed to load GitHub workspace:", error);
-          this.disconnect();
-          const msg = err.status === 401 ? "GitHub session expired. Please sign in again." :
-            err.status === 403 ? "You do not have access to this repository." :
-              err.status === 404 ? "Repository or folder not found." :
-                "Failed to connect to GitHub. Check your internet or token.";
-          if (err.status === 401) {
-            events.emit(EventNames.SHOW_GITHUB_LOGIN, { loginOnly: true, projectId: project.id });
-            events.emit(EventNames.GITHUB_SESSION_EXPIRED);
-          } else {
-            events.emit(EventNames.SHOW_NOTIFICATION, { message: msg, type: "error" });
-          }
-          window.history.replaceState({}, '', '/');
-          this.notifyStateChange();
-          return;
-        }
-      } else if (this.mode === "temporary") {
-        this.metadata = EMPTY_METADATA;
-        this.entries = [];
-      }
-
-      // Update URL to reflect the project selection
-      const url = new URL(window.location.href);
-      url.searchParams.set('project', id);
-      if (url.pathname === '/') url.pathname = '/workspace/editor';
-      if (window.location.href !== url.toString()) {
-        window.history.pushState({}, '', url.toString());
-      }
-
-      events.emit(EventNames.PROJECT_LOADED, project);
-      await this.refreshPending();
-
-      // Update last opened timestamp only if successfully opened
-      if (this.mode !== "none") {
-        project.lastOpened = new Date().toISOString();
-        await saveProject(project);
-        await this.refreshProjects();
-      }
-    } finally {
-      this.setLoading(false);
-    }
+  public async selectProject(id: string) {
+    return this.projectManager.selectProject(id);
   }
 
-  private async reloadWorkspace() {
-    if (this.mode === "local") {
-      await this.loadLocalWorkspace();
-    } else if (this.mode === "github") {
-      await this.loadGitHubWorkspace();
-    } else if (this.mode === "temporary") {
-      // Re-populate entries from metadata for temporary mode
-      this.entries = Object.values(this.metadata.entries).map(e => ({
-        name: e.filename.split('/').pop() || '',
-        path: e.filename
-      })).sort((a, b) => {
-        const metaA = this.metadata.entries[a.path.split('/').pop()?.replace('.json', '') || ''];
-        const metaB = this.metadata.entries[b.path.split('/').pop()?.replace('.json', '') || ''];
-        const timeA = metaA?.updatedAt || metaA?.createdAt || 0;
-        const timeB = metaB?.updatedAt || metaB?.createdAt || 0;
-        return new Date(timeB).getTime() - new Date(timeA).getTime();
-      });
-      this.notifyStateChange();
-    }
+  public async reloadWorkspace() {
+    return this.projectManager.reloadWorkspace();
   }
 
-  private async loadLocalWorkspace() {
-    if (!this.dirHandle) return;
-
-    // Ensure core directories exist
-    await ensureLocalDirectory(this.dirHandle, ENTRIES_DIR);
-    await ensureLocalDirectory(this.dirHandle, ASSETS_DIR);
-    await ensureLocalDirectory(this.dirHandle, LATEX_DIR);
-
-    const files = await listLocalFiles(this.dirHandle, ENTRIES_DIR);
-    this.entries = files;
-    let isNew = false;
-    try {
-      const metaStr = await readLocalFile(this.dirHandle, INDEX_PATH);
-      const parsed = JSON.parse(metaStr);
-
-      // Hydrate team assets
-      const assetCache = new Map<string, string>();
-      const fetchLocalAsset = async (path: string) => {
-        if (!path || path.startsWith('data:')) return;
-        try {
-          const res = await getLocalFileContent(this.dirHandle!, path);
-          if (res.base64) assetCache.set(path, res.base64);
-        } catch { }
-      };
-
-      const tasks: Promise<void>[] = [];
-      if (parsed.team?.logo) tasks.push(fetchLocalAsset(parsed.team.logo));
-      if (parsed.team?.members) {
-        for (const m of parsed.team.members) {
-          if (m.image) tasks.push(fetchLocalAsset(m.image));
-        }
-      }
-      await Promise.all(tasks);
-
-      // Keep metadata clean, but update the global asset cache
-      assetCache.forEach((v, k) => this.assetCache.set(k, v));
-      this.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...parsed });
-    } catch {
-      this.metadata = validateNotebookIntegrity(EMPTY_METADATA);
-      isNew = true;
-      // Initialize notebook.json
-      await writeLocalFile(this.dirHandle, INDEX_PATH, JSON.stringify(this.metadata, null, 2));
-    }
-    this.isMainTexPresent = await checkLocalFileExists(this.dirHandle, "main.tex");
-
-    if (isNew) {
-      await this.updateLatexMetadata();
-    }
+  // ─── Delegated Entry Management ─────────────────────────────────────────────
+  public async openEntry(id: string) {
+    return this.entryManager.openEntry(id);
   }
 
-  private async loadGitHubWorkspace() {
-    if (!this.config) throw new Error("GitHub configuration missing");
-    if (!this.config.token) throw new Error("GitHub token is required");
-
-    const dbName = this.getDBName();
-    const normalizedBase = this.config.baseDir ? this.config.baseDir.replace(/^\/+|\/+$/g, '') : '';
-    const basePrefix = normalizedBase ? normalizedBase + '/' : '';
-    const actualIndexPath = `${basePrefix}${INDEX_PATH}`;
-    let isNew = false;
-
-    const files = await fetchDirectoryTree(this.config, `${basePrefix}${ENTRIES_DIR}`);
-    const entryFiles = Array.isArray(files) ? files.map((f: GitHubFile) => ({
-      name: f.name,
-      path: f.path.startsWith(basePrefix) ? f.path.slice(basePrefix.length) : f.path
-    })) : [];
-
-    const pending = await getAllPending(dbName);
-    const pendingMeta = pending.find(p => p.path === INDEX_PATH && p.operation === "upsert");
-
-    if (pendingMeta?.content) {
-      const parsed = JSON.parse(pendingMeta.content);
-      this.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...parsed });
-    } else {
-      try {
-        const metaStr = await fetchFileContent(this.config, actualIndexPath);
-        this.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...JSON.parse(metaStr) });
-      } catch {
-        this.metadata = validateNotebookIntegrity(EMPTY_METADATA);
-        isNew = true;
-        // Stage default metadata
-        await stageChange(dbName, {
-          path: INDEX_PATH,
-          operation: "upsert",
-          content: JSON.stringify(this.metadata, null, 2),
-          label: "Initialize notebook.json",
-          stagedAt: new Date().toISOString()
-        });
-        await this.refreshPending();
-      }
-    }
-
-    let mergedEntries = [...entryFiles];
-    for (const p of pending) {
-      if (p.path.startsWith(ENTRIES_DIR) && p.path.endsWith('.json')) {
-        if (p.operation === "upsert" && !mergedEntries.some(e => e.path === p.path)) {
-          mergedEntries.push({ name: p.path.split('/').pop() || '', path: p.path });
-        } else if (p.operation === "delete") {
-          mergedEntries = mergedEntries.filter(e => e.path !== p.path);
-        }
-      }
-    }
-    this.entries = mergedEntries;
-
-    // Hydrate team assets for GitHub
-    if (this.metadata.team) {
-      const dbName = this.getDBName();
-      const team = this.metadata.team;
-
-      const fetchAsset = async (path: string) => {
-        if (!path || path.startsWith('data:')) return;
-        try {
-          // 1. Check if already in memory
-          if (this.assetCache.has(path)) {
-            return;
-          }
-
-          // 2. Check pending changes store (for newly uploaded but uncommitted images)
-          const pending = await getPending(dbName, path);
-          if (pending?.content) {
-            const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${pending.content}`;
-            this.assetCache.set(path, dataUrl);
-            return;
-          }
-
-          // 3. Check resource cache
-          let cached = await getResource(dbName, path);
-          if (cached) {
-            // Fix legacy/corrupted image/* prefix from previous versions
-            if (cached.startsWith('data:image/*;base64,')) {
-              cached = cached.replace('data:image/*;base64,', `data:${getMimeTypeFromExtension(path)};base64,`);
-              await putResource(dbName, { path, dataUrl: cached }); // Update cache with fix
-            }
-          }
-
-          if (cached) {
-            this.assetCache.set(path, cached);
-            return;
-          }
-
-          // 4. Fetch from GitHub
-          const actualPath = this.getFullPath(path);
-          const base64 = await fetchRawFileContent(this.config!, actualPath);
-          const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${base64}`;
-          this.assetCache.set(path, dataUrl);
-          await putResource(dbName, { path, dataUrl });
-        } catch (e) {
-          console.warn(`[Store] Failed to hydrate GitHub asset: ${path}`, e);
-        }
-      };
-
-      const tasks: Promise<void>[] = [];
-      if (team.logo) tasks.push(fetchAsset(team.logo));
-      if (team.members) {
-        for (const m of team.members) {
-          if (m.image) tasks.push(fetchAsset(m.image));
-        }
-      }
-      await Promise.all(tasks);
-    }
-
-    this.isMainTexPresent = await checkGitHubFileExists(this.config, `${basePrefix}main.tex`);
-    if (isNew) {
-      await this.updateLatexMetadata();
-    }
+  public updateDraft(tiptapContent: string | null, info: { title?: string; author?: string; phase?: number | null; date?: string }) {
+    return this.entryManager.updateDraft(tiptapContent, info);
   }
 
-  // ─── Entry Management ───────────────────────────────────────────────────────
-  async openEntry(id: string) {
-    this.debouncedPersist.flush();
-    const meta = this.metadata.entries[id];
-
-    if (!meta) {
-      this.navigateTo({ entry: null });
-      events.emit(EventNames.SHOW_NOTIFICATION, {
-        message: "Entry not found",
-        type: "error"
-      });
-      return;
-    }
-
-    // Clear current file to show localized loading state in UI
-    this.openFile = null;
-    this.notifyStateChange();
-
-    try {
-      const dbName = this.getDBName();
-      let entryJsonStr = "";
-
-      // Fetch pending changes once to use for entry and assets
-      const pending = await getAllPending(dbName);
-
-      // 1. Check memory cache first (for immediate access to new/modified entries)
-      entryJsonStr = this.#lastSavedContents.get(meta.filename) || "";
-
-      // 2. Check pending changes if not in memory
-      if (!entryJsonStr) {
-        const stagedEntry = pending.find(p => p.path === meta.filename && p.operation === "upsert");
-        if (stagedEntry?.content) {
-          entryJsonStr = stagedEntry.content;
-        }
-      }
-
-      // 3. Check disk/remote if still not found
-      if (!entryJsonStr) {
-        if (this.mode === "local" && this.dirHandle) {
-          entryJsonStr = (await getLocalFileContent(this.dirHandle, meta.filename)).text || "";
-        } else if (this.mode === "github" && this.config) {
-          entryJsonStr = await fetchFileContent(this.config, this.getFullPath(meta.filename));
-        }
-      }
-
-      if (!entryJsonStr) throw new Error("Entry not found");
-      const rawData = JSON.parse(entryJsonStr);
-      const content = rawData.content || rawData;
-
-      // Hydrate assets
-      const assetCache = new Map<string, string>();
-      const images = extractImagePaths(content);
-      for (const imgPath of images) {
-        if (imgPath.startsWith('data:')) continue;
-        const actualImgPath = this.getFullPath(imgPath);
-        const staged = pending.find(p => p.path === imgPath && p.operation === "upsert");
-        if (staged?.content) {
-          const dataUrl = staged.content.startsWith('data:') ? staged.content : `data:${getMimeTypeFromExtension(imgPath)};base64,${staged.content}`;
-          assetCache.set(imgPath, dataUrl);
-        } else {
-          let cached = await getResource(dbName, actualImgPath);
-          if (cached) {
-            if (cached.startsWith('data:image/*;base64,')) {
-              cached = cached.replace('data:image/*;base64,', `data:${getMimeTypeFromExtension(imgPath)};base64,`);
-              await putResource(dbName, { path: actualImgPath, dataUrl: cached });
-            }
-          }
-          if (cached) {
-            assetCache.set(imgPath, cached);
-          } else if (this.mode === "local" && this.dirHandle) {
-            try {
-              const res = await getLocalFileContent(this.dirHandle, imgPath);
-              if (res.base64) assetCache.set(imgPath, res.base64);
-            } catch { }
-          } else if (this.mode === "github" && this.config) {
-            try {
-              const base64 = await fetchRawFileContent(this.config, actualImgPath);
-              const dataUrl = `data:${getMimeTypeFromExtension(imgPath)};base64,${base64}`;
-              assetCache.set(imgPath, dataUrl);
-              await putResource(dbName, { path: actualImgPath, dataUrl });
-            } catch { }
-          }
-        }
-      }
-
-      const hydratedContent = hydrateAssets(content, assetCache);
-
-      let latex = "";
-      try {
-        const texPath = `${LATEX_DIR}/${id}.tex`;
-        if (this.mode === "local" && this.dirHandle) {
-          latex = await readLocalFile(this.dirHandle, texPath);
-        } else if (this.mode === "github" && this.config) {
-          latex = await fetchFileContent(this.config, this.getFullPath(texPath));
-        }
-      } catch { }
-
-      this.openFile = {
-        path: meta.filename,
-        name: meta.filename.split('/').pop() || "",
-        id: id,
-        tiptapContent: JSON.stringify(hydratedContent),
-        latex,
-        title: meta.title,
-        author: meta.author,
-        phase: meta.phase,
-        date: meta.date,
-        createdAt: meta.createdAt,
-        updatedAt: meta.updatedAt
-      };
-
-      this.#lastSavedContents.set(meta.filename, JSON.stringify({ version: 3, content }, null, 2));
-      events.emit(EventNames.ENTRY_LOADED, this.openFile);
-      this.notifyStateChange();
-    } catch (e) {
-      console.error("Failed to open entry:", e);
-      this.openFile = null;
-      this.navigateTo({ entry: null });
-      events.emit(EventNames.SHOW_NOTIFICATION, { message: "Failed to load entry.", type: "error" });
-      this.notifyStateChange();
-    } finally {
-      // No global loading here
-    }
+  public async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null; date: string }) {
+    return this.entryManager.updateEntry(id, latex, tiptapContent, info);
   }
 
-  public updateDraft(
-    tiptapContent: string | null,
-    info: { title?: string; author?: string; phase?: number | null; date?: string }
-  ) {
-    if (!this.openFile) return;
-    const id = this.openFile.id;
-
-    // 1. Synchronously update openFile
-    if (tiptapContent !== null) {
-      this.openFile.tiptapContent = tiptapContent;
-    }
-    if (info.title !== undefined) this.openFile.title = info.title;
-    if (info.author !== undefined) this.openFile.author = info.author;
-    if (info.phase !== undefined) this.openFile.phase = info.phase;
-    if (info.date !== undefined) this.openFile.date = info.date;
-    this.openFile.updatedAt = new Date().toISOString();
-
-    // 2. Synchronously update metadata in-memory for immediate UI feedback (Sidebar, etc.)
-    const existingEntry = this.metadata.entries[id];
-    if (existingEntry) {
-      this.metadata = {
-        ...this.metadata,
-        entries: {
-          ...this.metadata.entries,
-          [id]: {
-            ...existingEntry,
-            ...(info.title !== undefined ? { title: info.title } : {}),
-            ...(info.author !== undefined ? { author: info.author } : {}),
-            ...(info.phase !== undefined ? { phase: info.phase } : {}),
-            ...(info.date !== undefined ? { date: info.date } : {}),
-            updatedAt: this.openFile.updatedAt,
-          }
-        }
-      };
-    }
-
-    // 3. Mark pending save as true
-    this.setPendingSave(true);
-
-    // 4. Trigger debounced background save
-    this.debouncedPersist();
-
-    // 5. Notify reactive hooks/listeners
-    this.notifyStateChange();
+  public async createEntry() {
+    return this.entryManager.createEntry();
   }
 
-  async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null; date: string }) {
-    this.updateDraft(tiptapContent, info);
-    this.debouncedPersist.flush();
+  public async refreshPending() {
+    return this.entryManager.refreshPending();
   }
 
-  private async saveDraft(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null; date: string }) {
-    let contentJson = JSON.parse(tiptapContent);
-    // Handle double-stringification and wrapping
-    if (typeof contentJson === 'string') {
-      try { contentJson = JSON.parse(contentJson); } catch { }
-    }
-    if (contentJson && contentJson.content && !contentJson.type) {
-      contentJson = contentJson.content;
-    }
-
-    // Ensure all tables, headings, codeBlocks, etc. have IDs!
-    contentJson = ensureResourceIds(contentJson) as TipTapNode;
-    tiptapContent = JSON.stringify(contentJson);
-
-    // 1. Update memory immediately (Source of Truth)
-    if (this.openFile && this.openFile.id === id) {
-      this.openFile = { ...this.openFile, ...info, tiptapContent, latex, updatedAt: new Date().toISOString() };
-    }
-
-    const existingEntry = this.metadata.entries[id];
-    if (!existingEntry) return;
-
-    const discoveredResources = extractResources(contentJson);
-    const mergedResources: Record<string, { type: string; title: string; caption: string }> = {};
-    const oldResources = existingEntry.resources || {};
-
-    for (const [resId, resInfo] of Object.entries(discoveredResources)) {
-      mergedResources[resId] = {
-        type: resInfo.type,
-        title: resInfo.title || oldResources[resId]?.title || "",
-        caption: resInfo.caption || oldResources[resId]?.caption || "",
-      };
-    }
-
-    const mergedEntry: EntryMetadata = {
-      ...existingEntry,
-      ...info,
-      updatedAt: new Date().toISOString(),
-      resources: mergedResources,
-      references: extractReferences(contentJson),
-      assets: extractImagePaths(contentJson),
-    };
-
-    this.metadata = validateNotebookIntegrity({
-      ...this.metadata,
-      entries: { ...this.metadata.entries, [id]: mergedEntry }
-    });
-
-    this.notifyStateChange();
-    events.emit(EventNames.ENTRY_UPDATED, { id, ...info });
-
-    if (info.author && info.author !== existingEntry.author) {
-      localStorage.setItem("nb-last-author", info.author);
-    }
-
-    // 2. Queue background persistence
-    this.enqueue(async () => {
-      let contentObj = JSON.parse(tiptapContent);
-      // Handle potential double-stringification
-      if (typeof contentObj === 'string') {
-        try {
-          contentObj = JSON.parse(contentObj);
-        } catch { /* use as is */ }
-      }
-
-      const { cleanDoc, newAssets } = await dehydrateAssets(contentObj, existingEntry.assets || []);
-      const entryJsonStr = JSON.stringify({ version: 3, content: cleanDoc }, null, 2);
-
-      // Save assets
-      for (const asset of newAssets) {
-        await this.persistFile(asset.path, asset.base64, `Asset: ${asset.path}`, true);
-        if (this.mode === "github") {
-          await putResource(this.getDBName(), { path: asset.path, dataUrl: `data:${getMimeTypeFromExtension(asset.path)};base64,${asset.base64}` });
-        }
-      }
-
-      // Save Entry JSON
-      if (this.#lastSavedContents.get(mergedEntry.filename) !== entryJsonStr) {
-        await this.persistFile(mergedEntry.filename, entryJsonStr, `Auto-save: ${info.title}`);
-        this.#lastSavedContents.set(mergedEntry.filename, entryJsonStr);
-      }
-
-      // Save LaTeX
-      const latexPath = `${LATEX_DIR}/${id}.tex`;
-      if (this.#lastSavedContents.get(latexPath) !== latex) {
-        await this.persistFile(latexPath, latex, `Generate LaTeX: ${info.title}`);
-        this.#lastSavedContents.set(latexPath, latex);
-      }
-
-      // Cleanup orphaned assets
-      await this.reconcileAssetRefs(existingEntry.assets || [], mergedEntry.assets || []);
-
-      // Save Metadata
-      await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Auto-save metadata");
-      await this.updateLatexMetadata();
-    });
+  public setEntryValidity(id: string, isValid: boolean, validationErrors?: string[]) {
+    return this.entryManager.setEntryValidity(id, isValid, validationErrors);
   }
 
-  async createEntry() {
-    const id = generateUUID();
-    const createdAt = new Date().toISOString();
-    const path = `${ENTRIES_DIR}/${id}.json`;
-    const latexPath = `${LATEX_DIR}/${id}.tex`;
-
-    const newEntry: EntryMetadata = {
-      id,
-      title: "",
-      author: localStorage.getItem("nb-last-author") || "",
-      phase: null,
-      date: getLocalDateString(),
-      createdAt, updatedAt: createdAt, filename: path
-    };
-
-    const wrapper = { version: 3, content: { type: "doc", content: [{ type: "paragraph" }] } };
-    const jsonStr = JSON.stringify(wrapper, null, 2);
-    const initialLatex = `\\notebookentry{${newEntry.title}}{${createdAt.split('T')[0]}}{${newEntry.author}}{}{${id}}\n\n`;
-
-    this.#lastSavedContents.set(path, jsonStr);
-    this.#lastSavedContents.set(latexPath, initialLatex);
-
-    this.metadata = validateNotebookIntegrity({
-      ...this.metadata,
-      entries: { ...this.metadata.entries, [id]: newEntry }
-    });
-    this.entries = [{ name: `${id}.json`, path }, ...this.entries];
-    this.notifyStateChange();
-
-    this.enqueue(async () => {
-      await this.persistFile(path, jsonStr, "New entry");
-      await this.persistFile(latexPath, initialLatex, "Init LaTeX");
-      await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Create entry metadata");
-      await this.updateLatexMetadata();
-    });
-
-    this.navigateTo({ entry: id });
-    return id;
+  public async discardPendingChanges() {
+    return this.entryManager.discardPendingChanges();
   }
 
-  async refreshPending() {
-    if (this.#savingCount > 0) {
-      return this.pendingChanges;
-    }
-    const dbName = this.getDBName();
-    this.pendingChanges = await getAllPending(dbName);
-    this.notifyStateChange();
-    return this.pendingChanges;
-  }
-
-  setEntryValidity(id: string, isValid: boolean, validationErrors: string[] = []) {
-    const existingEntry = this.metadata.entries[id];
-    if (!existingEntry) return;
-
-    if (existingEntry.isValid === isValid && JSON.stringify(existingEntry.validationErrors || []) === JSON.stringify(validationErrors)) {
-      return;
-    }
-
-    this.metadata = {
-      ...this.metadata,
-      entries: {
-        ...this.metadata.entries,
-        [id]: {
-          ...existingEntry,
-          isValid,
-          validationErrors
-        }
-      }
-    };
-
-    this.notifyStateChange();
-  }
-
-  async discardPendingChanges() {
-    if (this.mode !== "github" && this.mode !== "temporary") {
-      return;
-    }
-
-    const dbName = this.getDBName();
-    await this.#queue;
-    const previousOpenId = this.openFile?.id ?? null;
-
-    const { clearAllPending } = await import("./db");
-    await clearAllPending(dbName);
-
-    // Drop in-memory drafts so reload/openEntry can't resurrect discarded text.
-    this.#lastSavedContents.clear();
-
-    await this.reloadWorkspace();
-    await this.refreshPending();
-
-    if (previousOpenId) {
-      if (this.metadata.entries[previousOpenId]) {
-        await this.openEntry(previousOpenId);
-        return;
-      }
-
-      this.openFile = null;
-      this.selectedPaths = new Set();
-      this.navigateTo({ entry: null, resource: null });
-      return;
-    }
-
-    this.notifyStateChange();
-  }
-
-  async deleteEntry(file: ExplorerFile) {
-    const id = file.path.split('/').pop()?.replace('.json', '') || "";
-    if (this.openFile?.id === id) {
-      this.debouncedPersist.cancel();
-    }
-    const oldMeta = this.metadata;
-    const updatedMeta = validateNotebookIntegrity(removeEntryFromMetadata(this.metadata, id));
-
-    // Memory update
-    this.metadata = updatedMeta;
-    this.entries = this.entries.filter(e => e.path !== file.path);
-    if (this.openFile?.id === id) {
-      this.openFile = null;
-      this.navigateTo({ entry: null });
-    }
-
-    this.notifyStateChange();
-
-    // Background persistence
-    this.enqueue(async () => {
-      if (this.mode === "local" && this.dirHandle) {
-        if (await this.shouldStageDelete(file.path)) {
-          await deleteLocalFileAtPath(this.dirHandle, file.path);
-        }
-        if (await this.shouldStageDelete(`${LATEX_DIR}/${id}.tex`)) {
-          await deleteLocalFileAtPath(this.dirHandle, `${LATEX_DIR}/${id}.tex`);
-        }
-      } else if (this.mode === "github" || this.mode === "temporary") {
-        const dbName = this.getDBName();
-
-        if (await this.shouldStageDelete(file.path)) {
-          await stageChange(dbName, { path: file.path, operation: "delete", label: "Delete entry", stagedAt: new Date().toISOString() });
-        }
-
-        if (await this.shouldStageDelete(`${LATEX_DIR}/${id}.tex`)) {
-          await stageChange(dbName, { path: `${LATEX_DIR}/${id}.tex`, operation: "delete", label: "Delete LaTeX", stagedAt: new Date().toISOString() });
-        }
-      }
-
-      await this.reconcileAssetRefs(oldMeta.assetRefs || {}, this.metadata.assetRefs || {});
-      await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Delete entry");
-      await this.updateLatexMetadata();
-    });
+  public async deleteEntry(file: ExplorerFile) {
+    return this.entryManager.deleteEntry(file);
   }
 
   public async updateLatexMetadata() {
-    const entryDates = Object.values(this.metadata.entries)
-      .map(e => e.date)
-      .filter(Boolean)
-      .sort();
-
-    const startDate = entryDates.length > 0 ? entryDates[0] : "";
-    const endDate = entryDates.length > 0 ? entryDates[entryDates.length - 1] : "";
-
-    // Update team metadata in memory so generateTeamLatex picks it up
-    const teamInfo = {
-      teamName: "",
-      teamNumber: "",
-      organization: "",
-      members: [],
-      ...(this.metadata.team || {}),
-      startDate: formatDateMonthYear(startDate),
-      endDate: formatDateMonthYear(endDate)
-    };
-
-    const teamLatex = generateTeamLatex(teamInfo);
-    const phasesLatex = generatePhasesLatex(this.metadata.phases || []);
-    const allEntriesLatex = generateAllEntriesLatex(this.metadata);
-
-    await this.persistFile(TEAM_PATH, teamLatex, "Update team.tex");
-    await this.persistFile(PHASES_PATH, phasesLatex, "Update phases.tex");
-    await this.persistFile(ENTRIES_INDEX_PATH, allEntriesLatex, "Update entries.tex");
+    return this.entryManager.updateLatexMetadata();
   }
 
-  async saveTeam(team: TeamMetadata, phases?: ProjectPhase[]) {
-    const oldMeta = this.metadata;
-    const { cleanTeam, newAssets } = await dehydrateTeamAssets(team);
-
-    // Memory update
-    const updatedMeta = validateNotebookIntegrity({
-      ...this.metadata,
-      team: cleanTeam,
-      phases: phases || this.metadata.phases || []
-    });
-
-    const metaStr = JSON.stringify(updatedMeta, null, 2);
-
-    // Update memory (we'll keep the hydrated version in memory for the UI)
-    const assetCache = new Map<string, string>();
-    for (const asset of newAssets) {
-      const dataUrl = `data:${getMimeTypeFromExtension(asset.path)};base64,${asset.base64}`;
-      assetCache.set(asset.path, dataUrl);
-      this.assetCache.set(asset.path, dataUrl); // Update global cache
-    }
-
-    this.metadata = { ...updatedMeta, team: cleanTeam }; // Metadata stays CLEAN
-    this.notifyStateChange();
-
-    return this.enqueue(async () => {
-      for (const asset of newAssets) {
-        await this.persistFile(asset.path, asset.base64, `Team asset`, true);
-      }
-      await this.reconcileAssetRefs(oldMeta.assetRefs || {}, updatedMeta.assetRefs || {});
-      await this.persistFile(INDEX_PATH, metaStr, "Update team metadata");
-      await this.updateLatexMetadata();
-    });
+  public async persistFile(path: string, content: string, label: string, isBase64?: boolean) {
+    return this.entryManager.persistFile(path, content, label, isBase64);
   }
 
+  public async reconcileAssetRefs(oldRefs: string[] | Record<string, string[]>, newRefs: string[] | Record<string, string[]>) {
+    return this.entryManager.reconcileAssetRefs(oldRefs, newRefs);
+  }
+
+  public async shouldStageDelete(path: string) {
+    return this.entryManager.shouldStageDelete(path);
+  }
+
+  public async getCommittedFileContent(path: string, isBase64?: boolean) {
+    return this.entryManager.getCommittedFileContent(path, isBase64);
+  }
+
+  // ─── Delegated Team & Compile Management ────────────────────────────────────
+  public async saveTeam(team: TeamMetadata, phases?: ProjectPhase[]) {
+    return this.teamManager.saveTeam(team, phases);
+  }
+
+  public async saveCompiledPdf(pdfData: Uint8Array) {
+    return this.teamManager.saveCompiledPdf(pdfData);
+  }
+
+  public async getCompiledPdfUrl() {
+    return this.teamManager.getCompiledPdfUrl();
+  }
+
+  // ─── Delegated Transfer & Archive Management ─────────────────────────────────
+  public async getFileContent(path: string) {
+    return this.transferManager.getFileContent(path);
+  }
+
+  public async getAssetBase64(path: string) {
+    return this.transferManager.getAssetBase64(path);
+  }
+
+  public async exportEntries(entryIds?: string[]) {
+    return this.transferManager.exportEntries(entryIds);
+  }
+
+  public async exportNotebook() {
+    return this.transferManager.exportNotebook();
+  }
+
+  public async importNotebook(data: Record<string, unknown>) {
+    return this.transferManager.importNotebook(data);
+  }
+
+  public async importNotebookArchive(file: File) {
+    return this.transferManager.importNotebookArchive(file);
+  }
+
+  // ─── Sync / Git Operations ──────────────────────────────────────────────────
   async commitAll(config: GitHubConfig, customMessage?: string) {
-    await this.#queue;
+    await this.queue;
     const dbName = this.getDBName();
     const all = await getAllPending(dbName);
     const { commitChanges } = await import("./github");
@@ -1232,498 +296,60 @@ class WorkspaceStore {
       : defaultMsg;
 
     await commitChanges(config, gitChanges, finalMsg);
-    await this.loadGitHubWorkspace();
+    await this.reloadWorkspace();
     await clearAllPending(dbName);
     await this.refreshPending();
     this.notifyStateChange();
   }
 
-  // ─── Persistence Helpers ────────────────────────────────────────────────────
-  public async getFileContent(path: string): Promise<string | null> {
-    const dbName = this.getDBName();
-    const pending = await getAllPending(dbName);
-    const staged = pending.find(p => p.path === path && p.operation === "upsert");
-    if (staged?.content) return staged.content;
-
-    try {
-      if (this.mode === "local" && this.dirHandle) {
-        const res = await getLocalFileContent(this.dirHandle, path);
-        return res.text || null;
-      } else if (this.mode === "github" && this.config) {
-        return await fetchFileContent(this.config, this.getFullPath(path));
-      } else if (this.mode === "temporary") {
-        // Temporary mode only exists in pending changes
-        return null;
-      }
-    } catch (e) {
-      console.error(`Failed to get content for ${path}:`, e);
-    }
-    return null;
-  }
-
-  public async exportEntries(entryIds?: string[]) {
-    this.setLoading(true);
-    try {
-      const JSZip = (await import("jszip")).default;
-      const zip = new JSZip();
-      const targets = entryIds || Object.keys(this.metadata.entries);
-      const exportAll = !entryIds;
-      const assetPaths = new Set<string>();
-
-      const addAssetPath = (assetPath?: string) => {
-        if (assetPath && !assetPath.startsWith("data:")) {
-          assetPaths.add(assetPath);
-        }
-      };
-
-      const addTextFile = async (path: string) => {
-        const content = await this.getFileContent(path);
-        if (content) {
-          zip.file(path, content);
-          return;
-        }
-
-        // Only attempt fallback fetch for packaged LaTeX core files.
-        // Avoid fetching arbitrary project files (e.g., data/entries.tex) which may resolve to HTML.
-        const fallbackAllowed = path === 'main.tex' || path === 'engineering_notebook.sty' || path.startsWith(`${LATEX_DIR}/`);
-        if (!fallbackAllowed) return;
-
-        try {
-          const res = await fetch(`/latex/${encodeURIComponent(path)}`);
-          if (res.ok) {
-            const text = await res.text();
-            zip.file(path, text);
-          }
-        } catch {
-          // Ignore fetch failures; file simply won't be included
-        }
-      };
-
-      const addAssetFile = async (path: string) => {
-        const base64 = await this.getAssetBase64(path);
-        if (base64) zip.file(path, base64, { base64: true });
-      };
-
-      // Root files needed for import/compile workflows
-      await addTextFile("main.tex");
-      await addTextFile("engineering_notebook.sty");
-
-      // Export compiled PDF if available
-      try {
-        const pdfBase64 = await this.getAssetBase64("main.pdf");
-        if (pdfBase64) {
-          zip.file("main.pdf", pdfBase64, { base64: true });
-        }
-      } catch (err) {
-        console.warn("[Export] Skipping main.pdf due to error:", err);
-      }
-
-      if (exportAll) {
-        zip.file(INDEX_PATH, JSON.stringify(this.metadata, null, 2));
-      } else {
-        // For partial exports include only the selected entries.
-        // Team and phases are intentionally omitted; the importer will fall back
-        // to the project's defaults when those fields are missing.
-        const filteredEntries: Record<string, EntryMetadata> = {};
-        for (const id of targets) {
-          const meta = this.metadata.entries[id];
-          if (meta) filteredEntries[id] = meta;
-        }
-        zip.file(INDEX_PATH, JSON.stringify({
-          version: this.metadata.version,
-          entries: filteredEntries,
-        }, null, 2));
-      }
-
-      // Team/phases are shared project files and should come along with entry exports.
-      await addTextFile(TEAM_PATH);
-      await addTextFile(PHASES_PATH);
-      if (exportAll) {
-        await addTextFile(ENTRIES_INDEX_PATH);
-      }
-
-      for (const id of targets) {
-        const meta = this.metadata.entries[id];
-        if (!meta) continue;
-
-        const contentStr = await this.getFileContent(meta.filename);
-        if (!contentStr) continue;
-
-        zip.file(meta.filename, contentStr);
-
-        let content: TipTapNode;
-        try {
-          const parsed = JSON.parse(contentStr);
-          content = parsed.content || parsed;
-        } catch (e) {
-          console.error(`Failed to parse content for ${id}`, e);
-          continue;
-        }
-
-        const latexPath = `${LATEX_DIR}/${id}.tex`;
-        const latex = await this.getFileContent(latexPath);
-        if (latex) zip.file(latexPath, latex);
-
-        extractImagePaths(content).forEach(addAssetPath);
-      }
-
-      // Include team assets even when not exported from the full notebook.
-      if (this.metadata.team) {
-        addAssetPath(this.metadata.team.logo);
-        addAssetPath(this.metadata.team.logoOriginal);
-        this.metadata.team.members.forEach(member => {
-          addAssetPath(member.image);
-          addAssetPath(member.imageOriginal);
-        });
-      }
-
-      for (const assetPath of assetPaths) {
-        try {
-          await addAssetFile(assetPath);
-        } catch (err) {
-          console.warn(`[Export] Skipping asset due to error: ${assetPath}`, err);
-        }
-      }
-
-      const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
-      const { saveAs } = await import("file-saver");
-      const name = entryIds
-        ? (entryIds.length === 1
-          ? (this.metadata.entries[entryIds[0]]?.title || "entry").replace(/[^a-z0-9]/gi, '_').toLowerCase()
-          : "entries")
-        : "notebook";
-      saveAs(blob, `${name}.zip`);
-
-    } catch (e) {
-      console.error("Export failed", e);
-      events.emit(EventNames.SHOW_NOTIFICATION, { message: "Export failed", type: "error" });
-    } finally {
-      this.setLoading(false);
-    }
-  }
-
-  public async importNotebook(data: Record<string, unknown>) {
-    this.setLoading(true, "Importing project data...");
-    try {
-      if (this.mode === "temporary") {
-        const { clearAllPending, clearAllResources } = await import("./db");
-        const dbName = this.getDBName();
-        await clearAllPending(dbName);
-        await clearAllResources(dbName);
-        this.assetCache.clear();
-        this.entries = [];
-      }
-
-      const {
-        entries = {},
-        assets = {},
-        files = {},
-        latexFiles = {},
-        pdf = ""
-      } = data as {
-        entries: Record<string, Record<string, unknown>>;
-        assets: Record<string, unknown>;
-        files?: Record<string, string>;
-        latexFiles?: Record<string, string>;
-        pdf?: string;
-      };
-      const idMap = new Map<string, string>();
-
-      // 1. Map ALL IDs first (Entries and their internal Resources)
-      const entryIdList = Object.keys(entries);
-      for (const oldId of entryIdList) {
-        idMap.set(oldId, generateUUID());
-        const entryData = entries[oldId] as Record<string, unknown>;
-        const resources = entryData.resources as Record<string, unknown> | undefined;
-        if (resources) {
-          for (const resId of Object.keys(resources)) {
-            idMap.set(resId, generateUUID());
-          }
-        }
-      }
-
-      // 2. Map and prepare assets (no I/O yet)
-      const assetList = Object.entries(assets as Record<string, string>);
-
-      // 3. Remap entries in memory
-      // Pass 1: Remap all IDs and build the full entry metadata map
-      const remappedEntries: { id: string, doc: TipTapNode, meta: EntryMetadata }[] = [];
-      const newEntriesMap: Record<string, EntryMetadata> = {};
-
-      for (const oldId of entryIdList) {
-        const entryWithContent = entries[oldId] as Record<string, unknown> & { content?: TipTapNode };
-        const { content, ...entryMetadata } = entryWithContent;
-        const newId = idMap.get(oldId)!;
-
-        // Remap content IDs
-        const { doc: remappedDoc } = remapContentIds((content || {}) as TipTapNode, idMap);
-
-        // Ensure resource node IDs exist (in case imported content lacks them)
-        const docWithIds = ensureResourceIds(remappedDoc as TipTapNode) as TipTapNode;
-
-        // Remap metadata IDs (resources, references)
-        const remappedMeta = remapEntryMetadataIds(entryMetadata as unknown as EntryMetadata, idMap);
-        remappedMeta.id = newId;
-        remappedMeta.filename = `${ENTRIES_DIR}/${newId}.json`;
-
-        if (!remappedMeta.date) {
-          remappedMeta.date = remappedMeta.createdAt?.split('T')[0] || getLocalDateString();
-        }
-
-        // Re-extract resources using the fully ID'ed document to ensure no tables or resources are missed
-        const discoveredResources = extractResources(docWithIds);
-        const mergedResources: Record<string, { type: string; title: string; caption: string }> = {};
-        const oldResources = remappedMeta.resources || {};
-        for (const [resId, resInfo] of Object.entries(discoveredResources)) {
-          mergedResources[resId] = {
-            type: resInfo.type,
-            title: resInfo.title || oldResources[resId]?.title || "",
-            caption: resInfo.caption || oldResources[resId]?.caption || "",
-          };
-        }
-        remappedMeta.resources = mergedResources;
-
-        remappedEntries.push({ id: newId, doc: docWithIds, meta: remappedMeta });
-        newEntriesMap[newId] = remappedMeta;
-      }
-
-      // Build the global resource index using all new entries
-      const globalResourceTypes = buildResourceTypeIndex({ ...this.metadata.entries, ...newEntriesMap });
-
-      // 4. Import Team and Phases if present
-      const importedPhases = data.phases as ProjectPhase[] | undefined;
-      const importedTeam = data.team as TeamMetadata | undefined;
-
-      // 5. Update project metadata in memory
-      this.metadata = validateNotebookIntegrity({
-        ...EMPTY_METADATA,
-        ...this.metadata,
-        entries: newEntriesMap,
-        ...(importedPhases ? { phases: importedPhases } : {}),
-        ...(importedTeam ? { team: importedTeam } : {}),
-      });
-
-      const extraFiles = { ...(latexFiles || {}), ...(files || {}) };
-
-      // 6. Perform all IndexedDB / file persistence inside the sequential save queue
-      await this.enqueue(async () => {
-        // Save assets
-        for (const [path, base64] of assetList) {
-          const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${base64}`;
-          this.assetCache.set(path, dataUrl); // Immediate memory cache
-          await this.persistFile(path, base64, `Import asset: ${path}`, true);
-          if (this.mode === "github" || this.mode === "temporary") {
-            await putResource(this.getDBName(), { path, dataUrl });
-          }
-        }
-
-        // Pass 2: Generate LaTeX and persist entry files
-        for (const item of remappedEntries) {
-          const { id, doc, meta } = item;
-          const contentStr = JSON.stringify({ version: 3, content: doc }, null, 2);
-
-          // Generate LaTeX with the global index so cross-entry links work
-          const latex = generateEntryLatex(doc, meta.title, meta.author, meta.phase, meta.createdAt, id, globalResourceTypes, meta.date);
-
-          await this.persistFile(meta.filename, contentStr, `Import entry: ${meta.title}`);
-          await this.persistFile(`${LATEX_DIR}/${id}.tex`, latex, `Import LaTeX: ${meta.title}`);
-        }
-
-        // Persist optional text files provided by import payload
-        for (const [path, content] of Object.entries(extraFiles)) {
-          if (!path || typeof content !== "string") continue;
-          if (path === INDEX_PATH) continue;
-          if (path.startsWith(`${ENTRIES_DIR}/`) || path.startsWith(`${ASSETS_DIR}/`)) continue;
-          // When entries are imported/remapped, skip old generated entry .tex files from archive payloads
-          if (entryIdList.length > 0 && path.startsWith(`${LATEX_DIR}/`)) continue;
-          await this.persistFile(path, content, `Import file: ${path}`);
-        }
-
-        // Persist optional compiled PDF if provided by import payload
-        if (pdf && typeof pdf === "string") {
-          await this.persistFile("main.pdf", pdf, "Import compiled PDF", true);
-        }
-
-        // Save metadata
-        await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Import notebook metadata");
-        await this.updateLatexMetadata();
-      });
-
-      // Refresh project list
-      await this.reloadWorkspace();
-
-      // Select the newly imported entries
-      const newPaths = new Set<string>(Object.values(newEntriesMap).map(m => m.filename));
-      this.selectedPaths = newPaths;
-
-      this.notifyStateChange();
-
-      const isFullNotebook = !!(data.team || data.phases);
-      const entryCount = entryIdList.length;
-      const entryText = `${entryCount} ${entryCount === 1 ? 'entry' : 'entries'}`;
-
-      const message = isFullNotebook
-        ? `Notebook imported successfully with ${entryText}`
-        : `Successfully imported ${entryText}`;
-
-      events.emit(EventNames.SHOW_NOTIFICATION, { message, type: "success" });
-
-    } catch (e) {
-      console.error("Import failed", e);
-      events.emit(EventNames.SHOW_NOTIFICATION, { message: "Import failed", type: "error" });
-    } finally {
-      this.setLoading(false);
-    }
-  }
-
-  public async importNotebookArchive(file: File) {
-    this.setLoading(true, "Importing project archive...");
-    try {
-      const JSZip = (await import("jszip")).default;
-      const zip = await JSZip.loadAsync(await file.arrayBuffer());
-      const filenames = Object.keys(zip.files).filter(name => !zip.files[name].dir);
-      const hasNotebookIndex = filenames.includes(INDEX_PATH);
-      const isBinaryFile = (path: string) => /\.(png|jpe?g|gif|webp|bmp|ico|tiff?|avif|heic|pdf|otf|ttf|woff2?|eot|zip|7z|rar|tar|gz|bz2|xz|mp3|wav|ogg|flac|aac|m4a|mp4|mov|avi|mkv|webm|wasm|exe|dll|so|dylib|bin)$/i.test(path);
-      const isImageAsset = (path: string) => /\.(png|jpe?g|gif|webp|bmp|ico|tiff?|avif|heic)$/i.test(path);
-
-      if (this.mode === "temporary") {
-        const { clearAllPending, clearAllResources } = await import("./db");
-        const dbName = this.getDBName();
-        await clearAllPending(dbName);
-        await clearAllResources(dbName);
-        this.assetCache.clear();
-      }
-
-      if (hasNotebookIndex) {
-        for (const filename of filenames) {
-          const entry = zip.file(filename);
-          if (!entry) continue;
-
-          if (isBinaryFile(filename)) {
-            const base64 = await entry.async("base64");
-            if (isImageAsset(filename)) {
-              const dataUrl = `data:${getMimeTypeFromExtension(filename)};base64,${base64}`;
-              this.assetCache.set(filename, dataUrl);
-              if (this.mode === "github" || this.mode === "temporary") {
-                await putResource(this.getDBName(), { path: filename, dataUrl });
-              }
-            }
-            await this.persistFile(filename, base64, `Import asset: ${filename}`, true);
-          } else {
-            const text = await entry.async("string");
-            await this.persistFile(filename, text, `Import file: ${filename}`);
-          }
-        }
-
-        const indexEntry = zip.file(INDEX_PATH);
-        if (indexEntry) {
-          const parsed = JSON.parse(await indexEntry.async("string")) as NotebookMetadata;
-          const importedTeam = (parsed as { team: TeamMetadata }).team as TeamMetadata | undefined;
-          const importedPhases = (parsed as { phases: ProjectPhase[] }).phases as ProjectPhase[] | undefined;
-
-          this.metadata = validateNotebookIntegrity({
-            ...EMPTY_METADATA,
-            ...this.metadata,
-            ...parsed,
-            ...(importedPhases ? { phases: importedPhases } : {}),
-            ...(importedTeam ? { team: importedTeam } : {}),
-          });
-        }
-
-        await this.reloadWorkspace();
-        this.notifyStateChange();
-        events.emit(EventNames.SHOW_NOTIFICATION, { message: "Notebook archive imported successfully", type: "success" });
-        return;
-      }
-
-      const entries: Record<string, Record<string, unknown>> = {};
-      const assets: Record<string, string> = {};
-      const files: Record<string, string> = {};
-
-      for (const filename of filenames) {
-        const entry = zip.file(filename);
-        if (!entry) continue;
-
-        if (filename.startsWith(`${ENTRIES_DIR}/`) && filename.endsWith(".json")) {
-          const raw = await entry.async("string");
-          const parsed = JSON.parse(raw) as Record<string, unknown>;
-          const entryId = filename.split("/").pop()?.replace(/\.json$/, "") || generateUUID();
-          entries[entryId] = parsed;
-        } else if (filename.startsWith(`${ASSETS_DIR}/`)) {
-          assets[filename] = await entry.async("base64");
-        } else if (!isBinaryFile(filename)) {
-          files[filename] = await entry.async("string");
-        }
-      }
-
-      await this.importNotebook({ entries, assets, files });
-    } catch (e) {
-      console.error("Archive import failed", e);
-      events.emit(EventNames.SHOW_NOTIFICATION, { message: "Import failed", type: "error" });
-    } finally {
-      this.setLoading(false);
-    }
-  }
-
-  public async getAssetBase64(path: string): Promise<string | null> {
-    const dbName = this.getDBName();
-
-    // 1. Check pending/staged changes first (most recent local version)
-    if (this.mode === "github" || this.mode === "temporary") {
-      const pending = await getPending(dbName, path);
-      if (pending?.operation === "upsert" && pending.content) {
-        const c = pending.content;
-        if (typeof c === 'string') {
-          return normalizeBase64(c);
-        }
-        return null;
-      }
-    }
-
-    // 2. Check resource cache
-    const cached = await getResource(dbName, path);
-    if (cached) {
-      return normalizeBase64(cached);
-    }
-
-    try {
-      if (this.mode === "local" && this.dirHandle) {
-        const res = await getLocalFileContent(this.dirHandle, path);
-        return normalizeBase64(res.base64 as string | null | undefined);
-      } else if (this.mode === "github" && this.config) {
-        const remote = await fetchRawFileContent(this.config, this.getFullPath(path));
-        return normalizeBase64(remote as string | null | undefined);
-      }
-    } catch (e) {
-      console.error(`Failed to get asset base64 for ${path}`, e);
-    }
-    return null;
-  }
-
-  public async exportNotebook() {
-    await this.exportEntries();
-  }
-
+  // ─── State & Persistence Core Helpers ───────────────────────────────────────
   public getDBName() {
     const id = this.currentProjectId || "default";
     return `notebook-project-${id}`;
   }
 
-  private enqueue(op: () => Promise<void>): Promise<void> {
-    this.#savingCount++;
+  public getFullPath(path: string): string {
+    if (!this.config) return path;
+    const baseDir = this.config.baseDir ? this.config.baseDir.replace(/^\/+|\/+$/g, '') : '';
+    if (!baseDir) return path;
+    const prefix = baseDir + '/';
+    if (path.startsWith(prefix)) return path;
+    return `${prefix}${path}`;
+  }
+
+  public setLoading(val: boolean, label: string = "Loading...") {
+    this.isLoading = val;
+    this.loadingLabel = label;
+    this.notifyStateChange();
+    events.emit(EventNames.LOADING_STATUS, val);
+  }
+
+  public notifyStateChange() {
+    events.emit(EventNames.STATE_CHANGED, this);
+  }
+
+  public setPendingSave(val: boolean) {
+    if (this.isPendingSave !== val) {
+      this.isPendingSave = val;
+      this.notifyStateChange();
+    }
+  }
+
+  public enqueue(op: () => Promise<void>): Promise<void> {
+    this.savingCount++;
     if (!this.isSaving) {
       this.isSaving = true;
       this.notifyStateChange();
     }
 
-    const p = this.#queue = this.#queue.then(async () => {
+    const p = this.queue = this.queue.then(async () => {
       try {
         await op();
       } catch (e) {
         console.error("Background persistence error:", e);
       } finally {
-        this.#savingCount--;
-        if (this.#savingCount === 0) {
+        this.savingCount--;
+        if (this.savingCount === 0) {
           this.isSaving = false;
           try {
             const dbName = this.getDBName();
@@ -1740,133 +366,11 @@ class WorkspaceStore {
     return p;
   }
 
-  private async getCommittedFileContent(path: string, isBase64 = false): Promise<string | null> {
-    if (this.mode !== "github" || !this.config) {
-      return null;
-    }
-
-    try {
-      const fullPath = this.getFullPath(path);
-      return isBase64 ? await fetchRawFileContent(this.config, fullPath) : await fetchFileContent(this.config, fullPath);
-    } catch {
-      return null;
-    }
-  }
-
-  private async persistFile(path: string, content: string, label: string, isBase64 = false) {
-    if ((this.mode === "local" || (this.mode === "none" && this.dirHandle)) && this.dirHandle) {
-      await writeLocalFile(this.dirHandle, path, content, isBase64);
-    } else if (this.mode === "github" || this.mode === "temporary" || (this.mode === "none" && this.config)) {
-      const mode = (this.mode === "none" && this.config) ? "github" : this.mode;
-      const dbName = this.getDBName();
-      const staged = await getPending(dbName, path);
-      const committed = mode === "github" ? await this.getCommittedFileContent(path, isBase64) : null;
-      const changeType = committed === null ? "create" : "update";
-
-      if (mode === "github") {
-        if (committed === content) {
-          if (staged) {
-            await removeStaged(dbName, path);
-            await this.refreshPending();
-          }
-          return;
-        }
-      }
-
-      if (staged?.operation === "upsert" && staged.content === content) {
-        return;
-      }
-
-      await stageChange(dbName, { path, content, operation: "upsert", changeType, label, stagedAt: new Date().toISOString() });
-      await this.refreshPending();
-    }
-  }
-
-  private async reconcileAssetRefs(oldRefs: string[] | Record<string, string[]>, newRefs: string[] | Record<string, string[]>) {
-    const removed: string[] = [];
-
-    if (Array.isArray(oldRefs) && Array.isArray(newRefs)) {
-      // Comparing specific entry assets
-      for (const path of oldRefs) {
-        // Only mark for deletion if it's not in the new set AND not used by ANY other entry/team
-        if (!newRefs.includes(path) && (!this.metadata.assetRefs?.[path] || this.metadata.assetRefs[path].length === 0)) {
-          removed.push(path);
-        }
-      }
-    } else {
-      // Comparing global assetRefs (Record<path, owners[]>)
-      const oldR = oldRefs as Record<string, string[]>;
-      const newR = newRefs as Record<string, string[]>;
-      for (const path in oldR) {
-        if (!newR[path]) removed.push(path);
-      }
-    }
-
-    for (const path of removed) {
-      if (this.mode === "local" && this.dirHandle) {
-        if (await this.shouldStageDelete(path)) {
-          await deleteLocalFileAtPath(this.dirHandle, path);
-        }
-      } else if (this.mode === "github" || this.mode === "temporary") {
-        if (await this.shouldStageDelete(path)) {
-          await stageChange(this.getDBName(), { path, operation: "delete", label: `Cleanup orphan: ${path}`, stagedAt: new Date().toISOString() });
-        }
-      }
-      // Also remove from global cache to prevent hydration of dead paths
-      this.assetCache.delete(path);
-    }
-  }
-
-  private async shouldStageDelete(path: string): Promise<boolean> {
-    const dbName = this.getDBName();
-    const staged = await getPending(dbName, path);
-
-    if (staged?.operation === "upsert") {
-      await removeStaged(dbName, path);
-      await this.refreshPending();
-      return false;
-    }
-
-    if (staged?.operation === "delete") {
-      return false;
-    }
-
-    if (this.mode === "local" && this.dirHandle) {
-      return checkLocalFileExists(this.dirHandle, path);
-    }
-
-    if (this.config && (this.mode === "github" || this.mode === "temporary" || this.mode === "none")) {
-      return checkGitHubFileExists(this.config, this.getFullPath(path));
-    }
-
-    return false;
-  }
-
-  // ─── State Helpers ──────────────────────────────────────────────────────────
-  private setLoading(val: boolean, label: string = "Loading...") {
-    this.isLoading = val;
-    this.loadingLabel = label;
-    this.notifyStateChange();
-    events.emit(EventNames.LOADING_STATUS, val);
-  }
-
-  private notifyStateChange() {
-    events.emit(EventNames.STATE_CHANGED, this);
-  }
-
-  public setPendingSave(val: boolean) {
-    if (this.isPendingSave !== val) {
-      this.isPendingSave = val;
-      this.notifyStateChange();
-    }
-  }
-
-  async disconnect() {
+  public async disconnect() {
     this.debouncedPersist.flush();
     this.setLoading(true);
     try {
-      // Ensure all pending I/O for the current project is finished before context is cleared
-      await this.#queue;
+      await this.queue;
 
       this.mode = "none";
       this.currentProjectId = null;
@@ -1883,76 +387,6 @@ class WorkspaceStore {
       this.setLoading(false);
     }
   }
-
-  private getFullPath(path: string): string {
-    if (!this.config) return path;
-    const baseDir = this.config.baseDir ? this.config.baseDir.replace(/^\/+|\/+$/g, '') : '';
-    if (!baseDir) return path;
-    const prefix = baseDir + '/';
-    if (path.startsWith(prefix)) return path;
-    return `${prefix}${path}`;
-  }
-
-  public async saveCompiledPdf(pdfData: Uint8Array) {
-    const base64 = btoa(
-      pdfData.reduce((data, byte) => data + String.fromCharCode(byte), "")
-    );
-
-    await this.enqueue(async () => {
-      // 1. Persist main.pdf in root
-      await this.persistFile("main.pdf", base64, "Compilation: Update main.pdf", true);
-
-      // 2. Update lastCompiled timestamp in metadata
-      this.metadata = {
-        ...this.metadata,
-        lastCompiled: new Date().toISOString()
-      };
-
-      // 3. Persist updated metadata
-      await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Update lastCompiled metadata");
-
-      this.notifyStateChange();
-    });
-  }
-
-  public async getCompiledPdfUrl(): Promise<string | null> {
-    const dbName = this.getDBName();
-
-    // 1. Check pending changes
-    const pending = await getPending(dbName, "main.pdf");
-    if (pending && pending.content) {
-      return this.blobFromBase64(pending.content);
-    }
-
-    // 2. Check resource store
-    const cached = await getResource(dbName, "main.pdf");
-    if (cached) {
-      const base64 = cached.includes(',') ? cached.split(',')[1] : cached;
-      return this.blobFromBase64(base64);
-    }
-
-    // 3. Check filesystem (for local/github modes)
-    const base64 = await this.getAssetBase64("main.pdf");
-    if (base64) return this.blobFromBase64(base64);
-
-    return null;
-  }
-
-  private blobFromBase64(base64: string): string | null {
-    try {
-      const binaryString = atob(base64);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      const blob = new Blob([bytes], { type: 'application/pdf' });
-      return URL.createObjectURL(blob);
-    } catch (e) {
-      console.error("Failed to create blob URL for PDF", e);
-      return null;
-    }
-  }
-
 }
 
 export const store = new WorkspaceStore();

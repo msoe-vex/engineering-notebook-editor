@@ -1,0 +1,445 @@
+import { INDEX_PATH, ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from "../constants";
+import { events, EventNames } from "../events";
+import { getAllPending, getPending, getResource, putResource } from "../db";
+import { fetchFileContent, fetchRawFileContent } from "../github";
+import { getLocalFileContent } from "../fs";
+import { generateUUID, getMimeTypeFromExtension, normalizeBase64 } from "../utils";
+import { EntryMetadata, validateNotebookIntegrity, EMPTY_METADATA, TeamMetadata, ProjectPhase, remapContentIds, remapEntryMetadataIds, TipTapNode, ensureResourceIds, extractResources, buildResourceTypeIndex, extractImagePaths, NotebookMetadata } from "../metadata";
+import { generateEntryLatex } from "../latex";
+import { IWorkspaceStore } from "./types";
+
+export class TransferManager {
+  private store: IWorkspaceStore;
+
+  constructor(store: IWorkspaceStore) {
+    this.store = store;
+  }
+
+  async getFileContent(path: string): Promise<string | null> {
+    const dbName = this.store.getDBName();
+    const pending = await getAllPending(dbName);
+    const staged = pending.find(p => p.path === path && p.operation === "upsert");
+    if (staged?.content) return staged.content;
+
+    try {
+      if (this.store.mode === "local" && this.store.dirHandle) {
+        const res = await getLocalFileContent(this.store.dirHandle, path);
+        return res.text || null;
+      } else if (this.store.mode === "github" && this.store.config) {
+        return await fetchFileContent(this.store.config, this.store.getFullPath(path));
+      } else if (this.store.mode === "temporary") {
+        return null;
+      }
+    } catch (e) {
+      console.error(`Failed to get content for ${path}:`, e);
+    }
+    return null;
+  }
+
+  async getAssetBase64(path: string): Promise<string | null> {
+    const dbName = this.store.getDBName();
+
+    if (this.store.mode === "github" || this.store.mode === "temporary") {
+      const pending = await getPending(dbName, path);
+      if (pending?.operation === "upsert" && pending.content) {
+        const c = pending.content;
+        if (typeof c === 'string') {
+          return normalizeBase64(c);
+        }
+        return null;
+      }
+    }
+
+    const cached = await getResource(dbName, path);
+    if (cached) {
+      return normalizeBase64(cached);
+    }
+
+    try {
+      if (this.store.mode === "local" && this.store.dirHandle) {
+        const res = await getLocalFileContent(this.store.dirHandle, path);
+        return normalizeBase64(res.base64 as string | null | undefined);
+      } else if (this.store.mode === "github" && this.store.config) {
+        const remote = await fetchRawFileContent(this.store.config, this.store.getFullPath(path));
+        return normalizeBase64(remote as string | null | undefined);
+      }
+    } catch (e) {
+      console.error(`Failed to get asset base64 for ${path}`, e);
+    }
+    return null;
+  }
+
+  async exportEntries(entryIds?: string[]) {
+    this.store.setLoading(true);
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+      const targets = entryIds || Object.keys(this.store.metadata.entries);
+      const exportAll = !entryIds;
+      const assetPaths = new Set<string>();
+
+      const addAssetPath = (assetPath?: string) => {
+        if (assetPath && !assetPath.startsWith("data:")) {
+          assetPaths.add(assetPath);
+        }
+      };
+
+      const addTextFile = async (path: string) => {
+        const content = await this.getFileContent(path);
+        if (content) {
+          zip.file(path, content);
+          return;
+        }
+
+        const fallbackAllowed = path === 'main.tex' || path === 'engineering_notebook.sty' || path.startsWith(`${LATEX_DIR}/`);
+        if (!fallbackAllowed) return;
+
+        try {
+          const res = await fetch(`/latex/${encodeURIComponent(path)}`);
+          if (res.ok) {
+            const text = await res.text();
+            zip.file(path, text);
+          }
+        } catch {
+          // Ignore
+        }
+      };
+
+      const addAssetFile = async (path: string) => {
+        const base64 = await this.getAssetBase64(path);
+        if (base64) zip.file(path, base64, { base64: true });
+      };
+
+      await addTextFile("main.tex");
+      await addTextFile("engineering_notebook.sty");
+
+      try {
+        const pdfBase64 = await this.getAssetBase64("main.pdf");
+        if (pdfBase64) {
+          zip.file("main.pdf", pdfBase64, { base64: true });
+        }
+      } catch (err) {
+        console.warn("[Export] Skipping main.pdf due to error:", err);
+      }
+
+      if (exportAll) {
+        zip.file(INDEX_PATH, JSON.stringify(this.store.metadata, null, 2));
+      } else {
+        const filteredEntries: Record<string, EntryMetadata> = {};
+        for (const id of targets) {
+          const meta = this.store.metadata.entries[id];
+          if (meta) filteredEntries[id] = meta;
+        }
+        zip.file(INDEX_PATH, JSON.stringify({
+          version: this.store.metadata.version,
+          entries: filteredEntries,
+        }, null, 2));
+      }
+
+      await addTextFile(TEAM_PATH);
+      await addTextFile(PHASES_PATH);
+      if (exportAll) {
+        await addTextFile(ENTRIES_INDEX_PATH);
+      }
+
+      for (const id of targets) {
+        const meta = this.store.metadata.entries[id];
+        if (!meta) continue;
+
+        const contentStr = await this.getFileContent(meta.filename);
+        if (!contentStr) continue;
+
+        zip.file(meta.filename, contentStr);
+
+        let content: TipTapNode;
+        try {
+          const parsed = JSON.parse(contentStr);
+          content = parsed.content || parsed;
+        } catch (e) {
+          console.error(`Failed to parse content for ${id}`, e);
+          continue;
+        }
+
+        const latexPath = `${LATEX_DIR}/${id}.tex`;
+        const latex = await this.getFileContent(latexPath);
+        if (latex) zip.file(latexPath, latex);
+
+        extractImagePaths(content).forEach(addAssetPath);
+      }
+
+      if (this.store.metadata.team) {
+        addAssetPath(this.store.metadata.team.logo);
+        addAssetPath(this.store.metadata.team.logoOriginal);
+        this.store.metadata.team.members.forEach(member => {
+          addAssetPath(member.image);
+          addAssetPath(member.imageOriginal);
+        });
+      }
+
+      for (const assetPath of assetPaths) {
+        try {
+          await addAssetFile(assetPath);
+        } catch (err) {
+          console.warn(`[Export] Skipping asset due to error: ${assetPath}`, err);
+        }
+      }
+
+      const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
+      const { saveAs } = await import("file-saver");
+      const name = entryIds
+        ? (entryIds.length === 1
+          ? (this.store.metadata.entries[entryIds[0]]?.title || "entry").replace(/[^a-z0-9]/gi, '_').toLowerCase()
+          : "entries")
+        : "notebook";
+      saveAs(blob, `${name}.zip`);
+
+    } catch (e) {
+      console.error("Export failed", e);
+      events.emit(EventNames.SHOW_NOTIFICATION, { message: "Export failed", type: "error" });
+    } finally {
+      this.store.setLoading(false);
+    }
+  }
+
+  async exportNotebook() {
+    await this.exportEntries();
+  }
+
+  async importNotebook(data: Record<string, unknown>) {
+    this.store.setLoading(true, "Importing project data...");
+    try {
+      if (this.store.mode === "temporary") {
+        const { clearAllPending, clearAllResources } = await import("../db");
+        const dbName = this.store.getDBName();
+        await clearAllPending(dbName);
+        await clearAllResources(dbName);
+        this.store.assetCache.clear();
+        this.store.entries = [];
+      }
+
+      const {
+        entries = {},
+        assets = {},
+        files = {},
+        latexFiles = {},
+        pdf = ""
+      } = data as {
+        entries: Record<string, Record<string, unknown>>;
+        assets: Record<string, unknown>;
+        files?: Record<string, string>;
+        latexFiles?: Record<string, string>;
+        pdf?: string;
+      };
+      const idMap = new Map<string, string>();
+
+      const entryIdList = Object.keys(entries);
+      for (const oldId of entryIdList) {
+        idMap.set(oldId, generateUUID());
+        const entryData = entries[oldId] as Record<string, unknown>;
+        const resources = entryData.resources as Record<string, unknown> | undefined;
+        if (resources) {
+          for (const resId of Object.keys(resources)) {
+            idMap.set(resId, generateUUID());
+          }
+        }
+      }
+
+      const assetList = Object.entries(assets as Record<string, string>);
+
+      const remappedEntries: { id: string, doc: TipTapNode, meta: EntryMetadata }[] = [];
+      const newEntriesMap: Record<string, EntryMetadata> = {};
+
+      for (const oldId of entryIdList) {
+        const entryWithContent = entries[oldId] as Record<string, unknown> & { content?: TipTapNode };
+        const { content, ...entryMetadata } = entryWithContent;
+        const newId = idMap.get(oldId)!;
+
+        const { doc: remappedDoc } = remapContentIds((content || {}) as TipTapNode, idMap);
+        const docWithIds = ensureResourceIds(remappedDoc as TipTapNode) as TipTapNode;
+
+        const remappedMeta = remapEntryMetadataIds(entryMetadata as unknown as EntryMetadata, idMap);
+        remappedMeta.id = newId;
+        remappedMeta.filename = `${ENTRIES_DIR}/${newId}.json`;
+
+        if (!remappedMeta.date) {
+          remappedMeta.date = remappedMeta.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0];
+        }
+
+        const discoveredResources = extractResources(docWithIds);
+        const mergedResources: Record<string, { type: string; title: string; caption: string }> = {};
+        const oldResources = remappedMeta.resources || {};
+        for (const [resId, resInfo] of Object.entries(discoveredResources)) {
+          mergedResources[resId] = {
+            type: resInfo.type,
+            title: resInfo.title || oldResources[resId]?.title || "",
+            caption: resInfo.caption || oldResources[resId]?.caption || "",
+          };
+        }
+        remappedMeta.resources = mergedResources;
+
+        remappedEntries.push({ id: newId, doc: docWithIds, meta: remappedMeta });
+        newEntriesMap[newId] = remappedMeta;
+      }
+
+      const globalResourceTypes = buildResourceTypeIndex({ ...this.store.metadata.entries, ...newEntriesMap });
+
+      const importedPhases = data.phases as ProjectPhase[] | undefined;
+      const importedTeam = data.team as TeamMetadata | undefined;
+
+      this.store.metadata = validateNotebookIntegrity({
+        ...EMPTY_METADATA,
+        ...this.store.metadata,
+        entries: newEntriesMap,
+        ...(importedPhases ? { phases: importedPhases } : {}),
+        ...(importedTeam ? { team: importedTeam } : {}),
+      });
+
+      const extraFiles = { ...(latexFiles || {}), ...(files || {}) };
+
+      await this.store.enqueue(async () => {
+        for (const [path, base64] of assetList) {
+          const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${base64}`;
+          this.store.assetCache.set(path, dataUrl);
+          await this.store.persistFile(path, base64, `Import asset: ${path}`, true);
+          if (this.store.mode === "github" || this.store.mode === "temporary") {
+            await putResource(this.store.getDBName(), { path, dataUrl });
+          }
+        }
+
+        for (const item of remappedEntries) {
+          const { id, doc, meta } = item;
+          const contentStr = JSON.stringify({ version: 3, content: doc }, null, 2);
+          const latex = generateEntryLatex(doc, meta.title, meta.author, meta.phase, meta.createdAt, id, globalResourceTypes, meta.date);
+
+          await this.store.persistFile(meta.filename, contentStr, `Import entry: ${meta.title}`);
+          await this.store.persistFile(`${LATEX_DIR}/${id}.tex`, latex, `Import LaTeX: ${meta.title}`);
+        }
+
+        for (const [path, content] of Object.entries(extraFiles)) {
+          if (!path || typeof content !== "string") continue;
+          if (path === INDEX_PATH) continue;
+          if (path.startsWith(`${ENTRIES_DIR}/`) || path.startsWith(`${ASSETS_DIR}/`)) continue;
+          if (entryIdList.length > 0 && path.startsWith(`${LATEX_DIR}/`)) continue;
+          await this.store.persistFile(path, content, `Import file: ${path}`);
+        }
+
+        if (pdf && typeof pdf === "string") {
+          await this.store.persistFile("main.pdf", pdf, "Import compiled PDF", true);
+        }
+
+        await this.store.persistFile(INDEX_PATH, JSON.stringify(this.store.metadata, null, 2), "Import notebook metadata");
+        await this.store.updateLatexMetadata();
+      });
+
+      await this.store.reloadWorkspace();
+
+      const newPaths = new Set<string>(Object.values(newEntriesMap).map(m => m.filename));
+      this.store.selectedPaths = newPaths;
+      this.store.notifyStateChange();
+
+      const isFullNotebook = !!(data.team || data.phases);
+      const entryCount = entryIdList.length;
+      const entryText = `${entryCount} ${entryCount === 1 ? 'entry' : 'entries'}`;
+      const message = isFullNotebook
+        ? `Notebook imported successfully with ${entryText}`
+        : `Successfully imported ${entryText}`;
+
+      events.emit(EventNames.SHOW_NOTIFICATION, { message, type: "success" });
+
+    } catch (e) {
+      console.error("Import failed", e);
+      events.emit(EventNames.SHOW_NOTIFICATION, { message: "Import failed", type: "error" });
+    } finally {
+      this.store.setLoading(false);
+    }
+  }
+
+  async importNotebookArchive(file: File) {
+    this.store.setLoading(true, "Importing project archive...");
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = await JSZip.loadAsync(await file.arrayBuffer());
+      const filenames = Object.keys(zip.files).filter(name => !zip.files[name].dir);
+      const hasNotebookIndex = filenames.includes(INDEX_PATH);
+      const isBinaryFile = (path: string) => /\.(png|jpe?g|gif|webp|bmp|ico|tiff?|avif|heic|pdf|otf|ttf|woff2?|eot|zip|7z|rar|tar|gz|bz2|xz|mp3|wav|ogg|flac|aac|m4a|mp4|mov|avi|mkv|webm|wasm|exe|dll|so|dylib|bin)$/i.test(path);
+      const isImageAsset = (path: string) => /\.(png|jpe?g|gif|webp|bmp|ico|tiff?|avif|heic)$/i.test(path);
+
+      if (this.store.mode === "temporary") {
+        const { clearAllPending, clearAllResources } = await import("../db");
+        const dbName = this.store.getDBName();
+        await clearAllPending(dbName);
+        await clearAllResources(dbName);
+        this.store.assetCache.clear();
+      }
+
+      if (hasNotebookIndex) {
+        for (const filename of filenames) {
+          const entry = zip.file(filename);
+          if (!entry) continue;
+
+          if (isBinaryFile(filename)) {
+            const base64 = await entry.async("base64");
+            if (isImageAsset(filename)) {
+              const dataUrl = `data:${getMimeTypeFromExtension(filename)};base64,${base64}`;
+              this.store.assetCache.set(filename, dataUrl);
+              if (this.store.mode === "github" || this.store.mode === "temporary") {
+                await putResource(this.store.getDBName(), { path: filename, dataUrl });
+              }
+            }
+            await this.store.persistFile(filename, base64, `Import asset: ${filename}`, true);
+          } else {
+            const text = await entry.async("string");
+            await this.store.persistFile(filename, text, `Import file: ${filename}`);
+          }
+        }
+
+        const indexEntry = zip.file(INDEX_PATH);
+        if (indexEntry) {
+          const parsed = JSON.parse(await indexEntry.async("string")) as NotebookMetadata;
+          const importedTeam = (parsed as { team: TeamMetadata }).team as TeamMetadata | undefined;
+          const importedPhases = (parsed as { phases: ProjectPhase[] }).phases as ProjectPhase[] | undefined;
+
+          this.store.metadata = validateNotebookIntegrity({
+            ...EMPTY_METADATA,
+            ...this.store.metadata,
+            ...parsed,
+            ...(importedPhases ? { phases: importedPhases } : {}),
+            ...(importedTeam ? { team: importedTeam } : {}),
+          });
+        }
+
+        await this.store.reloadWorkspace();
+        this.store.notifyStateChange();
+        events.emit(EventNames.SHOW_NOTIFICATION, { message: "Notebook archive imported successfully", type: "success" });
+        return;
+      }
+
+      const entries: Record<string, Record<string, unknown>> = {};
+      const assets: Record<string, string> = {};
+      const files: Record<string, string> = {};
+
+      for (const filename of filenames) {
+        const entry = zip.file(filename);
+        if (!entry) continue;
+
+        if (filename.startsWith(`${ENTRIES_DIR}/`) && filename.endsWith(".json")) {
+          const raw = await entry.async("string");
+          const parsed = JSON.parse(raw) as Record<string, unknown>;
+          const entryId = filename.split("/").pop()?.replace(/\.json$/, "") || generateUUID();
+          entries[entryId] = parsed;
+        } else if (filename.startsWith(`${ASSETS_DIR}/`)) {
+          assets[filename] = await entry.async("base64");
+        } else if (!isBinaryFile(filename)) {
+          files[filename] = await entry.async("string");
+        }
+      }
+
+      await this.importNotebook({ entries, assets, files });
+    } catch (e) {
+      console.error("Archive import failed", e);
+      events.emit(EventNames.SHOW_NOTIFICATION, { message: "Import failed", type: "error" });
+    } finally {
+      this.store.setLoading(false);
+    }
+  }
+}
