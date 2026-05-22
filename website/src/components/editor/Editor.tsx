@@ -10,7 +10,7 @@ import { saveAs } from "file-saver";
 import {
   Save, Trash2, Loader2, User, X, FileCode,
   Undo2, Redo2, ImagePlus, ChevronDown, ChevronUp, List, ListOrdered,
-  Code, Table as TableIcon, Heading, Bold, Italic, Check, Image as ImageIcon,
+  Code, Table as TableIcon, Heading, Bold, Italic, Image as ImageIcon,
   Terminal, Link as LinkIcon, Underline as UnderlineIcon, Sigma,
   FileJson, Strikethrough, Palette, Highlighter, Superscript, Subscript, HelpCircle
 } from "lucide-react";
@@ -775,8 +775,6 @@ const EditorContent = React.memo(function EditorContent({
   showConfirm,
   viewMode,
   onSetViewMode,
-  isSavingGlobal,
-  isPendingSaveGlobal,
   workspaceVersion,
   onOpenHelp,
   updateDraft,
@@ -789,8 +787,6 @@ const EditorContent = React.memo(function EditorContent({
   setEntryValidity: ReturnType<typeof useWorkspace>['setEntryValidity'];
   exportEntries: ReturnType<typeof useWorkspace>['exportEntries'];
   setPendingSave: (val: boolean) => void;
-  isSavingGlobal: boolean;
-  isPendingSaveGlobal: boolean;
   workspaceVersion: number;
   updateDraft: ReturnType<typeof useWorkspace>['updateDraft'];
 }) {
@@ -889,7 +885,7 @@ const EditorContent = React.memo(function EditorContent({
     }
   }, [viewMode]);
 
-  const [isManualSaving, setIsManualSaving] = useState(false);
+
   const editorPanelRef = useRef<import("react-resizable-panels").ImperativePanelHandle>(null);
   const previewPanelRef = useRef<import("react-resizable-panels").ImperativePanelHandle>(null);
   const phaseButtonRef = useRef<HTMLDivElement>(null);
@@ -988,7 +984,6 @@ const EditorContent = React.memo(function EditorContent({
     }
 
     setValidationErrors([]);
-    setIsManualSaving(true);
 
     try {
       await updateEntry(entryId, previewLatex, openFile.tiptapContent, {
@@ -997,8 +992,8 @@ const EditorContent = React.memo(function EditorContent({
         phase: openFile.phase,
         date: openFile.date
       });
-    } finally {
-      setIsManualSaving(false);
+    } catch (e) {
+      console.error(e);
     }
   }, [openFile.tiptapContent, openFile.title, openFile.author, openFile.phase, openFile.date, previewLatex, validate, updateEntry, entryId]);
 
@@ -1258,19 +1253,7 @@ const EditorContent = React.memo(function EditorContent({
               <ViewToggle viewMode={viewMode} onSetViewMode={onSetViewMode} />
             </div>
 
-            <div className="flex items-center gap-2 mr-2">
-              {isPendingSaveGlobal || isSavingGlobal || isManualSaving ? (
-                <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-primary animate-pulse">
-                  <Loader2 size={12} className="animate-spin" />
-                  <span>SAVING...</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5 text-[10px] font-bold text-nb-on-surface-variant/40">
-                  <Check size={12} />
-                  <span>SAVED</span>
-                </div>
-              )}
-            </div>
+
 
             <button
               onClick={onOpenHelp}
@@ -1485,8 +1468,6 @@ const Editor = (props: EditorProps) => {
     setEntryValidity,
     exportEntries,
     setPendingSave,
-    isSaving,
-    isPendingSave,
     workspaceVersion,
     updateDraft,
   } = useWorkspace();
@@ -1504,8 +1485,6 @@ const Editor = (props: EditorProps) => {
       setEntryValidity={setEntryValidity}
       exportEntries={exportEntries}
       setPendingSave={setPendingSave}
-      isSavingGlobal={isSaving}
-      isPendingSaveGlobal={isPendingSave}
       workspaceVersion={workspaceVersion}
       updateDraft={updateDraft}
       {...props}

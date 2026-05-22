@@ -26,7 +26,7 @@ import Logo from "./Logo";
 import { ViewMode } from "./editor/ui/ViewToggle";
 import ConfirmationDialog from "./ConfirmationDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { HardDrive, X, Loader2 } from "lucide-react";
+import { HardDrive, X, Loader2, ArrowLeftRight, Sun, Moon } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { ENTRIES_DIR, } from "@/lib/constants";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -673,6 +673,20 @@ export default function App() {
           </div>
         </div>
         <div className="flex items-center gap-1">
+          <button
+            onClick={handleDisconnect}
+            className="p-1.5 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-tertiary transition-colors cursor-pointer"
+            title="Change Workspace"
+          >
+            <ArrowLeftRight size={16} />
+          </button>
+          <button
+            onClick={() => setTheme(isDarkMode ? "light" : "dark")}
+            className="p-1.5 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer"
+            title="Toggle Theme"
+          >
+            {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
           {isMobile && (
             <button
               onClick={(e) => {
@@ -713,8 +727,6 @@ export default function App() {
         onSetProjectRenameValue={setProjectRenameValue}
         onStartRename={() => { if (currentProject) { setProjectRenameValue(currentProject.name); setIsRenamingProject(true); } }}
         onEndRename={(save) => { if (save && currentProjectId) handleRenameProject(currentProjectId, projectRenameValue); setIsRenamingProject(false); }}
-        isDarkMode={isDarkMode}
-        onToggleTheme={() => setTheme(isDarkMode ? "light" : "dark")}
         onOpenHelp={() => navigateTo({}, '/workspace/help')}
         onOpenTeam={handleOpenTeamEditor}
         onOpenCompiler={() => navigateTo({}, '/workspace/compile')}
@@ -722,7 +734,6 @@ export default function App() {
         onExport={handleExportNotebook}
         onDisconnect={handleDisconnect}
         onGoHome={handleGoHome}
-        mounted={mounted}
       />
 
       <div className="flex-1 overflow-hidden relative bg-nb-bg">
