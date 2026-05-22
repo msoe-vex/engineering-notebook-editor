@@ -466,7 +466,9 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
     if (!entry.date?.trim()) errors.push("Date is required.");
 
     // Phase validation
-    const phases = metadata.phases && metadata.phases.length > 0 ? metadata.phases : DEFAULT_PHASES;
+    // Respect an explicit empty phases array. Only fall back to DEFAULT_PHASES
+    // when `phases` is undefined (i.e., not provided).
+    const phases = metadata.phases !== undefined ? metadata.phases : DEFAULT_PHASES;
     if (typeof entry.phase !== "number" || !phases.some(p => p.index === entry.phase)) {
       errors.push("Entry phase is required.");
     }

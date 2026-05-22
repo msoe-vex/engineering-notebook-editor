@@ -22,7 +22,9 @@ export interface PhaseInfo {
 }
 
 export function getPhases(customPhases?: ProjectPhase[]): ProjectPhase[] {
-  if (!customPhases || customPhases.length === 0) return DEFAULT_PHASES;
+  // If caller explicitly provides an array (even empty), respect it.
+  // Only return DEFAULT_PHASES when `customPhases` is undefined.
+  if (customPhases === undefined) return DEFAULT_PHASES;
   return customPhases;
 }
 

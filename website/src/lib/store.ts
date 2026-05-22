@@ -1,4 +1,4 @@
-import { NotebookMetadata, EMPTY_METADATA, EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds, TipTapNode, buildResourceTypeIndex, getLocalDateString, ensureResourceIds } from "./metadata";
+import { NotebookMetadata, EMPTY_METADATA, DEFAULT_PHASES, EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, TeamMetadata, ProjectPhase, removeEntryFromMetadata, dehydrateTeamAssets, hydrateTeamAssets, remapContentIds, remapEntryMetadataIds, TipTapNode, buildResourceTypeIndex, getLocalDateString, ensureResourceIds } from "./metadata";
 import { generateAllEntriesLatex, generateEntryLatex, generateTeamLatex, generatePhasesLatex } from "./latex";
 import { ExplorerFile, GitHubConfig, TeamTab } from "./types";
 import { getProjects, getProject, Project, getAllPending, getPending, stageChange, removeStaged, getResource, putResource, saveProject, getProjectHandle, saveProjectHandle, PendingChange } from "./db";
@@ -1168,6 +1168,19 @@ class WorkspaceStore {
 
       if (exportAll) {
         zip.file(INDEX_PATH, JSON.stringify(this.metadata, null, 2));
+      } else {
+        // For partial exports include only the selected entries.
+        // Team and phases are intentionally omitted; the importer will fall back
+        // to the project's defaults when those fields are missing.
+        const filteredEntries: Record<string, EntryMetadata> = {};
+        for (const id of targets) {
+          const meta = this.metadata.entries[id];
+          if (meta) filteredEntries[id] = meta;
+        }
+        zip.file(INDEX_PATH, JSON.stringify({
+          version: this.metadata.version,
+          entries: filteredEntries,
+        }, null, 2));
       }
 
       // Team/phases are shared project files and should come along with entry exports.
@@ -1358,12 +1371,13 @@ class WorkspaceStore {
       const importedPhases = data.phases as ProjectPhase[] | undefined;
       const importedTeam = data.team as TeamMetadata | undefined;
 
-      // 6. Update project metadata
+      // 6. Update project metadata - preserve existing team/phases when import omits them
       this.metadata = validateNotebookIntegrity({
         ...EMPTY_METADATA,
+        ...this.metadata,
         entries: newEntriesMap,
-        phases: importedPhases || [],
-        team: importedTeam
+        ...(importedPhases ? { phases: importedPhases } : {}),
+        ...(importedTeam ? { team: importedTeam } : {}),
       });
 
       // Save metadata
@@ -1438,8 +1452,17 @@ class WorkspaceStore {
 
         const indexEntry = zip.file(INDEX_PATH);
         if (indexEntry) {
-          const parsed = JSON.parse(await indexEntry.async("string"));
-          this.metadata = validateNotebookIntegrity(parsed as NotebookMetadata);
+          const parsed = JSON.parse(await indexEntry.async("string")) as NotebookMetadata;
+          const importedTeam = (parsed as any).team as TeamMetadata | undefined;
+          const importedPhases = (parsed as any).phases as ProjectPhase[] | undefined;
+
+          this.metadata = validateNotebookIntegrity({
+            ...EMPTY_METADATA,
+            ...this.metadata,
+            ...parsed,
+            ...(importedPhases ? { phases: importedPhases } : {}),
+            ...(importedTeam ? { team: importedTeam } : {}),
+          });
         }
 
         await this.reloadWorkspace();
