@@ -486,9 +486,9 @@ export default function App() {
 
   const handleOpenEntry = useCallback((file: ExplorerFile) => {
     const id = file.name.replace('.json', '');
-    checkUnsaved(() => navigateTo({ entry: id, resource: null }, '/workspace/editor'));
+    navigateTo({ entry: id, resource: null }, '/workspace/editor');
     if (isMobile) setUserSidebarPreference(false);
-  }, [checkUnsaved, isMobile, navigateTo]);
+  }, [isMobile, navigateTo]);
 
   const handleOpenTeamEditor = (tab: TeamTab = "identity") => {
     navigateTo({}, `/workspace/team/${tab}`);
@@ -777,7 +777,7 @@ export default function App() {
             {openFile && (
               <Editor
                 key={openFile.path}
-                onClose={() => checkUnsaved(() => navigateTo({ entry: null, resource: null }))}
+                onClose={() => navigateTo({ entry: null, resource: null })}
                 showConfirm={showConfirm}
                 viewMode={viewMode}
                 onSetViewMode={handleSetViewMode}

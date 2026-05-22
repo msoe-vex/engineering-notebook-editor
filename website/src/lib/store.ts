@@ -8,6 +8,66 @@ import { INDEX_PATH, ENTRIES_DIR, ENTRIES_INDEX_PATH, LATEX_DIR, ASSETS_DIR, TEA
 import { events, EventNames } from "./events";
 import { generateUUID, getMimeTypeFromExtension, generateDeterministicUUID, formatDateMonthYear } from "./utils";
 
+export interface DebouncedFunction<T extends (...args: any[]) => any> {
+  (...args: Parameters<T>): void;
+  flush(): void;
+  cancel(): void;
+}
+
+export function debounceWithFlush<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): DebouncedFunction<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let lastArgs: Parameters<T> | null = null;
+  let lastThis: any = null;
+
+  const debounced = function (this: any, ...args: Parameters<T>) {
+    lastArgs = args;
+    lastThis = this;
+
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+    }
+
+    timeoutId = setTimeout(() => {
+      const argsToUse = lastArgs;
+      const thisToUse = lastThis;
+      timeoutId = null;
+      lastArgs = null;
+      lastThis = null;
+      if (argsToUse) {
+        func.apply(thisToUse, argsToUse);
+      }
+    }, wait);
+  };
+
+  debounced.flush = () => {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+    const argsToUse = lastArgs;
+    const thisToUse = lastThis;
+    lastArgs = null;
+    lastThis = null;
+    if (argsToUse) {
+      func.apply(thisToUse, argsToUse);
+    }
+  };
+
+  debounced.cancel = () => {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+    lastArgs = null;
+    lastThis = null;
+  };
+
+  return debounced;
+}
+
 export type WorkspaceMode = "local" | "github" | "temporary" | "none";
 
 // Normalize base64 payloads: strip non-base64 chars and pad with '=' to valid length
@@ -68,6 +128,38 @@ class WorkspaceStore {
   public selectedPaths: Set<string> = new Set();
   public isSaving = false;
   public isPendingSave = false;
+
+  public debouncedPersist = debounceWithFlush(async () => {
+    if (!this.openFile) return;
+    const id = this.openFile.id;
+    const tiptapContent = this.openFile.tiptapContent;
+    const title = this.openFile.title;
+    const author = this.openFile.author;
+    const phase = this.openFile.phase;
+    const date = this.openFile.date;
+
+    let contentJson = null;
+    try {
+      contentJson = JSON.parse(tiptapContent);
+    } catch { }
+
+    const doc = contentJson && contentJson.content && !contentJson.type ? contentJson.content : contentJson;
+    const resources = doc ? extractResources(doc as TipTapNode) : {};
+    const resourceTypes = buildResourceTypeIndex(this.metadata.entries, resources, id);
+    const latex = generateEntryLatex(
+      tiptapContent,
+      title,
+      author,
+      phase === null ? "" : phase,
+      this.openFile.createdAt,
+      id,
+      resourceTypes,
+      date
+    );
+
+    this.setPendingSave(false);
+    await this.saveDraft(id, latex, tiptapContent, { title, author, phase, date });
+  }, 800);
 
   get hydratedMetadata(): NotebookMetadata {
     return {
@@ -286,6 +378,8 @@ class WorkspaceStore {
 
   async selectProject(id: string) {
     if (this.currentProjectId === id && id !== "temporary" && this.isInitialized && !this.isLoading) return;
+
+    this.debouncedPersist.flush();
 
     // For temporary workspaces, if this is the initial load of the session, clear the DB
     // to fulfill the UI promise of "Lost on reload".
@@ -613,6 +707,7 @@ class WorkspaceStore {
 
   // ─── Entry Management ───────────────────────────────────────────────────────
   async openEntry(id: string) {
+    this.debouncedPersist.flush();
     const meta = this.metadata.entries[id];
 
     if (!meta) {
@@ -735,7 +830,58 @@ class WorkspaceStore {
     }
   }
 
+  public updateDraft(
+    tiptapContent: string | null,
+    info: { title?: string; author?: string; phase?: number | null; date?: string }
+  ) {
+    if (!this.openFile) return;
+    const id = this.openFile.id;
+
+    // 1. Synchronously update openFile
+    if (tiptapContent !== null) {
+      this.openFile.tiptapContent = tiptapContent;
+    }
+    if (info.title !== undefined) this.openFile.title = info.title;
+    if (info.author !== undefined) this.openFile.author = info.author;
+    if (info.phase !== undefined) this.openFile.phase = info.phase;
+    if (info.date !== undefined) this.openFile.date = info.date;
+    this.openFile.updatedAt = new Date().toISOString();
+
+    // 2. Synchronously update metadata in-memory for immediate UI feedback (Sidebar, etc.)
+    const existingEntry = this.metadata.entries[id];
+    if (existingEntry) {
+      this.metadata = {
+        ...this.metadata,
+        entries: {
+          ...this.metadata.entries,
+          [id]: {
+            ...existingEntry,
+            ...(info.title !== undefined ? { title: info.title } : {}),
+            ...(info.author !== undefined ? { author: info.author } : {}),
+            ...(info.phase !== undefined ? { phase: info.phase } : {}),
+            ...(info.date !== undefined ? { date: info.date } : {}),
+            updatedAt: this.openFile.updatedAt,
+          }
+        }
+      };
+    }
+
+    // 3. Mark pending save as true
+    this.setPendingSave(true);
+
+    // 4. Trigger debounced background save
+    this.debouncedPersist();
+
+    // 5. Notify reactive hooks/listeners
+    this.notifyStateChange();
+  }
+
   async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null; date: string }) {
+    this.updateDraft(tiptapContent, info);
+    this.debouncedPersist.flush();
+  }
+
+  private async saveDraft(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null; date: string }) {
     let contentJson = JSON.parse(tiptapContent);
     // Handle double-stringification and wrapping
     if (typeof contentJson === 'string') {
@@ -938,6 +1084,9 @@ class WorkspaceStore {
 
   async deleteEntry(file: ExplorerFile) {
     const id = file.path.split('/').pop()?.replace('.json', '') || "";
+    if (this.openFile?.id === id) {
+      this.debouncedPersist.cancel();
+    }
     const oldMeta = this.metadata;
     const updatedMeta = validateNotebookIntegrity(removeEntryFromMetadata(this.metadata, id));
 
@@ -1705,6 +1854,7 @@ class WorkspaceStore {
   }
 
   async disconnect() {
+    this.debouncedPersist.flush();
     this.setLoading(true);
     try {
       // Ensure all pending I/O for the current project is finished before context is cleared
