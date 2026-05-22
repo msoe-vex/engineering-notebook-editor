@@ -1013,6 +1013,9 @@ class WorkspaceStore {
   }
 
   async refreshPending() {
+    if (this.#savingCount > 0) {
+      return this.pendingChanges;
+    }
     const dbName = this.getDBName();
     this.pendingChanges = await getAllPending(dbName);
     this.notifyStateChange();
@@ -1439,17 +1442,10 @@ class WorkspaceStore {
         }
       }
 
-      // 2. Save assets first
-      for (const [path, base64] of Object.entries(assets as Record<string, string>)) {
-        const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${base64}`;
-        this.assetCache.set(path, dataUrl); // Immediate memory cache
-        await this.persistFile(path, base64, `Import asset: ${path}`, true);
-        if (this.mode === "github" || this.mode === "temporary") {
-          await putResource(this.getDBName(), { path, dataUrl });
-        }
-      }
+      // 2. Map and prepare assets (no I/O yet)
+      const assetList = Object.entries(assets as Record<string, string>);
 
-      // 3. Remap entries
+      // 3. Remap entries in memory
       // Pass 1: Remap all IDs and build the full entry metadata map
       const remappedEntries: { id: string, doc: TipTapNode, meta: EntryMetadata }[] = [];
       const newEntriesMap: Record<string, EntryMetadata> = {};
@@ -1494,40 +1490,11 @@ class WorkspaceStore {
       // Build the global resource index using all new entries
       const globalResourceTypes = buildResourceTypeIndex({ ...this.metadata.entries, ...newEntriesMap });
 
-      // Pass 2: Generate LaTeX and persist files
-      for (const item of remappedEntries) {
-        const { id, doc, meta } = item;
-        const contentStr = JSON.stringify({ version: 3, content: doc }, null, 2);
-
-        // Generate LaTeX with the global index so cross-entry links work
-        const latex = generateEntryLatex(doc, meta.title, meta.author, meta.phase, meta.createdAt, id, globalResourceTypes, meta.date);
-
-        await this.persistFile(meta.filename, contentStr, `Import entry: ${meta.title}`);
-        await this.persistFile(`${LATEX_DIR}/${id}.tex`, latex, `Import LaTeX: ${meta.title}`);
-      }
-
-      // 4. Persist optional text files provided by import payload.
-      // This preserves customized compile templates such as main.tex and engineering_notebook.sty.
-      const extraFiles = { ...(latexFiles || {}), ...(files || {}) };
-      for (const [path, content] of Object.entries(extraFiles)) {
-        if (!path || typeof content !== "string") continue;
-        if (path === INDEX_PATH) continue;
-        if (path.startsWith(`${ENTRIES_DIR}/`) || path.startsWith(`${ASSETS_DIR}/`)) continue;
-        // When entries are imported/remapped, skip old generated entry .tex files from archive payloads.
-        if (entryIdList.length > 0 && path.startsWith(`${LATEX_DIR}/`)) continue;
-        await this.persistFile(path, content, `Import file: ${path}`);
-      }
-
-      // 4.5 Persist optional compiled PDF if provided by import payload.
-      if (pdf && typeof pdf === "string") {
-        await this.persistFile("main.pdf", pdf, "Import compiled PDF", true);
-      }
-
-      // 5. Import Team and Phases if present
+      // 4. Import Team and Phases if present
       const importedPhases = data.phases as ProjectPhase[] | undefined;
       const importedTeam = data.team as TeamMetadata | undefined;
 
-      // 6. Update project metadata - preserve existing team/phases when import omits them
+      // 5. Update project metadata in memory
       this.metadata = validateNotebookIntegrity({
         ...EMPTY_METADATA,
         ...this.metadata,
@@ -1536,9 +1503,51 @@ class WorkspaceStore {
         ...(importedTeam ? { team: importedTeam } : {}),
       });
 
-      // Save metadata
-      await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Import notebook metadata");
-      await this.updateLatexMetadata();
+      const extraFiles = { ...(latexFiles || {}), ...(files || {}) };
+
+      // 6. Perform all IndexedDB / file persistence inside the sequential save queue
+      await this.enqueue(async () => {
+        // Save assets
+        for (const [path, base64] of assetList) {
+          const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${base64}`;
+          this.assetCache.set(path, dataUrl); // Immediate memory cache
+          await this.persistFile(path, base64, `Import asset: ${path}`, true);
+          if (this.mode === "github" || this.mode === "temporary") {
+            await putResource(this.getDBName(), { path, dataUrl });
+          }
+        }
+
+        // Pass 2: Generate LaTeX and persist entry files
+        for (const item of remappedEntries) {
+          const { id, doc, meta } = item;
+          const contentStr = JSON.stringify({ version: 3, content: doc }, null, 2);
+
+          // Generate LaTeX with the global index so cross-entry links work
+          const latex = generateEntryLatex(doc, meta.title, meta.author, meta.phase, meta.createdAt, id, globalResourceTypes, meta.date);
+
+          await this.persistFile(meta.filename, contentStr, `Import entry: ${meta.title}`);
+          await this.persistFile(`${LATEX_DIR}/${id}.tex`, latex, `Import LaTeX: ${meta.title}`);
+        }
+
+        // Persist optional text files provided by import payload
+        for (const [path, content] of Object.entries(extraFiles)) {
+          if (!path || typeof content !== "string") continue;
+          if (path === INDEX_PATH) continue;
+          if (path.startsWith(`${ENTRIES_DIR}/`) || path.startsWith(`${ASSETS_DIR}/`)) continue;
+          // When entries are imported/remapped, skip old generated entry .tex files from archive payloads
+          if (entryIdList.length > 0 && path.startsWith(`${LATEX_DIR}/`)) continue;
+          await this.persistFile(path, content, `Import file: ${path}`);
+        }
+
+        // Persist optional compiled PDF if provided by import payload
+        if (pdf && typeof pdf === "string") {
+          await this.persistFile("main.pdf", pdf, "Import compiled PDF", true);
+        }
+
+        // Save metadata
+        await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Import notebook metadata");
+        await this.updateLatexMetadata();
+      });
 
       // Refresh project list
       await this.reloadWorkspace();
@@ -1716,6 +1725,12 @@ class WorkspaceStore {
         this.#savingCount--;
         if (this.#savingCount === 0) {
           this.isSaving = false;
+          try {
+            const dbName = this.getDBName();
+            this.pendingChanges = await getAllPending(dbName);
+          } catch (err) {
+            console.error("Failed to refresh pending changes after save queue:", err);
+          }
           this.notifyStateChange();
           events.emit(EventNames.PERSISTENCE_SYNC);
         }
@@ -1883,19 +1898,21 @@ class WorkspaceStore {
       pdfData.reduce((data, byte) => data + String.fromCharCode(byte), "")
     );
 
-    // 1. Persist main.pdf in root
-    await this.persistFile("main.pdf", base64, "Compilation: Update main.pdf", true);
+    await this.enqueue(async () => {
+      // 1. Persist main.pdf in root
+      await this.persistFile("main.pdf", base64, "Compilation: Update main.pdf", true);
 
-    // 2. Update lastCompiled timestamp in metadata
-    this.metadata = {
-      ...this.metadata,
-      lastCompiled: new Date().toISOString()
-    };
+      // 2. Update lastCompiled timestamp in metadata
+      this.metadata = {
+        ...this.metadata,
+        lastCompiled: new Date().toISOString()
+      };
 
-    // 3. Persist updated metadata
-    await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Update lastCompiled metadata");
+      // 3. Persist updated metadata
+      await this.persistFile(INDEX_PATH, JSON.stringify(this.metadata, null, 2), "Update lastCompiled metadata");
 
-    this.notifyStateChange();
+      this.notifyStateChange();
+    });
   }
 
   public async getCompiledPdfUrl(): Promise<string | null> {
