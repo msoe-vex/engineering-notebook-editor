@@ -13,7 +13,7 @@ import {
   getProjectDBName
 } from "@/lib/db";
 import Home from "./Home";
-import Editor from "./editor";
+import Editor from "./editor/Editor";
 import WelcomePage from "./WelcomePage";
 import Sidebar from "./Sidebar";
 import TeamEditor from "./TeamEditor";
