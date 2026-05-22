@@ -458,18 +458,18 @@ export function LinkReferencePopup({
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <input
-                          type="date"
-                          value={startDate}
-                          onChange={e => setStartDate(e.target.value)}
-                          className="w-full text-[9px] font-medium p-1 bg-nb-surface-low border border-nb-outline-variant/20 rounded-md outline-none focus:border-nb-primary transition-all text-nb-on-surface"
+                           type="date"
+                           value={startDate}
+                           onChange={e => setStartDate(e.target.value)}
+                           className="w-full text-[9px] font-medium p-1 bg-nb-surface-low border border-nb-outline-variant/20 rounded-md outline-none focus:border-nb-primary transition-all text-nb-on-surface"
                         />
                       </div>
                       <div>
                         <input
-                          type="date"
-                          value={endDate}
-                          onChange={e => setEndDate(e.target.value)}
-                          className="w-full text-[9px] font-medium p-1 bg-nb-surface-low border border-nb-outline-variant/20 rounded-md outline-none focus:border-nb-primary transition-all text-nb-on-surface"
+                           type="date"
+                           value={endDate}
+                           onChange={e => setEndDate(e.target.value)}
+                           className="w-full text-[9px] font-medium p-1 bg-nb-surface-low border border-nb-outline-variant/20 rounded-md outline-none focus:border-nb-primary transition-all text-nb-on-surface"
                         />
                       </div>
                     </div>

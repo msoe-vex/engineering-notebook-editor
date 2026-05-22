@@ -6,7 +6,7 @@ import {
   Search, ChevronDown, ExternalLink, Trash2, FileJson, FileCode,
   Download
 } from "lucide-react";
-import ValidationTooltip from "./ValidationTooltip";
+import ValidationTooltip from "./editor/ui/ValidationTooltip";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

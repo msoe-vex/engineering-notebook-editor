@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import UnifiedEditor from "./UnifiedEditor";
+import RichTextArea from "./RichTextArea";
 import { Editor as TiptapEditor } from "@tiptap/react";
-import { ToolbarButton, TableGridSelector } from "./editor/EditorUI";
+import { ToolbarButton } from "./ui/ToolbarButton";
+import { TableGridSelector } from "./ui/TableGridSelector";
 import { createPortal } from "react-dom";
 import { saveAs } from "file-saver";
 import {
@@ -13,17 +14,17 @@ import {
   Terminal, Link as LinkIcon, Underline as UnderlineIcon, Sigma,
   FileJson, Strikethrough, Palette, Highlighter, Superscript, Subscript, HelpCircle
 } from "lucide-react";
-import ValidationTooltip from "./ValidationTooltip";
+import ValidationTooltip from "./ui/ValidationTooltip";
 import * as LucideIcons from "lucide-react";
 import {
   Panel,
   PanelGroup,
   PanelResizeHandle
 } from "react-resizable-panels";
-import ViewToggle, { ViewMode } from "./ViewToggle";
+import ViewToggle, { ViewMode } from "./ui/ViewToggle";
 import dynamic from "next/dynamic";
 
-const Preview = dynamic(() => import("./Preview"), {
+const LatexPreview = dynamic(() => import("./LatexPreview"), {
   ssr: false,
   loading: () => (
     <div className="flex flex-col items-center justify-center h-full gap-4 bg-nb-bg/50 backdrop-blur-sm">
@@ -35,8 +36,8 @@ const Preview = dynamic(() => import("./Preview"), {
 import { getLocalDateString } from "@/lib/metadata";
 import { generateEntryLatex } from "@/lib/latex";
 import { getPhases, getPhaseConfig } from "@/lib/phases";
-import AutocompleteInput from "./AutocompleteInput";
-import DatePicker from "./DatePicker";
+import AutocompleteInput from "./ui/AutocompleteInput";
+import DatePicker from "./ui/DatePicker";
 import { extractResources, extractReferences, TipTapNode, ensureResourceIds, buildResourceTypeIndex } from "@/lib/metadata";
 import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng, compressImageToJpeg } from "@/lib/utils";
@@ -210,7 +211,6 @@ const MenuItem = ({ label, children, activeMenu, setActiveMenu }: { label: strin
   const containerRef = useRef<HTMLDivElement>(null);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
 
-
   return (
     <div className="relative h-full flex items-center" ref={containerRef}>
       <button
@@ -354,7 +354,6 @@ const EditorToolbar = React.memo(function EditorToolbar({
       editor.off('transaction', handleUpdate);
     };
   }, [editor]);
-
 
   return (
     <div className="border-t border-nb-outline-variant/30 bg-nb-surface-mid/50 shrink-0 overflow-x-auto scrollbar-hide w-full">
@@ -924,12 +923,10 @@ const EditorContent = React.memo(function EditorContent({
     return () => window.removeEventListener("mousedown", handleOutsideClick);
   }, [showTableGrid, setShowTableGrid]);
 
-
   // Dynamic Phase Logic
   const availablePhases = getPhases(metadata?.phases);
   const phaseConfig = getPhaseConfig(availablePhases);
   const activePhaseCfg = openFile.phase !== null && openFile.phase !== undefined && phaseConfig[openFile.phase] ? phaseConfig[openFile.phase] : null;
-
 
   const otherAuthors = React.useMemo(() => {
     const authors = new Set<string>();
@@ -1011,7 +1008,6 @@ const EditorContent = React.memo(function EditorContent({
     saveAs(blob, filename);
   };
 
-
   useEffect(() => {
     if (!activeMenu) return;
     const handleOutsideClick = () => {
@@ -1032,8 +1028,6 @@ const EditorContent = React.memo(function EditorContent({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleSave]);
-
-
 
   const insertImage = () => {
     const input = document.createElement("input");
@@ -1110,7 +1104,6 @@ const EditorContent = React.memo(function EditorContent({
                 <ChevronUp size={14} className="group-hover:scale-110 transition-transform" />
               )}
             </button>
-
 
             <MenuItem label="File" activeMenu={activeMenu} setActiveMenu={handleSetActiveMenu}>
               <MenuAction icon={<Save size={14} />} label="Save Entry" onClick={handleSave} setActiveMenu={handleSetActiveMenu} />
@@ -1259,13 +1252,11 @@ const EditorContent = React.memo(function EditorContent({
               />
             </MenuItem>
 
-
             <div className="flex-1 min-w-[20px]" />
 
             <div className="flex items-center gap-2 mr-4">
               <ViewToggle viewMode={viewMode} onSetViewMode={onSetViewMode} />
             </div>
-
 
             <div className="flex items-center gap-2 mr-2">
               {isPendingSaveGlobal || isSavingGlobal || isManualSaving ? (
@@ -1450,7 +1441,7 @@ const EditorContent = React.memo(function EditorContent({
           >
             <div className="flex-1 overflow-hidden relative">
               <div className="absolute inset-0 flex flex-col overflow-y-auto custom-scrollbar">
-                <UnifiedEditor
+                <RichTextArea
                   key={`${filename}-${workspaceVersion}`}
                   filename={filename}
                   content={parseInitialContent(openFile.tiptapContent)} // Initial load only
@@ -1469,7 +1460,7 @@ const EditorContent = React.memo(function EditorContent({
             defaultSize={viewMode === "preview" ? 100 : (viewMode === "editor" ? 0 : 50)}
             className={`flex flex-col h-full bg-nb-surface-low transition-all duration-500 ease-in-out ${viewMode === "editor" ? "opacity-0 scale-[0.98] pointer-events-none" : "opacity-100 scale-100"}`}
           >
-            <Preview latexContent={previewLatex} />
+            <LatexPreview latexContent={previewLatex} />
           </Panel>
         </PanelGroup>
       </div>

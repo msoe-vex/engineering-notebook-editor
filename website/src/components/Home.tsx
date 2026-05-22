@@ -8,8 +8,8 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import GitHubConnectionDialog from "./GitHubConnectionDialog";
-import GithubIcon from "./ui/GithubIcon";
-import Logo from "./ui/Logo";
+import GithubIcon from "./GithubIcon";
+import Logo from "./Logo";
 
 
 interface HomeProps {

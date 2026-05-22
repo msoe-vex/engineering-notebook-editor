@@ -13,7 +13,7 @@ import {
   getProjectDBName
 } from "@/lib/db";
 import Home from "./Home";
-import Editor from "./Editor";
+import Editor from "./editor";
 import WelcomePage from "./WelcomePage";
 import Sidebar from "./Sidebar";
 import TeamEditor from "./TeamEditor";
@@ -22,8 +22,8 @@ import HelpPage from "./HelpPage";
 import ProjectHeader from "./ProjectHeader";
 import AboutPage from "./AboutPage";
 import LoadingOverlay from "./LoadingOverlay";
-import Logo from "./ui/Logo";
-import { ViewMode } from "./ViewToggle";
+import Logo from "./Logo";
+import { ViewMode } from "./editor/ui/ViewToggle";
 import ConfirmationDialog from "./ConfirmationDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { HardDrive, X, Loader2 } from "lucide-react";

@@ -16,7 +16,7 @@ import {
   ExternalLink,
   Play
 } from "lucide-react";
-import GithubIcon from "./ui/GithubIcon";
+import GithubIcon from "./GithubIcon";
 
 interface HelpPageProps {
   path: string;

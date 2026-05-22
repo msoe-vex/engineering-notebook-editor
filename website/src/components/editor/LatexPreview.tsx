@@ -19,14 +19,14 @@ if (Prism.languages.latex) {
   Prism.languages.context = Prism.languages.latex;
 }
 
-interface PreviewProps {
+interface LatexPreviewProps {
   latexContent: string;
   pdfUrl?: string;
 }
 
 const clampScale = (s: number) => Math.min(3.0, Math.max(0.1, s));
 
-export default function Preview({ latexContent, pdfUrl }: PreviewProps) {
+export default function LatexPreview({ latexContent, pdfUrl }: LatexPreviewProps) {
   const rawCodeRef = useRef<HTMLElement>(null);
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
@@ -278,9 +278,9 @@ export default function Preview({ latexContent, pdfUrl }: PreviewProps) {
                     <div ref={contentRef} className="flex flex-col items-center w-full">
                       {Array.from(new Array(numPages || 0), (el, index) => (
                         <div
-                          key={`page_${index + 1}`}
-                          data-page-number={index + 1}
-                          className="mb-8 shadow-nb-2xl rounded-sm overflow-hidden bg-white"
+                           key={`page_${index + 1}`}
+                           data-page-number={index + 1}
+                           className="mb-8 shadow-nb-2xl rounded-sm overflow-hidden bg-white"
                         >
                           <Page
                             pageNumber={index + 1}
