@@ -39,7 +39,7 @@ import AutocompleteInput from "./AutocompleteInput";
 import DatePicker from "./DatePicker";
 import { extractResources, extractReferences, TipTapNode, ensureResourceIds, buildResourceTypeIndex } from "@/lib/metadata";
 import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
-import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng, debounce, compressImageToJpeg } from "@/lib/utils";
+import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng, compressImageToJpeg } from "@/lib/utils";
 import { NodeSelection } from "@tiptap/pm/state";
 
 // ─── Sub-components for Performance ──────────────────────────────────────────
@@ -776,7 +776,6 @@ const EditorContent = React.memo(function EditorContent({
   showConfirm,
   viewMode,
   onSetViewMode,
-  setPendingSave,
   isSavingGlobal,
   isPendingSaveGlobal,
   workspaceVersion,

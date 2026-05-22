@@ -8,23 +8,21 @@ import { INDEX_PATH, ENTRIES_DIR, ENTRIES_INDEX_PATH, LATEX_DIR, ASSETS_DIR, TEA
 import { events, EventNames } from "./events";
 import { generateUUID, getMimeTypeFromExtension, generateDeterministicUUID, formatDateMonthYear } from "./utils";
 
-export interface DebouncedFunction<T extends (...args: any[]) => any> {
+export interface DebouncedFunction<T extends (...args: unknown[]) => unknown> {
   (...args: Parameters<T>): void;
   flush(): void;
   cancel(): void;
 }
 
-export function debounceWithFlush<T extends (...args: any[]) => any>(
+export function debounceWithFlush<T extends (...args: unknown[]) => unknown>(
   func: T,
   wait: number
 ): DebouncedFunction<T> {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   let lastArgs: Parameters<T> | null = null;
-  let lastThis: any = null;
 
-  const debounced = function (this: any, ...args: Parameters<T>) {
+  const debounced = function (...args: Parameters<T>) {
     lastArgs = args;
-    lastThis = this;
 
     if (timeoutId !== null) {
       clearTimeout(timeoutId);
@@ -32,12 +30,10 @@ export function debounceWithFlush<T extends (...args: any[]) => any>(
 
     timeoutId = setTimeout(() => {
       const argsToUse = lastArgs;
-      const thisToUse = lastThis;
       timeoutId = null;
       lastArgs = null;
-      lastThis = null;
       if (argsToUse) {
-        func.apply(thisToUse, argsToUse);
+        func(...argsToUse);
       }
     }, wait);
   };
@@ -48,11 +44,9 @@ export function debounceWithFlush<T extends (...args: any[]) => any>(
       timeoutId = null;
     }
     const argsToUse = lastArgs;
-    const thisToUse = lastThis;
     lastArgs = null;
-    lastThis = null;
     if (argsToUse) {
-      func.apply(thisToUse, argsToUse);
+      func(...argsToUse);
     }
   };
 
@@ -62,7 +56,6 @@ export function debounceWithFlush<T extends (...args: any[]) => any>(
       timeoutId = null;
     }
     lastArgs = null;
-    lastThis = null;
   };
 
   return debounced;
