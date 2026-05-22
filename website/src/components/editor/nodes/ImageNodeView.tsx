@@ -111,7 +111,7 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, ed
                   try { dataUrl = await convertSvgToPng(dataUrl); } catch {}
                 }
 
-                const compressed = await compressImageToJpeg(dataUrl, 1600, 0.8).catch(() => ({ dataUrl, base64: dataUrl.split(',')[1] }));
+                const compressed = await compressImageToJpeg(dataUrl, 1920, 0.8).catch(() => ({ dataUrl, base64: dataUrl.split(',')[1] }));
                 const originalBase64 = dataUrl.split(',')[1];
                 const originalHash = await hashContent(originalBase64);
                 const compressedHash = await hashContent(compressed.base64);

@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import dynamic from "next/dynamic";
 import { compileNotebook, CompileResult, CompileMode } from "@/lib/busytex";
 import { showNotification } from "./Notification";
-import { Play, Loader2, Calendar, FileText, X, RefreshCcw, Download } from "lucide-react";
+import { Play, Loader2, Calendar, FileText, X, RefreshCcw, Download, ChevronDown } from "lucide-react";
 
 const Preview = dynamic(() => import("./Preview"), {
   ssr: false,
@@ -26,6 +26,19 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
   const [totalSteps, setTotalSteps] = useState(0);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [isLoadingPdf, setIsLoadingPdf] = useState(true);
+  const [isCompileMenuOpen, setIsCompileMenuOpen] = useState(false);
+  const compileMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!compileMenuRef.current?.contains(event.target as Node)) {
+        setIsCompileMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -70,14 +83,15 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
     };
   }, [getCompiledPdfUrl, isInitialized, metadata.lastCompiled]);
 
-  const handleCompile = async (mode: CompileMode = "preview") => {
+  const handleCompile = async (mode: CompileMode = "quality") => {
     if (isCompiling) return;
+    setIsCompileMenuOpen(false);
     setIsCompiling(true);
     setCompileProgress(0);
     setCompileStatus("Starting...");
 
     try {
-      const result: CompileResult = await compileNotebook(mode, (status, step, total, percentage) => {
+      const result: CompileResult = await compileNotebook(mode, (status: string, step: number, total: number, percentage: number) => {
         setCompileStatus(status);
         setCompileStep(step);
         setTotalSteps(total);
@@ -155,31 +169,46 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
             </button>
           )}
 
-          <button
-            onClick={() => handleCompile("preview")}
-            disabled={isCompiling}
-            className={`flex items-center gap-2 px-3 md:px-5 py-2.5 rounded-xl text-sm font-black transition-all shadow-lg active:scale-[0.98] ${isCompiling
-              ? 'bg-nb-surface-low text-nb-on-surface-variant cursor-not-allowed border border-nb-outline-variant'
-              : 'bg-nb-primary text-white hover:bg-nb-primary-dim shadow-nb-primary/20 cursor-pointer'
-            }`}
-          >
-            <Play size={16} fill="currentColor" />
-            <span className="hidden xs:inline">Compile Preview</span>
-            <span className="xs:hidden">Preview</span>
-          </button>
+          <div ref={compileMenuRef} className="relative flex items-stretch">
+            <button
+              onClick={() => handleCompile("quality")}
+              disabled={isCompiling}
+              className={`flex items-center gap-2 px-3 md:px-5 py-2.5 rounded-l-xl text-sm font-black transition-all shadow-lg active:scale-[0.98] border-r-0 ${isCompiling
+                ? 'bg-nb-surface-low text-nb-on-surface-variant cursor-not-allowed border border-nb-outline-variant'
+                : 'bg-nb-primary text-white hover:bg-nb-primary-dim shadow-nb-primary/20 cursor-pointer border border-nb-primary'
+              }`}
+            >
+              <Play size={16} fill="currentColor" />
+              <span className="hidden xs:inline">Compile</span>
+              <span className="xs:hidden">Compile</span>
+            </button>
 
-          <button
-            onClick={() => handleCompile("quality")}
-            disabled={isCompiling}
-            className={`flex items-center gap-2 px-3 md:px-5 py-2.5 rounded-xl text-sm font-black transition-all shadow-lg active:scale-[0.98] ${isCompiling
-              ? 'bg-nb-surface-low text-nb-on-surface-variant cursor-not-allowed border border-nb-outline-variant'
-              : 'bg-nb-tertiary text-white hover:bg-nb-tertiary-dim shadow-nb-tertiary/20 cursor-pointer'
-            }`}
-          >
-            <Play size={16} fill="currentColor" />
-            <span className="hidden xs:inline">Compile Quality</span>
-            <span className="xs:hidden">Quality</span>
-          </button>
+            <button
+              onClick={() => setIsCompileMenuOpen(open => !open)}
+              disabled={isCompiling}
+              aria-haspopup="menu"
+              aria-expanded={isCompileMenuOpen}
+              className={`flex items-center justify-center px-2 md:px-2.5 py-2.5 rounded-r-xl text-sm font-black transition-all shadow-lg active:scale-[0.98] ${isCompiling
+                ? 'bg-nb-surface-low text-nb-on-surface-variant cursor-not-allowed border border-nb-outline-variant border-l-0'
+                : 'bg-nb-primary text-white hover:bg-nb-primary-dim shadow-nb-primary/20 cursor-pointer border border-nb-primary border-l border-l-white/15'
+              }`}
+              title="Choose compile mode"
+            >
+              <ChevronDown size={16} />
+            </button>
+
+            {isCompileMenuOpen && !isCompiling && (
+              <div className="absolute right-0 top-full mt-2 w-44 overflow-hidden rounded-xl border border-nb-outline-variant bg-nb-surface shadow-nb-xl z-50">
+                <button
+                  onClick={() => handleCompile("compressed")}
+                  className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-black text-nb-on-surface hover:bg-nb-surface-low transition-colors"
+                >
+                  <span>Compressed</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant/60">Mode</span>
+                </button>
+              </div>
+            )}
+          </div>
 
           <div className="w-px h-6 bg-nb-outline-variant/30 mx-1" />
 

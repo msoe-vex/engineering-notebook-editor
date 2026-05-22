@@ -60,11 +60,11 @@ export interface CompileResult {
   log: string;
 }
 
-export type CompileMode = "preview" | "quality";
+export type CompileMode = "quality" | "compressed";
 
 export type CompileStatusCallback = (status: string, step: number, totalSteps: number, percentage: number) => void;
 
-export async function compileNotebook(mode: CompileMode = "preview", onStatus?: CompileStatusCallback): Promise<CompileResult> {
+export async function compileNotebook(mode: CompileMode = "quality", onStatus?: CompileStatusCallback): Promise<CompileResult> {
   const TOTAL_STEPS = 7;
 
   onStatus?.("Updating project metadata...", 1, TOTAL_STEPS, 10);

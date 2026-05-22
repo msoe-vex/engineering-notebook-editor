@@ -1249,7 +1249,17 @@ class WorkspaceStore {
         this.entries = [];
       }
 
-      const { entries = {}, assets = {} } = data as { entries: Record<string, Record<string, unknown>>; assets: Record<string, unknown> };
+      const {
+        entries = {},
+        assets = {},
+        files = {},
+        latexFiles = {}
+      } = data as {
+        entries: Record<string, Record<string, unknown>>;
+        assets: Record<string, unknown>;
+        files?: Record<string, string>;
+        latexFiles?: Record<string, string>;
+      };
       const idMap = new Map<string, string>();
 
       // 1. Map ALL IDs first (Entries and their internal Resources)
@@ -1332,11 +1342,23 @@ class WorkspaceStore {
         await this.persistFile(`${LATEX_DIR}/${id}.tex`, latex, `Import LaTeX: ${meta.title}`);
       }
 
-      // 4. Import Team and Phases if present
+      // 4. Persist optional text files provided by import payload.
+      // This preserves customized compile templates such as main.tex and engineering_notebook.sty.
+      const extraFiles = { ...(latexFiles || {}), ...(files || {}) };
+      for (const [path, content] of Object.entries(extraFiles)) {
+        if (!path || typeof content !== "string") continue;
+        if (path === INDEX_PATH) continue;
+        if (path.startsWith(`${ENTRIES_DIR}/`) || path.startsWith(`${ASSETS_DIR}/`)) continue;
+        // When entries are imported/remapped, skip old generated entry .tex files from archive payloads.
+        if (entryIdList.length > 0 && path.startsWith(`${LATEX_DIR}/`)) continue;
+        await this.persistFile(path, content, `Import file: ${path}`);
+      }
+
+      // 5. Import Team and Phases if present
       const importedPhases = data.phases as ProjectPhase[] | undefined;
       const importedTeam = data.team as TeamMetadata | undefined;
 
-      // 5. Update project metadata
+      // 6. Update project metadata
       this.metadata = validateNotebookIntegrity({
         ...EMPTY_METADATA,
         entries: newEntriesMap,
@@ -1381,8 +1403,9 @@ class WorkspaceStore {
       const JSZip = (await import("jszip")).default;
       const zip = await JSZip.loadAsync(await file.arrayBuffer());
       const filenames = Object.keys(zip.files).filter(name => !zip.files[name].dir);
-      const normalizedFiles = filenames.filter(name => !name.endsWith(".tex"));
-      const hasNotebookIndex = normalizedFiles.includes(INDEX_PATH);
+      const hasNotebookIndex = filenames.includes(INDEX_PATH);
+      const isBinaryFile = (path: string) => /\.(png|jpe?g|gif|webp|bmp|ico|tiff?|avif|heic|pdf|otf|ttf|woff2?|eot|zip|7z|rar|tar|gz|bz2|xz|mp3|wav|ogg|flac|aac|m4a|mp4|mov|avi|mkv|webm|wasm|exe|dll|so|dylib|bin)$/i.test(path);
+      const isImageAsset = (path: string) => /\.(png|jpe?g|gif|webp|bmp|ico|tiff?|avif|heic)$/i.test(path);
 
       if (this.mode === "temporary") {
         const { clearAllPending, clearAllResources } = await import("./db");
@@ -1393,18 +1416,20 @@ class WorkspaceStore {
       }
 
       if (hasNotebookIndex) {
-        for (const filename of normalizedFiles) {
+        for (const filename of filenames) {
           const entry = zip.file(filename);
           if (!entry) continue;
 
-          if (/\.(png|jpe?g|gif|webp|pdf|otf|ttf|woff2?)$/i.test(filename)) {
+          if (isBinaryFile(filename)) {
             const base64 = await entry.async("base64");
-            const dataUrl = `data:${getMimeTypeFromExtension(filename)};base64,${base64}`;
-            this.assetCache.set(filename, dataUrl);
-            await this.persistFile(filename, base64, `Import asset: ${filename}`, true);
-            if (this.mode === "github" || this.mode === "temporary") {
-              await putResource(this.getDBName(), { path: filename, dataUrl });
+            if (isImageAsset(filename)) {
+              const dataUrl = `data:${getMimeTypeFromExtension(filename)};base64,${base64}`;
+              this.assetCache.set(filename, dataUrl);
+              if (this.mode === "github" || this.mode === "temporary") {
+                await putResource(this.getDBName(), { path: filename, dataUrl });
+              }
             }
+            await this.persistFile(filename, base64, `Import asset: ${filename}`, true);
           } else {
             const text = await entry.async("string");
             await this.persistFile(filename, text, `Import file: ${filename}`);
@@ -1425,8 +1450,9 @@ class WorkspaceStore {
 
       const entries: Record<string, Record<string, unknown>> = {};
       const assets: Record<string, string> = {};
+      const files: Record<string, string> = {};
 
-      for (const filename of normalizedFiles) {
+      for (const filename of filenames) {
         const entry = zip.file(filename);
         if (!entry) continue;
 
@@ -1437,10 +1463,12 @@ class WorkspaceStore {
           entries[entryId] = parsed;
         } else if (filename.startsWith(`${ASSETS_DIR}/`)) {
           assets[filename] = await entry.async("base64");
+        } else if (!isBinaryFile(filename)) {
+          files[filename] = await entry.async("string");
         }
       }
 
-      await this.importNotebook({ entries, assets });
+      await this.importNotebook({ entries, assets, files });
     } catch (e) {
       console.error("Archive import failed", e);
       events.emit(EventNames.SHOW_NOTIFICATION, { message: "Import failed", type: "error" });
