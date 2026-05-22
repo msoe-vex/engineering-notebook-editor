@@ -127,6 +127,10 @@ export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
           <NavButton active={activeTab === 'editor'} onClick={() => setActiveTab('editor')} icon={<FileText size={16} />} label="Editor Guide" />
           <NavButton active={activeTab === 'compiler'} onClick={() => setActiveTab('compiler')} icon={<Play size={16} />} label="PDF Compilation" />
           <NavButton active={activeTab === 'data'} onClick={() => setActiveTab('data')} icon={<Layers size={16} />} label="Import / Export" />
+
+          <div className="px-4 py-2 mt-4">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant/40">Best Practices</h3>
+          </div>
           <NavButton active={activeTab === 'phases'} onClick={() => setActiveTab('phases')} icon={<Target size={16} />} label="Design Process" />
           <NavButton active={activeTab === 'tips'} onClick={() => setActiveTab('tips')} icon={<Lightbulb size={16} />} label="Notebook Tips" />
           <NavButton active={activeTab === 'resources'} onClick={() => setActiveTab('resources')} icon={<ExternalLink size={16} />} label="Resources" />
@@ -162,8 +166,7 @@ export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
                         {children}
                       </pre>
                     ),
-                    code: (props: any) => {
-                      const { children, className } = props;
+                    code: ({ children, className }: { children?: React.ReactNode; className?: string }) => {
                       const isBlockCode = typeof className === "string" && className.includes("language-");
 
                       if (!isBlockCode) {
