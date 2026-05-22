@@ -7,6 +7,7 @@ import {
   Edit3, FileText, Download, ArrowRight,
   Shield, Bold, Italic, List, Type, Sun, Moon,
   Sigma, Code, Image as ImageIcon, Table as TableIcon, Terminal, Link as LinkIcon,
+  Users, Sparkles, Play,
   Lock, WifiOff, ChevronDown
 } from "lucide-react";
 import Logo from "./ui/Logo";
@@ -22,9 +23,10 @@ const BLINK_CSS = `
 interface AboutPageProps {
   onClose: () => void;
   onTryIt: () => void;
+  onOpenHelp?: () => void;
 }
 
-export default function AboutPage({ onClose, onTryIt }: AboutPageProps) {
+export default function AboutPage({ onClose, onTryIt, onOpenHelp }: AboutPageProps) {
   const { setTheme, resolvedTheme } = useTheme();
 
   const scrollToId = (id: string) => {
@@ -57,6 +59,14 @@ export default function AboutPage({ onClose, onTryIt }: AboutPageProps) {
             >
               {resolvedTheme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
             </button>
+            {onOpenHelp && (
+              <button
+                onClick={onOpenHelp}
+                className="px-4 py-2 rounded-xl border border-nb-outline-variant/30 text-nb-on-surface-variant text-xs font-black uppercase tracking-widest hover:bg-nb-surface-low transition-all active:scale-95 cursor-pointer"
+              >
+                Help & Docs
+              </button>
+            )}
             <button
               onClick={onTryIt}
               className="px-4 py-2 rounded-xl bg-nb-primary text-white text-xs font-black uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-lg shadow-nb-primary/20 active:scale-95 cursor-pointer"
@@ -90,11 +100,54 @@ export default function AboutPage({ onClose, onTryIt }: AboutPageProps) {
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <button
-              onClick={() => scrollToId('features')}
+              onClick={() => scrollToId('motivation')}
               className="w-full sm:w-auto px-10 py-5 rounded-2xl bg-nb-primary text-white text-sm font-black uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-2xl shadow-nb-primary/30 active:scale-95 cursor-pointer flex items-center justify-center gap-3"
             >
-              Explore Features
+              Why ENGen?
               <ChevronDown size={18} />
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Motivation Section */}
+      <section id="motivation" className="py-24 bg-nb-surface border-y border-nb-outline-variant/30 overflow-hidden">
+        <div className="max-w-5xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-nb-primary mb-4">Why we built ENGen</p>
+            <h2 className="text-4xl font-black text-nb-on-surface mb-4 tracking-tight">Paper notebooks slow teams down.</h2>
+            <p className="text-nb-on-surface-variant font-medium max-w-3xl mx-auto leading-relaxed">
+              Physical engineering notebooks are hard to collaborate on, hard to keep consistent, and awkward to combine with digital resources like images, tables, and code. ENGen was built to make the process accessible to the whole team while still producing a professional, reusable notebook format.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <FeatureCard
+              icon={<Users size={24} className="text-nb-primary" />}
+              title="Built for Collaboration"
+              description="Everyone can contribute to the same shared notebook without learning LaTeX or installing heavy software."
+            />
+            <FeatureCard
+              icon={<Sparkles size={24} className="text-nb-tertiary" />}
+              title="Consistency by Default"
+              description="Entry templates, autofill, and structured fields keep author, date, and design phase information aligned."
+            />
+            <FeatureCard
+              icon={<Shield size={24} className="text-nb-primary" />}
+              title="Future-Proof & Reusable"
+              description="Notebook entries compile to clean, portable LaTeX files. Your documentation remains accessible and reusable for future seasons."
+            />
+          </div>
+
+          <div className="mt-20 flex justify-center">
+            <button
+              onClick={() => scrollToId('features')}
+              className="flex flex-col items-center gap-3 text-nb-on-surface-variant hover:text-nb-primary transition-all group cursor-pointer"
+            >
+              <span className="text-[10px] font-black uppercase tracking-[0.2em]">Explore Features</span>
+              <div className="w-12 h-12 rounded-full border border-nb-outline-variant/30 flex items-center justify-center group-hover:border-nb-primary/30 group-hover:bg-nb-primary/5">
+                <ChevronDown size={20} className="group-hover:translate-y-1 transition-transform" />
+              </div>
             </button>
           </div>
         </div>
@@ -104,8 +157,8 @@ export default function AboutPage({ onClose, onTryIt }: AboutPageProps) {
       <section id="features" className="py-24 bg-nb-surface-low overflow-hidden border-y border-nb-outline-variant/30">
         <div className="max-w-5xl mx-auto px-6">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-black text-nb-on-surface mb-4 tracking-tight">Powerful Editor Features</h2>
-            <p className="text-nb-on-surface-variant font-medium">Everything you need for technical documentation.</p>
+            <h2 className="text-4xl font-black text-nb-on-surface mb-4 tracking-tight">Features that matter in practice</h2>
+            <p className="text-nb-on-surface-variant font-medium">ENGen combines usability, automation, and long-term portability.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <FeatureCard
@@ -137,6 +190,21 @@ export default function AboutPage({ onClose, onTryIt }: AboutPageProps) {
               icon={<LinkIcon size={24} className="text-nb-tertiary" />}
               title="Cross-References"
               description="Automatically link to figures, tables, and other notebook entries. Build a connected web of documentation."
+            />
+            <FeatureCard
+              icon={<GithubIcon size={24} className="text-nb-primary" />}
+              title="GitHub Sync"
+              description="Keep the whole team on the same notebook with versioned sharing and a single source of truth."
+            />
+            <FeatureCard
+              icon={<Play size={24} className="text-nb-tertiary" />}
+              title="Browser-Based PDF Compilation"
+              description="Compile directly in the browser with no complex local setup, installs, or toolchain maintenance."
+            />
+            <FeatureCard
+              icon={<Download size={24} className="text-nb-primary" />}
+              title="Import / Export"
+              description="Move notebooks in and out easily for backup, sharing, and long-term future-proof archiving."
             />
           </div>
 
@@ -329,6 +397,33 @@ export default function AboutPage({ onClose, onTryIt }: AboutPageProps) {
             <Image src="/rr.svg" alt="Raider Robotics" width={24} height={24} className="w-6 h-6" />
             <span className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface">Made by MSOE Raider Robotics</span>
           </div>
+          <div className="flex flex-wrap items-center gap-6">
+            <a
+              href="https://github.com/msoe-vex/engineering-notebook-editor"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary transition-colors cursor-pointer"
+            >
+              <GithubIcon size={14} />
+              GitHub
+            </a>
+            <a
+              href="https://www.msoevex.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary transition-colors cursor-pointer"
+            >
+              MSOE VEX Website
+            </a>
+            {onOpenHelp && (
+              <button
+                onClick={onOpenHelp}
+                className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary transition-colors cursor-pointer font-sans border-none bg-transparent p-0"
+              >
+                Help & Docs
+              </button>
+            )}
+          </div>
         </div>
       </footer>
     </div>
@@ -503,7 +598,8 @@ function PdfMockup() {
 
 function FeatureCard({ icon, title, description }: { icon: React.ReactNode, title: string, description: string }) {
   return (
-    <div className="p-8 rounded-3xl bg-nb-surface border border-nb-outline-variant/30 hover:border-nb-primary/30 transition-all shadow-nb-sm group">
+    <div className="p-8 rounded-3xl bg-nb-surface border border-nb-outline-variant/30 hover:border-nb-primary/30 transition-all shadow-nb-sm group relative overflow-hidden">
+      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-nb-primary/0 via-nb-primary/40 to-nb-tertiary/0 opacity-0 group-hover:opacity-100 transition-opacity" />
       <div className="mb-6 group-hover:scale-110 transition-transform">{icon}</div>
       <h3 className="text-lg font-black text-nb-on-surface mb-3 tracking-tight">{title}</h3>
       <p className="text-sm text-nb-on-surface-variant leading-relaxed font-medium">{description}</p>

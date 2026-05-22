@@ -932,6 +932,9 @@ export default function App() {
           onTryIt={() => {
             navigateToHome();
           }}
+          onOpenHelp={() => {
+            navigateTo({}, '/help');
+          }}
         />
       )}
     </div>
