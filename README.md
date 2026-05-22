@@ -3,7 +3,9 @@
 This repository contains two related parts of the VEX engineering notebook system:
 
 - `website/`: the Next.js editor and sync UI
+  - For more details, see the [README in the `website/` folder](website/README.md)
 - `notebook/`: the LaTeX source and generated notebook output
+  - For more details, see the [README in the `notebook/` folder](notebook/README.md)
 
 ## Quick Start
 
