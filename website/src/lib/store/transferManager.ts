@@ -317,11 +317,15 @@ export class TransferManager {
 
       const importedPhases = data.phases as ProjectPhase[] | undefined;
       const importedTeam = data.team as TeamMetadata | undefined;
+      const importedLastCompiled = pdf && typeof data.lastCompiled === "string"
+        ? data.lastCompiled as string
+        : undefined;
 
       this.store.metadata = validateNotebookIntegrity({
         ...EMPTY_METADATA,
         ...this.store.metadata,
         entries: mergedEntries,
+        ...(importedLastCompiled ? { lastCompiled: importedLastCompiled } : {}),
         ...(importedPhases && options?.overwritePhases ? { phases: importedPhases } : {}),
         ...(importedTeam && options?.overwriteTeam ? { team: importedTeam } : {}),
       });
@@ -365,6 +369,7 @@ export class TransferManager {
       });
 
       await this.store.reloadWorkspace();
+      this.store.workspaceVersion++;
 
       const newPaths = new Set<string>(Object.values(newEntriesMap).map(m => m.filename));
       this.store.selectedPaths = newPaths;

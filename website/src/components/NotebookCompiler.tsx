@@ -18,7 +18,7 @@ const LatexPreview = dynamic(() => import("./editor/LatexPreview"), {
 });
 
 export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
-  const { metadata, saveCompiledPdf, getCompiledPdfUrl, isInitialized, currentProject } = useWorkspace();
+  const { metadata, saveCompiledPdf, getCompiledPdfUrl, isInitialized, currentProject, workspaceVersion } = useWorkspace();
   const [isCompiling, setIsCompiling] = useState(false);
   const [compileStatus, setCompileStatus] = useState<string>("");
   const [compileProgress, setCompileProgress] = useState(0);
@@ -81,7 +81,7 @@ export default function NotebookCompiler({ onClose }: { onClose: () => void }) {
         URL.revokeObjectURL(currentUrl);
       }
     };
-  }, [getCompiledPdfUrl, isInitialized, metadata.lastCompiled]);
+  }, [getCompiledPdfUrl, isInitialized, metadata.lastCompiled, workspaceVersion]);
 
   const handleCompile = async (mode: CompileMode = "quality") => {
     if (isCompiling) return;
