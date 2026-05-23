@@ -1,6 +1,7 @@
 import { INDEX_PATH, ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from "../constants";
 import { events, EventNames } from "../events";
 import { getAllPending, getPending, getResource, putResource } from "../db";
+import { isBinaryFile, isImageAsset, zipCompressionOptions, addTextFileToZip, addAssetFileToZip } from "../transferUtils";
 import { fetchFileContent, fetchRawFileContent } from "../github";
 import { getLocalFileContent } from "../fs";
 import { generateUUID, getMimeTypeFromExtension, normalizeBase64 } from "../utils";
@@ -17,11 +18,10 @@ export class TransferManager {
 
   async getFileContent(path: string): Promise<string | null> {
     const dbName = this.store.getDBName();
-    const pending = await getAllPending(dbName);
-    const deleted = pending.find(p => p.path === path && p.operation === "delete");
-    if (deleted) return null;
-    const staged = pending.find(p => p.path === path && p.operation === "upsert");
-    if (staged?.content) return staged.content;
+    // Respect staged deletes via the workspace store API
+    if (await this.store.shouldStageDelete(path)) return null;
+    const staged = await getPending(dbName, path);
+    if (staged?.operation === 'upsert' && staged.content) return staged.content;
 
     try {
       if (this.store.mode === "local" && this.store.dirHandle) {
@@ -40,11 +40,9 @@ export class TransferManager {
 
   async getAssetBase64(path: string): Promise<string | null> {
     const dbName = this.store.getDBName();
+    // Respect staged deletes via the workspace store API
+    if (await this.store.shouldStageDelete(path)) return null;
     const pending = await getPending(dbName, path);
-
-    if (pending?.operation === "delete") {
-      return null;
-    }
 
     if (this.store.mode === "github" || this.store.mode === "temporary") {
       if (pending?.operation === "upsert" && pending.content) {
@@ -90,31 +88,9 @@ export class TransferManager {
         }
       };
 
-      const addTextFile = async (path: string) => {
-        const content = await this.getFileContent(path);
-        if (content) {
-          zip.file(path, content);
-          return;
-        }
+      const addTextFile = async (path: string) => addTextFileToZip(zip, (p: string) => this.getFileContent(p), path);
 
-        const fallbackAllowed = path === 'main.tex' || path === 'engineering_notebook.sty' || path.startsWith(`${LATEX_DIR}/`);
-        if (!fallbackAllowed) return;
-
-        try {
-          const res = await fetch(`/latex/${encodeURIComponent(path)}`);
-          if (res.ok) {
-            const text = await res.text();
-            zip.file(path, text);
-          }
-        } catch {
-          // Ignore
-        }
-      };
-
-      const addAssetFile = async (path: string) => {
-        const base64 = await this.getAssetBase64(path);
-        if (base64) zip.file(path, base64, { base64: true });
-      };
+      const addAssetFile = async (path: string) => addAssetFileToZip(zip, (p: string) => this.getAssetBase64(p), path);
 
       await addTextFile("main.tex");
       await addTextFile("engineering_notebook.sty");
@@ -190,14 +166,14 @@ export class TransferManager {
         }
       }
 
-      const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
+      const blob = await zip.generateAsync(zipCompressionOptions as any);
       const { saveAs } = await import("file-saver");
       const name = entryIds
         ? (entryIds.length === 1
           ? (this.store.metadata.entries[entryIds[0]]?.title || "entry").replace(/[^a-z0-9]/gi, '_').toLowerCase()
           : "entries")
         : "notebook";
-      saveAs(blob, `${name}.zip`);
+      saveAs(blob as Blob, `${name}.zip`);
 
     } catch (e) {
       console.error("Export failed", e);
@@ -367,8 +343,7 @@ export class TransferManager {
       const zip = await JSZip.loadAsync(await file.arrayBuffer());
       const filenames = Object.keys(zip.files).filter(name => !zip.files[name].dir);
       const hasNotebookIndex = filenames.includes(INDEX_PATH);
-      const isBinaryFile = (path: string) => /\.(png|jpe?g|gif|webp|bmp|ico|tiff?|avif|heic|pdf|otf|ttf|woff2?|eot|zip|7z|rar|tar|gz|bz2|xz|mp3|wav|ogg|flac|aac|m4a|mp4|mov|avi|mkv|webm|wasm|exe|dll|so|dylib|bin)$/i.test(path);
-      const isImageAsset = (path: string) => /\.(png|jpe?g|gif|webp|bmp|ico|tiff?|avif|heic)$/i.test(path);
+      // Use shared helpers `isBinaryFile` and `isImageAsset` imported from transferUtils
       let parsedNotebookIndex: NotebookMetadata | null = null;
       let importedTeam: TeamMetadata | undefined;
       let importedPhases: ProjectPhase[] | undefined;

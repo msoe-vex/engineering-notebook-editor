@@ -1,4 +1,4 @@
-import { ASSETS_DIR, ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "./constants";
+import { ASSETS_DIR, ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR, TYPE_LABELS } from "./constants";
 import { generateUUID } from "./utils";
 
 export const getLocalDateString = () => {
@@ -12,19 +12,23 @@ export const getLocalDateString = () => {
 /**
  * metadata.ts — resource ↔ entry relationship tracking.
  *
- * metadata.json shape:
+ * Notebook index (data/notebook.json) shape (high level):
  * {
- *   "version": 1,
- *   "resourceRefs": {
- *     "assets/2026-04-28T09-00-00.png": [
- *       "entries/2026-04-28T09-00-00.json"
- *     ]
- *   }
+ *   "version": 3,
+ *   "entries": { "<entryId>": { <EntryMetadata> } },
+ *   "team": { <TeamMetadata> },
+ *   "phases": [ <ProjectPhase[]> ],
+ *   "assetRefs": { "<assetPath>": ["entries/<id>.json" ] },
+ *   "lastCompiled": "2026-05-22T..."
  * }
  *
- * All operations work on TipTap JSON (the value of the "content" key stored
- * inside the % METADATA: {...} comment at the top of every .tex file).
- * This is more robust than scanning generated LaTeX.
+ * This module operates primarily on TipTap JSON (the `content` stored
+ * inside the `% METADATA: {...}` comment at the top of each entry .tex
+ * file) and on the NotebookMetadata index. Use `dehydrateAssets` /
+ * `hydrateAssets` to map between data-URLs and hashed asset paths.
+ *
+ * Shared UI labels for resource node types are defined in
+ * `src/lib/constants.ts` as `TYPE_LABELS`.
  */
 
 export interface EntryMetadata {
@@ -426,6 +430,7 @@ export function updateEntryInIndex(
  * Checks for missing required fields, empty resource metadata, and dead internal links.
  */
 export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookMetadata {
+    // noop placeholder to ensure patch context (will add import next)
   const newEntries = { ...metadata.entries };
   const assetRefs: Record<string, string[]> = {};
 
@@ -462,13 +467,7 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
   // 3. Validate each entry
   for (const [id, entry] of Object.entries(newEntries)) {
     const errors: string[] = [];
-    const TYPE_LABELS: Record<string, string> = {
-      image: "image",
-      table: "table",
-      codeBlock: "codeBlock",
-      rawLatex: "latexBlock",
-      heading: "heading"
-    };
+    // use shared TYPE_LABELS from constants
 
     // Check basic metadata
     if (!entry.title?.trim()) errors.push("Entry title is required.");

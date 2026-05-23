@@ -13,9 +13,10 @@ import {
 } from "lucide-react";
 import { extractResources, NotebookMetadata, EntryMetadata } from "@/lib/metadata";
 import { store } from "@/lib/store";
+import type { TiptapEditor } from "@/lib/types";
 
 interface LinkReferencePopupProps {
-  editor: import("@tiptap/react").Editor;
+  editor: TiptapEditor;
   onClose: () => void;
   metadata?: NotebookMetadata;
   filename?: string;

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import {
   useEditor, EditorContent, Extension, InputRule
 } from "@tiptap/react";
+import type { TiptapEditor } from "@/lib/types";
 import { NodeSelection, Transaction, EditorState, Plugin } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { store } from "@/lib/store";
@@ -78,7 +79,7 @@ interface RichTextAreaProps {
   onImageUpload?: (path: string, base64: string) => void;
   author?: string;
   filename: string;
-  onEditorInit?: (editor: import("@tiptap/react").Editor) => void;
+  onEditorInit?: (editor: TiptapEditor) => void;
   onToggleLink?: (fn: () => void) => void;
   entryId?: string;
 }
