@@ -1,7 +1,7 @@
 import { INDEX_PATH, ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from "../constants";
 import { events, EventNames } from "../events";
 import { getPending, getResource, putResource } from "../db";
-import { isBinaryFile, isImageAsset, zipCompressionOptions, addTextFileToZip, addAssetFileToZip } from "../transferUtils";
+import { isBinaryFile, zipCompressionOptions, addTextFileToZip, addAssetFileToZip } from "../transferUtils";
 import { fetchFileContent, fetchRawFileContent } from "../github";
 import { getLocalFileContent } from "../fs";
 import { generateUUID, getMimeTypeFromExtension, normalizeBase64 } from "../utils";

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import { EntryImportMode, ImportOptions } from "@/lib/store/types";
 
@@ -34,13 +34,6 @@ export default function ImportDecisionDialog({
   const [entryImportMode, setEntryImportMode] = useState<EntryImportMode>(initialOptions.entryImportMode || "replace");
   const [importTeam, setImportTeam] = useState(initialOptions.overwriteTeam !== false);
   const [importPhases, setImportPhases] = useState(initialOptions.overwritePhases !== false);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    setEntryImportMode(initialOptions.entryImportMode || "replace");
-    setImportTeam(allowTeamImport && initialOptions.overwriteTeam !== false);
-    setImportPhases(allowPhaseImport && initialOptions.overwritePhases !== false);
-  }, [isOpen, initialOptions.entryImportMode, initialOptions.overwriteTeam, initialOptions.overwritePhases, allowTeamImport, allowPhaseImport]);
 
   const derivedCounts = useMemo(() => {
     if (entryImportMode === "none") {

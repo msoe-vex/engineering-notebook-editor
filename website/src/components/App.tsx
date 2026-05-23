@@ -31,7 +31,7 @@ import { HardDrive, X, Loader2, ArrowLeftRight, Sun, Moon } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { ENTRIES_DIR, INDEX_PATH } from "@/lib/constants";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { EntryImportMode, ImportOptions } from "@/lib/store/types";
+import { ImportOptions } from "@/lib/store/types";
 import { events, EventNames } from "@/lib/events";
 import { Toaster } from "react-hot-toast";
 import { showNotification } from "./Notification";
@@ -1073,49 +1073,51 @@ export default function App() {
         projects={projects}
       />
 
-      <ImportDecisionDialog
-        isOpen={importDecisionDialog.isOpen}
-        title={importDecisionDialog.title}
-        currentEntries={importDecisionDialog.currentEntries}
-        entriesToImport={importDecisionDialog.entriesToImport}
-        entriesReplaced={importDecisionDialog.entriesReplaced}
-        newEntries={importDecisionDialog.newEntries}
-        initialOptions={importDecisionDialog.initialOptions}
-        allowTeamImport={importDecisionDialog.allowTeamImport}
-        allowPhaseImport={importDecisionDialog.allowPhaseImport}
-        onConfirm={(options) => {
-          const resolve = importDecisionDialog.resolve;
-          setImportDecisionDialog({
-            isOpen: false,
-            title: "",
-            currentEntries: 0,
-            entriesToImport: 0,
-            entriesReplaced: 0,
-            newEntries: 0,
-            initialOptions: { entryImportMode: "replace", overwriteTeam: true, overwritePhases: true },
-            allowTeamImport: false,
-            allowPhaseImport: false,
-            resolve: null,
-          });
-          resolve?.(options);
-        }}
-        onCancel={() => {
-          const resolve = importDecisionDialog.resolve;
-          setImportDecisionDialog({
-            isOpen: false,
-            title: "",
-            currentEntries: 0,
-            entriesToImport: 0,
-            entriesReplaced: 0,
-            newEntries: 0,
-            initialOptions: { entryImportMode: "replace", overwriteTeam: true, overwritePhases: true },
-            allowTeamImport: false,
-            allowPhaseImport: false,
-            resolve: null,
-          });
-          resolve?.(null);
-        }}
-      />
+      {importDecisionDialog.isOpen && (
+        <ImportDecisionDialog
+          isOpen={importDecisionDialog.isOpen}
+          title={importDecisionDialog.title}
+          currentEntries={importDecisionDialog.currentEntries}
+          entriesToImport={importDecisionDialog.entriesToImport}
+          entriesReplaced={importDecisionDialog.entriesReplaced}
+          newEntries={importDecisionDialog.newEntries}
+          initialOptions={importDecisionDialog.initialOptions}
+          allowTeamImport={importDecisionDialog.allowTeamImport}
+          allowPhaseImport={importDecisionDialog.allowPhaseImport}
+          onConfirm={(options) => {
+            const resolve = importDecisionDialog.resolve;
+            setImportDecisionDialog({
+              isOpen: false,
+              title: "",
+              currentEntries: 0,
+              entriesToImport: 0,
+              entriesReplaced: 0,
+              newEntries: 0,
+              initialOptions: { entryImportMode: "replace", overwriteTeam: true, overwritePhases: true },
+              allowTeamImport: false,
+              allowPhaseImport: false,
+              resolve: null,
+            });
+            resolve?.(options);
+          }}
+          onCancel={() => {
+            const resolve = importDecisionDialog.resolve;
+            setImportDecisionDialog({
+              isOpen: false,
+              title: "",
+              currentEntries: 0,
+              entriesToImport: 0,
+              entriesReplaced: 0,
+              newEntries: 0,
+              initialOptions: { entryImportMode: "replace", overwriteTeam: true, overwritePhases: true },
+              allowTeamImport: false,
+              allowPhaseImport: false,
+              resolve: null,
+            });
+            resolve?.(null);
+          }}
+        />
+      )}
 
       <ConfirmationDialog
         isOpen={confirmDialog.isOpen}
