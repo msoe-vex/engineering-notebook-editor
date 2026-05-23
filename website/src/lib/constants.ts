@@ -16,3 +16,12 @@ export const PHASES_PATH = `${DATA_DIR}/phases.tex`;
 // GitHub Integration
 export const GITHUB_APP_INSTALL_URL = "https://github.com/apps/msoe-engineering-notebook-editor/installations/select_target";
 export const GITHUB_ISSUES_URL = "https://github.com/msoe-vex/engineering-notebook-editor/issues/new";
+
+// Human-readable labels for TipTap resource node types used in validation messages
+export const TYPE_LABELS: Record<string, string> = {
+	image: "image",
+	table: "table",
+	codeBlock: "codeBlock",
+	rawLatex: "latexBlock",
+	heading: "heading",
+};

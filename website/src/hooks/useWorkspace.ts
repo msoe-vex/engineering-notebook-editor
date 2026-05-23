@@ -3,6 +3,7 @@ import { store, WorkspaceMode } from "@/lib/store";
 import { events, EventNames } from "@/lib/events";
 import { ExplorerFile, GitHubConfig } from "@/lib/types";
 import { TeamMetadata, ProjectPhase } from "@/lib/metadata";
+import { ImportOptions } from "@/lib/store/types";
 
 export type { WorkspaceMode };
 
@@ -97,8 +98,8 @@ export function useWorkspace() {
   const getFileContent = useCallback((path: string) => store.getFileContent(path), []);
   const exportNotebook = useCallback(() => store.exportNotebook(), []);
   const exportEntries = useCallback((entryIds?: string[]) => store.exportEntries(entryIds), []);
-  const importNotebook = useCallback((data: Record<string, unknown>) => store.importNotebook(data), []);
-  const importNotebookArchive = useCallback((file: File) => store.importNotebookArchive(file), []);
+  const importNotebook = useCallback((data: Record<string, unknown>, options?: ImportOptions) => store.importNotebook(data, options), []);
+  const importNotebookArchive = useCallback((file: File, options?: ImportOptions) => store.importNotebookArchive(file, options), []);
   const setSelectedPaths = useCallback((pathsOrUpdater: Set<string> | ((prev: Set<string>) => Set<string>)) => store.setSelectedPaths(pathsOrUpdater), []);
   const getCompiledPdfUrl = useCallback(() => store.getCompiledPdfUrl(), []);
   const saveCompiledPdf = useCallback((pdf: Uint8Array) => store.saveCompiledPdf(pdf), []);

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import RichTextArea from "./RichTextArea";
-import { Editor as TiptapEditor } from "@tiptap/react";
+import type { TiptapEditor } from "@/lib/types";
 import { ToolbarButton } from "./ui/ToolbarButton";
 import { TableGridSelector } from "./ui/TableGridSelector";
 import { createPortal } from "react-dom";
@@ -39,9 +39,56 @@ import { getPhases, getPhaseConfig } from "@/lib/phases";
 import AutocompleteInput from "./ui/AutocompleteInput";
 import DatePicker from "./ui/DatePicker";
 import { extractResources, extractReferences, TipTapNode, ensureResourceIds, buildResourceTypeIndex } from "@/lib/metadata";
-import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
+import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR, TYPE_LABELS } from "@/lib/constants";
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng, compressImageToJpeg } from "@/lib/utils";
 import { NodeSelection } from "@tiptap/pm/state";
+
+// Returns a safe insertion position for block nodes, or null to insert at selection
+export function getSafeInsertPos(ed: TiptapEditor | null): number | null {
+  if (!ed) return null;
+  const { selection } = ed.state;
+  if (selection instanceof NodeSelection) return selection.to;
+  try {
+    if (ed.isActive('tableCell') || ed.isActive('tableHeader') || ed.isActive('codeBlock')) {
+      return selection.$from.after(1);
+    }
+  } catch {
+    try { return selection.$from.after(); } catch { return null; }
+  }
+  return null;
+}
+
+// Insert a block node at a safe position (or at selection if no safe position).
+export function insertBlock(editor: TiptapEditor | null, content: TipTapNode, options?: { fallback?: () => void, selectNodeId?: string }) {
+  if (!editor) return;
+  const { fallback, selectNodeId } = options || {};
+  const safePos = getSafeInsertPos(editor);
+
+  const chain = safePos !== null
+    ? editor.chain().focus().insertContentAt(safePos, content)
+    : editor.chain().focus().insertContent(content);
+
+  if (selectNodeId) {
+    chain.command(({ state, commands }) => {
+      let newPos = -1;
+      state.doc.descendants((node, pos) => {
+        if (node.attrs && node.attrs.id === selectNodeId) {
+          newPos = pos;
+          return false;
+        }
+      });
+      if (newPos >= 0) commands.setNodeSelection(newPos);
+      return true;
+    });
+  }
+
+  if (safePos !== null) {
+    chain.run();
+  } else {
+    if (fallback) fallback();
+    else chain.run();
+  }
+}
 
 // ─── Sub-components for Performance ──────────────────────────────────────────
 
@@ -528,16 +575,7 @@ const EditorToolbar = React.memo(function EditorToolbar({
                   key={level}
                   className={`w-full flex items-center px-4 py-3 rounded-lg transition-all text-left cursor-pointer active:scale-[0.98] ${editor.isActive("heading", { level }) ? "bg-nb-primary text-white" : "text-nb-on-surface-variant hover:bg-nb-surface-mid hover:translate-x-1"}`}
                   onClick={() => {
-                    const { selection } = editor.state;
-                    const safePos = (selection instanceof NodeSelection) ? selection.to :
-                      (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                        (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-                    if (safePos !== null) {
-                      editor.chain().focus().insertContentAt(safePos, { type: 'heading', attrs: { level } }).run();
-                    } else {
-                      editor.chain().focus().toggleHeading({ level }).run();
-                    }
+                    insertBlock(editor, { type: 'heading', attrs: { level } }, { fallback: () => editor.chain().focus().toggleHeading({ level }).run() });
                     setActiveMenu(null);
                   }}
                 >
@@ -558,20 +596,7 @@ const EditorToolbar = React.memo(function EditorToolbar({
 
         <ToolbarButton
           onClick={() => {
-            const { selection } = editor.state;
-            const safePos = selection.empty ? (
-              (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null
-            ) : null;
-
-            if (safePos !== null) {
-              editor.chain().focus().insertContentAt(safePos, {
-                type: 'notebookListItem',
-                attrs: { listType: 'bullet', indent: 1 }
-              }).run();
-            } else {
-              editor.chain().focus().toggleNotebookList("bullet").run();
-            }
+            insertBlock(editor, { type: 'notebookListItem', attrs: { listType: 'bullet', indent: 1 } }, { fallback: () => editor.chain().focus().toggleNotebookList("bullet").run() });
           }}
           active={isListActive(editor, "bullet")}
           title="Bullet List"
@@ -580,20 +605,7 @@ const EditorToolbar = React.memo(function EditorToolbar({
         </ToolbarButton>
         <ToolbarButton
           onClick={() => {
-            const { selection } = editor.state;
-            const safePos = selection.empty ? (
-              (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null
-            ) : null;
-
-            if (safePos !== null) {
-              editor.chain().focus().insertContentAt(safePos, {
-                type: 'notebookListItem',
-                attrs: { listType: 'ordered', indent: 1 }
-              }).run();
-            } else {
-              editor.chain().focus().toggleNotebookList("ordered").run();
-            }
+            insertBlock(editor, { type: 'notebookListItem', attrs: { listType: 'ordered', indent: 1 } }, { fallback: () => editor.chain().focus().toggleNotebookList("ordered").run() });
           }}
           active={isListActive(editor, "ordered")}
           title="Ordered List"
@@ -605,16 +617,7 @@ const EditorToolbar = React.memo(function EditorToolbar({
 
         <ToolbarButton
           onClick={() => {
-            const { selection } = editor.state;
-            const safePos = (selection instanceof NodeSelection) ? selection.to :
-              (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-            if (safePos !== null) {
-              editor.chain().focus().insertContentAt(safePos, { type: 'codeBlock', attrs: { id: generateUUID() } }).run();
-            } else {
-              editor.chain().focus().insertContent({ type: 'codeBlock', attrs: { id: generateUUID() } }).run();
-            }
+            insertBlock(editor, { type: 'codeBlock', attrs: { id: generateUUID() } });
           }}
           active={editor.isActive("codeBlock")}
           title="Code Block"
@@ -624,16 +627,7 @@ const EditorToolbar = React.memo(function EditorToolbar({
 
         <ToolbarButton
           onClick={() => {
-            const { selection } = editor.state;
-            const safePos = (selection instanceof NodeSelection) ? selection.to :
-              (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-            if (safePos !== null) {
-              editor.chain().focus().insertContentAt(safePos, { type: 'rawLatex' }).run();
-            } else {
-              editor.chain().focus().insertContent({ type: 'rawLatex' }).run();
-            }
+            insertBlock(editor, { type: 'rawLatex' });
           }}
           active={editor.isActive("rawLatex")}
           title="Raw LaTeX"
@@ -643,47 +637,8 @@ const EditorToolbar = React.memo(function EditorToolbar({
 
         <ToolbarButton
           onClick={() => {
-            const { selection } = editor.state;
-            const safePos = (selection instanceof NodeSelection) ? selection.to :
-              (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
             const id = generateUUID();
-            if (safePos !== null) {
-              editor.chain().focus()
-                .insertContentAt(safePos, { type: 'mathBlock', attrs: { id } })
-                .command(({ state, commands }) => {
-                  let newPos = -1;
-                  state.doc.descendants((node, pos) => {
-                    if (node.attrs.id === id) {
-                      newPos = pos;
-                      return false;
-                    }
-                  });
-                  if (newPos >= 0) {
-                    commands.setNodeSelection(newPos);
-                  }
-                  return true;
-                })
-                .run();
-            } else {
-              editor.chain().focus()
-                .insertContent({ type: 'mathBlock', attrs: { id } })
-                .command(({ state, commands }) => {
-                  let newPos = -1;
-                  state.doc.descendants((node, pos) => {
-                    if (node.attrs.id === id) {
-                      newPos = pos;
-                      return false;
-                    }
-                  });
-                  if (newPos >= 0) {
-                    commands.setNodeSelection(newPos);
-                  }
-                  return true;
-                })
-                .run();
-            }
+            insertBlock(editor, { type: 'mathBlock', attrs: { id } }, { selectNodeId: id });
           }}
           active={editor.isActive("mathBlock")}
           title="Equation Block"
@@ -735,16 +690,7 @@ const EditorToolbar = React.memo(function EditorToolbar({
                     }))
                   };
 
-                  const { selection } = editor.state;
-                  const safePos = (selection instanceof NodeSelection) ? selection.to :
-                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                      (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-                  if (safePos !== null) {
-                    editor.chain().focus().insertContentAt(safePos, tableContent).run();
-                  } else {
-                    editor.chain().focus().insertContent(tableContent).run();
-                  }
+                  insertBlock(editor, tableContent);
                   setShowTableGrid(false);
                 }}
               />
@@ -796,7 +742,7 @@ const EditorContent = React.memo(function EditorContent({
     id: entryId
   } = openFile;
 
-  const [editor, setEditor] = useState<import("@tiptap/react").Editor | null>(null);
+  const [editor, setEditor] = useState<TiptapEditor | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   const validate = useCallback(() => {
@@ -806,13 +752,7 @@ const EditorContent = React.memo(function EditorContent({
     if (!openFile.date?.trim()) errors.push("Date is required.");
     if (openFile.phase === null || openFile.phase === undefined) errors.push("Entry phase is required.");
 
-    const TYPE_LABELS: Record<string, string> = {
-      image: "image",
-      table: "table",
-      codeBlock: "codeBlock",
-      rawLatex: "latexBlock",
-      heading: "heading"
-    };
+    // use shared TYPE_LABELS from constants
 
     if (editor) {
       const doc = editor.getJSON();
@@ -950,6 +890,8 @@ const EditorContent = React.memo(function EditorContent({
     updateDraft(newVal, {});
   }, [updateDraft]);
 
+  // use module-level getSafeInsertPos
+
   const generateLatex = useCallback((cnt: TipTapNode | string, t: string, a: string, p: number | null, d: string) => {
     const id = filename.split('/').pop()?.replace('.json', '') || "";
 
@@ -1053,26 +995,7 @@ const EditorContent = React.memo(function EditorContent({
           const originalPath = `${ASSETS_ORIGINAL_DIR}/${originalHash}.${originalExt}`;
           const newPath = `${ASSETS_COMPRESSED_DIR}/${compressedHash}.jpg`;
 
-          const safePos = (() => {
-            const { selection } = editor.state;
-            if (selection instanceof NodeSelection) return selection.to;
-            if (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) {
-              try { return selection.$from.after(1); } catch { return selection.$from.after(); }
-            }
-            return null;
-          })();
-
-          if (safePos !== null) {
-            editor.chain().focus().insertContentAt(safePos, {
-              type: "image",
-              attrs: { id: generateUUID(), src: compressed.dataUrl, originalSrc: dataUrl, filePath: newPath, originalFilePath: originalPath, title: "" }
-            }).run();
-          } else {
-            editor.chain().focus().insertContent({
-              type: "image",
-              attrs: { id: generateUUID(), src: compressed.dataUrl, originalSrc: dataUrl, filePath: newPath, originalFilePath: originalPath, title: "" }
-            }).run();
-          }
+          insertBlock(editor, { type: "image", attrs: { id: generateUUID(), src: compressed.dataUrl, originalSrc: dataUrl, filePath: newPath, originalFilePath: originalPath, title: "" } });
 
         };
         reader.readAsDataURL(file);
@@ -1166,16 +1089,8 @@ const EditorContent = React.memo(function EditorContent({
                 label="Code Block"
                 onClick={() => {
                   if (!editor) return;
-                  const { selection } = editor.state;
-                  const safePos = (selection instanceof NodeSelection) ? selection.to :
-                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                      (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-                  if (safePos !== null) {
-                    editor.chain().focus().insertContentAt(safePos, { type: 'codeBlock', attrs: { id: generateUUID() } }).run();
-                  } else {
-                    editor.chain().focus().insertContent({ type: 'codeBlock', attrs: { id: generateUUID() } }).run();
-                  }
+                  insertBlock(editor, { type: 'codeBlock', attrs: { id: generateUUID() } });
+                  setActiveMenu(null);
                 }}
                 setActiveMenu={handleSetActiveMenu}
               />
@@ -1184,16 +1099,8 @@ const EditorContent = React.memo(function EditorContent({
                 label="LaTeX Block"
                 onClick={() => {
                   if (!editor) return;
-                  const { selection } = editor.state;
-                  const safePos = (selection instanceof NodeSelection) ? selection.to :
-                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                      (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
-                  if (safePos !== null) {
-                    editor.chain().focus().insertContentAt(safePos, { type: 'rawLatex' }).run();
-                  } else {
-                    editor.chain().focus().insertContent({ type: 'rawLatex' }).run();
-                  }
+                  insertBlock(editor, { type: 'rawLatex' });
+                  setActiveMenu(null);
                 }}
                 setActiveMenu={handleSetActiveMenu}
               />
@@ -1202,47 +1109,9 @@ const EditorContent = React.memo(function EditorContent({
                 label="Math Block"
                 onClick={() => {
                   if (!editor) return;
-                  const { selection } = editor.state;
-                  const safePos = (selection instanceof NodeSelection) ? selection.to :
-                    (editor.isActive('tableCell') || editor.isActive('tableHeader') || editor.isActive('codeBlock')) ?
-                      (() => { try { return selection.$from.after(1); } catch { return selection.$from.after(); } })() : null;
-
                   const id = generateUUID();
-                  if (safePos !== null) {
-                    editor.chain().focus()
-                      .insertContentAt(safePos, { type: 'mathBlock', attrs: { id } })
-                      .command(({ state, commands }) => {
-                        let newPos = -1;
-                        state.doc.descendants((node, pos) => {
-                          if (node.attrs.id === id) {
-                            newPos = pos;
-                            return false;
-                          }
-                        });
-                        if (newPos >= 0) {
-                          commands.setNodeSelection(newPos);
-                        }
-                        return true;
-                      })
-                      .run();
-                  } else {
-                    editor.chain().focus()
-                      .insertContent({ type: 'mathBlock', attrs: { id } })
-                      .command(({ state, commands }) => {
-                        let newPos = -1;
-                        state.doc.descendants((node, pos) => {
-                          if (node.attrs.id === id) {
-                            newPos = pos;
-                            return false;
-                          }
-                        });
-                        if (newPos >= 0) {
-                          commands.setNodeSelection(newPos);
-                        }
-                        return true;
-                      })
-                      .run();
-                  }
+                  insertBlock(editor, { type: 'mathBlock', attrs: { id } }, { selectNodeId: id });
+                  setActiveMenu(null);
                 }}
                 setActiveMenu={handleSetActiveMenu}
               />

@@ -71,7 +71,7 @@ export default function ConfirmationDialog({
             </button>
           </div>
 
-          <p className="text-xs text-nb-on-surface-variant font-medium leading-relaxed mb-8">
+          <p className="text-xs text-nb-on-surface-variant font-medium leading-relaxed mb-8 whitespace-pre-line">
             {message}
           </p>
 

@@ -3,7 +3,7 @@ import { generateEntryLatex } from "./latex";
 import { ExplorerFile, GitHubConfig, TeamTab } from "./types";
 import { Project, getAllPending, removeStaged, PendingChange } from "./db";
 import { events, EventNames } from "./events";
-import { WorkspaceMode, OpenFileState, IWorkspaceStore, DebouncedFunction } from "./store/types";
+import { WorkspaceMode, OpenFileState, IWorkspaceStore, DebouncedFunction, ImportOptions } from "./store/types";
 export type { WorkspaceMode, OpenFileState, DebouncedFunction };
 import { debounceWithFlush } from "./utils";
 import { ProjectManager } from "./store/projectManager";
@@ -106,7 +106,7 @@ class WorkspaceStore implements IWorkspaceStore {
 
   // ─── Initialization ─────────────────────────────────────────────────────────
   async initialize() {
-    this.setLoading(true);
+    this.setLoading(true, "Loading workspace...");
     try {
       await this.refreshProjects();
       await this.handleUrlChange();
@@ -241,12 +241,12 @@ class WorkspaceStore implements IWorkspaceStore {
     return this.transferManager.exportNotebook();
   }
 
-  public async importNotebook(data: Record<string, unknown>) {
-    return this.transferManager.importNotebook(data);
+  public async importNotebook(data: Record<string, unknown>, options?: ImportOptions) {
+    return this.transferManager.importNotebook(data, options);
   }
 
-  public async importNotebookArchive(file: File) {
-    return this.transferManager.importNotebookArchive(file);
+  public async importNotebookArchive(file: File, options?: ImportOptions) {
+    return this.transferManager.importNotebookArchive(file, options);
   }
 
   // ─── Sync / Git Operations ──────────────────────────────────────────────────
@@ -368,7 +368,7 @@ class WorkspaceStore implements IWorkspaceStore {
 
   public async disconnect() {
     this.debouncedPersist.flush();
-    this.setLoading(true);
+    this.setLoading(true, "Closing workspace...");
     try {
       await this.queue;
 

@@ -1,3 +1,6 @@
+// Shared light-weight type aliases used across the editor components
+export type TiptapEditor = import('@tiptap/react').Editor;
+
 export interface GitHubConfig {
   token: string;
   owner: string;
