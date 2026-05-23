@@ -208,6 +208,7 @@ export class TransferManager {
       const entryImportMode: EntryImportMode = options?.entryImportMode || "replace";
       const idMap = new Map<string, string>();
       const entryIdList = Object.keys(entries);
+      const effectiveEntryIdList = entryImportMode === "none" ? [] : entryIdList;
 
       if (this.store.mode === "temporary" && entryImportMode === "clear") {
         const { clearAllPending, clearAllResources } = await import("../db");
@@ -227,13 +228,13 @@ export class TransferManager {
       }
 
       if (entryImportMode === "keep") {
-        for (const oldId of entryIdList) {
+        for (const oldId of effectiveEntryIdList) {
           const newId = usedIds.has(oldId) ? generateUUID() : oldId;
           idMap.set(oldId, newId);
           usedIds.add(newId);
         }
 
-        for (const oldId of entryIdList) {
+        for (const oldId of effectiveEntryIdList) {
           const entryData = entries[oldId] as Record<string, unknown>;
           const resources = entryData.resources as Record<string, unknown> | undefined;
           if (!resources) continue;
@@ -246,7 +247,7 @@ export class TransferManager {
           }
         }
       } else {
-        for (const oldId of entryIdList) {
+        for (const oldId of effectiveEntryIdList) {
           idMap.set(oldId, oldId);
           const entryData = entries[oldId] as Record<string, unknown>;
           const resources = entryData.resources as Record<string, unknown> | undefined;
@@ -263,7 +264,7 @@ export class TransferManager {
       const remappedEntries: { id: string, doc: TipTapNode, meta: EntryMetadata }[] = [];
       const newEntriesMap: Record<string, EntryMetadata> = {};
 
-      for (const oldId of entryIdList) {
+      for (const oldId of effectiveEntryIdList) {
         const entryWithContent = entries[oldId] as Record<string, unknown> & { content?: TipTapNode };
         const { content, ...entryMetadata } = entryWithContent;
         const newId = idMap.get(oldId)!;
@@ -295,12 +296,16 @@ export class TransferManager {
         newEntriesMap[newId] = remappedMeta;
       }
 
-      const mergedEntries = entryImportMode === "clear"
-        ? newEntriesMap
-        : { ...this.store.metadata.entries, ...newEntriesMap };
-      const globalResourceTypes = buildResourceTypeIndex(entryImportMode === "clear"
-        ? newEntriesMap
-        : { ...this.store.metadata.entries, ...newEntriesMap });
+      const mergedEntries = entryImportMode === "none"
+        ? { ...this.store.metadata.entries }
+        : entryImportMode === "clear"
+          ? newEntriesMap
+          : { ...this.store.metadata.entries, ...newEntriesMap };
+      const globalResourceTypes = buildResourceTypeIndex(entryImportMode === "none"
+        ? this.store.metadata.entries
+        : entryImportMode === "clear"
+          ? newEntriesMap
+          : { ...this.store.metadata.entries, ...newEntriesMap });
 
       const importedPhases = data.phases as ProjectPhase[] | undefined;
       const importedTeam = data.team as TeamMetadata | undefined;
@@ -337,6 +342,7 @@ export class TransferManager {
         for (const [path, content] of Object.entries(extraFiles)) {
           if (!path || typeof content !== "string") continue;
           if (path === INDEX_PATH) continue;
+          if (entryImportMode === "none" && (path.startsWith(`${ENTRIES_DIR}/`) || path.startsWith(`${LATEX_DIR}/`))) continue;
           if (path.startsWith(`${ENTRIES_DIR}/`) || path.startsWith(`${ASSETS_DIR}/`)) continue;
           if (entryIdList.length > 0 && path.startsWith(`${LATEX_DIR}/`)) continue;
           await this.store.persistFile(path, content, `Import file: ${path}`);

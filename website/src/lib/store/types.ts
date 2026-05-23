@@ -7,7 +7,7 @@ export type { DebouncedFunction };
 
 export type WorkspaceMode = "local" | "github" | "temporary" | "none";
 
-export type EntryImportMode = "keep" | "replace" | "clear";
+export type EntryImportMode = "keep" | "replace" | "clear" | "none";
 
 export interface ImportOptions {
   entryImportMode?: EntryImportMode;
