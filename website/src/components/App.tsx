@@ -660,7 +660,7 @@ export default function App() {
         const zip = await JSZip.loadAsync(await file.arrayBuffer());
         const filenames = Object.keys(zip.files).filter(name => !zip.files[name].dir);
 
-        let parsedIndex: { entries?: Record<string, unknown>; team?: unknown; phases?: unknown } | null = null;
+        let parsedIndex: { entries?: Record<string, unknown>; team?: unknown; phases?: unknown; lastCompiled?: string } | null = null;
         const indexEntry = zip.file(INDEX_PATH);
         if (indexEntry) {
           try {
@@ -711,6 +711,7 @@ export default function App() {
           files,
           latexFiles,
           pdf,
+          ...(pdf && parsedIndex?.lastCompiled ? { lastCompiled: parsedIndex.lastCompiled } : {}),
           ...(parsedIndex?.team ? { team: parsedIndex.team } : {}),
           ...(parsedIndex?.phases ? { phases: parsedIndex.phases } : {}),
         };
