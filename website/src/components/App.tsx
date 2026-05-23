@@ -21,6 +21,7 @@ import NotebookCompiler from "./NotebookCompiler";
 import HelpPage from "./HelpPage";
 import ProjectHeader from "./ProjectHeader";
 import AboutPage from "./AboutPage";
+import ImportDecisionDialog from "./ImportDecisionDialog";
 import LoadingOverlay from "./LoadingOverlay";
 import Logo from "./Logo";
 import { ViewMode } from "./editor/ui/ViewToggle";
@@ -28,11 +29,13 @@ import ConfirmationDialog from "./ConfirmationDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { HardDrive, X, Loader2, ArrowLeftRight, Sun, Moon } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
-import { ENTRIES_DIR, } from "@/lib/constants";
+import { ENTRIES_DIR, INDEX_PATH } from "@/lib/constants";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { EntryImportMode } from "@/lib/store/types";
 import { events, EventNames } from "@/lib/events";
 import { Toaster } from "react-hot-toast";
 import { showNotification } from "./Notification";
+import { isBinaryFile } from "@/lib/transferUtils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -82,7 +85,6 @@ export default function App() {
     navigateTo,
     exportNotebook,
     importNotebook,
-    importNotebookArchive,
     selectedPaths,
     setSelectedPaths,
     hasEntryInUrl,
@@ -136,6 +138,18 @@ export default function App() {
     onConfirm: () => { },
   });
 
+  const [importDecisionDialog, setImportDecisionDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    resolve: ((value: EntryImportMode | null) => void) | null;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    resolve: null,
+  });
+
   const showConfirm = useCallback((title: string, message: string, onConfirm: () => void, variant: "danger" | "warning" | "info" = "danger", onCancel?: () => void) => {
     setConfirmDialog({
       isOpen: true,
@@ -150,6 +164,17 @@ export default function App() {
         onCancel?.();
       },
       variant
+    });
+  }, []);
+
+  const promptImportDecision = useCallback((title: string, message: string) => {
+    return new Promise<EntryImportMode | null>(resolve => {
+      setImportDecisionDialog({
+        isOpen: true,
+        title,
+        message,
+        resolve,
+      });
     });
   }, []);
 
@@ -603,25 +628,111 @@ export default function App() {
   const importNotebookFromFile = async (file: File) => {
     try {
       const lowerName = file.name.toLowerCase();
+      let data: Record<string, unknown> | null = null;
+      let hasEntries = false;
+      let hasTeam = false;
+      let hasPhases = false;
+      let entryCount = 0;
+
       if (lowerName.endsWith(".zip")) {
-        await importNotebookArchive(file);
-        return;
+        const JSZip = (await import("jszip")).default;
+        const zip = await JSZip.loadAsync(await file.arrayBuffer());
+        const filenames = Object.keys(zip.files).filter(name => !zip.files[name].dir);
+
+        let parsedIndex: { entries?: Record<string, unknown>; team?: unknown; phases?: unknown } | null = null;
+        const indexEntry = zip.file(INDEX_PATH);
+        if (indexEntry) {
+          try {
+            parsedIndex = JSON.parse(await indexEntry.async("string"));
+          } catch (error) {
+            console.error("Failed to parse notebook index", error);
+            showNotification("Invalid notebook archive", "error");
+            return;
+          }
+        }
+
+        const entries: Record<string, Record<string, unknown>> = {};
+        const assets: Record<string, string> = {};
+        const files: Record<string, string> = {};
+        const latexFiles: Record<string, string> = {};
+        let pdf = "";
+
+        for (const filename of filenames) {
+          const entry = zip.file(filename);
+          if (!entry || filename === INDEX_PATH) continue;
+
+          if (filename.startsWith(`${ENTRIES_DIR}/`) && filename.endsWith(".json")) {
+            const entryId = filename.split("/").pop()?.replace(/\.json$/, "") || "";
+            const metadata = parsedIndex?.entries?.[entryId] as Record<string, unknown> | undefined;
+            const raw = await entry.async("string");
+            const parsedEntry = JSON.parse(raw) as { content?: unknown } & Record<string, unknown>;
+            entries[entryId] = {
+              ...(metadata || {}),
+              content: parsedEntry.content ?? parsedEntry,
+            };
+          } else if (filename === "main.pdf") {
+            pdf = await entry.async("base64");
+          } else if (filename.startsWith("data/assets/")) {
+            assets[filename] = await entry.async("base64");
+          } else if (filename.startsWith("data/latex/")) {
+            latexFiles[filename] = await entry.async("string");
+          } else if (!filename.endsWith("/")) {
+            if (isBinaryFile(filename)) {
+              continue;
+            }
+            files[filename] = await entry.async("string");
+          }
+        }
+
+        data = {
+          entries,
+          assets,
+          files,
+          latexFiles,
+          pdf,
+          ...(parsedIndex?.team ? { team: parsedIndex.team } : {}),
+          ...(parsedIndex?.phases ? { phases: parsedIndex.phases } : {}),
+        };
+        hasEntries = Object.keys(entries).length > 0;
+        hasTeam = !!parsedIndex?.team;
+        hasPhases = !!parsedIndex?.phases;
+        entryCount = Object.keys(entries).length;
+      } else {
+        const raw = await file.text();
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        data = parsed;
+        hasEntries = !!parsed.entries && Object.keys((parsed.entries as Record<string, unknown>) || {}).length > 0;
+        hasTeam = !!parsed.team;
+        hasPhases = !!parsed.phases;
+        entryCount = Object.keys((parsed.entries as Record<string, unknown>) || {}).length;
       }
 
-      const reader = new FileReader();
-      reader.onload = async () => {
-        try {
-          const data = JSON.parse(reader.result as string);
-          await importNotebook(data);
-        } catch (error) {
-          console.error("Import failed", error);
-          showNotification(error instanceof Error ? error.message : "Invalid import file", "error");
-        }
-      };
-      reader.onerror = () => {
-        showNotification("Failed to read file", "error");
-      };
-      reader.readAsText(file);
+      if (hasTeam || hasPhases) {
+        let message = "The import contains ";
+        if (hasTeam) message += "team data ";
+        if (hasTeam && hasPhases) message += "and ";
+        if (hasPhases) message += "phase data ";
+        message += "which will overwrite the current project data. Continue?";
+        const proceed = await new Promise<boolean>(resolve => {
+          showConfirm("Import will overwrite team/phase data", message, () => resolve(true), "warning", () => resolve(false));
+        });
+        if (!proceed) return;
+      }
+
+      const entryImportMode = hasEntries
+        ? await promptImportDecision(
+            "Import entries",
+            `Choose how to handle ${entryCount} imported entries. Keep remaps them to new ids, Replace keeps the ids from the file and overwrites matching entries, and Clear removes existing entries before importing.`
+          )
+        : "replace";
+
+      if (!entryImportMode || !data) return;
+
+      if (lowerName.endsWith(".zip")) {
+        await importNotebook(data, { entryImportMode, overwriteTeam: hasTeam, overwritePhases: hasPhases });
+      } else {
+        await importNotebook(data, { entryImportMode, overwriteTeam: hasTeam, overwritePhases: hasPhases });
+      }
     } catch {
       showNotification("Import failed", "error");
     }
@@ -918,6 +1029,17 @@ export default function App() {
         }}
         isExchangingCode={isExchangingCode}
         projects={projects}
+      />
+
+      <ImportDecisionDialog
+        isOpen={importDecisionDialog.isOpen}
+        title={importDecisionDialog.title}
+        message={importDecisionDialog.message}
+        onChoose={(mode) => {
+          const resolve = importDecisionDialog.resolve;
+          setImportDecisionDialog({ isOpen: false, title: "", message: "", resolve: null });
+          resolve?.(mode);
+        }}
       />
 
       <ConfirmationDialog

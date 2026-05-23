@@ -7,6 +7,14 @@ export type { DebouncedFunction };
 
 export type WorkspaceMode = "local" | "github" | "temporary" | "none";
 
+export type EntryImportMode = "keep" | "replace" | "clear";
+
+export interface ImportOptions {
+  entryImportMode?: EntryImportMode;
+  overwriteTeam?: boolean;
+  overwritePhases?: boolean;
+}
+
 export interface OpenFileState {
   path: string;
   name: string;
@@ -91,8 +99,8 @@ export interface IWorkspaceStore {
   commitAll(config: GitHubConfig, customMessage?: string): Promise<void>;
   getFileContent(path: string): Promise<string | null>;
   exportEntries(entryIds?: string[]): Promise<void>;
-  importNotebook(data: Record<string, unknown>): Promise<void>;
-  importNotebookArchive(file: File): Promise<void>;
+  importNotebook(data: Record<string, unknown>, options?: ImportOptions): Promise<void>;
+  importNotebookArchive(file: File, options?: ImportOptions): Promise<void>;
   getAssetBase64(path: string): Promise<string | null>;
   exportNotebook(): Promise<void>;
   disconnect(): Promise<void>;

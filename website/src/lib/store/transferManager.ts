@@ -7,7 +7,7 @@ import { getLocalFileContent } from "../fs";
 import { generateUUID, getMimeTypeFromExtension, normalizeBase64 } from "../utils";
 import { EntryMetadata, validateNotebookIntegrity, EMPTY_METADATA, TeamMetadata, ProjectPhase, remapContentIds, remapEntryMetadataIds, TipTapNode, ensureResourceIds, extractResources, buildResourceTypeIndex, extractImagePaths, NotebookMetadata } from "../metadata";
 import { generateEntryLatex } from "../latex";
-import { IWorkspaceStore } from "./types";
+import { IWorkspaceStore, ImportOptions, EntryImportMode } from "./types";
 import type JSZipType from 'jszip';
 
 export class TransferManager {
@@ -189,18 +189,9 @@ export class TransferManager {
     await this.exportEntries();
   }
 
-  async importNotebook(data: Record<string, unknown>) {
+  async importNotebook(data: Record<string, unknown>, options?: ImportOptions) {
     this.store.setLoading(true, "Importing data...");
     try {
-      if (this.store.mode === "temporary") {
-        const { clearAllPending, clearAllResources } = await import("../db");
-        const dbName = this.store.getDBName();
-        await clearAllPending(dbName);
-        await clearAllResources(dbName);
-        this.store.assetCache.clear();
-        this.store.entries = [];
-      }
-
       const {
         entries = {},
         assets = {},
@@ -214,16 +205,55 @@ export class TransferManager {
         latexFiles?: Record<string, string>;
         pdf?: string;
       };
+      const entryImportMode: EntryImportMode = options?.entryImportMode || "replace";
       const idMap = new Map<string, string>();
-
       const entryIdList = Object.keys(entries);
-      for (const oldId of entryIdList) {
-        idMap.set(oldId, generateUUID());
-        const entryData = entries[oldId] as Record<string, unknown>;
-        const resources = entryData.resources as Record<string, unknown> | undefined;
-        if (resources) {
+
+      if (this.store.mode === "temporary" && entryImportMode === "clear") {
+        const { clearAllPending, clearAllResources } = await import("../db");
+        const dbName = this.store.getDBName();
+        await clearAllPending(dbName);
+        await clearAllResources(dbName);
+        this.store.assetCache.clear();
+        this.store.entries = [];
+      }
+
+      const usedIds = new Set<string>();
+      for (const existingEntry of Object.values(this.store.metadata.entries)) {
+        usedIds.add(existingEntry.id);
+        for (const resId of Object.keys(existingEntry.resources || {})) {
+          usedIds.add(resId);
+        }
+      }
+
+      if (entryImportMode === "keep") {
+        for (const oldId of entryIdList) {
+          const newId = usedIds.has(oldId) ? generateUUID() : oldId;
+          idMap.set(oldId, newId);
+          usedIds.add(newId);
+        }
+
+        for (const oldId of entryIdList) {
+          const entryData = entries[oldId] as Record<string, unknown>;
+          const resources = entryData.resources as Record<string, unknown> | undefined;
+          if (!resources) continue;
+
           for (const resId of Object.keys(resources)) {
-            idMap.set(resId, generateUUID());
+            if (idMap.has(resId)) continue;
+            const newId = usedIds.has(resId) ? generateUUID() : resId;
+            idMap.set(resId, newId);
+            usedIds.add(newId);
+          }
+        }
+      } else {
+        for (const oldId of entryIdList) {
+          idMap.set(oldId, oldId);
+          const entryData = entries[oldId] as Record<string, unknown>;
+          const resources = entryData.resources as Record<string, unknown> | undefined;
+          if (resources) {
+            for (const resId of Object.keys(resources)) {
+              idMap.set(resId, resId);
+            }
           }
         }
       }
@@ -265,7 +295,12 @@ export class TransferManager {
         newEntriesMap[newId] = remappedMeta;
       }
 
-      const globalResourceTypes = buildResourceTypeIndex({ ...this.store.metadata.entries, ...newEntriesMap });
+      const mergedEntries = entryImportMode === "clear"
+        ? newEntriesMap
+        : { ...this.store.metadata.entries, ...newEntriesMap };
+      const globalResourceTypes = buildResourceTypeIndex(entryImportMode === "clear"
+        ? newEntriesMap
+        : { ...this.store.metadata.entries, ...newEntriesMap });
 
       const importedPhases = data.phases as ProjectPhase[] | undefined;
       const importedTeam = data.team as TeamMetadata | undefined;
@@ -273,9 +308,9 @@ export class TransferManager {
       this.store.metadata = validateNotebookIntegrity({
         ...EMPTY_METADATA,
         ...this.store.metadata,
-        entries: newEntriesMap,
-        ...(importedPhases ? { phases: importedPhases } : {}),
-        ...(importedTeam ? { team: importedTeam } : {}),
+        entries: mergedEntries,
+        ...(importedPhases && options?.overwritePhases ? { phases: importedPhases } : {}),
+        ...(importedTeam && options?.overwriteTeam ? { team: importedTeam } : {}),
       });
 
       const extraFiles = { ...(latexFiles || {}), ...(files || {}) };
@@ -338,105 +373,67 @@ export class TransferManager {
     }
   }
 
-  async importNotebookArchive(file: File) {
-    this.store.setLoading(true, "Importing data...");
+  async importNotebookArchive(file: File, options?: ImportOptions) {
     try {
       const JSZip = (await import("jszip")).default;
       const zip = await JSZip.loadAsync(await file.arrayBuffer());
       const filenames = Object.keys(zip.files).filter(name => !zip.files[name].dir);
-      const hasNotebookIndex = filenames.includes(INDEX_PATH);
-      // Use shared helpers `isBinaryFile` and `isImageAsset` imported from transferUtils
+
       let parsedNotebookIndex: NotebookMetadata | null = null;
-      let importedTeam: TeamMetadata | undefined;
-      let importedPhases: ProjectPhase[] | undefined;
-      const stagedFiles: Array<{ filename: string; content: string; isBase64: boolean; isAsset: boolean }> = [];
-
-      if (hasNotebookIndex) {
-        const indexEntry = zip.file(INDEX_PATH);
-        if (indexEntry) {
-          parsedNotebookIndex = JSON.parse(await indexEntry.async("string")) as NotebookMetadata;
-          importedTeam = (parsedNotebookIndex as { team: TeamMetadata }).team as TeamMetadata | undefined;
-          importedPhases = (parsedNotebookIndex as { phases: ProjectPhase[] }).phases as ProjectPhase[] | undefined;
-        }
-
-        for (const filename of filenames) {
-          const entry = zip.file(filename);
-          if (!entry) continue;
-
-          if (isBinaryFile(filename)) {
-            stagedFiles.push({ filename, content: await entry.async("base64"), isBase64: true, isAsset: true });
-          } else {
-            stagedFiles.push({ filename, content: await entry.async("string"), isBase64: false, isAsset: false });
-          }
-        }
-
-        if (parsedNotebookIndex) {
-          this.store.metadata = validateNotebookIntegrity({
-            ...EMPTY_METADATA,
-            ...this.store.metadata,
-            ...parsedNotebookIndex,
-            ...(importedPhases ? { phases: importedPhases } : {}),
-            ...(importedTeam ? { team: importedTeam } : {}),
-          });
-        }
-
-        if (this.store.mode === "temporary") {
-          const { clearAllPending, clearAllResources } = await import("../db");
-          const dbName = this.store.getDBName();
-          await clearAllPending(dbName);
-          await clearAllResources(dbName);
-          this.store.assetCache.clear();
-        }
-
-        for (const fileEntry of stagedFiles) {
-          if (fileEntry.isAsset && isImageAsset(fileEntry.filename)) {
-            const dataUrl = `data:${getMimeTypeFromExtension(fileEntry.filename)};base64,${fileEntry.content}`;
-            this.store.assetCache.set(fileEntry.filename, dataUrl);
-            if (this.store.mode === "github" || this.store.mode === "temporary") {
-              await putResource(this.store.getDBName(), { path: fileEntry.filename, dataUrl });
-            }
-          }
-
-          await this.store.persistFile(
-            fileEntry.filename,
-            fileEntry.content,
-            fileEntry.isBase64 ? `Import asset: ${fileEntry.filename}` : `Import file: ${fileEntry.filename}`,
-            fileEntry.isBase64
-          );
-        }
-
-        await this.store.reloadWorkspace();
-        this.store.notifyStateChange();
-        events.emit(EventNames.SHOW_NOTIFICATION, { message: "Notebook archive imported successfully", type: "success" });
-        return;
+      const indexEntry = zip.file(INDEX_PATH);
+      if (indexEntry) {
+        parsedNotebookIndex = JSON.parse(await indexEntry.async("string")) as NotebookMetadata;
       }
 
       const entries: Record<string, Record<string, unknown>> = {};
       const assets: Record<string, string> = {};
       const files: Record<string, string> = {};
+      const latexFiles: Record<string, string> = {};
+      let pdf = "";
 
       for (const filename of filenames) {
         const entry = zip.file(filename);
-        if (!entry) continue;
+        if (!entry || filename === INDEX_PATH) continue;
 
         if (filename.startsWith(`${ENTRIES_DIR}/`) && filename.endsWith(".json")) {
           const raw = await entry.async("string");
-          const parsed = JSON.parse(raw) as Record<string, unknown>;
+          const parsed = JSON.parse(raw) as { version?: number; content?: TipTapNode } & Record<string, unknown>;
           const entryId = filename.split("/").pop()?.replace(/\.json$/, "") || generateUUID();
-          entries[entryId] = parsed;
+          const metadata = parsedNotebookIndex?.entries?.[entryId] as Record<string, unknown> | undefined;
+          entries[entryId] = {
+            ...(metadata || {}),
+            content: parsed.content || parsed,
+          };
+        } else if (filename === "main.pdf") {
+          pdf = await entry.async("base64");
         } else if (filename.startsWith(`${ASSETS_DIR}/`)) {
           assets[filename] = await entry.async("base64");
+        } else if (filename.startsWith(`${LATEX_DIR}/`)) {
+          latexFiles[filename] = await entry.async("string");
         } else if (!isBinaryFile(filename)) {
           files[filename] = await entry.async("string");
         }
       }
 
-      await this.importNotebook({ entries, assets, files });
+      const importData: Record<string, unknown> = {
+        entries,
+        assets,
+        files,
+        latexFiles,
+        pdf,
+      };
+
+      if (parsedNotebookIndex?.team) {
+        importData.team = parsedNotebookIndex.team;
+      }
+      if (parsedNotebookIndex?.phases) {
+        importData.phases = parsedNotebookIndex.phases;
+      }
+
+      await this.importNotebook(importData, options);
     } catch (e) {
       console.error("Archive import failed", e);
       events.emit(EventNames.SHOW_NOTIFICATION, { message: "Import failed", type: "error" });
-    } finally {
-      this.store.setLoading(false);
     }
   }
 }
