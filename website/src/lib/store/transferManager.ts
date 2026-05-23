@@ -18,6 +18,8 @@ export class TransferManager {
   async getFileContent(path: string): Promise<string | null> {
     const dbName = this.store.getDBName();
     const pending = await getAllPending(dbName);
+    const deleted = pending.find(p => p.path === path && p.operation === "delete");
+    if (deleted) return null;
     const staged = pending.find(p => p.path === path && p.operation === "upsert");
     if (staged?.content) return staged.content;
 
@@ -38,9 +40,13 @@ export class TransferManager {
 
   async getAssetBase64(path: string): Promise<string | null> {
     const dbName = this.store.getDBName();
+    const pending = await getPending(dbName, path);
+
+    if (pending?.operation === "delete") {
+      return null;
+    }
 
     if (this.store.mode === "github" || this.store.mode === "temporary") {
-      const pending = await getPending(dbName, path);
       if (pending?.operation === "upsert" && pending.content) {
         const c = pending.content;
         if (typeof c === 'string') {
@@ -363,49 +369,63 @@ export class TransferManager {
       const hasNotebookIndex = filenames.includes(INDEX_PATH);
       const isBinaryFile = (path: string) => /\.(png|jpe?g|gif|webp|bmp|ico|tiff?|avif|heic|pdf|otf|ttf|woff2?|eot|zip|7z|rar|tar|gz|bz2|xz|mp3|wav|ogg|flac|aac|m4a|mp4|mov|avi|mkv|webm|wasm|exe|dll|so|dylib|bin)$/i.test(path);
       const isImageAsset = (path: string) => /\.(png|jpe?g|gif|webp|bmp|ico|tiff?|avif|heic)$/i.test(path);
-
-      if (this.store.mode === "temporary") {
-        const { clearAllPending, clearAllResources } = await import("../db");
-        const dbName = this.store.getDBName();
-        await clearAllPending(dbName);
-        await clearAllResources(dbName);
-        this.store.assetCache.clear();
-      }
+      let parsedNotebookIndex: NotebookMetadata | null = null;
+      let importedTeam: TeamMetadata | undefined;
+      let importedPhases: ProjectPhase[] | undefined;
+      const stagedFiles: Array<{ filename: string; content: string; isBase64: boolean; isAsset: boolean }> = [];
 
       if (hasNotebookIndex) {
+        const indexEntry = zip.file(INDEX_PATH);
+        if (indexEntry) {
+          parsedNotebookIndex = JSON.parse(await indexEntry.async("string")) as NotebookMetadata;
+          importedTeam = (parsedNotebookIndex as { team: TeamMetadata }).team as TeamMetadata | undefined;
+          importedPhases = (parsedNotebookIndex as { phases: ProjectPhase[] }).phases as ProjectPhase[] | undefined;
+        }
+
         for (const filename of filenames) {
           const entry = zip.file(filename);
           if (!entry) continue;
 
           if (isBinaryFile(filename)) {
-            const base64 = await entry.async("base64");
-            if (isImageAsset(filename)) {
-              const dataUrl = `data:${getMimeTypeFromExtension(filename)};base64,${base64}`;
-              this.store.assetCache.set(filename, dataUrl);
-              if (this.store.mode === "github" || this.store.mode === "temporary") {
-                await putResource(this.store.getDBName(), { path: filename, dataUrl });
-              }
-            }
-            await this.store.persistFile(filename, base64, `Import asset: ${filename}`, true);
+            stagedFiles.push({ filename, content: await entry.async("base64"), isBase64: true, isAsset: true });
           } else {
-            const text = await entry.async("string");
-            await this.store.persistFile(filename, text, `Import file: ${filename}`);
+            stagedFiles.push({ filename, content: await entry.async("string"), isBase64: false, isAsset: false });
           }
         }
 
-        const indexEntry = zip.file(INDEX_PATH);
-        if (indexEntry) {
-          const parsed = JSON.parse(await indexEntry.async("string")) as NotebookMetadata;
-          const importedTeam = (parsed as { team: TeamMetadata }).team as TeamMetadata | undefined;
-          const importedPhases = (parsed as { phases: ProjectPhase[] }).phases as ProjectPhase[] | undefined;
-
+        if (parsedNotebookIndex) {
           this.store.metadata = validateNotebookIntegrity({
             ...EMPTY_METADATA,
             ...this.store.metadata,
-            ...parsed,
+            ...parsedNotebookIndex,
             ...(importedPhases ? { phases: importedPhases } : {}),
             ...(importedTeam ? { team: importedTeam } : {}),
           });
+        }
+
+        if (this.store.mode === "temporary") {
+          const { clearAllPending, clearAllResources } = await import("../db");
+          const dbName = this.store.getDBName();
+          await clearAllPending(dbName);
+          await clearAllResources(dbName);
+          this.store.assetCache.clear();
+        }
+
+        for (const fileEntry of stagedFiles) {
+          if (fileEntry.isAsset && isImageAsset(fileEntry.filename)) {
+            const dataUrl = `data:${getMimeTypeFromExtension(fileEntry.filename)};base64,${fileEntry.content}`;
+            this.store.assetCache.set(fileEntry.filename, dataUrl);
+            if (this.store.mode === "github" || this.store.mode === "temporary") {
+              await putResource(this.store.getDBName(), { path: fileEntry.filename, dataUrl });
+            }
+          }
+
+          await this.store.persistFile(
+            fileEntry.filename,
+            fileEntry.content,
+            fileEntry.isBase64 ? `Import asset: ${fileEntry.filename}` : `Import file: ${fileEntry.filename}`,
+            fileEntry.isBase64
+          );
         }
 
         await this.store.reloadWorkspace();
