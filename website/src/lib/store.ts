@@ -106,7 +106,7 @@ class WorkspaceStore implements IWorkspaceStore {
 
   // ─── Initialization ─────────────────────────────────────────────────────────
   async initialize() {
-    this.setLoading(true);
+    this.setLoading(true, "Loading workspace...");
     try {
       await this.refreshProjects();
       await this.handleUrlChange();
@@ -368,7 +368,7 @@ class WorkspaceStore implements IWorkspaceStore {
 
   public async disconnect() {
     this.debouncedPersist.flush();
-    this.setLoading(true);
+    this.setLoading(true, "Closing workspace...");
     try {
       await this.queue;
 

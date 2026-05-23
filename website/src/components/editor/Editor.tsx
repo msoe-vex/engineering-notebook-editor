@@ -59,7 +59,7 @@ export function getSafeInsertPos(ed: TiptapEditor | null): number | null {
 }
 
 // Insert a block node at a safe position (or at selection if no safe position).
-export function insertBlock(editor: TiptapEditor | null, content: any, options?: { fallback?: () => void, selectNodeId?: string }) {
+export function insertBlock(editor: TiptapEditor | null, content: TipTapNode, options?: { fallback?: () => void, selectNodeId?: string }) {
   if (!editor) return;
   const { fallback, selectNodeId } = options || {};
   const safePos = getSafeInsertPos(editor);

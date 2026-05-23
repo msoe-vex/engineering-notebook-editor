@@ -114,7 +114,7 @@ export class ProjectManager {
     await this.store.queue;
 
     this.store.selectedPaths = new Set();
-    this.store.setLoading(true);
+    this.store.setLoading(true, "Loading workspace...");
     try {
       if (id === "temporary") {
         if (this.store.currentProjectId !== "temporary") {

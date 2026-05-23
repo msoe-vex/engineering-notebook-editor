@@ -1,6 +1,6 @@
 import { INDEX_PATH, ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from "../constants";
 import { events, EventNames } from "../events";
-import { getAllPending, getPending, getResource, putResource } from "../db";
+import { getPending, getResource, putResource } from "../db";
 import { isBinaryFile, isImageAsset, zipCompressionOptions, addTextFileToZip, addAssetFileToZip } from "../transferUtils";
 import { fetchFileContent, fetchRawFileContent } from "../github";
 import { getLocalFileContent } from "../fs";
@@ -8,6 +8,7 @@ import { generateUUID, getMimeTypeFromExtension, normalizeBase64 } from "../util
 import { EntryMetadata, validateNotebookIntegrity, EMPTY_METADATA, TeamMetadata, ProjectPhase, remapContentIds, remapEntryMetadataIds, TipTapNode, ensureResourceIds, extractResources, buildResourceTypeIndex, extractImagePaths, NotebookMetadata } from "../metadata";
 import { generateEntryLatex } from "../latex";
 import { IWorkspaceStore } from "./types";
+import type JSZipType from 'jszip';
 
 export class TransferManager {
   private store: IWorkspaceStore;
@@ -74,10 +75,11 @@ export class TransferManager {
   }
 
   async exportEntries(entryIds?: string[]) {
-    this.store.setLoading(true);
+    this.store.setLoading(true, "Exporting data...");
     try {
-      const JSZip = (await import("jszip")).default;
-      const zip = new JSZip();
+      const JSZipModule = await import("jszip");
+      const JSZip = JSZipModule.default as unknown as { new(): JSZipType };
+      const zip: JSZipType = new JSZip();
       const targets = entryIds || Object.keys(this.store.metadata.entries);
       const exportAll = !entryIds;
       const assetPaths = new Set<string>();
@@ -166,7 +168,7 @@ export class TransferManager {
         }
       }
 
-      const blob = await zip.generateAsync(zipCompressionOptions as any);
+      const blob = await zip.generateAsync(zipCompressionOptions);
       const { saveAs } = await import("file-saver");
       const name = entryIds
         ? (entryIds.length === 1
@@ -188,7 +190,7 @@ export class TransferManager {
   }
 
   async importNotebook(data: Record<string, unknown>) {
-    this.store.setLoading(true, "Importing project data...");
+    this.store.setLoading(true, "Importing data...");
     try {
       if (this.store.mode === "temporary") {
         const { clearAllPending, clearAllResources } = await import("../db");
@@ -337,7 +339,7 @@ export class TransferManager {
   }
 
   async importNotebookArchive(file: File) {
-    this.store.setLoading(true, "Importing project archive...");
+    this.store.setLoading(true, "Importing data...");
     try {
       const JSZip = (await import("jszip")).default;
       const zip = await JSZip.loadAsync(await file.arrayBuffer());

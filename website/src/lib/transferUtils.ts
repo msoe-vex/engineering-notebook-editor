@@ -1,15 +1,16 @@
 // Small transfer-related helpers shared by TransferManager
+import type JSZip from 'jszip';
+import { LATEX_DIR } from "./constants";
+
 export const isBinaryFile = (path: string) => {
   return /\.(png|jpe?g|gif|webp|bmp|ico|tiff?|avif|heic|pdf|otf|ttf|woff2?|eot|zip|7z|rar|tar|gz|bz2|xz|mp3|wav|ogg|flac|aac|m4a|mp4|mov|avi|mkv|webm|wasm|exe|dll|so|dylib|bin)$/i.test(path);
 };
 
-export const zipCompressionOptions = { type: 'blob' as const, compression: 'DEFLATE' as const, compressionOptions: { level: 6 } };
+export const zipCompressionOptions: Parameters<JSZip["generateAsync"]>[0] = { type: 'blob' as const, compression: 'DEFLATE' as const, compressionOptions: { level: 6 } };
 
 export const isImageAsset = (path: string) => /\.(png|jpe?g|gif|webp|bmp|ico|tiff?|avif|heic)$/i.test(path);
 
-import { LATEX_DIR } from "./constants";
-
-export async function addTextFileToZip(zip: any, getFileContent: (path: string) => Promise<string | null>, path: string) {
+export async function addTextFileToZip(zip: JSZip, getFileContent: (path: string) => Promise<string | null>, path: string) {
   const content = await getFileContent(path);
   if (content) {
     zip.file(path, content);
@@ -30,7 +31,7 @@ export async function addTextFileToZip(zip: any, getFileContent: (path: string) 
   }
 }
 
-export async function addAssetFileToZip(zip: any, getAssetBase64: (path: string) => Promise<string | null>, path: string) {
+export async function addAssetFileToZip(zip: JSZip, getAssetBase64: (path: string) => Promise<string | null>, path: string) {
   const base64 = await getAssetBase64(path);
   if (base64) zip.file(path, base64, { base64: true });
 }
