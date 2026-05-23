@@ -94,16 +94,23 @@ export class TransferManager {
 
       const addAssetFile = async (path: string) => addAssetFileToZip(zip, (p: string) => this.getAssetBase64(p), path);
 
-      await addTextFile("main.tex");
-      await addTextFile("engineering_notebook.sty");
+      // Only include top-level LaTeX sources and compiled PDF when exporting the
+      // entire notebook. When exporting a subset of entries we should not
+      // include `main.tex`, `engineering_notebook.sty` or `main.pdf` since
+      // those represent the full-document build and may confuse consumers of
+      // entry-only exports.
+      if (exportAll) {
+        await addTextFile("main.tex");
+        await addTextFile("engineering_notebook.sty");
 
-      try {
-        const pdfBase64 = await this.getAssetBase64("main.pdf");
-        if (pdfBase64) {
-          zip.file("main.pdf", pdfBase64, { base64: true });
+        try {
+          const pdfBase64 = await this.getAssetBase64("main.pdf");
+          if (pdfBase64) {
+            zip.file("main.pdf", pdfBase64, { base64: true });
+          }
+        } catch (err) {
+          console.warn("[Export] Skipping main.pdf due to error:", err);
         }
-      } catch (err) {
-        console.warn("[Export] Skipping main.pdf due to error:", err);
       }
 
       if (exportAll) {
@@ -120,9 +127,10 @@ export class TransferManager {
         }, null, 2));
       }
 
-      await addTextFile(TEAM_PATH);
-      await addTextFile(PHASES_PATH);
+      // Only include team/phase metadata when exporting the full notebook.
       if (exportAll) {
+        await addTextFile(TEAM_PATH);
+        await addTextFile(PHASES_PATH);
         await addTextFile(ENTRIES_INDEX_PATH);
       }
 
