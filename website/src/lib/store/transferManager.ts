@@ -19,9 +19,9 @@ export class TransferManager {
 
   async getFileContent(path: string): Promise<string | null> {
     const dbName = this.store.getDBName();
-    // Respect staged deletes via the workspace store API
-    if (await this.store.shouldStageDelete(path)) return null;
+    // If there's a pending delete for this path, treat as removed for exports
     const staged = await getPending(dbName, path);
+    if (staged?.operation === 'delete') return null;
     if (staged?.operation === 'upsert' && staged.content) return staged.content;
 
     try {
@@ -41,9 +41,9 @@ export class TransferManager {
 
   async getAssetBase64(path: string): Promise<string | null> {
     const dbName = this.store.getDBName();
-    // Respect staged deletes via the workspace store API
-    if (await this.store.shouldStageDelete(path)) return null;
+    // If there's a pending delete for this path, treat as removed for exports
     const pending = await getPending(dbName, path);
+    if (pending?.operation === 'delete') return null;
 
     if (this.store.mode === "github" || this.store.mode === "temporary") {
       if (pending?.operation === "upsert" && pending.content) {
