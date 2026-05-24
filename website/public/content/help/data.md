@@ -4,12 +4,16 @@ Easily move your data between different workspace modes or back it up.
 
 ## Export Notebook
 
-Use the export option by clicking the project name in the top of the editor to export a full backup of your entire notebook. This will download a ZIP file containing all your entries, images, and metadata in a structured format. This is useful for creating backups or transferring your work to another workspace or team. The exported data includes:
+Use the export option by clicking the project name in the top of the editor to export a backup of your notebook. This downloads a ZIP file containing the notebook data and any optional project files that match the selected export mode. It is useful for backups or transferring your work to another workspace or team. The exported data includes:
 
-- Notebook and entries in JSON format
-- All images and resources in their original and compressed formats
-- Metadata files for team info and project phases
-- LaTeX source files for the entire notebook, allowing you to compile it locally if desired
+- Notebook metadata in JSON format
+- Entry content and metadata in JSON format
+- All images and resources used by entries, preserved in their stored formats
+- Team and phase metadata when present
+- LaTeX source files when exporting the full project
+- Font assets when exporting the full project and when the archive contains them
+
+The export no longer includes a separate `notebook.index.json` manifest. The main notebook metadata file is `data/notebook.json`, which is the file the importer reads first.
 
 ## Entry Export
 
@@ -27,10 +31,11 @@ Upload a previously exported ZIP file to restore or transfer your work between w
 
 Key points about notebook imports:
 
-- Validation: the notebook index (notebook.json) is validated early and the archive is staged in memory before any writes. This prevents partial or corrupted imports.
-- Prompt & Confirmation: you will be shown an import dialog summarizing the impact (how many entries will be replaced, added, or removed) and asked to choose how entries should be handled. A final confirmation is required before changes are applied.
+- Validation: the importer reads `data/notebook.json` early and stages the archive in memory before any writes. This prevents partial or corrupted imports.
+- Prompt & Confirmation: you will be shown an import dialog summarizing the impact, including how many entries will be replaced, added, or removed. You then confirm the exact overwrite choices before changes are applied.
 - Team & Phases: by default a full-notebook import will offer to overwrite team and phase metadata. Those checkboxes are disabled when the uploaded archive does not contain team or phase data.
 - Temporary workspaces: clearing existing entries is only performed when you explicitly choose the "Clear" import mode. Importing in other modes will not unconditionally delete your current entries.
+- Project files: if the archive contains `main.tex`, `notebook.sty`, or font assets, the dialog lets you opt into those overwrites separately. Turning the parent project-files toggle off does not erase your per-file selections.
 
 Entry import modes (choose in the import dialog):
 
@@ -42,6 +47,6 @@ Entry import modes (choose in the import dialog):
 Export behavior notes relevant to imports:
 
 - Exports respect staged changes (pending deletes and updates). Files you have marked for deletion will not be resurrected by exporting then importing the same archive.
-- Full notebook exports include the notebook and entries in JSON format, all assets (images/resources), team and phase metadata, and LaTeX source files.
+- Full project exports include notebook metadata, entries, assets, team and phase metadata, LaTeX sources, and any bundled font assets.
 
 If you'd like a clean slate before importing, choose the "Clear" mode in the import dialog. Otherwise, use "Replace" or "Keep" depending on whether you want imported IDs preserved or kept alongside your existing entries.
