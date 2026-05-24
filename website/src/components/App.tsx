@@ -22,6 +22,7 @@ import HelpPage from "./HelpPage";
 import ProjectHeader from "./ProjectHeader";
 import AboutPage from "./AboutPage";
 import ImportDecisionDialog from "./ImportDecisionDialog";
+import ImportConfirmDialog from "./ImportConfirmDialog";
 import ExportDecisionDialog from "./ExportDecisionDialog";
 import LoadingOverlay from "./LoadingOverlay";
 import Logo from "./Logo";
@@ -172,6 +173,34 @@ export default function App() {
     resolve: null,
   });
 
+  const [importConfirmDialog, setImportConfirmDialog] = useState<{
+    isOpen: boolean;
+    options: ImportOptions;
+    currentEntries: number;
+    entriesToImport: number;
+    entriesReplaced: number;
+    newEntries: number;
+    allowTeamImport: boolean;
+    allowPhaseImport: boolean;
+    hasMainTex: boolean;
+    hasStyles: boolean;
+    hasFonts: boolean;
+    resolve: ((value: boolean) => void) | null;
+  }>({
+    isOpen: false,
+    options: { entryImportMode: "replace", overwriteTeam: true, overwritePhases: true },
+    currentEntries: 0,
+    entriesToImport: 0,
+    entriesReplaced: 0,
+    newEntries: 0,
+    allowTeamImport: false,
+    allowPhaseImport: false,
+    hasMainTex: false,
+    hasStyles: false,
+    hasFonts: false,
+    resolve: null,
+  });
+
   const showConfirm = useCallback((title: string, message: string, onConfirm: () => void, variant: "danger" | "warning" | "info" = "danger", onCancel?: () => void) => {
     setConfirmDialog({
       isOpen: true,
@@ -206,6 +235,27 @@ export default function App() {
       setImportDecisionDialog({
         isOpen: true,
         ...summary,
+        resolve,
+      });
+    });
+  }, []);
+
+  const promptImportConfirmation = useCallback((params: {
+    options: ImportOptions;
+    currentEntries: number;
+    entriesToImport: number;
+    entriesReplaced: number;
+    newEntries: number;
+    allowTeamImport: boolean;
+    allowPhaseImport: boolean;
+    hasMainTex: boolean;
+    hasStyles: boolean;
+    hasFonts: boolean;
+  }) => {
+    return new Promise<boolean>(resolve => {
+      setImportConfirmDialog({
+        isOpen: true,
+        ...params,
         resolve,
       });
     });
@@ -787,31 +837,17 @@ export default function App() {
 
       if (!options || !data) return;
 
-      const confirmMessage = [
-        `Entry mode: ${options.entryImportMode}`,
-        `Current entries: ${currentEntryCount}`,
-        `Entries to import: ${importedEntryCount}`,
-        `Will be deleted: ${options.entryImportMode === "clear" ? currentEntryCount : 0}`,
-        `Will be replaced: ${options.entryImportMode === "replace" ? overlapCount : 0}`,
-        `New entries: ${options.entryImportMode === "keep" ? importedEntryCount : options.entryImportMode === "replace" ? newEntryCount : options.entryImportMode === "clear" ? importedEntryCount : 0}`,
-        `Import team data: ${options.overwriteTeam ? "yes" : "no"}`,
-        `Import phase data: ${options.overwritePhases ? "yes" : "no"}`,
-        `Import custom project files: ${options.importProjectFiles ? "yes" : "no"}`,
-        ...(options.importProjectFiles ? [
-          `  - Overwrite main.tex: ${options.overwriteMainTex ? "yes" : "no"}`,
-          `  - Overwrite stylesheet: ${options.overwriteStyles ? "yes" : "no"}`,
-          `  - Overwrite fonts: ${options.overwriteFonts ? "yes" : "no"}`
-        ] : []),
-      ].join("\n");
-
-      const proceed = await new Promise<boolean>(resolve => {
-        showConfirm(
-          "Confirm Import",
-          confirmMessage,
-          () => resolve(true),
-          "warning",
-          () => resolve(false)
-        );
+      const proceed = await promptImportConfirmation({
+        options,
+        currentEntries: currentEntryCount,
+        entriesToImport: importedEntryCount,
+        entriesReplaced: overlapCount,
+        newEntries: newEntryCount,
+        allowTeamImport: hasTeam,
+        allowPhaseImport: hasPhases,
+        hasMainTex: zipHasMainTex,
+        hasStyles: zipHasStyles,
+        hasFonts: zipHasFonts,
       });
 
       if (!proceed) return;
@@ -1168,6 +1204,30 @@ export default function App() {
         isOpen={isExportDialogOpen}
         onConfirm={handleConfirmExport}
         onCancel={() => setIsExportDialogOpen(false)}
+      />
+
+      <ImportConfirmDialog
+        isOpen={importConfirmDialog.isOpen}
+        options={importConfirmDialog.options}
+        currentEntries={importConfirmDialog.currentEntries}
+        entriesToImport={importConfirmDialog.entriesToImport}
+        entriesReplaced={importConfirmDialog.entriesReplaced}
+        newEntries={importConfirmDialog.newEntries}
+        allowTeamImport={importConfirmDialog.allowTeamImport}
+        allowPhaseImport={importConfirmDialog.allowPhaseImport}
+        hasMainTex={importConfirmDialog.hasMainTex}
+        hasStyles={importConfirmDialog.hasStyles}
+        hasFonts={importConfirmDialog.hasFonts}
+        onConfirm={() => {
+          const resolve = importConfirmDialog.resolve;
+          setImportConfirmDialog(prev => ({ ...prev, isOpen: false, resolve: null }));
+          resolve?.(true);
+        }}
+        onCancel={() => {
+          const resolve = importConfirmDialog.resolve;
+          setImportConfirmDialog(prev => ({ ...prev, isOpen: false, resolve: null }));
+          resolve?.(false);
+        }}
       />
 
       <ConfirmationDialog
