@@ -1,6 +1,5 @@
 // Small transfer-related helpers shared by TransferManager
 import type JSZip from 'jszip';
-import { LATEX_DIR } from "./constants";
 
 export const isBinaryFile = (path: string) => {
   return /\.(png|jpe?g|gif|webp|bmp|ico|tiff?|avif|heic|pdf|otf|ttf|woff2?|eot|zip|7z|rar|tar|gz|bz2|xz|mp3|wav|ogg|flac|aac|m4a|mp4|mov|avi|mkv|webm|wasm|exe|dll|so|dylib|bin)$/i.test(path);

@@ -1,4 +1,4 @@
-import { ASSETS_DIR, DATA_DIR } from "./constants";
+import { ASSETS_DIR } from "./constants";
 import { TipTapNode, ProjectPhase } from "./metadata";
 
 export const escapeLaTeX = (text?: string) =>

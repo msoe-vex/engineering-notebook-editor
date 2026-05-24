@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ShieldAlert, Check, X, ArrowRight, RefreshCw, Plus, Trash2, Users, Palette, FileCode, CheckSquare } from "lucide-react";
+import { ShieldAlert, Check, X, ArrowLeft, RefreshCw, Plus, Trash2, Users, Palette, FileCode, CheckSquare } from "lucide-react";
 import { ImportOptions } from "@/lib/store/types";
 
 interface ImportConfirmDialogProps {
@@ -18,6 +18,7 @@ interface ImportConfirmDialogProps {
   hasFonts: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  onBack: () => void;
 }
 
 export default function ImportConfirmDialog({
@@ -34,6 +35,7 @@ export default function ImportConfirmDialog({
   hasFonts,
   onConfirm,
   onCancel,
+  onBack,
 }: ImportConfirmDialogProps) {
   if (!isOpen) return null;
 
@@ -224,6 +226,13 @@ export default function ImportConfirmDialog({
               className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-nb-outline-variant/30 text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface transition-all duration-200 cursor-pointer active:scale-95 shrink-0"
             >
               Cancel
+            </button>
+            <button
+              onClick={onBack}
+              className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-nb-outline-variant/30 text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface transition-all duration-200 cursor-pointer active:scale-95 shrink-0 flex items-center gap-1.5"
+            >
+              <ArrowLeft size={12} />
+              Back
             </button>
             <button
               onClick={onConfirm}

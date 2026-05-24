@@ -59,10 +59,10 @@ export default function ImportDecisionDialog({
   const [importTeam, setImportTeam] = useState(initialOptions.overwriteTeam !== false);
   const [importPhases, setImportPhases] = useState(initialOptions.overwritePhases !== false);
 
-  const [importProjectFiles, setImportProjectFiles] = useState(true);
-  const [overwriteMainTex, setOverwriteMainTex] = useState(hasMainTex);
-  const [overwriteStyles, setOverwriteStyles] = useState(hasStyles);
-  const [overwriteFonts, setOverwriteFonts] = useState(hasFonts);
+  const [importProjectFiles, setImportProjectFiles] = useState(initialOptions.importProjectFiles !== false);
+  const [overwriteMainTex, setOverwriteMainTex] = useState(initialOptions.overwriteMainTex ?? hasMainTex);
+  const [overwriteStyles, setOverwriteStyles] = useState(initialOptions.overwriteStyles ?? hasStyles);
+  const [overwriteFonts, setOverwriteFonts] = useState(initialOptions.overwriteFonts ?? hasFonts);
 
   // Calculate the impact dynamically
   const derivedCounts = useMemo(() => {
@@ -320,7 +320,7 @@ export default function ImportDecisionDialog({
                             <label className="flex items-center justify-between gap-4 cursor-pointer select-none">
                               <div>
                                 <span className="block text-[9px] font-black uppercase tracking-widest text-nb-on-surface">Overwrite main.tex</span>
-                                <span className="block text-[9px] text-nb-on-surface-variant font-medium mt-0.5">Use the package's primary compilation layout file.</span>
+                                <span className="block text-[9px] text-nb-on-surface-variant font-medium mt-0.5">Use the package&apos;s primary compilation layout file.</span>
                               </div>
                               <input
                                 type="checkbox"
@@ -381,9 +381,9 @@ export default function ImportDecisionDialog({
                   overwriteTeam: importTeam,
                   overwritePhases: importPhases,
                   importProjectFiles,
-                  overwriteMainTex: importProjectFiles && overwriteMainTex,
-                  overwriteStyles: importProjectFiles && overwriteStyles,
-                  overwriteFonts: importProjectFiles && overwriteFonts,
+                  overwriteMainTex,
+                  overwriteStyles,
+                  overwriteFonts,
                 })}
                 className="px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest bg-nb-primary text-white hover:bg-nb-primary-dim shadow-lg shadow-nb-primary/20 hover:shadow-nb-primary/30 transition-all duration-200 cursor-pointer active:scale-95 flex-1 text-center font-bold"
               >

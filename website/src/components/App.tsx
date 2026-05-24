@@ -185,7 +185,7 @@ export default function App() {
     hasMainTex: boolean;
     hasStyles: boolean;
     hasFonts: boolean;
-    resolve: ((value: boolean) => void) | null;
+    resolve: ((value: "confirm" | "back" | "cancel") => void) | null;
   }>({
     isOpen: false,
     options: { entryImportMode: "replace", overwriteTeam: true, overwritePhases: true },
@@ -252,7 +252,7 @@ export default function App() {
     hasStyles: boolean;
     hasFonts: boolean;
   }) => {
-    return new Promise<boolean>(resolve => {
+    return new Promise<"confirm" | "back" | "cancel">(resolve => {
       setImportConfirmDialog({
         isOpen: true,
         ...params,
@@ -811,48 +811,62 @@ export default function App() {
       const overlapCount = importedEntryIds.filter(id => currentEntryIds.has(id)).length;
       const newEntryCount = importedEntryCount - overlapCount;
 
-      const initialOptions: ImportOptions = {
+      let options = {
         entryImportMode: importedEntryCount > 0 ? "replace" : "none",
         overwriteTeam: hasTeam,
         overwritePhases: hasPhases,
-        importProjectFiles: false,
+        importProjectFiles: true,
         overwriteMainTex: zipHasMainTex,
         overwriteStyles: zipHasStyles,
         overwriteFonts: zipHasFonts,
-      };
+      } as ImportOptions;
 
-      const options = await promptImportDecision({
-        title: "Import options",
-        currentEntries: currentEntryCount,
-        entriesToImport: importedEntryCount,
-        entriesReplaced: overlapCount,
-        newEntries: newEntryCount,
-        initialOptions,
-        allowTeamImport: hasTeam,
-        allowPhaseImport: hasPhases,
-        hasMainTex: zipHasMainTex,
-        hasStyles: zipHasStyles,
-        hasFonts: zipHasFonts,
-      });
+      let shouldPromptDecision = true;
 
-      if (!options || !data) return;
+      while (true) {
+        if (shouldPromptDecision) {
+          const chosenOptions = await promptImportDecision({
+            title: "Import options",
+            currentEntries: currentEntryCount,
+            entriesToImport: importedEntryCount,
+            entriesReplaced: overlapCount,
+            newEntries: newEntryCount,
+            initialOptions: options,
+            allowTeamImport: hasTeam,
+            allowPhaseImport: hasPhases,
+            hasMainTex: zipHasMainTex,
+            hasStyles: zipHasStyles,
+            hasFonts: zipHasFonts,
+          });
 
-      const proceed = await promptImportConfirmation({
-        options,
-        currentEntries: currentEntryCount,
-        entriesToImport: importedEntryCount,
-        entriesReplaced: overlapCount,
-        newEntries: newEntryCount,
-        allowTeamImport: hasTeam,
-        allowPhaseImport: hasPhases,
-        hasMainTex: zipHasMainTex,
-        hasStyles: zipHasStyles,
-        hasFonts: zipHasFonts,
-      });
+          if (!chosenOptions || !data) return;
+          options = chosenOptions;
+        }
 
-      if (!proceed) return;
+        const confirmationResult = await promptImportConfirmation({
+          options,
+          currentEntries: currentEntryCount,
+          entriesToImport: importedEntryCount,
+          entriesReplaced: overlapCount,
+          newEntries: newEntryCount,
+          allowTeamImport: hasTeam,
+          allowPhaseImport: hasPhases,
+          hasMainTex: zipHasMainTex,
+          hasStyles: zipHasStyles,
+          hasFonts: zipHasFonts,
+        });
 
-      await importNotebook(data, options);
+        if (confirmationResult === "confirm") {
+          await importNotebook(data, options);
+          break;
+        } else if (confirmationResult === "back") {
+          shouldPromptDecision = true;
+          // Loop again and show settings dialog
+        } else {
+          // Cancelled
+          break;
+        }
+      }
     } catch {
       showNotification("Import failed", "error");
     }
@@ -1221,12 +1235,17 @@ export default function App() {
         onConfirm={() => {
           const resolve = importConfirmDialog.resolve;
           setImportConfirmDialog(prev => ({ ...prev, isOpen: false, resolve: null }));
-          resolve?.(true);
+          resolve?.("confirm");
         }}
         onCancel={() => {
           const resolve = importConfirmDialog.resolve;
           setImportConfirmDialog(prev => ({ ...prev, isOpen: false, resolve: null }));
-          resolve?.(false);
+          resolve?.("cancel");
+        }}
+        onBack={() => {
+          const resolve = importConfirmDialog.resolve;
+          setImportConfirmDialog(prev => ({ ...prev, isOpen: false, resolve: null }));
+          resolve?.("back");
         }}
       />
 

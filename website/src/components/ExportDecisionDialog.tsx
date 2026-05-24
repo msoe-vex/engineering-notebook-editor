@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Download, X, FileJson, Archive, Check } from "lucide-react";
+import { Download, X, FileJson, Archive } from "lucide-react";
 
 interface ExportDecisionDialogProps {
   isOpen: boolean;
