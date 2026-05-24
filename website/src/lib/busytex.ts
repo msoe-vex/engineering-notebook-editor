@@ -1,6 +1,6 @@
 import { BusyTexRunner, XeLatex, FileInput } from 'texlyre-busytex';
 import { store } from './store';
-import { DATA_DIR, LATEX_DIR } from './constants';
+import { DATA_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from './constants';
 
 let runner: BusyTexRunner | null = null;
 let xelatex: XeLatex | null = null;
@@ -94,8 +94,8 @@ export async function compileNotebook(mode: CompileMode = "quality", onStatus?: 
 
     for (const pkg of packageFiles) {
       try {
-        // Try to pull main.tex and engineering_notebook.sty from workspace first
-        if (pkg === 'main.tex' || pkg === 'engineering_notebook.sty') {
+        // Try to pull main.tex and notebook.sty from workspace first
+        if (pkg === 'main.tex' || pkg === 'notebook.sty') {
           const userContent = await store.getFileContent(pkg);
           if (userContent) {
             files.push({ path: pkg, content: userContent });
@@ -129,16 +129,16 @@ export async function compileNotebook(mode: CompileMode = "quality", onStatus?: 
     }
   }
 
-  // 3. Map project files from store (Only files in data/ are dynamic)
+  // 3. Map project files from store (Only files in latex/ are dynamic)
   onStatus?.("Mapping document structure...", 5, TOTAL_STEPS, 65);
-  const teamTex = await store.getFileContent(`${DATA_DIR}/team.tex`);
-  const phasesTex = await store.getFileContent(`${DATA_DIR}/phases.tex`);
-  const entriesIndexTex = await store.getFileContent(`${DATA_DIR}/entries.tex`);
+  const teamTex = await store.getFileContent(TEAM_PATH);
+  const phasesTex = await store.getFileContent(PHASES_PATH);
+  const entriesIndexTex = await store.getFileContent(ENTRIES_INDEX_PATH);
 
-  if (teamTex) files.push({ path: 'data/team.tex', content: teamTex });
-  if (phasesTex) files.push({ path: 'data/phases.tex', content: phasesTex });
+  if (teamTex) files.push({ path: TEAM_PATH, content: teamTex });
+  if (phasesTex) files.push({ path: PHASES_PATH, content: phasesTex });
   if (entriesIndexTex) {
-    files.push({ path: 'data/entries.tex', content: entriesIndexTex });
+    files.push({ path: ENTRIES_INDEX_PATH, content: entriesIndexTex });
   }
 
   // 4. Map entry .tex files
@@ -147,7 +147,7 @@ export async function compileNotebook(mode: CompileMode = "quality", onStatus?: 
     const entryTexPath = `${LATEX_DIR}/${entryId}.tex`;
     const tex = await store.getFileContent(entryTexPath);
     if (tex) {
-      files.push({ path: `data/latex/${entryId}.tex`, content: tex });
+      files.push({ path: entryTexPath, content: tex });
     }
   }
 

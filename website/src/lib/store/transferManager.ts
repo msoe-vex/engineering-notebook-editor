@@ -74,14 +74,16 @@ export class TransferManager {
     return null;
   }
 
-  async exportEntries(entryIds?: string[]) {
+  async exportEntries(entryIds?: string[], mode: 'data-only' | 'full' = 'data-only') {
     this.store.setLoading(true, "Exporting data...");
     try {
       const JSZipModule = await import("jszip");
       const JSZip = JSZipModule.default as unknown as { new(): JSZipType };
       const zip: JSZipType = new JSZip();
+      
+      const isSubset = !!entryIds;
+      const exportMode = isSubset ? 'data-only' : mode;
       const targets = entryIds || Object.keys(this.store.metadata.entries);
-      const exportAll = !entryIds;
       const assetPaths = new Set<string>();
 
       const addAssetPath = (assetPath?: string) => {
@@ -91,29 +93,24 @@ export class TransferManager {
       };
 
       const addTextFile = async (path: string) => addTextFileToZip(zip, (p: string) => this.getFileContent(p), path);
-
       const addAssetFile = async (path: string) => addAssetFileToZip(zip, (p: string) => this.getAssetBase64(p), path);
 
-      // Only include top-level LaTeX sources and compiled PDF when exporting the
-      // entire notebook. When exporting a subset of entries we should not
-      // include `main.tex`, `engineering_notebook.sty` or `main.pdf` since
-      // those represent the full-document build and may confuse consumers of
-      // entry-only exports.
-      if (exportAll) {
-        await addTextFile("main.tex");
-        await addTextFile("engineering_notebook.sty");
-
-        try {
-          const pdfBase64 = await this.getAssetBase64("main.pdf");
-          if (pdfBase64) {
-            zip.file("main.pdf", pdfBase64, { base64: true });
-          }
-        } catch (err) {
-          console.warn("[Export] Skipping main.pdf due to error:", err);
+      // Write Manifest
+      const manifest = {
+        version: "1.0.0",
+        formatVersion: 2,
+        generatedAt: new Date().toISOString(),
+        includes: {
+          data: true,
+          latex: exportMode === 'full',
+          fonts: exportMode === 'full',
+          pdf: exportMode === 'full'
         }
-      }
+      };
+      zip.file("notebook.index.json", JSON.stringify(manifest, null, 2));
 
-      if (exportAll) {
+      // 1. Data Mode files
+      if (!isSubset) {
         zip.file(INDEX_PATH, JSON.stringify(this.store.metadata, null, 2));
       } else {
         const filteredEntries: Record<string, EntryMetadata> = {};
@@ -127,13 +124,7 @@ export class TransferManager {
         }, null, 2));
       }
 
-      // Only include team/phase metadata when exporting the full notebook.
-      if (exportAll) {
-        await addTextFile(TEAM_PATH);
-        await addTextFile(PHASES_PATH);
-        await addTextFile(ENTRIES_INDEX_PATH);
-      }
-
+      // Add entries json
       for (const id of targets) {
         const meta = this.store.metadata.entries[id];
         if (!meta) continue;
@@ -151,15 +142,11 @@ export class TransferManager {
           console.error(`Failed to parse content for ${id}`, e);
           continue;
         }
-
-        const latexPath = `${LATEX_DIR}/${id}.tex`;
-        const latex = await this.getFileContent(latexPath);
-        if (latex) zip.file(latexPath, latex);
-
         extractImagePaths(content).forEach(addAssetPath);
       }
 
-      if (this.store.metadata.team) {
+      // Include team assets if exporting full notebook
+      if (!isSubset && this.store.metadata.team) {
         addAssetPath(this.store.metadata.team.logo);
         addAssetPath(this.store.metadata.team.logoOriginal);
         this.store.metadata.team.members.forEach(member => {
@@ -168,11 +155,68 @@ export class TransferManager {
         });
       }
 
+      // Bundle assets
       for (const assetPath of assetPaths) {
         try {
           await addAssetFile(assetPath);
         } catch (err) {
           console.warn(`[Export] Skipping asset due to error: ${assetPath}`, err);
+        }
+      }
+
+      // 2. Full LaTeX Project Mode files
+      if (exportMode === 'full') {
+        await addTextFile("main.tex");
+        await addTextFile("notebook.sty");
+
+        try {
+          const pdfBase64 = await this.getAssetBase64("main.pdf");
+          if (pdfBase64) {
+            zip.file("main.pdf", pdfBase64, { base64: true });
+          }
+        } catch (err) {
+          console.warn("[Export] Skipping main.pdf due to error:", err);
+        }
+
+        // Global LaTeX documents
+        await addTextFile(TEAM_PATH);
+        await addTextFile(PHASES_PATH);
+        await addTextFile(ENTRIES_INDEX_PATH);
+
+        // Entry LaTeX documents
+        for (const id of targets) {
+          const latexPath = `${LATEX_DIR}/${id}.tex`;
+          const latex = await this.getFileContent(latexPath);
+          if (latex) zip.file(latexPath, latex);
+        }
+
+        // Bundle fonts
+        const fontFiles = [
+          'inter/Inter-Regular.otf', 'inter/Inter-Bold.otf', 'inter/Inter-Italic.otf', 'inter/Inter-BoldItalic.otf',
+          'inconsolata/Inconsolata-Regular.otf', 'inconsolata/Inconsolata-Bold.otf'
+        ];
+
+        for (const font of fontFiles) {
+          try {
+            let base64 = await this.getAssetBase64(`fonts/${font}`);
+            if (!base64) {
+              const res = await fetch(`/fonts/${font}`);
+              if (res.ok) {
+                const buffer = await res.arrayBuffer();
+                let binary = '';
+                const bytes = new Uint8Array(buffer);
+                for (let i = 0; i < bytes.byteLength; i++) {
+                  binary += String.fromCharCode(bytes[i]);
+                }
+                base64 = btoa(binary);
+              }
+            }
+            if (base64) {
+              zip.file(`fonts/${font}`, base64, { base64: true });
+            }
+          } catch (err) {
+            console.warn(`[Export] Skipping font ${font} due to error:`, err);
+          }
         }
       }
 
@@ -193,8 +237,8 @@ export class TransferManager {
     }
   }
 
-  async exportNotebook() {
-    await this.exportEntries();
+  async exportNotebook(mode?: 'data-only' | 'full') {
+    await this.exportEntries(undefined, mode);
   }
 
   async importNotebook(data: Record<string, unknown>, options?: ImportOptions) {
@@ -205,12 +249,14 @@ export class TransferManager {
         assets = {},
         files = {},
         latexFiles = {},
+        fonts = {},
         pdf = ""
       } = data as {
         entries: Record<string, Record<string, unknown>>;
         assets: Record<string, unknown>;
         files?: Record<string, string>;
         latexFiles?: Record<string, string>;
+        fonts?: Record<string, string>;
         pdf?: string;
       };
       const entryImportMode: EntryImportMode = options?.entryImportMode || "replace";
@@ -333,6 +379,7 @@ export class TransferManager {
       const extraFiles = { ...(latexFiles || {}), ...(files || {}) };
 
       await this.store.enqueue(async () => {
+        // Write assets
         for (const [path, base64] of assetList) {
           const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${base64}`;
           this.store.assetCache.set(path, dataUrl);
@@ -342,6 +389,7 @@ export class TransferManager {
           }
         }
 
+        // Write entries JSON and entries LaTeX files (which are always reconstructed for imported entries)
         for (const item of remappedEntries) {
           const { id, doc, meta } = item;
           const contentStr = JSON.stringify({ version: 3, content: doc }, null, 2);
@@ -351,17 +399,34 @@ export class TransferManager {
           await this.store.persistFile(`${LATEX_DIR}/${id}.tex`, latex, `Import LaTeX: ${meta.title}`);
         }
 
-        for (const [path, content] of Object.entries(extraFiles)) {
-          if (!path || typeof content !== "string") continue;
-          if (path === INDEX_PATH) continue;
-          if (entryImportMode === "none" && (path.startsWith(`${ENTRIES_DIR}/`) || path.startsWith(`${LATEX_DIR}/`))) continue;
-          if (path.startsWith(`${ENTRIES_DIR}/`) || path.startsWith(`${ASSETS_DIR}/`)) continue;
-          if (entryIdList.length > 0 && path.startsWith(`${LATEX_DIR}/`)) continue;
-          await this.store.persistFile(path, content, `Import file: ${path}`);
-        }
+        // Only write custom project files if opted-in
+        if (options?.importProjectFiles) {
+          if (options.overwriteMainTex && files["main.tex"]) {
+            await this.store.persistFile("main.tex", files["main.tex"], "Import main.tex");
+          }
+          if (options.overwriteStyles && files["notebook.sty"]) {
+            await this.store.persistFile("notebook.sty", files["notebook.sty"], "Import notebook.sty");
+          }
 
-        if (pdf && typeof pdf === "string") {
-          await this.store.persistFile("main.pdf", pdf, "Import compiled PDF", true);
+          // Write remaining extra non-binary files (custom latex config files, readme, guide etc.)
+          for (const [path, content] of Object.entries(extraFiles)) {
+            if (!path || typeof content !== "string") continue;
+            if (path === INDEX_PATH || path === "main.tex" || path === "notebook.sty") continue;
+            if (entryImportMode === "none" && (path.startsWith(`${ENTRIES_DIR}/`) || path.startsWith("latex/"))) continue;
+            if (path.startsWith(`${ENTRIES_DIR}/`) || path.startsWith(`${ASSETS_DIR}/`)) continue;
+            if (entryIdList.length > 0 && path.startsWith("latex/")) continue;
+            await this.store.persistFile(path, content, `Import file: ${path}`);
+          }
+
+          if (pdf && typeof pdf === "string") {
+            await this.store.persistFile("main.pdf", pdf, "Import compiled PDF", true);
+          }
+
+          if (options.overwriteFonts && data.fonts) {
+            for (const [path, base64] of Object.entries(data.fonts as Record<string, string>)) {
+              await this.store.persistFile(path, base64, `Import font: ${path}`, true);
+            }
+          }
         }
 
         await this.store.persistFile(INDEX_PATH, JSON.stringify(this.store.metadata, null, 2), "Import notebook metadata");
@@ -408,6 +473,7 @@ export class TransferManager {
       const assets: Record<string, string> = {};
       const files: Record<string, string> = {};
       const latexFiles: Record<string, string> = {};
+      const fonts: Record<string, string> = {};
       let pdf = "";
 
       for (const filename of filenames) {
@@ -427,8 +493,10 @@ export class TransferManager {
           pdf = await entry.async("base64");
         } else if (filename.startsWith(`${ASSETS_DIR}/`)) {
           assets[filename] = await entry.async("base64");
-        } else if (filename.startsWith(`${LATEX_DIR}/`)) {
+        } else if (filename.startsWith("latex/") && filename.endsWith(".tex")) {
           latexFiles[filename] = await entry.async("string");
+        } else if (filename.startsWith("fonts/")) {
+          fonts[filename] = await entry.async("base64");
         } else if (!isBinaryFile(filename)) {
           files[filename] = await entry.async("string");
         }
@@ -439,6 +507,7 @@ export class TransferManager {
         assets,
         files,
         latexFiles,
+        fonts,
         pdf,
       };
 

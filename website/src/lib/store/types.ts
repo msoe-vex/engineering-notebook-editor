@@ -13,6 +13,10 @@ export interface ImportOptions {
   entryImportMode?: EntryImportMode;
   overwriteTeam?: boolean;
   overwritePhases?: boolean;
+  importProjectFiles?: boolean;
+  overwriteMainTex?: boolean;
+  overwriteStyles?: boolean;
+  overwriteFonts?: boolean;
 }
 
 export interface OpenFileState {
@@ -98,11 +102,11 @@ export interface IWorkspaceStore {
   saveTeam(team: TeamMetadata, phases?: ProjectPhase[]): Promise<void>;
   commitAll(config: GitHubConfig, customMessage?: string): Promise<void>;
   getFileContent(path: string): Promise<string | null>;
-  exportEntries(entryIds?: string[]): Promise<void>;
+  exportEntries(entryIds?: string[], mode?: 'data-only' | 'full'): Promise<void>;
   importNotebook(data: Record<string, unknown>, options?: ImportOptions): Promise<void>;
   importNotebookArchive(file: File, options?: ImportOptions): Promise<void>;
   getAssetBase64(path: string): Promise<string | null>;
-  exportNotebook(): Promise<void>;
+  exportNotebook(mode?: 'data-only' | 'full'): Promise<void>;
   disconnect(): Promise<void>;
   saveCompiledPdf(pdfData: Uint8Array): Promise<void>;
   getCompiledPdfUrl(): Promise<string | null>;

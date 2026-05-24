@@ -22,6 +22,7 @@ import HelpPage from "./HelpPage";
 import ProjectHeader from "./ProjectHeader";
 import AboutPage from "./AboutPage";
 import ImportDecisionDialog from "./ImportDecisionDialog";
+import ExportDecisionDialog from "./ExportDecisionDialog";
 import LoadingOverlay from "./LoadingOverlay";
 import Logo from "./Logo";
 import { ViewMode } from "./editor/ui/ViewToggle";
@@ -139,6 +140,8 @@ export default function App() {
     onConfirm: () => { },
   });
 
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+
   const [importDecisionDialog, setImportDecisionDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -149,6 +152,9 @@ export default function App() {
     initialOptions: ImportOptions;
     allowTeamImport: boolean;
     allowPhaseImport: boolean;
+    hasMainTex?: boolean;
+    hasStyles?: boolean;
+    hasFonts?: boolean;
     resolve: ((value: ImportOptions | null) => void) | null;
   }>({
     isOpen: false,
@@ -160,6 +166,9 @@ export default function App() {
     initialOptions: { entryImportMode: "replace", overwriteTeam: true, overwritePhases: true },
     allowTeamImport: false,
     allowPhaseImport: false,
+    hasMainTex: false,
+    hasStyles: false,
+    hasFonts: false,
     resolve: null,
   });
 
@@ -189,6 +198,9 @@ export default function App() {
     initialOptions: ImportOptions;
     allowTeamImport: boolean;
     allowPhaseImport: boolean;
+    hasMainTex?: boolean;
+    hasStyles?: boolean;
+    hasFonts?: boolean;
   }) => {
     return new Promise<ImportOptions | null>(resolve => {
       setImportDecisionDialog({
@@ -642,8 +654,13 @@ export default function App() {
     });
   };
 
-  const handleExportNotebook = async () => {
-    await exportNotebook();
+  const handleExportNotebook = () => {
+    setIsExportDialogOpen(true);
+  };
+
+  const handleConfirmExport = async (mode: 'data-only' | 'full') => {
+    setIsExportDialogOpen(false);
+    await exportNotebook(mode);
   };
 
   const importNotebookFromFile = async (file: File) => {
@@ -654,11 +671,18 @@ export default function App() {
       let hasPhases = false;
       let importedEntryCount = 0;
       let importedEntryIds: string[] = [];
+      let zipHasMainTex = false;
+      let zipHasStyles = false;
+      let zipHasFonts = false;
 
       if (lowerName.endsWith(".zip")) {
         const JSZip = (await import("jszip")).default;
         const zip = await JSZip.loadAsync(await file.arrayBuffer());
         const filenames = Object.keys(zip.files).filter(name => !zip.files[name].dir);
+
+        zipHasMainTex = filenames.includes("main.tex");
+        zipHasStyles = filenames.includes("notebook.sty") || filenames.includes("engineering_notebook.sty");
+        zipHasFonts = filenames.some(f => f.startsWith("fonts/"));
 
         let parsedIndex: { entries?: Record<string, unknown>; team?: unknown; phases?: unknown; lastCompiled?: string } | null = null;
         const indexEntry = zip.file(INDEX_PATH);
@@ -676,6 +700,7 @@ export default function App() {
         const assets: Record<string, string> = {};
         const files: Record<string, string> = {};
         const latexFiles: Record<string, string> = {};
+        const fonts: Record<string, string> = {};
         let pdf = "";
 
         for (const filename of filenames) {
@@ -695,8 +720,10 @@ export default function App() {
             pdf = await entry.async("base64");
           } else if (filename.startsWith("data/assets/")) {
             assets[filename] = await entry.async("base64");
-          } else if (filename.startsWith("data/latex/")) {
+          } else if (filename.startsWith("latex/") && filename.endsWith(".tex")) {
             latexFiles[filename] = await entry.async("string");
+          } else if (filename.startsWith("fonts/")) {
+            fonts[filename] = await entry.async("base64");
           } else if (!filename.endsWith("/")) {
             if (isBinaryFile(filename)) {
               continue;
@@ -710,6 +737,7 @@ export default function App() {
           assets,
           files,
           latexFiles,
+          fonts,
           pdf,
           ...(pdf && parsedIndex?.lastCompiled ? { lastCompiled: parsedIndex.lastCompiled } : {}),
           ...(parsedIndex?.team ? { team: parsedIndex.team } : {}),
@@ -737,6 +765,10 @@ export default function App() {
         entryImportMode: importedEntryCount > 0 ? "replace" : "none",
         overwriteTeam: hasTeam,
         overwritePhases: hasPhases,
+        importProjectFiles: false,
+        overwriteMainTex: zipHasMainTex,
+        overwriteStyles: zipHasStyles,
+        overwriteFonts: zipHasFonts,
       };
 
       const options = await promptImportDecision({
@@ -748,6 +780,9 @@ export default function App() {
         initialOptions,
         allowTeamImport: hasTeam,
         allowPhaseImport: hasPhases,
+        hasMainTex: zipHasMainTex,
+        hasStyles: zipHasStyles,
+        hasFonts: zipHasFonts,
       });
 
       if (!options || !data) return;
@@ -761,6 +796,12 @@ export default function App() {
         `New entries: ${options.entryImportMode === "keep" ? importedEntryCount : options.entryImportMode === "replace" ? newEntryCount : options.entryImportMode === "clear" ? importedEntryCount : 0}`,
         `Import team data: ${options.overwriteTeam ? "yes" : "no"}`,
         `Import phase data: ${options.overwritePhases ? "yes" : "no"}`,
+        `Import custom project files: ${options.importProjectFiles ? "yes" : "no"}`,
+        ...(options.importProjectFiles ? [
+          `  - Overwrite main.tex: ${options.overwriteMainTex ? "yes" : "no"}`,
+          `  - Overwrite stylesheet: ${options.overwriteStyles ? "yes" : "no"}`,
+          `  - Overwrite fonts: ${options.overwriteFonts ? "yes" : "no"}`
+        ] : []),
       ].join("\n");
 
       const proceed = await new Promise<boolean>(resolve => {
@@ -1085,6 +1126,9 @@ export default function App() {
           initialOptions={importDecisionDialog.initialOptions}
           allowTeamImport={importDecisionDialog.allowTeamImport}
           allowPhaseImport={importDecisionDialog.allowPhaseImport}
+          hasMainTex={importDecisionDialog.hasMainTex}
+          hasStyles={importDecisionDialog.hasStyles}
+          hasFonts={importDecisionDialog.hasFonts}
           onConfirm={(options) => {
             const resolve = importDecisionDialog.resolve;
             setImportDecisionDialog({
@@ -1119,6 +1163,12 @@ export default function App() {
           }}
         />
       )}
+
+      <ExportDecisionDialog
+        isOpen={isExportDialogOpen}
+        onConfirm={handleConfirmExport}
+        onCancel={() => setIsExportDialogOpen(false)}
+      />
 
       <ConfirmationDialog
         isOpen={confirmDialog.isOpen}

@@ -385,7 +385,7 @@ export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: strin
   return latex;
 };
 
-export const generateAllEntriesLatex = (metadata: { entries: Record<string, { id: string, date: string, createdAt: string, updatedAt?: string }> }, prefix: string = `${DATA_DIR}/`): string => {
+export const generateAllEntriesLatex = (metadata: { entries: Record<string, { id: string, date: string, createdAt: string, updatedAt?: string }> }, prefix: string = ""): string => {
   const entries = Object.values(metadata.entries)
     .sort((a, b) => {
       const dateComp = (a.date || "").localeCompare(b.date || "");
@@ -396,7 +396,7 @@ export const generateAllEntriesLatex = (metadata: { entries: Record<string, { id
     });
 
   return entries
-    .map(entry => `\\input{${prefix}latex/${entry.id}.tex}`)
+    .map(entry => `\\input{${prefix}latex/entries/${entry.id}.tex}`)
     .join("\n") + "\n";
 };
 

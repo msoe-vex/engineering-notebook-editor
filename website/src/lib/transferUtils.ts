@@ -17,7 +17,7 @@ export async function addTextFileToZip(zip: JSZip, getFileContent: (path: string
     return;
   }
 
-  const fallbackAllowed = path === 'main.tex' || path === 'engineering_notebook.sty' || path.startsWith(`${LATEX_DIR}/`);
+  const fallbackAllowed = path === 'main.tex' || path === 'notebook.sty' || path.startsWith('latex/');
   if (!fallbackAllowed) return;
 
   try {

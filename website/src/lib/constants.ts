@@ -7,11 +7,11 @@ export const ENTRIES_DIR = `${DATA_DIR}/entries`;
 export const ASSETS_DIR = `${DATA_DIR}/assets`;
 export const ASSETS_ORIGINAL_DIR = `${ASSETS_DIR}/original`;
 export const ASSETS_COMPRESSED_DIR = `${ASSETS_DIR}/compressed`;
-export const LATEX_DIR = `${DATA_DIR}/latex`;
+export const LATEX_DIR = "latex/entries";
 export const INDEX_PATH = `${DATA_DIR}/notebook.json`;
-export const ENTRIES_INDEX_PATH = `${DATA_DIR}/entries.tex`;
-export const TEAM_PATH = `${DATA_DIR}/team.tex`;
-export const PHASES_PATH = `${DATA_DIR}/phases.tex`;
+export const ENTRIES_INDEX_PATH = "latex/entries.tex";
+export const TEAM_PATH = "latex/team.tex";
+export const PHASES_PATH = "latex/phases.tex";
 
 // GitHub Integration
 export const GITHUB_APP_INSTALL_URL = "https://github.com/apps/msoe-engineering-notebook-editor/installations/select_target";

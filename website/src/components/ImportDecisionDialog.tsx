@@ -14,6 +14,9 @@ interface ImportDecisionDialogProps {
   initialOptions: ImportOptions;
   allowTeamImport: boolean;
   allowPhaseImport: boolean;
+  hasMainTex?: boolean;
+  hasStyles?: boolean;
+  hasFonts?: boolean;
   onConfirm: (options: ImportOptions) => void;
   onCancel: () => void;
 }
@@ -28,12 +31,20 @@ export default function ImportDecisionDialog({
   initialOptions,
   allowTeamImport,
   allowPhaseImport,
+  hasMainTex = false,
+  hasStyles = false,
+  hasFonts = false,
   onConfirm,
   onCancel,
 }: ImportDecisionDialogProps) {
   const [entryImportMode, setEntryImportMode] = useState<EntryImportMode>(initialOptions.entryImportMode || "replace");
   const [importTeam, setImportTeam] = useState(initialOptions.overwriteTeam !== false);
   const [importPhases, setImportPhases] = useState(initialOptions.overwritePhases !== false);
+
+  const [importProjectFiles, setImportProjectFiles] = useState(false);
+  const [overwriteMainTex, setOverwriteMainTex] = useState(hasMainTex);
+  const [overwriteStyles, setOverwriteStyles] = useState(hasStyles);
+  const [overwriteFonts, setOverwriteFonts] = useState(hasFonts);
 
   const derivedCounts = useMemo(() => {
     if (entryImportMode === "none") {
@@ -84,7 +95,6 @@ export default function ImportDecisionDialog({
           </div>
 
           <div className="grid grid-cols-2 gap-3 mb-6">
-            {/* <StatCard label="Current entries" value={currentEntries} tone="neutral" /> */} {/* Optional: can show current entries if it adds value, skip for now */}
             <StatCard label="Entries to import" value={entriesToImport} tone="neutral" />
             <StatCard label="Will be deleted" value={derivedCounts.deleted} tone="danger" />
             <StatCard label="Will be replaced" value={derivedCounts.replaced} tone="warning" />
@@ -127,6 +137,70 @@ export default function ImportDecisionDialog({
                 className="h-4 w-4 rounded border-nb-outline-variant/50 text-nb-primary focus:ring-nb-primary disabled:cursor-not-allowed disabled:opacity-40"
               />
             </label>
+
+            {/* Custom Project Files Accordion */}
+            {(hasMainTex || hasStyles || hasFonts) && (
+              <div className="rounded-2xl border border-nb-outline-variant/30 bg-nb-surface-low overflow-hidden">
+                <div 
+                  onClick={() => setImportProjectFiles(!importProjectFiles)}
+                  className="flex items-center justify-between px-4 py-3.5 cursor-pointer hover:bg-nb-surface-mid/40 transition-colors select-none"
+                >
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface">
+                      Custom Project Files Detected
+                    </span>
+                    <span className="text-[9px] text-nb-on-surface-variant font-bold mt-0.5">
+                      {importProjectFiles ? "Overwriting selected files" : "Data-only import (recommended)"}
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={importProjectFiles}
+                    onChange={(e) => setImportProjectFiles(e.target.checked)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="h-4 w-4 rounded border-nb-outline-variant/50 text-nb-primary focus:ring-nb-primary cursor-pointer"
+                  />
+                </div>
+
+                {importProjectFiles && (
+                  <div className="px-4 pb-4 pt-1 border-t border-nb-outline-variant/10 flex flex-col gap-3 animate-in slide-in-from-top-2 duration-200">
+                    {hasMainTex && (
+                      <label className="flex items-center justify-between gap-4 cursor-pointer select-none">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-nb-on-surface-variant">Overwrite main.tex</span>
+                        <input
+                          type="checkbox"
+                          checked={overwriteMainTex}
+                          onChange={(e) => setOverwriteMainTex(e.target.checked)}
+                          className="h-4 w-4 rounded border-nb-outline-variant/50 text-nb-primary focus:ring-nb-primary"
+                        />
+                      </label>
+                    )}
+                    {hasStyles && (
+                      <label className="flex items-center justify-between gap-4 cursor-pointer select-none">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-nb-on-surface-variant">Overwrite Stylesheet (notebook.sty)</span>
+                        <input
+                          type="checkbox"
+                          checked={overwriteStyles}
+                          onChange={(e) => setOverwriteStyles(e.target.checked)}
+                          className="h-4 w-4 rounded border-nb-outline-variant/50 text-nb-primary focus:ring-nb-primary"
+                        />
+                      </label>
+                    )}
+                    {hasFonts && (
+                      <label className="flex items-center justify-between gap-4 cursor-pointer select-none">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-nb-on-surface-variant">Overwrite Custom Fonts</span>
+                        <input
+                          type="checkbox"
+                          checked={overwriteFonts}
+                          onChange={(e) => setOverwriteFonts(e.target.checked)}
+                          className="h-4 w-4 rounded border-nb-outline-variant/50 text-nb-primary focus:ring-nb-primary"
+                        />
+                      </label>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -137,7 +211,15 @@ export default function ImportDecisionDialog({
               Cancel
             </button>
             <button
-              onClick={() => onConfirm({ entryImportMode, overwriteTeam: importTeam, overwritePhases: importPhases })}
+              onClick={() => onConfirm({
+                entryImportMode,
+                overwriteTeam: importTeam,
+                overwritePhases: importPhases,
+                importProjectFiles,
+                overwriteMainTex: importProjectFiles && overwriteMainTex,
+                overwriteStyles: importProjectFiles && overwriteStyles,
+                overwriteFonts: importProjectFiles && overwriteFonts,
+              })}
               className={`${buttonClass} bg-nb-primary text-white hover:bg-nb-primary-dim shadow-lg shadow-nb-primary/20 sm:col-span-3`}
             >
               Import

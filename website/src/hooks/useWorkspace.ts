@@ -96,8 +96,8 @@ export function useWorkspace() {
   const navigateTo = useCallback((params: Record<string, string | null>, path?: string) => store.navigateTo(params, path), []);
   const handleUrlChange = useCallback(() => store.handleUrlChange(), []);
   const getFileContent = useCallback((path: string) => store.getFileContent(path), []);
-  const exportNotebook = useCallback(() => store.exportNotebook(), []);
-  const exportEntries = useCallback((entryIds?: string[]) => store.exportEntries(entryIds), []);
+  const exportNotebook = useCallback((mode?: 'data-only' | 'full') => store.exportNotebook(mode), []);
+  const exportEntries = useCallback((entryIds?: string[], mode?: 'data-only' | 'full') => store.exportEntries(entryIds, mode), []);
   const importNotebook = useCallback((data: Record<string, unknown>, options?: ImportOptions) => store.importNotebook(data, options), []);
   const importNotebookArchive = useCallback((file: File, options?: ImportOptions) => store.importNotebookArchive(file, options), []);
   const setSelectedPaths = useCallback((pathsOrUpdater: Set<string> | ((prev: Set<string>) => Set<string>)) => store.setSelectedPaths(pathsOrUpdater), []);
