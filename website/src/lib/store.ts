@@ -233,12 +233,12 @@ class WorkspaceStore implements IWorkspaceStore {
     return this.transferManager.getAssetBase64(path);
   }
 
-  public async exportEntries(entryIds?: string[]) {
-    return this.transferManager.exportEntries(entryIds);
+  public async exportEntries(entryIds?: string[], mode?: 'data-only' | 'full') {
+    return this.transferManager.exportEntries(entryIds, mode);
   }
 
-  public async exportNotebook() {
-    return this.transferManager.exportNotebook();
+  public async exportNotebook(mode?: 'data-only' | 'full') {
+    return this.transferManager.exportNotebook(mode);
   }
 
   public async importNotebook(data: Record<string, unknown>, options?: ImportOptions) {

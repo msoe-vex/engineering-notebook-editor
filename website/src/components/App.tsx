@@ -22,6 +22,8 @@ import HelpPage from "./HelpPage";
 import ProjectHeader from "./ProjectHeader";
 import AboutPage from "./AboutPage";
 import ImportDecisionDialog from "./ImportDecisionDialog";
+import ImportConfirmDialog from "./ImportConfirmDialog";
+import ExportDecisionDialog from "./ExportDecisionDialog";
 import LoadingOverlay from "./LoadingOverlay";
 import Logo from "./Logo";
 import { ViewMode } from "./editor/ui/ViewToggle";
@@ -139,6 +141,8 @@ export default function App() {
     onConfirm: () => { },
   });
 
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+
   const [importDecisionDialog, setImportDecisionDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -149,6 +153,9 @@ export default function App() {
     initialOptions: ImportOptions;
     allowTeamImport: boolean;
     allowPhaseImport: boolean;
+    hasMainTex?: boolean;
+    hasStyles?: boolean;
+    hasFonts?: boolean;
     resolve: ((value: ImportOptions | null) => void) | null;
   }>({
     isOpen: false,
@@ -160,6 +167,37 @@ export default function App() {
     initialOptions: { entryImportMode: "replace", overwriteTeam: true, overwritePhases: true },
     allowTeamImport: false,
     allowPhaseImport: false,
+    hasMainTex: false,
+    hasStyles: false,
+    hasFonts: false,
+    resolve: null,
+  });
+
+  const [importConfirmDialog, setImportConfirmDialog] = useState<{
+    isOpen: boolean;
+    options: ImportOptions;
+    currentEntries: number;
+    entriesToImport: number;
+    entriesReplaced: number;
+    newEntries: number;
+    allowTeamImport: boolean;
+    allowPhaseImport: boolean;
+    hasMainTex: boolean;
+    hasStyles: boolean;
+    hasFonts: boolean;
+    resolve: ((value: "confirm" | "back" | "cancel") => void) | null;
+  }>({
+    isOpen: false,
+    options: { entryImportMode: "replace", overwriteTeam: true, overwritePhases: true },
+    currentEntries: 0,
+    entriesToImport: 0,
+    entriesReplaced: 0,
+    newEntries: 0,
+    allowTeamImport: false,
+    allowPhaseImport: false,
+    hasMainTex: false,
+    hasStyles: false,
+    hasFonts: false,
     resolve: null,
   });
 
@@ -189,11 +227,35 @@ export default function App() {
     initialOptions: ImportOptions;
     allowTeamImport: boolean;
     allowPhaseImport: boolean;
+    hasMainTex?: boolean;
+    hasStyles?: boolean;
+    hasFonts?: boolean;
   }) => {
     return new Promise<ImportOptions | null>(resolve => {
       setImportDecisionDialog({
         isOpen: true,
         ...summary,
+        resolve,
+      });
+    });
+  }, []);
+
+  const promptImportConfirmation = useCallback((params: {
+    options: ImportOptions;
+    currentEntries: number;
+    entriesToImport: number;
+    entriesReplaced: number;
+    newEntries: number;
+    allowTeamImport: boolean;
+    allowPhaseImport: boolean;
+    hasMainTex: boolean;
+    hasStyles: boolean;
+    hasFonts: boolean;
+  }) => {
+    return new Promise<"confirm" | "back" | "cancel">(resolve => {
+      setImportConfirmDialog({
+        isOpen: true,
+        ...params,
         resolve,
       });
     });
@@ -642,8 +704,13 @@ export default function App() {
     });
   };
 
-  const handleExportNotebook = async () => {
-    await exportNotebook();
+  const handleExportNotebook = () => {
+    setIsExportDialogOpen(true);
+  };
+
+  const handleConfirmExport = async (mode: 'data-only' | 'full') => {
+    setIsExportDialogOpen(false);
+    await exportNotebook(mode);
   };
 
   const importNotebookFromFile = async (file: File) => {
@@ -654,11 +721,18 @@ export default function App() {
       let hasPhases = false;
       let importedEntryCount = 0;
       let importedEntryIds: string[] = [];
+      let zipHasMainTex = false;
+      let zipHasStyles = false;
+      let zipHasFonts = false;
 
       if (lowerName.endsWith(".zip")) {
         const JSZip = (await import("jszip")).default;
         const zip = await JSZip.loadAsync(await file.arrayBuffer());
         const filenames = Object.keys(zip.files).filter(name => !zip.files[name].dir);
+
+        zipHasMainTex = filenames.includes("main.tex");
+        zipHasStyles = filenames.includes("notebook.sty") || filenames.includes("engineering_notebook.sty");
+        zipHasFonts = filenames.some(f => f.startsWith("fonts/"));
 
         let parsedIndex: { entries?: Record<string, unknown>; team?: unknown; phases?: unknown; lastCompiled?: string } | null = null;
         const indexEntry = zip.file(INDEX_PATH);
@@ -676,6 +750,7 @@ export default function App() {
         const assets: Record<string, string> = {};
         const files: Record<string, string> = {};
         const latexFiles: Record<string, string> = {};
+        const fonts: Record<string, string> = {};
         let pdf = "";
 
         for (const filename of filenames) {
@@ -695,8 +770,10 @@ export default function App() {
             pdf = await entry.async("base64");
           } else if (filename.startsWith("data/assets/")) {
             assets[filename] = await entry.async("base64");
-          } else if (filename.startsWith("data/latex/")) {
+          } else if (filename.startsWith("latex/") && filename.endsWith(".tex")) {
             latexFiles[filename] = await entry.async("string");
+          } else if (filename.startsWith("fonts/")) {
+            fonts[filename] = await entry.async("base64");
           } else if (!filename.endsWith("/")) {
             if (isBinaryFile(filename)) {
               continue;
@@ -710,6 +787,7 @@ export default function App() {
           assets,
           files,
           latexFiles,
+          fonts,
           pdf,
           ...(pdf && parsedIndex?.lastCompiled ? { lastCompiled: parsedIndex.lastCompiled } : {}),
           ...(parsedIndex?.team ? { team: parsedIndex.team } : {}),
@@ -733,49 +811,62 @@ export default function App() {
       const overlapCount = importedEntryIds.filter(id => currentEntryIds.has(id)).length;
       const newEntryCount = importedEntryCount - overlapCount;
 
-      const initialOptions: ImportOptions = {
+      let options = {
         entryImportMode: importedEntryCount > 0 ? "replace" : "none",
         overwriteTeam: hasTeam,
         overwritePhases: hasPhases,
-      };
+        importProjectFiles: true,
+        overwriteMainTex: zipHasMainTex,
+        overwriteStyles: zipHasStyles,
+        overwriteFonts: zipHasFonts,
+      } as ImportOptions;
 
-      const options = await promptImportDecision({
-        title: "Import options",
-        currentEntries: currentEntryCount,
-        entriesToImport: importedEntryCount,
-        entriesReplaced: overlapCount,
-        newEntries: newEntryCount,
-        initialOptions,
-        allowTeamImport: hasTeam,
-        allowPhaseImport: hasPhases,
-      });
+      let shouldPromptDecision = true;
 
-      if (!options || !data) return;
+      while (true) {
+        if (shouldPromptDecision) {
+          const chosenOptions = await promptImportDecision({
+            title: "Import options",
+            currentEntries: currentEntryCount,
+            entriesToImport: importedEntryCount,
+            entriesReplaced: overlapCount,
+            newEntries: newEntryCount,
+            initialOptions: options,
+            allowTeamImport: hasTeam,
+            allowPhaseImport: hasPhases,
+            hasMainTex: zipHasMainTex,
+            hasStyles: zipHasStyles,
+            hasFonts: zipHasFonts,
+          });
 
-      const confirmMessage = [
-        `Entry mode: ${options.entryImportMode}`,
-        `Current entries: ${currentEntryCount}`,
-        `Entries to import: ${importedEntryCount}`,
-        `Will be deleted: ${options.entryImportMode === "clear" ? currentEntryCount : 0}`,
-        `Will be replaced: ${options.entryImportMode === "replace" ? overlapCount : 0}`,
-        `New entries: ${options.entryImportMode === "keep" ? importedEntryCount : options.entryImportMode === "replace" ? newEntryCount : options.entryImportMode === "clear" ? importedEntryCount : 0}`,
-        `Import team data: ${options.overwriteTeam ? "yes" : "no"}`,
-        `Import phase data: ${options.overwritePhases ? "yes" : "no"}`,
-      ].join("\n");
+          if (!chosenOptions || !data) return;
+          options = chosenOptions;
+        }
 
-      const proceed = await new Promise<boolean>(resolve => {
-        showConfirm(
-          "Confirm Import",
-          confirmMessage,
-          () => resolve(true),
-          "warning",
-          () => resolve(false)
-        );
-      });
+        const confirmationResult = await promptImportConfirmation({
+          options,
+          currentEntries: currentEntryCount,
+          entriesToImport: importedEntryCount,
+          entriesReplaced: overlapCount,
+          newEntries: newEntryCount,
+          allowTeamImport: hasTeam,
+          allowPhaseImport: hasPhases,
+          hasMainTex: zipHasMainTex,
+          hasStyles: zipHasStyles,
+          hasFonts: zipHasFonts,
+        });
 
-      if (!proceed) return;
-
-      await importNotebook(data, options);
+        if (confirmationResult === "confirm") {
+          await importNotebook(data, options);
+          break;
+        } else if (confirmationResult === "back") {
+          shouldPromptDecision = true;
+          // Loop again and show settings dialog
+        } else {
+          // Cancelled
+          break;
+        }
+      }
     } catch {
       showNotification("Import failed", "error");
     }
@@ -1085,6 +1176,9 @@ export default function App() {
           initialOptions={importDecisionDialog.initialOptions}
           allowTeamImport={importDecisionDialog.allowTeamImport}
           allowPhaseImport={importDecisionDialog.allowPhaseImport}
+          hasMainTex={importDecisionDialog.hasMainTex}
+          hasStyles={importDecisionDialog.hasStyles}
+          hasFonts={importDecisionDialog.hasFonts}
           onConfirm={(options) => {
             const resolve = importDecisionDialog.resolve;
             setImportDecisionDialog({
@@ -1119,6 +1213,41 @@ export default function App() {
           }}
         />
       )}
+
+      <ExportDecisionDialog
+        isOpen={isExportDialogOpen}
+        onConfirm={handleConfirmExport}
+        onCancel={() => setIsExportDialogOpen(false)}
+      />
+
+      <ImportConfirmDialog
+        isOpen={importConfirmDialog.isOpen}
+        options={importConfirmDialog.options}
+        currentEntries={importConfirmDialog.currentEntries}
+        entriesToImport={importConfirmDialog.entriesToImport}
+        entriesReplaced={importConfirmDialog.entriesReplaced}
+        newEntries={importConfirmDialog.newEntries}
+        allowTeamImport={importConfirmDialog.allowTeamImport}
+        allowPhaseImport={importConfirmDialog.allowPhaseImport}
+        hasMainTex={importConfirmDialog.hasMainTex}
+        hasStyles={importConfirmDialog.hasStyles}
+        hasFonts={importConfirmDialog.hasFonts}
+        onConfirm={() => {
+          const resolve = importConfirmDialog.resolve;
+          setImportConfirmDialog(prev => ({ ...prev, isOpen: false, resolve: null }));
+          resolve?.("confirm");
+        }}
+        onCancel={() => {
+          const resolve = importConfirmDialog.resolve;
+          setImportConfirmDialog(prev => ({ ...prev, isOpen: false, resolve: null }));
+          resolve?.("cancel");
+        }}
+        onBack={() => {
+          const resolve = importConfirmDialog.resolve;
+          setImportConfirmDialog(prev => ({ ...prev, isOpen: false, resolve: null }));
+          resolve?.("back");
+        }}
+      />
 
       <ConfirmationDialog
         isOpen={confirmDialog.isOpen}
