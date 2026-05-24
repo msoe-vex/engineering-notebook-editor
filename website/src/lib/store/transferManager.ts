@@ -95,20 +95,6 @@ export class TransferManager {
       const addTextFile = async (path: string) => addTextFileToZip(zip, (p: string) => this.getFileContent(p), path);
       const addAssetFile = async (path: string) => addAssetFileToZip(zip, (p: string) => this.getAssetBase64(p), path);
 
-      // Write Manifest
-      const manifest = {
-        version: "1.0.0",
-        formatVersion: 2,
-        generatedAt: new Date().toISOString(),
-        includes: {
-          data: true,
-          latex: exportMode === 'full',
-          fonts: exportMode === 'full',
-          pdf: exportMode === 'full'
-        }
-      };
-      zip.file("notebook.index.json", JSON.stringify(manifest, null, 2));
-
       // 1. Data Mode files
       if (!isSubset) {
         zip.file(INDEX_PATH, JSON.stringify(this.store.metadata, null, 2));
@@ -249,14 +235,12 @@ export class TransferManager {
         assets = {},
         files = {},
         latexFiles = {},
-        fonts = {},
         pdf = ""
       } = data as {
         entries: Record<string, Record<string, unknown>>;
         assets: Record<string, unknown>;
         files?: Record<string, string>;
         latexFiles?: Record<string, string>;
-        fonts?: Record<string, string>;
         pdf?: string;
       };
       const entryImportMode: EntryImportMode = options?.entryImportMode || "replace";

@@ -120,7 +120,6 @@ export default function ExportDecisionDialog({
                   <div className="flex flex-wrap gap-1.5 mt-3">
                     <span className="text-[9px] font-bold text-nb-on-surface-variant bg-nb-surface-low/80 border border-nb-outline-variant/10 px-2 py-0.5 rounded">data/entries/</span>
                     <span className="text-[9px] font-bold text-nb-on-surface-variant bg-nb-surface-low/80 border border-nb-outline-variant/10 px-2 py-0.5 rounded">data/assets/</span>
-                    <span className="text-[9px] font-bold text-nb-on-surface-variant bg-nb-surface-low/80 border border-nb-outline-variant/10 px-2 py-0.5 rounded">notebook.index.json</span>
                   </div>
                 </div>
               </div>
