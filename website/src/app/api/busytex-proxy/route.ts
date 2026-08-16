@@ -1,7 +1,5 @@
 import { NextRequest } from 'next/server';
 
-export const runtime = 'edge'; // Edge runtime supports streaming large responses without the 10MB limit
-
 export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get('url');
   
