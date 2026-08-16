@@ -6,6 +6,7 @@ import { events, EventNames } from "../events";
 import { generateDeterministicUUID, generateUUID, getMimeTypeFromExtension } from "../utils";
 import { INDEX_PATH, ENTRIES_DIR, ASSETS_DIR, LATEX_DIR } from "../constants";
 import { IWorkspaceStore, WorkspaceMode } from "./types";
+import { isMobileDevice } from "@/hooks/useDevice";
 
 export class ProjectManager {
   private store: IWorkspaceStore;
@@ -157,14 +158,45 @@ export class ProjectManager {
       const projectType = project.type as WorkspaceMode;
 
       if (projectType === "local") {
+        if (typeof window !== "undefined" && (!("showDirectoryPicker" in window) || isMobileDevice())) {
+          this.store.disconnect();
+          events.emit(EventNames.SHOW_NOTIFICATION, {
+            message: "Local folder workspaces are only supported on desktop browsers. Please use a GitHub workspace on mobile.",
+            type: "error"
+          });
+          window.history.replaceState({}, '', '/');
+          this.store.notifyStateChange();
+          return;
+        }
+
+        this.store.mode = "local";
         const handle = await getProjectHandle(id);
         if (handle) {
           this.store.dirHandle = handle;
-          await this.loadLocalWorkspace();
-          this.store.mode = "local";
+          let hasPermission = false;
+          try {
+            if (typeof handle.queryPermission === "function") {
+              const status = await handle.queryPermission({ mode: "readwrite" });
+              hasPermission = status === "granted";
+            }
+          } catch (e) {
+            console.warn("Could not query handle permission:", e);
+          }
+
+          if (hasPermission) {
+            try {
+              await this.loadLocalWorkspace();
+              this.store.needsPermission = false;
+            } catch (err) {
+              console.warn("Failed to load local workspace despite permission query:", err);
+              this.store.needsPermission = true;
+            }
+          } else {
+            this.store.needsPermission = true;
+          }
         } else {
-          // Needs permission
-          this.store.mode = "none";
+          this.store.dirHandle = null;
+          this.store.needsPermission = true;
         }
       } else if (projectType === "github") {
         const token = localStorage.getItem("nb-github-token");
@@ -284,6 +316,72 @@ export class ProjectManager {
 
     if (isNew) {
       await this.store.updateLatexMetadata();
+    }
+  }
+
+  async grantLocalPermission(): Promise<boolean> {
+    if (!this.store.dirHandle) return false;
+    try {
+      const mode = "readwrite";
+      let status: PermissionState = "denied";
+      if (typeof this.store.dirHandle.requestPermission === "function") {
+        status = await this.store.dirHandle.requestPermission({ mode });
+      }
+      if (status === "granted") {
+        this.store.needsPermission = false;
+        await this.loadLocalWorkspace();
+        if (this.store.currentProjectId) {
+          const project = await getProject(this.store.currentProjectId);
+          if (project) {
+            project.lastOpened = new Date().toISOString();
+            await saveProject(project);
+            await this.refreshProjects();
+          }
+        }
+        this.store.notifyStateChange();
+        events.emit(EventNames.SHOW_NOTIFICATION, { message: "Folder access granted.", type: "success" });
+        return true;
+      }
+    } catch (err) {
+      console.error("Failed to request permission:", err);
+      events.emit(EventNames.SHOW_NOTIFICATION, { message: "Permission not granted. Please re-select the folder.", type: "error" });
+    }
+    return false;
+  }
+
+  async reselectLocalFolder(): Promise<boolean> {
+    if (typeof window === "undefined" || !("showDirectoryPicker" in window) || isMobileDevice()) {
+      events.emit(EventNames.SHOW_NOTIFICATION, {
+        message: "Local folder workspaces are only supported on desktop browsers.",
+        type: "error"
+      });
+      return false;
+    }
+    try {
+      const newHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+      const currentId = this.store.currentProjectId;
+      if (currentId && currentId !== "temporary") {
+        await saveProjectHandle(currentId, newHandle);
+        const project = await getProject(currentId);
+        if (project) {
+          project.name = newHandle.name;
+          project.lastOpened = new Date().toISOString();
+          await saveProject(project);
+          this.store.currentProject = project;
+          await this.refreshProjects();
+        }
+      }
+      this.store.dirHandle = newHandle;
+      this.store.needsPermission = false;
+      await this.loadLocalWorkspace();
+      this.store.notifyStateChange();
+      events.emit(EventNames.SHOW_NOTIFICATION, { message: `Connected to ${newHandle.name}.`, type: "success" });
+      return true;
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return false;
+      console.error("Failed to reselect folder:", err);
+      events.emit(EventNames.SHOW_NOTIFICATION, { message: "Failed to open selected folder.", type: "error" });
+      return false;
     }
   }
 

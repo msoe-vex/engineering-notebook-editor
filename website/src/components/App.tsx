@@ -102,6 +102,9 @@ export default function App() {
     isPendingSave,
     isDiscarding,
     isCommitting,
+    needsPermission,
+    grantLocalPermission,
+    reselectLocalFolder,
   } = useWorkspace();
 
   // Global loading overlay for background operations (like importing/exporting)
@@ -285,7 +288,6 @@ export default function App() {
   const [isRenamingProject, setIsRenamingProject] = useState(false);
   const [projectRenameValue, setProjectRenameValue] = useState("");
   const importEntryInputRef = useRef<HTMLInputElement>(null);
-  const [needsPermission, setNeedsPermission] = useState(false);
   const navigateToHome = useCallback(() => {
     navigateTo({ project: null, entry: null, resource: null }, "/");
   }, [navigateTo]);
@@ -895,16 +897,6 @@ export default function App() {
     await importNotebookFromFile(file);
   };
 
-  const requestPermission = async () => {
-    if (dirHandle) {
-      const mode = 'readwrite';
-      if ((await dirHandle.requestPermission({ mode })) === 'granted') {
-        setNeedsPermission(false);
-        selectProject(currentProjectId!);
-      }
-    }
-  };
-
   const currentProject = projects.find(p => p.id === currentProjectId) || (currentProjectId === "temporary" ? { id: "temporary", name: "Temporary Workspace" } as Project : null);
   const workspaceLabel = mode === "github" ? `${config?.owner}/${config?.repo}` : (mode === "local" ? (currentProject?.name ?? "Local Folder") : "Temporary");
 
@@ -996,10 +988,36 @@ export default function App() {
             <div className="max-w-md w-full bg-nb-surface border border-nb-outline-variant rounded-3xl p-8 shadow-2xl text-center animate-in fade-in zoom-in duration-300">
               <div className="w-20 h-20 rounded-2xl bg-nb-primary/10 text-nb-primary flex items-center justify-center mx-auto mb-8"><HardDrive size={40} /></div>
               <h2 className="text-2xl font-bold text-nb-on-surface mb-4">Connect to Workspace</h2>
-              <p className="text-sm text-nb-on-surface-variant mb-10 leading-relaxed px-4">Browser needs permission to access <strong>{dirHandle?.name || "the local folder"}</strong>.</p>
+              <p className="text-sm text-nb-on-surface-variant mb-10 leading-relaxed px-4">
+                {dirHandle
+                  ? <>Browser needs permission to access <strong>{dirHandle.name}</strong>.</>
+                  : <>Folder access has expired or is unavailable. Please re-select the folder on your device.</>}
+              </p>
               <div className="flex flex-col gap-3">
-                <button onClick={requestPermission} className="w-full bg-nb-primary hover:bg-nb-primary-dim text-white font-bold py-4 rounded-xl shadow-lg shadow-nb-primary/20 transition-all active:scale-[0.98]">Grant Access</button>
-                <button onClick={handleDisconnect} className="w-full bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface font-bold py-4 rounded-xl transition-all">Cancel</button>
+                {dirHandle && (
+                  <button
+                    onClick={() => grantLocalPermission()}
+                    className="w-full bg-nb-primary hover:bg-nb-primary-dim text-white font-bold py-4 rounded-xl shadow-lg shadow-nb-primary/20 transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    Grant Access
+                  </button>
+                )}
+                <button
+                  onClick={() => reselectLocalFolder()}
+                  className={`w-full font-bold py-4 rounded-xl transition-all cursor-pointer ${
+                    dirHandle
+                      ? "bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface hover:bg-nb-surface-high"
+                      : "bg-nb-primary hover:bg-nb-primary-dim text-white shadow-lg shadow-nb-primary/20"
+                  }`}
+                >
+                  {dirHandle ? "Select Another Folder" : "Select Folder"}
+                </button>
+                <button
+                  onClick={handleDisconnect}
+                  className="w-full bg-transparent text-nb-on-surface-variant hover:text-nb-on-surface font-bold py-3 rounded-xl transition-all cursor-pointer text-xs uppercase tracking-widest"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           </div>

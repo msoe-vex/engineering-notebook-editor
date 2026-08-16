@@ -63,6 +63,7 @@ export interface IWorkspaceStore {
   isPendingSave: boolean;
   isDiscarding: boolean;
   isCommitting: boolean;
+  needsPermission: boolean;
   debouncedPersist: DebouncedFunction<() => Promise<void>>;
   queue: Promise<void>;
   lastSavedContents: Map<string, string>;
@@ -90,6 +91,8 @@ export interface IWorkspaceStore {
   renameProject(id: string, name: string): Promise<void>;
   createGithubProject(config: { owner: string; repo: string; branch: string; folderPath: string; name: string }): Promise<string>;
   createLocalProject(handle: FileSystemDirectoryHandle, name: string): Promise<string>;
+  grantLocalPermission(): Promise<boolean>;
+  reselectLocalFolder(): Promise<boolean>;
   createTemporaryProject(): Promise<string>;
   selectProject(id: string): Promise<void>;
   openEntry(id: string): Promise<void>;

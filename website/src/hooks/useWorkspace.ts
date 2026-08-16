@@ -36,6 +36,7 @@ export function useWorkspace() {
     isPendingSave: store.isPendingSave,
     isDiscarding: store.isDiscarding,
     isCommitting: store.isCommitting,
+    needsPermission: store.needsPermission,
   });
 
   useEffect(() => {
@@ -69,6 +70,7 @@ export function useWorkspace() {
         isPendingSave: s.isPendingSave,
         isDiscarding: s.isDiscarding,
         isCommitting: s.isCommitting,
+        needsPermission: s.needsPermission,
       });
     });
 
@@ -141,6 +143,9 @@ export function useWorkspace() {
     isPendingSave: state.isPendingSave,
     isDiscarding: state.isDiscarding,
     isCommitting: state.isCommitting,
+    needsPermission: state.needsPermission,
+    grantLocalPermission: useCallback(() => store.grantLocalPermission(), []),
+    reselectLocalFolder: useCallback(() => store.reselectLocalFolder(), []),
     setPendingSave: useCallback((val: boolean) => store.setPendingSave(val), []),
   };
 }

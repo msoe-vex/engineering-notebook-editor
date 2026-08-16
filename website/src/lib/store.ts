@@ -42,6 +42,7 @@ class WorkspaceStore implements IWorkspaceStore {
   public isPendingSave = false;
   public isDiscarding = false;
   public isCommitting = false;
+  public needsPermission = false;
 
   // Internal persistence tracking
   public lastSavedContents = new Map<string, string>();
@@ -146,6 +147,14 @@ class WorkspaceStore implements IWorkspaceStore {
 
   public async createLocalProject(handle: FileSystemDirectoryHandle, name: string) {
     return this.projectManager.createLocalProject(handle, name);
+  }
+
+  public async grantLocalPermission() {
+    return this.projectManager.grantLocalPermission();
+  }
+
+  public async reselectLocalFolder() {
+    return this.projectManager.reselectLocalFolder();
   }
 
   public async createTemporaryProject() {
@@ -389,6 +398,7 @@ class WorkspaceStore implements IWorkspaceStore {
       this.openFile = null;
       this.selectedPaths = new Set();
       this.assetCache.clear();
+      this.needsPermission = false;
       this.notifyStateChange();
     } finally {
       this.setLoading(false);
