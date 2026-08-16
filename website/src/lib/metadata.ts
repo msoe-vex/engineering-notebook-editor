@@ -40,6 +40,7 @@ export interface EntryMetadata {
   updatedAt: string;
   date: string; // YYYY-MM-DD
   filename: string; // Path to the entry file (e.g. "entries/uuid.json")
+  isTemplate?: boolean; // When true, excluded from LaTeX entries.tex compilation and export
   resources?: Record<string, { title: string, caption: string, type: string }>; // block uuid -> metadata
   isValid?: boolean;
   references?: string[]; // List of target UUIDs this entry points to

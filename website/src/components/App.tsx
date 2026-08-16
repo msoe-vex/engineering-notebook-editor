@@ -269,9 +269,9 @@ export default function App() {
   const [mounted, setMounted] = useState(false);
   const isMobile = useIsMobile();
   const initialPercentSize = useMemo(() => {
-    if (typeof window === "undefined") return 20;
-    const fixedWidthPx = 300;
-    return Math.max(15, Math.min(40, (fixedWidthPx / window.innerWidth) * 100));
+    if (typeof window === "undefined") return 22;
+    const fixedWidthPx = 360;
+    return Math.max(18, Math.min(45, (fixedWidthPx / window.innerWidth) * 100));
   }, []);
   const [userSidebarPreference, setUserSidebarPreference] = useState<boolean | null>(null);
   const isSidebarOpen = userSidebarPreference ?? !isMobile;
@@ -515,8 +515,8 @@ export default function App() {
     if (isSidebarOpen) {
       if (isToggleFromButton.current) {
         sidebarPanelRef.current.expand();
-        const fixedWidthPx = 300;
-        const percent = Math.max(15, Math.min(40, (fixedWidthPx / window.innerWidth) * 100));
+        const fixedWidthPx = 360;
+        const percent = Math.max(18, Math.min(45, (fixedWidthPx / window.innerWidth) * 100));
         sidebarPanelRef.current.resize(percent);
       } else {
         sidebarPanelRef.current.expand();
@@ -1120,7 +1120,7 @@ export default function App() {
               <div className="flex-1 w-full h-full">{main}</div>
               <div className={`fixed inset-0 z-500 transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
                 <div className="absolute inset-0 bg-black/40" onClick={() => setUserSidebarPreference(false)} />
-                <div className={`absolute top-0 bottom-0 left-0 w-[85%] max-w-75 bg-nb-surface-low border-r border-nb-outline-variant flex flex-col shadow-2xl transition-transform duration-300 ease-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                <div className={`absolute top-0 bottom-0 left-0 w-[85%] max-w-90 bg-nb-surface-low border-r border-nb-outline-variant flex flex-col shadow-2xl transition-transform duration-300 ease-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                   {sidebar}
                 </div>
               </div>
@@ -1128,7 +1128,7 @@ export default function App() {
           ) : (
             <PanelGroup direction="horizontal" className="w-full h-full" id="main-layout-group">
               <Panel
-                id="sidebar-panel" order={1} ref={sidebarPanelRef} defaultSize={initialPercentSize} minSize={15} maxSize={40} collapsible={true}
+                id="sidebar-panel" order={1} ref={sidebarPanelRef} defaultSize={initialPercentSize} minSize={18} maxSize={45} collapsible={true}
                 onCollapse={() => setUserSidebarPreference(false)} onExpand={() => setUserSidebarPreference(true)}
                 className={`flex flex-col ${isSidebarDragging ? "pointer-events-none select-none" : "transition-all duration-300 ease-out"}`}
               >

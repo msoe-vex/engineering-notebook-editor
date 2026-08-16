@@ -253,21 +253,34 @@ button:disabled {
   box-shadow: none !important;
 }
 
-/* Prevent selection highlighting of UI elements and inputs in custom resource blocks/node views */
-.ProseMirror [contenteditable="false"]::selection,
-.ProseMirror [contenteditable="false"] *::selection,
+/* Allow text selection & proper highlight in inputs/captions inside custom resource blocks */
+.ProseMirror input,
+.ProseMirror textarea {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
 .ProseMirror input::selection,
 .ProseMirror textarea::selection,
-.ProseMirror-selectednode *::selection {
-  background-color: transparent !important;
+.ProseMirror [contenteditable="false"] input::selection,
+.ProseMirror [contenteditable="false"] textarea::selection {
+  background-color: rgba(217, 40, 47, 0.3) !important;
   color: inherit !important;
 }
 
-/* Disable user text selection on drag handles, buttons, and captions/headers when full block is selected */
-.ProseMirror [contenteditable="false"],
-.ProseMirror [contenteditable="false"] *,
-.ProseMirror-selectednode input,
-.ProseMirror-selectednode textarea {
+.dark .ProseMirror input::selection,
+.dark .ProseMirror textarea::selection,
+.dark .ProseMirror [contenteditable="false"] input::selection,
+.dark .ProseMirror [contenteditable="false"] textarea::selection {
+  background-color: rgba(217, 40, 47, 0.45) !important;
+  color: inherit !important;
+}
+
+/* Prevent text selection on non-text UI handles and buttons when full node is selected */
+.ProseMirror [contenteditable="false"] button,
+.ProseMirror [contenteditable="false"] svg,
+.ProseMirror-selectednode button,
+.ProseMirror-selectednode svg {
   user-select: none !important;
   -webkit-user-select: none !important;
 }

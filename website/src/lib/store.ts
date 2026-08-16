@@ -1,4 +1,4 @@
-import { NotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, hydrateTeamAssets, TipTapNode, buildResourceTypeIndex, extractResources } from "./metadata";
+import { NotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, EntryMetadata, hydrateTeamAssets, TipTapNode, buildResourceTypeIndex, extractResources } from "./metadata";
 import { generateEntryLatex } from "./latex";
 import { ExplorerFile, GitHubConfig, TeamTab } from "./types";
 import { Project, getAllPending, removeStaged, PendingChange } from "./db";
@@ -186,6 +186,18 @@ class WorkspaceStore implements IWorkspaceStore {
     return this.entryManager.createEntry();
   }
 
+  public async duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string }) {
+    return this.entryManager.duplicateEntry(sourceId, options);
+  }
+
+  public async createTemplate(templateData?: Partial<EntryMetadata>) {
+    return this.entryManager.createTemplate(templateData);
+  }
+
+  public async createEntryFromTemplate(templateId: string) {
+    return this.entryManager.createEntryFromTemplate(templateId);
+  }
+
   public async refreshPending() {
     return this.entryManager.refreshPending();
   }
@@ -196,6 +208,14 @@ class WorkspaceStore implements IWorkspaceStore {
 
   public async discardPendingChanges() {
     return this.entryManager.discardPendingChanges();
+  }
+
+  public async discardPathChange(path: string) {
+    return this.entryManager.discardPathChange(path);
+  }
+
+  public async discardEntryChanges(entryId: string) {
+    return this.entryManager.discardEntryChanges(entryId);
   }
 
   public async deleteEntry(file: ExplorerFile) {

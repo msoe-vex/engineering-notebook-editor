@@ -3,8 +3,8 @@
 import React, { useState } from "react";
 import {
   FileText, Plus, X, Calendar, SortAsc, SortDesc, CalendarDays,
-  Search, ChevronDown, ExternalLink, Trash2, FileJson, FileCode,
-  Download
+  Search, ChevronDown, ChevronRight, ExternalLink, Trash2, FileJson, FileCode,
+  Download, Copy, Layers, Sparkles
 } from "lucide-react";
 import ValidationTooltip from "./editor/ui/ValidationTooltip";
 
@@ -26,6 +26,10 @@ interface FileExplorerProps {
   onDownloadLatex: (file: ExplorerFile) => void;
   onDownloadJson: (file: ExplorerFile) => void;
   onDeleteEntry: (file: ExplorerFile) => void;
+  onDuplicateEntry?: (file: ExplorerFile) => void;
+  onSaveAsTemplate?: (file: ExplorerFile) => void;
+  onCreateTemplate?: () => void;
+  onCreateFromTemplate?: (templateId: string) => void;
   onDownloadMulti: (files: ExplorerFile[]) => void;
   onDeleteMulti: (files: ExplorerFile[]) => void;
   onNewEntry: () => void;
@@ -51,7 +55,7 @@ interface FileRowProps {
   icon: React.ReactNode;
   isValid?: boolean;
   validationErrors?: string[];
-  sortBy: "date" | "title";
+  sortBy?: "date" | "title";
   onSelect: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
@@ -138,35 +142,94 @@ function FileRow({
 interface PaneProps {
   id: string;
   title: string;
-  actionLabel: string;
-  actionIcon: React.ReactNode;
-  onAction: () => void;
+  count?: number;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
+  actionLabel?: string;
+  actionIcon?: React.ReactNode;
+  onAction?: () => void;
+  actionComponent?: React.ReactNode;
   children: React.ReactNode;
-  empty: string;
+  empty: React.ReactNode;
   hasItems: boolean;
+  className?: string;
+  maxHeight?: string;
 }
 
-function Pane({ id, title, actionLabel, actionIcon, onAction, children, empty, hasItems }: PaneProps) {
+function Pane({
+  id,
+  title,
+  count,
+  isCollapsed = false,
+  onToggleCollapse,
+  actionLabel,
+  actionIcon,
+  onAction,
+  actionComponent,
+  children,
+  empty,
+  hasItems,
+  className = "flex-1",
+  maxHeight
+}: PaneProps) {
   return (
-    <div id={id} className="flex flex-col min-h-0 flex-1">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-nb-surface-mid dark:border-nb-dark-outline-variant shrink-0 bg-nb-surface-low/50 dark:bg-nb-dark-surface-low/30">
-        <span className="text-sm font-semibold text-nb-on-surface">
-          {title}
-        </span>
-        <button
-          onClick={onAction}
-          title={actionLabel}
-          className="flex items-center gap-1.5 text-xs font-semibold text-nb-tertiary hover:text-nb-tertiary-dim transition-colors cursor-pointer"
+    <div id={id} className={`flex flex-col min-h-0 ${className}`}>
+      <div
+        onClick={onToggleCollapse}
+        className={`flex items-center justify-between px-3 py-2 border-b border-nb-outline-variant/30 shrink-0 bg-nb-surface-low/60 hover:bg-nb-surface-low transition-colors select-none ${
+          onToggleCollapse ? "cursor-pointer" : ""
+        }`}
+      >
+        <div className="flex items-center gap-1.5 min-w-0">
+          {onToggleCollapse && (
+            isCollapsed ? (
+              <ChevronRight size={12} className="text-nb-on-surface-variant/60 shrink-0" />
+            ) : (
+              <ChevronDown size={12} className="text-nb-on-surface-variant/60 shrink-0" />
+            )
+          )}
+          <span className="text-[11px] font-black uppercase tracking-wider text-nb-on-surface truncate">
+            {title}
+          </span>
+          {typeof count === "number" && (
+            <span className="text-[9px] font-bold text-nb-on-surface-variant/70 bg-nb-surface-high/60 px-1.5 py-0.2 rounded-full shrink-0">
+              {count}
+            </span>
+          )}
+        </div>
+        {actionComponent ? (
+          actionComponent
+        ) : actionLabel && onAction ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onAction();
+            }}
+            title={actionLabel}
+            className="flex items-center gap-1 text-[10px] font-bold text-nb-primary hover:underline transition-colors cursor-pointer shrink-0"
+          >
+            {actionIcon}
+            <span>{actionLabel}</span>
+          </button>
+        ) : null}
+      </div>
+
+      {!isCollapsed && (
+        <div
+          className="flex-1 overflow-y-auto p-2 min-h-0 bg-nb-surface-lowest/40"
+          style={maxHeight ? { maxHeight } : undefined}
         >
-          {actionIcon}
-          {actionLabel}
-        </button>
-      </div>
-      <div className="flex-1 overflow-y-auto p-2.5 min-h-0 bg-nb-surface-lowest dark:bg-nb-dark-bg">
-        {hasItems ? children : (
-          <p className="text-[11px] text-nb-on-surface-variant/60 dark:text-nb-dark-on-variant/40 px-3 py-5 italic font-medium tracking-tight">{empty}</p>
-        )}
-      </div>
+          {hasItems ? (
+            children
+          ) : typeof empty === "string" ? (
+            <div className="py-3 px-3 text-center rounded-lg border border-dashed border-nb-outline-variant/30 text-[10px] text-nb-on-surface-variant/60">
+              {empty}
+            </div>
+          ) : (
+            empty
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -183,9 +246,13 @@ export default function FileExplorer({
   onDownloadLatex,
   onDownloadJson,
   onDeleteEntry,
+  onDuplicateEntry,
+  onSaveAsTemplate,
   onDownloadMulti,
   onDeleteMulti,
   onNewEntry,
+  onCreateTemplate,
+  onCreateFromTemplate,
   search,
   onSearchChange,
   sortBy,
@@ -203,9 +270,15 @@ export default function FileExplorer({
   const availablePhases = getPhases(notebookMetadata?.phases);
   const phaseConfig = getPhaseConfig(availablePhases);
 
+  const [isTemplatesCollapsed, setIsTemplatesCollapsed] = useState(false);
+  const [isEntriesCollapsed, setIsEntriesCollapsed] = useState(false);
+  const [isNewDropdownOpen, setIsNewDropdownOpen] = useState(false);
+
+  const regularEntries = entries.filter(e => !e.isTemplate);
+  const templateEntries = entries.filter(e => e.isTemplate);
+
   const handleContextMenu = (e: React.MouseEvent, file: ExplorerFile) => {
     e.preventDefault();
-    // If clicking a file not in selection, select it exclusively first
     if (!selectedPaths.has(file.path)) {
       onSelectEntry(file, false, false);
     }
@@ -215,7 +288,7 @@ export default function FileExplorer({
   const selectedEntries = entries.filter(e => selectedPaths.has(e.path));
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden min-h-0" onClick={() => setContextMenu(null)}>
+    <div className="flex-1 flex flex-col overflow-hidden min-h-0" onClick={() => { setContextMenu(null); setIsNewDropdownOpen(false); }}>
       {/* Search and Sort Header */}
       <div className="px-3 py-3 bg-nb-surface border-b border-nb-outline-variant space-y-3 shrink-0">
         <div className="relative group">
@@ -227,116 +300,126 @@ export default function FileExplorer({
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search entries..."
-            className="w-full bg-nb-surface-low border border-nb-outline-variant rounded-xl py-2 pl-9 pr-4 text-xs font-medium placeholder:text-nb-on-surface-variant/40 focus:outline-none focus:ring-2 focus:ring-nb-primary/20 focus:border-nb-primary transition-all"
+            className="w-full pl-9 pr-8 py-2 bg-nb-surface-low border border-nb-outline-variant/60 rounded-xl text-xs text-nb-on-surface placeholder:text-nb-on-surface-variant/40 focus:outline-none focus:ring-2 focus:ring-nb-primary/20 focus:border-nb-primary transition-all shadow-xs"
           />
           {search && (
             <button
               onClick={() => onSearchChange("")}
-              className="absolute inset-y-0 right-3 flex items-center text-nb-on-surface-variant/40 hover:text-nb-primary transition-colors"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-nb-on-surface-variant/40 hover:text-nb-on-surface transition-colors cursor-pointer"
             >
-              <X size={14} />
+              <X size={13} />
             </button>
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Sort Dropdown */}
+        {/* Action Controls Row */}
+        <div className="flex items-center justify-between gap-2">
+          {/* Sort Menu */}
           <div className="relative flex-1">
             <button
-              onClick={(e) => { e.stopPropagation(); setIsSortOpen(!isSortOpen); }}
-              className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-nb-surface-low border border-nb-outline-variant rounded-xl text-[10px] font-bold tracking-wider text-nb-on-surface-variant hover:border-nb-primary transition-all cursor-pointer"
+              onClick={() => { setIsSortOpen(!isSortOpen); setIsFilterOpen(false); }}
+              className="w-full flex items-center justify-between px-2.5 py-1.5 bg-nb-surface-low hover:bg-nb-surface-mid border border-nb-outline-variant/60 rounded-lg text-xs font-bold text-nb-on-surface transition-all cursor-pointer shadow-xs"
             >
-              <div className="flex items-center gap-2">
-                {sortBy === 'date' ? <Calendar size={12} /> : <SortAsc size={12} />}
-                <span>Sort: {sortBy === 'date' ? 'Date' : 'Title'}</span>
+              <div className="flex items-center gap-1.5 truncate">
+                {sortBy === "date" ? <Calendar size={13} className="text-nb-primary shrink-0" /> : <FileText size={13} className="text-nb-primary shrink-0" />}
+                <span className="truncate">{sortBy === "date" ? "Date" : "Title"}</span>
               </div>
-              <ChevronDown size={12} className={`transition-transform duration-200 ${isSortOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown size={12} className={`text-nb-on-surface-variant transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isSortOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setIsSortOpen(false)} />
-                <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-nb-surface border border-nb-outline-variant rounded-xl shadow-nb-lg py-1.5 animate-in fade-in zoom-in-95 duration-200">
-                  {[
-                    { id: 'date' as const, label: 'Date', icon: <Calendar size={12} /> },
-                    { id: 'title' as const, label: 'Title', icon: <SortAsc size={12} /> }
-                  ].map((s) => (
-                    <button
-                      key={s.id}
-                      onClick={() => {
-                        onSortChange(s.id);
-                        setIsSortOpen(false);
-                      }}
-                      className={`w-full flex items-center gap-3 px-3 py-2 text-[10px] font-bold tracking-wider transition-colors cursor-pointer ${sortBy === s.id ? 'text-nb-primary bg-nb-primary/5' : 'text-nb-on-surface-variant/70 hover:bg-nb-surface-low'}`}
-                    >
-                      {s.icon}
-                      {s.label}
-                    </button>
-                  ))}
+                <div className="absolute top-full left-0 mt-1.5 w-44 bg-nb-surface border border-nb-outline-variant rounded-xl shadow-xl py-1 z-50 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="px-3 py-1 text-[9px] font-black uppercase tracking-wider text-nb-on-surface-variant/40">Sort By</div>
+                  <button
+                    onClick={() => { onSortChange("date"); setIsSortOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold transition-colors cursor-pointer ${sortBy === 'date' ? 'text-nb-primary bg-nb-primary/5' : 'text-nb-on-surface hover:bg-nb-surface-low'}`}
+                  >
+                    <Calendar size={14} />
+                    Date
+                  </button>
+                  <button
+                    onClick={() => { onSortChange("title"); setIsSortOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold transition-colors cursor-pointer ${sortBy === 'title' ? 'text-nb-primary bg-nb-primary/5' : 'text-nb-on-surface hover:bg-nb-surface-low'}`}
+                  >
+                    <FileText size={14} />
+                    Title
+                  </button>
                 </div>
               </>
             )}
           </div>
 
-          {/* Direction Toggle */}
+          {/* Sort Direction Toggle */}
           <button
             onClick={onSortDirectionToggle}
-            className="p-2 bg-nb-surface-low border border-nb-outline-variant rounded-xl text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary transition-all shadow-sm active:scale-95 cursor-pointer"
-            title={sortDirection === 'asc' ? "Ascending" : "Descending"}
+            className="p-1.5 bg-nb-surface-low hover:bg-nb-surface-mid border border-nb-outline-variant/60 rounded-lg text-nb-on-surface transition-all cursor-pointer shadow-xs"
+            title={`Sort Direction: ${sortDirection.toUpperCase()}`}
           >
-            {sortDirection === 'asc' ? <SortAsc size={14} /> : <SortDesc size={14} />}
+            {sortDirection === "asc" ? <SortAsc size={15} className="text-nb-primary" /> : <SortDesc size={15} className="text-nb-primary" />}
           </button>
 
-          {/* Date Filter */}
+          {/* Date Filter Menu */}
           <div className="relative">
             <button
-              onClick={(e) => { e.stopPropagation(); setIsFilterOpen(!isFilterOpen); }}
-              className={`p-2 cursor-pointer border rounded-xl transition-all shadow-sm active:scale-95 ${dateRange ? 'bg-nb-tertiary text-white border-nb-tertiary shadow-nb-tertiary/20' : 'bg-nb-surface-low border-nb-outline-variant text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary'}`}
-              title="Filter by Date"
+              onClick={() => { setIsFilterOpen(!isFilterOpen); setIsSortOpen(false); }}
+              className={`p-1.5 rounded-lg border transition-all cursor-pointer shadow-xs flex items-center gap-1 ${dateRange ? 'bg-nb-primary/10 border-nb-primary/30 text-nb-primary' : 'bg-nb-surface-low hover:bg-nb-surface-mid border-nb-outline-variant/60 text-nb-on-surface'}`}
+              title="Filter by Date Range"
             >
-              <CalendarDays size={14} />
+              <CalendarDays size={15} className={dateRange ? 'text-nb-primary' : ''} />
+              {dateRange && <span className="w-1.5 h-1.5 rounded-full bg-nb-primary" />}
             </button>
 
             {isFilterOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setIsFilterOpen(false)} />
-                <div className="absolute top-full right-0 mt-2 z-50 bg-nb-surface border border-nb-outline-variant rounded-2xl shadow-nb-lg p-4 w-64 animate-in fade-in zoom-in-95 duration-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-[10px] font-bold tracking-widest text-nb-on-surface-variant">Date Range</h4>
+                <div className="absolute top-full right-0 mt-1.5 w-64 bg-nb-surface border border-nb-outline-variant rounded-2xl shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-3">
+                  <div className="flex items-center justify-between border-b border-nb-outline-variant/40 pb-2">
+                    <span className="text-xs font-black uppercase tracking-wider text-nb-on-surface">Date Filter</span>
                     {dateRange && (
                       <button
                         onClick={() => { onDateRangeChange(null); setIsFilterOpen(false); }}
-                        className="text-[9px] font-bold text-nb-primary hover:underline"
+                        className="text-[10px] font-bold text-red-500 hover:underline cursor-pointer"
                       >
-                        Clear
+                        Reset
                       </button>
                     )}
                   </div>
 
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-nb-on-surface-variant/50 ml-1">From</label>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-nb-on-surface-variant block mb-1">Start Date</label>
                       <input
                         type="date"
-                        value={dateRange?.start || ""}
-                        onChange={(e) => onDateRangeChange({ start: e.target.value, end: dateRange?.end || "" })}
-                        className="w-full bg-nb-surface-low border border-nb-outline-variant rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-nb-primary/20 focus:border-nb-primary outline-none transition-all"
+                        defaultValue={dateRange?.start || ""}
+                        id="filter-start-date"
+                        className="w-full bg-nb-surface-low border border-nb-outline-variant/60 rounded-xl px-2.5 py-1.5 text-xs text-nb-on-surface focus:outline-none focus:border-nb-primary"
                       />
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-nb-on-surface-variant/50 ml-1">To</label>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-nb-on-surface-variant block mb-1">End Date</label>
                       <input
                         type="date"
-                        value={dateRange?.end || ""}
-                        onChange={(e) => onDateRangeChange({ start: dateRange?.start || "", end: e.target.value })}
-                        className="w-full bg-nb-surface-low border border-nb-outline-variant rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-nb-primary/20 focus:border-nb-primary outline-none transition-all"
+                        defaultValue={dateRange?.end || ""}
+                        id="filter-end-date"
+                        className="w-full bg-nb-surface-low border border-nb-outline-variant/60 rounded-xl px-2.5 py-1.5 text-xs text-nb-on-surface focus:outline-none focus:border-nb-primary"
                       />
                     </div>
                   </div>
 
                   <button
-                    onClick={() => setIsFilterOpen(false)}
-                    className="w-full cursor-pointer mt-4 py-2 bg-nb-primary text-white rounded-xl text-[10px] font-bold tracking-widest hover:bg-nb-primary-dim transition-all shadow-md shadow-nb-primary/20"
+                    onClick={() => {
+                      const start = (document.getElementById("filter-start-date") as HTMLInputElement)?.value;
+                      const end = (document.getElementById("filter-end-date") as HTMLInputElement)?.value;
+                      if (start || end) {
+                        onDateRangeChange({ start, end });
+                      } else {
+                        onDateRangeChange(null);
+                      }
+                      setIsFilterOpen(false);
+                    }}
+                    className="w-full bg-nb-primary hover:bg-nb-primary-dim text-white font-bold py-2 rounded-xl text-xs transition-all shadow-md shadow-nb-primary/20 cursor-pointer"
                   >
                     Apply Filter
                   </button>
@@ -347,28 +430,44 @@ export default function FileExplorer({
         </div>
       </div>
 
-      {/* Entries pane */}
+      {/* Templates Pane */}
       <Pane
-        id="explorer-entries-pane"
-        title="Entries"
+        id="explorer-templates-pane"
+        title="Templates"
+        count={templateEntries.length}
+        isCollapsed={isTemplatesCollapsed}
+        onToggleCollapse={() => setIsTemplatesCollapsed(!isTemplatesCollapsed)}
         actionLabel="New"
         actionIcon={<Plus size={11} />}
-        onAction={onNewEntry}
-        empty={search ? "No matches found." : "No entries yet."}
-        hasItems={entries.length > 0}
+        onAction={onCreateTemplate}
+        className={isTemplatesCollapsed ? "shrink-0 border-b border-nb-outline-variant/30" : "flex-1 border-b border-nb-outline-variant/30"}
+        empty={
+          <div className="py-3 px-3 text-center rounded-lg border border-dashed border-nb-outline-variant/30 text-[10px] text-nb-on-surface-variant/60 flex flex-col items-center gap-1.5">
+            <span>No entry templates yet</span>
+            {onCreateTemplate && (
+              <button
+                onClick={onCreateTemplate}
+                className="text-[9px] font-bold text-nb-primary hover:underline cursor-pointer"
+              >
+                Create Template +
+              </button>
+            )}
+          </div>
+        }
+        hasItems={templateEntries.length > 0}
       >
         <div className="space-y-1">
-          {entries.map((f) => {
-            const pConfig = f.phase && phaseConfig[f.phase] ? phaseConfig[f.phase] : null;
-            const IconComponent = pConfig ? pConfig.icon : FileText;
-            const phase = availablePhases.find(p => p.index === f.phase);
-            const iconStyle = phase ? { color: phase.color } : undefined;
+          {templateEntries.map(f => {
+            const pConfig = typeof f.phase === "number" ? phaseConfig[f.phase] : null;
+            const IconComponent = pConfig ? pConfig.icon : Layers;
+            const phase = typeof f.phase === "number" ? availablePhases.find(p => p.index === f.phase) : null;
+            const iconStyle = phase ? { color: phase.color } : { color: "#9333ea" };
 
             const icon = (
               <IconComponent
                 size={16}
                 style={activePath === f.path ? { color: "inherit" } : iconStyle}
-                className={activePath === f.path ? "" : pConfig ? "" : "opacity-40"}
+                className={activePath === f.path ? "text-white" : pConfig ? "" : "text-purple-600 dark:text-purple-400"}
               />
             );
 
@@ -383,7 +482,118 @@ export default function FileExplorer({
                 icon={icon}
                 isValid={f.isValid}
                 validationErrors={f.validationErrors}
-                sortBy={sortBy}
+                onSelect={(e) => onSelectEntry(f, e.ctrlKey || e.metaKey, e.shiftKey)}
+                onDoubleClick={() => onOpenEntry(f)}
+                onContextMenu={(e) => handleContextMenu(e, f)}
+              />
+            );
+          })}
+        </div>
+      </Pane>
+
+      {/* Entries pane */}
+      <Pane
+        id="explorer-entries-pane"
+        title="Entries"
+        count={regularEntries.length}
+        isCollapsed={isEntriesCollapsed}
+        onToggleCollapse={() => setIsEntriesCollapsed(!isEntriesCollapsed)}
+        actionComponent={
+          <div className="relative flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => onNewEntry()}
+              title="New Blank Entry"
+              className="flex items-center gap-1 text-[10px] font-bold text-nb-primary hover:underline transition-colors cursor-pointer px-1 py-0.5"
+            >
+              <Plus size={11} />
+              <span>New</span>
+            </button>
+
+            <button
+              onClick={() => setIsNewDropdownOpen(!isNewDropdownOpen)}
+              title="Create from template..."
+              className={`p-0.5 rounded transition-colors cursor-pointer text-nb-primary ${isNewDropdownOpen ? 'bg-nb-primary/15' : 'hover:bg-nb-surface-high'}`}
+            >
+              <ChevronDown size={11} className={`transition-transform ${isNewDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isNewDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIsNewDropdownOpen(false)} />
+                <div className="absolute right-0 top-full mt-1.5 z-50 w-52 bg-nb-surface border border-nb-outline-variant rounded-xl shadow-xl py-1 animate-in fade-in zoom-in-95 duration-150">
+                  <button
+                    onClick={() => {
+                      setIsNewDropdownOpen(false);
+                      onNewEntry();
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold text-nb-on-surface hover:bg-nb-surface-low transition-colors cursor-pointer text-left"
+                  >
+                    <FileText size={13} className="text-nb-primary shrink-0" />
+                    <span>Blank Entry</span>
+                  </button>
+
+                  <div className="px-3 py-1 text-[9px] font-black uppercase tracking-wider text-nb-on-surface-variant/50 border-t border-nb-outline-variant/20 mt-1">
+                    From Template
+                  </div>
+
+                  {templateEntries.length > 0 ? (
+                    templateEntries.map(tmpl => {
+                      const tmplId = tmpl.name.replace('.json', '');
+                      return (
+                        <button
+                          key={tmpl.path}
+                          onClick={() => {
+                            setIsNewDropdownOpen(false);
+                            if (onCreateFromTemplate) {
+                              onCreateFromTemplate(tmplId);
+                            }
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-1.5 text-[10px] font-medium text-nb-on-surface hover:bg-nb-surface-low hover:text-nb-primary transition-colors cursor-pointer text-left"
+                        >
+                          <Layers size={12} className="text-purple-500 shrink-0" />
+                          <span className="truncate flex-1">{tmpl.title || "Untitled Template"}</span>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="px-3 py-1.5 text-[10px] text-nb-on-surface-variant/60 italic">
+                      No templates yet
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        }
+        empty={search ? "No matches found." : "No entries yet."}
+        hasItems={regularEntries.length > 0}
+      >
+        <div className="space-y-1">
+          {regularEntries.map((f) => {
+            const pConfig = typeof f.phase === "number" ? phaseConfig[f.phase] : null;
+            const IconComponent = pConfig ? pConfig.icon : FileText;
+            const phase = typeof f.phase === "number" ? availablePhases.find(p => p.index === f.phase) : null;
+            const iconStyle = phase ? { color: phase.color } : undefined;
+
+            const icon = (
+              <IconComponent
+                size={16}
+                style={activePath === f.path ? { color: "inherit" } : iconStyle}
+                className={activePath === f.path ? "text-white" : pConfig ? "" : "opacity-40"}
+              />
+            );
+
+            return (
+              <FileRow
+                key={f.path}
+                file={f}
+                isOpened={activePath === f.path}
+                isSelected={selectedPaths.has(f.path)}
+                isPending={pendingPaths.has(f.path)}
+                isDeleted={deletedPaths.has(f.path)}
+                icon={icon}
+                isValid={f.isValid}
+                validationErrors={f.validationErrors}
                 onSelect={(e) => onSelectEntry(f, e.ctrlKey || e.metaKey, e.shiftKey)}
                 onDoubleClick={() => onOpenEntry(f)}
                 onContextMenu={(e) => handleContextMenu(e, f)}
@@ -398,25 +608,83 @@ export default function FileExplorer({
         <>
           <div className="fixed inset-0 z-[1100]" onClick={() => setContextMenu(null)} onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }} />
           <div
-            className="fixed z-[1200] w-48 bg-nb-surface border border-nb-outline-variant rounded-2xl shadow-2xl py-2 animate-in fade-in zoom-in-95 duration-200"
-            style={{ left: Math.min(contextMenu.x, window.innerWidth - 200), top: Math.min(contextMenu.y, window.innerHeight - 250) }}
+            className="fixed z-[1200] w-56 bg-nb-surface border border-nb-outline-variant rounded-2xl shadow-2xl py-2 animate-in fade-in zoom-in-95 duration-200"
+            style={{ left: Math.min(contextMenu.x, window.innerWidth - 240), top: Math.min(contextMenu.y, window.innerHeight - 300) }}
             onClick={e => e.stopPropagation()}
           >
             <div className="px-3 py-2 border-b border-nb-outline-variant/30 mb-1">
               <p className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant truncate">
-                {selectedPaths.size > 1 ? `${selectedPaths.size} Items Selected` : (contextMenu.file.title || "Untitled Entry")}
+                {selectedPaths.size > 1 ? `${selectedPaths.size} Items Selected` : (contextMenu.file.title || (contextMenu.file.isTemplate ? "Untitled Template" : "Untitled Entry"))}
               </p>
             </div>
 
             {selectedPaths.size <= 1 ? (
               <>
-                <button
-                  onClick={() => { onOpenEntry(contextMenu.file); setContextMenu(null); }}
-                  className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-nb-on-surface hover:bg-nb-surface-low transition-colors cursor-pointer"
-                >
-                  <ExternalLink size={14} className="text-nb-primary" />
-                  Open Entry
-                </button>
+                {contextMenu.file.isTemplate ? (
+                  <>
+                    {onCreateFromTemplate && (
+                      <button
+                        onClick={() => {
+                          const tmplId = contextMenu.file.name.replace('.json', '');
+                          onCreateFromTemplate(tmplId);
+                          setContextMenu(null);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-nb-primary hover:bg-nb-primary/10 transition-colors cursor-pointer"
+                      >
+                        <Plus size={14} />
+                        Create Entry from Template
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => { onOpenEntry(contextMenu.file); setContextMenu(null); }}
+                      className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-nb-on-surface hover:bg-nb-surface-low transition-colors cursor-pointer"
+                    >
+                      <ExternalLink size={14} className="text-purple-500" />
+                      Edit Template
+                    </button>
+
+                    {onDuplicateEntry && (
+                      <button
+                        onClick={() => { onDuplicateEntry(contextMenu.file); setContextMenu(null); }}
+                        className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-nb-on-surface hover:bg-nb-surface-low transition-colors cursor-pointer"
+                      >
+                        <Copy size={14} className="text-nb-on-surface-variant" />
+                        Duplicate Template
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => { onOpenEntry(contextMenu.file); setContextMenu(null); }}
+                      className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-nb-on-surface hover:bg-nb-surface-low transition-colors cursor-pointer"
+                    >
+                      <ExternalLink size={14} className="text-nb-primary" />
+                      Open Entry
+                    </button>
+
+                    {onDuplicateEntry && (
+                      <button
+                        onClick={() => { onDuplicateEntry(contextMenu.file); setContextMenu(null); }}
+                        className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-nb-on-surface hover:bg-nb-surface-low transition-colors cursor-pointer"
+                      >
+                        <Copy size={14} className="text-nb-primary" />
+                        Duplicate Entry
+                      </button>
+                    )}
+
+                    {onSaveAsTemplate && (
+                      <button
+                        onClick={() => { onSaveAsTemplate(contextMenu.file); setContextMenu(null); }}
+                        className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 transition-colors cursor-pointer"
+                      >
+                        <Layers size={14} />
+                        Save as Template
+                      </button>
+                    )}
+                  </>
+                )}
 
                 {activePath === contextMenu.file.path && (
                   <button
@@ -424,7 +692,7 @@ export default function FileExplorer({
                     className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-nb-on-surface hover:bg-nb-surface-low transition-colors cursor-pointer"
                   >
                     <X size={14} className="text-nb-on-surface-variant" />
-                    Close Entry
+                    Close
                   </button>
                 )}
 
@@ -453,7 +721,7 @@ export default function FileExplorer({
                   className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-500/5 transition-colors cursor-pointer"
                 >
                   <Trash2 size={14} />
-                  Delete Entry
+                  Delete {contextMenu.file.isTemplate ? "Template" : "Entry"}
                 </button>
               </>
             ) : (
@@ -463,7 +731,7 @@ export default function FileExplorer({
                   className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-nb-on-surface hover:bg-nb-surface-low transition-colors cursor-pointer"
                 >
                   <Download size={14} className="text-nb-tertiary" />
-                  Export Entries ({selectedPaths.size})
+                  Export Selected ({selectedPaths.size})
                 </button>
 
                 <div className="h-px bg-nb-outline-variant/30 my-1" />

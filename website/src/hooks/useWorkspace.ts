@@ -107,6 +107,11 @@ export function useWorkspace() {
   const importNotebook = useCallback((data: Record<string, unknown>, options?: ImportOptions) => store.importNotebook(data, options), []);
   const importNotebookArchive = useCallback((file: File, options?: ImportOptions) => store.importNotebookArchive(file, options), []);
   const setSelectedPaths = useCallback((pathsOrUpdater: Set<string> | ((prev: Set<string>) => Set<string>)) => store.setSelectedPaths(pathsOrUpdater), []);
+  const duplicateEntry = useCallback((sourceId: string, options?: { asTemplate?: boolean; title?: string }) => store.duplicateEntry(sourceId, options), []);
+  const createTemplate = useCallback((templateData?: Partial<import("@/lib/metadata").EntryMetadata>) => store.createTemplate(templateData), []);
+  const createEntryFromTemplate = useCallback((templateId: string) => store.createEntryFromTemplate(templateId), []);
+  const discardPathChange = useCallback((path: string) => store.discardPathChange(path), []);
+  const discardEntryChanges = useCallback((entryId: string) => store.discardEntryChanges(entryId), []);
   const getCompiledPdfUrl = useCallback(() => store.getCompiledPdfUrl(), []);
   const saveCompiledPdf = useCallback((pdf: Uint8Array) => store.saveCompiledPdf(pdf), []);
 
@@ -118,6 +123,9 @@ export function useWorkspace() {
     renameProject,
     selectProject,
     createEntry,
+    duplicateEntry,
+    createTemplate,
+    createEntryFromTemplate,
     deleteEntry,
     updateDraft,
     updateEntry,
@@ -129,6 +137,8 @@ export function useWorkspace() {
     refreshPending,
     setEntryValidity,
     discardPendingChanges,
+    discardPathChange,
+    discardEntryChanges,
     navigateTo,
     handleUrlChange,
     getFileContent,

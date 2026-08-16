@@ -5,7 +5,7 @@ import { getAllPending, getPending, stageChange, removeStaged } from "../db";
 import { fetchFileContent, fetchRawFileContent, checkGitHubFileExists } from "../github";
 import { readLocalFile, writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, checkLocalFileExists } from "../fs";
 import { generateUUID, getMimeTypeFromExtension, formatDateMonthYear } from "../utils";
-import { EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds } from "../metadata";
+import { EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, buildResourceTypeIndex } from "../metadata";
 import { generateAllEntriesLatex, generateTeamLatex, generatePhasesLatex } from "../latex";
 import { IWorkspaceStore } from "./types";
 
@@ -318,6 +318,147 @@ export class EntryManager {
     return id;
   }
 
+  async duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string }): Promise<string> {
+    const sourceMeta = this.store.metadata.entries[sourceId];
+    if (!sourceMeta) throw new Error("Source entry not found");
+
+    // Flush any pending debounced edits first
+    this.store.debouncedPersist.flush();
+
+    // 1. Get raw content JSON from memory or disk
+    let contentJson: TipTapNode = { type: "doc", content: [{ type: "paragraph" }] };
+    if (this.store.openFile?.id === sourceId && this.store.openFile.tiptapContent) {
+      try {
+        contentJson = JSON.parse(this.store.openFile.tiptapContent);
+      } catch {}
+    } else {
+      const raw = await this.store.getFileContent(sourceMeta.filename);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          contentJson = parsed.content || parsed;
+        } catch {}
+      }
+    }
+
+    // Ensure all resource nodes in duplicated doc get fresh unique IDs
+    contentJson = ensureResourceIds(JSON.parse(JSON.stringify(contentJson)));
+
+    const newId = generateUUID();
+    const createdAt = new Date().toISOString();
+    const newPath = `${ENTRIES_DIR}/${newId}.json`;
+    const newLatexPath = `${LATEX_DIR}/${newId}.tex`;
+
+    const isTemplate = options?.asTemplate ?? sourceMeta.isTemplate ?? false;
+    let newTitle = options?.title;
+    if (!newTitle) {
+      if (options?.asTemplate && !sourceMeta.isTemplate) {
+        newTitle = `${sourceMeta.title || "Untitled"} Template`;
+      } else {
+        newTitle = `${sourceMeta.title || "Untitled"} (Copy)`;
+      }
+    }
+
+    const newEntry: EntryMetadata = {
+      id: newId,
+      title: newTitle,
+      author: sourceMeta.author || localStorage.getItem("nb-last-author") || "",
+      phase: sourceMeta.phase ?? null,
+      date: isTemplate ? (sourceMeta.date || createdAt.split('T')[0]) : createdAt.split('T')[0],
+      createdAt,
+      updatedAt: createdAt,
+      filename: newPath,
+      isTemplate: isTemplate || undefined,
+      resources: sourceMeta.resources ? { ...sourceMeta.resources } : undefined,
+      assets: sourceMeta.assets ? [...sourceMeta.assets] : undefined
+    };
+
+    const wrapper = { version: 3, content: dehydrateAssets(contentJson) };
+    const jsonStr = JSON.stringify(wrapper, null, 2);
+
+    const { generateEntryLatex } = await import("../latex");
+    const resourceTypes = buildResourceTypeIndex(this.store.metadata.entries, sourceMeta.resources, newId);
+    const newLatex = generateEntryLatex(
+      contentJson,
+      newTitle,
+      newEntry.author,
+      newEntry.phase,
+      createdAt,
+      newId,
+      resourceTypes,
+      newEntry.date
+    );
+
+    this.store.lastSavedContents.set(newPath, jsonStr);
+    this.store.lastSavedContents.set(newLatexPath, newLatex);
+
+    this.store.metadata = validateNotebookIntegrity({
+      ...this.store.metadata,
+      entries: { ...this.store.metadata.entries, [newId]: newEntry }
+    });
+    this.store.entries = [{ name: `${newId}.json`, path: newPath }, ...this.store.entries];
+    this.store.notifyStateChange();
+
+    await this.store.enqueue(async () => {
+      await this.persistFile(newPath, jsonStr, `Create entry: ${newTitle}`);
+      await this.persistFile(newLatexPath, newLatex, `Init LaTeX for: ${newTitle}`);
+      await this.persistFile(INDEX_PATH, JSON.stringify(this.store.metadata, null, 2), "Update notebook metadata");
+      await this.store.updateLatexMetadata();
+    });
+
+    this.store.navigateTo({ entry: newId });
+    return newId;
+  }
+
+  async createTemplate(templateData?: Partial<EntryMetadata>): Promise<string> {
+    const id = generateUUID();
+    const createdAt = new Date().toISOString();
+    const path = `${ENTRIES_DIR}/${id}.json`;
+    const latexPath = `${LATEX_DIR}/${id}.tex`;
+
+    const newTemplate: EntryMetadata = {
+      id,
+      title: templateData?.title || "New Template",
+      author: templateData?.author || localStorage.getItem("nb-last-author") || "",
+      phase: templateData?.phase ?? null,
+      date: templateData?.date || createdAt.split('T')[0],
+      createdAt,
+      updatedAt: createdAt,
+      filename: path,
+      isTemplate: true
+    };
+
+    const wrapper = { version: 3, content: { type: "doc", content: [{ type: "paragraph" }] } };
+    const jsonStr = JSON.stringify(wrapper, null, 2);
+    const initialLatex = `\\notebookentry{${newTemplate.title}}{${newTemplate.date}}{${newTemplate.author}}{}{${id}}\n\n`;
+
+    this.store.lastSavedContents.set(path, jsonStr);
+    this.store.lastSavedContents.set(latexPath, initialLatex);
+
+    this.store.metadata = validateNotebookIntegrity({
+      ...this.store.metadata,
+      entries: { ...this.store.metadata.entries, [id]: newTemplate }
+    });
+    this.store.entries = [{ name: `${id}.json`, path }, ...this.store.entries];
+    this.store.notifyStateChange();
+
+    await this.store.enqueue(async () => {
+      await this.persistFile(path, jsonStr, `Create template: ${newTemplate.title}`);
+      await this.persistFile(latexPath, initialLatex, "Init template LaTeX");
+      await this.persistFile(INDEX_PATH, JSON.stringify(this.store.metadata, null, 2), "Update notebook metadata");
+    });
+
+    this.store.navigateTo({ entry: id });
+    return id;
+  }
+
+  async createEntryFromTemplate(templateId: string): Promise<string> {
+    return this.duplicateEntry(templateId, {
+      asTemplate: false,
+      title: this.store.metadata.entries[templateId]?.title || "New Entry"
+    });
+  }
+
   async refreshPending() {
     if (this.store.savingCount > 0) {
       return this.store.pendingChanges;
@@ -348,6 +489,48 @@ export class EntryManager {
       }
     };
 
+    this.store.notifyStateChange();
+  }
+
+  async discardPathChange(path: string) {
+    if (this.store.mode !== "github" && this.store.mode !== "temporary") return;
+    const dbName = this.store.getDBName();
+    await this.store.queue;
+    await removeStaged(dbName, path);
+    this.store.lastSavedContents.delete(path);
+    await this.refreshPending();
+    this.store.notifyStateChange();
+  }
+
+  async discardEntryChanges(entryId: string) {
+    if (this.store.mode !== "github" && this.store.mode !== "temporary") return;
+    const dbName = this.store.getDBName();
+    await this.store.queue;
+    
+    const entryJsonPath = `${ENTRIES_DIR}/${entryId}.json`;
+    const entryTexPath = `${LATEX_DIR}/${entryId}.tex`;
+
+    await removeStaged(dbName, entryJsonPath);
+    await removeStaged(dbName, entryTexPath);
+    this.store.lastSavedContents.delete(entryJsonPath);
+    this.store.lastSavedContents.delete(entryTexPath);
+
+    // If this entry was a newly created entry (never committed), clean it from memory
+    const committed = await this.getCommittedFileContent(entryJsonPath);
+    if (!committed) {
+      this.store.metadata = validateNotebookIntegrity(removeEntryFromMetadata(this.store.metadata, entryId));
+      this.store.entries = this.store.entries.filter(e => e.path !== entryJsonPath);
+      if (this.store.openFile?.id === entryId) {
+        this.store.openFile = null;
+        this.store.navigateTo({ entry: null });
+      }
+    } else {
+      try {
+        await this.openEntry(entryId);
+      } catch {}
+    }
+
+    await this.refreshPending();
     this.store.notifyStateChange();
   }
 

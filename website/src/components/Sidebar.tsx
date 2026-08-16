@@ -1,6 +1,10 @@
+"use client";
+
 import { useState, useMemo, useEffect, useCallback } from "react";
+import ActivityBar, { SidebarTab } from "./sidebar/ActivityBar";
 import FileExplorer from "./FileExplorer";
-import PendingChangesPanel from "./PendingChangesPanel";
+import SearchTab from "./sidebar/SearchTab";
+import VersionControlTab from "./sidebar/VersionControlTab";
 import { ExplorerFile, TeamTab } from "@/lib/types";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { LATEX_DIR, ENTRIES_DIR } from "@/lib/constants";
@@ -19,6 +23,7 @@ interface SidebarProps {
 export default function Sidebar({
   selectedPaths,
   onSelectEntry,
+  onOpenTeam,
   showConfirm,
   onNewEntry,
   onOpenEntry,
@@ -31,16 +36,16 @@ export default function Sidebar({
     pendingChanges,
     mode,
     createEntry,
+    duplicateEntry,
+    createTemplate,
+    createEntryFromTemplate,
     deleteEntry,
-    commitAll,
-    discardPendingChanges,
-    isCommitting,
-    isDiscarding,
-    config,
     navigateTo,
     getFileContent,
     exportEntries
   } = useWorkspace();
+
+  const [activeTab, setActiveTab] = useState<SidebarTab>("explorer");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"date" | "title">("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
@@ -49,10 +54,12 @@ export default function Sidebar({
   const handleConfirmDelete = useCallback((files: ExplorerFile[]) => {
     if (files.length === 0) return;
 
-    const title = files.length === 1 ? "Delete Entry" : "Delete Multiple Entries";
+    const isTemplate = files.some(f => f.isTemplate);
+    const itemType = isTemplate ? "Template" : "Entry";
+    const title = files.length === 1 ? `Delete ${itemType}` : `Delete Multiple ${itemType}s`;
     const message = files.length === 1
-      ? `Are you sure you want to delete "${files[0].title || "Untitled Entry"}"? This action cannot be undone and will permanently remove the entry and its associated LaTeX file.`
-      : `Are you sure you want to delete ${files.length} entries? This action cannot be undone and will permanently remove all selected entries and their associated LaTeX files.`;
+      ? `Are you sure you want to delete "${files[0].title || "Untitled"}"? This action cannot be undone.`
+      : `Are you sure you want to delete ${files.length} items? This action cannot be undone.`;
 
     showConfirm(
       title,
@@ -68,7 +75,6 @@ export default function Sidebar({
     const paths = new Set<string>();
     for (const p of pendingChanges || []) {
       paths.add(p.path);
-      // If the LaTeX file of an entry has pending changes, mark the entry JSON as pending too
       if (p.path.startsWith(`${LATEX_DIR}/`) && p.path.endsWith(".tex")) {
         const entryId = p.path.replace(`${LATEX_DIR}/`, "").replace(".tex", "");
         paths.add(`${ENTRIES_DIR}/${entryId}.json`);
@@ -76,6 +82,7 @@ export default function Sidebar({
     }
     return paths;
   }, [pendingChanges]);
+
   const deletedPaths = useMemo(() => new Set((pendingChanges || []).filter(p => p.operation === "delete").map(p => p.path)), [pendingChanges]);
 
   const augmentedEntries = useMemo(() => {
@@ -85,10 +92,12 @@ export default function Sidebar({
       return {
         ...f,
         title: meta?.title || "",
+        author: meta?.author || "",
         phase: meta?.phase ?? null,
         timestamp: meta?.createdAt,
         updatedAt: meta?.updatedAt,
         date: meta?.date,
+        isTemplate: meta?.isTemplate || false,
         isValid: meta?.isValid !== false,
         validationErrors: meta?.validationErrors || []
       };
@@ -99,7 +108,7 @@ export default function Sidebar({
     const list = augmentedEntries.filter(f => {
       if (search) {
         const q = search.toLowerCase();
-        if (!(f.title?.toLowerCase().includes(q) || f.name.toLowerCase().includes(q))) return false;
+        if (!(f.title?.toLowerCase().includes(q) || f.name.toLowerCase().includes(q) || f.author?.toLowerCase().includes(q))) return false;
       }
       if (dateRange) {
         const dStr = f.date || (f.timestamp ? f.timestamp.split('T')[0] : null);
@@ -129,7 +138,6 @@ export default function Sidebar({
       if (valA < valB) return sortDirection === "asc" ? -1 : 1;
       if (valA > valB) return sortDirection === "asc" ? 1 : -1;
       
-      // Tie-breaker: updatedAt (timestamp)
       const tsA = a.updatedAt || a.timestamp || "";
       const tsB = b.updatedAt || b.timestamp || "";
       if (tsA < tsB) return sortDirection === "asc" ? -1 : 1;
@@ -144,7 +152,6 @@ export default function Sidebar({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Delete" || (e.key === "Backspace" && (e.metaKey || e.ctrlKey))) {
-        // Don't trigger if typing in an input
         const target = e.target as HTMLElement;
         if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
 
@@ -169,46 +176,62 @@ export default function Sidebar({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedPaths, entries, handleConfirmDelete, onSelectAll, filteredEntries]);
 
-  const handleOpenEntry = (file: ExplorerFile) => {
-    if (onOpenEntry) {
+  const handleOpenEntry = useCallback((file: ExplorerFile, resourceId?: string) => {
+    if (onOpenEntry && !resourceId) {
       onOpenEntry(file);
     } else {
       const id = file.name.replace('.json', '');
-      navigateTo({ entry: id, resource: null }, '/workspace/editor');
+      navigateTo({ entry: id, resource: resourceId || null }, '/workspace/editor');
     }
-  };
+  }, [onOpenEntry, navigateTo]);
 
-  const handleDiscard = () => {
-    showConfirm(
-      "Discard All Changes",
-      "Are you sure you want to discard all pending changes? This action cannot be undone and you will lose all uncommitted edits.",
-      async () => {
-        try {
-          await discardPendingChanges();
-          showNotification("Discarded all pending changes.", "info");
-        } catch (e) {
-          console.error("Discard failed", e);
-          showNotification("Failed to discard changes.", "error");
-        }
-      },
-      "danger"
-    );
-  };
-
-  const handleCommit = async (message?: string) => {
-    if (!config) {
-      showNotification("GitHub is not configured for this project.", "error");
-      return;
-    }
-
+  const handleDuplicateEntry = useCallback(async (file: ExplorerFile) => {
     try {
-      await commitAll(config, message);
-      showNotification("Synced changes to GitHub.", "success");
-    } catch (error) {
-      console.error("GitHub sync failed", error);
-      showNotification(error instanceof Error ? error.message : "Failed to sync to GitHub", "error");
+      const id = file.name.replace('.json', '');
+      const newId = await duplicateEntry(id);
+      showNotification("Entry duplicated successfully.", "success");
+    } catch (e) {
+      console.error("Duplicate failed", e);
+      showNotification("Failed to duplicate entry.", "error");
     }
-  };
+  }, [duplicateEntry]);
+
+  const handleSaveAsTemplate = useCallback(async (file: ExplorerFile) => {
+    try {
+      const id = file.name.replace('.json', '');
+      await duplicateEntry(id, { asTemplate: true });
+      showNotification("Saved as reusable template.", "success");
+    } catch (e) {
+      console.error("Save as template failed", e);
+      showNotification("Failed to save as template.", "error");
+    }
+  }, [duplicateEntry]);
+
+  const handleCreateFromTemplate = useCallback(async (templateId: string) => {
+    try {
+      const newId = await createEntryFromTemplate(templateId);
+      if (newId) {
+        navigateTo({ entry: newId, resource: null }, '/workspace/editor');
+      }
+      showNotification("Created new entry from template.", "success");
+    } catch (e) {
+      console.error("Create from template failed", e);
+      showNotification("Failed to create entry from template.", "error");
+    }
+  }, [createEntryFromTemplate, navigateTo]);
+
+  const handleCreateTemplate = useCallback(async () => {
+    try {
+      const newTemplateId = await createTemplate();
+      if (newTemplateId) {
+        navigateTo({ entry: newTemplateId, resource: null }, '/workspace/editor');
+      }
+      showNotification("Created new blank template.", "success");
+    } catch (e) {
+      console.error("Create template failed", e);
+      showNotification("Failed to create template.", "error");
+    }
+  }, [createTemplate, navigateTo]);
 
   const handleDownloadJson = async (file: ExplorerFile) => {
     const id = file.name.replace('.json', '');
@@ -244,46 +267,63 @@ export default function Sidebar({
   }, [navigateTo]);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden min-h-0">
-      <FileExplorer
-        entries={filteredEntries}
-        activePath={openFile?.path || null}
-        selectedPaths={selectedPaths}
-        pendingPaths={pendingPaths}
-        deletedPaths={deletedPaths}
-        onSelectEntry={(file, multi, range) => onSelectEntry(file, multi, range, filteredEntries.map(e => e.path))}
-        onOpenEntry={handleOpenEntry}
-        onCloseEntry={handleCloseEntry}
-        onDownloadLatex={handleDownloadLatex}
-        onDownloadJson={handleDownloadJson}
-        onDeleteEntry={(file) => handleConfirmDelete([file])}
-        onDownloadMulti={handleDownloadMulti}
-        onDeleteMulti={handleConfirmDelete}
-        onNewEntry={onNewEntry || createEntry}
-        search={search}
-        onSearchChange={setSearch}
-        sortBy={sortBy}
-        onSortChange={setSortBy}
-        sortDirection={sortDirection}
-        onSortDirectionToggle={() => setSortDirection(prev => prev === "asc" ? "desc" : "asc")}
-        dateRange={dateRange}
-        onDateRangeChange={setDateRange}
-        notebookMetadata={metadata}
+    <div className="flex h-full overflow-hidden min-h-0 bg-nb-surface-lowest">
+      {/* Activity Bar (VS Code style slim icon column) */}
+      <ActivityBar
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        pendingCount={(pendingChanges || []).length}
+        onOpenTeam={onOpenTeam}
+        onOpenCompile={() => navigateTo({}, '/workspace/compile')}
+        onOpenHelp={() => navigateTo({}, '/workspace/help/getting-started')}
       />
 
-      <div className={`grid transition-all duration-500 ease-in-out ${pendingChanges.length > 0 || isCommitting || isDiscarding ? 'grid-rows-[1fr] opacity-100 border-t border-nb-outline-variant' : 'grid-rows-[0fr] opacity-0'}`}>
-        <div className="overflow-hidden">
-          <div className="p-4 bg-nb-surface">
-            <PendingChangesPanel
-              pendingChanges={pendingChanges}
-              isCommitting={isCommitting}
-              isDiscarding={isDiscarding}
-              onCommit={handleCommit}
-              onDiscard={handleDiscard}
-              workspaceMode={mode as "github" | "local" | "temporary"}
-            />
-          </div>
-        </div>
+      {/* Main Tab Panel */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden min-h-0 bg-nb-surface-low">
+        {activeTab === "explorer" && (
+          <FileExplorer
+            entries={filteredEntries}
+            activePath={openFile?.path || null}
+            selectedPaths={selectedPaths}
+            pendingPaths={pendingPaths}
+            deletedPaths={deletedPaths}
+            onSelectEntry={(file, multi, range) => onSelectEntry(file, multi, range, filteredEntries.map(e => e.path))}
+            onOpenEntry={handleOpenEntry}
+            onCloseEntry={handleCloseEntry}
+            onDownloadLatex={handleDownloadLatex}
+            onDownloadJson={handleDownloadJson}
+            onDeleteEntry={(file) => handleConfirmDelete([file])}
+            onDuplicateEntry={handleDuplicateEntry}
+            onSaveAsTemplate={handleSaveAsTemplate}
+            onCreateTemplate={handleCreateTemplate}
+            onCreateFromTemplate={handleCreateFromTemplate}
+            onDownloadMulti={handleDownloadMulti}
+            onDeleteMulti={handleConfirmDelete}
+            onNewEntry={onNewEntry || createEntry}
+            search={search}
+            onSearchChange={setSearch}
+            sortBy={sortBy}
+            onSortChange={setSortBy}
+            sortDirection={sortDirection}
+            onSortDirectionToggle={() => setSortDirection(prev => prev === "asc" ? "desc" : "asc")}
+            dateRange={dateRange}
+            onDateRangeChange={setDateRange}
+            notebookMetadata={metadata}
+          />
+        )}
+
+        {activeTab === "search" && (
+          <SearchTab
+            entries={augmentedEntries}
+            onSelectEntry={handleOpenEntry}
+          />
+        )}
+
+        {activeTab === "git" && (
+          <VersionControlTab
+            showConfirm={showConfirm}
+          />
+        )}
       </div>
     </div>
   );

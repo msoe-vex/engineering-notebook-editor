@@ -1,4 +1,4 @@
-import { NotebookMetadata, TeamMetadata, ProjectPhase } from "../metadata";
+import { NotebookMetadata, TeamMetadata, ProjectPhase, EntryMetadata } from "../metadata";
 import { ExplorerFile, GitHubConfig, TeamTab } from "../types";
 import { Project, PendingChange } from "../db";
 import { DebouncedFunction } from "../utils";
@@ -99,9 +99,14 @@ export interface IWorkspaceStore {
   updateDraft(tiptapContent: string | null, info: { title?: string; author?: string; phase?: number | null; date?: string }): void;
   updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null; date: string }): Promise<void>;
   createEntry(): Promise<string>;
+  duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string }): Promise<string>;
+  createTemplate(templateData?: Partial<EntryMetadata>): Promise<string>;
+  createEntryFromTemplate(templateId: string): Promise<string>;
   refreshPending(): Promise<PendingChange[]>;
   setEntryValidity(id: string, isValid: boolean, validationErrors?: string[]): void;
   discardPendingChanges(): Promise<void>;
+  discardPathChange(path: string): Promise<void>;
+  discardEntryChanges(entryId: string): Promise<void>;
   deleteEntry(file: ExplorerFile): Promise<void>;
   updateLatexMetadata(): Promise<void>;
   saveTeam(team: TeamMetadata, phases?: ProjectPhase[]): Promise<void>;
