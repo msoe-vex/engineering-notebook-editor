@@ -63,10 +63,20 @@ export class TransferManager {
     try {
       if (this.store.mode === "local" && this.store.dirHandle) {
         const res = await getLocalFileContent(this.store.dirHandle, path);
-        return normalizeBase64(res.base64 as string | null | undefined);
+        const norm = normalizeBase64(res.base64 as string | null | undefined);
+        if (norm) {
+          const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${norm}`;
+          await putResource(dbName, { path, dataUrl });
+          return norm;
+        }
       } else if (this.store.mode === "github" && this.store.config) {
         const remote = await fetchRawFileContent(this.store.config, this.store.getFullPath(path));
-        return normalizeBase64(remote as string | null | undefined);
+        const norm = normalizeBase64(remote as string | null | undefined);
+        if (norm) {
+          const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${norm}`;
+          await putResource(dbName, { path, dataUrl });
+          return norm;
+        }
       }
     } catch (e) {
       console.error(`Failed to get asset base64 for ${path}`, e);

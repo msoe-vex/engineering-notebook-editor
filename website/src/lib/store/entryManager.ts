@@ -35,38 +35,52 @@ export class EntryManager {
 
     try {
       const dbName = this.store.getDBName();
-      let entryJsonStr = "";
+      const texPath = `${LATEX_DIR}/${id}.tex`;
 
-      // Fetch pending changes once to use for entry and assets
+      // 1. Fetch pending changes once
       const pending = await getAllPending(dbName);
 
-      // 1. Check memory cache first (for immediate access to new/modified entries)
-      entryJsonStr = this.store.lastSavedContents.get(meta.filename) || "";
-
-      // 2. Check pending changes if not in memory
-      if (!entryJsonStr) {
-        const stagedEntry = pending.find(p => p.path === meta.filename && p.operation === "upsert");
-        if (stagedEntry?.content) {
-          entryJsonStr = stagedEntry.content;
-        }
-      }
-
-      // 3. Check disk/remote if still not found
-      if (!entryJsonStr) {
-        if (this.store.mode === "local" && this.store.dirHandle) {
-          entryJsonStr = (await getLocalFileContent(this.store.dirHandle, meta.filename)).text || "";
-        } else if (this.store.mode === "github" && this.store.config) {
-          entryJsonStr = await fetchFileContent(this.store.config, this.store.getFullPath(meta.filename));
-        }
-      }
+      // 2. Fetch Entry JSON and LaTeX concurrently
+      const [entryJsonStr, latex] = await Promise.all([
+        (async () => {
+          // Check memory cache first
+          if (this.store.lastSavedContents.has(meta.filename)) {
+            return this.store.lastSavedContents.get(meta.filename)!;
+          }
+          // Check staged changes
+          const stagedEntry = pending.find(p => p.path === meta.filename && p.operation === "upsert");
+          if (stagedEntry?.content) return stagedEntry.content;
+          // Check disk / remote
+          if (this.store.mode === "local" && this.store.dirHandle) {
+            return (await getLocalFileContent(this.store.dirHandle, meta.filename)).text || "";
+          } else if (this.store.mode === "github" && this.store.config) {
+            return await fetchFileContent(this.store.config, this.store.getFullPath(meta.filename));
+          }
+          return "";
+        })(),
+        (async () => {
+          try {
+            const stagedTex = pending.find(p => p.path === texPath && p.operation === "upsert");
+            if (stagedTex?.content) return stagedTex.content;
+            if (this.store.mode === "local" && this.store.dirHandle) {
+              return await readLocalFile(this.store.dirHandle, texPath);
+            } else if (this.store.mode === "github" && this.store.config) {
+              return await fetchFileContent(this.store.config, this.store.getFullPath(texPath));
+            }
+          } catch { }
+          return "";
+        })()
+      ]);
 
       if (!entryJsonStr) throw new Error("Entry not found");
       const rawData = JSON.parse(entryJsonStr);
       const content = rawData.content || rawData;
 
-      // Hydrate assets
+      // 3. Fast local asset resolution from memory / IndexedDB without blocking on remote downloads
       const assetCache = new Map<string, string>();
       const images = extractImagePaths(content);
+      const localTasks: Promise<void>[] = [];
+
       for (const imgPath of images) {
         if (imgPath.startsWith('data:')) continue;
         const actualImgPath = this.store.getFullPath(imgPath);
@@ -75,42 +89,24 @@ export class EntryManager {
           const dataUrl = staged.content.startsWith('data:') ? staged.content : `data:${getMimeTypeFromExtension(imgPath)};base64,${staged.content}`;
           assetCache.set(imgPath, dataUrl);
         } else {
-          let cached = await getResource(dbName, actualImgPath);
-          if (cached) {
-            if (cached.startsWith('data:image/*;base64,')) {
-              cached = cached.replace('data:image/*;base64,', `data:${getMimeTypeFromExtension(imgPath)};base64,`);
-              await putResource(dbName, { path: actualImgPath, dataUrl: cached });
+          localTasks.push((async () => {
+            let cached = (await getResource(dbName, imgPath)) || (await getResource(dbName, actualImgPath));
+            if (cached) {
+              if (cached.startsWith('data:image/*;base64,')) {
+                cached = cached.replace('data:image/*;base64,', `data:${getMimeTypeFromExtension(imgPath)};base64,`);
+                await putResource(dbName, { path: imgPath, dataUrl: cached });
+              }
+              assetCache.set(imgPath, cached);
             }
-          }
-          if (cached) {
-            assetCache.set(imgPath, cached);
-          } else if (this.store.mode === "local" && this.store.dirHandle) {
-            try {
-              const res = await getLocalFileContent(this.store.dirHandle, imgPath);
-              if (res.base64) assetCache.set(imgPath, res.base64);
-            } catch { }
-          } else if (this.store.mode === "github" && this.store.config) {
-            try {
-              const base64 = await fetchRawFileContent(this.store.config, actualImgPath);
-              const dataUrl = `data:${getMimeTypeFromExtension(imgPath)};base64,${base64}`;
-              assetCache.set(imgPath, dataUrl);
-              await putResource(dbName, { path: actualImgPath, dataUrl });
-            } catch { }
-          }
+          })());
         }
       }
 
-      const hydratedContent = hydrateAssets(content, assetCache);
+      if (localTasks.length > 0) {
+        await Promise.all(localTasks);
+      }
 
-      let latex = "";
-      try {
-        const texPath = `${LATEX_DIR}/${id}.tex`;
-        if (this.store.mode === "local" && this.store.dirHandle) {
-          latex = await readLocalFile(this.store.dirHandle, texPath);
-        } else if (this.store.mode === "github" && this.store.config) {
-          latex = await fetchFileContent(this.store.config, this.store.getFullPath(texPath));
-        }
-      } catch { }
+      const hydratedContent = hydrateAssets(content, assetCache);
 
       this.store.openFile = {
         path: meta.filename,

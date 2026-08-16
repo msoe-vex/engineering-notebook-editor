@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useSyncExternalStore } from "react";
 
 /**
  * Checks whether the current environment is a mobile or touch-primary device
@@ -34,16 +34,16 @@ export function isMobileDevice(): boolean {
   return isMobileUA || isIPadOS;
 }
 
+const emptySubscribe = () => () => {};
+
 /**
  * React hook to reactively check if the current device is a mobile device.
  * Defaults to false during SSR to avoid hydration mismatches.
  */
 export function useIsMobileDevice(): boolean {
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    setIsMobile(isMobileDevice());
-  }, []);
-
-  return isMobile;
+  return useSyncExternalStore(
+    emptySubscribe,
+    isMobileDevice,
+    () => false
+  );
 }

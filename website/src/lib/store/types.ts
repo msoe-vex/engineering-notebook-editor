@@ -105,6 +105,7 @@ export interface IWorkspaceStore {
   deleteEntry(file: ExplorerFile): Promise<void>;
   updateLatexMetadata(): Promise<void>;
   saveTeam(team: TeamMetadata, phases?: ProjectPhase[]): Promise<void>;
+  hydrateTeamAssets(): Promise<void>;
   commitAll(config: GitHubConfig, customMessage?: string): Promise<void>;
   getFileContent(path: string): Promise<string | null>;
   exportEntries(entryIds?: string[], mode?: 'data-only' | 'full'): Promise<void>;

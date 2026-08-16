@@ -4,6 +4,7 @@ import { Table } from "@tiptap/extension-table";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { GripVertical, Trash2, Table as TableIcon, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Rows3, Columns3 } from "lucide-react";
+import { NodeViewInput } from "./NodeViewInput";
 export function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: NodeViewProps) {
   const [isCursorInside, setIsCursorInside] = useState(false);
   const [isHoveringToolbar, setIsHoveringToolbar] = useState(false);
@@ -29,8 +30,8 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
     <NodeViewWrapper
       draggable={dragEnabled}
       data-id={node.attrs.id}
-      className={`my-6 group relative w-full transition ${active ? 'z-[100]' : 'z-10'} pl-12`}>
-      <div contentEditable={false} className="absolute left-0 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
+      className={`my-6 group relative w-full transition ${active ? 'z-100' : 'z-10'} pl-12`}>
+      <div contentEditable={false} className="absolute left-0 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-70">
         <div
           data-drag-handle
           onMouseEnter={() => setDragEnabled(true)}
@@ -57,10 +58,9 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
         >
           <div className="flex items-center gap-1.5 pr-3 border-r border-nb-outline-variant/20 mr-1 shrink-0">
             <TableIcon size={12} className="text-nb-primary" />
-            <input
-              type="text"
+            <NodeViewInput
               value={node.attrs.title || ""}
-              onChange={(e) => updateAttributes({ title: e.target.value })}
+              onUpdate={(title) => updateAttributes({ title })}
               placeholder="Table Title..."
               className="bg-transparent border-none outline-none text-[12px] font-bold tracking-wider text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30 w-48"
             />
@@ -136,10 +136,9 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
         </div>
 
         <div contentEditable={false} className="bg-nb-surface-low/30 border-t border-nb-outline-variant/10 px-4 py-2 flex items-center justify-center gap-2 group/caption">
-          <input
-            type="text"
+          <NodeViewInput
             value={node.attrs.caption || ""}
-            onChange={(e) => updateAttributes({ caption: e.target.value })}
+            onUpdate={(caption) => updateAttributes({ caption })}
             placeholder="Describe this table..."
             className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface/50 group-hover/caption:text-nb-on-surface focus:text-nb-on-surface focus:opacity-100 transition-all"
           />

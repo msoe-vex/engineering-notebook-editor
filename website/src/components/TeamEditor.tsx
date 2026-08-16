@@ -70,8 +70,8 @@ const IconPicker = ({
 
       {isOpen && (
         <>
-          <div className="fixed inset-0 z-[190]" onClick={() => setIsOpen(false)} />
-          <div className="absolute top-1/2 left-full ml-4 -translate-y-1/2 w-60 bg-nb-surface border border-nb-outline-variant shadow-nb-2xl rounded-[20px] p-3 z-[200] animate-in fade-in slide-in-from-left-2 duration-200">
+          <div className="fixed inset-0 z-190" onClick={() => setIsOpen(false)} />
+          <div className="absolute top-1/2 left-full ml-4 -translate-y-1/2 w-60 bg-nb-surface border border-nb-outline-variant shadow-nb-2xl rounded-[20px] p-3 z-200 animate-in fade-in slide-in-from-left-2 duration-200">
             <div className="relative mb-2.5">
               <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-nb-on-surface-variant/40" />
               <input
@@ -240,7 +240,7 @@ const MemberCard = memo(({
 
   return (
     <div
-      className={`group flex flex-col items-center gap-5 p-6 rounded-[32px] bg-nb-surface border border-nb-outline-variant hover:border-nb-primary/30 hover:shadow-nb-xl transition-all relative ${isOverlay ? 'shadow-nb-2xl border-nb-primary ring-2 ring-nb-primary/10' : ''}`}
+      className={`group flex flex-col items-center gap-5 p-6 rounded-4xl bg-nb-surface border border-nb-outline-variant hover:border-nb-primary/30 hover:shadow-nb-xl transition-all relative ${isOverlay ? 'shadow-nb-2xl border-nb-primary ring-2 ring-nb-primary/10' : ''}`}
     >
       <div
         {...attributes}
@@ -260,7 +260,7 @@ const MemberCard = memo(({
 
       {/* Member Avatar */}
       <div className="relative mt-2">
-        <div className="w-50 h-60 rounded-[32px] bg-nb-surface-low border-2 border-nb-outline-variant/30 overflow-hidden flex items-center justify-center shadow-inner">
+        <div className="w-50 h-60 rounded-4xl bg-nb-surface-low border-2 border-nb-outline-variant/30 overflow-hidden flex items-center justify-center shadow-inner">
           {member.image ? (
             <div className="relative w-full h-full">
               <Image src={member.image} alt={member.name} fill className="object-cover" unoptimized />
@@ -351,7 +351,7 @@ const MemberRow = memo(({
     <div
       ref={setNodeRef}
       style={style}
-      className={`group/row ${isDragging ? 'z-[100]' : ''}`}
+      className={`group/row ${isDragging ? 'z-100' : ''}`}
     >
       <div className={`transition-all ${isDragging ? 'opacity-0 duration-0' : 'opacity-100 duration-200 delay-150'}`}>
         <MemberCard
@@ -395,7 +395,7 @@ const PhaseRow = memo(({
     <div
       ref={setNodeRef}
       style={style}
-      className={`group/row ${isDragging ? 'z-[100]' : ''}`}
+      className={`group/row ${isDragging ? 'z-100' : ''}`}
     >
       <div className={`transition-all ${isDragging ? 'opacity-0 duration-0' : 'opacity-100 duration-200 delay-150'}`}>
         <PhaseCard
@@ -413,6 +413,7 @@ const PhaseRow = memo(({
 PhaseRow.displayName = "PhaseRow";
 
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { store } from "@/lib/store";
 
 interface TeamEditorProps {
   onClose: () => void;
@@ -430,6 +431,20 @@ export default function TeamEditor({
     saveTeam,
     setPendingSave
   } = useWorkspace();
+
+  useEffect(() => {
+    let active = true;
+    void store.hydrateTeamAssets().then(() => {
+      if (active) {
+        const data = store.hydratedMetadata.team || { teamName: "", teamNumber: "", organization: "", logo: "", logoOriginal: "", members: [] };
+        setTeamData({
+          ...data,
+          members: data.members.map(m => ({ ...m, id: m.id || generateUUID() }))
+        });
+      }
+    });
+    return () => { active = false; };
+  }, []);
 
   const initialData = useMemo(() => {
     const data = metadata.team || { teamName: "", teamNumber: "", organization: "", logo: "", logoOriginal: "", members: [] };
@@ -806,7 +821,7 @@ export default function TeamEditor({
               </div>
 
               {/* Right Column: Logo */}
-              <div className="flex flex-col items-center justify-center p-8 rounded-[32px] bg-nb-surface-low border border-nb-outline-variant/30 space-y-6">
+              <div className="flex flex-col items-center justify-center p-8 rounded-4xl bg-nb-surface-low border border-nb-outline-variant/30 space-y-6">
                 <div className="relative group">
                   <div className="w-48 h-48 rounded-[40px] bg-nb-surface border-4 border-white shadow-nb-lg overflow-hidden flex items-center justify-center">
                     {teamData.logo ? (
@@ -909,7 +924,7 @@ export default function TeamEditor({
                     {/* Static Numbers Column */}
                     <div className="flex flex-col gap-3 py-1">
                       {phases.map((_, i) => (
-                        <div key={i} className="w-10 h-[74px] flex items-center justify-center">
+                        <div key={i} className="w-10 h-18.5 flex items-center justify-center">
                           <span className="text-2xl font-black text-nb-on-surface-variant/10 select-none">
                             {i + 1}
                           </span>
@@ -932,7 +947,7 @@ export default function TeamEditor({
                 </SortableContext>
                 <DragOverlay>
                   {activeId ? (
-                    <div className="w-[768px]">
+                    <div className="w-3xl">
                       <PhaseCard
                         phase={phases.find(p => p.id === activeId)!}
                         isOverlay

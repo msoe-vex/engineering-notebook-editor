@@ -282,7 +282,7 @@ export default function Home({
             <span className="text-[10px] font-bold text-nb-on-surface-variant/40">{projects.length} Found</span>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-2 -mr-2 max-h-[380px] pb-4">
+          <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-2 -mr-2 max-h-95 pb-4">
             <div className="grid grid-cols-1 gap-3">
               {[...projects].sort((a, b) => new Date(b.lastOpened).getTime() - new Date(a.lastOpened).getTime()).map(project => (
                 <div
@@ -360,9 +360,9 @@ export default function Home({
 
                     {menuOpenId === project.id && (
                       <>
-                        <div className="fixed inset-0 z-[100]" onClick={() => setMenuOpenId(null)} />
+                        <div className="fixed inset-0 z-100" onClick={() => setMenuOpenId(null)} />
                         <div
-                          className="fixed w-48 bg-nb-surface border border-nb-outline-variant/30 rounded-2xl shadow-nb-xl z-[101] overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+                          className="fixed w-48 bg-nb-surface border border-nb-outline-variant/30 rounded-2xl shadow-nb-xl z-101 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
                           style={{
                             top: menuPosition.top - window.scrollY + 8,
                             left: Math.max(16, Math.min(window.innerWidth - 208, menuPosition.left - window.scrollX))

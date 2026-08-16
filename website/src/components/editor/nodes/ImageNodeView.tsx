@@ -1,38 +1,98 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { NodeViewWrapper, ReactNodeViewRenderer, NodeViewProps } from "@tiptap/react";
 import { Image as TiptapImage, type ImageOptions } from "@tiptap/extension-image";
 import Image from "next/image";
-import { GripVertical, Trash2, Image as ImageIcon, Upload } from "lucide-react";
-import { getResource } from "@/lib/db";
+import { GripVertical, Trash2, Image as ImageIcon, Upload, Loader2 } from "lucide-react";
+import { getResource, putResource } from "@/lib/db";
 import { events, EventNames } from "@/lib/events";
 
-import { compressImageToJpeg, hashContent, convertSvgToPng, getExtensionFromDataUrl } from "@/lib/utils";
+import { compressImageToJpeg, hashContent, convertSvgToPng, getExtensionFromDataUrl, getMimeTypeFromExtension } from "@/lib/utils";
 import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
+import { NodeViewInput } from "./NodeViewInput";
 export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, editor, dbName }: NodeViewProps & { dbName: string }) => {
-  const [resolvedSrc, setResolvedSrc] = useState(node.attrs.src);
+  const isDataUrl = Boolean(node.attrs.src?.startsWith('data:'));
+  const [resolvedSrc, setResolvedSrc] = useState(isDataUrl ? node.attrs.src : "");
+  const [isVisible, setIsVisible] = useState(isDataUrl);
+  const [isLoading, setIsLoading] = useState(!isDataUrl);
   const [dragEnabled, setDragEnabled] = useState(false);
   const [, setIsResizing] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const fileInputId = `replace-image-${node.attrs.id}`;
 
   useEffect(() => {
+    if (isDataUrl || isVisible) return;
+    const el = containerRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setIsVisible(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "300px" }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isDataUrl, isVisible]);
+
+  useEffect(() => {
+    if (!isVisible) return;
     let active = true;
     const load = async () => {
-      if (node.attrs.src?.startsWith('data:')) {
-        if (active) setResolvedSrc(node.attrs.src);
+      const targetPath = (node.attrs.filePath as string) || (node.attrs.src as string) || "";
+      if (!targetPath) {
+        if (active) setIsLoading(false);
         return;
       }
+
+      if (targetPath.startsWith('data:')) {
+        if (active) {
+          setResolvedSrc(targetPath);
+          setIsLoading(false);
+        }
+        return;
+      }
+
       try {
-        const cached = await getResource(dbName, node.attrs.src);
+        // 1. Check IndexedDB
+        let cached = await getResource(dbName, targetPath);
         if (cached && active) {
+          if (cached.startsWith('data:image/*;base64,')) {
+            cached = cached.replace('data:image/*;base64,', `data:${getMimeTypeFromExtension(targetPath)};base64,`);
+          }
           setResolvedSrc(cached);
+          setIsLoading(false);
+          updateAttributes({ src: cached, filePath: targetPath });
           return;
         }
-      } catch { }
-      if (active) setResolvedSrc(node.attrs.src);
+
+        // 2. Fetch on-demand from store
+        const { store } = await import("@/lib/store");
+        const b64 = await store.getAssetBase64(targetPath);
+        if (b64 && active) {
+          const dataUrl = b64.startsWith('data:') ? b64 : `data:${getMimeTypeFromExtension(targetPath)};base64,${b64}`;
+          setResolvedSrc(dataUrl);
+          setIsLoading(false);
+          updateAttributes({ src: dataUrl, filePath: targetPath });
+          return;
+        }
+      } catch (err) {
+        console.warn("Failed to load image lazily:", err);
+      }
+
+      if (active) {
+        setIsLoading(false);
+      }
     };
     load();
     return () => { active = false; };
-  }, [node.attrs.src, dbName]);
+  }, [node.attrs.src, node.attrs.filePath, dbName, isVisible, updateAttributes]);
 
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -55,11 +115,12 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, ed
 
   return (
     <NodeViewWrapper
+      ref={containerRef}
       draggable={dragEnabled}
       data-id={node.attrs.id}
-      className={`my-6 group relative w-full transition ${selected ? 'z-[100]' : 'z-10'} pl-12`}
+      className={`my-6 group relative w-full transition ${selected ? 'z-100' : 'z-10'} pl-12`}
     >
-      <div contentEditable={false} className="absolute left-0 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
+      <div contentEditable={false} className="absolute left-0 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-70">
         <div
           data-drag-handle
           onMouseEnter={() => setDragEnabled(true)}
@@ -83,10 +144,9 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, ed
         <div contentEditable={false} className="flex items-center justify-between px-4 py-2 bg-nb-surface-low/50 border-b border-nb-outline-variant/10 overflow-x-auto scrollbar-hide">
           <div className="flex-1 flex items-center gap-3">
             <ImageIcon size={12} className="text-nb-primary shrink-0" />
-            <input
-              type="text"
+            <NodeViewInput
               value={node.attrs.title || ""}
-              onChange={(e) => updateAttributes({ title: e.target.value })}
+              onUpdate={(title) => updateAttributes({ title })}
               placeholder="Give this image a title..."
               className="flex-1 bg-transparent border-none outline-none text-[12px] font-bold tracking-wider text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
             />
@@ -103,22 +163,26 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, ed
                   r.readAsDataURL(file);
                 });
 
-                let dataUrl = await readAsDataUrl(f);
-                if (f.type === 'image/svg+xml' || f.name.toLowerCase().endsWith('.svg')) {
-                  try { dataUrl = await convertSvgToPng(dataUrl); } catch {}
-                }
-
-                const compressed = await compressImageToJpeg(dataUrl, 1920, 0.8).catch(() => ({ dataUrl, base64: dataUrl.split(',')[1] }));
-                const originalBase64 = dataUrl.split(',')[1];
-                const originalHash = await hashContent(originalBase64);
-                const compressedHash = await hashContent(compressed.base64);
+                const dataUrl = await readAsDataUrl(f);
+                const compressed = await compressImageToJpeg(dataUrl);
                 const originalExt = getExtensionFromDataUrl(dataUrl);
+                const originalHash = await hashContent(dataUrl);
+                const compressedHash = await hashContent(compressed.base64);
                 const originalPath = `${ASSETS_ORIGINAL_DIR}/${originalHash}.${originalExt}`;
                 const newPath = `${ASSETS_COMPRESSED_DIR}/${compressedHash}.jpg`;
 
-                // Update node attrs and preview
+                // If original is svg, convert to png for preview
+                let previewOriginal = dataUrl;
+                if (dataUrl.startsWith("data:image/svg+xml")) {
+                  previewOriginal = await convertSvgToPng(dataUrl);
+                }
+
+                await putResource(dbName, { path: newPath, dataUrl: compressed.dataUrl });
+                await putResource(dbName, { path: originalPath, dataUrl: previewOriginal });
+
                 updateAttributes({ src: compressed.dataUrl, originalSrc: dataUrl, filePath: newPath, originalFilePath: originalPath });
                 setResolvedSrc(compressed.dataUrl);
+                setIsLoading(false);
                 events.emit(EventNames.SHOW_NOTIFICATION, { message: 'Image replaced', type: 'success' });
               } catch (err) {
                 console.error('Replace image failed', err);
@@ -134,18 +198,29 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, ed
           </div>
         </div>
 
-        <div className="relative flex justify-center">
-          <Image
-            src={resolvedSrc}
-            alt={node.attrs.caption || node.attrs.alt || ""}
-            width={0}
-            height={0}
-            sizes="100vw"
-            style={{ width: node.attrs.width ?? "100%", height: "auto" }}
-            className="block select-none pointer-events-none"
-            draggable={false}
-            unoptimized
-          />
+        <div className="relative flex justify-center min-h-30 bg-nb-surface-low/10">
+          {isLoading || !resolvedSrc || !resolvedSrc.startsWith('data:') ? (
+            <div
+              style={{ width: node.attrs.width ?? "100%" }}
+              className="h-44 rounded-lg bg-nb-surface-low animate-pulse flex flex-col items-center justify-center gap-2 text-nb-on-surface-variant/40"
+            >
+              <Loader2 size={20} className="animate-spin text-nb-primary/50" />
+              <span className="text-[10px] font-bold tracking-wider uppercase">Loading image...</span>
+            </div>
+          ) : (
+            <Image
+              src={resolvedSrc}
+              alt={node.attrs.caption || node.attrs.alt || ""}
+              width={0}
+              height={0}
+              sizes="100vw"
+              style={{ width: node.attrs.width ?? "100%", height: "auto" }}
+              className="block select-none pointer-events-none"
+              draggable={false}
+              loading="lazy"
+              unoptimized
+            />
+          )}
           <div
             contentEditable={false}
             onMouseDown={startResize}
@@ -157,10 +232,9 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, ed
         </div>
 
         <div contentEditable={false} className="bg-nb-surface-low/30 border-t border-nb-outline-variant/10 px-4 py-2 flex items-center justify-center gap-2 group/caption">
-          <input
-            type="text"
+          <NodeViewInput
             value={node.attrs.caption || ""}
-            onChange={(e) => updateAttributes({ caption: e.target.value })}
+            onUpdate={(caption) => updateAttributes({ caption })}
             placeholder="Add figure description..."
             className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface/50 group-hover/caption:text-nb-on-surface focus:text-nb-on-surface focus:opacity-100 transition-all"
           />

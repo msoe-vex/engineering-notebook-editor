@@ -227,6 +227,10 @@ class WorkspaceStore implements IWorkspaceStore {
     return this.teamManager.saveTeam(team, phases);
   }
 
+  public async hydrateTeamAssets() {
+    return this.teamManager.hydrateTeamAssetsOnDemand();
+  }
+
   public async saveCompiledPdf(pdfData: Uint8Array) {
     return this.teamManager.saveCompiledPdf(pdfData);
   }

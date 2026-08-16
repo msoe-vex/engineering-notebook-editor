@@ -1,9 +1,9 @@
-import { Project, getProjects, getProject, saveProject, getProjectHandle, saveProjectHandle, getAllPending, getPending, putResource, getResource, stageChange } from "../db";
-import { listLocalFiles, readLocalFile, writeLocalFile, getLocalFileContent, ensureLocalDirectory, checkLocalFileExists } from "../fs";
-import { fetchFileContent, fetchDirectoryTree, fetchRawFileContent, checkGitHubFileExists, fetchGitHubUser, GitHubFile } from "../github";
+import { Project, getProjects, getProject, saveProject, getProjectHandle, saveProjectHandle, getAllPending, stageChange } from "../db";
+import { listLocalFiles, readLocalFile, writeLocalFile, ensureLocalDirectory, checkLocalFileExists } from "../fs";
+import { fetchFileContent, fetchDirectoryTree, checkGitHubFileExists, fetchGitHubUser, GitHubFile } from "../github";
 import { EMPTY_METADATA, validateNotebookIntegrity } from "../metadata";
 import { events, EventNames } from "../events";
-import { generateDeterministicUUID, generateUUID, getMimeTypeFromExtension } from "../utils";
+import { generateDeterministicUUID, generateUUID } from "../utils";
 import { INDEX_PATH, ENTRIES_DIR, ASSETS_DIR, LATEX_DIR } from "../constants";
 import { IWorkspaceStore, WorkspaceMode } from "./types";
 import { isMobileDevice } from "@/hooks/useDevice";
@@ -283,28 +283,6 @@ export class ProjectManager {
     try {
       const metaStr = await readLocalFile(this.store.dirHandle, INDEX_PATH);
       const parsed = JSON.parse(metaStr);
-
-      // Hydrate team assets
-      const assetCache = new Map<string, string>();
-      const fetchLocalAsset = async (path: string) => {
-        if (!path || path.startsWith('data:')) return;
-        try {
-          const res = await getLocalFileContent(this.store.dirHandle!, path);
-          if (res.base64) assetCache.set(path, res.base64);
-        } catch { }
-      };
-
-      const tasks: Promise<void>[] = [];
-      if (parsed.team?.logo) tasks.push(fetchLocalAsset(parsed.team.logo));
-      if (parsed.team?.members) {
-        for (const m of parsed.team.members) {
-          if (m.image) tasks.push(fetchLocalAsset(m.image));
-        }
-      }
-      await Promise.all(tasks);
-
-      // Keep metadata clean, but update the global asset cache
-      assetCache.forEach((v, k) => this.store.assetCache.set(k, v));
       this.store.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...parsed });
     } catch {
       this.store.metadata = validateNotebookIntegrity(EMPTY_METADATA);
@@ -395,35 +373,44 @@ export class ProjectManager {
     const actualIndexPath = `${basePrefix}${INDEX_PATH}`;
     let isNew = false;
 
-    const files = await fetchDirectoryTree(this.store.config, `${basePrefix}${ENTRIES_DIR}`);
+    const pending = await getAllPending(dbName);
+    const pendingMeta = pending.find(p => p.path === INDEX_PATH && p.operation === "upsert");
+
+    const [files, remoteMetaStr, isMainTexPresent] = await Promise.all([
+      fetchDirectoryTree(this.store.config, `${basePrefix}${ENTRIES_DIR}`),
+      (async () => {
+        if (pendingMeta?.content) return null;
+        try {
+          return await fetchFileContent(this.store.config!, actualIndexPath);
+        } catch {
+          return null;
+        }
+      })(),
+      checkGitHubFileExists(this.store.config, `${basePrefix}main.tex`)
+    ]);
+
     const entryFiles = Array.isArray(files) ? files.map((f: GitHubFile) => ({
       name: f.name,
       path: f.path.startsWith(basePrefix) ? f.path.slice(basePrefix.length) : f.path
     })) : [];
 
-    const pending = await getAllPending(dbName);
-    const pendingMeta = pending.find(p => p.path === INDEX_PATH && p.operation === "upsert");
-
     if (pendingMeta?.content) {
       const parsed = JSON.parse(pendingMeta.content);
       this.store.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...parsed });
+    } else if (remoteMetaStr) {
+      this.store.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...JSON.parse(remoteMetaStr) });
     } else {
-      try {
-        const metaStr = await fetchFileContent(this.store.config, actualIndexPath);
-        this.store.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...JSON.parse(metaStr) });
-      } catch {
-        this.store.metadata = validateNotebookIntegrity(EMPTY_METADATA);
-        isNew = true;
-        // Stage default metadata
-        await stageChange(dbName, {
-          path: INDEX_PATH,
-          operation: "upsert",
-          content: JSON.stringify(this.store.metadata, null, 2),
-          label: "Initialize notebook.json",
-          stagedAt: new Date().toISOString()
-        });
-        await this.store.refreshPending();
-      }
+      this.store.metadata = validateNotebookIntegrity(EMPTY_METADATA);
+      isNew = true;
+      // Stage default metadata
+      await stageChange(dbName, {
+        path: INDEX_PATH,
+        operation: "upsert",
+        content: JSON.stringify(this.store.metadata, null, 2),
+        label: "Initialize notebook.json",
+        stagedAt: new Date().toISOString()
+      });
+      await this.store.refreshPending();
     }
 
     let mergedEntries = [...entryFiles];
@@ -437,65 +424,8 @@ export class ProjectManager {
       }
     }
     this.store.entries = mergedEntries;
+    this.store.isMainTexPresent = isMainTexPresent;
 
-    // Hydrate team assets for GitHub
-    if (this.store.metadata.team) {
-      const dbName = this.store.getDBName();
-      const team = this.store.metadata.team;
-
-      const fetchAsset = async (path: string) => {
-        if (!path || path.startsWith('data:')) return;
-        try {
-          // 1. Check if already in memory
-          if (this.store.assetCache.has(path)) {
-            return;
-          }
-
-          // 2. Check pending changes store (for newly uploaded but uncommitted images)
-          const pending = await getPending(dbName, path);
-          if (pending?.content) {
-            const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${pending.content}`;
-            this.store.assetCache.set(path, dataUrl);
-            return;
-          }
-
-          // 3. Check resource cache
-          let cached = await getResource(dbName, path);
-          if (cached) {
-            // Fix legacy/corrupted image/* prefix from previous versions
-            if (cached.startsWith('data:image/*;base64,')) {
-              cached = cached.replace('data:image/*;base64,', `data:${getMimeTypeFromExtension(path)};base64,`);
-              await putResource(dbName, { path, dataUrl: cached }); // Update cache with fix
-            }
-          }
-
-          if (cached) {
-            this.store.assetCache.set(path, cached);
-            return;
-          }
-
-          // 4. Fetch from GitHub
-          const actualPath = this.store.getFullPath(path);
-          const base64 = await fetchRawFileContent(this.store.config!, actualPath);
-          const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${base64}`;
-          this.store.assetCache.set(path, dataUrl);
-          await putResource(dbName, { path, dataUrl });
-        } catch (e) {
-          console.warn(`[Store] Failed to hydrate GitHub asset: ${path}`, e);
-        }
-      };
-
-      const tasks: Promise<void>[] = [];
-      if (team.logo) tasks.push(fetchAsset(team.logo));
-      if (team.members) {
-        for (const m of team.members) {
-          if (m.image) tasks.push(fetchAsset(m.image));
-        }
-      }
-      await Promise.all(tasks);
-    }
-
-    this.store.isMainTexPresent = await checkGitHubFileExists(this.store.config, `${basePrefix}main.tex`);
     if (isNew) {
       await this.store.updateLatexMetadata();
     }
