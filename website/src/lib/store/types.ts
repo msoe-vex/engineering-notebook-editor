@@ -61,6 +61,8 @@ export interface IWorkspaceStore {
   selectedPaths: Set<string>;
   isSaving: boolean;
   isPendingSave: boolean;
+  isDiscarding: boolean;
+  isCommitting: boolean;
   debouncedPersist: DebouncedFunction<() => Promise<void>>;
   queue: Promise<void>;
   lastSavedContents: Map<string, string>;

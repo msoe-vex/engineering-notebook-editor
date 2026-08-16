@@ -34,6 +34,8 @@ export default function Sidebar({
     deleteEntry,
     commitAll,
     discardPendingChanges,
+    isCommitting,
+    isDiscarding,
     config,
     navigateTo,
     getFileContent,
@@ -43,8 +45,6 @@ export default function Sidebar({
   const [sortBy, setSortBy] = useState<"date" | "title">("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
-  const [isCommitting, setIsCommitting] = useState(false);
-  const [isDiscarding, setIsDiscarding] = useState(false);
 
   const handleConfirmDelete = useCallback((files: ExplorerFile[]) => {
     if (files.length === 0) return;
@@ -184,14 +184,11 @@ export default function Sidebar({
       "Are you sure you want to discard all pending changes? This action cannot be undone and you will lose all uncommitted edits.",
       async () => {
         try {
-          setIsDiscarding(true);
           await discardPendingChanges();
           showNotification("Discarded all pending changes.", "info");
         } catch (e) {
           console.error("Discard failed", e);
           showNotification("Failed to discard changes.", "error");
-        } finally {
-          setIsDiscarding(false);
         }
       },
       "danger"
@@ -205,14 +202,11 @@ export default function Sidebar({
     }
 
     try {
-      setIsCommitting(true);
       await commitAll(config, message);
       showNotification("Synced changes to GitHub.", "success");
     } catch (error) {
       console.error("GitHub sync failed", error);
       showNotification(error instanceof Error ? error.message : "Failed to sync to GitHub", "error");
-    } finally {
-      setIsCommitting(false);
     }
   };
 

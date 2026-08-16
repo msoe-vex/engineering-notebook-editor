@@ -365,32 +365,38 @@ export class EntryManager {
       return;
     }
 
-    const dbName = this.store.getDBName();
-    await this.store.queue;
-    const previousOpenId = this.store.openFile?.id ?? null;
+    this.store.isDiscarding = true;
+    this.store.notifyStateChange();
 
-    const { clearAllPending } = await import("../db");
-    await clearAllPending(dbName);
+    try {
+      const dbName = this.store.getDBName();
+      await this.store.queue;
+      const previousOpenId = this.store.openFile?.id ?? null;
 
-    // Drop in-memory drafts so reload/openEntry can't resurrect discarded text.
-    this.store.lastSavedContents.clear();
+      const { clearAllPending } = await import("../db");
+      await clearAllPending(dbName);
 
-    await this.store.reloadWorkspace();
-    await this.refreshPending();
+      // Drop in-memory drafts so reload/openEntry can't resurrect discarded text.
+      this.store.lastSavedContents.clear();
 
-    if (previousOpenId) {
-      if (this.store.metadata.entries[previousOpenId]) {
-        await this.openEntry(previousOpenId);
+      await this.store.reloadWorkspace();
+      await this.refreshPending();
+
+      if (previousOpenId) {
+        if (this.store.metadata.entries[previousOpenId]) {
+          await this.openEntry(previousOpenId);
+          return;
+        }
+
+        this.store.openFile = null;
+        this.store.selectedPaths = new Set();
+        this.store.navigateTo({ entry: null, resource: null });
         return;
       }
-
-      this.store.openFile = null;
-      this.store.selectedPaths = new Set();
-      this.store.navigateTo({ entry: null, resource: null });
-      return;
+    } finally {
+      this.store.isDiscarding = false;
+      this.store.notifyStateChange();
     }
-
-    this.store.notifyStateChange();
   }
 
   async deleteEntry(file: ExplorerFile) {

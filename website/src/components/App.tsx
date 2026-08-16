@@ -100,6 +100,8 @@ export default function App() {
     getCompiledPdfUrl,
     isSaving,
     isPendingSave,
+    isDiscarding,
+    isCommitting,
   } = useWorkspace();
 
   // Global loading overlay for background operations (like importing/exporting)
@@ -290,14 +292,14 @@ export default function App() {
 
   const checkUnsaved = useCallback(
     (action: () => void) => {
-      if (isSaving || isPendingSave) {
+      if (isSaving || isPendingSave || isDiscarding || isCommitting) {
         pendingActionRef.current = action;
         setIsSaveLocked(true);
       } else {
         action();
       }
     },
-    [isSaving, isPendingSave]
+    [isSaving, isPendingSave, isDiscarding, isCommitting]
   );
 
   const handleGoHome = useCallback(() => {
@@ -313,18 +315,24 @@ export default function App() {
   }, [currentProjectId, navigateTo, handleGoHome]);
 
   useEffect(() => {
-    if (!isSaving && !isPendingSave && pendingActionRef.current) {
+    if (!isSaving && !isPendingSave && !isDiscarding && !isCommitting && pendingActionRef.current) {
       const action = pendingActionRef.current;
       pendingActionRef.current = null;
       setIsSaveLocked(false);
       action();
     }
-  }, [isSaving, isPendingSave]);
+  }, [isSaving, isPendingSave, isDiscarding, isCommitting]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isSaving || isPendingSave) {
+      if (isSaving || isPendingSave || isDiscarding || isCommitting) {
         e.preventDefault();
+        if (isDiscarding) {
+          return "Changes are currently being discarded. If you leave now, the workspace state might be inconsistent. Are you sure you want to proceed?";
+        }
+        if (isCommitting) {
+          return "Changes are currently being committed to GitHub. If you leave now, the commit might be interrupted. Are you sure you want to proceed?";
+        }
         return "You have changes that are currently being saved. If you leave now, some changes might be lost. Are you sure you want to proceed?";
       }
       if (mode === "temporary") {
@@ -334,7 +342,7 @@ export default function App() {
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [isSaving, isPendingSave, mode]);
+  }, [isSaving, isPendingSave, isDiscarding, isCommitting, mode]);
 
   const onSignOutGithub = useCallback(() => {
     localStorage.removeItem("nb-github-token");
@@ -984,7 +992,7 @@ export default function App() {
 
       <div className="flex-1 overflow-hidden relative bg-nb-bg">
         {((needsPermission && mode === "local")) && (
-          <div className="absolute inset-0 z-[200] bg-nb-bg/80 backdrop-blur-md flex items-center justify-center p-8">
+          <div className="absolute inset-0 z-200 bg-nb-bg/80 backdrop-blur-md flex items-center justify-center p-8">
             <div className="max-w-md w-full bg-nb-surface border border-nb-outline-variant rounded-3xl p-8 shadow-2xl text-center animate-in fade-in zoom-in duration-300">
               <div className="w-20 h-20 rounded-2xl bg-nb-primary/10 text-nb-primary flex items-center justify-center mx-auto mb-8"><HardDrive size={40} /></div>
               <h2 className="text-2xl font-bold text-nb-on-surface mb-4">Connect to Workspace</h2>
@@ -1092,9 +1100,9 @@ export default function App() {
           {isMobile ? (
             <div className="flex w-full h-full relative overflow-hidden">
               <div className="flex-1 w-full h-full">{main}</div>
-              <div className={`fixed inset-0 z-[500] transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+              <div className={`fixed inset-0 z-500 transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
                 <div className="absolute inset-0 bg-black/40" onClick={() => setUserSidebarPreference(false)} />
-                <div className={`absolute top-0 bottom-0 left-0 w-[85%] max-w-[300px] bg-nb-surface-low border-r border-nb-outline-variant flex flex-col shadow-2xl transition-transform duration-300 ease-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                <div className={`absolute top-0 bottom-0 left-0 w-[85%] max-w-75 bg-nb-surface-low border-r border-nb-outline-variant flex flex-col shadow-2xl transition-transform duration-300 ease-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                   {sidebar}
                 </div>
               </div>
@@ -1134,7 +1142,7 @@ export default function App() {
 
       {/* Notifications */}
       {notification && (
-        <div className="fixed bottom-6 right-6 z-[200] animate-in slide-in-from-right-10 duration-300">
+        <div className="fixed bottom-6 right-6 z-200 animate-in slide-in-from-right-10 duration-300">
           <div className={`px-5 py-4 rounded-2xl shadow-nb-lg border flex items-center gap-4 ${notification.type === 'error' ? 'bg-nb-primary/5 border-nb-primary/30 text-nb-primary' : 'bg-nb-tertiary/5 border-nb-tertiary/30 text-nb-tertiary'} backdrop-blur-xl bg-white/80 dark:bg-nb-dark-surface/80`}>
             <div className="flex-1">
               <p className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">{notification.type === 'error' ? 'Error' : 'Success'}</p>
@@ -1261,8 +1269,8 @@ export default function App() {
       {/* Global Loading Overlay */}
       {(!isInitialized || (isLoading && mode === "none") || isGlobalLoading || isSaveLocked || isExchangingCode) && (
         <LoadingOverlay
-          label={isSaveLocked ? "Saving changes..." : (isExchangingCode ? "Signing in with GitHub..." : (isGlobalLoading ? loadingLabel : "ENGen"))}
-          subtitle={isSaveLocked ? "Please wait for save to complete." : (isExchangingCode ? "Completing authentication..." : (isGlobalLoading ? "Please wait..." : "Engineering Notebook Generator"))}
+          label={isSaveLocked ? (isDiscarding ? "Discarding changes..." : (isCommitting ? "Syncing changes..." : "Saving changes...")) : (isExchangingCode ? "Signing in with GitHub..." : (isGlobalLoading ? loadingLabel : "ENGen"))}
+          subtitle={isSaveLocked ? (isDiscarding ? "Please wait for discard to complete." : (isCommitting ? "Please wait for sync to complete." : "Please wait for save to complete.")) : (isExchangingCode ? "Completing authentication..." : (isGlobalLoading ? "Please wait..." : "Engineering Notebook Generator"))}
         />
       )}
       {/* Toast Container */}

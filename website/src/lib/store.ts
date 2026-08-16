@@ -40,6 +40,8 @@ class WorkspaceStore implements IWorkspaceStore {
   public selectedPaths: Set<string> = new Set();
   public isSaving = false;
   public isPendingSave = false;
+  public isDiscarding = false;
+  public isCommitting = false;
 
   // Internal persistence tracking
   public lastSavedContents = new Map<string, string>();
@@ -251,55 +253,60 @@ class WorkspaceStore implements IWorkspaceStore {
 
   // ─── Sync / Git Operations ──────────────────────────────────────────────────
   async commitAll(config: GitHubConfig, customMessage?: string) {
-    await this.queue;
-    const dbName = this.getDBName();
-    const all = await getAllPending(dbName);
-    const { commitChanges } = await import("./github");
-    const { clearAllPending } = await import("./db");
+    this.isCommitting = true;
+    this.notifyStateChange();
+    try {
+      await this.queue;
+      const dbName = this.getDBName();
+      const all = await getAllPending(dbName);
+      const { commitChanges } = await import("./github");
+      const { clearAllPending } = await import("./db");
 
-    const gitChanges: { path: string; content: string | null; isBinary: boolean }[] = [];
+      const gitChanges: { path: string; content: string | null; isBinary: boolean }[] = [];
 
-    for (const change of all) {
-      const isBinary = change.path.includes("resources/") || /\.(png|jpg|jpeg|gif|webp|pdf)$/i.test(change.path);
-      const nextContent = change.operation === "delete"
-        ? null
-        : (change.content?.startsWith("data:") ? change.content.split(",")[1] : (change.content ?? ""));
+      for (const change of all) {
+        const isBinary = change.path.includes("resources/") || /\.(png|jpg|jpeg|gif|webp|pdf)$/i.test(change.path);
+        const nextContent = change.operation === "delete"
+          ? null
+          : (change.content?.startsWith("data:") ? change.content.split(",")[1] : (change.content ?? ""));
 
-      const committedContent = await this.getCommittedFileContent(change.path, isBinary);
+        const committedContent = await this.getCommittedFileContent(change.path, isBinary);
 
-      if (change.operation === "delete") {
-        if (committedContent === null) {
+        if (change.operation === "delete") {
+          if (committedContent === null) {
+            await removeStaged(dbName, change.path);
+            continue;
+          }
+        } else if (committedContent !== null && committedContent === nextContent) {
           await removeStaged(dbName, change.path);
           continue;
         }
-      } else if (committedContent !== null && committedContent === nextContent) {
-        await removeStaged(dbName, change.path);
-        continue;
+
+        gitChanges.push({ path: this.getFullPath(change.path), content: nextContent, isBinary });
       }
 
-      gitChanges.push({ path: this.getFullPath(change.path), content: nextContent, isBinary });
-    }
+      if (gitChanges.length === 0) {
+        await clearAllPending(dbName);
+        await this.refreshPending();
+        events.emit(EventNames.SHOW_NOTIFICATION, { message: "Nothing to sync to GitHub.", type: "info" });
+        return;
+      }
 
-    if (gitChanges.length === 0) {
+      const changesCount = gitChanges.length;
+      const filesLabel = changesCount === 1 ? "file" : "files";
+      const defaultMsg = `Update notebook: ${changesCount} ${filesLabel}`;
+      const finalMsg = customMessage
+        ? `${customMessage} (Updated ${changesCount} ${filesLabel})`
+        : defaultMsg;
+
+      await commitChanges(config, gitChanges, finalMsg);
+      await this.reloadWorkspace();
       await clearAllPending(dbName);
       await this.refreshPending();
+    } finally {
+      this.isCommitting = false;
       this.notifyStateChange();
-      events.emit(EventNames.SHOW_NOTIFICATION, { message: "Nothing to sync to GitHub.", type: "info" });
-      return;
     }
-
-    const changesCount = gitChanges.length;
-    const filesLabel = changesCount === 1 ? "file" : "files";
-    const defaultMsg = `Update notebook: ${changesCount} ${filesLabel}`;
-    const finalMsg = customMessage
-      ? `${customMessage} (Updated ${changesCount} ${filesLabel})`
-      : defaultMsg;
-
-    await commitChanges(config, gitChanges, finalMsg);
-    await this.reloadWorkspace();
-    await clearAllPending(dbName);
-    await this.refreshPending();
-    this.notifyStateChange();
   }
 
   // ─── State & Persistence Core Helpers ───────────────────────────────────────

@@ -34,6 +34,8 @@ export function useWorkspace() {
     workspaceVersion: store.workspaceVersion,
     isSaving: store.isSaving,
     isPendingSave: store.isPendingSave,
+    isDiscarding: store.isDiscarding,
+    isCommitting: store.isCommitting,
   });
 
   useEffect(() => {
@@ -65,6 +67,8 @@ export function useWorkspace() {
         workspaceVersion: s.workspaceVersion,
         isSaving: s.isSaving,
         isPendingSave: s.isPendingSave,
+        isDiscarding: s.isDiscarding,
+        isCommitting: s.isCommitting,
       });
     });
 
@@ -135,6 +139,8 @@ export function useWorkspace() {
     saveCompiledPdf,
     isSaving: state.isSaving,
     isPendingSave: state.isPendingSave,
+    isDiscarding: state.isDiscarding,
+    isCommitting: state.isCommitting,
     setPendingSave: useCallback((val: boolean) => store.setPendingSave(val), []),
   };
 }
