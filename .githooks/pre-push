@@ -1,0 +1,30 @@
+#!/bin/sh
+
+# Pre-push hook: run lint and build from website directory to match .github/workflows/verify.yml
+
+echo "Running pre-push checks (lint & build)..."
+
+# Navigate to website directory from repository root
+REPO_ROOT=$(git rev-parse --show-toplevel)
+cd "$REPO_ROOT/website" || exit 1
+
+echo "1/2: Running lint (npm run lint -- --max-warnings 0)..."
+npm run lint -- --max-warnings 0
+LINT_EXIT=$?
+
+if [ $LINT_EXIT -ne 0 ]; then
+  echo "Error: Lint check failed. Push aborted."
+  exit 1
+fi
+
+echo "2/2: Running build (npm run build)..."
+npm run build
+BUILD_EXIT=$?
+
+if [ $BUILD_EXIT -ne 0 ]; then
+  echo "Error: Build check failed. Push aborted."
+  exit 1
+fi
+
+echo "Pre-push verification passed."
+exit 0

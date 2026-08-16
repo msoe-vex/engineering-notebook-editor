@@ -26,6 +26,14 @@ npm run lint
 npm run build
 ```
 
+### Git Hooks (Recommended)
+
+To automatically run the same linting and build checks before every `git push` (matching the CI workflow), enable the repository's `.githooks` directory:
+
+```bash
+git config core.hooksPath .githooks
+```
+
 ## Environment Variables
 
 Create `website/.env.local` with the GitHub OAuth values used by the app:
