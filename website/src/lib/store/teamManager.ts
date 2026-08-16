@@ -1,5 +1,5 @@
 import { INDEX_PATH } from "../constants";
-import { getPending, getResource } from "../db";
+import { getPending } from "../db";
 import { getMimeTypeFromExtension, blobFromBase64 } from "../utils";
 import { TeamMetadata, ProjectPhase, dehydrateTeamAssets, validateNotebookIntegrity } from "../metadata";
 import { IWorkspaceStore } from "./types";
@@ -106,14 +106,7 @@ export class TeamManager {
       return blobFromBase64(pending.content);
     }
 
-    // 2. Check resource store
-    const cached = await getResource(dbName, "main.pdf");
-    if (cached) {
-      const base64 = cached.includes(',') ? cached.split(',')[1] : cached;
-      return blobFromBase64(base64);
-    }
-
-    // 3. Check filesystem (for local/github modes)
+    // 2. Check memory cache / filesystem / GitHub
     const base64 = await this.store.getAssetBase64("main.pdf");
     if (base64) return blobFromBase64(base64);
 

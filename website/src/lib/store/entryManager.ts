@@ -1,7 +1,7 @@
 import { INDEX_PATH, ENTRIES_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from "../constants";
 import { events, EventNames } from "../events";
 import { ExplorerFile } from "../types";
-import { getAllPending, getPending, stageChange, removeStaged, putResource, getResource } from "../db";
+import { getAllPending, getPending, stageChange, removeStaged } from "../db";
 import { fetchFileContent, fetchRawFileContent, checkGitHubFileExists } from "../github";
 import { readLocalFile, writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, checkLocalFileExists } from "../fs";
 import { generateUUID, getMimeTypeFromExtension, formatDateMonthYear } from "../utils";
@@ -76,34 +76,19 @@ export class EntryManager {
       const rawData = JSON.parse(entryJsonStr);
       const content = rawData.content || rawData;
 
-      // 3. Fast local asset resolution from memory / IndexedDB without blocking on remote downloads
+      // 3. Fast asset resolution from memory and staged pending changes
       const assetCache = new Map<string, string>();
       const images = extractImagePaths(content);
-      const localTasks: Promise<void>[] = [];
 
       for (const imgPath of images) {
         if (imgPath.startsWith('data:')) continue;
-        const actualImgPath = this.store.getFullPath(imgPath);
         const staged = pending.find(p => p.path === imgPath && p.operation === "upsert");
         if (staged?.content) {
           const dataUrl = staged.content.startsWith('data:') ? staged.content : `data:${getMimeTypeFromExtension(imgPath)};base64,${staged.content}`;
           assetCache.set(imgPath, dataUrl);
-        } else {
-          localTasks.push((async () => {
-            let cached = (await getResource(dbName, imgPath)) || (await getResource(dbName, actualImgPath));
-            if (cached) {
-              if (cached.startsWith('data:image/*;base64,')) {
-                cached = cached.replace('data:image/*;base64,', `data:${getMimeTypeFromExtension(imgPath)};base64,`);
-                await putResource(dbName, { path: imgPath, dataUrl: cached });
-              }
-              assetCache.set(imgPath, cached);
-            }
-          })());
+        } else if (this.store.assetCache.has(imgPath)) {
+          assetCache.set(imgPath, this.store.assetCache.get(imgPath)!);
         }
-      }
-
-      if (localTasks.length > 0) {
-        await Promise.all(localTasks);
       }
 
       const hydratedContent = hydrateAssets(content, assetCache);
@@ -140,6 +125,17 @@ export class EntryManager {
   ) {
     if (!this.store.openFile) return;
     const id = this.store.openFile.id;
+
+    // Check if anything actually changed
+    const titleChanged = info.title !== undefined && info.title !== this.store.openFile.title;
+    const authorChanged = info.author !== undefined && info.author !== this.store.openFile.author;
+    const phaseChanged = info.phase !== undefined && info.phase !== this.store.openFile.phase;
+    const dateChanged = info.date !== undefined && info.date !== this.store.openFile.date;
+    const contentChanged = tiptapContent !== null && tiptapContent !== this.store.openFile.tiptapContent;
+
+    if (!titleChanged && !authorChanged && !phaseChanged && !dateChanged && !contentChanged) {
+      return; // No real change, do not bump updatedAt or stage pending saves
+    }
 
     // 1. Synchronously update openFile
     if (tiptapContent !== null) {
@@ -256,9 +252,8 @@ export class EntryManager {
       // Save assets
       for (const asset of newAssets) {
         await this.persistFile(asset.path, asset.base64, `Asset: ${asset.path}`, true);
-        if (this.store.mode === "github") {
-          await putResource(this.store.getDBName(), { path: asset.path, dataUrl: `data:${getMimeTypeFromExtension(asset.path)};base64,${asset.base64}` });
-        }
+        const dataUrl = `data:${getMimeTypeFromExtension(asset.path)};base64,${asset.base64}`;
+        this.store.assetCache.set(asset.path, dataUrl);
       }
 
       // Save Entry JSON

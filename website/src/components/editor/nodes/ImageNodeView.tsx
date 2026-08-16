@@ -3,7 +3,6 @@ import { NodeViewWrapper, ReactNodeViewRenderer, NodeViewProps } from "@tiptap/r
 import { Image as TiptapImage, type ImageOptions } from "@tiptap/extension-image";
 import Image from "next/image";
 import { GripVertical, Trash2, Image as ImageIcon, Upload, Loader2 } from "lucide-react";
-import { getResource, putResource } from "@/lib/db";
 import { events, EventNames } from "@/lib/events";
 
 import { compressImageToJpeg, hashContent, convertSvgToPng, getExtensionFromDataUrl, getMimeTypeFromExtension } from "@/lib/utils";
@@ -60,26 +59,24 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, ed
       }
 
       try {
-        // 1. Check IndexedDB
-        let cached = await getResource(dbName, targetPath);
-        if (cached && active) {
-          if (cached.startsWith('data:image/*;base64,')) {
-            cached = cached.replace('data:image/*;base64,', `data:${getMimeTypeFromExtension(targetPath)};base64,`);
+        const { store } = await import("@/lib/store");
+
+        // 1. Check in-memory session cache (0ms)
+        if (store.assetCache.has(targetPath)) {
+          const cached = store.assetCache.get(targetPath)!;
+          if (active) {
+            setResolvedSrc(cached);
+            setIsLoading(false);
           }
-          setResolvedSrc(cached);
-          setIsLoading(false);
-          updateAttributes({ src: cached, filePath: targetPath });
           return;
         }
 
-        // 2. Fetch on-demand from store
-        const { store } = await import("@/lib/store");
+        // 2. Fetch on-demand via store (pending / disk / GitHub)
         const b64 = await store.getAssetBase64(targetPath);
         if (b64 && active) {
           const dataUrl = b64.startsWith('data:') ? b64 : `data:${getMimeTypeFromExtension(targetPath)};base64,${b64}`;
           setResolvedSrc(dataUrl);
           setIsLoading(false);
-          updateAttributes({ src: dataUrl, filePath: targetPath });
           return;
         }
       } catch (err) {
@@ -129,15 +126,13 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, ed
         >
           <GripVertical size={14} />
         </div>
-        <div className="flex flex-col gap-1 items-center">
-          <button
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteNode(); editor.commands.focus(); }}
-            title="Delete Image"
-            className="w-8 h-8 rounded-full bg-nb-surface text-red-500 flex items-center justify-center hover:bg-red-50 transition border border-nb-outline-variant/30 shadow-sm"
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
+        <button
+          onClick={deleteNode}
+          title="Delete Image"
+          className="w-8 h-8 rounded-full bg-nb-surface text-red-500 flex items-center justify-center hover:bg-red-50 transition border border-nb-outline-variant/30 shadow-sm"
+        >
+          <Trash2 size={14} />
+        </button>
       </div>
 
       <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${selected ? 'ring-2 ring-nb-primary/50' : ''}`}>
@@ -177,8 +172,9 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, ed
                   previewOriginal = await convertSvgToPng(dataUrl);
                 }
 
-                await putResource(dbName, { path: newPath, dataUrl: compressed.dataUrl });
-                await putResource(dbName, { path: originalPath, dataUrl: previewOriginal });
+                const { store } = await import("@/lib/store");
+                store.assetCache.set(newPath, compressed.dataUrl);
+                store.assetCache.set(originalPath, previewOriginal);
 
                 updateAttributes({ src: compressed.dataUrl, originalSrc: dataUrl, filePath: newPath, originalFilePath: originalPath });
                 setResolvedSrc(compressed.dataUrl);

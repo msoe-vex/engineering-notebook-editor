@@ -1,6 +1,6 @@
 import { INDEX_PATH, ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from "../constants";
 import { events, EventNames } from "../events";
-import { getPending, getResource, putResource } from "../db";
+import { getPending } from "../db";
 import { isBinaryFile, zipCompressionOptions, addTextFileToZip, addAssetFileToZip } from "../transferUtils";
 import { fetchFileContent, fetchRawFileContent } from "../github";
 import { getLocalFileContent } from "../fs";
@@ -55,18 +55,20 @@ export class TransferManager {
       }
     }
 
-    const cached = await getResource(dbName, path);
-    if (cached) {
-      return normalizeBase64(cached);
+    // 1. Check in-memory session cache (0ms)
+    if (this.store.assetCache.has(path)) {
+      const cached = this.store.assetCache.get(path);
+      if (cached) return normalizeBase64(cached);
     }
 
+    // 2. Fetch from filesystem or GitHub
     try {
       if (this.store.mode === "local" && this.store.dirHandle) {
         const res = await getLocalFileContent(this.store.dirHandle, path);
         const norm = normalizeBase64(res.base64 as string | null | undefined);
         if (norm) {
           const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${norm}`;
-          await putResource(dbName, { path, dataUrl });
+          this.store.assetCache.set(path, dataUrl);
           return norm;
         }
       } else if (this.store.mode === "github" && this.store.config) {
@@ -74,7 +76,7 @@ export class TransferManager {
         const norm = normalizeBase64(remote as string | null | undefined);
         if (norm) {
           const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${norm}`;
-          await putResource(dbName, { path, dataUrl });
+          this.store.assetCache.set(path, dataUrl);
           return norm;
         }
       }
@@ -378,9 +380,6 @@ export class TransferManager {
           const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${base64}`;
           this.store.assetCache.set(path, dataUrl);
           await this.store.persistFile(path, base64, `Import asset: ${path}`, true);
-          if (this.store.mode === "github" || this.store.mode === "temporary") {
-            await putResource(this.store.getDBName(), { path, dataUrl });
-          }
         }
 
         // Write entries JSON and entries LaTeX files (which are always reconstructed for imported entries)
