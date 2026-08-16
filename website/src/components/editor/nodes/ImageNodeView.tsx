@@ -8,7 +8,7 @@ import { events, EventNames } from "@/lib/events";
 import { compressImageToJpeg, hashContent, convertSvgToPng, getExtensionFromDataUrl, getMimeTypeFromExtension } from "@/lib/utils";
 import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
 import { NodeViewInput } from "./NodeViewInput";
-export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, editor, dbName }: NodeViewProps & { dbName: string }) => {
+export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName }: NodeViewProps & { dbName: string }) => {
   const isDataUrl = Boolean(node.attrs.src?.startsWith('data:'));
   const [resolvedSrc, setResolvedSrc] = useState(isDataUrl ? node.attrs.src : "");
   const [isVisible, setIsVisible] = useState(isDataUrl);

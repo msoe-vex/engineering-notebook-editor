@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useMemo, memo, useCallback, useRef } from "react";
 import {
   Hash, User, Briefcase, Image as ImageIcon,
-   Check, X, Camera, Building2, Plus, Trash2, Users,
-  Palette, Shapes, Search, GripVertical, LucideIcon
+  Check, X, Camera, Building2, Plus, Trash2, Users,
+  Palette, Shapes, Search, GripVertical, LucideIcon, Loader2
 } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import Image from "next/image";
@@ -33,7 +33,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { TeamMetadata, TeamMember, ProjectPhase } from "@/lib/metadata";
 import { DEFAULT_PHASES, AVAILABLE_ICONS } from "@/lib/phases";
-import { generateUUID, formatDateMonthYear, compressImageToJpeg } from "@/lib/utils";
+import { generateUUID, formatDateMonthYear, compressImageToJpeg, getMimeTypeFromExtension } from "@/lib/utils";
 
 // ─── Sub-components for performance ──────────────────────────────────────────
 
@@ -105,6 +105,99 @@ const IconPicker = ({
   );
 };
 
+const TeamAssetImage = memo(({
+  src,
+  alt,
+  className = "object-cover",
+  fallbackIcon
+}: {
+  src?: string;
+  alt: string;
+  className?: string;
+  fallbackIcon: React.ReactNode;
+}) => {
+  const isDataUrl = Boolean(src?.startsWith("data:"));
+  const [resolvedSrc, setResolvedSrc] = useState(isDataUrl ? src : "");
+  const [isLoading, setIsLoading] = useState(!isDataUrl && Boolean(src));
+
+  useEffect(() => {
+    let active = true;
+    if (!src) {
+      setResolvedSrc("");
+      setIsLoading(false);
+      return;
+    }
+
+    if (src.startsWith("data:")) {
+      setResolvedSrc(src);
+      setIsLoading(false);
+      return;
+    }
+
+    const load = async () => {
+      setIsLoading(true);
+      try {
+        const { store } = await import("@/lib/store");
+        // 1. Check in-memory session cache
+        if (store.assetCache.has(src)) {
+          const cached = store.assetCache.get(src)!;
+          if (active) {
+            setResolvedSrc(cached);
+            setIsLoading(false);
+          }
+          return;
+        }
+
+        // 2. Fetch on-demand
+        const b64 = await store.getAssetBase64(src);
+        if (b64 && active) {
+          const dataUrl = b64.startsWith("data:") ? b64 : `data:${getMimeTypeFromExtension(src)};base64,${b64}`;
+          setResolvedSrc(dataUrl);
+          setIsLoading(false);
+          return;
+        }
+      } catch (e) {
+        console.warn("Failed to load team asset:", src, e);
+      }
+
+      if (active) {
+        setIsLoading(false);
+      }
+    };
+
+    load();
+    return () => { active = false; };
+  }, [src]);
+
+  if (!src) {
+    return <>{fallbackIcon}</>;
+  }
+
+  return (
+    <div className="relative w-full h-full flex items-center justify-center">
+      {isLoading && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-nb-surface-low/80 backdrop-blur-[2px] animate-pulse">
+          <Loader2 size={24} className="animate-spin text-nb-primary mb-1.5 opacity-80" />
+          <span className="text-[9px] font-bold text-nb-on-surface-variant/60 tracking-wider uppercase">Loading</span>
+        </div>
+      )}
+      {resolvedSrc ? (
+        <Image
+          src={resolvedSrc}
+          alt={alt}
+          fill
+          className={`${className} transition-opacity duration-300 ${isLoading ? "opacity-0" : "opacity-100"}`}
+          unoptimized
+        />
+      ) : (
+        !isLoading && fallbackIcon
+      )}
+    </div>
+  );
+});
+
+TeamAssetImage.displayName = "TeamAssetImage";
+
 const PhaseCard = memo(({
   phase,
   handlePhaseChange,
@@ -127,54 +220,45 @@ const PhaseCard = memo(({
     setPrevColor(phase.color);
   }
 
-  // Color confirmation logic
-  const hasColorChanged = localColor !== phase.color;
-
   return (
     <div
-      className={`flex-1 group flex items-center gap-4 p-3 rounded-2xl bg-nb-surface border border-nb-outline-variant hover:border-nb-primary/30 transition-all ${isOverlay ? 'shadow-nb-2xl border-nb-primary ring-2 ring-nb-primary/10' : ''}`}
+      className={`flex items-center gap-3 p-3.5 rounded-2xl bg-nb-surface border border-nb-outline-variant/60 hover:border-nb-primary/40 hover:shadow-nb-sm transition-all group ${isOverlay ? 'shadow-nb-xl border-nb-primary ring-2 ring-nb-primary/10' : ''}`}
     >
       <div
         {...attributes}
         {...listeners}
-        className="p-2 -ml-2 rounded-lg text-nb-on-surface-variant/20 hover:text-nb-on-surface-variant/60 hover:bg-nb-surface-low cursor-grab active:cursor-grabbing transition-all shrink-0"
+        className="p-1 rounded-lg text-nb-on-surface-variant/20 hover:text-nb-on-surface-variant/60 hover:bg-nb-surface-low cursor-grab active:cursor-grabbing transition-all shrink-0"
       >
-        <GripVertical size={16} />
+        <GripVertical size={14} />
       </div>
 
       <IconPicker
         currentIcon={phase.iconName}
-        color={localColor}
         onSelect={(name) => handlePhaseChange?.(phase.id, "iconName", name)}
+        color={localColor}
       />
 
-      <div className="relative group/color shrink-0 flex items-center gap-2">
-        <input
-          type="color"
-          value={localColor}
-          onChange={e => setLocalColor(e.target.value)}
-          className="w-7 h-7 rounded-full border-2 border-white shadow-nb-sm cursor-pointer overflow-hidden p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-none [&::-webkit-color-swatch]:rounded-full"
-        />
-        {hasColorChanged && (
-          <button
-            type="button"
-            onClick={() => handlePhaseChange?.(phase.id, "color", localColor)}
-            className="p-1.5 rounded-xl bg-nb-primary text-white shadow-nb-lg hover:scale-110 active:scale-95 transition-all animate-in fade-in zoom-in-95 duration-200 cursor-pointer"
-            title="Confirm Color"
-          >
-            <Check size={12} />
-          </button>
-        )}
-      </div>
-
-      <div className="flex-1 min-w-0 space-y-2">
-        <input
-          type="text"
-          value={phase.name}
-          onChange={e => handlePhaseChange?.(phase.id, "name", e.target.value)}
-          placeholder="Phase Name"
-          className="w-full bg-transparent border-none p-0 text-sm font-bold text-nb-on-surface focus:outline-none placeholder:text-nb-on-surface-variant/30"
-        />
+      <div className="flex-1 min-w-0 space-y-1">
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={phase.name}
+            onChange={e => handlePhaseChange?.(phase.id, "name", e.target.value)}
+            placeholder="Phase Name"
+            className="w-full bg-transparent border-none p-0 text-xs font-black text-nb-on-surface focus:outline-none placeholder:text-nb-on-surface-variant/20 tracking-tight"
+          />
+          <div className="flex items-center gap-1 shrink-0">
+            <input
+              type="color"
+              value={localColor}
+              onChange={e => {
+                setLocalColor(e.target.value);
+                handlePhaseChange?.(phase.id, "color", e.target.value);
+              }}
+              className="w-4 h-4 rounded-full border-0 p-0 cursor-pointer overflow-hidden bg-transparent"
+            />
+          </div>
+        </div>
         <textarea
           value={phase.description}
           onChange={e => handlePhaseChange?.(phase.id, "description", e.target.value)}
@@ -260,14 +344,13 @@ const MemberCard = memo(({
 
       {/* Member Avatar */}
       <div className="relative mt-2">
-        <div className="w-50 h-60 rounded-4xl bg-nb-surface-low border-2 border-nb-outline-variant/30 overflow-hidden flex items-center justify-center shadow-inner">
-          {member.image ? (
-            <div className="relative w-full h-full">
-              <Image src={member.image} alt={member.name} fill className="object-cover" unoptimized />
-            </div>
-          ) : (
-            <User size={48} className="text-nb-on-surface-variant/10" />
-          )}
+        <div className="w-50 h-60 rounded-4xl bg-nb-surface-low border-2 border-nb-outline-variant/30 overflow-hidden flex items-center justify-center shadow-inner relative">
+          <TeamAssetImage
+            src={member.image}
+            alt={member.name || "Member"}
+            className="object-cover"
+            fallbackIcon={<User size={48} className="text-nb-on-surface-variant/10" />}
+          />
         </div>
 
         <div className="absolute -bottom-2 -right-2 flex flex-col gap-1">
@@ -431,20 +514,6 @@ export default function TeamEditor({
     saveTeam,
     setPendingSave
   } = useWorkspace();
-
-  useEffect(() => {
-    let active = true;
-    void store.hydrateTeamAssets().then(() => {
-      if (active) {
-        const data = store.hydratedMetadata.team || { teamName: "", teamNumber: "", organization: "", logo: "", logoOriginal: "", members: [] };
-        setTeamData({
-          ...data,
-          members: data.members.map(m => ({ ...m, id: m.id || generateUUID() }))
-        });
-      }
-    });
-    return () => { active = false; };
-  }, []);
 
   const initialData = useMemo(() => {
     const data = metadata.team || { teamName: "", teamNumber: "", organization: "", logo: "", logoOriginal: "", members: [] };
@@ -822,17 +891,16 @@ export default function TeamEditor({
 
               {/* Right Column: Logo */}
               <div className="flex flex-col items-center justify-center p-8 rounded-4xl bg-nb-surface-low border border-nb-outline-variant/30 space-y-6">
-                <div className="relative group">
-                  <div className="w-48 h-48 rounded-[40px] bg-nb-surface border-4 border-white shadow-nb-lg overflow-hidden flex items-center justify-center">
-                    {teamData.logo ? (
-                      <div className="relative w-full h-full">
-                        <Image src={teamData.logo} alt="Logo" fill className="object-contain" unoptimized />
-                      </div>
-                    ) : (
-                      <ImageIcon size={48} className="text-nb-on-surface-variant/20" />
-                    )}
+                <div className="relative group w-full max-w-70 flex justify-center">
+                  <div className="w-full aspect-square rounded-[36px] bg-nb-surface border-2 border-nb-outline-variant/30 shadow-nb-sm overflow-hidden flex items-center justify-center relative p-3">
+                    <TeamAssetImage
+                      src={teamData.logo}
+                      alt="Logo"
+                      className="object-contain p-2"
+                      fallbackIcon={<ImageIcon size={56} className="text-nb-on-surface-variant/20" />}
+                    />
                   </div>
-                  <label className="absolute -bottom-2 -right-2 p-4 rounded-2xl bg-nb-primary text-white shadow-lg shadow-nb-primary/30 cursor-pointer hover:scale-105 transition-transform">
+                  <label className="absolute -bottom-2 right-1 p-3.5 rounded-2xl bg-nb-primary text-white shadow-lg shadow-nb-primary/30 cursor-pointer hover:scale-105 transition-transform z-20">
                     <Camera size={20} />
                     <input
                       type="file"
