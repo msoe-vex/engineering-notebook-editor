@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTheme } from "next-themes";
 import Image from "next/image";
+import Link from "next/link";
 import {
   Edit3, FileText, Download, ArrowRight,
   Shield, Bold, Italic, List, Type, Sun, Moon,
@@ -49,7 +50,7 @@ export default function AboutPage({ onClose, onTryIt, onOpenHelp }: AboutPagePro
       {/* Navigation */}
       <div className="sticky top-0 z-10 bg-nb-bg/80 backdrop-blur-md border-b border-nb-outline-variant/30">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-          <a
+          <Link
             href="/"
             onClick={handleAnchorClick(onClose)}
             className="flex items-center gap-3 hover:opacity-70 transition-opacity cursor-pointer group"
@@ -58,7 +59,7 @@ export default function AboutPage({ onClose, onTryIt, onOpenHelp }: AboutPagePro
               <Logo className="text-white" size={20} strokeWidth={20} />
             </div>
             <span className="font-black tracking-tight text-nb-on-surface">ENGen</span>
-          </a>
+          </Link>
           <div className="flex items-center gap-4">
             <button
               onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
@@ -68,29 +69,29 @@ export default function AboutPage({ onClose, onTryIt, onOpenHelp }: AboutPagePro
               {resolvedTheme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
             </button>
             {onOpenHelp && (
-              <a
+              <Link
                 href="/help"
                 onClick={handleAnchorClick(onOpenHelp)}
                 className="px-4 py-2 rounded-xl border border-nb-outline-variant/30 text-nb-on-surface-variant text-xs font-black uppercase tracking-widest hover:bg-nb-surface-low transition-all active:scale-95 cursor-pointer"
               >
                 Help & Docs
-              </a>
+              </Link>
             )}
-            <a
+            <Link
               href="/"
               onClick={handleAnchorClick(onTryIt)}
               className="px-4 py-2 rounded-xl bg-nb-primary text-white text-xs font-black uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-lg shadow-nb-primary/20 active:scale-95 cursor-pointer"
             >
               Try It
-            </a>
-            <a
+            </Link>
+            <Link
               href="/"
               onClick={handleAnchorClick(onClose)}
               className="p-2 rounded-xl hover:bg-nb-surface-low text-nb-on-surface-variant transition-colors cursor-pointer"
               title="Close"
             >
               <ArrowRight size={20} />
-            </a>
+            </Link>
           </div>
         </div>
       </div>
@@ -393,13 +394,13 @@ export default function AboutPage({ onClose, onTryIt, onOpenHelp }: AboutPagePro
           <p className="text-white/80 mb-10 text-lg font-medium leading-relaxed">
             Start your digital engineering notebook today.
           </p>
-          <a
+          <Link
             href="/"
             onClick={handleAnchorClick(onTryIt)}
             className="inline-block px-12 py-5 rounded-2xl bg-white text-nb-primary text-sm font-black uppercase tracking-widest hover:bg-nb-surface-low transition-all shadow-2xl active:scale-95 cursor-pointer"
           >
             Open the Editor
-          </a>
+          </Link>
         </div>
       </section>
 
@@ -429,13 +430,13 @@ export default function AboutPage({ onClose, onTryIt, onOpenHelp }: AboutPagePro
               MSOE VEX Website
             </a>
             {onOpenHelp && (
-              <a
+              <Link
                 href="/help"
                 onClick={handleAnchorClick(onOpenHelp)}
                 className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary transition-colors cursor-pointer font-sans border-none bg-transparent p-0"
               >
                 Help & Docs
-              </a>
+              </Link>
             )}
           </div>
         </div>
