@@ -36,7 +36,7 @@ function bundle() {
       // Exclude temporary/generated files
       .filter(file => !/(main\.aux|main\.fls|main\.log|main\.out|main\.toc)$/.test(file))
       // Exclude local data files that are handled separately
-      .filter(file => !file.includes('data/'));
+      .filter(file => !file.includes('data/') && !file.includes('latex/'));
 
     // Get unique basenames
     const uniqueFiles = Array.from(new Set(inputs.map(f => path.basename(f))));
@@ -50,12 +50,14 @@ function bundle() {
     console.log(`\nCopying dependencies to ${DEST_DIR}...`);
     const manifest: string[] = [];
 
-    const DATA_DIR = path.join(NOTEBOOK_DIR, 'data');
+    const LATEX_SRC_DIR = path.join(NOTEBOOK_DIR, 'latex');
 
     for (const file of uniqueFiles) {
-      // Skip files that exist in notebook/data/ as they are dynamic project data
-      // handled by the app's store, not static template dependencies.
-      if (fs.existsSync(path.join(DATA_DIR, file))) {
+      // Skip project-specific dynamic files that live in notebook/latex/ or notebook/data/
+      if (
+        fs.existsSync(path.join(LATEX_SRC_DIR, file)) ||
+        fs.existsSync(path.join(NOTEBOOK_DIR, 'data', file))
+      ) {
         continue;
       }
 
@@ -64,8 +66,13 @@ function bundle() {
         const absPath = execSync(`kpsewhich ${file}`, { encoding: 'utf8' }).trim();
 
         if (absPath && fs.existsSync(absPath)) {
-          // Check if it's already in the notebook dir (custom template files)
-          // or in the TeX live tree.
+          const normalizedPath = absPath.replace(/\\/g, '/');
+
+          // Systematically skip internal LaTeX3 engine kernel components (preloaded in xelatex.fmt)
+          if (normalizedPath.includes('/tex/latex/l3kernel/')) {
+            continue;
+          }
+
           console.log(`  [+] ${file}`);
           fs.copyFileSync(absPath, path.join(DEST_DIR, file));
           manifest.push(file);

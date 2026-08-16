@@ -35,8 +35,6 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_APP_VERSION: releaseVersion,
   },
   async rewrites() {
-    const isProd = process.env.NODE_ENV === 'production';
-    if (!isProd) return [];
     return [
       {
         source: '/busytex/:path*',

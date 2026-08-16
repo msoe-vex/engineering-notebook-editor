@@ -40,7 +40,7 @@ async function fetchAsset(path: string): Promise<Uint8Array> {
       return new Uint8Array(buffer);
     }
   } catch {
-    // Ignore local failure and try remote
+    // Ignore local failure and try remote release
   }
 
   // Fallback to remote release via proxy
@@ -48,10 +48,17 @@ async function fetchAsset(path: string): Promise<Uint8Array> {
   const remoteUrl = `${GITHUB_RELEASE_URL}/${filename}`;
   const proxiedUrl = `${window.location.origin}/api/busytex-proxy?url=${encodeURIComponent(remoteUrl)}`;
 
-  const response = await fetch(proxiedUrl);
-  if (!response.ok) throw new Error(`Failed to fetch asset from ${path} or ${remoteUrl}`);
-  const buffer = await response.arrayBuffer();
-  return new Uint8Array(buffer);
+  try {
+    const response = await fetch(proxiedUrl);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} ${response.statusText}`);
+    }
+    const buffer = await response.arrayBuffer();
+    return new Uint8Array(buffer);
+  } catch (error) {
+    console.error(`[BusyTex] Failed to fetch asset "${path}" from both local path and remote release (${remoteUrl}):`, error);
+    throw new Error(`Failed to load asset "${path}" from public or release: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 export interface CompileResult {
@@ -84,13 +91,24 @@ export async function compileNotebook(mode: CompileMode = "quality", onStatus?: 
     let packageFiles: string[] = [];
     try {
       const res = await fetch('/latex/manifest.json');
-      if (res.ok) packageFiles = await res.json();
-      else throw new Error();
+      if (res.ok) {
+        packageFiles = await res.json();
+      } else {
+        throw new Error(`HTTP ${res.status}`);
+      }
     } catch {
       const remoteManifestUrl = `${GITHUB_RELEASE_URL}/manifest.json`;
       const proxiedUrl = `${window.location.origin}/api/busytex-proxy?url=${encodeURIComponent(remoteManifestUrl)}`;
-      const res = await fetch(proxiedUrl);
-      if (res.ok) packageFiles = await res.json();
+      try {
+        const res = await fetch(proxiedUrl);
+        if (res.ok) {
+          packageFiles = await res.json();
+        } else {
+          throw new Error(`HTTP ${res.status}`);
+        }
+      } catch (manifestErr) {
+        console.error(`[BusyTex] Failed to load LaTeX manifest.json from both local (/latex/manifest.json) and remote release (${remoteManifestUrl}):`, manifestErr);
+      }
     }
 
     for (const pkg of packageFiles) {
@@ -107,11 +125,11 @@ export async function compileNotebook(mode: CompileMode = "quality", onStatus?: 
         const content = await fetchAsset(`/latex/${pkg}`);
         files.push({ path: pkg, content });
       } catch (e) {
-        console.warn(`Failed to pre-load ${pkg}`, e);
+        console.error(`[BusyTex] Failed to load LaTeX dependency "${pkg}" from public or release:`, e);
       }
     }
   } catch (e) {
-    console.error("Failed to load LaTeX dependencies", e);
+    console.error("[BusyTex] Failed to load LaTeX dependencies:", e);
   }
 
   // 2. Map fonts (/fonts/*)
@@ -126,7 +144,7 @@ export async function compileNotebook(mode: CompileMode = "quality", onStatus?: 
       const content = await fetchAsset(`/fonts/${font}`);
       files.push({ path: `fonts/${font}`, content });
     } catch (e) {
-      console.warn(`Failed to pre-load font ${font}`, e);
+      console.error(`[BusyTex] Failed to load font "${font}" from public or release:`, e);
     }
   }
 

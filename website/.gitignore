@@ -6,6 +6,7 @@ busytex-assets.tar.gz
 # busytex bundle
 busytex/
 public/busytex/
+public/latex/
 
 # dependencies
 /node_modules
