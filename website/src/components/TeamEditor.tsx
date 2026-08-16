@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, memo, useCallback, useRef } from "react";
 import {
   Hash, User, Briefcase, Image as ImageIcon,
-  Check, X, Camera, Building2, Plus, Trash2, Users,
+  X, Camera, Building2, Plus, Trash2, Users,
   Palette, Shapes, Search, GripVertical, LucideIcon, Loader2
 } from "lucide-react";
 import * as LucideIcons from "lucide-react";
@@ -117,20 +117,14 @@ const TeamAssetImage = memo(({
   fallbackIcon: React.ReactNode;
 }) => {
   const isDataUrl = Boolean(src?.startsWith("data:"));
-  const [resolvedSrc, setResolvedSrc] = useState(isDataUrl ? src : "");
+  const [asyncSrc, setAsyncSrc] = useState("");
   const [isLoading, setIsLoading] = useState(!isDataUrl && Boolean(src));
+
+  const resolvedSrc = isDataUrl ? (src || "") : asyncSrc;
 
   useEffect(() => {
     let active = true;
-    if (!src) {
-      setResolvedSrc("");
-      setIsLoading(false);
-      return;
-    }
-
-    if (src.startsWith("data:")) {
-      setResolvedSrc(src);
-      setIsLoading(false);
+    if (!src || src.startsWith("data:")) {
       return;
     }
 
@@ -142,7 +136,7 @@ const TeamAssetImage = memo(({
         if (store.assetCache.has(src)) {
           const cached = store.assetCache.get(src)!;
           if (active) {
-            setResolvedSrc(cached);
+            setAsyncSrc(cached);
             setIsLoading(false);
           }
           return;
@@ -152,7 +146,7 @@ const TeamAssetImage = memo(({
         const b64 = await store.getAssetBase64(src);
         if (b64 && active) {
           const dataUrl = b64.startsWith("data:") ? b64 : `data:${getMimeTypeFromExtension(src)};base64,${b64}`;
-          setResolvedSrc(dataUrl);
+          setAsyncSrc(dataUrl);
           setIsLoading(false);
           return;
         }
@@ -165,7 +159,7 @@ const TeamAssetImage = memo(({
       }
     };
 
-    load();
+    void load();
     return () => { active = false; };
   }, [src]);
 
@@ -496,7 +490,6 @@ const PhaseRow = memo(({
 PhaseRow.displayName = "PhaseRow";
 
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { store } from "@/lib/store";
 
 interface TeamEditorProps {
   onClose: () => void;

@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "download:busytex": "tsx scripts/download-busytex.ts",
-    "bundle:latex": "tsx scripts/bundle-latex.ts"
+    "bundle:latex": "tsx scripts/bundle-latex.ts",
+    "sync:version": "tsx scripts/sync-version.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

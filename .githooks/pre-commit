@@ -1,0 +1,18 @@
+#!/bin/sh
+
+# Pre-commit hook: sync VERSION file to website/package.json
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+cd "$REPO_ROOT/website" || exit 1
+
+if [ -f "$REPO_ROOT/VERSION" ]; then
+  npm run sync:version
+  if [ $? -ne 0 ]; then
+    echo "Error: Version sync failed. Commit aborted."
+    exit 1
+  fi
+  # Stage the synchronized package.json
+  git add "$REPO_ROOT/website/package.json" 2>/dev/null || true
+fi
+
+exit 0

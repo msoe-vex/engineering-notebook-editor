@@ -5,7 +5,8 @@ import { DATA_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from 
 let runner: BusyTexRunner | null = null;
 let xelatex: XeLatex | null = null;
 
-const GITHUB_RELEASE_URL = 'https://github.com/msoe-vex/engineering-notebook-editor/releases/download/v0.1.0';
+const APP_TAG = process.env.NEXT_PUBLIC_APP_VERSION || 'v0.1.0';
+const GITHUB_RELEASE_URL = `https://github.com/msoe-vex/engineering-notebook-editor/releases/download/${APP_TAG}`;
 
 export async function initBusyTex() {
   if (runner && runner.isInitialized()) return;
