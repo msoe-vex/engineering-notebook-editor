@@ -768,7 +768,7 @@ export default function TeamEditor({
               <Users size={20} />
             </div>
             <div>
-              <h1 className="text-sm md:text-lg font-black text-nb-on-surface tracking-tight leading-tight">Project Configuration</h1>
+              <h1 className="text-sm md:text-lg font-black text-nb-on-surface tracking-tight leading-tight">Team Configuration</h1>
               <div className="hidden sm:flex items-center gap-2 text-[10px] font-black tracking-[0.2em] text-nb-on-surface-variant/40 uppercase">
                 <span>Identity, Team, and Design Process</span>
               </div>
@@ -781,7 +781,7 @@ export default function TeamEditor({
             <button
               onClick={onClose}
               className="p-2 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer"
-              title="Close Configuration"
+              title="Close Team Configuration"
             >
               <X size={20} />
             </button>

@@ -6,7 +6,7 @@ import { fetchFileContent, fetchRawFileContent, checkGitHubFileExists } from "..
 import { readLocalFile, writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, checkLocalFileExists } from "../fs";
 import { generateUUID, getMimeTypeFromExtension, formatDateMonthYear } from "../utils";
 import { EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, buildResourceTypeIndex } from "../metadata";
-import { generateAllEntriesLatex, generateTeamLatex, generatePhasesLatex } from "../latex";
+import { generateAllEntriesLatex, generateTeamLatex, generatePhasesLatex, generateEntryLatex } from "../latex";
 import { IWorkspaceStore } from "./types";
 
 export class EntryManager {
@@ -307,7 +307,7 @@ export class EntryManager {
     this.store.entries = [{ name: `${id}.json`, path }, ...this.store.entries];
     this.store.notifyStateChange();
 
-    await this.store.enqueue(async () => {
+    this.store.enqueue(async () => {
       await this.persistFile(path, jsonStr, "New entry");
       await this.persistFile(latexPath, initialLatex, "Init LaTeX");
       await this.persistFile(INDEX_PATH, JSON.stringify(this.store.metadata, null, 2), "Create entry metadata");
@@ -376,7 +376,6 @@ export class EntryManager {
     const wrapper = { version: 3, content: dehydrateAssets(contentJson) };
     const jsonStr = JSON.stringify(wrapper, null, 2);
 
-    const { generateEntryLatex } = await import("../latex");
     const resourceTypes = buildResourceTypeIndex(this.store.metadata.entries, sourceMeta.resources, newId);
     const newLatex = generateEntryLatex(
       contentJson,
@@ -399,7 +398,7 @@ export class EntryManager {
     this.store.entries = [{ name: `${newId}.json`, path: newPath }, ...this.store.entries];
     this.store.notifyStateChange();
 
-    await this.store.enqueue(async () => {
+    this.store.enqueue(async () => {
       await this.persistFile(newPath, jsonStr, `Create entry: ${newTitle}`);
       await this.persistFile(newLatexPath, newLatex, `Init LaTeX for: ${newTitle}`);
       await this.persistFile(INDEX_PATH, JSON.stringify(this.store.metadata, null, 2), "Update notebook metadata");
@@ -442,7 +441,7 @@ export class EntryManager {
     this.store.entries = [{ name: `${id}.json`, path }, ...this.store.entries];
     this.store.notifyStateChange();
 
-    await this.store.enqueue(async () => {
+    this.store.enqueue(async () => {
       await this.persistFile(path, jsonStr, `Create template: ${newTemplate.title}`);
       await this.persistFile(latexPath, initialLatex, "Init template LaTeX");
       await this.persistFile(INDEX_PATH, JSON.stringify(this.store.metadata, null, 2), "Update notebook metadata");
