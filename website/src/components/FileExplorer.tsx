@@ -3,7 +3,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import {
   FileText, Plus, X, Calendar, SortAsc, SortDesc,
   ChevronDown, ChevronRight, ExternalLink, Trash2, FileJson, FileCode,
-  Download, Copy, Layers, Sparkles, FolderTree
+  Download, Copy, Layers, FolderTree
 } from "lucide-react";
 import ValidationTooltip from "./editor/ui/ValidationTooltip";
 
@@ -60,11 +60,16 @@ function FileRow({
   file, isOpened, isSelected, isPending, isDeleted, icon, isValid = true, validationErrors = [],
   onSelect, onDoubleClick, onContextMenu
 }: FileRowProps) {
+  const tooltipLines = [file.title || (file.isTemplate ? "Untitled Template" : "Untitled Entry")];
+  if (file.author) tooltipLines.push(`By ${file.author}`);
+  if (file.date) tooltipLines.push(file.date);
+
   return (
     <div
       onClick={isDeleted ? undefined : onSelect}
       onDoubleClick={isDeleted ? undefined : onDoubleClick}
       onContextMenu={isDeleted ? undefined : onContextMenu}
+      title={tooltipLines.join(' · ')}
       className={`
         group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer select-none border-2
         ${isOpened
@@ -393,6 +398,10 @@ export default function FileExplorer({
                       {templateEntries.length > 0 ? (
                         templateEntries.map(tmpl => {
                           const tmplId = tmpl.name.replace('.json', '');
+                          const tmplPConfig = typeof tmpl.phase === "number" ? phaseConfig[tmpl.phase] : null;
+                          const TmplIcon = tmplPConfig ? tmplPConfig.icon : Layers;
+                          const tmplPhase = typeof tmpl.phase === "number" ? availablePhases.find(p => p.index === tmpl.phase) : null;
+                          const tmplIconColor = tmplPhase ? tmplPhase.color : "#9333ea";
                           return (
                             <button
                               key={tmpl.path}
@@ -404,7 +413,7 @@ export default function FileExplorer({
                               }}
                               className="w-full flex items-center gap-2 px-3 py-1.5 text-[10px] font-medium text-nb-on-surface hover:bg-nb-surface-low hover:text-nb-primary transition-colors cursor-pointer text-left"
                             >
-                              <Layers size={12} className="text-purple-500 shrink-0" />
+                              <TmplIcon size={12} style={{ color: tmplIconColor }} className="shrink-0" />
                               <span className="truncate flex-1">{tmpl.title || "Untitled Template"}</span>
                             </button>
                           );

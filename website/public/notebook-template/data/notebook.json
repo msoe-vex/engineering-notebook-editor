@@ -1,0 +1,155 @@
+{
+  "version": 3,
+  "entries": {
+    "01a00d05-17f6-7cf0-b2a6-c12c385d8cd2": {
+      "id": "01a00d05-17f6-7cf0-b2a6-c12c385d8cd2",
+      "title": "Evaluate Solution Template",
+      "author": "Andrew Needham",
+      "phase": 5,
+      "date": "2026-08-21",
+      "createdAt": "2026-08-17T00:00:32.758Z",
+      "updatedAt": "2026-08-17T00:01:45.982Z",
+      "filename": "data/entries/01a00d05-17f6-7cf0-b2a6-c12c385d8cd2.json",
+      "isTemplate": true,
+      "resources": {
+        "019e2f2d-1dd1-786d-9393-77da24edef94": {
+          "type": "heading",
+          "title": "Evaluate Solution",
+          "caption": "Evaluate Solution"
+        }
+      },
+      "assets": [],
+      "isValid": true,
+      "validationErrors": [],
+      "references": []
+    },
+    "01a00d03-c46f-717f-b046-bf512bdd1d9d": {
+      "id": "01a00d03-c46f-717f-b046-bf512bdd1d9d",
+      "title": "Construct and Test Template",
+      "author": "Andrew Needham",
+      "phase": 4,
+      "date": "2026-08-20",
+      "createdAt": "2026-08-16T23:59:05.839Z",
+      "updatedAt": "2026-08-17T00:02:13.620Z",
+      "filename": "data/entries/01a00d03-c46f-717f-b046-bf512bdd1d9d.json",
+      "isTemplate": true,
+      "resources": {
+        "019e2f13-d57c-7544-bf91-b0e51edd2bda": {
+          "type": "heading",
+          "title": "Program & Test",
+          "caption": "Program & Test"
+        }
+      },
+      "assets": [],
+      "isValid": true,
+      "validationErrors": [],
+      "references": []
+    },
+    "01a00cff-5bde-7274-afb0-93c09579c080": {
+      "id": "01a00cff-5bde-7274-afb0-93c09579c080",
+      "title": "Develop Solution Template",
+      "author": "Andrew Needham",
+      "phase": 3,
+      "date": "2026-08-19",
+      "createdAt": "2026-08-16T23:54:16.926Z",
+      "updatedAt": "2026-08-17T00:02:17.979Z",
+      "filename": "data/entries/01a00cff-5bde-7274-afb0-93c09579c080.json",
+      "isTemplate": true,
+      "resources": {
+        "019e2f01-4cf8-7e23-804c-1e8968f3de13": {
+          "type": "heading",
+          "title": "Develop Solution",
+          "caption": "Develop Solution"
+        }
+      },
+      "assets": [],
+      "isValid": true,
+      "validationErrors": [],
+      "references": []
+    },
+    "01a00cfb-5e56-79b5-a33f-3e6a94950b64": {
+      "id": "01a00cfb-5e56-79b5-a33f-3e6a94950b64",
+      "title": "Generate Concepts Template",
+      "author": "Andrew Needham",
+      "phase": 2,
+      "date": "2026-08-18",
+      "createdAt": "2026-08-16T23:49:55.414Z",
+      "updatedAt": "2026-08-17T00:02:21.972Z",
+      "filename": "data/entries/01a00cfb-5e56-79b5-a33f-3e6a94950b64.json",
+      "isTemplate": true,
+      "resources": {
+        "019e2ee1-e249-7193-b019-ff994f7740bd": {
+          "type": "heading",
+          "title": "Generate Concepts",
+          "caption": "Generate Concepts"
+        },
+        "019e2ee2-9922-744c-8327-9ed8e76ef988": {
+          "type": "heading",
+          "title": "Ideas",
+          "caption": "Ideas"
+        },
+        "019e2efa-a918-7cc4-900f-394b7104e7a2": {
+          "type": "heading",
+          "title": "Decision Matrix",
+          "caption": "Decision Matrix"
+        },
+        "019e481d-f9a7-73b6-9333-d759fcc0d061": {
+          "type": "table",
+          "title": "Decision Matrix",
+          "caption": "Tip: Copy/Paste from Excel or Google sheets"
+        }
+      },
+      "assets": [],
+      "isValid": true,
+      "validationErrors": [],
+      "references": []
+    },
+    "01a00cf9-c38e-76d6-ba61-1ee2c71f954d": {
+      "id": "01a00cf9-c38e-76d6-ba61-1ee2c71f954d",
+      "title": "Define Problem Template",
+      "author": "Andrew Needham",
+      "phase": 1,
+      "date": "2026-08-17",
+      "createdAt": "2026-08-16T23:48:10.254Z",
+      "updatedAt": "2026-08-17T00:02:10.686Z",
+      "filename": "data/entries/01a00cf9-c38e-76d6-ba61-1ee2c71f954d.json",
+      "isTemplate": true,
+      "resources": {
+        "019e2e73-7250-79d6-9940-4861c779eb31": {
+          "type": "heading",
+          "title": "Define Problem",
+          "caption": "Define Problem"
+        },
+        "019e2e73-7250-77f9-844f-2c2b05d7c484": {
+          "type": "heading",
+          "title": "Problem Statement",
+          "caption": "Problem Statement"
+        },
+        "019e2e73-7250-7210-8764-40265896b149": {
+          "type": "heading",
+          "title": "Design Statement",
+          "caption": "Design Statement"
+        },
+        "019e2e76-6e7b-72bf-acf7-f557fcb22555": {
+          "type": "heading",
+          "title": "Goals",
+          "caption": "Goals"
+        },
+        "019e2edb-af09-7c58-a594-93a125f60741": {
+          "type": "heading",
+          "title": "Constraints",
+          "caption": "Constraints"
+        },
+        "019e2edd-da8d-7153-9a9a-2f77b51b5a10": {
+          "type": "heading",
+          "title": "Deadlines",
+          "caption": "Deadlines"
+        }
+      },
+      "assets": [],
+      "isValid": true,
+      "validationErrors": [],
+      "references": []
+    }
+  }
+}

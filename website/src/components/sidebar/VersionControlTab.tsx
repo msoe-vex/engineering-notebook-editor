@@ -8,11 +8,8 @@ import {
   Users,
   Layers,
   FileCode,
-  Image as ImageIcon,
   ChevronDown,
   ChevronRight,
-  Trash2,
-  Plus,
   GitCompare
 } from "lucide-react";
 import { PendingChange } from "@/lib/db";
@@ -147,7 +144,7 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
       groups.push({
         id: "notebook-meta",
         type: "metadata",
-        title: "Project Manifest (notebook.json)",
+        title: "Project Metadata",
         subtitle: "Global Index",
         changes: metaChanges
       });

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Loader2, X, Plus, Minus, FileCode, Check } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { PendingChange } from "@/lib/db";
 import { computeLineDiff, FileDiffResult } from "@/lib/diffUtils";
 
@@ -55,8 +55,6 @@ export default function DiffViewer({ change, getBaseContent, onClose }: DiffView
       isMounted = false;
     };
   }, [change, getBaseContent]);
-
-  const fileName = change.path.split("/").pop() || change.path;
 
   return (
     <div className="mt-1.5 rounded-xl border border-nb-outline-variant/60 bg-nb-surface-lowest overflow-hidden shadow-nb-sm text-[11px] select-text">

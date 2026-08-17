@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "download:busytex": "tsx scripts/download-busytex.ts",
-    "bundle:latex": "tsx scripts/bundle-latex.ts",
+    "bundle:template": "tsx scripts/bundle-template.ts",
+    "bundle:latex": "tsx scripts/bundle-template.ts",
     "sync:version": "tsx scripts/sync-version.ts"
   },
   "dependencies": {

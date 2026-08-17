@@ -56,6 +56,7 @@ export default function SearchTab({
   const [isSearchFieldsCollapsed, setIsSearchFieldsCollapsed] = useState(true);
   const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(true);
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
+  const [showTemplates, setShowTemplates] = useState<"all" | "entries" | "templates">("all");
 
   const [filters, setFilters] = useState<SearchFieldFilters>({
     titles: true,
@@ -107,6 +108,10 @@ export default function SearchTab({
     const matchesList: GroupedEntryResult[] = [];
 
     for (const entry of augmentedEntries) {
+      // Template filter
+      if (showTemplates === "entries" && entry.isTemplate) continue;
+      if (showTemplates === "templates" && !entry.isTemplate) continue;
+
       if (selectedPhase !== null && entry.phase !== selectedPhase) {
         continue;
       }
@@ -174,7 +179,7 @@ export default function SearchTab({
     }
 
     return matchesList;
-  }, [query, selectedPhase, dateRange, filters, augmentedEntries]);
+  }, [query, selectedPhase, dateRange, filters, augmentedEntries, showTemplates]);
 
   const highlightMatch = useCallback((text: string, q: string) => {
     if (!q.trim() || !text) return text;
@@ -196,7 +201,7 @@ export default function SearchTab({
 
   const selectedPhaseObj = selectedPhase !== null ? phaseMap.get(selectedPhase) : null;
   const activeFieldCount = (filters.titles ? 1 : 0) + (filters.authors ? 1 : 0) + (filters.figures ? 1 : 0) + (filters.dates ? 1 : 0);
-  const activeFiltersCount = (selectedPhase !== null ? 1 : 0) + (dateRange !== null ? 1 : 0);
+  const activeFiltersCount = (selectedPhase !== null ? 1 : 0) + (dateRange !== null ? 1 : 0) + (showTemplates !== "all" ? 1 : 0);
 
   return (
     <div className="flex flex-col h-full bg-nb-surface-low select-none relative">
@@ -225,7 +230,7 @@ export default function SearchTab({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search titles, authors, figures..."
+            placeholder="Search titles, authors, resources..."
             className="w-full pl-8 pr-16 py-2 bg-nb-surface border border-nb-outline-variant/50 rounded-xl text-[11px] text-nb-on-surface placeholder:text-nb-on-surface-variant/40 focus:outline-none focus:ring-1.5 focus:ring-nb-primary transition-all shadow-nb-xs"
             autoFocus
           />
@@ -310,7 +315,7 @@ export default function SearchTab({
                 <span className="text-nb-on-surface-variant font-medium">Authors</span>
               </button>
 
-              {/* Figures Checkbox */}
+              {/* Resources Checkbox */}
               <button
                 onClick={() => toggleFilter("figures")}
                 className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-nb-surface-high/40 transition-colors cursor-pointer text-left"
@@ -318,7 +323,7 @@ export default function SearchTab({
                 <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border transition-all ${filters.figures ? "bg-nb-primary border-nb-primary text-nb-on-primary" : "border-nb-outline-variant bg-nb-surface"}`}>
                   {filters.figures && <Check size={10} strokeWidth={3} />}
                 </div>
-                <span className="text-nb-on-surface-variant font-medium">Figures</span>
+                <span className="text-nb-on-surface-variant font-medium">Resources</span>
               </button>
 
               {/* Dates Checkbox */}
@@ -364,6 +369,7 @@ export default function SearchTab({
                     onClick={() => {
                       setSelectedPhase(null);
                       setDateRange(null);
+                      setShowTemplates("all");
                     }}
                     className="text-[9px] font-bold text-red-500 hover:underline cursor-pointer"
                   >
@@ -371,6 +377,29 @@ export default function SearchTab({
                   </button>
                 </div>
               )}
+
+              {/* Template Type Filter Chips */}
+              <div className="space-y-1 pt-1 border-t border-nb-outline-variant/15">
+                <label className="text-[8px] font-bold uppercase tracking-wider text-nb-on-surface-variant/60 block">Type</label>
+                <div className="flex items-center gap-1.5">
+                  {(["all", "entries", "templates"] as const).map(opt => (
+                    <button
+                      key={opt}
+                      onClick={() => setShowTemplates(opt)}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-bold border transition-all cursor-pointer ${
+                        showTemplates === opt
+                          ? opt === "templates"
+                            ? "bg-purple-500/15 border-purple-500/40 text-purple-600 dark:text-purple-400"
+                            : "bg-nb-primary/15 border-nb-primary/40 text-nb-primary"
+                          : "bg-nb-surface border-nb-outline-variant/50 text-nb-on-surface-variant hover:border-nb-primary/30 hover:text-nb-on-surface"
+                      }`}
+                    >
+                      {opt === "templates" && <Layers size={9} className="shrink-0" />}
+                      {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               {/* Phase Filter Dropdown */}
               <div className="space-y-1">
@@ -484,6 +513,7 @@ export default function SearchTab({
               <div
                 key={file.path}
                 onClick={() => onSelectEntry(file)}
+                title={[file.title || (file.isTemplate ? "Untitled Template" : "Untitled Entry"), file.author ? `By ${file.author}` : null, file.date || null].filter(Boolean).join(' · ')}
                 className="w-full text-left p-2.5 rounded-xl bg-nb-surface hover:bg-nb-surface-high/80 border border-nb-outline-variant/30 hover:border-nb-primary/40 transition-all cursor-pointer group shadow-nb-xs"
               >
                 <div className="flex items-start justify-between gap-2">
@@ -514,8 +544,14 @@ export default function SearchTab({
                     </div>
                   </div>
 
-                  {/* Phase Badge & Arrow */}
+                  {/* Phase Badge, Template chip & Arrow */}
                   <div className="flex items-center gap-1.5 shrink-0">
+                    {file.isTemplate && (
+                      <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-md border bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400 flex items-center gap-0.5">
+                        <Layers size={8} />
+                        Template
+                      </span>
+                    )}
                     {phase && (
                       <span
                         style={{ backgroundColor: `${phase.color}15`, color: phase.color, borderColor: `${phase.color}30` }}
@@ -532,7 +568,7 @@ export default function SearchTab({
                 {resourceMatches.length > 0 && (
                   <div className="mt-2 pt-1.5 border-t border-nb-outline-variant/20 flex flex-col gap-1">
                     <span className="text-[8px] font-black uppercase tracking-wider text-nb-on-surface-variant/60 px-0.5">
-                      Matched {resourceMatches.length === 1 ? "Figure / Resource" : `${resourceMatches.length} Figures / Resources`}:
+                      Matched {resourceMatches.length === 1 ? "Resource" : `${resourceMatches.length} Resources`}:
                     </span>
                     {resourceMatches.map(res => (
                       <div

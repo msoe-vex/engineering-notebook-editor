@@ -113,15 +113,6 @@ export async function compileNotebook(mode: CompileMode = "quality", onStatus?: 
 
     for (const pkg of packageFiles) {
       try {
-        // Try to pull main.tex and notebook.sty from workspace first
-        if (pkg === 'main.tex' || pkg === 'notebook.sty') {
-          const userContent = await store.getFileContent(pkg);
-          if (userContent) {
-            files.push({ path: pkg, content: userContent });
-            continue;
-          }
-        }
-
         const content = await fetchAsset(`/latex/${pkg}`);
         files.push({ path: pkg, content });
       } catch (e) {
@@ -132,7 +123,26 @@ export async function compileNotebook(mode: CompileMode = "quality", onStatus?: 
     console.error("[BusyTex] Failed to load LaTeX dependencies:", e);
   }
 
-  // 2. Map fonts (/fonts/*)
+  // 2. Map root template files (main.tex and notebook.sty) from workspace store or bundled template
+  const templateCoreFiles = ['main.tex', 'notebook.sty'];
+  for (const file of templateCoreFiles) {
+    try {
+      const userContent = await store.getFileContent(file);
+      if (userContent) {
+        files.push({ path: file, content: userContent });
+        continue;
+      }
+      const res = await fetch(`/notebook-template/${file}`);
+      if (res.ok) {
+        const text = await res.text();
+        files.push({ path: file, content: text });
+      }
+    } catch (e) {
+      console.error(`[BusyTex] Failed to load template file "${file}":`, e);
+    }
+  }
+
+  // 3. Map fonts (/notebook-template/fonts/*)
   onStatus?.("Loading typography assets...", 4, TOTAL_STEPS, 50);
   const fontFiles = [
     'inter/Inter-Regular.otf', 'inter/Inter-Bold.otf', 'inter/Inter-Italic.otf', 'inter/Inter-BoldItalic.otf',
@@ -141,10 +151,15 @@ export async function compileNotebook(mode: CompileMode = "quality", onStatus?: 
 
   for (const font of fontFiles) {
     try {
-      const content = await fetchAsset(`/fonts/${font}`);
-      files.push({ path: `fonts/${font}`, content });
+      const res = await fetch(`/notebook-template/fonts/${font}`);
+      if (res.ok) {
+        const buffer = await res.arrayBuffer();
+        files.push({ path: `fonts/${font}`, content: new Uint8Array(buffer) });
+      } else {
+        throw new Error(`HTTP ${res.status}`);
+      }
     } catch (e) {
-      console.error(`[BusyTex] Failed to load font "${font}" from public or release:`, e);
+      console.error(`[BusyTex] Failed to load font "${font}" from /notebook-template/fonts:`, e);
     }
   }
 

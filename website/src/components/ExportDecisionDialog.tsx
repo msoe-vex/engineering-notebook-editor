@@ -20,12 +20,12 @@ export default function ExportDecisionDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/75 backdrop-blur-md px-4 animate-in fade-in duration-300"
+      className="fixed inset-0 z-1000 flex items-center justify-center bg-black/75 backdrop-blur-md px-4 animate-in fade-in duration-300"
       onClick={onCancel}
     >
       {/* Outer Card: enforces rounded corners and masks the scrollbar */}
       <div
-        className="relative w-full max-w-lg bg-nb-surface border border-nb-outline-variant/40 rounded-[32px] shadow-[0_24px_50px_-12px_rgba(0,0,0,0.5)] overflow-hidden animate-in zoom-in-95 duration-300"
+        className="relative w-full max-w-lg bg-nb-surface border border-nb-outline-variant/40 rounded-4xl shadow-[0_24px_50px_-12px_rgba(0,0,0,0.5)] overflow-hidden animate-in zoom-in-95 duration-300"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Offset Wrapper: pushes the scroll container and its scrollbar 16px (pr-4) away from the right border and 16px (py-4) vertically to prevent rounded corner clipping */}

@@ -426,6 +426,52 @@ export function updateEntryInIndex(
   return validateNotebookIntegrity(next);
 }
 
+/**
+ * Validate a single entry and return a list of error strings.
+ * Templates are exempt from author / date / phase requirements.
+ *
+ * @param entry       - The entry metadata to validate
+ * @param phases      - Available phase definitions (used to check phase validity)
+ * @param existingIds - Set of all known entry/resource IDs (for broken-reference checks)
+ */
+export function validateEntry(
+  entry: EntryMetadata,
+  phases: { index: number }[],
+  existingIds: Set<string>
+): string[] {
+  const errors: string[] = [];
+
+  if (!entry.title?.trim()) errors.push("Entry title is required.");
+
+  // Templates are exempt from author, date, and phase requirements
+  if (!entry.isTemplate) {
+    if (!entry.author?.trim()) errors.push("Author name is required.");
+    if (!entry.date?.trim()) errors.push("Date is required.");
+    if (typeof entry.phase !== "number" || !phases.some(p => p.index === entry.phase)) {
+      errors.push("Entry phase is required.");
+    }
+  }
+
+  // Check local resources (applies to both entries and templates)
+  if (entry.resources) {
+    for (const res of Object.values(entry.resources)) {
+      if (res.type === "rawLatex") continue;
+      const label = TYPE_LABELS[res.type] || res.type;
+      if (!res.title?.trim()) errors.push(`Title missing for ${label}.`);
+      if (!res.caption?.trim()) errors.push(`Caption missing for ${label}.`);
+    }
+  }
+
+  // Check internal references
+  if (entry.references) {
+    for (const refId of entry.references) {
+      if (!existingIds.has(refId)) errors.push(`Broken reference found: ${refId}`);
+    }
+  }
+
+  return errors;
+}
+
 /** 
  * Scans the entire notebook metadata and evaluates the integrity of every entry.
  * Checks for missing required fields, empty resource metadata, and dead internal links.
@@ -465,74 +511,32 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
     }
   }
 
-  // 3. Validate each entry
+  // Resolve phases — respect explicit empty array, fall back to DEFAULT_PHASES only when undefined
+  const phases = metadata.phases !== undefined ? metadata.phases : DEFAULT_PHASES;
+
+  // 3. Validate each entry using the shared helper
   for (const [id, entry] of Object.entries(newEntries)) {
-    const errors: string[] = [];
-    // use shared TYPE_LABELS from constants
-
-    // Check basic metadata
-    if (!entry.title?.trim()) errors.push("Entry title is required.");
-    if (!entry.author?.trim()) errors.push("Author name is required.");
-    if (!entry.date?.trim()) errors.push("Date is required.");
-
-    // Phase validation
-    // Respect an explicit empty phases array. Only fall back to DEFAULT_PHASES
-    // when `phases` is undefined (i.e., not provided).
-    const phases = metadata.phases !== undefined ? metadata.phases : DEFAULT_PHASES;
-    if (typeof entry.phase !== "number" || !phases.some(p => p.index === entry.phase)) {
-      errors.push("Entry phase is required.");
-    }
-
-    // Check local resources
-    if (entry.resources) {
-      for (const res of Object.values(entry.resources)) {
-        // rawLatex resources are not referenceable and shouldn't require title/caption
-        if (res.type === 'rawLatex') continue;
-
-        const label = TYPE_LABELS[res.type] || res.type;
-        if (!res.title?.trim()) errors.push(`Title missing for ${label}.`);
-        if (!res.caption?.trim()) {
-          errors.push(`Caption missing for ${label}.`);
-        }
-      }
-    }
-
-    // Check internal references
-    if (entry.references) {
-      for (const refId of entry.references) {
-        if (!existingIds.has(refId)) {
-          errors.push(`Broken reference found: ${refId}`);
-        }
-      }
-    }
-
-    newEntries[id] = {
-      ...entry,
-      isValid: errors.length === 0,
-      validationErrors: errors
-    };
+    const errors = validateEntry(entry, phases, existingIds);
+    newEntries[id] = { ...entry, isValid: errors.length === 0, validationErrors: errors };
   }
 
-  return {
-    ...metadata,
-    entries: newEntries,
-    assetRefs
-  };
+  return { ...metadata, entries: newEntries, assetRefs };
 }
 
-/** Check if an entry has all required metadata fields. */
+/** Check if an entry has all required metadata fields (template-aware). */
 export function isEntryValid(info: EntryMetadata): boolean {
   if (!info.title?.trim()) return false;
-  if (!info.author?.trim()) return false;
-  if (!info.date?.trim()) return false;
-  if (info.phase === null) return false;
-
+  if (!info.isTemplate) {
+    if (!info.author?.trim()) return false;
+    if (!info.date?.trim()) return false;
+    if (info.phase === null || info.phase === undefined) return false;
+  }
   if (info.resources) {
     for (const res of Object.values(info.resources)) {
+      if (res.type === "rawLatex") continue;
       if (!res.title?.trim() || !res.caption?.trim()) return false;
     }
   }
-
   return true;
 }
 

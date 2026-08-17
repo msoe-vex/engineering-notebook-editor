@@ -377,8 +377,8 @@ export class EntryManager {
     const date = options?.date !== undefined
       ? options.date
       : (!isTemplate && sourceMeta.isTemplate)
-      ? todayDate
-      : (isTemplate ? (sourceMeta.date || todayDate) : todayDate);
+      ? todayDate                                   // creating a new entry from a template → today
+      : (sourceMeta.date || todayDate);             // duplicating an entry or template → keep source date
 
     const newEntry: EntryMetadata = {
       id: newId,

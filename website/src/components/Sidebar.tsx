@@ -34,7 +34,6 @@ export default function Sidebar({
     openFile,
     metadata,
     pendingChanges,
-    mode,
     createEntry,
     duplicateEntry,
     createTemplate,
@@ -168,7 +167,7 @@ export default function Sidebar({
   const handleDuplicateEntry = useCallback(async (file: ExplorerFile) => {
     try {
       const id = file.name.replace('.json', '');
-      const newId = await duplicateEntry(id);
+      await duplicateEntry(id);
       showNotification("Entry duplicated successfully.", "success");
     } catch (e) {
       console.error("Duplicate failed", e);

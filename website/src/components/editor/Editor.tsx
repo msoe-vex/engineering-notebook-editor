@@ -38,7 +38,7 @@ import { generateEntryLatex } from "@/lib/latex";
 import { getPhases, getPhaseConfig } from "@/lib/phases";
 import AutocompleteInput from "./ui/AutocompleteInput";
 import DatePicker from "./ui/DatePicker";
-import { extractResources, extractReferences, TipTapNode, ensureResourceIds, buildResourceTypeIndex } from "@/lib/metadata";
+import { extractResources, extractReferences, TipTapNode, ensureResourceIds, buildResourceTypeIndex, validateEntry } from "@/lib/metadata";
 import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR, TYPE_LABELS } from "@/lib/constants";
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng, compressImageToJpeg } from "@/lib/utils";
 import { NodeSelection } from "@tiptap/pm/state";
@@ -746,42 +746,49 @@ const EditorContent = React.memo(function EditorContent({
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   const validate = useCallback(() => {
-    const errors: string[] = [];
-    if (!openFile.title?.trim()) errors.push("Entry title is required.");
-    if (!openFile.author?.trim()) errors.push("Author name is required.");
-    if (!openFile.date?.trim()) errors.push("Date is required.");
-    if (openFile.phase === null || openFile.phase === undefined) errors.push("Entry phase is required.");
+    const entryIdMeta = metadata.entries[entryId];
+    const isTemplate = entryIdMeta?.isTemplate || false;
 
-    // use shared TYPE_LABELS from constants
-
-    if (editor) {
-      const doc = editor.getJSON();
-      const resources = extractResources(doc);
-      for (const res of Object.values(resources)) {
-        const label = TYPE_LABELS[res.type] || res.type;
-        if (!res.title?.trim()) errors.push(`Title missing for ${label}.`);
-        if (!res.caption?.trim()) errors.push(`Caption missing for ${label}.`);
-      }
-
-      const refs = extractReferences(doc);
-      if (refs.length > 0 && metadata?.entries) {
-        const existingIds = new Set<string>();
-        for (const entry of Object.values(metadata.entries)) {
-          existingIds.add(entry.id);
-          if (entry.resources) {
-            for (const resId of Object.keys(entry.resources)) {
-              existingIds.add(resId);
-            }
+    // Build the set of existing IDs (for references)
+    const existingIds = new Set<string>();
+    if (metadata?.entries) {
+      for (const entry of Object.values(metadata.entries)) {
+        existingIds.add(entry.id);
+        if (entry.resources) {
+          for (const resId of Object.keys(entry.resources)) {
+            existingIds.add(resId);
           }
-        }
-        for (const refId of refs) {
-          if (!existingIds.has(refId)) errors.push(`Broken reference found: ${refId}`);
         }
       }
     }
 
+    // Extract live resources from the current editor instance
+    let liveResources: Record<string, any> | undefined = undefined;
+    let liveReferences: string[] = [];
+    if (editor) {
+      const doc = editor.getJSON();
+      liveResources = extractResources(doc);
+      liveReferences = extractReferences(doc);
+    }
+
+    // Combine current openFile form fields with the live resources from the editor
+    const entryToValidate = {
+      ...entryIdMeta,
+      id: entryId,
+      title: openFile.title || "",
+      author: openFile.author || "",
+      date: openFile.date || "",
+      phase: openFile.phase,
+      isTemplate,
+      resources: liveResources || entryIdMeta?.resources,
+      references: liveReferences.length > 0 ? liveReferences : (entryIdMeta?.references || [])
+    };
+
+    const phases = metadata.phases || [];
+    const errors = validateEntry(entryToValidate, phases, existingIds);
+
     return { valid: errors.length === 0, errors };
-  }, [openFile.title, openFile.author, openFile.date, openFile.phase, editor, metadata]);
+  }, [openFile.title, openFile.author, openFile.date, openFile.phase, editor, metadata, entryId]);
 
   // Local validation state for immediate UI feedback.
   // Editor is the sole authority on validity while open — parent isValid is only used for initial value.
@@ -1235,6 +1242,17 @@ const EditorContent = React.memo(function EditorContent({
                           className="mt-1 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl p-1.5 animate-in fade-in zoom-in-95 slide-in-from-top-2 duration-200 ease-out"
                           onMouseDown={(e) => e.stopPropagation()}
                         >
+                          {/* Deselect option */}
+                          {openFile.phase !== null && openFile.phase !== undefined && (
+                            <button
+                              type="button"
+                              onClick={() => { updateDraft(null, { phase: null }); setActiveMenu(null); }}
+                              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[10px] font-bold tracking-widest transition-all text-left cursor-pointer active:scale-[0.98] text-nb-on-surface-variant hover:bg-nb-surface-mid hover:text-nb-on-surface"
+                            >
+                              <LucideIcons.X size={14} className="text-nb-on-surface-variant/50" />
+                              <span className="flex-1">NO PHASE</span>
+                            </button>
+                          )}
                           {availablePhases.map(p => {
                             const cfg = phaseConfig[p.index];
                             const Icon = cfg.icon;

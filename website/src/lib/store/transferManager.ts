@@ -214,7 +214,7 @@ export class TransferManager {
           try {
             let base64 = await this.getAssetBase64(`fonts/${font}`);
             if (!base64) {
-              const res = await fetch(`/fonts/${font}`);
+              const res = await fetch(`/notebook-template/fonts/${font}`);
               if (res.ok) {
                 const buffer = await res.arrayBuffer();
                 let binary = '';

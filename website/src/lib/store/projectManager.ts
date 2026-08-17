@@ -7,6 +7,7 @@ import { generateDeterministicUUID, generateUUID } from "../utils";
 import { INDEX_PATH, ENTRIES_DIR, ASSETS_DIR, LATEX_DIR } from "../constants";
 import { IWorkspaceStore, WorkspaceMode } from "./types";
 import { isMobileDevice } from "@/hooks/useDevice";
+import { fetchDefaultTemplates } from "../defaultTemplates";
 
 export class ProjectManager {
   private store: IWorkspaceStore;
@@ -124,6 +125,22 @@ export class ProjectManager {
           this.store.mode = "temporary";
           this.store.metadata = EMPTY_METADATA;
           this.store.entries = [];
+
+          // Seed default templates into new temporary project
+          try {
+            const defaultTemplates = await fetchDefaultTemplates();
+            for (const tmpl of defaultTemplates) {
+              this.store.metadata.entries[tmpl.entryMeta.id] = tmpl.entryMeta;
+              this.store.entries.push({ name: tmpl.filename.split('/').pop() || '', path: tmpl.filename });
+              // Store content in lastSavedContents so it can be opened without disk
+              this.store.lastSavedContents.set(tmpl.filename, tmpl.contentJson);
+            }
+            if (defaultTemplates.length > 0) {
+              this.store.metadata = validateNotebookIntegrity(this.store.metadata);
+            }
+          } catch (e) {
+            console.warn("Failed to seed default templates for temporary project:", e);
+          }
 
           // Persist initial LaTeX metadata files for temporary projects so exports include them
           try {
@@ -293,6 +310,22 @@ export class ProjectManager {
     this.store.isMainTexPresent = await checkLocalFileExists(this.store.dirHandle, "main.tex");
 
     if (isNew) {
+      // Seed default templates into every brand-new local project
+      try {
+        const defaultTemplates = await fetchDefaultTemplates();
+        for (const tmpl of defaultTemplates) {
+          await writeLocalFile(this.store.dirHandle!, tmpl.filename, tmpl.contentJson);
+          this.store.metadata.entries[tmpl.entryMeta.id] = tmpl.entryMeta;
+        }
+        if (defaultTemplates.length > 0) {
+          this.store.metadata = validateNotebookIntegrity(this.store.metadata);
+          await writeLocalFile(this.store.dirHandle!, INDEX_PATH, JSON.stringify(this.store.metadata, null, 2));
+          // Rebuild entries list to include template files
+          this.store.entries = await listLocalFiles(this.store.dirHandle!, ENTRIES_DIR);
+        }
+      } catch (e) {
+        console.warn("Failed to seed default templates:", e);
+      }
       await this.store.updateLatexMetadata();
     }
   }
@@ -427,6 +460,38 @@ export class ProjectManager {
     this.store.isMainTexPresent = isMainTexPresent;
 
     if (isNew) {
+      // Seed default templates into every brand-new GitHub project
+      try {
+        const defaultTemplates = await fetchDefaultTemplates();
+        for (const tmpl of defaultTemplates) {
+          await stageChange(dbName, {
+            path: tmpl.filename,
+            operation: "upsert",
+            content: tmpl.contentJson,
+            label: `Seed template: ${tmpl.entryMeta.title}`,
+            stagedAt: new Date().toISOString()
+          });
+          this.store.metadata.entries[tmpl.entryMeta.id] = tmpl.entryMeta;
+          if (!mergedEntries.some(e => e.path === tmpl.filename)) {
+            mergedEntries.push({ name: tmpl.filename.split('/').pop() || '', path: tmpl.filename });
+          }
+        }
+        if (defaultTemplates.length > 0) {
+          this.store.metadata = validateNotebookIntegrity(this.store.metadata);
+          // Update the staged notebook.json with the seeded templates
+          await stageChange(dbName, {
+            path: INDEX_PATH,
+            operation: "upsert",
+            content: JSON.stringify(this.store.metadata, null, 2),
+            label: "Initialize notebook.json with default templates",
+            stagedAt: new Date().toISOString()
+          });
+        }
+      } catch (e) {
+        console.warn("Failed to seed default templates:", e);
+      }
+      this.store.entries = mergedEntries;
+      await this.store.refreshPending();
       await this.store.updateLatexMetadata();
     }
   }

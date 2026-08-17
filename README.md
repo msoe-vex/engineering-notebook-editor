@@ -70,24 +70,29 @@ For notebook/PDF work, see `notebook/README.md`.
 
 ## Release Workflow (For Web Editor)
 
-To ensure the web editor can compile PDFs efficiently without bloating the Git repository or hitting GitHub LFS limits, we host the LaTeX engine and template dependencies as GitHub Release assets.
+To ensure the web editor can compile PDFs efficiently without bloating the Git repository or hitting GitHub LFS limits, we bundle the notebook template directly into `website/public/notebook-template/` and host external LaTeX engine/packages as GitHub Release assets.
 
 ### 1. Prepare Assets
 
 Run the following from the `website/` directory:
 
-- `npm run download:busytex`: Downloads the engine WASM and TeX Live `.data` files into `website/public/busytex/`.
-- `npm run bundle:latex`: Gathers the template `.sty`, `.cls`, font spec, and `manifest.json` dependencies into `website/public/latex/`.
+- `npm run download:busytex`
+  - Downloads the engine WASM and TeX Live `.data` files into `website/public/busytex/`.
+- `npm run bundle:template`
+  - Bundles the complete notebook template (`notebook/main.tex`, `notebook/notebook.sty`, `notebook/fonts/`, and `notebook/data/`) into `website/public/notebook-template/`.
+  - Scans and gathers external LaTeX package dependencies into `website/public/latex/` with `manifest.json`.
 
-### 2. Upload to Release
+### 2. Upload to Release (LaTeX Engine & Packages Only)
 
 1. Create or edit a release tag on GitHub (e.g., `v0.1.0`).
 2. Upload **all** files from `website/public/busytex/` and `website/public/latex/` to the release assets.
-3. You can then delete the local copies from `website/public/busytex/` and `website/public/latex/` to keep your git repo clean and lightweight.
+3. You can then delete the local copies from `website/public/busytex/` and `website/public/latex/` to keep your git repo clean and lightweight (while `website/public/notebook-template/` remains the bundled template for the app).
    > [!NOTE]
    > Keeping `website/public/busytex/` and `website/public/latex/` locally enables **100% offline-ready local development**!
 
 ### 3. How it Works (Development vs. Production)
 
-- **Local Development**: In dev mode, the app serves the WASM engine, TeX Live packages, and LaTeX style templates directly from your local `website/public/` directory if present.
-- **Production / Deployment**: In production, Next.js automatically rewrites/proxies `/busytex/...` and `/latex/...` routes via an edge function to the official GitHub Release `GITHUB_RELEASE_URL` (configured in `website/src/lib/busytex.ts`), meaning you never have to commit large WASM binaries or hundreds of LaTeX files to Git!
+- **Template Files**: The app serves `main.tex`, `notebook.sty`, typography fonts, and initial template entries directly from `website/public/notebook-template/`.
+- **LaTeX Engine & Packages**:
+  - **Local Development**: In dev mode, the app serves the WASM engine and TeX Live packages directly from your local `website/public/` directory if present.
+  - **Production / Deployment**: In production, Next.js automatically rewrites/proxies `/busytex/...` and `/latex/...` routes via an edge function to the official GitHub Release `GITHUB_RELEASE_URL` (configured in `website/src/lib/busytex.ts`), meaning you never have to commit large WASM binaries or hundreds of LaTeX package files to Git!
