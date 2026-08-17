@@ -200,18 +200,23 @@ export default function SearchTab({
 
   return (
     <div className="flex flex-col h-full bg-nb-surface-low select-none relative">
-      {/* Search Header */}
-      <div className="p-3 border-b border-nb-outline-variant/30 space-y-2.5 relative z-20 bg-nb-surface-low">
-        <div className="flex items-center justify-between h-5">
-          <span className="text-[11px] font-black uppercase tracking-wider text-nb-on-surface-variant leading-none">
-            Search Workspace
+      {/* Standardized Panel Header */}
+      <div className="p-3.5 border-b border-nb-outline-variant/30 flex items-center justify-between shrink-0 bg-nb-surface-low">
+        <div className="flex items-center gap-2">
+          <Search size={15} className="text-nb-primary" />
+          <span className="text-[11px] font-black uppercase tracking-wider text-nb-on-surface">
+            Search
           </span>
-          {results.length > 0 && (
-            <span className="text-[10px] font-bold text-nb-primary bg-nb-primary/10 px-2 py-0.5 rounded-full leading-none animate-in fade-in duration-100">
-              {results.length} {results.length === 1 ? "entry" : "entries"}
-            </span>
-          )}
         </div>
+        {results.length > 0 && query.trim() && (
+          <span className="text-[9px] font-bold text-nb-primary bg-nb-primary/10 px-2 py-0.5 rounded-full animate-in fade-in duration-100">
+            {results.length} {results.length === 1 ? "entry" : "entries"}
+          </span>
+        )}
+      </div>
+
+      {/* Search Input Controls Header */}
+      <div className="p-3 border-b border-nb-outline-variant/30 space-y-2.5 relative z-20 bg-nb-surface">
 
         {/* Search Input with inline Fields Toggle */}
         <div className="relative">

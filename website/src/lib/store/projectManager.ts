@@ -99,7 +99,7 @@ export class ProjectManager {
   async selectProject(id: string) {
     if (this.store.currentProjectId === id && id !== "temporary" && this.store.isInitialized && !this.store.isLoading) return;
 
-    this.store.debouncedPersist.flush();
+    await this.store.debouncedPersist.flush();
 
     // For temporary workspaces, if this is the initial load of the session, clear the DB
     // to fulfill the UI promise of "Lost on reload".

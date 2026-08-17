@@ -46,10 +46,8 @@ export default function Sidebar({
   } = useWorkspace();
 
   const [activeTab, setActiveTab] = useState<SidebarTab>("explorer");
-  const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"date" | "title">("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-  const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
 
   const handleConfirmDelete = useCallback((files: ExplorerFile[]) => {
     if (files.length === 0) return;
@@ -105,25 +103,7 @@ export default function Sidebar({
   }, [entries, metadata]);
 
   const filteredEntries = useMemo(() => {
-    const list = augmentedEntries.filter(f => {
-      if (search) {
-        const q = search.toLowerCase();
-        if (!(f.title?.toLowerCase().includes(q) || f.name.toLowerCase().includes(q) || f.author?.toLowerCase().includes(q))) return false;
-      }
-      if (dateRange) {
-        const dStr = f.date || (f.timestamp ? f.timestamp.split('T')[0] : null);
-        if (!dStr) return false;
-        
-        const ts = new Date(dStr);
-        if (dateRange.start && ts < new Date(dateRange.start)) return false;
-        if (dateRange.end) {
-          const end = new Date(dateRange.end);
-          end.setHours(23, 59, 59, 999);
-          if (ts > end) return false;
-        }
-      }
-      return true;
-    });
+    const list = [...augmentedEntries];
 
     list.sort((a, b) => {
       let valA, valB;
@@ -147,7 +127,7 @@ export default function Sidebar({
     });
 
     return list;
-  }, [augmentedEntries, search, sortBy, sortDirection, dateRange]);
+  }, [augmentedEntries, sortBy, sortDirection]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -300,14 +280,10 @@ export default function Sidebar({
             onDownloadMulti={handleDownloadMulti}
             onDeleteMulti={handleConfirmDelete}
             onNewEntry={onNewEntry || createEntry}
-            search={search}
-            onSearchChange={setSearch}
             sortBy={sortBy}
             onSortChange={setSortBy}
             sortDirection={sortDirection}
             onSortDirectionToggle={() => setSortDirection(prev => prev === "asc" ? "desc" : "asc")}
-            dateRange={dateRange}
-            onDateRangeChange={setDateRange}
             notebookMetadata={metadata}
           />
         )}

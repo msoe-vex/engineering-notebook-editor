@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useState, useMemo, useCallback } from "react";
 import {
   GitBranch,
@@ -14,11 +12,13 @@ import {
   ChevronDown,
   ChevronRight,
   Trash2,
-  Plus
+  Plus,
+  GitCompare
 } from "lucide-react";
 import { PendingChange } from "@/lib/db";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { ENTRIES_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, INDEX_PATH } from "@/lib/constants";
+import DiffViewer from "./DiffViewer";
 
 interface VersionControlTabProps {
   showConfirm: (title: string, message: string, onConfirm: () => void, variant?: "danger" | "warning" | "info") => void;
@@ -45,11 +45,22 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
     discardPendingChanges,
     discardPathChange,
     discardEntryChanges,
+    getBaseFileContent,
     navigateTo
   } = useWorkspace();
 
   const [commitMessage, setCommitMessage] = useState("");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [openDiffPaths, setOpenDiffPaths] = useState<Set<string>>(new Set());
+
+  const toggleDiff = useCallback((path: string) => {
+    setOpenDiffPaths(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }, []);
 
   const toggleGroup = useCallback((id: string) => {
     setExpandedGroups(prev => {
@@ -205,7 +216,7 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
       <div className="flex flex-col items-center justify-center h-full p-6 text-center select-none bg-nb-surface-low">
         <GitBranch size={32} className="text-nb-on-surface-variant/30 mb-3" />
         <span className="text-[13px] font-bold text-nb-on-surface">Local Workspace</span>
-        <p className="text-[11px] text-nb-on-surface-variant/70 mt-1 max-w-[220px]">
+        <p className="text-[11px] text-nb-on-surface-variant/70 mt-1 max-w-55">
           Local filesystem mode writes changes directly to your computer. Git version control tracking is active for GitHub projects.
         </p>
       </div>
@@ -217,7 +228,7 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
   return (
     <div className="flex flex-col h-full bg-nb-surface-low select-none">
       {/* Header */}
-      <div className="p-3.5 border-b border-nb-outline-variant/30 flex items-center justify-between">
+      <div className="p-3.5 border-b border-nb-outline-variant/30 flex items-center justify-between shrink-0 bg-nb-surface-low">
         <div className="flex items-center gap-2">
           <GitBranch size={15} className="text-nb-tertiary" />
           <span className="text-[11px] font-black uppercase tracking-wider text-nb-on-surface">
@@ -340,38 +351,65 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
 
                     {/* Group Expanded Files */}
                     {isExpanded && (
-                      <div className="bg-nb-surface-low/60 border-t border-nb-outline-variant/20 p-2 space-y-1 pl-6">
+                      <div className="bg-nb-surface-low/60 border-t border-nb-outline-variant/20 p-2 space-y-1.5 pl-4">
                         {group.changes.map(c => {
                           const fileName = c.path.split('/').pop() || c.path;
                           const isDelete = c.operation === "delete";
                           const isNew = c.changeType === "create";
+                          const isDiffOpen = openDiffPaths.has(c.path);
+
                           return (
-                            <div
-                              key={c.path}
-                              className="flex items-center justify-between text-[10px] text-nb-on-surface-variant py-0.5 group"
-                            >
-                              <div className="flex items-center gap-1.5 truncate">
-                                <span
-                                  className={`text-[8px] font-bold uppercase px-1 rounded ${
-                                    isDelete
-                                      ? "bg-red-500/15 text-red-500"
-                                      : isNew
-                                      ? "bg-emerald-500/15 text-emerald-500"
-                                      : "bg-blue-500/15 text-blue-500"
-                                  }`}
-                                >
-                                  {isDelete ? "DEL" : isNew ? "NEW" : "MOD"}
-                                </span>
-                                <span className="truncate font-mono">{fileName}</span>
+                            <div key={c.path} className="flex flex-col">
+                              <div
+                                onClick={() => toggleDiff(c.path)}
+                                className={`flex items-center justify-between text-[10px] text-nb-on-surface-variant py-1 px-1.5 rounded-lg hover:bg-nb-surface-mid/60 transition-colors cursor-pointer group ${isDiffOpen ? 'bg-nb-surface-mid/80 text-nb-on-surface' : ''}`}
+                              >
+                                <div className="flex items-center gap-1.5 truncate min-w-0">
+                                  <span
+                                    className={`text-[8px] font-bold uppercase px-1 py-0.2 rounded shrink-0 ${
+                                      isDelete
+                                        ? "bg-red-500/15 text-red-500"
+                                        : isNew
+                                        ? "bg-emerald-500/15 text-emerald-500"
+                                        : "bg-blue-500/15 text-blue-500"
+                                    }`}
+                                  >
+                                    {isDelete ? "DEL" : isNew ? "NEW" : "MOD"}
+                                  </span>
+                                  <span className="truncate font-mono text-[10px] font-medium">{fileName}</span>
+                                </div>
+
+                                <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                                  <button
+                                    onClick={() => toggleDiff(c.path)}
+                                    title={isDiffOpen ? "Hide Diff" : "View Git Diff"}
+                                    className={`p-1 rounded transition-colors cursor-pointer ${
+                                      isDiffOpen
+                                        ? "bg-nb-primary/15 text-nb-primary"
+                                        : "text-nb-on-surface-variant/50 hover:text-nb-primary hover:bg-nb-surface-high opacity-0 group-hover:opacity-100"
+                                    }`}
+                                  >
+                                    <GitCompare size={11} />
+                                  </button>
+
+                                  <button
+                                    onClick={() => handleDiscardFile(c.path, fileName)}
+                                    title={`Revert ${fileName}`}
+                                    className="opacity-0 group-hover:opacity-100 p-1 text-nb-on-surface-variant/50 hover:text-red-500 hover:bg-red-500/10 rounded transition-all cursor-pointer"
+                                  >
+                                    <RotateCcw size={11} />
+                                  </button>
+                                </div>
                               </div>
 
-                              <button
-                                onClick={() => handleDiscardFile(c.path, fileName)}
-                                title={`Revert ${fileName}`}
-                                className="opacity-0 group-hover:opacity-100 p-0.5 text-nb-on-surface-variant/60 hover:text-red-500 transition-opacity cursor-pointer"
-                              >
-                                <RotateCcw size={10} />
-                              </button>
+                              {/* Inline Diff Viewer */}
+                              {isDiffOpen && (
+                                <DiffViewer
+                                  change={c}
+                                  getBaseContent={getBaseFileContent}
+                                  onClose={() => toggleDiff(c.path)}
+                                />
+                              )}
                             </div>
                           );
                         })}
@@ -386,7 +424,7 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
           <div className="flex flex-col items-center justify-center h-56 text-center p-4">
             <CheckCircle2 size={32} className="text-emerald-500/60 mb-2.5" />
             <span className="text-[12px] font-bold text-nb-on-surface">No Pending Changes</span>
-            <span className="text-[10px] text-nb-on-surface-variant/60 mt-1 max-w-[200px]">
+            <span className="text-[10px] text-nb-on-surface-variant/60 mt-1 max-w-50">
               All your entries and templates are synchronized with the repository.
             </span>
           </div>

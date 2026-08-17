@@ -39,6 +39,22 @@ export class TransferManager {
     return null;
   }
 
+  async getBaseFileContent(path: string): Promise<string | null> {
+    try {
+      if (this.store.mode === "local" && this.store.dirHandle) {
+        const res = await getLocalFileContent(this.store.dirHandle, path);
+        return res.text || null;
+      } else if (this.store.mode === "github" && this.store.config) {
+        return await fetchFileContent(this.store.config, this.store.getFullPath(path));
+      } else if (this.store.mode === "temporary") {
+        return null;
+      }
+    } catch (e) {
+      console.error(`Failed to get base content for ${path}:`, e);
+    }
+    return null;
+  }
+
   async getAssetBase64(path: string): Promise<string | null> {
     const dbName = this.store.getDBName();
     // If there's a pending delete for this path, treat as removed for exports

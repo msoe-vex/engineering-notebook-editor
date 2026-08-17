@@ -102,12 +102,13 @@ export function useWorkspace() {
   const navigateTo = useCallback((params: Record<string, string | null>, path?: string) => store.navigateTo(params, path), []);
   const handleUrlChange = useCallback(() => store.handleUrlChange(), []);
   const getFileContent = useCallback((path: string) => store.getFileContent(path), []);
+  const getBaseFileContent = useCallback((path: string) => store.getBaseFileContent(path), []);
   const exportNotebook = useCallback((mode?: 'data-only' | 'full') => store.exportNotebook(mode), []);
   const exportEntries = useCallback((entryIds?: string[], mode?: 'data-only' | 'full') => store.exportEntries(entryIds, mode), []);
   const importNotebook = useCallback((data: Record<string, unknown>, options?: ImportOptions) => store.importNotebook(data, options), []);
   const importNotebookArchive = useCallback((file: File, options?: ImportOptions) => store.importNotebookArchive(file, options), []);
   const setSelectedPaths = useCallback((pathsOrUpdater: Set<string> | ((prev: Set<string>) => Set<string>)) => store.setSelectedPaths(pathsOrUpdater), []);
-  const duplicateEntry = useCallback((sourceId: string, options?: { asTemplate?: boolean; title?: string }) => store.duplicateEntry(sourceId, options), []);
+  const duplicateEntry = useCallback((sourceId: string, options?: { asTemplate?: boolean; title?: string; author?: string; phase?: number | null; date?: string }) => store.duplicateEntry(sourceId, options), []);
   const createTemplate = useCallback((templateData?: Partial<import("@/lib/metadata").EntryMetadata>) => store.createTemplate(templateData), []);
   const createEntryFromTemplate = useCallback((templateId: string) => store.createEntryFromTemplate(templateId), []);
   const discardPathChange = useCallback((path: string) => store.discardPathChange(path), []);
@@ -142,6 +143,7 @@ export function useWorkspace() {
     navigateTo,
     handleUrlChange,
     getFileContent,
+    getBaseFileContent,
     exportNotebook,
     exportEntries,
     importNotebook,

@@ -206,7 +206,7 @@ export function formatDateMonthYear(dateStr: string): string {
 
 export interface DebouncedFunction<T extends (...args: unknown[]) => unknown> {
   (...args: Parameters<T>): void;
-  flush(): void;
+  flush(): Promise<void>;
   cancel(): void;
 }
 
@@ -237,7 +237,7 @@ export function debounceWithFlush<T extends (...args: unknown[]) => unknown>(
     }, wait);
   };
 
-  debounced.flush = () => {
+  debounced.flush = (): Promise<void> => {
     if (timeoutId !== null) {
       clearTimeout(timeoutId);
       timeoutId = null;
@@ -245,8 +245,9 @@ export function debounceWithFlush<T extends (...args: unknown[]) => unknown>(
     const argsToUse = lastArgs;
     lastArgs = null;
     if (argsToUse) {
-      func(...argsToUse);
+      return Promise.resolve(func(...argsToUse) as void);
     }
+    return Promise.resolve();
   };
 
   debounced.cancel = () => {

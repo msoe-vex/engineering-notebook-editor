@@ -264,6 +264,10 @@ class WorkspaceStore implements IWorkspaceStore {
     return this.transferManager.getFileContent(path);
   }
 
+  public async getBaseFileContent(path: string) {
+    return this.transferManager.getBaseFileContent(path);
+  }
+
   public async getAssetBase64(path: string) {
     return this.transferManager.getAssetBase64(path);
   }
@@ -407,7 +411,7 @@ class WorkspaceStore implements IWorkspaceStore {
   }
 
   public async disconnect() {
-    this.debouncedPersist.flush();
+    await this.debouncedPersist.flush();
     this.setLoading(true, "Closing workspace...");
     try {
       await this.queue;

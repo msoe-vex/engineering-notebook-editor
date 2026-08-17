@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import {
-  FileText, Plus, X, Calendar, SortAsc, SortDesc, CalendarDays,
-  Search, ChevronDown, ChevronRight, ExternalLink, Trash2, FileJson, FileCode,
-  Download, Copy, Layers, Sparkles
+  FileText, Plus, X, Calendar, SortAsc, SortDesc,
+  ChevronDown, ChevronRight, ExternalLink, Trash2, FileJson, FileCode,
+  Download, Copy, Layers, Sparkles, FolderTree
 } from "lucide-react";
 import ValidationTooltip from "./editor/ui/ValidationTooltip";
 
@@ -32,14 +32,10 @@ interface FileExplorerProps {
   onDownloadMulti: (files: ExplorerFile[]) => void;
   onDeleteMulti: (files: ExplorerFile[]) => void;
   onNewEntry: () => void;
-  search: string;
-  onSearchChange: (val: string) => void;
   sortBy: "date" | "title";
   onSortChange: (val: "date" | "title") => void;
   sortDirection: "asc" | "desc";
   onSortDirectionToggle: () => void;
-  dateRange: { start: string; end: string } | null;
-  onDateRangeChange: (range: { start: string; end: string } | null) => void;
   notebookMetadata?: NotebookMetadata;
 }
 
@@ -252,18 +248,13 @@ export default function FileExplorer({
   onNewEntry,
   onCreateTemplate,
   onCreateFromTemplate,
-  search,
-  onSearchChange,
   sortBy,
   onSortChange,
   sortDirection,
   onSortDirectionToggle,
-  dateRange,
-  onDateRangeChange,
   notebookMetadata
 }: FileExplorerProps) {
   const [isSortOpen, setIsSortOpen] = useState(false);
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, file: ExplorerFile } | null>(null);
 
   const availablePhases = getPhases(notebookMetadata?.phases);
@@ -287,146 +278,69 @@ export default function FileExplorer({
   const selectedEntries = entries.filter(e => selectedPaths.has(e.path));
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden min-h-0" onClick={() => { setContextMenu(null); setIsNewDropdownOpen(false); }}>
-      {/* Search and Sort Header */}
-      <div className="px-3 py-3 bg-nb-surface border-b border-nb-outline-variant space-y-3 shrink-0">
-        <div className="relative group">
-          <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-nb-on-surface-variant/40 group-focus-within:text-nb-primary transition-colors">
-            <Search size={14} />
-          </div>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search entries..."
-            className="w-full pl-9 pr-8 py-2 bg-nb-surface-low border border-nb-outline-variant/60 rounded-xl text-xs text-nb-on-surface placeholder:text-nb-on-surface-variant/40 focus:outline-none focus:ring-2 focus:ring-nb-primary/20 focus:border-nb-primary transition-all shadow-xs"
-          />
-          {search && (
-            <button
-              onClick={() => onSearchChange("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-nb-on-surface-variant/40 hover:text-nb-on-surface transition-colors cursor-pointer"
-            >
-              <X size={13} />
-            </button>
+    <div className="flex-1 flex flex-col overflow-hidden min-h-0 bg-nb-surface-low select-none" onClick={() => { setContextMenu(null); setIsNewDropdownOpen(false); }}>
+      {/* Standardized Panel Header */}
+      <div className="p-3.5 border-b border-nb-outline-variant/30 flex items-center justify-between shrink-0 bg-nb-surface-low">
+        <div className="flex items-center gap-2">
+          <FolderTree size={15} className="text-nb-primary" />
+          <span className="text-[11px] font-black uppercase tracking-wider text-nb-on-surface">
+            Explorer
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[9px] font-bold text-nb-on-surface-variant/70 bg-nb-surface-high/60 px-2 py-0.5 rounded-full">
+            {entries.length} {entries.length === 1 ? "item" : "items"}
+          </span>
+        </div>
+      </div>
+
+      {/* Sort Controls Bar */}
+      <div className="px-3 py-2 bg-nb-surface border-b border-nb-outline-variant/30 flex items-center justify-between gap-2 shrink-0">
+        {/* Sort Menu */}
+        <div className="relative flex-1">
+          <button
+            onClick={() => setIsSortOpen(!isSortOpen)}
+            className="w-full flex items-center justify-between px-2.5 py-1.5 bg-nb-surface-low hover:bg-nb-surface-mid border border-nb-outline-variant/60 rounded-lg text-xs font-bold text-nb-on-surface transition-all cursor-pointer shadow-xs"
+          >
+            <div className="flex items-center gap-1.5 truncate">
+              {sortBy === "date" ? <Calendar size={13} className="text-nb-primary shrink-0" /> : <FileText size={13} className="text-nb-primary shrink-0" />}
+              <span className="truncate">Sort: {sortBy === "date" ? "Date" : "Title"}</span>
+            </div>
+            <ChevronDown size={12} className={`text-nb-on-surface-variant transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {isSortOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setIsSortOpen(false)} />
+              <div className="absolute top-full left-0 mt-1.5 w-44 bg-nb-surface border border-nb-outline-variant rounded-xl shadow-xl py-1 z-50 animate-in fade-in zoom-in-95 duration-150">
+                <div className="px-3 py-1 text-[9px] font-black uppercase tracking-wider text-nb-on-surface-variant/40">Sort By</div>
+                <button
+                  onClick={() => { onSortChange("date"); setIsSortOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold transition-colors cursor-pointer ${sortBy === 'date' ? 'text-nb-primary bg-nb-primary/5' : 'text-nb-on-surface hover:bg-nb-surface-low'}`}
+                >
+                  <Calendar size={14} />
+                  Date
+                </button>
+                <button
+                  onClick={() => { onSortChange("title"); setIsSortOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold transition-colors cursor-pointer ${sortBy === 'title' ? 'text-nb-primary bg-nb-primary/5' : 'text-nb-on-surface hover:bg-nb-surface-low'}`}
+                >
+                  <FileText size={14} />
+                  Title
+                </button>
+              </div>
+            </>
           )}
         </div>
 
-        {/* Action Controls Row */}
-        <div className="flex items-center justify-between gap-2">
-          {/* Sort Menu */}
-          <div className="relative flex-1">
-            <button
-              onClick={() => { setIsSortOpen(!isSortOpen); setIsFilterOpen(false); }}
-              className="w-full flex items-center justify-between px-2.5 py-1.5 bg-nb-surface-low hover:bg-nb-surface-mid border border-nb-outline-variant/60 rounded-lg text-xs font-bold text-nb-on-surface transition-all cursor-pointer shadow-xs"
-            >
-              <div className="flex items-center gap-1.5 truncate">
-                {sortBy === "date" ? <Calendar size={13} className="text-nb-primary shrink-0" /> : <FileText size={13} className="text-nb-primary shrink-0" />}
-                <span className="truncate">{sortBy === "date" ? "Date" : "Title"}</span>
-              </div>
-              <ChevronDown size={12} className={`text-nb-on-surface-variant transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            {isSortOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setIsSortOpen(false)} />
-                <div className="absolute top-full left-0 mt-1.5 w-44 bg-nb-surface border border-nb-outline-variant rounded-xl shadow-xl py-1 z-50 animate-in fade-in zoom-in-95 duration-150">
-                  <div className="px-3 py-1 text-[9px] font-black uppercase tracking-wider text-nb-on-surface-variant/40">Sort By</div>
-                  <button
-                    onClick={() => { onSortChange("date"); setIsSortOpen(false); }}
-                    className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold transition-colors cursor-pointer ${sortBy === 'date' ? 'text-nb-primary bg-nb-primary/5' : 'text-nb-on-surface hover:bg-nb-surface-low'}`}
-                  >
-                    <Calendar size={14} />
-                    Date
-                  </button>
-                  <button
-                    onClick={() => { onSortChange("title"); setIsSortOpen(false); }}
-                    className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold transition-colors cursor-pointer ${sortBy === 'title' ? 'text-nb-primary bg-nb-primary/5' : 'text-nb-on-surface hover:bg-nb-surface-low'}`}
-                  >
-                    <FileText size={14} />
-                    Title
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Sort Direction Toggle */}
-          <button
-            onClick={onSortDirectionToggle}
-            className="p-1.5 bg-nb-surface-low hover:bg-nb-surface-mid border border-nb-outline-variant/60 rounded-lg text-nb-on-surface transition-all cursor-pointer shadow-xs"
-            title={`Sort Direction: ${sortDirection.toUpperCase()}`}
-          >
-            {sortDirection === "asc" ? <SortAsc size={15} className="text-nb-primary" /> : <SortDesc size={15} className="text-nb-primary" />}
-          </button>
-
-          {/* Date Filter Menu */}
-          <div className="relative">
-            <button
-              onClick={() => { setIsFilterOpen(!isFilterOpen); setIsSortOpen(false); }}
-              className={`p-1.5 rounded-lg border transition-all cursor-pointer shadow-xs flex items-center gap-1 ${dateRange ? 'bg-nb-primary/10 border-nb-primary/30 text-nb-primary' : 'bg-nb-surface-low hover:bg-nb-surface-mid border-nb-outline-variant/60 text-nb-on-surface'}`}
-              title="Filter by Date Range"
-            >
-              <CalendarDays size={15} className={dateRange ? 'text-nb-primary' : ''} />
-              {dateRange && <span className="w-1.5 h-1.5 rounded-full bg-nb-primary" />}
-            </button>
-
-            {isFilterOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setIsFilterOpen(false)} />
-                <div className="absolute top-full right-0 mt-1.5 w-64 bg-nb-surface border border-nb-outline-variant rounded-2xl shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-3">
-                  <div className="flex items-center justify-between border-b border-nb-outline-variant/40 pb-2">
-                    <span className="text-xs font-black uppercase tracking-wider text-nb-on-surface">Date Filter</span>
-                    {dateRange && (
-                      <button
-                        onClick={() => { onDateRangeChange(null); setIsFilterOpen(false); }}
-                        className="text-[10px] font-bold text-red-500 hover:underline cursor-pointer"
-                      >
-                        Reset
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <div>
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-nb-on-surface-variant block mb-1">Start Date</label>
-                      <input
-                        type="date"
-                        defaultValue={dateRange?.start || ""}
-                        id="filter-start-date"
-                        className="w-full bg-nb-surface-low border border-nb-outline-variant/60 rounded-xl px-2.5 py-1.5 text-xs text-nb-on-surface focus:outline-none focus:border-nb-primary"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-nb-on-surface-variant block mb-1">End Date</label>
-                      <input
-                        type="date"
-                        defaultValue={dateRange?.end || ""}
-                        id="filter-end-date"
-                        className="w-full bg-nb-surface-low border border-nb-outline-variant/60 rounded-xl px-2.5 py-1.5 text-xs text-nb-on-surface focus:outline-none focus:border-nb-primary"
-                      />
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      const start = (document.getElementById("filter-start-date") as HTMLInputElement)?.value;
-                      const end = (document.getElementById("filter-end-date") as HTMLInputElement)?.value;
-                      if (start || end) {
-                        onDateRangeChange({ start, end });
-                      } else {
-                        onDateRangeChange(null);
-                      }
-                      setIsFilterOpen(false);
-                    }}
-                    className="w-full bg-nb-primary hover:bg-nb-primary-dim text-white font-bold py-2 rounded-xl text-xs transition-all shadow-md shadow-nb-primary/20 cursor-pointer"
-                  >
-                    Apply Filter
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+        {/* Sort Direction Toggle */}
+        <button
+          onClick={onSortDirectionToggle}
+          className="p-1.5 bg-nb-surface-low hover:bg-nb-surface-mid border border-nb-outline-variant/60 rounded-lg text-nb-on-surface transition-all cursor-pointer shadow-xs"
+          title={`Sort Direction: ${sortDirection.toUpperCase()}`}
+        >
+          {sortDirection === "asc" ? <SortAsc size={15} className="text-nb-primary" /> : <SortDesc size={15} className="text-nb-primary" />}
+        </button>
       </div>
 
       {/* Entries and Templates Content Area */}
@@ -505,7 +419,7 @@ export default function FileExplorer({
                 )}
               </div>
             }
-            empty={search ? "No matches found." : "No entries yet."}
+            empty="No entries yet."
             hasItems={regularEntries.length > 0}
             className={isEntriesCollapsed ? "shrink-0" : "flex-1"}
           >
@@ -634,9 +548,9 @@ export default function FileExplorer({
       {/* Context Menu */}
       {contextMenu && (
         <>
-          <div className="fixed inset-0 z-[1100]" onClick={() => setContextMenu(null)} onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }} />
+          <div className="fixed inset-0 z-1100" onClick={() => setContextMenu(null)} onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }} />
           <div
-            className="fixed z-[1200] w-56 bg-nb-surface border border-nb-outline-variant rounded-2xl shadow-2xl py-2 animate-in fade-in zoom-in-95 duration-200"
+            className="fixed z-1200 w-56 bg-nb-surface border border-nb-outline-variant rounded-2xl shadow-2xl py-2 animate-in fade-in zoom-in-95 duration-200"
             style={{ left: Math.min(contextMenu.x, window.innerWidth - 240), top: Math.min(contextMenu.y, window.innerHeight - 300) }}
             onClick={e => e.stopPropagation()}
           >

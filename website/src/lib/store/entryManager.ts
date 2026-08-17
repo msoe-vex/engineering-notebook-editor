@@ -17,7 +17,7 @@ export class EntryManager {
   }
 
   async openEntry(id: string) {
-    this.store.debouncedPersist.flush();
+    await this.store.debouncedPersist.flush();
     const meta = this.store.metadata.entries[id];
 
     if (!meta) {
@@ -178,7 +178,7 @@ export class EntryManager {
 
   async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null; date: string }) {
     this.updateDraft(tiptapContent, info);
-    this.store.debouncedPersist.flush();
+    await this.store.debouncedPersist.flush();
   }
 
   async saveDraft(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null; date: string }) {
@@ -232,7 +232,7 @@ export class EntryManager {
     this.store.notifyStateChange();
     events.emit(EventNames.ENTRY_UPDATED, { id, ...info });
 
-    if (info.author && info.author !== existingEntry.author) {
+    if (info.author) {
       localStorage.setItem("nb-last-author", info.author);
     }
 
@@ -318,12 +318,12 @@ export class EntryManager {
     return id;
   }
 
-  async duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string }): Promise<string> {
+  async duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string; author?: string; phase?: number | null; date?: string }): Promise<string> {
     const sourceMeta = this.store.metadata.entries[sourceId];
     if (!sourceMeta) throw new Error("Source entry not found");
 
-    // Flush any pending debounced edits first
-    this.store.debouncedPersist.flush();
+    // Flush any pending debounced edits first and wait for the save to complete
+    await this.store.debouncedPersist.flush();
 
     // 1. Get raw content JSON from memory or disk
     let contentJson: TipTapNode = { type: "doc", content: [{ type: "paragraph" }] };
@@ -346,6 +346,7 @@ export class EntryManager {
 
     const newId = generateUUID();
     const createdAt = new Date().toISOString();
+    const todayDate = createdAt.split('T')[0];
     const newPath = `${ENTRIES_DIR}/${newId}.json`;
     const newLatexPath = `${LATEX_DIR}/${newId}.tex`;
 
@@ -354,17 +355,37 @@ export class EntryManager {
     if (!newTitle) {
       if (options?.asTemplate && !sourceMeta.isTemplate) {
         newTitle = `${sourceMeta.title || "Untitled"} Template`;
+      } else if (!isTemplate && sourceMeta.isTemplate) {
+        newTitle = sourceMeta.title || "New Entry";
       } else {
         newTitle = `${sourceMeta.title || "Untitled"} (Copy)`;
       }
     }
 
+    const lastUsedAuthor = (typeof window !== "undefined" ? localStorage.getItem("nb-last-author") : null) || "";
+
+    const author = options?.author !== undefined
+      ? options.author
+      : (!isTemplate && sourceMeta.isTemplate)
+      ? (lastUsedAuthor || sourceMeta.author || "")
+      : (sourceMeta.author || lastUsedAuthor);
+
+    const phase = options?.phase !== undefined
+      ? options.phase
+      : (sourceMeta.phase ?? null);
+
+    const date = options?.date !== undefined
+      ? options.date
+      : (!isTemplate && sourceMeta.isTemplate)
+      ? todayDate
+      : (isTemplate ? (sourceMeta.date || todayDate) : todayDate);
+
     const newEntry: EntryMetadata = {
       id: newId,
       title: newTitle,
-      author: sourceMeta.author || localStorage.getItem("nb-last-author") || "",
-      phase: sourceMeta.phase ?? null,
-      date: isTemplate ? (sourceMeta.date || createdAt.split('T')[0]) : createdAt.split('T')[0],
+      author,
+      phase,
+      date,
       createdAt,
       updatedAt: createdAt,
       filename: newPath,
@@ -373,8 +394,15 @@ export class EntryManager {
       assets: sourceMeta.assets ? [...sourceMeta.assets] : undefined
     };
 
-    const wrapper = { version: 3, content: dehydrateAssets(contentJson) };
+    const { cleanDoc, newAssets } = await dehydrateAssets(contentJson, newEntry.assets || []);
+    const wrapper = { version: 3, content: cleanDoc };
     const jsonStr = JSON.stringify(wrapper, null, 2);
+
+    // Merge any freshly extracted asset paths into metadata
+    if (newAssets.length > 0) {
+      const assetPaths = newAssets.map(a => a.path);
+      newEntry.assets = [...new Set([...(newEntry.assets || []), ...assetPaths])];
+    }
 
     const resourceTypes = buildResourceTypeIndex(this.store.metadata.entries, sourceMeta.resources, newId);
     const newLatex = generateEntryLatex(
@@ -399,6 +427,13 @@ export class EntryManager {
     this.store.notifyStateChange();
 
     this.store.enqueue(async () => {
+      // Persist any new asset files
+      for (const asset of newAssets) {
+        await this.persistFile(asset.path, asset.base64, `Asset: ${asset.path}`, true);
+        const { getMimeTypeFromExtension } = await import("../utils");
+        const dataUrl = `data:${getMimeTypeFromExtension(asset.path)};base64,${asset.base64}`;
+        this.store.assetCache.set(asset.path, dataUrl);
+      }
       await this.persistFile(newPath, jsonStr, `Create entry: ${newTitle}`);
       await this.persistFile(newLatexPath, newLatex, `Init LaTeX for: ${newTitle}`);
       await this.persistFile(INDEX_PATH, JSON.stringify(this.store.metadata, null, 2), "Update notebook metadata");
@@ -408,6 +443,7 @@ export class EntryManager {
     this.store.navigateTo({ entry: newId });
     return newId;
   }
+
 
   async createTemplate(templateData?: Partial<EntryMetadata>): Promise<string> {
     const id = generateUUID();
@@ -452,9 +488,16 @@ export class EntryManager {
   }
 
   async createEntryFromTemplate(templateId: string): Promise<string> {
+    const templateMeta = this.store.metadata.entries[templateId];
+    const lastAuthor = (typeof window !== "undefined" ? localStorage.getItem("nb-last-author") : null) || "";
+    const todayDate = new Date().toISOString().split('T')[0];
+
     return this.duplicateEntry(templateId, {
       asTemplate: false,
-      title: this.store.metadata.entries[templateId]?.title || "New Entry"
+      title: templateMeta?.title || "New Entry",
+      author: lastAuthor || templateMeta?.author || "",
+      phase: templateMeta?.phase ?? null,
+      date: todayDate
     });
   }
 
