@@ -590,7 +590,7 @@ export default function TeamEditor({
     const data = metadata.team || { teamName: "", teamNumber: "", organization: "", logo: "", logoOriginal: "", members: [] };
     return {
       ...data,
-      members: data.members.map(m => ({ ...m, id: m.id || generateUUID() }))
+      members: (data.members || []).map((m, idx) => ({ ...m, id: m.id || `member-${idx}` }))
     };
   }, [metadata.team]);
 
@@ -687,14 +687,14 @@ export default function TeamEditor({
   const lastInitialDataRef = useRef(initialData);
   const lastInitialPhasesRef = useRef(initialPhases);
 
-  // Sync state with latest metadata after external discard/load
+  // Sync state with latest metadata after external discard/load (only when user has no unsaved local changes)
   useEffect(() => {
     let cancelled = false;
     const initialDataStr = JSON.stringify(initialData);
     const lastInitialDataStr = JSON.stringify(lastInitialDataRef.current);
 
     if (initialDataStr !== lastInitialDataStr) {
-      if (JSON.stringify(initialData) !== JSON.stringify(teamData)) {
+      if (!hasChanges) {
         queueMicrotask(() => {
           if (!cancelled) setTeamData(initialData);
         });
@@ -702,7 +702,7 @@ export default function TeamEditor({
       lastInitialDataRef.current = initialData;
     }
     return () => { cancelled = true; };
-  }, [initialData, teamData]);
+  }, [initialData, hasChanges]);
 
   useEffect(() => {
     let cancelled = false;
@@ -710,7 +710,7 @@ export default function TeamEditor({
     const lastInitialPhasesStr = JSON.stringify(lastInitialPhasesRef.current);
 
     if (initialPhasesStr !== lastInitialPhasesStr) {
-      if (JSON.stringify(initialPhases) !== JSON.stringify(phases)) {
+      if (!hasChanges) {
         queueMicrotask(() => {
           if (!cancelled) setPhases(initialPhases);
         });
@@ -718,7 +718,7 @@ export default function TeamEditor({
       lastInitialPhasesRef.current = initialPhases;
     }
     return () => { cancelled = true; };
-  }, [initialPhases, phases]);
+  }, [initialPhases, hasChanges]);
 
   const handleFieldChange = (field: keyof TeamMetadata, value: string) => {
     setTeamData(prev => ({ ...prev, [field]: value }));
