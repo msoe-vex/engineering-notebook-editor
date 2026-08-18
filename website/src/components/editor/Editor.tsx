@@ -36,6 +36,7 @@ const LatexPreview = dynamic(() => import("./LatexPreview"), {
 import { getLocalDateString } from "@/lib/metadata";
 import { generateEntryLatex } from "@/lib/latex";
 import { getPhases, getPhaseConfig } from "@/lib/phases";
+import { store } from "@/lib/store";
 import AutocompleteInput from "./ui/AutocompleteInput";
 import DatePicker from "./ui/DatePicker";
 import { extractResources, extractReferences, TipTapNode, ensureResourceIds, buildResourceTypeIndex, validateEntry } from "@/lib/metadata";
@@ -1002,7 +1003,14 @@ const EditorContent = React.memo(function EditorContent({
           const originalPath = `${ASSETS_ORIGINAL_DIR}/${originalHash}.${originalExt}`;
           const newPath = `${ASSETS_COMPRESSED_DIR}/${compressedHash}.jpg`;
 
-          insertBlock(editor, { type: "image", attrs: { id: generateUUID(), src: compressed.dataUrl, originalSrc: dataUrl, filePath: newPath, originalFilePath: originalPath, title: "" } });
+          store.enqueue(async () => {
+            await store.persistFile(originalPath, originalBase64, `Original Asset: ${originalPath}`, true);
+            await store.persistFile(newPath, compressed.base64, `Compressed Asset: ${newPath}`, true);
+            store.assetCache.set(originalPath, dataUrl);
+            store.assetCache.set(newPath, compressed.dataUrl);
+          });
+
+          insertBlock(editor, { type: "image", attrs: { id: generateUUID(), src: compressed.dataUrl, filePath: newPath, originalFilePath: originalPath, title: "" } });
 
         };
         reader.readAsDataURL(file);
@@ -1014,11 +1022,11 @@ const EditorContent = React.memo(function EditorContent({
   return (
     <div className="flex flex-col h-full bg-nb-surface overflow-hidden scrollbar-hide">
       {/* ── Fixed Header ────────────────────────────────────────── */}
-      <div className="shrink-0 border-b border-nb-outline-variant bg-nb-surface/80 backdrop-blur-md z-[150]">
+      <div className="shrink-0 border-b border-nb-outline-variant bg-nb-surface/80 backdrop-blur-md z-150">
         <div className="w-full">
 
           {/* Row 1: Menu Bar */}
-          <div className="px-4 md:px-6 min-h-[2.5rem] py-1 flex flex-wrap items-center gap-2 border-b border-nb-outline-variant/30 relative z-[170]">
+          <div className="px-4 md:px-6 min-h-10 py-1 flex flex-wrap items-center gap-2 border-b border-nb-outline-variant/30 relative z-170">
             <button
               onClick={() => setIsHeaderCollapsed(!isHeaderCollapsed)}
               className="p-1.5 rounded-lg hover:bg-nb-surface-mid text-nb-on-surface-variant transition-colors group cursor-pointer shrink-0"
@@ -1124,7 +1132,7 @@ const EditorContent = React.memo(function EditorContent({
               />
             </MenuItem>
 
-            <div className="flex-1 min-w-[20px]" />
+            <div className="flex-1 min-w-5" />
 
             <div className="flex items-center gap-2 mr-4">
               <ViewToggle viewMode={viewMode} onSetViewMode={onSetViewMode} />
@@ -1154,8 +1162,8 @@ const EditorContent = React.memo(function EditorContent({
             <div className="min-h-0 overflow-hidden">
               <div className={`flex flex-col transition-all duration-500 ease-in-out ${isHeaderCollapsed ? '-translate-y-6' : 'translate-y-0'}`}>
                 {/* Row 2: Metadata */}
-                <div className="px-4 md:px-6 py-2.5 flex flex-wrap items-center gap-3 relative z-[160] shrink-0">
-                  <div className="flex-1 min-w-[280px]">
+                <div className="px-4 md:px-6 py-2.5 flex flex-wrap items-center gap-3 relative z-160 shrink-0">
+                  <div className="flex-1 min-w-70">
                     <AutocompleteInput
                       type="text"
                       value={openFile.title}
@@ -1185,11 +1193,11 @@ const EditorContent = React.memo(function EditorContent({
                     <DatePicker
                       value={openFile.date || ""}
                       onChange={(val) => updateDraft(null, { date: val })}
-                      className="h-9 flex-1 min-w-[140px]"
+                      className="h-9 flex-1 min-w-35"
                     />
 
                     <div
-                      className="h-9 flex-1 min-w-[160px] flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50"
+                      className="h-9 flex-1 min-w-40 flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50"
                     >
                       <User size={15} className="text-nb-primary drop-shadow-sm shrink-0" />
                       <AutocompleteInput
@@ -1206,7 +1214,7 @@ const EditorContent = React.memo(function EditorContent({
 
                     <div
                       ref={phaseButtonRef}
-                      className="relative h-9 flex-1 min-w-[240px] flex items-center gap-2.5 px-3 rounded-xl border border-nb-outline-variant/30 bg-nb-surface-low transition-all"
+                      className="relative h-9 flex-1 min-w-60 flex items-center gap-2.5 px-3 rounded-xl border border-nb-outline-variant/30 bg-nb-surface-low transition-all"
                     >
                       <div
                         className="absolute inset-0 z-10 cursor-pointer"

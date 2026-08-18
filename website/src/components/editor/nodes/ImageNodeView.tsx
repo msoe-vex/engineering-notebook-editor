@@ -259,7 +259,6 @@ export const ImageWithCaption = TiptapImage.extend<ImageOptions & { dbName: stri
       title: { default: "" },
       filePath: { default: null },
       originalFilePath: { default: null },
-      originalSrc: { default: null },
       caption: { default: "" },
       width: { default: "100%" },
     };

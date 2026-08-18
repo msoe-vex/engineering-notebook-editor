@@ -360,15 +360,7 @@ export async function dehydrateAssets(
           nextAttrs.filePath = compressedPath;
         }
         if (originalPath) nextAttrs.originalFilePath = originalPath;
-        delete nextAttrs.originalSrc;
 
-        return { ...node, attrs: nextAttrs };
-      }
-
-      // If already a persisted image node with file paths, make sure temporary originalSrc is stripped
-      if (node.attrs && 'originalSrc' in node.attrs) {
-        const nextAttrs = { ...node.attrs };
-        delete nextAttrs.originalSrc;
         return { ...node, attrs: nextAttrs };
       }
     }

@@ -444,12 +444,19 @@ const RichTextArea = ({
       const imageAttrs = {
         id: generateUUID(),
         src: compressed.dataUrl, // Use compressed preview
-        originalSrc: dataUrl,
         alt: "",
         title: "",
         filePath: newPath,
         originalFilePath: originalPath,
       };
+
+      // Persist both original and compressed assets immediately in background
+      store.enqueue(async () => {
+        await store.persistFile(originalPath, originalBase64, `Original Asset: ${originalPath}`, true);
+        await store.persistFile(newPath, compressed.base64, `Compressed Asset: ${newPath}`, true);
+        store.assetCache.set(originalPath, dataUrl);
+        store.assetCache.set(newPath, compressed.dataUrl);
+      });
 
       if (editor?.state.selection instanceof NodeSelection) {
         editor.chain().focus().insertContentAt(editor.state.selection.to, {
@@ -763,9 +770,9 @@ const RichTextArea = ({
           </div>
         )}
 
-        <div className="bg-nb-surface min-h-[800px] relative">
+        <div className="bg-nb-surface min-h-200 relative">
           <div
-            className={`max-w-5xl mx-auto h-full ${isCtrlPressed ? '[&_a]:!cursor-pointer' : ''}`}
+            className={`max-w-5xl mx-auto h-full ${isCtrlPressed ? '[&_a]:cursor-pointer!' : ''}`}
             onMouseDown={() => setShowLinkPopup(false)}
           >
             <EditorContent editor={editor} className="h-full" />
