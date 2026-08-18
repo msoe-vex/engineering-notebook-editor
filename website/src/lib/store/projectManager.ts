@@ -298,6 +298,7 @@ export class ProjectManager {
       const metaStr = await readLocalFile(this.store.dirHandle, INDEX_PATH);
       const parsed = JSON.parse(metaStr);
       this.store.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...parsed });
+      this.store.baseMetadata = this.store.metadata;
     } catch {
       isNew = true;
       try {
@@ -412,6 +413,10 @@ export class ProjectManager {
 
     let isNew = false;
     let mergedEntries = [...entryFiles];
+
+    if (remoteMetaStr) {
+      this.store.baseMetadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...JSON.parse(remoteMetaStr) });
+    }
 
     if (pendingMeta?.content) {
       const parsed = JSON.parse(pendingMeta.content);

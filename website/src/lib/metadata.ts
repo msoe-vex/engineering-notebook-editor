@@ -364,6 +364,13 @@ export async function dehydrateAssets(
 
         return { ...node, attrs: nextAttrs };
       }
+
+      // If already a persisted image node with file paths, make sure temporary originalSrc is stripped
+      if (node.attrs && 'originalSrc' in node.attrs) {
+        const nextAttrs = { ...node.attrs };
+        delete nextAttrs.originalSrc;
+        return { ...node, attrs: nextAttrs };
+      }
     }
     if (node.content) {
       const newContent = await Promise.all(node.content.map(walk));

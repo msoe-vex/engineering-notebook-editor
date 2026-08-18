@@ -259,8 +259,8 @@ export default function Sidebar({
       />
 
       {/* Main Tab Panel */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden min-h-0 bg-nb-surface-low">
-        {activeTab === "explorer" && (
+      <div className="flex-1 flex flex-col h-full overflow-hidden min-h-0 bg-nb-surface-low relative">
+        <div className={`flex-1 flex flex-col h-full overflow-hidden ${activeTab === "explorer" ? "" : "hidden"}`}>
           <FileExplorer
             entries={filteredEntries}
             activePath={openFile?.path || null}
@@ -286,20 +286,20 @@ export default function Sidebar({
             onSortDirectionToggle={() => setSortDirection(prev => prev === "asc" ? "desc" : "asc")}
             notebookMetadata={metadata}
           />
-        )}
+        </div>
 
-        {activeTab === "search" && (
+        <div className={`flex-1 flex flex-col h-full overflow-hidden ${activeTab === "search" ? "" : "hidden"}`}>
           <SearchTab
             entries={augmentedEntries}
             onSelectEntry={handleOpenEntry}
           />
-        )}
+        </div>
 
-        {activeTab === "git" && (
+        <div className={`flex-1 flex flex-col h-full overflow-hidden ${activeTab === "git" ? "" : "hidden"}`}>
           <VersionControlTab
             showConfirm={showConfirm}
           />
-        )}
+        </div>
       </div>
     </div>
   );

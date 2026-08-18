@@ -21,6 +21,7 @@ class WorkspaceStore implements IWorkspaceStore {
   public entries: ExplorerFile[] = [];
   public workspaceVersion: number = 0;
   public metadata: NotebookMetadata = EMPTY_METADATA;
+  public baseMetadata: NotebookMetadata | null = null;
   public currentProjectId: string | null = null;
   public currentProject: Project | null = null;
   public hasEntryInUrl: boolean = false;
@@ -293,6 +294,7 @@ class WorkspaceStore implements IWorkspaceStore {
   async commitAll(config: GitHubConfig, customMessage?: string) {
     this.isCommitting = true;
     this.notifyStateChange();
+    const currentOpenId = this.openFile?.id ?? null;
     try {
       await this.queue;
       const dbName = this.getDBName();
@@ -340,7 +342,7 @@ class WorkspaceStore implements IWorkspaceStore {
         try {
           const remoteMetadata = JSON.parse(remoteIndexContent);
           const baseIndex = await this.getCommittedFileContent(INDEX_PATH);
-          const baseMetadata = baseIndex ? JSON.parse(baseIndex) : null;
+          const baseMetadata = this.baseMetadata || (baseIndex ? JSON.parse(baseIndex) : null);
           const { merged, hasCollisions, collidingEntryIds } = mergeNotebookMetadata(baseMetadata, this.metadata, remoteMetadata);
 
           if (hasCollisions && collidingEntryIds.length > 0) {
@@ -391,6 +393,8 @@ class WorkspaceStore implements IWorkspaceStore {
 
                 await removeStaged(dbName, entryJsonPath);
                 await removeStaged(dbName, entryTexPath);
+                this.lastSavedContents.delete(entryJsonPath);
+                this.lastSavedContents.delete(entryTexPath);
               } else if (action === "duplicate") {
                 // Keep remote version at entryId, duplicate local version as a new entry with copy title
                 const localMeta = this.metadata.entries[entryId];
@@ -432,16 +436,46 @@ class WorkspaceStore implements IWorkspaceStore {
           
           this.metadata = merged;
           const mergedIndexStr = JSON.stringify(merged, null, 2);
+          const remoteNormalizedStr = JSON.stringify(remoteMetadata, null, 2);
+          const isMetadataModified = mergedIndexStr !== remoteNormalizedStr;
           
           const indexChangeIdx = gitChanges.findIndex(c => c.path === remoteIndexPath);
-          if (indexChangeIdx >= 0) {
-            gitChanges[indexChangeIdx].content = mergedIndexStr;
-          } else if (mergedIndexStr !== remoteIndexContent) {
-            gitChanges.push({ path: remoteIndexPath, content: mergedIndexStr, isBinary: false });
+          if (isMetadataModified) {
+            if (indexChangeIdx >= 0) {
+              gitChanges[indexChangeIdx].content = mergedIndexStr;
+            } else {
+              gitChanges.push({ path: remoteIndexPath, content: mergedIndexStr, isBinary: false });
+            }
+          } else {
+            // If merged metadata is identical to remote, remove notebook.json from gitChanges and staged
+            if (indexChangeIdx >= 0) {
+              gitChanges.splice(indexChangeIdx, 1);
+            }
+            await removeStaged(dbName, INDEX_PATH);
+            this.lastSavedContents.delete(INDEX_PATH);
           }
         } catch (mergeErr) {
           console.warn("Failed to 3-way merge remote metadata:", mergeErr);
         }
+      }
+
+      if (gitChanges.length === 0) {
+        await clearAllPending(dbName);
+        await this.reloadWorkspace();
+        this.workspaceVersion++;
+
+        if (currentOpenId) {
+          if (this.metadata.entries[currentOpenId]) {
+            await this.openEntry(currentOpenId);
+          } else {
+            this.openFile = null;
+            this.navigateTo({ entry: null });
+          }
+        }
+
+        await this.refreshPending();
+        events.emit(EventNames.SHOW_NOTIFICATION, { message: "Local changes discarded. Workspace updated to latest GitHub version.", type: "info" });
+        return;
       }
 
       const finalMsg = customMessage
@@ -449,8 +483,20 @@ class WorkspaceStore implements IWorkspaceStore {
         : `Update notebook: ${gitChanges.length} ${gitChanges.length === 1 ? "file" : "files"}`;
 
       await commitChanges(config, gitChanges, finalMsg);
-      await this.reloadWorkspace();
       await clearAllPending(dbName);
+      await this.reloadWorkspace();
+      this.workspaceVersion++;
+
+      // If the currently open file was affected by the commit or conflict resolution, reload it fresh from remote
+      if (currentOpenId) {
+        if (this.metadata.entries[currentOpenId]) {
+          await this.openEntry(currentOpenId);
+        } else {
+          this.openFile = null;
+          this.navigateTo({ entry: null });
+        }
+      }
+
       await this.refreshPending();
     } finally {
       this.isCommitting = false;

@@ -41,6 +41,7 @@ export interface IWorkspaceStore {
   entries: ExplorerFile[];
   workspaceVersion: number;
   metadata: NotebookMetadata;
+  baseMetadata: NotebookMetadata | null;
   currentProjectId: string | null;
   currentProject: Project | null;
   hasEntryInUrl: boolean;
