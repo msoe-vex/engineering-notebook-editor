@@ -658,6 +658,96 @@ export class EntryManager {
   }
 }
 
+  async discardTeamChanges() {
+    if (this.store.mode !== "github" && this.store.mode !== "temporary") return;
+    this.store.isDiscarding = true;
+    this.store.notifyStateChange();
+
+    try {
+      const dbName = this.store.getDBName();
+      await this.store.queue;
+
+      // 1. Remove staged team.tex
+      await removeStaged(dbName, TEAM_PATH);
+      this.store.lastSavedContents.delete(TEAM_PATH);
+
+      // 2. Fetch committed notebook.json to restore original team data
+      const committedIndex = await this.getCommittedFileContent(INDEX_PATH);
+      let committedTeam: import("../metadata").TeamMetadata | undefined = undefined;
+      if (committedIndex) {
+        try {
+          const parsed = JSON.parse(committedIndex);
+          committedTeam = parsed.team;
+        } catch {}
+      }
+
+      this.store.metadata = validateNotebookIntegrity({
+        ...this.store.metadata,
+        team: committedTeam
+      });
+
+      // 3. Update or clear staged notebook.json
+      const currentMetaStr = JSON.stringify(this.store.metadata, null, 2);
+      if (committedIndex && JSON.stringify(JSON.parse(committedIndex), null, 2) === currentMetaStr) {
+        await removeStaged(dbName, INDEX_PATH);
+        this.store.lastSavedContents.delete(INDEX_PATH);
+      } else {
+        await this.persistFile(INDEX_PATH, currentMetaStr, "Revert team metadata");
+      }
+
+      await this.store.updateLatexMetadata();
+      await this.refreshPending();
+    } finally {
+      this.store.isDiscarding = false;
+      this.store.notifyStateChange();
+    }
+  }
+
+  async discardPhaseChanges() {
+    if (this.store.mode !== "github" && this.store.mode !== "temporary") return;
+    this.store.isDiscarding = true;
+    this.store.notifyStateChange();
+
+    try {
+      const dbName = this.store.getDBName();
+      await this.store.queue;
+
+      // 1. Remove staged phases.tex
+      await removeStaged(dbName, PHASES_PATH);
+      this.store.lastSavedContents.delete(PHASES_PATH);
+
+      // 2. Fetch committed notebook.json to restore original phases
+      const committedIndex = await this.getCommittedFileContent(INDEX_PATH);
+      let committedPhases: import("../metadata").ProjectPhase[] | undefined = undefined;
+      if (committedIndex) {
+        try {
+          const parsed = JSON.parse(committedIndex);
+          committedPhases = parsed.phases;
+        } catch {}
+      }
+
+      this.store.metadata = validateNotebookIntegrity({
+        ...this.store.metadata,
+        phases: committedPhases
+      });
+
+      // 3. Update or clear staged notebook.json
+      const currentMetaStr = JSON.stringify(this.store.metadata, null, 2);
+      if (committedIndex && JSON.stringify(JSON.parse(committedIndex), null, 2) === currentMetaStr) {
+        await removeStaged(dbName, INDEX_PATH);
+        this.store.lastSavedContents.delete(INDEX_PATH);
+      } else {
+        await this.persistFile(INDEX_PATH, currentMetaStr, "Revert phases metadata");
+      }
+
+      await this.store.updateLatexMetadata();
+      await this.refreshPending();
+    } finally {
+      this.store.isDiscarding = false;
+      this.store.notifyStateChange();
+    }
+  }
+
   async discardPendingChanges() {
     if (this.store.mode !== "github" && this.store.mode !== "temporary") {
       return;
@@ -671,8 +761,9 @@ export class EntryManager {
       await this.store.queue;
       const previousOpenId = this.store.openFile?.id ?? null;
 
-      const { clearAllPending } = await import("../db");
+      const { clearAllPending, clearBaseMetadata } = await import("../db");
       await clearAllPending(dbName);
+      await clearBaseMetadata(dbName);
 
       // Drop in-memory drafts so reload/openEntry can't resurrect discarded text.
       this.store.lastSavedContents.clear();

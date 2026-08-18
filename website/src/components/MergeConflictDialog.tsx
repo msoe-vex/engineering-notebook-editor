@@ -1,7 +1,8 @@
-"use client";
-
 import React, { useState } from "react";
-import { AlertTriangle, X, Copy, CheckCircle2, RotateCcw, GitMerge } from "lucide-react";
+import { AlertTriangle, X, Copy, CheckCircle2, RotateCcw, GitMerge, GitCompare, ChevronDown, ChevronRight, FileText, Code } from "lucide-react";
+import { useWorkspace } from "@/hooks/useWorkspace";
+import DiffViewer from "./sidebar/DiffViewer";
+import { LATEX_DIR, ENTRIES_DIR } from "@/lib/constants";
 
 export type ConflictAction = "keep_local" | "keep_remote" | "duplicate";
 
@@ -30,6 +31,8 @@ export default function MergeConflictDialog({
   onResolve,
   onCancel
 }: MergeConflictDialogProps) {
+  const { getBaseFileContent, getFileContent } = useWorkspace();
+
   // Map of entryId -> chosen action. Default to 'duplicate' (safest: keep both).
   const [resolutions, setResolutions] = useState<Record<string, ConflictAction>>(() => {
     const initial: Record<string, ConflictAction> = {};
@@ -39,7 +42,19 @@ export default function MergeConflictDialog({
     return initial;
   });
 
+  const [expandedDiffs, setExpandedDiffs] = useState<Set<string>>(new Set());
+  const [diffMode, setDiffMode] = useState<Record<string, "latex" | "json">>({});
+
   if (!isOpen || conflicts.length === 0) return null;
+
+  const toggleDiff = (id: string) => {
+    setExpandedDiffs(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const setAction = (id: string, action: ConflictAction) => {
     setResolutions(prev => ({ ...prev, [id]: action }));
@@ -51,7 +66,7 @@ export default function MergeConflictDialog({
 
   return (
     <div className="fixed inset-0 z-500 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200 select-none">
-      <div className="bg-nb-surface border border-nb-outline-variant/60 rounded-2xl max-w-xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+      <div className="bg-nb-surface border border-nb-outline-variant/60 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="p-4 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
@@ -82,6 +97,9 @@ export default function MergeConflictDialog({
         <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
           {conflicts.map(item => {
             const currentAction = resolutions[item.id] || "duplicate";
+            const isDiffOpen = expandedDiffs.has(item.id);
+            const currentMode = diffMode[item.id] || "latex";
+            const targetPath = currentMode === "latex" ? `${LATEX_DIR}/${item.id}.tex` : `${ENTRIES_DIR}/${item.id}.json`;
 
             return (
               <div
@@ -98,6 +116,20 @@ export default function MergeConflictDialog({
                       ID: {item.id.slice(0, 8)}...
                     </span>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => toggleDiff(item.id)}
+                    className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg transition-colors cursor-pointer ${
+                      isDiffOpen
+                        ? "bg-nb-primary/15 text-nb-primary"
+                        : "text-nb-on-surface-variant hover:text-nb-on-surface hover:bg-nb-surface-high"
+                    }`}
+                  >
+                    <GitCompare size={12} />
+                    <span>{isDiffOpen ? "Hide Diff" : "View Diff"}</span>
+                    {isDiffOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                  </button>
                 </div>
 
                 {/* Local vs Remote Comparison Cards */}
@@ -111,6 +143,7 @@ export default function MergeConflictDialog({
                     <div className="font-bold text-[10px] text-nb-primary mb-1 uppercase tracking-wider">
                       Your Version
                     </div>
+                    <div>Title: <span className="font-medium text-nb-on-surface">{item.localTitle || "—"}</span></div>
                     <div>Author: <span className="font-medium text-nb-on-surface">{item.localAuthor || "—"}</span></div>
                     <div>Date: <span className="font-medium text-nb-on-surface">{item.localDate || "—"}</span></div>
                   </div>
@@ -124,10 +157,62 @@ export default function MergeConflictDialog({
                     <div className="font-bold text-[10px] text-purple-600 dark:text-purple-400 mb-1 uppercase tracking-wider">
                       GitHub Version
                     </div>
+                    <div>Title: <span className="font-medium text-nb-on-surface">{item.remoteTitle || "—"}</span></div>
                     <div>Author: <span className="font-medium text-nb-on-surface">{item.remoteAuthor || "—"}</span></div>
                     <div>Date: <span className="font-medium text-nb-on-surface">{item.remoteDate || "—"}</span></div>
                   </div>
                 </div>
+
+                {/* Inline Diff Preview */}
+                {isDiffOpen && (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-[9px] font-black uppercase tracking-wider text-nb-on-surface-variant/60">
+                        Comparing {currentMode === "latex" ? "LaTeX Content" : "JSON AST"}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setDiffMode(prev => ({ ...prev, [item.id]: "latex" }))}
+                          className={`flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded cursor-pointer transition-colors ${
+                            currentMode === "latex"
+                              ? "bg-nb-primary/20 text-nb-primary"
+                              : "text-nb-on-surface-variant/60 hover:text-nb-on-surface"
+                          }`}
+                        >
+                          <FileText size={10} />
+                          <span>LaTeX</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDiffMode(prev => ({ ...prev, [item.id]: "json" }))}
+                          className={`flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded cursor-pointer transition-colors ${
+                            currentMode === "json"
+                              ? "bg-nb-primary/20 text-nb-primary"
+                              : "text-nb-on-surface-variant/60 hover:text-nb-on-surface"
+                          }`}
+                        >
+                          <Code size={10} />
+                          <span>JSON</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <DiffViewer
+                      change={{
+                        path: targetPath,
+                        operation: "upsert",
+                        changeType: "update",
+                        content: "",
+                        label: `Diff ${targetPath}`,
+                        stagedAt: ""
+                      }}
+                      getBaseContent={getBaseFileContent}
+                      getFileContent={getFileContent}
+                      onClose={() => toggleDiff(item.id)}
+                    />
+                  </div>
+                )}
 
                 {/* Resolution Choice Pills */}
                 <div className="grid grid-cols-3 gap-1.5 pt-1">

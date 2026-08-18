@@ -113,6 +113,8 @@ export function useWorkspace() {
   const createEntryFromTemplate = useCallback((templateId: string) => store.createEntryFromTemplate(templateId), []);
   const discardPathChange = useCallback((path: string) => store.discardPathChange(path), []);
   const discardEntryChanges = useCallback((entryId: string) => store.discardEntryChanges(entryId), []);
+  const discardTeamChanges = useCallback(() => store.discardTeamChanges(), []);
+  const discardPhaseChanges = useCallback(() => store.discardPhaseChanges(), []);
   const getCompiledPdfUrl = useCallback(() => store.getCompiledPdfUrl(), []);
   const saveCompiledPdf = useCallback((pdf: Uint8Array) => store.saveCompiledPdf(pdf), []);
 
@@ -140,6 +142,8 @@ export function useWorkspace() {
     discardPendingChanges,
     discardPathChange,
     discardEntryChanges,
+    discardTeamChanges,
+    discardPhaseChanges,
     navigateTo,
     handleUrlChange,
     getFileContent,

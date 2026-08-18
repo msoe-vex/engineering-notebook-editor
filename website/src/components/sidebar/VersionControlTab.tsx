@@ -45,6 +45,8 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
     discardPendingChanges,
     discardPathChange,
     discardEntryChanges,
+    discardTeamChanges,
+    discardPhaseChanges,
     getBaseFileContent,
     navigateTo,
     openEntry
@@ -183,9 +185,15 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
     return groups;
   }, [pendingChanges, metadata]);
 
-  const handleCommit = useCallback(() => {
+  const handleCommit = useCallback(async () => {
     if (!config) return;
-    commitAll(config, commitMessage.trim() || undefined);
+    try {
+      await commitAll(config, commitMessage.trim() || undefined);
+      setCommitMessage("");
+      setOpenDiffPaths(new Set());
+    } catch (err) {
+      console.error("Commit failed:", err);
+    }
   }, [config, commitAll, commitMessage]);
 
   const handleDiscardAll = useCallback(() => {
@@ -206,6 +214,10 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
       () => {
         if (group.type === "entry" && group.entryId) {
           discardEntryChanges(group.entryId);
+        } else if (group.type === "team") {
+          discardTeamChanges();
+        } else if (group.type === "phases") {
+          discardPhaseChanges();
         } else {
           for (const change of group.changes) {
             discardPathChange(change.path);
@@ -214,7 +226,7 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
       },
       "danger"
     );
-  }, [showConfirm, discardEntryChanges, discardPathChange]);
+  }, [showConfirm, discardEntryChanges, discardTeamChanges, discardPhaseChanges, discardPathChange]);
 
   if (mode !== "github") {
     const isTemp = mode === "temporary";

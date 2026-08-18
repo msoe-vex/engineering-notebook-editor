@@ -1,12 +1,12 @@
 import { NotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, EntryMetadata, hydrateTeamAssets, TipTapNode, buildResourceTypeIndex, extractResources, mergeNotebookMetadata } from "./metadata";
-import { INDEX_PATH, ENTRIES_DIR, LATEX_DIR } from "./constants";
-import { generateEntryLatex } from "./latex";
+import { INDEX_PATH, ENTRIES_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from "./constants";
+import { generateEntryLatex, generateTeamLatex, generatePhasesLatex, generateAllEntriesLatex } from "./latex";
 import { ExplorerFile, GitHubConfig, TeamTab } from "./types";
-import { Project, getAllPending, removeStaged, PendingChange } from "./db";
+import { Project, getAllPending, removeStaged, PendingChange, clearBaseMetadata } from "./db";
 import { events, EventNames } from "./events";
 import { WorkspaceMode, OpenFileState, IWorkspaceStore, DebouncedFunction, ImportOptions } from "./store/types";
 export type { WorkspaceMode, OpenFileState, DebouncedFunction };
-import { debounceWithFlush } from "./utils";
+import { debounceWithFlush, formatDateMonthYear } from "./utils";
 import { ProjectManager } from "./store/projectManager";
 import { EntryManager } from "./store/entryManager";
 import { TransferManager } from "./store/transferManager";
@@ -218,6 +218,14 @@ class WorkspaceStore implements IWorkspaceStore {
 
   public async discardEntryChanges(entryId: string) {
     return this.entryManager.discardEntryChanges(entryId);
+  }
+
+  public async discardTeamChanges() {
+    return this.entryManager.discardTeamChanges();
+  }
+
+  public async discardPhaseChanges() {
+    return this.entryManager.discardPhaseChanges();
   }
 
   public async deleteEntry(file: ExplorerFile) {
@@ -452,6 +460,68 @@ class WorkspaceStore implements IWorkspaceStore {
             await removeStaged(dbName, INDEX_PATH);
             this.lastSavedContents.delete(INDEX_PATH);
           }
+
+          // Re-generate derivative LaTeX files from the merged metadata
+          const teamInfo = {
+            teamName: "",
+            teamNumber: "",
+            organization: "",
+            members: [],
+            ...(merged.team || {}),
+          };
+          const entryDates = Object.values(merged.entries)
+            .map(e => e.date)
+            .filter(Boolean)
+            .sort();
+          if (entryDates.length > 0) {
+            teamInfo.startDate = formatDateMonthYear(entryDates[0]);
+            teamInfo.endDate = formatDateMonthYear(entryDates[entryDates.length - 1]);
+          }
+
+          const teamTexContent = generateTeamLatex(teamInfo);
+          const phasesTexContent = generatePhasesLatex(merged.phases || []);
+          const entriesTexContent = generateAllEntriesLatex(merged);
+
+          const fullTeamPath = this.getFullPath(TEAM_PATH);
+          const fullPhasesPath = this.getFullPath(PHASES_PATH);
+          const fullEntriesTexPath = this.getFullPath(ENTRIES_INDEX_PATH);
+
+          const updateOrPushChange = (filePath: string, content: string) => {
+            const idx = gitChanges.findIndex(c => c.path === filePath);
+            if (idx >= 0) {
+              gitChanges[idx].content = content;
+            } else {
+              gitChanges.push({ path: filePath, content, isBinary: false });
+            }
+          };
+
+          // Compare against remote base to avoid sending unchanged derivative files
+          const remoteTeamTex = await this.transferManager.getBaseFileContent(TEAM_PATH);
+          if (remoteTeamTex !== teamTexContent) {
+            updateOrPushChange(fullTeamPath, teamTexContent);
+          } else {
+            const idx = gitChanges.findIndex(c => c.path === fullTeamPath);
+            if (idx >= 0) gitChanges.splice(idx, 1);
+            await removeStaged(dbName, TEAM_PATH);
+          }
+
+          const remotePhasesTex = await this.transferManager.getBaseFileContent(PHASES_PATH);
+          if (remotePhasesTex !== phasesTexContent) {
+            updateOrPushChange(fullPhasesPath, phasesTexContent);
+          } else {
+            const idx = gitChanges.findIndex(c => c.path === fullPhasesPath);
+            if (idx >= 0) gitChanges.splice(idx, 1);
+            await removeStaged(dbName, PHASES_PATH);
+          }
+
+          const remoteEntriesTex = await this.transferManager.getBaseFileContent(ENTRIES_INDEX_PATH);
+          if (remoteEntriesTex !== entriesTexContent) {
+            updateOrPushChange(fullEntriesTexPath, entriesTexContent);
+          } else {
+            const idx = gitChanges.findIndex(c => c.path === fullEntriesTexPath);
+            if (idx >= 0) gitChanges.splice(idx, 1);
+            await removeStaged(dbName, ENTRIES_INDEX_PATH);
+          }
         } catch (mergeErr) {
           console.warn("Failed to 3-way merge remote metadata:", mergeErr);
         }
@@ -459,6 +529,7 @@ class WorkspaceStore implements IWorkspaceStore {
 
       if (gitChanges.length === 0) {
         await clearAllPending(dbName);
+        await clearBaseMetadata(dbName);
         await this.reloadWorkspace();
         this.workspaceVersion++;
 
@@ -482,6 +553,7 @@ class WorkspaceStore implements IWorkspaceStore {
 
       await commitChanges(config, gitChanges, finalMsg);
       await clearAllPending(dbName);
+      await clearBaseMetadata(dbName);
       await this.reloadWorkspace();
       this.workspaceVersion++;
 

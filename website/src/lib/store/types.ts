@@ -108,6 +108,8 @@ export interface IWorkspaceStore {
   discardPendingChanges(): Promise<void>;
   discardPathChange(path: string): Promise<void>;
   discardEntryChanges(entryId: string): Promise<void>;
+  discardTeamChanges(): Promise<void>;
+  discardPhaseChanges(): Promise<void>;
   deleteEntry(file: ExplorerFile): Promise<void>;
   updateLatexMetadata(): Promise<void>;
   saveTeam(team: TeamMetadata, phases?: ProjectPhase[]): Promise<void>;

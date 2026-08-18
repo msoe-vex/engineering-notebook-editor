@@ -583,7 +583,8 @@ export default function TeamEditor({
   const {
     metadata,
     saveTeam,
-    setPendingSave
+    setPendingSave,
+    isDiscarding
   } = useWorkspace();
 
   const initialData = useMemo(() => {
@@ -631,14 +632,19 @@ export default function TeamEditor({
   );
 
   useEffect(() => {
+    if (isDiscarding) {
+      setPendingSave(false);
+      return;
+    }
     if (hasChanges) {
       setPendingSave(true);
     }
-  }, [hasChanges, setPendingSave]);
+  }, [hasChanges, isDiscarding, setPendingSave]);
 
   useEffect(() => {
+    if (isDiscarding) return;
     const timer = setTimeout(() => {
-      if (hasChanges) {
+      if (hasChanges && !isDiscarding) {
         saveTeam(teamData, phases).then(() => {
           setSaveSuccess(true);
           setPendingSave(false);
@@ -646,7 +652,7 @@ export default function TeamEditor({
       }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [teamData, phases, hasChanges, saveTeam, setPendingSave]);
+  }, [teamData, phases, hasChanges, isDiscarding, saveTeam, setPendingSave]);
 
   const latestDataRef = useRef({ teamData, phases, hasChanges });
   useEffect(() => {
@@ -658,23 +664,23 @@ export default function TeamEditor({
   useEffect(() => {
     if (initialTab !== lastTabRef.current) {
       const { teamData: latestData, phases: latestPhases, hasChanges: changesExist } = latestDataRef.current;
-      if (changesExist) {
+      if (changesExist && !isDiscarding) {
         saveTeam(latestData, latestPhases);
         setPendingSave(false);
       }
       lastTabRef.current = initialTab;
     }
-  }, [initialTab, saveTeam, setPendingSave]);
+  }, [initialTab, isDiscarding, saveTeam, setPendingSave]);
 
   useEffect(() => {
     return () => {
       const { teamData: latestData, phases: latestPhases, hasChanges: changesExist } = latestDataRef.current;
-      if (changesExist) {
+      if (changesExist && !isDiscarding) {
         saveTeam(latestData, latestPhases);
         setPendingSave(false);
       }
     };
-  }, [saveTeam, setPendingSave]);
+  }, [isDiscarding, saveTeam, setPendingSave]);
 
   useEffect(() => {
     if (saveSuccess) {
@@ -687,38 +693,28 @@ export default function TeamEditor({
   const lastInitialDataRef = useRef(initialData);
   const lastInitialPhasesRef = useRef(initialPhases);
 
-  // Sync state with latest metadata after external discard/load (only when user has no unsaved local changes)
+  // Sync state with latest metadata when metadata changes externally (e.g. discard)
   useEffect(() => {
-    let cancelled = false;
     const initialDataStr = JSON.stringify(initialData);
     const lastInitialDataStr = JSON.stringify(lastInitialDataRef.current);
 
-    if (initialDataStr !== lastInitialDataStr) {
-      if (!hasChanges) {
-        queueMicrotask(() => {
-          if (!cancelled) setTeamData(initialData);
-        });
-      }
+    if (initialDataStr !== lastInitialDataStr || isDiscarding) {
+      setTeamData(initialData);
       lastInitialDataRef.current = initialData;
+      setPendingSave(false);
     }
-    return () => { cancelled = true; };
-  }, [initialData, hasChanges]);
+  }, [initialData, isDiscarding, setPendingSave]);
 
   useEffect(() => {
-    let cancelled = false;
     const initialPhasesStr = JSON.stringify(initialPhases);
     const lastInitialPhasesStr = JSON.stringify(lastInitialPhasesRef.current);
 
-    if (initialPhasesStr !== lastInitialPhasesStr) {
-      if (!hasChanges) {
-        queueMicrotask(() => {
-          if (!cancelled) setPhases(initialPhases);
-        });
-      }
+    if (initialPhasesStr !== lastInitialPhasesStr || isDiscarding) {
+      setPhases(initialPhases);
       lastInitialPhasesRef.current = initialPhases;
+      setPendingSave(false);
     }
-    return () => { cancelled = true; };
-  }, [initialPhases, hasChanges]);
+  }, [initialPhases, isDiscarding, setPendingSave]);
 
   const handleFieldChange = (field: keyof TeamMetadata, value: string) => {
     setTeamData(prev => ({ ...prev, [field]: value }));

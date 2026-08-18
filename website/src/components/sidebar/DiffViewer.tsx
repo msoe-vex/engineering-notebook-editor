@@ -8,12 +8,15 @@ import { computeLineDiff, FileDiffResult } from "@/lib/diffUtils";
 interface DiffViewerProps {
   change: PendingChange;
   getBaseContent: (path: string) => Promise<string | null>;
+  getFileContent?: (path: string) => Promise<string | null>;
   onClose: () => void;
 }
 
-export default function DiffViewer({ change, getBaseContent, onClose }: DiffViewerProps) {
+export default function DiffViewer({ change, getBaseContent, getFileContent, onClose }: DiffViewerProps) {
   const [diff, setDiff] = useState<FileDiffResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showAllLines, setShowAllLines] = useState(false);
+  const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     let isMounted = true;
@@ -32,12 +35,18 @@ export default function DiffViewer({ change, getBaseContent, onClose }: DiffView
           newContent = "";
         } else if (isNew) {
           baseContent = "";
+          if (!newContent && getFileContent) {
+            newContent = (await getFileContent(change.path)) || "";
+          }
         } else {
           baseContent = await getBaseContent(change.path);
+          if (!newContent && getFileContent) {
+            newContent = (await getFileContent(change.path)) || "";
+          }
         }
 
         if (isMounted) {
-          const result = computeLineDiff(baseContent || "", newContent || "");
+          const result = computeLineDiff(baseContent || "", newContent || "", 3);
           setDiff(result);
         }
       } catch (err) {
@@ -54,7 +63,18 @@ export default function DiffViewer({ change, getBaseContent, onClose }: DiffView
     return () => {
       isMounted = false;
     };
-  }, [change, getBaseContent]);
+  }, [change.path, change.operation, change.changeType, change.content, getBaseContent, getFileContent]);
+
+  const toggleExpandSection = (idx: number) => {
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  };
+
+  const displayedLines = showAllLines && diff ? diff.allLines : diff?.lines || [];
 
   return (
     <div className="mt-1.5 rounded-xl border border-nb-outline-variant/60 bg-nb-surface-lowest overflow-hidden shadow-nb-sm text-[11px] select-text">
@@ -80,13 +100,28 @@ export default function DiffViewer({ change, getBaseContent, onClose }: DiffView
           )}
         </div>
 
-        <button
-          onClick={onClose}
-          className="p-0.5 hover:bg-nb-surface-high/60 rounded text-nb-on-surface-variant/50 hover:text-nb-on-surface transition-colors cursor-pointer shrink-0"
-          title="Close Diff"
-        >
-          <X size={11} />
-        </button>
+        <div className="flex items-center gap-1.5">
+          {diff && diff.allLines.length > diff.lines.length && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowAllLines(prev => !prev);
+                setExpandedSections(new Set());
+              }}
+              className="text-[9px] font-bold text-nb-primary hover:underline cursor-pointer px-1 py-0.5"
+            >
+              {showAllLines ? "Focus Changes" : "Show Full File"}
+            </button>
+          )}
+
+          <button
+            onClick={onClose}
+            className="p-0.5 hover:bg-nb-surface-high/60 rounded text-nb-on-surface-variant/50 hover:text-nb-on-surface transition-colors cursor-pointer shrink-0"
+            title="Close Diff"
+          >
+            <X size={11} />
+          </button>
+        </div>
       </div>
 
       {/* Diff Body */}
@@ -103,7 +138,47 @@ export default function DiffViewer({ change, getBaseContent, onClose }: DiffView
         <div className="max-h-64 overflow-x-auto overflow-y-auto font-mono text-[10px] leading-tight">
           <table className="w-full border-collapse">
             <tbody>
-              {diff.lines.map((line, idx) => {
+              {displayedLines.map((line, idx) => {
+                if (line.type === "collapsed") {
+                  const isExpanded = expandedSections.has(idx);
+                  if (isExpanded && line.hiddenLines) {
+                    return (
+                      <React.Fragment key={idx}>
+                        {line.hiddenLines.map((hiddenLine, hIdx) => (
+                          <tr key={`${idx}-${hIdx}`} className="text-nb-on-surface-variant hover:bg-nb-surface-low/50">
+                            <td className="w-6 px-1.5 py-0.5 text-right select-none opacity-40 text-[9px] border-r border-nb-outline-variant/20 font-mono">
+                              {hiddenLine.oldLineNumber ?? ""}
+                            </td>
+                            <td className="w-6 px-1.5 py-0.5 text-right select-none opacity-40 text-[9px] border-r border-nb-outline-variant/20 font-mono">
+                              {hiddenLine.newLineNumber ?? ""}
+                            </td>
+                            <td className="w-4 px-1 py-0.5 text-center select-none font-bold text-[10px]"> </td>
+                            <td className="px-1.5 py-0.5 whitespace-pre font-mono break-all opacity-80">
+                              {hiddenLine.content || " "}
+                            </td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    );
+                  }
+
+                  return (
+                    <tr key={idx} className="bg-nb-surface-low/80 border-y border-nb-outline-variant/30 text-nb-on-surface-variant/70">
+                      <td colSpan={4} className="py-1 px-2.5 text-left select-none">
+                        <div className="sticky left-2.5 inline-flex items-center">
+                          <button
+                            type="button"
+                            onClick={() => toggleExpandSection(idx)}
+                            className="text-[9px] font-bold text-nb-primary hover:underline cursor-pointer inline-flex items-center gap-1.5 bg-nb-primary/10 hover:bg-nb-primary/20 px-2 py-0.5 rounded transition-colors"
+                          >
+                            <span>↕ Expand {line.collapsedCount || "hidden"} unchanged lines</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+
                 const isAdded = line.type === "added";
                 const isDeleted = line.type === "deleted";
 

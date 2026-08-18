@@ -1,4 +1,4 @@
-import { Project, getProjects, getProject, saveProject, getProjectHandle, saveProjectHandle, getAllPending, stageChange } from "../db";
+import { Project, getProjects, getProject, saveProject, getProjectHandle, saveProjectHandle, getAllPending, stageChange, getBaseMetadata, saveBaseMetadata, clearBaseMetadata } from "../db";
 import { listLocalFiles, readLocalFile, writeLocalFile, ensureLocalDirectory, checkLocalFileExists } from "../fs";
 import { fetchFileContent, fetchDirectoryTree, checkGitHubFileExists, fetchGitHubUser, GitHubFile } from "../github";
 import { EMPTY_METADATA, validateNotebookIntegrity } from "../metadata";
@@ -414,8 +414,16 @@ export class ProjectManager {
     let isNew = false;
     let mergedEntries = [...entryFiles];
 
-    if (remoteMetaStr) {
-      this.store.baseMetadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...JSON.parse(remoteMetaStr) });
+    // Load persisted baseMetadata from IndexedDB if pending changes exist, otherwise advance to latest remote version
+    const hasPendingChanges = pending.length > 0;
+    const persistedBase = hasPendingChanges ? await getBaseMetadata(dbName) : null;
+
+    if (persistedBase) {
+      this.store.baseMetadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...persistedBase });
+    } else if (remoteMetaStr) {
+      const freshBase = validateNotebookIntegrity({ ...EMPTY_METADATA, ...JSON.parse(remoteMetaStr) });
+      this.store.baseMetadata = freshBase;
+      await saveBaseMetadata(dbName, freshBase);
     }
 
     if (pendingMeta?.content) {
@@ -471,6 +479,7 @@ export class ProjectManager {
     if (isNew) {
       await this.store.updateLatexMetadata();
     }
+    this.store.notifyStateChange();
   }
 
   async reloadWorkspace() {
