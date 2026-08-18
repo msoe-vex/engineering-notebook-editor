@@ -78,16 +78,44 @@ function bundleNotebookTemplate() {
   }
 }
 
+function getAugmentedEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  const candidateBinDirs = [
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'MiKTeX', 'miktex', 'bin', 'x64'),
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'MiKTeX', 'miktex', 'bin'),
+    path.join(process.env.APPDATA || '', 'MiKTeX', 'miktex', 'bin', 'x64'),
+    'C:\\Program Files\\MiKTeX\\miktex\\bin\\x64',
+    'C:\\Program Files (x86)\\MiKTeX\\miktex\\bin',
+    'C:\\texlive\\2026\\bin\\windows',
+    'C:\\texlive\\2025\\bin\\windows',
+    'C:\\texlive\\2024\\bin\\windows',
+    '/usr/local/texlive/2026/bin/x86_64-linux',
+    '/usr/local/texlive/2025/bin/x86_64-linux',
+    '/Library/TeX/texbin'
+  ].filter(d => fs.existsSync(d));
+
+  if (candidateBinDirs.length > 0) {
+    const sep = path.delimiter;
+    const currentPath = env.PATH || env.Path || '';
+    env.PATH = candidateBinDirs.join(sep) + sep + currentPath;
+    env.Path = env.PATH;
+  }
+  return env;
+}
+
 function bundleLatexDependencies() {
   console.log('=== Bundling LaTeX Dependencies into public/latex ===');
   try {
+    const env = getAugmentedEnv();
+
     // 1. Run xelatex to generate .fls record in the notebook directory if xelatex is installed
     let flsFile = path.join(NOTEBOOK_DIR, 'main.fls');
     try {
       console.log('Running xelatex -recorder main.tex...');
       execSync('xelatex -interaction=batchmode -recorder main.tex', {
         cwd: NOTEBOOK_DIR,
-        stdio: 'inherit'
+        stdio: 'inherit',
+        env
       });
     } catch {
       console.warn('xelatex execution returned non-zero (or not in PATH), checking existing main.fls...');
@@ -106,33 +134,29 @@ function bundleLatexDependencies() {
       .filter(file => /\.(sty|cls|def|clo|cfg|fd|tex|fontspec)$/.test(file))
       // Exclude temporary/generated files
       .filter(file => !/(main\.aux|main\.fls|main\.log|main\.out|main\.toc)$/.test(file))
-      // Exclude local data files and local template/dynamic files
-      .filter(file => !file.includes('data/') && !file.includes('latex/'))
-      .filter(file => !/(main\.tex|notebook\.sty|entries\.tex|team\.tex|phases\.tex)$/.test(path.basename(file)));
+      // Exclude notebook's local generated/data files
+    const localDataNorm = path.join(NOTEBOOK_DIR, 'data').replace(/\\/g, '/');
+    const localLatexNorm = path.join(NOTEBOOK_DIR, 'latex').replace(/\\/g, '/');
 
-    // Map of basename -> absolute path from .fls if available
+    // Map of basename -> absolute path from .fls
     const flsFileMap = new Map<string, string>();
-    for (const rawLine of flsContent.split('\n')) {
+    for (const rawLine of flsContent.replace(/\r/g, '').split('\n')) {
       if (!rawLine.startsWith('INPUT ')) continue;
       const fullPath = rawLine.substring(6).trim();
       const norm = fullPath.replace(/\\/g, '/');
-      if (norm.includes('data/') || norm.includes('latex/')) continue;
-      const base = path.basename(fullPath);
+      if (norm.startsWith(localDataNorm) || norm.startsWith(localLatexNorm)) continue;
+      if (norm.startsWith('./data/') || norm.startsWith('./latex/') || norm.startsWith('data/') || norm.startsWith('latex/')) continue;
+      const base = path.basename(norm);
       if (/(main\.tex|notebook\.sty|entries\.tex|team\.tex|phases\.tex)$/.test(base)) continue;
       if (/\.(sty|cls|def|clo|cfg|fd|tex|fontspec|sym)$/.test(base)) {
-        if (path.isAbsolute(fullPath) && fs.existsSync(fullPath)) {
+        if (!flsFileMap.has(base)) {
           flsFileMap.set(base, fullPath);
-        } else {
-          const localP = path.join(NOTEBOOK_DIR, fullPath);
-          if (fs.existsSync(localP)) {
-            flsFileMap.set(base, localP);
-          }
         }
       }
     }
 
-    // Get unique basenames
-    const uniqueFiles = Array.from(new Set(inputs.map(f => path.basename(f))));
+    // Get unique basenames directly discovered by xelatex in .fls
+    const uniqueFiles = Array.from(flsFileMap.keys()).sort();
 
     if (!fs.existsSync(LATEX_DEST_DIR)) {
       fs.mkdirSync(LATEX_DEST_DIR, { recursive: true });
@@ -142,7 +166,20 @@ function bundleLatexDependencies() {
     const manifest: string[] = [];
 
     for (const file of uniqueFiles) {
-      let absPath = flsFileMap.get(file);
+      const rawPath = flsFileMap.get(file);
+      let absPath: string | undefined;
+
+      if (rawPath) {
+        const normalized = path.normalize(rawPath);
+        if (fs.existsSync(normalized)) {
+          absPath = normalized;
+        } else {
+          const localP = path.join(NOTEBOOK_DIR, rawPath);
+          if (fs.existsSync(localP)) {
+            absPath = localP;
+          }
+        }
+      }
 
       if (!absPath || !fs.existsSync(absPath)) {
         try {
@@ -151,11 +188,54 @@ function bundleLatexDependencies() {
             absPath = found;
           }
         } catch {
+          // Check notebook directory
           const localPath = path.join(NOTEBOOK_DIR, file);
           if (fs.existsSync(localPath)) {
             absPath = localPath;
+          } else {
+            // Search known local TeX distribution directories on Windows / Unix
+            const candidateRoots = [
+              path.join(process.env.LOCALAPPDATA || '', 'Programs', 'MiKTeX'),
+              path.join(process.env.APPDATA || '', 'MiKTeX'),
+              'C:\\Program Files\\MiKTeX',
+              'C:\\Program Files (x86)\\MiKTeX',
+              'C:\\texlive',
+              '/usr/share/texmf',
+              '/usr/local/texlive'
+            ].filter(d => Boolean(d) && fs.existsSync(d));
+
+            function searchDir(dir: string, targetName: string, maxDepth: number = 6): string | null {
+              if (maxDepth <= 0) return null;
+              try {
+                const entries = fs.readdirSync(dir, { withFileTypes: true });
+                for (const e of entries) {
+                  const full = path.join(dir, e.name);
+                  if (e.isDirectory()) {
+                    const match = searchDir(full, targetName, maxDepth - 1);
+                    if (match) return match;
+                  } else if (e.name.toLowerCase() === targetName.toLowerCase()) {
+                    return full;
+                  }
+                }
+              } catch {}
+              return null;
+            }
+
+            for (const root of candidateRoots) {
+              const matched = searchDir(root, file);
+              if (matched) {
+                absPath = matched;
+                break;
+              }
+            }
           }
         }
+      }
+
+      // If still not found on the host machine, check if it was previously bundled in public/latex
+      const existingInDest = path.join(LATEX_DEST_DIR, file);
+      if ((!absPath || !fs.existsSync(absPath)) && fs.existsSync(existingInDest)) {
+        absPath = existingInDest;
       }
 
       if (absPath && fs.existsSync(absPath)) {
@@ -164,11 +244,13 @@ function bundleLatexDependencies() {
           continue;
         }
 
+        if (absPath !== existingInDest) {
+          fs.copyFileSync(absPath, existingInDest);
+        }
         console.log(`  [+] ${file}`);
-        fs.copyFileSync(absPath, path.join(LATEX_DEST_DIR, file));
         manifest.push(file);
       } else {
-        console.warn(`  [!] Warning: Could not find ${file}`);
+        console.warn(`  [!] Warning: Could not find ${file} (raw path: ${rawPath})`);
       }
     }
 

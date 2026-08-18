@@ -18,6 +18,10 @@ export class TransferManager {
   }
 
   async getFileContent(path: string): Promise<string | null> {
+    if (this.store.lastSavedContents.has(path)) {
+      return this.store.lastSavedContents.get(path)!;
+    }
+
     const dbName = this.store.getDBName();
     // If there's a pending delete for this path, treat as removed for exports
     const staged = await getPending(dbName, path);

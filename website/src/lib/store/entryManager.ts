@@ -5,7 +5,7 @@ import { getAllPending, getPending, stageChange, removeStaged } from "../db";
 import { fetchFileContent, fetchRawFileContent, checkGitHubFileExists } from "../github";
 import { readLocalFile, writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, checkLocalFileExists } from "../fs";
 import { generateUUID, getMimeTypeFromExtension, formatDateMonthYear } from "../utils";
-import { EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, buildResourceTypeIndex } from "../metadata";
+import { EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds } from "../metadata";
 import { generateAllEntriesLatex, generateTeamLatex, generatePhasesLatex, generateEntryLatex } from "../latex";
 import { IWorkspaceStore } from "./types";
 
@@ -17,7 +17,11 @@ export class EntryManager {
   }
 
   async openEntry(id: string) {
-    await this.store.debouncedPersist.flush();
+    // Flush any pending save for the previous entry in the background (non-blocking)
+    this.store.debouncedPersist.flush().catch((e: unknown) => {
+      console.warn("Background persist flush failed during entry navigation:", e);
+    });
+
     const meta = this.store.metadata.entries[id];
 
     if (!meta) {
@@ -325,14 +329,29 @@ export class EntryManager {
     // Flush any pending debounced edits first and wait for the save to complete
     await this.store.debouncedPersist.flush();
 
-    // 1. Get raw content JSON from memory or disk
+    // 1. Get raw content JSON from openFile, memory cache, pending staged DB, or disk/remote
     let contentJson: TipTapNode = { type: "doc", content: [{ type: "paragraph" }] };
     if (this.store.openFile?.id === sourceId && this.store.openFile.tiptapContent) {
       try {
         contentJson = JSON.parse(this.store.openFile.tiptapContent);
       } catch {}
     } else {
-      const raw = await this.store.getFileContent(sourceMeta.filename);
+      let raw: string | null = null;
+      if (this.store.lastSavedContents.has(sourceMeta.filename)) {
+        raw = this.store.lastSavedContents.get(sourceMeta.filename)!;
+      } else {
+        const dbName = this.store.getDBName();
+        const pending = await getAllPending(dbName);
+        const stagedEntry = pending.find(p => p.path === sourceMeta.filename && p.operation === "upsert");
+        if (stagedEntry?.content) {
+          raw = stagedEntry.content;
+        } else if (this.store.mode === "local" && this.store.dirHandle) {
+          raw = (await getLocalFileContent(this.store.dirHandle, sourceMeta.filename)).text || null;
+        } else if (this.store.mode === "github" && this.store.config) {
+          raw = await fetchFileContent(this.store.config, this.store.getFullPath(sourceMeta.filename));
+        }
+      }
+
       if (raw) {
         try {
           const parsed = JSON.parse(raw);
@@ -341,8 +360,10 @@ export class EntryManager {
       }
     }
 
-    // Ensure all resource nodes in duplicated doc get fresh unique IDs
-    contentJson = ensureResourceIds(JSON.parse(JSON.stringify(contentJson)));
+    // Deep clone and remap all resource and heading UUIDs in duplicated doc
+    const remapped = remapContentIds(JSON.parse(JSON.stringify(contentJson)));
+    contentJson = ensureResourceIds(remapped.doc as TipTapNode) as TipTapNode;
+    const remappedEntryMeta = remapEntryMetadataIds(sourceMeta, remapped.idMap);
 
     const newId = generateUUID();
     const createdAt = new Date().toISOString();
@@ -390,7 +411,8 @@ export class EntryManager {
       updatedAt: createdAt,
       filename: newPath,
       isTemplate: isTemplate || undefined,
-      resources: sourceMeta.resources ? { ...sourceMeta.resources } : undefined,
+      resources: remappedEntryMeta.resources,
+      references: remappedEntryMeta.references,
       assets: sourceMeta.assets ? [...sourceMeta.assets] : undefined
     };
 
@@ -404,7 +426,7 @@ export class EntryManager {
       newEntry.assets = [...new Set([...(newEntry.assets || []), ...assetPaths])];
     }
 
-    const resourceTypes = buildResourceTypeIndex(this.store.metadata.entries, sourceMeta.resources, newId);
+    const resourceTypes = buildResourceTypeIndex(this.store.metadata.entries, remappedEntryMeta.resources || {}, newId);
     const newLatex = generateEntryLatex(
       contentJson,
       newTitle,

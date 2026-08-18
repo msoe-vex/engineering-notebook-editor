@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import Image from "next/image";
+import { createPortal } from "react-dom";
 
 import {
   DndContext,
@@ -33,21 +34,61 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { TeamMetadata, TeamMember, ProjectPhase } from "@/lib/metadata";
 import { DEFAULT_PHASES, AVAILABLE_ICONS } from "@/lib/phases";
+import { fetchDefaultPhases } from "@/lib/defaultTemplates";
 import { generateUUID, formatDateMonthYear, compressImageToJpeg, getMimeTypeFromExtension } from "@/lib/utils";
 
 // ─── Sub-components for performance ──────────────────────────────────────────
 
+const PRESET_COLORS = [
+  "#3b82f6", // Blue
+  "#a855f7", // Purple
+  "#6366f1", // Indigo
+  "#f97316", // Orange
+  "#10b981", // Emerald
+  "#ec4899", // Pink
+  "#ef4444", // Red
+  "#eab308", // Yellow
+  "#06b6d4", // Cyan
+  "#14b8a6", // Teal
+  "#8b5cf6", // Violet
+  "#64748b", // Slate
+];
+
 const IconPicker = ({
   currentIcon,
   onSelect,
-  color
+  color,
+  onColorChange
 }: {
   currentIcon: string,
   onSelect: (iconName: string) => void,
-  color: string
+  color: string,
+  onColorChange: (color: string) => void
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
+
+  const updateCoords = () => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const popupWidth = 272; // w-68
+      const popupHeight = 320;
+      
+      // Calculate top position and clamp to screen bounds
+      let top = rect.top + rect.height / 2 - popupHeight / 2;
+      top = Math.max(16, Math.min(top, window.innerHeight - popupHeight - 16));
+
+      // Calculate left position (prefer right of button, fallback to left if overflow)
+      let left = rect.right + 16;
+      if (left + popupWidth > window.innerWidth - 16) {
+        left = rect.left - popupWidth - 16;
+      }
+
+      setCoords({ top, left });
+    }
+  };
 
   const filteredIcons = useMemo(() => {
     const q = search.toLowerCase();
@@ -59,47 +100,93 @@ const IconPicker = ({
   return (
     <div className="relative shrink-0">
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          if (!isOpen) {
+            updateCoords();
+          }
+          setIsOpen(!isOpen);
+        }}
         className="w-11 h-11 rounded-[14px] flex items-center justify-center border-2 transition-all cursor-pointer group hover:scale-105 active:scale-95 shadow-sm"
         style={{ backgroundColor: `${color}15`, color: color, borderColor: `${color}30` }}
-        title="Change Icon"
+        title="Customize Icon & Color"
       >
         <IconComp size={20} className="group-hover:rotate-12 transition-transform" />
       </button>
 
-      {isOpen && (
+      {isOpen && createPortal(
         <>
-          <div className="fixed inset-0 z-190" onClick={() => setIsOpen(false)} />
-          <div className="absolute top-1/2 left-full ml-4 -translate-y-1/2 w-60 bg-nb-surface border border-nb-outline-variant shadow-nb-2xl rounded-[20px] p-3 z-200 animate-in fade-in slide-in-from-left-2 duration-200">
-            <div className="relative mb-2.5">
-              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-nb-on-surface-variant/40" />
-              <input
-                autoFocus
-                type="text"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search icons..."
-                className="w-full bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg pl-8 pr-2 py-1.5 text-[10px] font-bold text-nb-on-surface focus:outline-none focus:ring-2 focus:ring-nb-primary/20 transition-all"
-              />
-            </div>
-            <div className="grid grid-cols-4 gap-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1">
-              {filteredIcons.map(iconName => {
-                const PickerIcon = (LucideIcons as unknown as Record<string, LucideIcon>)[iconName] || Shapes;
-                return (
+          <div className="fixed inset-0 z-9998" onClick={() => setIsOpen(false)} />
+          <div
+            style={{
+              position: 'fixed',
+              top: coords.top,
+              left: coords.left,
+              zIndex: 9999
+            }}
+            className="w-68 bg-nb-surface border border-nb-outline-variant shadow-nb-2xl rounded-[20px] p-3.5 animate-in fade-in zoom-in-95 duration-150 space-y-3"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Color Section */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[9px] font-black uppercase tracking-wider text-nb-on-surface-variant/50">Theme Color</label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="color"
+                    value={color}
+                    onChange={e => onColorChange(e.target.value)}
+                    className="w-4 h-4 rounded border-0 p-0 cursor-pointer overflow-hidden bg-transparent shrink-0"
+                  />
+                  <span className="text-[9px] font-mono font-bold text-nb-on-surface-variant/70 uppercase">{color}</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-6 gap-1.5">
+                {PRESET_COLORS.map(preset => (
                   <button
-                    key={iconName}
+                    key={preset}
                     type="button"
-                    onClick={() => { onSelect(iconName); setIsOpen(false); }}
-                    className={`w-8 h-8 flex items-center justify-center rounded-md transition-all hover:scale-110 cursor-pointer ${currentIcon === iconName ? "bg-nb-primary text-white" : "bg-nb-surface-low border border-nb-outline-variant/20 text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary"}`}
-                  >
-                    <PickerIcon size={14} />
-                  </button>
-                );
-              })}
+                    onClick={() => onColorChange(preset)}
+                    className={`w-5 h-5 rounded-full transition-transform hover:scale-115 cursor-pointer flex items-center justify-center ${color.toLowerCase() === preset.toLowerCase() ? "ring-2 ring-nb-primary ring-offset-1" : ""}`}
+                    style={{ backgroundColor: preset }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t border-nb-outline-variant/30 pt-2.5">
+              <label className="block text-[9px] font-black uppercase tracking-wider text-nb-on-surface-variant/50 mb-2">Icon</label>
+              <div className="relative mb-2">
+                <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-nb-on-surface-variant/40" />
+                <input
+                  autoFocus
+                  type="text"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search icons..."
+                  className="w-full bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg pl-8 pr-2 py-1.5 text-[10px] font-bold text-nb-on-surface focus:outline-none focus:ring-2 focus:ring-nb-primary/20 transition-all"
+                />
+              </div>
+              <div className="grid grid-cols-5 gap-1 max-h-36 overflow-y-auto custom-scrollbar pr-1">
+                {filteredIcons.map(iconName => {
+                  const PickerIcon = (LucideIcons as unknown as Record<string, LucideIcon>)[iconName] || Shapes;
+                  return (
+                    <button
+                      key={iconName}
+                      type="button"
+                      onClick={() => { onSelect(iconName); setIsOpen(false); }}
+                      className={`w-8 h-8 flex items-center justify-center rounded-md transition-all hover:scale-110 cursor-pointer ${currentIcon === iconName ? "bg-nb-primary text-white" : "bg-nb-surface-low border border-nb-outline-variant/20 text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary"}`}
+                    >
+                      <PickerIcon size={14} />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   );
@@ -230,29 +317,20 @@ const PhaseCard = memo(({
         currentIcon={phase.iconName}
         onSelect={(name) => handlePhaseChange?.(phase.id, "iconName", name)}
         color={localColor}
+        onColorChange={(newColor) => {
+          setLocalColor(newColor);
+          handlePhaseChange?.(phase.id, "color", newColor);
+        }}
       />
 
       <div className="flex-1 min-w-0 space-y-1">
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={phase.name}
-            onChange={e => handlePhaseChange?.(phase.id, "name", e.target.value)}
-            placeholder="Phase Name"
-            className="w-full bg-transparent border-none p-0 text-xs font-black text-nb-on-surface focus:outline-none placeholder:text-nb-on-surface-variant/20 tracking-tight"
-          />
-          <div className="flex items-center gap-1 shrink-0">
-            <input
-              type="color"
-              value={localColor}
-              onChange={e => {
-                setLocalColor(e.target.value);
-                handlePhaseChange?.(phase.id, "color", e.target.value);
-              }}
-              className="w-4 h-4 rounded-full border-0 p-0 cursor-pointer overflow-hidden bg-transparent"
-            />
-          </div>
-        </div>
+        <input
+          type="text"
+          value={phase.name}
+          onChange={e => handlePhaseChange?.(phase.id, "name", e.target.value)}
+          placeholder="Phase Name"
+          className="w-full bg-transparent border-none p-0 text-xs font-black text-nb-on-surface focus:outline-none placeholder:text-nb-on-surface-variant/20 tracking-tight"
+        />
         <textarea
           value={phase.description}
           onChange={e => handlePhaseChange?.(phase.id, "description", e.target.value)}
@@ -754,8 +832,13 @@ export default function TeamEditor({
     setActiveId(null);
   };
 
-  const restoreDefaultPhases = useCallback(() => {
-    setPhases(DEFAULT_PHASES.map(p => ({ ...p })));
+  const restoreDefaultPhases = useCallback(async () => {
+    const defaultPhases = await fetchDefaultPhases();
+    if (defaultPhases && defaultPhases.length > 0) {
+      setPhases(defaultPhases.map(p => ({ ...p })));
+    } else {
+      setPhases(DEFAULT_PHASES.map(p => ({ ...p })));
+    }
   }, []);
 
   return (

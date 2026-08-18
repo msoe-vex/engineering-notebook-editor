@@ -7,7 +7,7 @@ import { generateDeterministicUUID, generateUUID } from "../utils";
 import { INDEX_PATH, ENTRIES_DIR, ASSETS_DIR, LATEX_DIR } from "../constants";
 import { IWorkspaceStore, WorkspaceMode } from "./types";
 import { isMobileDevice } from "@/hooks/useDevice";
-import { fetchDefaultTemplates } from "../defaultTemplates";
+import { fetchDefaultNotebook } from "../defaultTemplates";
 
 export class ProjectManager {
   private store: IWorkspaceStore;
@@ -126,17 +126,14 @@ export class ProjectManager {
           this.store.metadata = EMPTY_METADATA;
           this.store.entries = [];
 
-          // Seed default templates into new temporary project
+          // Seed from bundled notebook template
           try {
-            const defaultTemplates = await fetchDefaultTemplates();
-            for (const tmpl of defaultTemplates) {
-              this.store.metadata.entries[tmpl.entryMeta.id] = tmpl.entryMeta;
-              this.store.entries.push({ name: tmpl.filename.split('/').pop() || '', path: tmpl.filename });
+            const defaultNotebook = await fetchDefaultNotebook();
+            this.store.metadata = defaultNotebook.metadata;
+            for (const entry of defaultNotebook.entries) {
+              this.store.entries.push({ name: entry.filename.split('/').pop() || '', path: entry.filename });
               // Store content in lastSavedContents so it can be opened without disk
-              this.store.lastSavedContents.set(tmpl.filename, tmpl.contentJson);
-            }
-            if (defaultTemplates.length > 0) {
-              this.store.metadata = validateNotebookIntegrity(this.store.metadata);
+              this.store.lastSavedContents.set(entry.filename, entry.contentJson);
             }
           } catch (e) {
             console.warn("Failed to seed default templates for temporary project:", e);
@@ -302,30 +299,24 @@ export class ProjectManager {
       const parsed = JSON.parse(metaStr);
       this.store.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...parsed });
     } catch {
-      this.store.metadata = validateNotebookIntegrity(EMPTY_METADATA);
       isNew = true;
+      try {
+        const defaultNotebook = await fetchDefaultNotebook();
+        this.store.metadata = defaultNotebook.metadata;
+        for (const entry of defaultNotebook.entries) {
+          await writeLocalFile(this.store.dirHandle, entry.filename, entry.contentJson);
+        }
+      } catch (e) {
+        console.warn("Failed to load default notebook template for local workspace:", e);
+        this.store.metadata = validateNotebookIntegrity(EMPTY_METADATA);
+      }
       // Initialize notebook.json
       await writeLocalFile(this.store.dirHandle, INDEX_PATH, JSON.stringify(this.store.metadata, null, 2));
+      this.store.entries = await listLocalFiles(this.store.dirHandle, ENTRIES_DIR);
     }
     this.store.isMainTexPresent = await checkLocalFileExists(this.store.dirHandle, "main.tex");
 
     if (isNew) {
-      // Seed default templates into every brand-new local project
-      try {
-        const defaultTemplates = await fetchDefaultTemplates();
-        for (const tmpl of defaultTemplates) {
-          await writeLocalFile(this.store.dirHandle!, tmpl.filename, tmpl.contentJson);
-          this.store.metadata.entries[tmpl.entryMeta.id] = tmpl.entryMeta;
-        }
-        if (defaultTemplates.length > 0) {
-          this.store.metadata = validateNotebookIntegrity(this.store.metadata);
-          await writeLocalFile(this.store.dirHandle!, INDEX_PATH, JSON.stringify(this.store.metadata, null, 2));
-          // Rebuild entries list to include template files
-          this.store.entries = await listLocalFiles(this.store.dirHandle!, ENTRIES_DIR);
-        }
-      } catch (e) {
-        console.warn("Failed to seed default templates:", e);
-      }
       await this.store.updateLatexMetadata();
     }
   }
@@ -391,35 +382,27 @@ export class ProjectManager {
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return false;
       console.error("Failed to reselect folder:", err);
-      events.emit(EventNames.SHOW_NOTIFICATION, { message: "Failed to open selected folder.", type: "error" });
+      events.emit(EventNames.SHOW_NOTIFICATION, { message: "Failed to open local folder.", type: "error" });
       return false;
     }
   }
 
   async loadGitHubWorkspace() {
-    if (!this.store.config) throw new Error("GitHub configuration missing");
-    if (!this.store.config.token) throw new Error("GitHub token is required");
+    if (!this.store.config) return;
 
-    const dbName = this.store.getDBName();
     const normalizedBase = this.store.config.baseDir ? this.store.config.baseDir.replace(/^\/+|\/+$/g, '') : '';
     const basePrefix = normalizedBase ? normalizedBase + '/' : '';
-    const actualIndexPath = `${basePrefix}${INDEX_PATH}`;
-    let isNew = false;
+    const fullEntriesDir = this.store.getFullPath(ENTRIES_DIR);
+    const fullIndexPath = this.store.getFullPath(INDEX_PATH);
+    const dbName = this.store.getDBName();
 
     const pending = await getAllPending(dbName);
     const pendingMeta = pending.find(p => p.path === INDEX_PATH && p.operation === "upsert");
 
     const [files, remoteMetaStr, isMainTexPresent] = await Promise.all([
-      fetchDirectoryTree(this.store.config, `${basePrefix}${ENTRIES_DIR}`),
-      (async () => {
-        if (pendingMeta?.content) return null;
-        try {
-          return await fetchFileContent(this.store.config!, actualIndexPath);
-        } catch {
-          return null;
-        }
-      })(),
-      checkGitHubFileExists(this.store.config, `${basePrefix}main.tex`)
+      fetchDirectoryTree(this.store.config, fullEntriesDir),
+      fetchFileContent(this.store.config, fullIndexPath),
+      checkGitHubFileExists(this.store.config, this.store.getFullPath("main.tex"))
     ]);
 
     const entryFiles = Array.isArray(files) ? files.map((f: GitHubFile) => ({
@@ -427,26 +410,47 @@ export class ProjectManager {
       path: f.path.startsWith(basePrefix) ? f.path.slice(basePrefix.length) : f.path
     })) : [];
 
+    let isNew = false;
+    let mergedEntries = [...entryFiles];
+
     if (pendingMeta?.content) {
       const parsed = JSON.parse(pendingMeta.content);
       this.store.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...parsed });
     } else if (remoteMetaStr) {
       this.store.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...JSON.parse(remoteMetaStr) });
     } else {
-      this.store.metadata = validateNotebookIntegrity(EMPTY_METADATA);
       isNew = true;
-      // Stage default metadata
+      try {
+        const defaultNotebook = await fetchDefaultNotebook();
+        this.store.metadata = defaultNotebook.metadata;
+        for (const entry of defaultNotebook.entries) {
+          await stageChange(dbName, {
+            path: entry.filename,
+            operation: "upsert",
+            content: entry.contentJson,
+            label: `Seed template: ${entry.filename}`,
+            stagedAt: new Date().toISOString()
+          });
+          if (!mergedEntries.some(e => e.path === entry.filename)) {
+            mergedEntries.push({ name: entry.filename.split('/').pop() || '', path: entry.filename });
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to load default notebook template for GitHub workspace:", e);
+        this.store.metadata = validateNotebookIntegrity(EMPTY_METADATA);
+      }
+
+      // Stage default notebook.json
       await stageChange(dbName, {
         path: INDEX_PATH,
         operation: "upsert",
         content: JSON.stringify(this.store.metadata, null, 2),
-        label: "Initialize notebook.json",
+        label: "Initialize notebook.json with default templates",
         stagedAt: new Date().toISOString()
       });
       await this.store.refreshPending();
     }
 
-    let mergedEntries = [...entryFiles];
     for (const p of pending) {
       if (p.path.startsWith(ENTRIES_DIR) && p.path.endsWith('.json')) {
         if (p.operation === "upsert" && !mergedEntries.some(e => e.path === p.path)) {
@@ -460,38 +464,6 @@ export class ProjectManager {
     this.store.isMainTexPresent = isMainTexPresent;
 
     if (isNew) {
-      // Seed default templates into every brand-new GitHub project
-      try {
-        const defaultTemplates = await fetchDefaultTemplates();
-        for (const tmpl of defaultTemplates) {
-          await stageChange(dbName, {
-            path: tmpl.filename,
-            operation: "upsert",
-            content: tmpl.contentJson,
-            label: `Seed template: ${tmpl.entryMeta.title}`,
-            stagedAt: new Date().toISOString()
-          });
-          this.store.metadata.entries[tmpl.entryMeta.id] = tmpl.entryMeta;
-          if (!mergedEntries.some(e => e.path === tmpl.filename)) {
-            mergedEntries.push({ name: tmpl.filename.split('/').pop() || '', path: tmpl.filename });
-          }
-        }
-        if (defaultTemplates.length > 0) {
-          this.store.metadata = validateNotebookIntegrity(this.store.metadata);
-          // Update the staged notebook.json with the seeded templates
-          await stageChange(dbName, {
-            path: INDEX_PATH,
-            operation: "upsert",
-            content: JSON.stringify(this.store.metadata, null, 2),
-            label: "Initialize notebook.json with default templates",
-            stagedAt: new Date().toISOString()
-          });
-        }
-      } catch (e) {
-        console.warn("Failed to seed default templates:", e);
-      }
-      this.store.entries = mergedEntries;
-      await this.store.refreshPending();
       await this.store.updateLatexMetadata();
     }
   }

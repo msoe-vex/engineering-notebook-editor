@@ -1183,7 +1183,7 @@ const EditorContent = React.memo(function EditorContent({
 
                   <div className="flex flex-wrap items-center gap-2 md:gap-3 flex-1 md:flex-none">
                     <DatePicker
-                      value={openFile.date || getLocalDateString()}
+                      value={openFile.date || ""}
                       onChange={(val) => updateDraft(null, { date: val })}
                       className="h-9 flex-1 min-w-[140px]"
                     />

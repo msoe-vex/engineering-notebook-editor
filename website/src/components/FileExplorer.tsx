@@ -91,8 +91,8 @@ function FileRow({
         </span>
         <span className={`text-[9px] font-mono truncate mt-0.5 ${isOpened ? 'text-white/70' : 'opacity-40'}`}>
           {(() => {
-            const dateStr = file.date || file.timestamp?.split('T')[0];
-            if (!dateStr) return "Unknown Date";
+            const dateStr = file.date;
+            if (!dateStr) return "No date";
             const match = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
             if (match) {
               const y = parseInt(match[1], 10);
