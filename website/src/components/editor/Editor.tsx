@@ -1003,11 +1003,13 @@ const EditorContent = React.memo(function EditorContent({
           const originalPath = `${ASSETS_ORIGINAL_DIR}/${originalHash}.${originalExt}`;
           const newPath = `${ASSETS_COMPRESSED_DIR}/${compressedHash}.jpg`;
 
+          // Populate in-memory asset cache synchronously (0ms) so ImageNodeView finds it immediately
+          store.assetCache.set(originalPath, dataUrl);
+          store.assetCache.set(newPath, compressed.dataUrl);
+
           store.enqueue(async () => {
             await store.persistFile(originalPath, originalBase64, `Original Asset: ${originalPath}`, true);
             await store.persistFile(newPath, compressed.base64, `Compressed Asset: ${newPath}`, true);
-            store.assetCache.set(originalPath, dataUrl);
-            store.assetCache.set(newPath, compressed.dataUrl);
           });
 
           insertBlock(editor, { type: "image", attrs: { id: generateUUID(), src: compressed.dataUrl, filePath: newPath, originalFilePath: originalPath, title: "" } });

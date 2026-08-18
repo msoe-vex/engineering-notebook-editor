@@ -101,9 +101,7 @@ export class TransferManager {
         }
       }
     } catch (e: unknown) {
-      if (e instanceof Error && e.name !== 'NotFoundError') {
-        console.warn(`Failed to get asset base64 for ${path}:`, e);
-      }
+      console.warn(`Failed to get asset base64 for ${path}:`, e);
     }
     return null;
   }

@@ -450,12 +450,14 @@ const RichTextArea = ({
         originalFilePath: originalPath,
       };
 
-      // Persist both original and compressed assets immediately in background
+      // Populate in-memory asset cache synchronously (0ms) so ImageNodeView finds it immediately
+      store.assetCache.set(originalPath, dataUrl);
+      store.assetCache.set(newPath, compressed.dataUrl);
+
+      // Persist both original and compressed assets in background
       store.enqueue(async () => {
         await store.persistFile(originalPath, originalBase64, `Original Asset: ${originalPath}`, true);
         await store.persistFile(newPath, compressed.base64, `Compressed Asset: ${newPath}`, true);
-        store.assetCache.set(originalPath, dataUrl);
-        store.assetCache.set(newPath, compressed.dataUrl);
       });
 
       if (editor?.state.selection instanceof NodeSelection) {
