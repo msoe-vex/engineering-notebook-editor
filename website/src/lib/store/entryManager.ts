@@ -39,42 +39,24 @@ export class EntryManager {
 
     try {
       const dbName = this.store.getDBName();
-      const texPath = `${LATEX_DIR}/${id}.tex`;
 
       // 1. Fetch pending changes once
       const pending = await getAllPending(dbName);
 
-      // 2. Fetch Entry JSON and LaTeX concurrently
-      const [entryJsonStr, latex] = await Promise.all([
-        (async () => {
-          // Check memory cache first
-          if (this.store.lastSavedContents.has(meta.filename)) {
-            return this.store.lastSavedContents.get(meta.filename)!;
-          }
-          // Check staged changes
-          const stagedEntry = pending.find(p => p.path === meta.filename && p.operation === "upsert");
-          if (stagedEntry?.content) return stagedEntry.content;
-          // Check disk / remote
-          if (this.store.mode === "local" && this.store.dirHandle) {
-            return (await getLocalFileContent(this.store.dirHandle, meta.filename)).text || "";
-          } else if (this.store.mode === "github" && this.store.config) {
-            return await fetchFileContent(this.store.config, this.store.getFullPath(meta.filename));
-          }
-          return "";
-        })(),
-        (async () => {
-          try {
-            const stagedTex = pending.find(p => p.path === texPath && p.operation === "upsert");
-            if (stagedTex?.content) return stagedTex.content;
-            if (this.store.mode === "local" && this.store.dirHandle) {
-              return await readLocalFile(this.store.dirHandle, texPath);
-            } else if (this.store.mode === "github" && this.store.config) {
-              return await fetchFileContent(this.store.config, this.store.getFullPath(texPath));
-            }
-          } catch { }
-          return "";
-        })()
-      ]);
+      // 2. Fetch Entry JSON (from memory cache -> staged -> local/remote)
+      let entryJsonStr: string | null = null;
+      if (this.store.lastSavedContents.has(meta.filename)) {
+        entryJsonStr = this.store.lastSavedContents.get(meta.filename)!;
+      } else {
+        const stagedEntry = pending.find(p => p.path === meta.filename && p.operation === "upsert");
+        if (stagedEntry?.content) {
+          entryJsonStr = stagedEntry.content;
+        } else if (this.store.mode === "local" && this.store.dirHandle) {
+          entryJsonStr = (await getLocalFileContent(this.store.dirHandle, meta.filename)).text || "";
+        } else if (this.store.mode === "github" && this.store.config) {
+          entryJsonStr = await fetchFileContent(this.store.config, this.store.getFullPath(meta.filename));
+        }
+      }
 
       if (!entryJsonStr) throw new Error("Entry not found");
       const rawData = JSON.parse(entryJsonStr);
@@ -102,7 +84,7 @@ export class EntryManager {
         name: meta.filename.split('/').pop() || "",
         id: id,
         tiptapContent: JSON.stringify(hydratedContent),
-        latex,
+        latex: "",
         title: meta.title,
         author: meta.author,
         phase: meta.phase,

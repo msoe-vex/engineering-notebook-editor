@@ -1,4 +1,5 @@
-import { NotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, EntryMetadata, hydrateTeamAssets, TipTapNode, buildResourceTypeIndex, extractResources } from "./metadata";
+import { NotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, EntryMetadata, hydrateTeamAssets, TipTapNode, buildResourceTypeIndex, extractResources, mergeNotebookMetadata } from "./metadata";
+import { INDEX_PATH, ENTRIES_DIR, LATEX_DIR } from "./constants";
 import { generateEntryLatex } from "./latex";
 import { ExplorerFile, GitHubConfig, TeamTab } from "./types";
 import { Project, getAllPending, removeStaged, PendingChange } from "./db";
@@ -332,9 +333,120 @@ class WorkspaceStore implements IWorkspaceStore {
       const changesCount = gitChanges.length;
       const filesLabel = changesCount === 1 ? "file" : "files";
       const defaultMsg = `Update notebook: ${changesCount} ${filesLabel}`;
+      // Check if remote notebook.json has changed since last loaded, and 3-way merge if necessary
+      const remoteIndexPath = this.getFullPath(INDEX_PATH);
+      const remoteIndexContent = await this.transferManager.getBaseFileContent(INDEX_PATH);
+      if (remoteIndexContent) {
+        try {
+          const remoteMetadata = JSON.parse(remoteIndexContent);
+          const baseIndex = await this.getCommittedFileContent(INDEX_PATH);
+          const baseMetadata = baseIndex ? JSON.parse(baseIndex) : null;
+          const { merged, hasCollisions, collidingEntryIds } = mergeNotebookMetadata(baseMetadata, this.metadata, remoteMetadata);
+
+          if (hasCollisions && collidingEntryIds.length > 0) {
+            // Level 2: Prompt user for resolution choice on conflicting entries
+            const conflictsList = collidingEntryIds.map(id => {
+              const localMeta = this.metadata.entries[id];
+              const remoteMeta = remoteMetadata.entries?.[id];
+              return {
+                id,
+                localTitle: localMeta?.title || "Untitled",
+                remoteTitle: remoteMeta?.title || "Untitled",
+                localAuthor: localMeta?.author,
+                remoteAuthor: remoteMeta?.author,
+                localDate: localMeta?.date,
+                remoteDate: remoteMeta?.date,
+                localUpdatedAt: localMeta?.updatedAt,
+                remoteUpdatedAt: remoteMeta?.updatedAt,
+              };
+            });
+
+            const resolutions = await new Promise<Record<string, "keep_local" | "keep_remote" | "duplicate"> | null>(resolve => {
+              events.emit(EventNames.PROMPT_MERGE_CONFLICT, {
+                conflicts: conflictsList,
+                resolve,
+              });
+            });
+
+            if (!resolutions) {
+              // User cancelled conflict resolution modal
+              events.emit(EventNames.SHOW_NOTIFICATION, { message: "Sync cancelled by user.", type: "info" });
+              return;
+            }
+
+            // Apply resolution actions
+            for (const [entryId, action] of Object.entries(resolutions)) {
+              if (action === "keep_remote") {
+                // Discard local edits for this entry
+                merged.entries[entryId] = remoteMetadata.entries[entryId];
+                const entryJsonPath = `${ENTRIES_DIR}/${entryId}.json`;
+                const entryTexPath = `${LATEX_DIR}/${entryId}.tex`;
+                const remoteEntryJson = this.getFullPath(entryJsonPath);
+                const remoteEntryTex = this.getFullPath(entryTexPath);
+
+                const jsonIdx = gitChanges.findIndex(c => c.path === remoteEntryJson);
+                if (jsonIdx >= 0) gitChanges.splice(jsonIdx, 1);
+                const texIdx = gitChanges.findIndex(c => c.path === remoteEntryTex);
+                if (texIdx >= 0) gitChanges.splice(texIdx, 1);
+
+                await removeStaged(dbName, entryJsonPath);
+                await removeStaged(dbName, entryTexPath);
+              } else if (action === "duplicate") {
+                // Keep remote version at entryId, duplicate local version as a new entry with copy title
+                const localMeta = this.metadata.entries[entryId];
+                const newId = await this.entryManager.duplicateEntry(entryId, {
+                  title: `${localMeta?.title || "Entry"} (Conflicted Copy)`,
+                  author: localMeta?.author,
+                  phase: localMeta?.phase ?? null,
+                  date: localMeta?.date,
+                });
+
+                // Set original entry in merged metadata to remote version
+                merged.entries[entryId] = remoteMetadata.entries[entryId];
+                // Include duplicated entry in merged metadata
+                const duplicatedMeta = this.metadata.entries[newId];
+                if (duplicatedMeta) {
+                  merged.entries[newId] = duplicatedMeta;
+                  const newJsonPath = this.getFullPath(`${ENTRIES_DIR}/${newId}.json`);
+                  const newTexPath = this.getFullPath(`${LATEX_DIR}/${newId}.tex`);
+                  const newJsonContent = await this.getFileContent(`${ENTRIES_DIR}/${newId}.json`);
+                  const newTexContent = await this.getFileContent(`${LATEX_DIR}/${newId}.tex`);
+                  if (newJsonContent) gitChanges.push({ path: newJsonPath, content: newJsonContent, isBinary: false });
+                  if (newTexContent) gitChanges.push({ path: newTexPath, content: newTexContent, isBinary: false });
+                }
+
+                // Remove original entry from staged since remote has it
+                const origJsonPath = this.getFullPath(`${ENTRIES_DIR}/${entryId}.json`);
+                const origTexPath = this.getFullPath(`${LATEX_DIR}/${entryId}.tex`);
+                const jIdx = gitChanges.findIndex(c => c.path === origJsonPath);
+                if (jIdx >= 0) gitChanges.splice(jIdx, 1);
+                const tIdx = gitChanges.findIndex(c => c.path === origTexPath);
+                if (tIdx >= 0) gitChanges.splice(tIdx, 1);
+
+                await removeStaged(dbName, `${ENTRIES_DIR}/${entryId}.json`);
+                await removeStaged(dbName, `${LATEX_DIR}/${entryId}.tex`);
+              }
+              // "keep_local" keeps merged.entries[entryId] = local version (default in merged)
+            }
+          }
+          
+          this.metadata = merged;
+          const mergedIndexStr = JSON.stringify(merged, null, 2);
+          
+          const indexChangeIdx = gitChanges.findIndex(c => c.path === remoteIndexPath);
+          if (indexChangeIdx >= 0) {
+            gitChanges[indexChangeIdx].content = mergedIndexStr;
+          } else if (mergedIndexStr !== remoteIndexContent) {
+            gitChanges.push({ path: remoteIndexPath, content: mergedIndexStr, isBinary: false });
+          }
+        } catch (mergeErr) {
+          console.warn("Failed to 3-way merge remote metadata:", mergeErr);
+        }
+      }
+
       const finalMsg = customMessage
-        ? `${customMessage} (Updated ${changesCount} ${filesLabel})`
-        : defaultMsg;
+        ? `${customMessage} (Updated ${gitChanges.length} ${gitChanges.length === 1 ? "file" : "files"})`
+        : `Update notebook: ${gitChanges.length} ${gitChanges.length === 1 ? "file" : "files"}`;
 
       await commitChanges(config, gitChanges, finalMsg);
       await this.reloadWorkspace();

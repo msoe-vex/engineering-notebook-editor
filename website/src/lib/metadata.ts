@@ -823,4 +823,109 @@ export function hydrateTeamAssets(team: TeamMetadata, assetCache: Map<string, st
   return hydrated;
 }
 
+/**
+ * 3-Way Merge for NotebookMetadata (Base, Local, Remote).
+ * Automatically merges non-colliding entry metadata additions/modifications and preserves team/phase changes.
+ */
+export function mergeNotebookMetadata(
+  base: NotebookMetadata | null,
+  local: NotebookMetadata,
+  remote: NotebookMetadata
+): { merged: NotebookMetadata; hasCollisions: boolean; collidingEntryIds: string[] } {
+  const baseEntries = base?.entries || {};
+  const localEntries = local.entries || {};
+  const remoteEntries = remote.entries || {};
+
+  const mergedEntries: Record<string, EntryMetadata> = {};
+  const allEntryIds = new Set([
+    ...Object.keys(baseEntries),
+    ...Object.keys(localEntries),
+    ...Object.keys(remoteEntries)
+  ]);
+
+  const collidingEntryIds: string[] = [];
+
+  for (const id of allEntryIds) {
+    const b = baseEntries[id];
+    const l = localEntries[id];
+    const r = remoteEntries[id];
+
+    // Case 1: Only in local (newly created locally)
+    if (!b && l && !r) {
+      mergedEntries[id] = l;
+      continue;
+    }
+
+    // Case 2: Only in remote (newly created on remote)
+    if (!b && !l && r) {
+      mergedEntries[id] = r;
+      continue;
+    }
+
+    // Case 3: Deleted in local, unchanged in remote
+    if (b && !l && r && JSON.stringify(b) === JSON.stringify(r)) {
+      continue; // keep deleted
+    }
+
+    // Case 4: Deleted in remote, unchanged in local
+    if (b && l && !r && JSON.stringify(b) === JSON.stringify(l)) {
+      continue; // keep deleted
+    }
+
+    // Case 5: Modified in local, unchanged in remote
+    if (b && l && r && JSON.stringify(b) !== JSON.stringify(l) && JSON.stringify(b) === JSON.stringify(r)) {
+      mergedEntries[id] = l;
+      continue;
+    }
+
+    // Case 6: Modified in remote, unchanged in local
+    if (b && l && r && JSON.stringify(b) === JSON.stringify(l) && JSON.stringify(b) !== JSON.stringify(r)) {
+      mergedEntries[id] = r;
+      continue;
+    }
+
+    // Case 7: Same modifications in both
+    if (l && r && JSON.stringify(l) === JSON.stringify(r)) {
+      mergedEntries[id] = l;
+      continue;
+    }
+
+    // Case 8: True collision (both modified differently, or added same ID differently)
+    if (l && r) {
+      collidingEntryIds.push(id);
+      // For level 1, keep local but flag collision
+      mergedEntries[id] = l;
+    } else if (l) {
+      mergedEntries[id] = l;
+    } else if (r) {
+      mergedEntries[id] = r;
+    }
+  }
+
+  // Merge team and phases (favor local if modified from base, else remote)
+  const baseTeamStr = JSON.stringify(base?.team || null);
+  const localTeamStr = JSON.stringify(local.team || null);
+  const remoteTeamStr = JSON.stringify(remote.team || null);
+  const team = localTeamStr !== baseTeamStr ? local.team : remote.team;
+
+  const basePhasesStr = JSON.stringify(base?.phases || null);
+  const localPhasesStr = JSON.stringify(local.phases || null);
+  const remotePhasesStr = JSON.stringify(remote.phases || null);
+  const phases = localPhasesStr !== basePhasesStr ? local.phases : remote.phases;
+
+  const merged = validateNotebookIntegrity({
+    version: Math.max(local.version || 3, remote.version || 3),
+    entries: mergedEntries,
+    team: team || local.team,
+    phases: phases || local.phases,
+    lastCompiled: local.lastCompiled || remote.lastCompiled
+  });
+
+  return {
+    merged,
+    hasCollisions: collidingEntryIds.length > 0,
+    collidingEntryIds
+  };
+}
+
 

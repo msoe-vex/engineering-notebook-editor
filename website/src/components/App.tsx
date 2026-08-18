@@ -28,6 +28,7 @@ import LoadingOverlay from "./LoadingOverlay";
 import Logo from "./Logo";
 import { ViewMode } from "./editor/ui/ViewToggle";
 import ConfirmationDialog from "./ConfirmationDialog";
+import MergeConflictDialog, { ConflictingEntryInfo, ConflictAction } from "./MergeConflictDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { HardDrive, X, Loader2, ArrowLeftRight, Sun, Moon } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
@@ -205,6 +206,32 @@ export default function App() {
     hasFonts: false,
     resolve: null,
   });
+
+  const [conflictDialog, setConflictDialog] = useState<{
+    isOpen: boolean;
+    conflicts: ConflictingEntryInfo[];
+    resolve: ((resolutions: Record<string, ConflictAction> | null) => void) | null;
+  }>({
+    isOpen: false,
+    conflicts: [],
+    resolve: null,
+  });
+
+  useEffect(() => {
+    const handlePromptConflict = (data: unknown) => {
+      const payload = data as { conflicts: ConflictingEntryInfo[]; resolve: (resolutions: Record<string, ConflictAction> | null) => void };
+      if (payload && payload.conflicts) {
+        setConflictDialog({
+          isOpen: true,
+          conflicts: payload.conflicts,
+          resolve: payload.resolve,
+        });
+      }
+    };
+
+    const unsub = events.on(EventNames.PROMPT_MERGE_CONFLICT, handlePromptConflict);
+    return () => unsub();
+  }, []);
 
   const showConfirm = useCallback((title: string, message: string, onConfirm: () => void, variant: "danger" | "warning" | "info" = "danger", onCancel?: () => void) => {
     setConfirmDialog({
@@ -1274,6 +1301,21 @@ export default function App() {
           const resolve = importConfirmDialog.resolve;
           setImportConfirmDialog(prev => ({ ...prev, isOpen: false, resolve: null }));
           resolve?.("back");
+        }}
+      />
+
+      <MergeConflictDialog
+        isOpen={conflictDialog.isOpen}
+        conflicts={conflictDialog.conflicts}
+        onResolve={(resolutions) => {
+          const resolve = conflictDialog.resolve;
+          setConflictDialog(prev => ({ ...prev, isOpen: false, resolve: null }));
+          resolve?.(resolutions);
+        }}
+        onCancel={() => {
+          const resolve = conflictDialog.resolve;
+          setConflictDialog(prev => ({ ...prev, isOpen: false, resolve: null }));
+          resolve?.(null);
         }}
       />
 
