@@ -60,12 +60,21 @@ function FileRow({
   file, isOpened, isSelected, isPending, isDeleted, icon, isValid = true, validationErrors = [],
   onSelect, onDoubleClick, onContextMenu
 }: FileRowProps) {
+  const rowRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (isOpened && rowRef.current) {
+      rowRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [isOpened]);
+
   const tooltipLines = [file.title || (file.isTemplate ? "Untitled Template" : "Untitled Entry")];
   if (file.author) tooltipLines.push(`By ${file.author}`);
   if (file.date) tooltipLines.push(file.date);
 
   return (
     <div
+      ref={rowRef}
       onClick={isDeleted ? undefined : onSelect}
       onDoubleClick={isDeleted ? undefined : onDoubleClick}
       onContextMenu={isDeleted ? undefined : onContextMenu}

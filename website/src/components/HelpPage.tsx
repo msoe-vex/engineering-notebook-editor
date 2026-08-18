@@ -22,12 +22,13 @@ interface HelpPageProps {
   path: string;
   onClose: () => void;
   navigateTo: (params: Record<string, string | null>, pathname?: string) => void;
+  isEmbedded?: boolean;
 }
 
-export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
+export default function HelpPage({ path, onClose, navigateTo, isEmbedded = false }: HelpPageProps) {
   const segments = path.split('/');
   const lastSegment = segments[segments.length - 1];
-  const isWorkspaceHelp = path.startsWith('/workspace/help');
+  const isWorkspaceHelp = path.startsWith('/workspace/help') || isEmbedded;
   const baseHelpPath = isWorkspaceHelp ? '/workspace/help' : '/help';
 
   // Determine active tab from path or default
@@ -63,24 +64,24 @@ export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
   }, [activeTab]);
 
   return (
-    <div className="fixed inset-0 z-[600] bg-nb-bg flex flex-col animate-in fade-in duration-300">
+    <div className={isEmbedded ? "w-full h-full flex flex-col bg-nb-bg overflow-hidden relative" : "fixed inset-0 z-[600] bg-nb-bg flex flex-col animate-in fade-in duration-300"}>
       {/* Header */}
-      <div className="h-16 border-b border-nb-outline-variant/30 flex items-center justify-between px-8 bg-nb-surface/50 backdrop-blur-xl">
-        <div className="flex items-center gap-4">
+      <div className="h-14 border-b border-nb-outline-variant/30 flex items-center justify-between px-6 bg-nb-surface/50 backdrop-blur-xl shrink-0">
+        <div className="flex items-center gap-3">
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             className="md:hidden p-2 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant transition-colors"
           >
-            <Book size={20} />
+            <Book size={18} />
           </button>
-          <div className="hidden xs:flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-nb-primary/10 text-nb-primary flex items-center justify-center">
-              <Book size={20} />
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-nb-primary/10 text-nb-primary flex items-center justify-center">
+              <Book size={16} />
             </div>
             <div>
-              <h1 className="text-lg font-black tracking-tight text-nb-on-surface leading-tight">Help Center</h1>
-              <div className="flex items-center gap-2 text-[10px] font-black tracking-[0.2em] text-nb-on-surface-variant/40 uppercase">
-                <span>{isWorkspaceHelp ? "Workspace & Editor Guide" : "General Setup & Modes"}</span>
+              <h1 className="text-sm font-black tracking-tight text-nb-on-surface leading-tight">Help & Documentation</h1>
+              <div className="flex items-center gap-2 text-[9px] font-black tracking-[0.15em] text-nb-on-surface-variant/50 uppercase">
+                <span>{isWorkspaceHelp ? "Workspace Guide" : "General Setup & Modes"}</span>
               </div>
             </div>
           </div>
@@ -88,10 +89,11 @@ export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
 
         <button
           onClick={onClose}
-          className="p-2 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer"
-          title="Close Help"
+          className="p-1.5 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+          title={isEmbedded ? "Back to Editor" : "Close Help"}
         >
-          <X size={20} />
+          <span className="hidden sm:inline text-[11px] text-nb-on-surface-variant/70">{isEmbedded ? "Back to Editor" : "Close"}</span>
+          <X size={16} />
         </button>
       </div>
 
@@ -140,12 +142,12 @@ export default function HelpPage({ path, onClose, navigateTo }: HelpPageProps) {
         <div className="flex-1 overflow-y-auto bg-nb-bg/50 custom-scrollbar relative" style={{ scrollbarGutter: 'stable' }}>
           <div className="max-w-4xl mx-auto p-6 md:p-12 pb-32">
             {isLoading ? (
-              <div className="flex flex-col items-center justify-center py-24 gap-4 animate-in fade-in duration-500">
+              <div className="flex flex-col items-center justify-center py-24 gap-4">
                 <Loader2 className="w-8 h-8 text-nb-primary animate-spin" />
                 <span className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant/40">Loading content...</span>
               </div>
             ) : (
-              <div className="animate-in slide-in-from-bottom-4 duration-500">
+              <div>
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{

@@ -1076,6 +1076,15 @@ export default function App() {
               onClose={() => navigateTo({}, '/workspace/editor')}
             />
           </div>
+        ) : (showHelp && helpPath) ? (
+          <div className="flex-1 flex flex-col min-h-0 relative h-full">
+            <HelpPage
+              path={helpPath}
+              onClose={() => navigateTo({}, '/workspace/editor')}
+              navigateTo={navigateTo}
+              isEmbedded={true}
+            />
+          </div>
         ) : (openFile || hasEntryInUrl) ? (
           <div className="flex-1 flex flex-col min-h-0 relative h-full">
             {!openFile && (
@@ -1108,7 +1117,7 @@ export default function App() {
               onOpenSidebar={() => { isToggleFromButton.current = true; setUserSidebarPreference(true); }}
               onOpenTeam={handleOpenTeamEditor}
               onOpenCompiler={() => navigateTo({}, '/workspace/compile')}
-              onOpenHelp={() => navigateTo({}, '/help')}
+              onOpenHelp={() => navigateTo({}, '/workspace/help')}
             />
           </div>
         )}
@@ -1178,8 +1187,8 @@ export default function App() {
         </div>
       )}
 
-      {/* Help Page Overlay */}
-      {showHelp && helpPath && (
+      {/* Help Page Overlay (Only for root /help when no project workspace is active) */}
+      {showHelp && helpPath && mode === "none" && (
         <HelpPage
           path={helpPath}
           onClose={handleCloseHelp}
