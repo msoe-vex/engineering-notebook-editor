@@ -832,6 +832,122 @@ export function hydrateTeamAssets(team: TeamMetadata, assetCache: Map<string, st
 }
 
 /**
+ * 3-Way Merge for TeamMetadata (Base, Local, Remote).
+ * Merges top-level fields (teamName, teamNumber, org, logo) and member lists cleanly.
+ */
+export function mergeTeamMetadata(
+  base: TeamMetadata | undefined,
+  local: TeamMetadata | undefined,
+  remote: TeamMetadata | undefined
+): TeamMetadata | undefined {
+  if (!local && !remote) return undefined;
+  if (!local) return remote;
+  if (!remote) return local;
+  if (!base) {
+    return { ...remote, ...local };
+  }
+
+  // Merge top-level fields: if local changed from base, keep local; else remote
+  const teamName = JSON.stringify(local.teamName) !== JSON.stringify(base.teamName) ? local.teamName : remote.teamName;
+  const teamNumber = JSON.stringify(local.teamNumber) !== JSON.stringify(base.teamNumber) ? local.teamNumber : remote.teamNumber;
+  const organization = JSON.stringify(local.organization) !== JSON.stringify(base.organization) ? local.organization : remote.organization;
+  const startDate = JSON.stringify(local.startDate) !== JSON.stringify(base.startDate) ? local.startDate : remote.startDate;
+  const endDate = JSON.stringify(local.endDate) !== JSON.stringify(base.endDate) ? local.endDate : remote.endDate;
+  const logo = JSON.stringify(local.logo) !== JSON.stringify(base.logo) ? local.logo : remote.logo;
+  const logoOriginal = JSON.stringify(local.logoOriginal) !== JSON.stringify(base.logoOriginal) ? local.logoOriginal : remote.logoOriginal;
+
+  // 3-way merge members by member ID
+  const baseMembers = new Map((base.members || []).map(m => [m.id, m]));
+  const localMembers = new Map((local.members || []).map(m => [m.id, m]));
+  const remoteMembers = new Map((remote.members || []).map(m => [m.id, m]));
+
+  const allMemberIds = new Set([
+    ...Array.from(baseMembers.keys()),
+    ...Array.from(localMembers.keys()),
+    ...Array.from(remoteMembers.keys())
+  ]);
+
+  const mergedMembers: TeamMember[] = [];
+  for (const id of allMemberIds) {
+    const b = baseMembers.get(id);
+    const l = localMembers.get(id);
+    const r = remoteMembers.get(id);
+
+    if (!b && l && !r) { mergedMembers.push(l); continue; } // Added in local
+    if (!b && !l && r) { mergedMembers.push(r); continue; } // Added in remote
+    if (b && !l && r && JSON.stringify(b) === JSON.stringify(r)) continue; // Deleted in local
+    if (b && l && !r && JSON.stringify(b) === JSON.stringify(l)) continue; // Deleted in remote
+    if (b && l && r && JSON.stringify(b) !== JSON.stringify(l) && JSON.stringify(b) === JSON.stringify(r)) {
+      mergedMembers.push(l); continue; // Modified in local only
+    }
+    if (b && l && r && JSON.stringify(b) === JSON.stringify(l) && JSON.stringify(b) !== JSON.stringify(r)) {
+      mergedMembers.push(r); continue; // Modified in remote only
+    }
+    if (l) mergedMembers.push(l);
+    else if (r) mergedMembers.push(r);
+  }
+
+  return {
+    teamName: teamName || "",
+    teamNumber: teamNumber || "",
+    organization: organization || "",
+    startDate,
+    endDate,
+    logo,
+    logoOriginal,
+    members: mergedMembers
+  };
+}
+
+/**
+ * 3-Way Merge for ProjectPhases (Base, Local, Remote).
+ * Merges custom phases by Phase ID, preserving local or remote additions and updates.
+ */
+export function mergeProjectPhases(
+  base: ProjectPhase[] | undefined,
+  local: ProjectPhase[] | undefined,
+  remote: ProjectPhase[] | undefined
+): ProjectPhase[] | undefined {
+  if (!local && !remote) return undefined;
+  if (!local) return remote;
+  if (!remote) return local;
+  if (!base) return local.length > 0 ? local : remote;
+
+  const basePhases = new Map((base || []).map(p => [p.id, p]));
+  const localPhases = new Map((local || []).map(p => [p.id, p]));
+  const remotePhases = new Map((remote || []).map(p => [p.id, p]));
+
+  const allPhaseIds = new Set([
+    ...Array.from(basePhases.keys()),
+    ...Array.from(localPhases.keys()),
+    ...Array.from(remotePhases.keys())
+  ]);
+
+  const mergedPhases: ProjectPhase[] = [];
+  for (const id of allPhaseIds) {
+    const b = basePhases.get(id);
+    const l = localPhases.get(id);
+    const r = remotePhases.get(id);
+
+    if (!b && l && !r) { mergedPhases.push(l); continue; } // Added in local
+    if (!b && !l && r) { mergedPhases.push(r); continue; } // Added in remote
+    if (b && !l && r && JSON.stringify(b) === JSON.stringify(r)) continue; // Deleted in local
+    if (b && l && !r && JSON.stringify(b) === JSON.stringify(l)) continue; // Deleted in remote
+    if (b && l && r && JSON.stringify(b) !== JSON.stringify(l) && JSON.stringify(b) === JSON.stringify(r)) {
+      mergedPhases.push(l); continue; // Modified in local only
+    }
+    if (b && l && r && JSON.stringify(b) === JSON.stringify(l) && JSON.stringify(b) !== JSON.stringify(r)) {
+      mergedPhases.push(r); continue; // Modified in remote only
+    }
+    if (l) mergedPhases.push(l);
+    else if (r) mergedPhases.push(r);
+  }
+
+  // Ensure phases are sorted by index
+  return mergedPhases.sort((a, b) => a.index - b.index);
+}
+
+/**
  * 3-Way Merge for NotebookMetadata (Base, Local, Remote).
  * Automatically merges non-colliding entry metadata additions/modifications and preserves team/phase changes.
  */
@@ -910,16 +1026,9 @@ export function mergeNotebookMetadata(
     }
   }
 
-  // Merge team and phases (favor local if modified from base, else remote)
-  const baseTeamStr = JSON.stringify(base?.team || null);
-  const localTeamStr = JSON.stringify(local.team || null);
-  const remoteTeamStr = JSON.stringify(remote.team || null);
-  const team = localTeamStr !== baseTeamStr ? local.team : remote.team;
-
-  const basePhasesStr = JSON.stringify(base?.phases || null);
-  const localPhasesStr = JSON.stringify(local.phases || null);
-  const remotePhasesStr = JSON.stringify(remote.phases || null);
-  const phases = localPhasesStr !== basePhasesStr ? local.phases : remote.phases;
+  // 3-way merge team and phases
+  const team = mergeTeamMetadata(base?.team, local.team, remote.team);
+  const phases = mergeProjectPhases(base?.phases, local.phases, remote.phases);
 
   const merged = validateNotebookIntegrity({
     version: Math.max(local.version || 3, remote.version || 3),
@@ -935,5 +1044,3 @@ export function mergeNotebookMetadata(
     collidingEntryIds
   };
 }
-
-

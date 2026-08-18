@@ -333,8 +333,6 @@ class WorkspaceStore implements IWorkspaceStore {
       }
 
       const changesCount = gitChanges.length;
-      const filesLabel = changesCount === 1 ? "file" : "files";
-      const defaultMsg = `Update notebook: ${changesCount} ${filesLabel}`;
       // Check if remote notebook.json has changed since last loaded, and 3-way merge if necessary
       const remoteIndexPath = this.getFullPath(INDEX_PATH);
       const remoteIndexContent = await this.transferManager.getBaseFileContent(INDEX_PATH);

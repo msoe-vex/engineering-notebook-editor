@@ -33,14 +33,13 @@ const LatexPreview = dynamic(() => import("./LatexPreview"), {
     </div>
   )
 });
-import { getLocalDateString } from "@/lib/metadata";
 import { generateEntryLatex } from "@/lib/latex";
 import { getPhases, getPhaseConfig } from "@/lib/phases";
 import { store } from "@/lib/store";
 import AutocompleteInput from "./ui/AutocompleteInput";
 import DatePicker from "./ui/DatePicker";
 import { extractResources, extractReferences, TipTapNode, ensureResourceIds, buildResourceTypeIndex, validateEntry } from "@/lib/metadata";
-import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR, TYPE_LABELS } from "@/lib/constants";
+import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng, compressImageToJpeg } from "@/lib/utils";
 import { NodeSelection } from "@tiptap/pm/state";
 
@@ -764,7 +763,7 @@ const EditorContent = React.memo(function EditorContent({
     }
 
     // Extract live resources from the current editor instance
-    let liveResources: Record<string, any> | undefined = undefined;
+    let liveResources: Record<string, { title: string; caption: string; type: string }> | undefined = undefined;
     let liveReferences: string[] = [];
     if (editor) {
       const doc = editor.getJSON();

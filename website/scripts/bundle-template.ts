@@ -109,7 +109,7 @@ function bundleLatexDependencies() {
     const env = getAugmentedEnv();
 
     // 1. Run xelatex to generate .fls record in the notebook directory if xelatex is installed
-    let flsFile = path.join(NOTEBOOK_DIR, 'main.fls');
+    const flsFile = path.join(NOTEBOOK_DIR, 'main.fls');
     try {
       console.log('Running xelatex -recorder main.tex...');
       execSync('xelatex -interaction=batchmode -recorder main.tex', {
@@ -127,14 +127,6 @@ function bundleLatexDependencies() {
     }
 
     const flsContent = fs.readFileSync(flsFile, 'utf8');
-    const inputs = flsContent.split('\n')
-      .filter(line => line.startsWith('INPUT '))
-      .map(line => line.substring(6).trim().replace(/\\/g, '/'))
-      // Filter for LaTeX dependency types
-      .filter(file => /\.(sty|cls|def|clo|cfg|fd|tex|fontspec)$/.test(file))
-      // Exclude temporary/generated files
-      .filter(file => !/(main\.aux|main\.fls|main\.log|main\.out|main\.toc)$/.test(file))
-      // Exclude notebook's local generated/data files
     const localDataNorm = path.join(NOTEBOOK_DIR, 'data').replace(/\\/g, '/');
     const localLatexNorm = path.join(NOTEBOOK_DIR, 'latex').replace(/\\/g, '/');
 
