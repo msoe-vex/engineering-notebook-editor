@@ -30,6 +30,7 @@ export default function Sidebar({
   onSelectAll,
 }: SidebarProps) {
   const {
+    mode,
     entries,
     openFile,
     metadata,
@@ -251,7 +252,7 @@ export default function Sidebar({
       <ActivityBar
         activeTab={activeTab}
         onSelectTab={setActiveTab}
-        pendingCount={(pendingChanges || []).length}
+        pendingCount={mode === "github" ? (pendingChanges || []).length : 0}
         onOpenTeam={onOpenTeam}
         onOpenCompile={() => navigateTo({}, '/workspace/compile')}
         onOpenHelp={() => navigateTo({}, '/workspace/help/getting-started')}

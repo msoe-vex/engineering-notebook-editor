@@ -498,16 +498,18 @@ export default function App() {
     };
   }, []);
 
-  // Load last compiled PDF URL when project changes or app initializes
+  // Lazily load last compiled PDF URL only when preview/split view mode is active
   useEffect(() => {
-    if (isInitialized && currentProjectId) {
+    if (isInitialized && currentProjectId && (viewMode === "preview" || viewMode === "split")) {
+      let active = true;
       const loadPdf = async () => {
         const url = await getCompiledPdfUrl();
-        if (url) setPdfUrl(url);
+        if (active && url) setPdfUrl(url);
       };
       loadPdf();
+      return () => { active = false; };
     }
-  }, [isInitialized, currentProjectId, getCompiledPdfUrl]);
+  }, [isInitialized, currentProjectId, viewMode, getCompiledPdfUrl]);
 
 
   useEffect(() => {

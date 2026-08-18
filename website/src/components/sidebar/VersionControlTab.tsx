@@ -208,13 +208,18 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
     );
   }, [showConfirm, discardPathChange]);
 
-  if (mode !== "github" && mode !== "temporary") {
+  if (mode !== "github") {
+    const isTemp = mode === "temporary";
     return (
       <div className="flex flex-col items-center justify-center h-full p-6 text-center select-none bg-nb-surface-low">
         <GitBranch size={32} className="text-nb-on-surface-variant/30 mb-3" />
-        <span className="text-[13px] font-bold text-nb-on-surface">Local Workspace</span>
-        <p className="text-[11px] text-nb-on-surface-variant/70 mt-1 max-w-55">
-          Local filesystem mode writes changes directly to your computer. Git version control tracking is active for GitHub projects.
+        <span className="text-[13px] font-bold text-nb-on-surface">
+          {isTemp ? "Temporary Playground" : "Local Workspace"}
+        </span>
+        <p className="text-[11px] text-nb-on-surface-variant/70 mt-1.5 max-w-55 leading-relaxed">
+          {isTemp
+            ? "Git version control and commit history are active when working inside a GitHub-connected repository. You can export your sandbox notebook anytime via the Export button."
+            : "Local filesystem mode writes changes directly to your computer. Git version control tracking is active for GitHub projects."}
         </p>
       </div>
     );
