@@ -576,31 +576,35 @@ export class EntryManager {
 
   async discardEntryChanges(entryId: string) {
     if (this.store.mode !== "github" && this.store.mode !== "temporary") return;
-    const dbName = this.store.getDBName();
-    await this.store.queue;
-    
-    const entryJsonPath = `${ENTRIES_DIR}/${entryId}.json`;
-    const entryTexPath = `${LATEX_DIR}/${entryId}.tex`;
+    this.store.isDiscarding = true;
+    this.store.notifyStateChange();
 
-    // 1. Revert staged entry files
-    await removeStaged(dbName, entryJsonPath);
-    await removeStaged(dbName, entryTexPath);
-    this.store.lastSavedContents.delete(entryJsonPath);
-    this.store.lastSavedContents.delete(entryTexPath);
+    try {
+      const dbName = this.store.getDBName();
+      await this.store.queue;
+      
+      const entryJsonPath = `${ENTRIES_DIR}/${entryId}.json`;
+      const entryTexPath = `${LATEX_DIR}/${entryId}.tex`;
 
-    // 2. Revert any staged asset files associated with this entry
-    const entryMeta = this.store.metadata.entries[entryId];
-    if (entryMeta?.assets) {
-      for (const assetPath of entryMeta.assets) {
-        // Only revert asset if it was newly staged and not shared by other non-discarded entries
-        const otherEntriesUsingAsset = Object.entries(this.store.metadata.entries)
-          .filter(([id, m]) => id !== entryId && m.assets?.includes(assetPath));
-        if (otherEntriesUsingAsset.length === 0) {
-          await removeStaged(dbName, assetPath);
-          this.store.assetCache.delete(assetPath);
+      // 1. Revert staged entry files
+      await removeStaged(dbName, entryJsonPath);
+      await removeStaged(dbName, entryTexPath);
+      this.store.lastSavedContents.delete(entryJsonPath);
+      this.store.lastSavedContents.delete(entryTexPath);
+
+      // 2. Revert any staged asset files associated with this entry
+      const entryMeta = this.store.metadata.entries[entryId];
+      if (entryMeta?.assets) {
+        for (const assetPath of entryMeta.assets) {
+          // Only revert asset if it was newly staged and not shared by other non-discarded entries
+          const otherEntriesUsingAsset = Object.entries(this.store.metadata.entries)
+            .filter(([id, m]) => id !== entryId && m.assets?.includes(assetPath));
+          if (otherEntriesUsingAsset.length === 0) {
+            await removeStaged(dbName, assetPath);
+            this.store.assetCache.delete(assetPath);
+          }
         }
       }
-    }
 
     // 3. If this entry was a newly created entry (never committed), clean it from metadata and explorer
     const committed = await this.getCommittedFileContent(entryJsonPath);
@@ -648,8 +652,11 @@ export class EntryManager {
 
     await this.store.updateLatexMetadata();
     await this.refreshPending();
+  } finally {
+    this.store.isDiscarding = false;
     this.store.notifyStateChange();
   }
+}
 
   async discardPendingChanges() {
     if (this.store.mode !== "github" && this.store.mode !== "temporary") {

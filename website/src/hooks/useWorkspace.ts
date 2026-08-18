@@ -149,6 +149,7 @@ export function useWorkspace() {
     importNotebook,
     importNotebookArchive,
     setSelectedPaths,
+    openEntry: useCallback((id: string) => store.openEntry(id), []),
     getCompiledPdfUrl,
     saveCompiledPdf,
     isSaving: state.isSaving,

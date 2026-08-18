@@ -11,7 +11,8 @@ import {
   Image as ImageIcon,
   ChevronDown,
   ChevronRight,
-  GitCompare
+  GitCompare,
+  ExternalLink
 } from "lucide-react";
 import { PendingChange } from "@/lib/db";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -45,7 +46,8 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
     discardPathChange,
     discardEntryChanges,
     getBaseFileContent,
-    navigateTo
+    navigateTo,
+    openEntry
   } = useWorkspace();
 
   const [commitMessage, setCommitMessage] = useState("");
@@ -349,16 +351,39 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
                         </div>
                       </button>
 
-                      {/* Revert Group Button (Hidden for global metadata & assets to prevent de-syncing entries) */}
-                      {group.type !== "metadata" && group.type !== "assets" && (
-                        <button
-                          onClick={() => handleDiscardGroup(group)}
-                          title={`Revert ${group.title}`}
-                          className="p-1 text-nb-on-surface-variant/50 hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors cursor-pointer shrink-0"
-                        >
-                          <RotateCcw size={12} />
-                        </button>
-                      )}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {/* Open Entry in Editor Button (only for entry groups that are not deleted) */}
+                        {group.type === "entry" && group.entryId && group.subtitle !== "Deleted" && (
+                          <button
+                            onClick={async () => {
+                              if (group.entryId) {
+                                navigateTo({ entry: group.entryId, resource: null }, '/workspace/editor');
+                                await openEntry(group.entryId);
+                              }
+                            }}
+                            title={`Open "${group.title}" in Editor`}
+                            className="p-1 text-nb-on-surface-variant/50 hover:text-nb-primary hover:bg-nb-surface-high rounded-md transition-colors cursor-pointer"
+                          >
+                            <ExternalLink size={12} />
+                          </button>
+                        )}
+
+                        {/* Revert Group Button (Hidden for global metadata & assets to prevent de-syncing entries) */}
+                        {group.type !== "metadata" && group.type !== "assets" && (
+                          <button
+                            onClick={() => handleDiscardGroup(group)}
+                            disabled={isDiscarding || isCommitting}
+                            title={`Revert ${group.title}`}
+                            className="p-1 text-nb-on-surface-variant/50 hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            {isDiscarding ? (
+                              <Loader2 size={12} className="animate-spin-stable text-red-500" />
+                            ) : (
+                              <RotateCcw size={12} />
+                            )}
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     {/* Group Expanded Files */}

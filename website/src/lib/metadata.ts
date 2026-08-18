@@ -513,7 +513,16 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
     newEntries[id] = { ...entry, isValid: errors.length === 0, validationErrors: errors };
   }
 
-  return { ...metadata, entries: newEntries, assetRefs };
+  const result: NotebookMetadata = {
+    version: metadata.version || 3,
+    entries: newEntries,
+    ...(metadata.team ? { team: metadata.team } : {}),
+    ...(metadata.phases ? { phases: metadata.phases } : {}),
+    ...(metadata.lastCompiled ? { lastCompiled: metadata.lastCompiled } : {}),
+    assetRefs,
+  };
+
+  return result;
 }
 
 /** Check if an entry has all required metadata fields (template-aware). */
