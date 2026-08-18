@@ -562,6 +562,32 @@ export class EntryManager {
     await this.store.queue;
     await removeStaged(dbName, path);
     this.store.lastSavedContents.delete(path);
+
+    if (path === "main.pdf") {
+      this.store.assetCache.delete("main.pdf");
+      const committedIndex = await this.getCommittedFileContent(INDEX_PATH);
+      let committedLastCompiled: string | undefined = undefined;
+      if (committedIndex) {
+        try {
+          const parsed = JSON.parse(committedIndex);
+          committedLastCompiled = parsed.lastCompiled;
+        } catch {}
+      }
+
+      this.store.metadata = {
+        ...this.store.metadata,
+        lastCompiled: committedLastCompiled
+      };
+
+      const currentMetaStr = JSON.stringify(this.store.metadata, null, 2);
+      if (committedIndex && JSON.stringify(JSON.parse(committedIndex), null, 2) === currentMetaStr) {
+        await removeStaged(dbName, INDEX_PATH);
+        this.store.lastSavedContents.delete(INDEX_PATH);
+      } else {
+        await this.persistFile(INDEX_PATH, currentMetaStr, "Revert lastCompiled metadata");
+      }
+    }
+
     await this.refreshPending();
     this.store.notifyStateChange();
   }
@@ -574,12 +600,27 @@ export class EntryManager {
     const entryJsonPath = `${ENTRIES_DIR}/${entryId}.json`;
     const entryTexPath = `${LATEX_DIR}/${entryId}.tex`;
 
+    // 1. Revert staged entry files
     await removeStaged(dbName, entryJsonPath);
     await removeStaged(dbName, entryTexPath);
     this.store.lastSavedContents.delete(entryJsonPath);
     this.store.lastSavedContents.delete(entryTexPath);
 
-    // If this entry was a newly created entry (never committed), clean it from memory
+    // 2. Revert any staged asset files associated with this entry
+    const entryMeta = this.store.metadata.entries[entryId];
+    if (entryMeta?.assets) {
+      for (const assetPath of entryMeta.assets) {
+        // Only revert asset if it was newly staged and not shared by other non-discarded entries
+        const otherEntriesUsingAsset = Object.entries(this.store.metadata.entries)
+          .filter(([id, m]) => id !== entryId && m.assets?.includes(assetPath));
+        if (otherEntriesUsingAsset.length === 0) {
+          await removeStaged(dbName, assetPath);
+          this.store.assetCache.delete(assetPath);
+        }
+      }
+    }
+
+    // 3. If this entry was a newly created entry (never committed), clean it from metadata and explorer
     const committed = await this.getCommittedFileContent(entryJsonPath);
     if (!committed) {
       this.store.metadata = validateNotebookIntegrity(removeEntryFromMetadata(this.store.metadata, entryId));
@@ -589,11 +630,41 @@ export class EntryManager {
         this.store.navigateTo({ entry: null });
       }
     } else {
+      // Re-read committed metadata if notebook.json was modified
+      const committedIndex = await this.getCommittedFileContent(INDEX_PATH);
+      if (committedIndex) {
+        try {
+          const parsed = JSON.parse(committedIndex);
+          if (parsed.entries?.[entryId]) {
+            this.store.metadata = validateNotebookIntegrity({
+              ...this.store.metadata,
+              entries: {
+                ...this.store.metadata.entries,
+                [entryId]: parsed.entries[entryId]
+              }
+            });
+          }
+        } catch {}
+      }
+
       try {
         await this.openEntry(entryId);
       } catch {}
     }
 
+    // 4. Update or clear staged notebook.json
+    const committedIndex = await this.getCommittedFileContent(INDEX_PATH);
+    const currentMetaStr = JSON.stringify(this.store.metadata, null, 2);
+    if (committedIndex && JSON.stringify(JSON.parse(committedIndex), null, 2) === currentMetaStr) {
+      // If metadata now matches committed state, remove staged notebook.json
+      await removeStaged(dbName, INDEX_PATH);
+      this.store.lastSavedContents.delete(INDEX_PATH);
+    } else {
+      // Otherwise update the staged notebook.json with the reverted metadata
+      await this.persistFile(INDEX_PATH, currentMetaStr, "Update notebook metadata");
+    }
+
+    await this.store.updateLatexMetadata();
     await this.refreshPending();
     this.store.notifyStateChange();
   }

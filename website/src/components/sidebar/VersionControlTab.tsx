@@ -8,13 +8,15 @@ import {
   Users,
   Layers,
   FileCode,
+  Image as ImageIcon,
   ChevronDown,
   ChevronRight,
   GitCompare
 } from "lucide-react";
 import { PendingChange } from "@/lib/db";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { ENTRIES_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, INDEX_PATH } from "@/lib/constants";
+import { ENTRIES_DIR, LATEX_DIR, ASSETS_DIR, TEAM_PATH, PHASES_PATH, INDEX_PATH } from "@/lib/constants";
+import { isBinaryFile } from "@/lib/transferUtils";
 import DiffViewer from "./DiffViewer";
 
 interface VersionControlTabProps {
@@ -23,7 +25,7 @@ interface VersionControlTabProps {
 
 interface ChangeGroup {
   id: string;
-  type: "entry" | "team" | "phases" | "metadata" | "file";
+  type: "entry" | "team" | "phases" | "assets" | "metadata" | "file";
   title: string;
   subtitle?: string;
   changes: PendingChange[];
@@ -78,6 +80,8 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
     const metaChanges: PendingChange[] = [];
     const otherChanges: PendingChange[] = [];
 
+    const assetChanges: PendingChange[] = [];
+
     for (const p of pendingChanges) {
       if (p.path.startsWith(`${ENTRIES_DIR}/`) && p.path.endsWith('.json')) {
         const id = p.path.replace(`${ENTRIES_DIR}/`, '').replace('.json', '');
@@ -87,6 +91,8 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
         const id = p.path.replace(`${LATEX_DIR}/`, '').replace('.tex', '');
         if (!entryMap.has(id)) entryMap.set(id, []);
         entryMap.get(id)!.push(p);
+      } else if (p.path.startsWith(`${ASSETS_DIR}/`)) {
+        assetChanges.push(p);
       } else if (p.path === TEAM_PATH || p.path.includes('team.json') || p.path.includes('team.tex')) {
         teamChanges.push(p);
       } else if (p.path === PHASES_PATH || p.path.includes('phases.json') || p.path.includes('phases.tex')) {
@@ -139,18 +145,29 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
       });
     }
 
-    // 4. Notebook Index
+    // 4. Asset Files (Images / Media attachments, managed automatically with entries)
+    if (assetChanges.length > 0) {
+      groups.push({
+        id: "project-assets",
+        type: "assets",
+        title: "Asset Files & Media",
+        subtitle: `${assetChanges.length} asset(s)`,
+        changes: assetChanges
+      });
+    }
+
+    // 5. Notebook Index
     if (metaChanges.length > 0) {
       groups.push({
         id: "notebook-meta",
         type: "metadata",
-        title: "Project Metadata",
-        subtitle: "Global Index",
+        title: "Project Index",
+        subtitle: "notebook.json",
         changes: metaChanges
       });
     }
 
-    // 5. Other loose files
+    // 6. Other loose files
     for (const file of otherChanges) {
       groups.push({
         id: `file-${file.path}`,
@@ -196,17 +213,6 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
       "danger"
     );
   }, [showConfirm, discardEntryChanges, discardPathChange]);
-
-  const handleDiscardFile = useCallback((path: string, fileName: string) => {
-    showConfirm(
-      `Discard changes to "${fileName}"?`,
-      `Are you sure you want to revert changes to this file?`,
-      () => {
-        discardPathChange(path);
-      },
-      "danger"
-    );
-  }, [showConfirm, discardPathChange]);
 
   if (mode !== "github") {
     const isTemp = mode === "temporary";
@@ -325,6 +331,8 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
                           <Users size={14} className="text-purple-500 shrink-0" />
                         ) : group.type === "phases" ? (
                           <Layers size={14} className="text-amber-500 shrink-0" />
+                        ) : group.type === "assets" ? (
+                          <ImageIcon size={14} className="text-emerald-500 shrink-0" />
                         ) : (
                           <FileCode size={14} className="text-nb-on-surface-variant shrink-0" />
                         )}
@@ -341,14 +349,16 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
                         </div>
                       </button>
 
-                      {/* Revert Group Button */}
-                      <button
-                        onClick={() => handleDiscardGroup(group)}
-                        title={`Revert ${group.title}`}
-                        className="p-1 text-nb-on-surface-variant/50 hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors cursor-pointer shrink-0"
-                      >
-                        <RotateCcw size={12} />
-                      </button>
+                      {/* Revert Group Button (Hidden for global metadata & assets to prevent de-syncing entries) */}
+                      {group.type !== "metadata" && group.type !== "assets" && (
+                        <button
+                          onClick={() => handleDiscardGroup(group)}
+                          title={`Revert ${group.title}`}
+                          className="p-1 text-nb-on-surface-variant/50 hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors cursor-pointer shrink-0"
+                        >
+                          <RotateCcw size={12} />
+                        </button>
+                      )}
                     </div>
 
                     {/* Group Expanded Files */}
@@ -358,13 +368,14 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
                           const fileName = c.path.split('/').pop() || c.path;
                           const isDelete = c.operation === "delete";
                           const isNew = c.changeType === "create";
+                          const isBinary = isBinaryFile(c.path);
                           const isDiffOpen = openDiffPaths.has(c.path);
 
                           return (
                             <div key={c.path} className="flex flex-col">
                               <div
-                                onClick={() => toggleDiff(c.path)}
-                                className={`flex items-center justify-between text-[10px] text-nb-on-surface-variant py-1 px-1.5 rounded-lg hover:bg-nb-surface-mid/60 transition-colors cursor-pointer group ${isDiffOpen ? 'bg-nb-surface-mid/80 text-nb-on-surface' : ''}`}
+                                onClick={() => !isBinary && toggleDiff(c.path)}
+                                className={`flex items-center justify-between text-[10px] text-nb-on-surface-variant py-1 px-1.5 rounded-lg ${!isBinary ? 'hover:bg-nb-surface-mid/60 cursor-pointer' : 'cursor-default'} transition-colors group ${isDiffOpen ? 'bg-nb-surface-mid/80 text-nb-on-surface' : ''}`}
                               >
                                 <div className="flex items-center gap-1.5 truncate min-w-0">
                                   <span
@@ -382,25 +393,23 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
                                 </div>
 
                                 <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-                                  <button
-                                    onClick={() => toggleDiff(c.path)}
-                                    title={isDiffOpen ? "Hide Diff" : "View Git Diff"}
-                                    className={`p-1 rounded transition-colors cursor-pointer ${
-                                      isDiffOpen
-                                        ? "bg-nb-primary/15 text-nb-primary"
-                                        : "text-nb-on-surface-variant/50 hover:text-nb-primary hover:bg-nb-surface-high opacity-0 group-hover:opacity-100"
-                                    }`}
-                                  >
-                                    <GitCompare size={11} />
-                                  </button>
-
-                                  <button
-                                    onClick={() => handleDiscardFile(c.path, fileName)}
-                                    title={`Revert ${fileName}`}
-                                    className="opacity-0 group-hover:opacity-100 p-1 text-nb-on-surface-variant/50 hover:text-red-500 hover:bg-red-500/10 rounded transition-all cursor-pointer"
-                                  >
-                                    <RotateCcw size={11} />
-                                  </button>
+                                  {!isBinary ? (
+                                    <button
+                                      onClick={() => toggleDiff(c.path)}
+                                      title={isDiffOpen ? "Hide Diff" : "View Git Diff"}
+                                      className={`p-1 rounded transition-colors cursor-pointer ${
+                                        isDiffOpen
+                                          ? "bg-nb-primary/15 text-nb-primary"
+                                          : "text-nb-on-surface-variant/50 hover:text-nb-primary hover:bg-nb-surface-high opacity-0 group-hover:opacity-100"
+                                      }`}
+                                    >
+                                      <GitCompare size={11} />
+                                    </button>
+                                  ) : (
+                                    <span className="text-[9px] font-mono text-nb-on-surface-variant/40 px-1">
+                                      binary
+                                    </span>
+                                  )}
                                 </div>
                               </div>
 
