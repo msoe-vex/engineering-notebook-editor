@@ -175,10 +175,10 @@ export async function compileNotebook(mode: CompileMode = "quality", onStatus?: 
     files.push({ path: ENTRIES_INDEX_PATH, content: entriesIndexTex });
   }
 
-  // 4. Map entry .tex files
-  const entryIds = Object.keys(store.metadata.entries);
-  for (const entryId of entryIds) {
-    const entryTexPath = `${LATEX_DIR}/${entryId}.tex`;
+  // 4. Map entry .tex files (templates do not have or need .tex files)
+  const regularEntries = Object.values(store.metadata.entries).filter(entry => !entry.isTemplate);
+  for (const entry of regularEntries) {
+    const entryTexPath = `${LATEX_DIR}/${entry.id}.tex`;
     const tex = await store.getFileContent(entryTexPath);
     if (tex) {
       files.push({ path: entryTexPath, content: tex });

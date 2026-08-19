@@ -140,24 +140,31 @@ export const fetchDirectoryTree = async (config: GitHubConfig, path: string = "n
   }
 };
 
-export const fetchFileContent = async (config: GitHubConfig, path: string) => {
+export const fetchFileContent = async (config: GitHubConfig, path: string): Promise<string | null> => {
   const octokit = getOctokit(config.token);
-  const response = await octokit.rest.repos.getContent({
-    owner: config.owner,
-    repo: config.repo,
-    path,
-    ref: config.branch,
-    headers: { 'If-None-Match': '' } // Cache busting
-  });
+  try {
+    const response = await octokit.rest.repos.getContent({
+      owner: config.owner,
+      repo: config.repo,
+      path,
+      ref: config.branch,
+      headers: { 'If-None-Match': '' } // Cache busting
+    });
 
-  if (!Array.isArray(response.data) && response.data.type === "file") {
-    try {
-      return decodeBase64(response.data.content);
-    } catch {
-      throw new Error("Failed to decode file content. It may not be a valid UTF-8 encoded text file.");
+    if (!Array.isArray(response.data) && response.data.type === "file") {
+      try {
+        return decodeBase64(response.data.content);
+      } catch {
+        throw new Error("Failed to decode file content. It may not be a valid UTF-8 encoded text file.");
+      }
     }
+    return null;
+  } catch (error: unknown) {
+    if (typeof error === "object" && error !== null && "status" in error && (error as { status: number }).status === 404) {
+      return null;
+    }
+    throw error;
   }
-  throw new Error("Not a file");
 };
 
 export const checkGitHubFileExists = async (config: GitHubConfig, path: string): Promise<boolean> => {
@@ -176,32 +183,39 @@ export const checkGitHubFileExists = async (config: GitHubConfig, path: string):
   }
 };
 
-export const fetchRawFileContent = async (config: GitHubConfig, path: string) => {
+export const fetchRawFileContent = async (config: GitHubConfig, path: string): Promise<string | null> => {
   const octokit = getOctokit(config.token);
-  const response = await octokit.rest.repos.getContent({
-    owner: config.owner,
-    repo: config.repo,
-    path,
-    ref: config.branch,
-    headers: { 'If-None-Match': '' } // Cache busting
-  });
-
-  if (!Array.isArray(response.data) && response.data.type === "file") {
-    if (response.data.content) {
-      const content = response.data.content.replace(/\s/g, '');
-      return content;
-    }
-
-    // If content is missing, it's likely too large (> 1MB). Fetch blob directly.
-    const blobResponse = await octokit.rest.git.getBlob({
+  try {
+    const response = await octokit.rest.repos.getContent({
       owner: config.owner,
       repo: config.repo,
-      file_sha: response.data.sha,
+      path,
+      ref: config.branch,
+      headers: { 'If-None-Match': '' } // Cache busting
     });
-    const content = blobResponse.data.content.replace(/\s/g, '');
-    return content;
+
+    if (!Array.isArray(response.data) && response.data.type === "file") {
+      if (response.data.content) {
+        const content = response.data.content.replace(/\s/g, '');
+        return content;
+      }
+
+      // If content is missing, it's likely too large (> 1MB). Fetch blob directly.
+      const blobResponse = await octokit.rest.git.getBlob({
+        owner: config.owner,
+        repo: config.repo,
+        file_sha: response.data.sha,
+      });
+      const content = blobResponse.data.content.replace(/\s/g, '');
+      return content;
+    }
+    return null;
+  } catch (error: unknown) {
+    if (typeof error === "object" && error !== null && "status" in error && (error as { status: number }).status === 404) {
+      return null;
+    }
+    throw error;
   }
-  throw new Error("Not a file");
 };
 
 export const saveFile = async (
