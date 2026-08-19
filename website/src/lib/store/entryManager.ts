@@ -834,13 +834,20 @@ export class EntryManager {
   }
 
   async updateLatexMetadata() {
-    const entryDates = Object.values(this.store.metadata.entries)
+    const regularEntries = Object.values(this.store.metadata.entries)
+      .filter(e => !e.isTemplate && Boolean(e.date));
+
+    const entryDates = regularEntries
       .map(e => e.date)
-      .filter(Boolean)
       .sort();
 
-    const startDate = entryDates.length > 0 ? entryDates[0] : "";
-    const endDate = entryDates.length > 0 ? entryDates[entryDates.length - 1] : "";
+    const autoStartDate = entryDates.length > 0 ? entryDates[0] : "";
+    const autoEndDate = entryDates.length > 0 ? entryDates[entryDates.length - 1] : "";
+
+    const rawTeam: Partial<import("../metadata").TeamMetadata> = this.store.metadata.team || {};
+    const isAuto = rawTeam.autoCalculateDates ?? true;
+    const effectiveStartDate = (!isAuto && rawTeam.startDate) ? rawTeam.startDate : formatDateMonthYear(autoStartDate);
+    const effectiveEndDate = (!isAuto && rawTeam.endDate) ? rawTeam.endDate : formatDateMonthYear(autoEndDate);
 
     // Update team metadata in memory so generateTeamLatex picks it up
     const teamInfo = {
@@ -848,9 +855,9 @@ export class EntryManager {
       teamNumber: "",
       organization: "",
       members: [],
-      ...(this.store.metadata.team || {}),
-      startDate: formatDateMonthYear(startDate),
-      endDate: formatDateMonthYear(endDate)
+      ...rawTeam,
+      startDate: effectiveStartDate,
+      endDate: effectiveEndDate
     };
 
     const teamLatex = generateTeamLatex(teamInfo);

@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { PendingChange } from "@/lib/db";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { ENTRIES_DIR, LATEX_DIR, ASSETS_DIR, TEAM_PATH, PHASES_PATH, INDEX_PATH } from "@/lib/constants";
+import { ENTRIES_DIR, LATEX_DIR, ASSETS_DIR, TEAM_PATH, PHASES_PATH, INDEX_PATH, ENTRIES_INDEX_PATH } from "@/lib/constants";
 import { isBinaryFile } from "@/lib/transferUtils";
 import DiffViewer from "./DiffViewer";
 
@@ -101,7 +101,7 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
         teamChanges.push(p);
       } else if (p.path === PHASES_PATH || p.path.includes('phases.json') || p.path.includes('phases.tex')) {
         phaseChanges.push(p);
-      } else if (p.path === INDEX_PATH) {
+      } else if (p.path === INDEX_PATH || p.path === ENTRIES_INDEX_PATH) {
         metaChanges.push(p);
       } else {
         otherChanges.push(p);

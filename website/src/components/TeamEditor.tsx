@@ -588,9 +588,12 @@ export default function TeamEditor({
   } = useWorkspace();
 
   const initialData = useMemo(() => {
-    const data = metadata.team || { teamName: "", teamNumber: "", organization: "", logo: "", logoOriginal: "", members: [] };
+    const data = metadata.team || { teamName: "", teamNumber: "", organization: "", logo: "", logoOriginal: "", members: [], startDate: "", endDate: "", autoCalculateDates: true };
     return {
       ...data,
+      startDate: data.startDate || "",
+      endDate: data.endDate || "",
+      autoCalculateDates: data.autoCalculateDates ?? true,
       members: (data.members || []).map((m, idx) => ({ ...m, id: m.id || `member-${idx}` }))
     };
   }, [metadata.team]);
@@ -603,11 +606,14 @@ export default function TeamEditor({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  const timeline = useMemo(() => {
-    const entryDates = Object.values(metadata.entries)
+  const autoTimeline = useMemo(() => {
+    const regularEntries = Object.values(metadata.entries)
+      .filter(e => !e.isTemplate && Boolean(e.date));
+
+    const entryDates = regularEntries
       .map(e => e.date)
-      .filter(Boolean)
       .sort();
+
     return {
       start: formatDateMonthYear(entryDates[0]),
       end: formatDateMonthYear(entryDates[entryDates.length - 1])
@@ -693,12 +699,9 @@ export default function TeamEditor({
   const lastInitialDataRef = useRef(initialData);
   const lastInitialPhasesRef = useRef(initialPhases);
 
-  // Sync state with latest metadata when metadata changes externally (e.g. discard)
+  // Sync state with latest metadata ONLY when discarding pending changes externally
   useEffect(() => {
-    const initialDataStr = JSON.stringify(initialData);
-    const lastInitialDataStr = JSON.stringify(lastInitialDataRef.current);
-
-    if (initialDataStr !== lastInitialDataStr || isDiscarding) {
+    if (isDiscarding) {
       setTeamData(initialData);
       lastInitialDataRef.current = initialData;
       setPendingSave(false);
@@ -716,7 +719,7 @@ export default function TeamEditor({
     }
   }, [initialPhases, isDiscarding, setPendingSave]);
 
-  const handleFieldChange = (field: keyof TeamMetadata, value: string) => {
+  const handleFieldChange = <K extends keyof TeamMetadata>(field: K, value: TeamMetadata[K]) => {
     setTeamData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -944,19 +947,78 @@ export default function TeamEditor({
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant ml-1">Project Timeline</label>
-                  <div className="flex gap-4">
-                    <div className="flex-1 bg-nb-surface-low border border-nb-outline-variant/30 rounded-2xl p-4">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant/40 mb-1">Start Date</p>
-                      <p className="text-sm font-black text-nb-on-surface">{timeline.start}</p>
-                    </div>
-                    <div className="flex-1 bg-nb-surface-low border border-nb-outline-variant/30 rounded-2xl p-4">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant/40 mb-1">End Date</p>
-                      <p className="text-sm font-black text-nb-on-surface">{timeline.end}</p>
-                    </div>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between ml-1">
+                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant">Project Timeline</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const isAuto = teamData.autoCalculateDates ?? true;
+                        if (isAuto) {
+                          // Switching to custom mode
+                          setTeamData(prev => ({
+                            ...prev,
+                            autoCalculateDates: false,
+                            startDate: prev.startDate || autoTimeline.start || "",
+                            endDate: prev.endDate || autoTimeline.end || ""
+                          }));
+                        } else {
+                          // Switching to auto mode
+                          setTeamData(prev => ({
+                            ...prev,
+                            autoCalculateDates: true,
+                            startDate: autoTimeline.start || "",
+                            endDate: autoTimeline.end || ""
+                          }));
+                        }
+                      }}
+                      className="text-[10px] font-bold text-nb-primary hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      <span>{!(teamData.autoCalculateDates ?? true) ? "Switch to Auto-Calculate" : "Set Custom Dates"}</span>
+                    </button>
                   </div>
-                  <p className="text-[10px] text-nb-on-surface-variant/60 italic ml-1 mt-1">Calculated from the earliest and latest entries.</p>
+
+                  {!(teamData.autoCalculateDates ?? true) ? (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-nb-on-surface-variant/70 ml-1">Start Date</label>
+                          <input
+                            type="text"
+                            value={teamData.startDate || ""}
+                            onChange={e => handleFieldChange("startDate", e.target.value)}
+                            placeholder="e.g. September 2025"
+                            className="w-full bg-nb-surface border border-nb-outline-variant rounded-xl px-3.5 py-2.5 text-xs font-bold text-nb-on-surface focus:outline-none focus:ring-2 focus:ring-nb-primary/20 focus:border-nb-primary transition-all"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-nb-on-surface-variant/70 ml-1">End Date</label>
+                          <input
+                            type="text"
+                            value={teamData.endDate || ""}
+                            onChange={e => handleFieldChange("endDate", e.target.value)}
+                            placeholder="e.g. April 2026"
+                            className="w-full bg-nb-surface border border-nb-outline-variant rounded-xl px-3.5 py-2.5 text-xs font-bold text-nb-on-surface focus:outline-none focus:ring-2 focus:ring-nb-primary/20 focus:border-nb-primary transition-all"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-nb-on-surface-variant/60 italic ml-1">Custom season range printed on the cover page.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <div className="flex gap-4">
+                        <div className="flex-1 bg-nb-surface-low border border-nb-outline-variant/30 rounded-2xl p-4">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant/40 mb-1">Start Date</p>
+                          <p className="text-sm font-black text-nb-on-surface">{autoTimeline.start || "No entries"}</p>
+                        </div>
+                        <div className="flex-1 bg-nb-surface-low border border-nb-outline-variant/30 rounded-2xl p-4">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant/40 mb-1">End Date</p>
+                          <p className="text-sm font-black text-nb-on-surface">{autoTimeline.end || "No entries"}</p>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-nb-on-surface-variant/60 italic ml-1">Automatically calculated from the earliest and latest entry dates (excluding templates).</p>
+                    </div>
+                  )}
                 </div>
 
               </div>

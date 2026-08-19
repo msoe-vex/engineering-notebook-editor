@@ -340,7 +340,6 @@ class WorkspaceStore implements IWorkspaceStore {
         return;
       }
 
-      const changesCount = gitChanges.length;
       // Check if remote notebook.json has changed since last loaded, and 3-way merge if necessary
       const remoteIndexPath = this.getFullPath(INDEX_PATH);
       const remoteIndexContent = await this.transferManager.getBaseFileContent(INDEX_PATH);
@@ -462,21 +461,30 @@ class WorkspaceStore implements IWorkspaceStore {
           }
 
           // Re-generate derivative LaTeX files from the merged metadata
+          const regularEntries = Object.values(merged.entries)
+            .filter(e => !e.isTemplate && Boolean(e.date));
+
+          const entryDates = regularEntries
+            .map(e => e.date)
+            .sort();
+
+          const autoStartDate = entryDates.length > 0 ? entryDates[0] : "";
+          const autoEndDate = entryDates.length > 0 ? entryDates[entryDates.length - 1] : "";
+
+          const rawTeam: Partial<TeamMetadata> = merged.team || {};
+          const isAuto = rawTeam.autoCalculateDates ?? true;
+          const effectiveStartDate = (!isAuto && rawTeam.startDate) ? rawTeam.startDate : formatDateMonthYear(autoStartDate);
+          const effectiveEndDate = (!isAuto && rawTeam.endDate) ? rawTeam.endDate : formatDateMonthYear(autoEndDate);
+
           const teamInfo = {
             teamName: "",
             teamNumber: "",
             organization: "",
             members: [],
-            ...(merged.team || {}),
+            ...rawTeam,
+            startDate: effectiveStartDate,
+            endDate: effectiveEndDate,
           };
-          const entryDates = Object.values(merged.entries)
-            .map(e => e.date)
-            .filter(Boolean)
-            .sort();
-          if (entryDates.length > 0) {
-            teamInfo.startDate = formatDateMonthYear(entryDates[0]);
-            teamInfo.endDate = formatDateMonthYear(entryDates[entryDates.length - 1]);
-          }
 
           const teamTexContent = generateTeamLatex(teamInfo);
           const phasesTexContent = generatePhasesLatex(merged.phases || []);

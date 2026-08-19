@@ -61,6 +61,7 @@ export interface TeamMetadata {
   teamNumber: string;
   startDate?: string;
   endDate?: string;
+  autoCalculateDates?: boolean;
   organization: string;
   logo?: string; // Path to asset
   logoOriginal?: string; // Path to original asset
@@ -147,6 +148,7 @@ export const EMPTY_METADATA: NotebookMetadata = {
     teamNumber: "",
     startDate: "",
     endDate: "",
+    autoCalculateDates: true,
     organization: "",
     members: []
   }
@@ -887,12 +889,15 @@ export function mergeTeamMetadata(
     else if (r) mergedMembers.push(r);
   }
 
+  const autoCalculateDates = JSON.stringify(local.autoCalculateDates) !== JSON.stringify(base.autoCalculateDates) ? local.autoCalculateDates : (remote.autoCalculateDates ?? true);
+
   return {
     teamName: teamName || "",
     teamNumber: teamNumber || "",
     organization: organization || "",
     startDate,
     endDate,
+    autoCalculateDates: autoCalculateDates ?? true,
     logo,
     logoOriginal,
     members: mergedMembers

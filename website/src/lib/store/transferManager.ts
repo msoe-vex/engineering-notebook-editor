@@ -347,7 +347,7 @@ export class TransferManager {
         remappedMeta.filename = `${ENTRIES_DIR}/${newId}.json`;
 
         if (!remappedMeta.date) {
-          remappedMeta.date = remappedMeta.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0];
+          remappedMeta.date = "";
         }
 
         const discoveredResources = extractResources(docWithIds);

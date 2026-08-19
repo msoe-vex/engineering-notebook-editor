@@ -1,6 +1,6 @@
 import { INDEX_PATH } from "../constants";
 import { getPending } from "../db";
-import { getMimeTypeFromExtension, blobFromBase64 } from "../utils";
+import { getMimeTypeFromExtension, blobFromBase64, formatDateMonthYear } from "../utils";
 import { TeamMetadata, ProjectPhase, dehydrateTeamAssets, validateNotebookIntegrity } from "../metadata";
 import { IWorkspaceStore } from "./types";
 
@@ -14,6 +14,15 @@ export class TeamManager {
   async saveTeam(team: TeamMetadata, phases?: ProjectPhase[]) {
     const oldMeta = this.store.metadata;
     const { cleanTeam, newAssets } = await dehydrateTeamAssets(team);
+
+    // If auto-calculating dates, ensure startDate and endDate in notebook.json reflect the calculated dates
+    if (cleanTeam.autoCalculateDates !== false) {
+      const regularEntries = Object.values(this.store.metadata.entries || {})
+        .filter(e => !e.isTemplate && Boolean(e.date));
+      const entryDates = regularEntries.map(e => e.date).sort();
+      cleanTeam.startDate = entryDates.length > 0 ? formatDateMonthYear(entryDates[0]) : "";
+      cleanTeam.endDate = entryDates.length > 0 ? formatDateMonthYear(entryDates[entryDates.length - 1]) : "";
+    }
 
     // Memory update
     const updatedMeta = validateNotebookIntegrity({
