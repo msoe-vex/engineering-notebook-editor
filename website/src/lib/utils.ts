@@ -183,6 +183,16 @@ export async function prepareImageAssets(dataUrl: string, originalExt: string, o
 }
 
 /**
+ * Formats a Date object (or current date) as YYYY-MM-DD in the local timezone.
+ */
+export function getLocalDateString(d: Date = new Date()): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * Formats a date string into "Month YYYY" (e.g. "September 2024")
  */
 export function formatDateMonthYear(dateStr: string): string {
@@ -206,7 +216,7 @@ export function formatDateMonthYear(dateStr: string): string {
 
 export interface DebouncedFunction<T extends (...args: unknown[]) => unknown> {
   (...args: Parameters<T>): void;
-  flush(): void;
+  flush(): Promise<void>;
   cancel(): void;
 }
 
@@ -237,7 +247,7 @@ export function debounceWithFlush<T extends (...args: unknown[]) => unknown>(
     }, wait);
   };
 
-  debounced.flush = () => {
+  debounced.flush = (): Promise<void> => {
     if (timeoutId !== null) {
       clearTimeout(timeoutId);
       timeoutId = null;
@@ -245,8 +255,9 @@ export function debounceWithFlush<T extends (...args: unknown[]) => unknown>(
     const argsToUse = lastArgs;
     lastArgs = null;
     if (argsToUse) {
-      func(...argsToUse);
+      return Promise.resolve(func(...argsToUse) as void);
     }
+    return Promise.resolve();
   };
 
   debounced.cancel = () => {

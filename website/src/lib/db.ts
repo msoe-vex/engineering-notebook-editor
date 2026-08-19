@@ -298,3 +298,46 @@ export async function getPending(dbName: string, path: string): Promise<PendingC
     req.onerror = () => reject(req.error);
   });
 }
+
+// ── Base Metadata Snapshot ──────────────────────────────────────────────────
+
+export async function saveBaseMetadata(dbName: string, metadata: import("./metadata").NotebookMetadata): Promise<void> {
+  const db = await openDB(dbName);
+  return new Promise((resolve, reject) => {
+    const store = tx(db, WORKSPACE_STORE, "readwrite");
+    const req = store.put(JSON.stringify(metadata), "base-metadata");
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function getBaseMetadata(dbName: string): Promise<import("./metadata").NotebookMetadata | null> {
+  const db = await openDB(dbName);
+  return new Promise((resolve, reject) => {
+    const store = tx(db, WORKSPACE_STORE, "readonly");
+    const req = store.get("base-metadata");
+    req.onsuccess = () => {
+      if (req.result && typeof req.result === "string") {
+        try {
+          resolve(JSON.parse(req.result));
+        } catch {
+          resolve(null);
+        }
+      } else {
+        resolve(null);
+      }
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function clearBaseMetadata(dbName: string): Promise<void> {
+  const db = await openDB(dbName);
+  return new Promise((resolve, reject) => {
+    const store = tx(db, WORKSPACE_STORE, "readwrite");
+    const req = store.delete("base-metadata");
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+

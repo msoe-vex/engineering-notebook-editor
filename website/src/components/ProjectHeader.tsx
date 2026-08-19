@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import GithubIcon from "./GithubIcon";
 import {
   Menu, HelpCircle, Play, Loader2, Check,
-  MoreVertical, Download, Upload, ArrowLeftRight, Settings2, Edit3
+  MoreVertical, Download, Upload, ArrowLeftRight, Users, Edit3
 } from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { ViewMode } from "./editor/ui/ViewToggle";
@@ -107,7 +107,7 @@ export default function ProjectHeader({
                 </div>
 
                 <MenuButton icon={<Play size={14} />} label="Compile Notebook" onClick={() => { onOpenCompiler(); setShowMenu(false); }} />
-                <MenuButton icon={<Settings2 size={14} />} label="Project Configuration" onClick={() => { onOpenTeam(); setShowMenu(false); }} />
+                <MenuButton icon={<Users size={14} />} label="Team Configuration" onClick={() => { onOpenTeam(); setShowMenu(false); }} />
 
                 <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
 

@@ -1,6 +1,6 @@
 import { INDEX_PATH } from "../constants";
-import { getPending, getResource } from "../db";
-import { getMimeTypeFromExtension, blobFromBase64 } from "../utils";
+import { getPending } from "../db";
+import { getMimeTypeFromExtension, blobFromBase64, formatDateMonthYear } from "../utils";
 import { TeamMetadata, ProjectPhase, dehydrateTeamAssets, validateNotebookIntegrity } from "../metadata";
 import { IWorkspaceStore } from "./types";
 
@@ -14,6 +14,15 @@ export class TeamManager {
   async saveTeam(team: TeamMetadata, phases?: ProjectPhase[]) {
     const oldMeta = this.store.metadata;
     const { cleanTeam, newAssets } = await dehydrateTeamAssets(team);
+
+    // If auto-calculating dates, ensure startDate and endDate in notebook.json reflect the calculated dates
+    if (cleanTeam.autoCalculateDates !== false) {
+      const regularEntries = Object.values(this.store.metadata.entries || {})
+        .filter(e => !e.isTemplate && Boolean(e.date));
+      const entryDates = regularEntries.map(e => e.date).sort();
+      cleanTeam.startDate = entryDates.length > 0 ? formatDateMonthYear(entryDates[0]) : "";
+      cleanTeam.endDate = entryDates.length > 0 ? formatDateMonthYear(entryDates[entryDates.length - 1]) : "";
+    }
 
     // Memory update
     const updatedMeta = validateNotebookIntegrity({
@@ -43,6 +52,36 @@ export class TeamManager {
       await this.store.persistFile(INDEX_PATH, metaStr, "Update team metadata");
       await this.store.updateLatexMetadata();
     });
+  }
+
+  async hydrateTeamAssetsOnDemand() {
+    if (!this.store.metadata.team) return;
+    const team = this.store.metadata.team;
+    const tasks: Promise<void>[] = [];
+
+    const fetchAsset = async (path: string) => {
+      if (!path || path.startsWith('data:') || this.store.assetCache.has(path)) return;
+      try {
+        const b64 = await this.store.getAssetBase64(path);
+        if (b64) {
+          const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${b64}`;
+          this.store.assetCache.set(path, dataUrl);
+        }
+      } catch (e) {
+        console.warn(`[TeamManager] Failed to hydrate asset: ${path}`, e);
+      }
+    };
+
+    if (team.logo) tasks.push(fetchAsset(team.logo));
+    if (team.members) {
+      for (const m of team.members) {
+        if (m.image) tasks.push(fetchAsset(m.image));
+      }
+    }
+    if (tasks.length > 0) {
+      await Promise.all(tasks);
+      this.store.notifyStateChange();
+    }
   }
 
   async saveCompiledPdf(pdfData: Uint8Array) {
@@ -76,14 +115,7 @@ export class TeamManager {
       return blobFromBase64(pending.content);
     }
 
-    // 2. Check resource store
-    const cached = await getResource(dbName, "main.pdf");
-    if (cached) {
-      const base64 = cached.includes(',') ? cached.split(',')[1] : cached;
-      return blobFromBase64(base64);
-    }
-
-    // 3. Check filesystem (for local/github modes)
+    // 2. Check memory cache / filesystem / GitHub
     const base64 = await this.store.getAssetBase64("main.pdf");
     if (base64) return blobFromBase64(base64);
 

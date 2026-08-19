@@ -33,13 +33,13 @@ const LatexPreview = dynamic(() => import("./LatexPreview"), {
     </div>
   )
 });
-import { getLocalDateString } from "@/lib/metadata";
 import { generateEntryLatex } from "@/lib/latex";
 import { getPhases, getPhaseConfig } from "@/lib/phases";
+import { store } from "@/lib/store";
 import AutocompleteInput from "./ui/AutocompleteInput";
 import DatePicker from "./ui/DatePicker";
-import { extractResources, extractReferences, TipTapNode, ensureResourceIds, buildResourceTypeIndex } from "@/lib/metadata";
-import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR, TYPE_LABELS } from "@/lib/constants";
+import { extractResources, extractReferences, TipTapNode, ensureResourceIds, buildResourceTypeIndex, validateEntry } from "@/lib/metadata";
+import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng, compressImageToJpeg } from "@/lib/utils";
 import { NodeSelection } from "@tiptap/pm/state";
 
@@ -746,42 +746,49 @@ const EditorContent = React.memo(function EditorContent({
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   const validate = useCallback(() => {
-    const errors: string[] = [];
-    if (!openFile.title?.trim()) errors.push("Entry title is required.");
-    if (!openFile.author?.trim()) errors.push("Author name is required.");
-    if (!openFile.date?.trim()) errors.push("Date is required.");
-    if (openFile.phase === null || openFile.phase === undefined) errors.push("Entry phase is required.");
+    const entryIdMeta = metadata.entries[entryId];
+    const isTemplate = entryIdMeta?.isTemplate || false;
 
-    // use shared TYPE_LABELS from constants
-
-    if (editor) {
-      const doc = editor.getJSON();
-      const resources = extractResources(doc);
-      for (const res of Object.values(resources)) {
-        const label = TYPE_LABELS[res.type] || res.type;
-        if (!res.title?.trim()) errors.push(`Title missing for ${label}.`);
-        if (!res.caption?.trim()) errors.push(`Caption missing for ${label}.`);
-      }
-
-      const refs = extractReferences(doc);
-      if (refs.length > 0 && metadata?.entries) {
-        const existingIds = new Set<string>();
-        for (const entry of Object.values(metadata.entries)) {
-          existingIds.add(entry.id);
-          if (entry.resources) {
-            for (const resId of Object.keys(entry.resources)) {
-              existingIds.add(resId);
-            }
+    // Build the set of existing IDs (for references)
+    const existingIds = new Set<string>();
+    if (metadata?.entries) {
+      for (const entry of Object.values(metadata.entries)) {
+        existingIds.add(entry.id);
+        if (entry.resources) {
+          for (const resId of Object.keys(entry.resources)) {
+            existingIds.add(resId);
           }
-        }
-        for (const refId of refs) {
-          if (!existingIds.has(refId)) errors.push(`Broken reference found: ${refId}`);
         }
       }
     }
 
+    // Extract live resources from the current editor instance
+    let liveResources: Record<string, { title: string; caption: string; type: string }> | undefined = undefined;
+    let liveReferences: string[] = [];
+    if (editor) {
+      const doc = editor.getJSON();
+      liveResources = extractResources(doc);
+      liveReferences = extractReferences(doc);
+    }
+
+    // Combine current openFile form fields with the live resources from the editor
+    const entryToValidate = {
+      ...entryIdMeta,
+      id: entryId,
+      title: openFile.title || "",
+      author: openFile.author || "",
+      date: openFile.date || "",
+      phase: openFile.phase,
+      isTemplate,
+      resources: liveResources || entryIdMeta?.resources,
+      references: liveReferences.length > 0 ? liveReferences : (entryIdMeta?.references || [])
+    };
+
+    const phases = metadata.phases || [];
+    const errors = validateEntry(entryToValidate, phases, existingIds);
+
     return { valid: errors.length === 0, errors };
-  }, [openFile.title, openFile.author, openFile.date, openFile.phase, editor, metadata]);
+  }, [openFile.title, openFile.author, openFile.date, openFile.phase, editor, metadata, entryId]);
 
   // Local validation state for immediate UI feedback.
   // Editor is the sole authority on validity while open — parent isValid is only used for initial value.
@@ -995,7 +1002,16 @@ const EditorContent = React.memo(function EditorContent({
           const originalPath = `${ASSETS_ORIGINAL_DIR}/${originalHash}.${originalExt}`;
           const newPath = `${ASSETS_COMPRESSED_DIR}/${compressedHash}.jpg`;
 
-          insertBlock(editor, { type: "image", attrs: { id: generateUUID(), src: compressed.dataUrl, originalSrc: dataUrl, filePath: newPath, originalFilePath: originalPath, title: "" } });
+          // Populate in-memory asset cache synchronously (0ms) so ImageNodeView finds it immediately
+          store.assetCache.set(originalPath, dataUrl);
+          store.assetCache.set(newPath, compressed.dataUrl);
+
+          store.enqueue(async () => {
+            await store.persistFile(originalPath, originalBase64, `Original Asset: ${originalPath}`, true);
+            await store.persistFile(newPath, compressed.base64, `Compressed Asset: ${newPath}`, true);
+          });
+
+          insertBlock(editor, { type: "image", attrs: { id: generateUUID(), src: compressed.dataUrl, filePath: newPath, originalFilePath: originalPath, title: "" } });
 
         };
         reader.readAsDataURL(file);
@@ -1007,11 +1023,11 @@ const EditorContent = React.memo(function EditorContent({
   return (
     <div className="flex flex-col h-full bg-nb-surface overflow-hidden scrollbar-hide">
       {/* ── Fixed Header ────────────────────────────────────────── */}
-      <div className="shrink-0 border-b border-nb-outline-variant bg-nb-surface/80 backdrop-blur-md z-[150]">
+      <div className="shrink-0 border-b border-nb-outline-variant bg-nb-surface/80 backdrop-blur-md z-150">
         <div className="w-full">
 
           {/* Row 1: Menu Bar */}
-          <div className="px-4 md:px-6 min-h-[2.5rem] py-1 flex flex-wrap items-center gap-2 border-b border-nb-outline-variant/30 relative z-[170]">
+          <div className="px-4 md:px-6 min-h-10 py-1 flex flex-wrap items-center gap-2 border-b border-nb-outline-variant/30 relative z-170">
             <button
               onClick={() => setIsHeaderCollapsed(!isHeaderCollapsed)}
               className="p-1.5 rounded-lg hover:bg-nb-surface-mid text-nb-on-surface-variant transition-colors group cursor-pointer shrink-0"
@@ -1117,7 +1133,7 @@ const EditorContent = React.memo(function EditorContent({
               />
             </MenuItem>
 
-            <div className="flex-1 min-w-[20px]" />
+            <div className="flex-1 min-w-5" />
 
             <div className="flex items-center gap-2 mr-4">
               <ViewToggle viewMode={viewMode} onSetViewMode={onSetViewMode} />
@@ -1147,8 +1163,8 @@ const EditorContent = React.memo(function EditorContent({
             <div className="min-h-0 overflow-hidden">
               <div className={`flex flex-col transition-all duration-500 ease-in-out ${isHeaderCollapsed ? '-translate-y-6' : 'translate-y-0'}`}>
                 {/* Row 2: Metadata */}
-                <div className="px-4 md:px-6 py-2.5 flex flex-wrap items-center gap-3 relative z-[160] shrink-0">
-                  <div className="flex-1 min-w-[280px]">
+                <div className="px-4 md:px-6 py-2.5 flex flex-wrap items-center gap-3 relative z-160 shrink-0">
+                  <div className="flex-1 min-w-70">
                     <AutocompleteInput
                       type="text"
                       value={openFile.title}
@@ -1176,13 +1192,13 @@ const EditorContent = React.memo(function EditorContent({
 
                   <div className="flex flex-wrap items-center gap-2 md:gap-3 flex-1 md:flex-none">
                     <DatePicker
-                      value={openFile.date || getLocalDateString()}
+                      value={openFile.date || ""}
                       onChange={(val) => updateDraft(null, { date: val })}
-                      className="h-9 flex-1 min-w-[140px]"
+                      className="h-9 flex-1 min-w-35"
                     />
 
                     <div
-                      className="h-9 flex-1 min-w-[160px] flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50"
+                      className="h-9 flex-1 min-w-40 flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50"
                     >
                       <User size={15} className="text-nb-primary drop-shadow-sm shrink-0" />
                       <AutocompleteInput
@@ -1199,7 +1215,7 @@ const EditorContent = React.memo(function EditorContent({
 
                     <div
                       ref={phaseButtonRef}
-                      className="relative h-9 flex-1 min-w-[240px] flex items-center gap-2.5 px-3 rounded-xl border border-nb-outline-variant/30 bg-nb-surface-low transition-all"
+                      className="relative h-9 flex-1 min-w-60 flex items-center gap-2.5 px-3 rounded-xl border border-nb-outline-variant/30 bg-nb-surface-low transition-all"
                     >
                       <div
                         className="absolute inset-0 z-10 cursor-pointer"
@@ -1235,6 +1251,17 @@ const EditorContent = React.memo(function EditorContent({
                           className="mt-1 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-xl p-1.5 animate-in fade-in zoom-in-95 slide-in-from-top-2 duration-200 ease-out"
                           onMouseDown={(e) => e.stopPropagation()}
                         >
+                          {/* Deselect option */}
+                          {openFile.phase !== null && openFile.phase !== undefined && (
+                            <button
+                              type="button"
+                              onClick={() => { updateDraft(null, { phase: null }); setActiveMenu(null); }}
+                              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[10px] font-bold tracking-widest transition-all text-left cursor-pointer active:scale-[0.98] text-nb-on-surface-variant hover:bg-nb-surface-mid hover:text-nb-on-surface"
+                            >
+                              <LucideIcons.X size={14} className="text-nb-on-surface-variant/50" />
+                              <span className="flex-1">NO PHASE</span>
+                            </button>
+                          )}
                           {availablePhases.map(p => {
                             const cfg = phaseConfig[p.index];
                             const Icon = cfg.icon;

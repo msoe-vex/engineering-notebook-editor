@@ -5,6 +5,7 @@ import { GripVertical, Trash2, Sigma, Edit3 } from "lucide-react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import { generateUUID } from "../../../lib/utils";
+import { NodeViewInput } from "./NodeViewInput";
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
@@ -74,10 +75,10 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
     <NodeViewWrapper
       draggable={dragEnabled}
       data-id={node.attrs.id}
-      className={`my-6 group relative w-full transition ${active ? 'z-[100]' : 'z-10'} pl-12`}>
+      className={`my-6 group relative w-full transition ${active ? 'z-100' : 'z-10'} pl-12`}>
 
       {/* Side Toolbar */}
-      <div contentEditable={false} className="absolute left-0 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
+      <div contentEditable={false} className="absolute left-0 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-70">
         <div
           data-drag-handle
           onMouseEnter={() => setDragEnabled(true)}
@@ -105,10 +106,9 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
         >
           <div className="flex-1 flex items-center gap-1.5 shrink-0">
             <Sigma size={12} className="text-nb-primary" />
-            <input
-              type="text"
+            <NodeViewInput
               value={node.attrs.title || ""}
-              onChange={(e) => updateAttributes({ title: e.target.value })}
+              onUpdate={(title) => updateAttributes({ title })}
               placeholder="Equation Title..."
               className="flex-1 bg-transparent border-none outline-none text-[12px] font-bold tracking-wider text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
             />
@@ -126,7 +126,7 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
         </div>
 
         {/* Content Area */}
-        <div className="flex flex-col items-stretch justify-center min-h-[6rem] relative">
+        <div className="flex flex-col items-stretch justify-center min-h-24 relative">
           {/* Edit View */}
           <div
             className="w-full px-6 py-4 bg-nb-surface-low/30"
@@ -191,10 +191,9 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
 
         {/* Caption Area */}
         <div contentEditable={false} className="bg-nb-surface-low/30 border-t border-nb-outline-variant/10 px-4 py-2 flex items-center justify-center gap-2 group/caption">
-          <input
-            type="text"
+          <NodeViewInput
             value={node.attrs.caption || ""}
-            onChange={(e) => updateAttributes({ caption: e.target.value })}
+            onUpdate={(caption) => updateAttributes({ caption })}
             placeholder="Add a caption to this equation..."
             className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface/50 group-hover/caption:text-nb-on-surface focus:text-nb-on-surface focus:opacity-100 transition-all"
           />

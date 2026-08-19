@@ -1,0 +1,35 @@
+{
+  "version": 3,
+  "content": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "heading",
+        "attrs": {
+          "level": 1,
+          "id": "019e2f01-4cf8-7e23-804c-1e8968f3de13"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Develop Solution"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "italic"
+              }
+            ],
+            "text": "(Overview Describe steps for how you designed the solution. Include pictures, screenshots, diagrams, etc.)"
+          }
+        ]
+      }
+    ]
+  }
+}

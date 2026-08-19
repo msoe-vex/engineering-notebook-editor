@@ -1,5 +1,5 @@
 import { GitHubConfig, initiateGitHubLogin } from "@/lib/github";
-import { Project, getProjectDBName, getAllPending } from "@/lib/db";
+import { Project, getProjectDBName, getAllPending, getProjectHandle } from "@/lib/db";
 import { GITHUB_ISSUES_URL } from "@/lib/constants";
 import React, { useState, useEffect } from "react";
 import {
@@ -10,6 +10,8 @@ import { useTheme } from "next-themes";
 import GitHubConnectionDialog from "./GitHubConnectionDialog";
 import GithubIcon from "./GithubIcon";
 import Logo from "./Logo";
+import { events, EventNames } from "@/lib/events";
+import { useIsMobileDevice } from "@/hooks/useDevice";
 
 
 interface HomeProps {
@@ -120,8 +122,23 @@ export default function Home({
   }, [projects]);
 
   const isDarkMode = resolvedTheme === "dark";
+  const isMobile = useIsMobileDevice();
 
   const handleOpenFolder = async () => {
+    if (isMobile) {
+      events.emit(EventNames.SHOW_NOTIFICATION, {
+        message: "Local folder workspaces are only supported on desktop browsers. Please use a GitHub workspace on mobile.",
+        type: "error"
+      });
+      return;
+    }
+    if (typeof window === "undefined" || !("showDirectoryPicker" in window)) {
+      events.emit(EventNames.SHOW_NOTIFICATION, {
+        message: "This browser does not support local folder picking. Please use a browser with File System support or use a GitHub workspace.",
+        type: "error"
+      });
+      return;
+    }
     try {
       const handle = await window.showDirectoryPicker({ mode: "readwrite" });
       onCreateLocal(handle);
@@ -129,6 +146,39 @@ export default function Home({
       if (e instanceof Error && e.name === 'AbortError') return;
       console.error(e);
     }
+  };
+
+  const handleSelectProject = async (project: Project) => {
+    if (project.type === "local") {
+      if (isMobile) {
+        events.emit(EventNames.SHOW_NOTIFICATION, {
+          message: "Local folder workspaces are only supported on desktop browsers. Please use a GitHub workspace on mobile.",
+          type: "error"
+        });
+        return;
+      }
+
+      try {
+        const handle = await getProjectHandle(project.id);
+        if (handle && typeof handle.queryPermission === "function") {
+          const queryStatus = await handle.queryPermission({ mode: "readwrite" });
+          if (queryStatus !== "granted" && typeof handle.requestPermission === "function") {
+            const reqStatus = await handle.requestPermission({ mode: "readwrite" });
+            if (reqStatus !== "granted") {
+              events.emit(EventNames.SHOW_NOTIFICATION, {
+                message: "Permission to access folder was not granted.",
+                type: "error"
+              });
+              return;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Could not check/request permission from Home:", err);
+      }
+    }
+
+    onSelectProject(project.id);
   };
 
   if (!mounted) return null;
@@ -154,16 +204,35 @@ export default function Home({
             <div className="grid grid-cols-1 gap-3">
               <button
                 onClick={handleOpenFolder}
-                className="group flex items-center gap-4 p-4 rounded-2xl bg-nb-surface border border-nb-outline-variant/30 hover:border-nb-primary/50 hover:bg-nb-primary/5 transition-all text-left shadow-nb-sm cursor-pointer"
+                className={`group flex items-center gap-4 p-4 rounded-2xl bg-nb-surface border border-nb-outline-variant/30 text-left shadow-nb-sm transition-all ${
+                  isMobile
+                    ? "opacity-60 cursor-not-allowed"
+                    : "hover:border-nb-primary/50 hover:bg-nb-primary/5 cursor-pointer"
+                }`}
               >
-                <div className="w-10 h-10 rounded-xl bg-nb-primary/10 text-nb-primary flex items-center justify-center group-hover:scale-110 transition-transform">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-transform ${
+                  isMobile
+                    ? "bg-nb-surface-low text-nb-on-surface-variant/50"
+                    : "bg-nb-primary/10 text-nb-primary group-hover:scale-110"
+                }`}>
                   <Folder size={20} />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-sm font-bold text-nb-on-surface">Local Folder</h3>
-                  <p className="text-[10px] text-nb-on-surface-variant">Sync with your local filesystem</p>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-nb-on-surface">Local Folder</h3>
+                    {isMobile && (
+                      <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-nb-surface-low text-nb-on-surface-variant/70 uppercase tracking-widest border border-nb-outline-variant/30">
+                        Desktop only
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-nb-on-surface-variant">
+                    {isMobile ? "Requires desktop browser with file access" : "Sync with your local filesystem"}
+                  </p>
                 </div>
-                <Plus size={16} className="text-nb-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity" />
+                {!isMobile && (
+                  <Plus size={16} className="text-nb-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity" />
+                )}
               </button>
 
               <button
@@ -213,7 +282,7 @@ export default function Home({
             <span className="text-[10px] font-bold text-nb-on-surface-variant/40">{projects.length} Found</span>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-2 -mr-2 max-h-[380px] pb-4">
+          <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-2 -mr-2 max-h-95 pb-4">
             <div className="grid grid-cols-1 gap-3">
               {[...projects].sort((a, b) => new Date(b.lastOpened).getTime() - new Date(a.lastOpened).getTime()).map(project => (
                 <div
@@ -222,7 +291,7 @@ export default function Home({
                 >
                   <div
                     className="flex-1 min-w-0 cursor-pointer flex items-center gap-4"
-                    onClick={() => onSelectProject(project.id)}
+                    onClick={() => handleSelectProject(project)}
                   >
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105 ${project.type === "local" ? "bg-nb-primary/10 text-nb-primary" :
                       project.type === "github" ? "bg-nb-tertiary/10 text-nb-tertiary" :
@@ -258,7 +327,9 @@ export default function Home({
                               {new Date(project.lastOpened).toLocaleDateString()}
                             </div>
                             <div className="w-1 h-1 rounded-full bg-nb-outline-variant/50" />
-                            <span className="text-[9px] font-black text-nb-on-surface-variant/40 tracking-widest italic">{project.type === "github" ? "GitHub" : project.type === "local" ? "Local" : "Temporary"}</span>
+                            <span className="text-[9px] font-black text-nb-on-surface-variant/40 tracking-widest italic">
+                              {project.type === "github" ? "GitHub" : project.type === "local" ? (isMobile ? "Local (Desktop only)" : "Local") : "Temporary"}
+                            </span>
                             {pendingCounts[project.id] > 0 && (
                               <>
                                 <div className="w-1 h-1 rounded-full bg-nb-outline-variant/50" />
@@ -289,9 +360,9 @@ export default function Home({
 
                     {menuOpenId === project.id && (
                       <>
-                        <div className="fixed inset-0 z-[100]" onClick={() => setMenuOpenId(null)} />
+                        <div className="fixed inset-0 z-100" onClick={() => setMenuOpenId(null)} />
                         <div
-                          className="fixed w-48 bg-nb-surface border border-nb-outline-variant/30 rounded-2xl shadow-nb-xl z-[101] overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+                          className="fixed w-48 bg-nb-surface border border-nb-outline-variant/30 rounded-2xl shadow-nb-xl z-101 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
                           style={{
                             top: menuPosition.top - window.scrollY + 8,
                             left: Math.max(16, Math.min(window.innerWidth - 208, menuPosition.left - window.scrollX))

@@ -24,9 +24,11 @@ export async function addTextFileToZip(zip: JSZip, getFileContent: (path: string
     if (res.ok) {
       const text = await res.text();
       zip.file(path, text);
+    } else {
+      console.error(`[Transfer] Failed to fetch fallback file "${path}" from /latex: HTTP ${res.status}`);
     }
-  } catch {
-    // ignore fallback failure
+  } catch (err) {
+    console.error(`[Transfer] Error fetching fallback file "${path}":`, err);
   }
 }
 

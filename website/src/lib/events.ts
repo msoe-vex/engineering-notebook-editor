@@ -38,4 +38,5 @@ export const EventNames = {
   SHOW_NOTIFICATION: "ui:show_notification",
   SHOW_GITHUB_LOGIN: "ui:show_github_login",
   GITHUB_SESSION_EXPIRED: "github:session_expired",
+  PROMPT_MERGE_CONFLICT: "ui:prompt_merge_conflict",
 };

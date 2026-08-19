@@ -57,7 +57,7 @@ export default function DatePicker({ value, onChange, className = "" }: DatePick
 
   return (
     <div
-      className={`flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all hover:border-nb-primary/50 relative cursor-pointer ${className}`}
+      className={`flex items-center gap-2 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all hover:border-nb-primary/50 relative cursor-pointer select-none ${className}`}
       ref={containerRef}
       onClick={() => {
         if (!isOpen) {
@@ -66,10 +66,24 @@ export default function DatePicker({ value, onChange, className = "" }: DatePick
         setIsOpen(!isOpen);
       }}
     >
-      <CalendarIcon size={18} className="text-nb-primary shrink-0 drop-shadow-sm" />
-      <span className="text-[11px] font-bold text-nb-on-surface-variant tracking-tight flex-1 truncate">
-        {value ? parseDateString(value).toLocaleDateString(undefined, { dateStyle: 'medium' }) : "Select Date"}
+      <CalendarIcon size={15} className="text-nb-primary shrink-0 drop-shadow-sm" />
+      <span className={`text-[12px] font-bold tracking-tight flex-1 truncate ${value ? 'text-nb-on-surface-variant' : 'text-nb-on-surface-variant/30'}`}>
+        {value ? parseDateString(value).toLocaleDateString(undefined, { dateStyle: 'medium' }) : "Date"}
       </span>
+
+      {value && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onChange("");
+          }}
+          title="Clear date"
+          className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-nb-on-surface-variant/40 hover:text-red-500 hover:bg-nb-surface-mid transition-all cursor-pointer"
+        >
+          <span className="text-xs font-bold leading-none px-0.5">×</span>
+        </button>
+      )}
 
       {isOpen && createPortal(
         <div
@@ -80,21 +94,36 @@ export default function DatePicker({ value, onChange, className = "" }: DatePick
             left: coords.left,
             zIndex: 9999
           }}
-          className="p-4 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-2xl w-60 animate-in fade-in zoom-in-95 duration-200"
+          className="p-3.5 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-2xl w-60 animate-in fade-in zoom-in-95 duration-200"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <div className="flex items-center justify-between">
               <label className="block text-[9px] font-black uppercase tracking-wider text-nb-on-surface-variant/50">Select Date</label>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsOpen(false);
-                }}
-                className="text-[10px] font-bold text-nb-primary hover:text-nb-primary/80 transition-colors cursor-pointer"
-              >
-                Done
-              </button>
+              <div className="flex items-center gap-2">
+                {value && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onChange("");
+                    }}
+                    className="text-[10px] font-bold text-red-500 hover:underline transition-colors cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsOpen(false);
+                  }}
+                  className="text-[10px] font-bold text-nb-primary hover:text-nb-primary/80 transition-colors cursor-pointer"
+                >
+                  Done
+                </button>
+              </div>
             </div>
             <input
               type="date"

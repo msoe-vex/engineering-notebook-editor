@@ -8,9 +8,9 @@ export function RawLatexNodeView({ node, deleteNode, selected, editor }: NodeVie
   return (
     <NodeViewWrapper
       draggable={dragEnabled}
-      className={`my-6 group relative w-full transition ${selected ? 'z-[100]' : 'z-10'} pl-12`}
+      className={`my-6 group relative w-full transition ${selected ? 'z-100' : 'z-10'} pl-12`}
     >
-      <div contentEditable={false} className="absolute left-0 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
+      <div contentEditable={false} className="absolute left-0 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-70">
         <div
           data-drag-handle
           onMouseEnter={() => setDragEnabled(true)}

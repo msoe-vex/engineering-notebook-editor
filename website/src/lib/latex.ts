@@ -385,8 +385,9 @@ export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: strin
   return latex;
 };
 
-export const generateAllEntriesLatex = (metadata: { entries: Record<string, { id: string, date: string, createdAt: string, updatedAt?: string }> }, prefix: string = ""): string => {
+export const generateAllEntriesLatex = (metadata: { entries: Record<string, { id: string, date: string, createdAt: string, updatedAt?: string, isTemplate?: boolean }> }, prefix: string = ""): string => {
   const entries = Object.values(metadata.entries)
+    .filter(entry => !entry.isTemplate)
     .sort((a, b) => {
       const dateComp = (a.date || "").localeCompare(b.date || "");
       if (dateComp !== 0) return dateComp;

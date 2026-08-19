@@ -253,21 +253,44 @@ button:disabled {
   box-shadow: none !important;
 }
 
-/* Prevent selection highlighting of UI elements and inputs in custom resource blocks/node views */
-.ProseMirror [contenteditable="false"]::selection,
-.ProseMirror [contenteditable="false"] *::selection,
-.ProseMirror input::selection,
-.ProseMirror textarea::selection,
-.ProseMirror-selectednode *::selection {
+/* Prevent browser text selection on inputs and UI elements when the parent node itself is selected */
+.ProseMirror-selectednode input,
+.ProseMirror-selectednode textarea,
+.ProseMirror-selectednode input::selection,
+.ProseMirror-selectednode textarea::selection {
+  user-select: none !important;
+  -webkit-user-select: none !important;
   background-color: transparent !important;
+}
+
+/* Allow text selection & proper highlight in inputs/captions ONLY when actively focused */
+.ProseMirror input:focus,
+.ProseMirror textarea:focus {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
+.ProseMirror input:focus::selection,
+.ProseMirror textarea:focus::selection,
+.ProseMirror [contenteditable="false"] input:focus::selection,
+.ProseMirror [contenteditable="false"] textarea:focus::selection {
+  background-color: rgba(217, 40, 47, 0.3) !important;
   color: inherit !important;
 }
 
-/* Disable user text selection on drag handles, buttons, and captions/headers when full block is selected */
-.ProseMirror [contenteditable="false"],
-.ProseMirror [contenteditable="false"] *,
-.ProseMirror-selectednode input,
-.ProseMirror-selectednode textarea {
+.dark .ProseMirror input:focus::selection,
+.dark .ProseMirror textarea:focus::selection,
+.dark .ProseMirror [contenteditable="false"] input:focus::selection,
+.dark .ProseMirror [contenteditable="false"] textarea:focus::selection {
+  background-color: rgba(217, 40, 47, 0.45) !important;
+  color: inherit !important;
+}
+
+/* Prevent text selection on non-text UI handles and buttons when full node is selected */
+.ProseMirror [contenteditable="false"] button,
+.ProseMirror [contenteditable="false"] svg,
+.ProseMirror-selectednode button,
+.ProseMirror-selectednode svg {
   user-select: none !important;
   -webkit-user-select: none !important;
 }
