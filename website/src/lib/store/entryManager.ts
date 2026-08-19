@@ -248,11 +248,13 @@ export class EntryManager {
         this.store.lastSavedContents.set(mergedEntry.filename, entryJsonStr);
       }
 
-      // Save LaTeX
-      const latexPath = `${LATEX_DIR}/${id}.tex`;
-      if (this.store.lastSavedContents.get(latexPath) !== latex) {
-        await this.persistFile(latexPath, latex, `Generate LaTeX: ${info.title}`);
-        this.store.lastSavedContents.set(latexPath, latex);
+      // Save LaTeX (only for regular entries, not templates)
+      if (!mergedEntry.isTemplate) {
+        const latexPath = `${LATEX_DIR}/${id}.tex`;
+        if (this.store.lastSavedContents.get(latexPath) !== latex) {
+          await this.persistFile(latexPath, latex, `Generate LaTeX: ${info.title}`);
+          this.store.lastSavedContents.set(latexPath, latex);
+        }
       }
 
       // Cleanup orphaned assets
@@ -409,7 +411,7 @@ export class EntryManager {
     }
 
     const resourceTypes = buildResourceTypeIndex(this.store.metadata.entries, remappedEntryMeta.resources || {}, newId);
-    const newLatex = generateEntryLatex(
+    const newLatex = !isTemplate ? generateEntryLatex(
       contentJson,
       newTitle,
       newEntry.author,
@@ -418,10 +420,12 @@ export class EntryManager {
       newId,
       resourceTypes,
       newEntry.date
-    );
+    ) : "";
 
     this.store.lastSavedContents.set(newPath, jsonStr);
-    this.store.lastSavedContents.set(newLatexPath, newLatex);
+    if (!isTemplate) {
+      this.store.lastSavedContents.set(newLatexPath, newLatex);
+    }
 
     this.store.metadata = validateNotebookIntegrity({
       ...this.store.metadata,
@@ -439,7 +443,9 @@ export class EntryManager {
         this.store.assetCache.set(asset.path, dataUrl);
       }
       await this.persistFile(newPath, jsonStr, `Create entry: ${newTitle}`);
-      await this.persistFile(newLatexPath, newLatex, `Init LaTeX for: ${newTitle}`);
+      if (!isTemplate) {
+        await this.persistFile(newLatexPath, newLatex, `Init LaTeX for: ${newTitle}`);
+      }
       await this.persistFile(INDEX_PATH, JSON.stringify(this.store.metadata, null, 2), "Update notebook metadata");
       await this.store.updateLatexMetadata();
     });
@@ -469,10 +475,8 @@ export class EntryManager {
 
     const wrapper = { version: 3, content: { type: "doc", content: [{ type: "paragraph" }] } };
     const jsonStr = JSON.stringify(wrapper, null, 2);
-    const initialLatex = `\\notebookentry{${newTemplate.title}}{${newTemplate.date}}{${newTemplate.author}}{}{${id}}\n\n`;
 
     this.store.lastSavedContents.set(path, jsonStr);
-    this.store.lastSavedContents.set(latexPath, initialLatex);
 
     this.store.metadata = validateNotebookIntegrity({
       ...this.store.metadata,
@@ -483,7 +487,6 @@ export class EntryManager {
 
     this.store.enqueue(async () => {
       await this.persistFile(path, jsonStr, `Create template: ${newTemplate.title}`);
-      await this.persistFile(latexPath, initialLatex, "Init template LaTeX");
       await this.persistFile(INDEX_PATH, JSON.stringify(this.store.metadata, null, 2), "Update notebook metadata");
     });
 

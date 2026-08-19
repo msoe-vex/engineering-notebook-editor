@@ -515,10 +515,33 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
     newEntries[id] = { ...entry, isValid: errors.length === 0, validationErrors: errors };
   }
 
+  // Canonicalize team metadata field order so JSON.stringify is completely deterministic
+  let canonicalTeam: TeamMetadata | undefined = undefined;
+  if (metadata.team) {
+    const t = metadata.team;
+    canonicalTeam = {
+      teamName: t.teamName || "",
+      teamNumber: t.teamNumber || "",
+      startDate: t.startDate || "",
+      endDate: t.endDate || "",
+      autoCalculateDates: t.autoCalculateDates ?? true,
+      organization: t.organization || "",
+      ...(t.logo ? { logo: t.logo } : {}),
+      ...(t.logoOriginal ? { logoOriginal: t.logoOriginal } : {}),
+      members: (t.members || []).map(m => ({
+        id: m.id,
+        name: m.name || "",
+        role: m.role || "",
+        ...(m.image ? { image: m.image } : {}),
+        ...(m.imageOriginal ? { imageOriginal: m.imageOriginal } : {})
+      }))
+    };
+  }
+
   const result: NotebookMetadata = {
     version: metadata.version || 3,
     entries: newEntries,
-    ...(metadata.team ? { team: metadata.team } : {}),
+    ...(canonicalTeam ? { team: canonicalTeam } : {}),
     ...(metadata.phases ? { phases: metadata.phases } : {}),
     ...(metadata.lastCompiled ? { lastCompiled: metadata.lastCompiled } : {}),
     assetRefs,
@@ -894,10 +917,10 @@ export function mergeTeamMetadata(
   return {
     teamName: teamName || "",
     teamNumber: teamNumber || "",
-    organization: organization || "",
     startDate,
     endDate,
     autoCalculateDates: autoCalculateDates ?? true,
+    organization: organization || "",
     logo,
     logoOriginal,
     members: mergedMembers

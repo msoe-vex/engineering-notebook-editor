@@ -402,14 +402,16 @@ export class TransferManager {
           await this.store.persistFile(path, base64, `Import asset: ${path}`, true);
         }
 
-        // Write entries JSON and entries LaTeX files (which are always reconstructed for imported entries)
+        // Write entries JSON and entries LaTeX files (which are reconstructed for regular imported entries)
         for (const item of remappedEntries) {
           const { id, doc, meta } = item;
           const contentStr = JSON.stringify({ version: 3, content: doc }, null, 2);
-          const latex = generateEntryLatex(doc, meta.title, meta.author, meta.phase, meta.createdAt, id, globalResourceTypes, meta.date);
 
           await this.store.persistFile(meta.filename, contentStr, `Import entry: ${meta.title}`);
-          await this.store.persistFile(`${LATEX_DIR}/${id}.tex`, latex, `Import LaTeX: ${meta.title}`);
+          if (!meta.isTemplate) {
+            const latex = generateEntryLatex(doc, meta.title, meta.author, meta.phase, meta.createdAt, id, globalResourceTypes, meta.date);
+            await this.store.persistFile(`${LATEX_DIR}/${id}.tex`, latex, `Import LaTeX: ${meta.title}`);
+          }
         }
 
         // Only write custom project files if opted-in
