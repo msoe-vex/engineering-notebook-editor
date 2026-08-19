@@ -1,6 +1,6 @@
 import { INDEX_PATH, ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from "../constants";
 import { events, EventNames } from "../events";
-import { getPending, getResource, putResource } from "../db";
+import { getPending } from "../db";
 import { isBinaryFile, zipCompressionOptions, addTextFileToZip, addAssetFileToZip } from "../transferUtils";
 import { fetchFileContent, fetchRawFileContent } from "../github";
 import { getLocalFileContent } from "../fs";
@@ -18,6 +18,10 @@ export class TransferManager {
   }
 
   async getFileContent(path: string): Promise<string | null> {
+    if (this.store.lastSavedContents.has(path)) {
+      return this.store.lastSavedContents.get(path)!;
+    }
+
     const dbName = this.store.getDBName();
     // If there's a pending delete for this path, treat as removed for exports
     const staged = await getPending(dbName, path);
@@ -39,6 +43,22 @@ export class TransferManager {
     return null;
   }
 
+  async getBaseFileContent(path: string): Promise<string | null> {
+    try {
+      if (this.store.mode === "local" && this.store.dirHandle) {
+        const res = await getLocalFileContent(this.store.dirHandle, path);
+        return res.text || null;
+      } else if (this.store.mode === "github" && this.store.config) {
+        return await fetchFileContent(this.store.config, this.store.getFullPath(path));
+      } else if (this.store.mode === "temporary") {
+        return null;
+      }
+    } catch (e) {
+      console.error(`Failed to get base content for ${path}:`, e);
+    }
+    return null;
+  }
+
   async getAssetBase64(path: string): Promise<string | null> {
     const dbName = this.store.getDBName();
     // If there's a pending delete for this path, treat as removed for exports
@@ -55,21 +75,33 @@ export class TransferManager {
       }
     }
 
-    const cached = await getResource(dbName, path);
-    if (cached) {
-      return normalizeBase64(cached);
+    // 1. Check in-memory session cache (0ms)
+    if (this.store.assetCache.has(path)) {
+      const cached = this.store.assetCache.get(path);
+      if (cached) return normalizeBase64(cached);
     }
 
+    // 2. Fetch from filesystem or GitHub
     try {
       if (this.store.mode === "local" && this.store.dirHandle) {
         const res = await getLocalFileContent(this.store.dirHandle, path);
-        return normalizeBase64(res.base64 as string | null | undefined);
+        const norm = normalizeBase64(res.base64 as string | null | undefined);
+        if (norm) {
+          const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${norm}`;
+          this.store.assetCache.set(path, dataUrl);
+          return norm;
+        }
       } else if (this.store.mode === "github" && this.store.config) {
         const remote = await fetchRawFileContent(this.store.config, this.store.getFullPath(path));
-        return normalizeBase64(remote as string | null | undefined);
+        const norm = normalizeBase64(remote as string | null | undefined);
+        if (norm) {
+          const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${norm}`;
+          this.store.assetCache.set(path, dataUrl);
+          return norm;
+        }
       }
-    } catch (e) {
-      console.error(`Failed to get asset base64 for ${path}`, e);
+    } catch (e: unknown) {
+      console.warn(`Failed to get asset base64 for ${path}:`, e);
     }
     return null;
   }
@@ -186,7 +218,7 @@ export class TransferManager {
           try {
             let base64 = await this.getAssetBase64(`fonts/${font}`);
             if (!base64) {
-              const res = await fetch(`/fonts/${font}`);
+              const res = await fetch(`/notebook-template/fonts/${font}`);
               if (res.ok) {
                 const buffer = await res.arrayBuffer();
                 let binary = '';
@@ -315,7 +347,7 @@ export class TransferManager {
         remappedMeta.filename = `${ENTRIES_DIR}/${newId}.json`;
 
         if (!remappedMeta.date) {
-          remappedMeta.date = remappedMeta.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0];
+          remappedMeta.date = "";
         }
 
         const discoveredResources = extractResources(docWithIds);
@@ -368,19 +400,18 @@ export class TransferManager {
           const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${base64}`;
           this.store.assetCache.set(path, dataUrl);
           await this.store.persistFile(path, base64, `Import asset: ${path}`, true);
-          if (this.store.mode === "github" || this.store.mode === "temporary") {
-            await putResource(this.store.getDBName(), { path, dataUrl });
-          }
         }
 
-        // Write entries JSON and entries LaTeX files (which are always reconstructed for imported entries)
+        // Write entries JSON and entries LaTeX files (which are reconstructed for regular imported entries)
         for (const item of remappedEntries) {
           const { id, doc, meta } = item;
           const contentStr = JSON.stringify({ version: 3, content: doc }, null, 2);
-          const latex = generateEntryLatex(doc, meta.title, meta.author, meta.phase, meta.createdAt, id, globalResourceTypes, meta.date);
 
           await this.store.persistFile(meta.filename, contentStr, `Import entry: ${meta.title}`);
-          await this.store.persistFile(`${LATEX_DIR}/${id}.tex`, latex, `Import LaTeX: ${meta.title}`);
+          if (!meta.isTemplate) {
+            const latex = generateEntryLatex(doc, meta.title, meta.author, meta.phase, meta.createdAt, id, globalResourceTypes, meta.date);
+            await this.store.persistFile(`${LATEX_DIR}/${id}.tex`, latex, `Import LaTeX: ${meta.title}`);
+          }
         }
 
         // Only write custom project files if opted-in

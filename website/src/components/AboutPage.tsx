@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTheme } from "next-themes";
 import Image from "next/image";
+import Link from "next/link";
 import {
   Edit3, FileText, Download, ArrowRight,
   Shield, Bold, Italic, List, Type, Sun, Moon,
@@ -29,6 +30,13 @@ interface AboutPageProps {
 export default function AboutPage({ onClose, onTryIt, onOpenHelp }: AboutPageProps) {
   const { setTheme, resolvedTheme } = useTheme();
 
+  const handleAnchorClick = (callback?: () => void) => (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+      e.preventDefault();
+      callback?.();
+    }
+  };
+
   const scrollToId = (id: string) => {
     const element = document.getElementById(id);
     if (element) {
@@ -37,20 +45,21 @@ export default function AboutPage({ onClose, onTryIt, onOpenHelp }: AboutPagePro
   };
 
   return (
-    <div className="fixed inset-0 z-[1000] bg-nb-bg overflow-y-auto custom-scrollbar" style={{ scrollbarGutter: 'stable' }}>
+    <div className="fixed inset-0 z-1000 bg-nb-bg overflow-y-auto custom-scrollbar" style={{ scrollbarGutter: 'stable' }}>
       <style dangerouslySetInnerHTML={{ __html: BLINK_CSS }} />
       {/* Navigation */}
       <div className="sticky top-0 z-10 bg-nb-bg/80 backdrop-blur-md border-b border-nb-outline-variant/30">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-          <button
-            onClick={onClose}
+          <Link
+            href="/"
+            onClick={handleAnchorClick(onClose)}
             className="flex items-center gap-3 hover:opacity-70 transition-opacity cursor-pointer group"
           >
             <div className="w-8 h-8 rounded-lg bg-nb-primary flex items-center justify-center shadow-lg shadow-nb-primary/20 group-hover:scale-110 transition-transform">
               <Logo className="text-white" size={20} strokeWidth={20} />
             </div>
             <span className="font-black tracking-tight text-nb-on-surface">ENGen</span>
-          </button>
+          </Link>
           <div className="flex items-center gap-4">
             <button
               onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
@@ -60,25 +69,29 @@ export default function AboutPage({ onClose, onTryIt, onOpenHelp }: AboutPagePro
               {resolvedTheme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
             </button>
             {onOpenHelp && (
-              <button
-                onClick={onOpenHelp}
+              <Link
+                href="/help"
+                onClick={handleAnchorClick(onOpenHelp)}
                 className="px-4 py-2 rounded-xl border border-nb-outline-variant/30 text-nb-on-surface-variant text-xs font-black uppercase tracking-widest hover:bg-nb-surface-low transition-all active:scale-95 cursor-pointer"
               >
                 Help & Docs
-              </button>
+              </Link>
             )}
-            <button
-              onClick={onTryIt}
+            <Link
+              href="/"
+              onClick={handleAnchorClick(onTryIt)}
               className="px-4 py-2 rounded-xl bg-nb-primary text-white text-xs font-black uppercase tracking-widest hover:bg-nb-primary-dim transition-all shadow-lg shadow-nb-primary/20 active:scale-95 cursor-pointer"
             >
               Try It
-            </button>
-            <button
-              onClick={onClose}
+            </Link>
+            <Link
+              href="/"
+              onClick={handleAnchorClick(onClose)}
               className="p-2 rounded-xl hover:bg-nb-surface-low text-nb-on-surface-variant transition-colors cursor-pointer"
+              title="Close"
             >
               <ArrowRight size={20} />
-            </button>
+            </Link>
           </div>
         </div>
       </div>
@@ -254,7 +267,7 @@ export default function AboutPage({ onClose, onTryIt, onOpenHelp }: AboutPagePro
             <p className="text-nb-on-surface-variant font-medium">Built for professional engineering standards.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="bg-nb-surface-low p-8 rounded-[32px] border border-nb-outline-variant/30 shadow-nb-xl relative overflow-hidden group">
+            <div className="bg-nb-surface-low p-8 rounded-4xl border border-nb-outline-variant/30 shadow-nb-xl relative overflow-hidden group">
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-12 h-12 rounded-2xl bg-nb-primary/10 text-nb-primary flex items-center justify-center">
                   <Shield size={24} />
@@ -269,7 +282,7 @@ export default function AboutPage({ onClose, onTryIt, onOpenHelp }: AboutPagePro
               </p>
             </div>
 
-            <div className="bg-nb-surface-low p-8 rounded-[32px] border border-nb-outline-variant/30 shadow-nb-xl relative overflow-hidden group">
+            <div className="bg-nb-surface-low p-8 rounded-4xl border border-nb-outline-variant/30 shadow-nb-xl relative overflow-hidden group">
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-12 h-12 rounded-2xl bg-nb-tertiary/10 text-nb-tertiary flex items-center justify-center">
                   <GithubIcon size={24} />
@@ -284,7 +297,7 @@ export default function AboutPage({ onClose, onTryIt, onOpenHelp }: AboutPagePro
               </p>
             </div>
 
-            <div className="bg-nb-surface-low p-8 rounded-[32px] border border-nb-outline-variant/30 shadow-nb-xl relative overflow-hidden group">
+            <div className="bg-nb-surface-low p-8 rounded-4xl border border-nb-outline-variant/30 shadow-nb-xl relative overflow-hidden group">
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-12 h-12 rounded-2xl bg-nb-primary/10 text-nb-primary flex items-center justify-center">
                   <Lock size={24} />
@@ -299,7 +312,7 @@ export default function AboutPage({ onClose, onTryIt, onOpenHelp }: AboutPagePro
               </p>
             </div>
 
-            <div className="bg-nb-surface-low p-8 rounded-[32px] border border-nb-outline-variant/30 shadow-nb-xl relative overflow-hidden group">
+            <div className="bg-nb-surface-low p-8 rounded-4xl border border-nb-outline-variant/30 shadow-nb-xl relative overflow-hidden group">
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-12 h-12 rounded-2xl bg-nb-tertiary/10 text-nb-tertiary flex items-center justify-center">
                   <WifiOff size={24} />
@@ -381,12 +394,13 @@ export default function AboutPage({ onClose, onTryIt, onOpenHelp }: AboutPagePro
           <p className="text-white/80 mb-10 text-lg font-medium leading-relaxed">
             Start your digital engineering notebook today.
           </p>
-          <button
-            onClick={onTryIt}
-            className="px-12 py-5 rounded-2xl bg-white text-nb-primary text-sm font-black uppercase tracking-widest hover:bg-nb-surface-low transition-all shadow-2xl active:scale-95 cursor-pointer"
+          <Link
+            href="/"
+            onClick={handleAnchorClick(onTryIt)}
+            className="inline-block px-12 py-5 rounded-2xl bg-white text-nb-primary text-sm font-black uppercase tracking-widest hover:bg-nb-surface-low transition-all shadow-2xl active:scale-95 cursor-pointer"
           >
             Open the Editor
-          </button>
+          </Link>
         </div>
       </section>
 
@@ -416,12 +430,13 @@ export default function AboutPage({ onClose, onTryIt, onOpenHelp }: AboutPagePro
               MSOE VEX Website
             </a>
             {onOpenHelp && (
-              <button
-                onClick={onOpenHelp}
+              <Link
+                href="/help"
+                onClick={handleAnchorClick(onOpenHelp)}
                 className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary transition-colors cursor-pointer font-sans border-none bg-transparent p-0"
               >
                 Help & Docs
-              </button>
+              </Link>
             )}
           </div>
         </div>
@@ -485,7 +500,7 @@ function PipelineCarousel() {
       </div>
 
       {/* Mockup Side */}
-      <div className="w-full lg:w-[70%] aspect-[4/3] bg-nb-surface border border-nb-outline-variant/30 rounded-[32px] p-4 lg:p-6 shadow-nb-2xl relative overflow-hidden flex items-center justify-center">
+      <div className="w-full lg:w-[70%] aspect-4/3 bg-nb-surface border border-nb-outline-variant/30 rounded-4xl p-4 lg:p-6 shadow-nb-2xl relative overflow-hidden flex items-center justify-center">
         <div className="absolute top-0 left-0 w-full h-1 bg-nb-primary/20">
           <div
             className="h-full bg-nb-primary transition-all duration-500 ease-out"
@@ -567,7 +582,7 @@ function PdfMockup() {
     <div className="w-full h-full bg-nb-surface-mid p-2 lg:p-6 flex items-center justify-center">
       <div className="h-full aspect-[1/1.414] max-w-full bg-white shadow-2xl rounded-sm p-4 lg:p-8 flex flex-col relative overflow-hidden">
         {/* PDF Header */}
-        <div className="border-b-[1px] border-nb-primary/20 pb-2 mb-4 flex justify-between items-end shrink-0">
+        <div className="border-b border-nb-primary/20 pb-2 mb-4 flex justify-between items-end shrink-0">
           <div>
             <div className="text-[8px] lg:text-[10px] font-black text-gray-900 uppercase tracking-tighter">Chassis Assembly</div>
             <div className="text-[6px] lg:text-[8px] text-gray-500 font-bold uppercase">Engineering Notebook</div>
@@ -599,7 +614,7 @@ function PdfMockup() {
 function FeatureCard({ icon, title, description }: { icon: React.ReactNode, title: string, description: string }) {
   return (
     <div className="p-8 rounded-3xl bg-nb-surface border border-nb-outline-variant/30 hover:border-nb-primary/30 transition-all shadow-nb-sm group relative overflow-hidden">
-      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-nb-primary/0 via-nb-primary/40 to-nb-tertiary/0 opacity-0 group-hover:opacity-100 transition-opacity" />
+      <div className="absolute inset-x-0 top-0 h-1 bg-linear-to-r from-nb-primary/0 via-nb-primary/40 to-nb-tertiary/0 opacity-0 group-hover:opacity-100 transition-opacity" />
       <div className="mb-6 group-hover:scale-110 transition-transform">{icon}</div>
       <h3 className="text-lg font-black text-nb-on-surface mb-3 tracking-tight">{title}</h3>
       <p className="text-sm text-nb-on-surface-variant leading-relaxed font-medium">{description}</p>

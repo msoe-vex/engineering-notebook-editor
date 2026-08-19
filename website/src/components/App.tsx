@@ -28,6 +28,7 @@ import LoadingOverlay from "./LoadingOverlay";
 import Logo from "./Logo";
 import { ViewMode } from "./editor/ui/ViewToggle";
 import ConfirmationDialog from "./ConfirmationDialog";
+import MergeConflictDialog, { ConflictingEntryInfo, ConflictAction } from "./MergeConflictDialog";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { HardDrive, X, Loader2, ArrowLeftRight, Sun, Moon } from "lucide-react";
 import { ImperativePanelHandle } from "react-resizable-panels";
@@ -100,6 +101,11 @@ export default function App() {
     getCompiledPdfUrl,
     isSaving,
     isPendingSave,
+    isDiscarding,
+    isCommitting,
+    needsPermission,
+    grantLocalPermission,
+    reselectLocalFolder,
   } = useWorkspace();
 
   // Global loading overlay for background operations (like importing/exporting)
@@ -201,6 +207,32 @@ export default function App() {
     resolve: null,
   });
 
+  const [conflictDialog, setConflictDialog] = useState<{
+    isOpen: boolean;
+    conflicts: ConflictingEntryInfo[];
+    resolve: ((resolutions: Record<string, ConflictAction> | null) => void) | null;
+  }>({
+    isOpen: false,
+    conflicts: [],
+    resolve: null,
+  });
+
+  useEffect(() => {
+    const handlePromptConflict = (data: unknown) => {
+      const payload = data as { conflicts: ConflictingEntryInfo[]; resolve: (resolutions: Record<string, ConflictAction> | null) => void };
+      if (payload && payload.conflicts) {
+        setConflictDialog({
+          isOpen: true,
+          conflicts: payload.conflicts,
+          resolve: payload.resolve,
+        });
+      }
+    };
+
+    const unsub = events.on(EventNames.PROMPT_MERGE_CONFLICT, handlePromptConflict);
+    return () => unsub();
+  }, []);
+
   const showConfirm = useCallback((title: string, message: string, onConfirm: () => void, variant: "danger" | "warning" | "info" = "danger", onCancel?: () => void) => {
     setConfirmDialog({
       isOpen: true,
@@ -264,9 +296,9 @@ export default function App() {
   const [mounted, setMounted] = useState(false);
   const isMobile = useIsMobile();
   const initialPercentSize = useMemo(() => {
-    if (typeof window === "undefined") return 20;
-    const fixedWidthPx = 300;
-    return Math.max(15, Math.min(40, (fixedWidthPx / window.innerWidth) * 100));
+    if (typeof window === "undefined") return 22;
+    const fixedWidthPx = 360;
+    return Math.max(18, Math.min(45, (fixedWidthPx / window.innerWidth) * 100));
   }, []);
   const [userSidebarPreference, setUserSidebarPreference] = useState<boolean | null>(null);
   const isSidebarOpen = userSidebarPreference ?? !isMobile;
@@ -283,21 +315,20 @@ export default function App() {
   const [isRenamingProject, setIsRenamingProject] = useState(false);
   const [projectRenameValue, setProjectRenameValue] = useState("");
   const importEntryInputRef = useRef<HTMLInputElement>(null);
-  const [needsPermission, setNeedsPermission] = useState(false);
   const navigateToHome = useCallback(() => {
     navigateTo({ project: null, entry: null, resource: null }, "/");
   }, [navigateTo]);
 
   const checkUnsaved = useCallback(
     (action: () => void) => {
-      if (isSaving || isPendingSave) {
+      if (isSaving || isPendingSave || isDiscarding || isCommitting) {
         pendingActionRef.current = action;
         setIsSaveLocked(true);
       } else {
         action();
       }
     },
-    [isSaving, isPendingSave]
+    [isSaving, isPendingSave, isDiscarding, isCommitting]
   );
 
   const handleGoHome = useCallback(() => {
@@ -313,18 +344,24 @@ export default function App() {
   }, [currentProjectId, navigateTo, handleGoHome]);
 
   useEffect(() => {
-    if (!isSaving && !isPendingSave && pendingActionRef.current) {
+    if (!isSaving && !isPendingSave && !isDiscarding && !isCommitting && pendingActionRef.current) {
       const action = pendingActionRef.current;
       pendingActionRef.current = null;
       setIsSaveLocked(false);
       action();
     }
-  }, [isSaving, isPendingSave]);
+  }, [isSaving, isPendingSave, isDiscarding, isCommitting]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isSaving || isPendingSave) {
+      if (isSaving || isPendingSave || isDiscarding || isCommitting) {
         e.preventDefault();
+        if (isDiscarding) {
+          return "Changes are currently being discarded. If you leave now, the workspace state might be inconsistent. Are you sure you want to proceed?";
+        }
+        if (isCommitting) {
+          return "Changes are currently being committed to GitHub. If you leave now, the commit might be interrupted. Are you sure you want to proceed?";
+        }
         return "You have changes that are currently being saved. If you leave now, some changes might be lost. Are you sure you want to proceed?";
       }
       if (mode === "temporary") {
@@ -334,7 +371,7 @@ export default function App() {
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [isSaving, isPendingSave, mode]);
+  }, [isSaving, isPendingSave, isDiscarding, isCommitting, mode]);
 
   const onSignOutGithub = useCallback(() => {
     localStorage.removeItem("nb-github-token");
@@ -488,16 +525,18 @@ export default function App() {
     };
   }, []);
 
-  // Load last compiled PDF URL when project changes or app initializes
+  // Lazily load last compiled PDF URL only when preview/split view mode is active
   useEffect(() => {
-    if (isInitialized && currentProjectId) {
+    if (isInitialized && currentProjectId && (viewMode === "preview" || viewMode === "split")) {
+      let active = true;
       const loadPdf = async () => {
         const url = await getCompiledPdfUrl();
-        if (url) setPdfUrl(url);
+        if (active && url) setPdfUrl(url);
       };
       loadPdf();
+      return () => { active = false; };
     }
-  }, [isInitialized, currentProjectId, getCompiledPdfUrl]);
+  }, [isInitialized, currentProjectId, viewMode, getCompiledPdfUrl]);
 
 
   useEffect(() => {
@@ -505,8 +544,8 @@ export default function App() {
     if (isSidebarOpen) {
       if (isToggleFromButton.current) {
         sidebarPanelRef.current.expand();
-        const fixedWidthPx = 300;
-        const percent = Math.max(15, Math.min(40, (fixedWidthPx / window.innerWidth) * 100));
+        const fixedWidthPx = 360;
+        const percent = Math.max(18, Math.min(45, (fixedWidthPx / window.innerWidth) * 100));
         sidebarPanelRef.current.resize(percent);
       } else {
         sidebarPanelRef.current.expand();
@@ -887,16 +926,6 @@ export default function App() {
     await importNotebookFromFile(file);
   };
 
-  const requestPermission = async () => {
-    if (dirHandle) {
-      const mode = 'readwrite';
-      if ((await dirHandle.requestPermission({ mode })) === 'granted') {
-        setNeedsPermission(false);
-        selectProject(currentProjectId!);
-      }
-    }
-  };
-
   const currentProject = projects.find(p => p.id === currentProjectId) || (currentProjectId === "temporary" ? { id: "temporary", name: "Temporary Workspace" } as Project : null);
   const workspaceLabel = mode === "github" ? `${config?.owner}/${config?.repo}` : (mode === "local" ? (currentProject?.name ?? "Local Folder") : "Temporary");
 
@@ -984,14 +1013,40 @@ export default function App() {
 
       <div className="flex-1 overflow-hidden relative bg-nb-bg">
         {((needsPermission && mode === "local")) && (
-          <div className="absolute inset-0 z-[200] bg-nb-bg/80 backdrop-blur-md flex items-center justify-center p-8">
+          <div className="absolute inset-0 z-200 bg-nb-bg/80 backdrop-blur-md flex items-center justify-center p-8">
             <div className="max-w-md w-full bg-nb-surface border border-nb-outline-variant rounded-3xl p-8 shadow-2xl text-center animate-in fade-in zoom-in duration-300">
               <div className="w-20 h-20 rounded-2xl bg-nb-primary/10 text-nb-primary flex items-center justify-center mx-auto mb-8"><HardDrive size={40} /></div>
               <h2 className="text-2xl font-bold text-nb-on-surface mb-4">Connect to Workspace</h2>
-              <p className="text-sm text-nb-on-surface-variant mb-10 leading-relaxed px-4">Browser needs permission to access <strong>{dirHandle?.name || "the local folder"}</strong>.</p>
+              <p className="text-sm text-nb-on-surface-variant mb-10 leading-relaxed px-4">
+                {dirHandle
+                  ? <>Browser needs permission to access <strong>{dirHandle.name}</strong>.</>
+                  : <>Folder access has expired or is unavailable. Please re-select the folder on your device.</>}
+              </p>
               <div className="flex flex-col gap-3">
-                <button onClick={requestPermission} className="w-full bg-nb-primary hover:bg-nb-primary-dim text-white font-bold py-4 rounded-xl shadow-lg shadow-nb-primary/20 transition-all active:scale-[0.98]">Grant Access</button>
-                <button onClick={handleDisconnect} className="w-full bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface font-bold py-4 rounded-xl transition-all">Cancel</button>
+                {dirHandle && (
+                  <button
+                    onClick={() => grantLocalPermission()}
+                    className="w-full bg-nb-primary hover:bg-nb-primary-dim text-white font-bold py-4 rounded-xl shadow-lg shadow-nb-primary/20 transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    Grant Access
+                  </button>
+                )}
+                <button
+                  onClick={() => reselectLocalFolder()}
+                  className={`w-full font-bold py-4 rounded-xl transition-all cursor-pointer ${
+                    dirHandle
+                      ? "bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface hover:bg-nb-surface-high"
+                      : "bg-nb-primary hover:bg-nb-primary-dim text-white shadow-lg shadow-nb-primary/20"
+                  }`}
+                >
+                  {dirHandle ? "Select Another Folder" : "Select Folder"}
+                </button>
+                <button
+                  onClick={handleDisconnect}
+                  className="w-full bg-transparent text-nb-on-surface-variant hover:text-nb-on-surface font-bold py-3 rounded-xl transition-all cursor-pointer text-xs uppercase tracking-widest"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           </div>
@@ -1019,6 +1074,15 @@ export default function App() {
           <div className="flex-1 flex flex-col min-h-0 relative h-full">
             <NotebookCompiler
               onClose={() => navigateTo({}, '/workspace/editor')}
+            />
+          </div>
+        ) : (showHelp && helpPath) ? (
+          <div className="flex-1 flex flex-col min-h-0 relative h-full">
+            <HelpPage
+              path={helpPath}
+              onClose={() => navigateTo({}, '/workspace/editor')}
+              navigateTo={navigateTo}
+              isEmbedded={true}
             />
           </div>
         ) : (openFile || hasEntryInUrl) ? (
@@ -1053,7 +1117,7 @@ export default function App() {
               onOpenSidebar={() => { isToggleFromButton.current = true; setUserSidebarPreference(true); }}
               onOpenTeam={handleOpenTeamEditor}
               onOpenCompiler={() => navigateTo({}, '/workspace/compile')}
-              onOpenHelp={() => navigateTo({}, '/help')}
+              onOpenHelp={() => navigateTo({}, '/workspace/help')}
             />
           </div>
         )}
@@ -1092,9 +1156,9 @@ export default function App() {
           {isMobile ? (
             <div className="flex w-full h-full relative overflow-hidden">
               <div className="flex-1 w-full h-full">{main}</div>
-              <div className={`fixed inset-0 z-[500] transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+              <div className={`fixed inset-0 z-500 transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
                 <div className="absolute inset-0 bg-black/40" onClick={() => setUserSidebarPreference(false)} />
-                <div className={`absolute top-0 bottom-0 left-0 w-[85%] max-w-[300px] bg-nb-surface-low border-r border-nb-outline-variant flex flex-col shadow-2xl transition-transform duration-300 ease-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                <div className={`absolute top-0 bottom-0 left-0 w-[85%] max-w-90 bg-nb-surface-low border-r border-nb-outline-variant flex flex-col shadow-2xl transition-transform duration-300 ease-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                   {sidebar}
                 </div>
               </div>
@@ -1102,7 +1166,7 @@ export default function App() {
           ) : (
             <PanelGroup direction="horizontal" className="w-full h-full" id="main-layout-group">
               <Panel
-                id="sidebar-panel" order={1} ref={sidebarPanelRef} defaultSize={initialPercentSize} minSize={15} maxSize={40} collapsible={true}
+                id="sidebar-panel" order={1} ref={sidebarPanelRef} defaultSize={initialPercentSize} minSize={18} maxSize={45} collapsible={true}
                 onCollapse={() => setUserSidebarPreference(false)} onExpand={() => setUserSidebarPreference(true)}
                 className={`flex flex-col ${isSidebarDragging ? "pointer-events-none select-none" : "transition-all duration-300 ease-out"}`}
               >
@@ -1123,8 +1187,8 @@ export default function App() {
         </div>
       )}
 
-      {/* Help Page Overlay */}
-      {showHelp && helpPath && (
+      {/* Help Page Overlay (Only for root /help when no project workspace is active) */}
+      {showHelp && helpPath && mode === "none" && (
         <HelpPage
           path={helpPath}
           onClose={handleCloseHelp}
@@ -1134,7 +1198,7 @@ export default function App() {
 
       {/* Notifications */}
       {notification && (
-        <div className="fixed bottom-6 right-6 z-[200] animate-in slide-in-from-right-10 duration-300">
+        <div className="fixed bottom-6 right-6 z-200 animate-in slide-in-from-right-10 duration-300">
           <div className={`px-5 py-4 rounded-2xl shadow-nb-lg border flex items-center gap-4 ${notification.type === 'error' ? 'bg-nb-primary/5 border-nb-primary/30 text-nb-primary' : 'bg-nb-tertiary/5 border-nb-tertiary/30 text-nb-tertiary'} backdrop-blur-xl bg-white/80 dark:bg-nb-dark-surface/80`}>
             <div className="flex-1">
               <p className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">{notification.type === 'error' ? 'Error' : 'Success'}</p>
@@ -1249,6 +1313,21 @@ export default function App() {
         }}
       />
 
+      <MergeConflictDialog
+        isOpen={conflictDialog.isOpen}
+        conflicts={conflictDialog.conflicts}
+        onResolve={(resolutions) => {
+          const resolve = conflictDialog.resolve;
+          setConflictDialog(prev => ({ ...prev, isOpen: false, resolve: null }));
+          resolve?.(resolutions);
+        }}
+        onCancel={() => {
+          const resolve = conflictDialog.resolve;
+          setConflictDialog(prev => ({ ...prev, isOpen: false, resolve: null }));
+          resolve?.(null);
+        }}
+      />
+
       <ConfirmationDialog
         isOpen={confirmDialog.isOpen}
         title={confirmDialog.title}
@@ -1261,8 +1340,8 @@ export default function App() {
       {/* Global Loading Overlay */}
       {(!isInitialized || (isLoading && mode === "none") || isGlobalLoading || isSaveLocked || isExchangingCode) && (
         <LoadingOverlay
-          label={isSaveLocked ? "Saving changes..." : (isExchangingCode ? "Signing in with GitHub..." : (isGlobalLoading ? loadingLabel : "ENGen"))}
-          subtitle={isSaveLocked ? "Please wait for save to complete." : (isExchangingCode ? "Completing authentication..." : (isGlobalLoading ? "Please wait..." : "Engineering Notebook Generator"))}
+          label={isSaveLocked ? (isDiscarding ? "Discarding changes..." : (isCommitting ? "Syncing changes..." : "Saving changes...")) : (isExchangingCode ? "Signing in with GitHub..." : (isGlobalLoading ? loadingLabel : "ENGen"))}
+          subtitle={isSaveLocked ? (isDiscarding ? "Please wait for discard to complete." : (isCommitting ? "Please wait for sync to complete." : "Please wait for save to complete.")) : (isExchangingCode ? "Completing authentication..." : (isGlobalLoading ? "Please wait..." : "Engineering Notebook Generator"))}
         />
       )}
       {/* Toast Container */}

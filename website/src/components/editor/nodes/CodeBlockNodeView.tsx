@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer, NodeViewProps } from "@tiptap/react";
 import { CodeBlock, type CodeBlockOptions } from "@tiptap/extension-code-block";
 import { GripVertical, Trash2, Code2, ChevronDown, Check } from "lucide-react";
+import { NodeViewInput } from "./NodeViewInput";
 
 export const LANGUAGES: Record<string, string> = {
   plaintext: "Plain Text",
@@ -27,8 +28,7 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
   const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-
-  const lines = node.textContent.split('\n');
+  const lineNumbers = (node.textContent || "").split('\n').map((_, i) => i + 1);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -83,9 +83,9 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
     <NodeViewWrapper
       draggable={dragEnabled}
       data-id={node.attrs.id}
-      className={`my-6 group relative w-full transition ${active ? 'z-[100]' : 'z-10'} pl-12`}
+      className={`my-6 group relative w-full transition ${active ? 'z-100' : 'z-10'} pl-12`}
     >
-      <div contentEditable={false} className="absolute left-0 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-[70]">
+      <div contentEditable={false} className="absolute left-0 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-70">
         <div
           data-drag-handle
           onMouseEnter={() => setDragEnabled(true)}
@@ -109,10 +109,9 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
             <div className="flex items-center gap-2 text-nb-primary shrink-0">
               <Code2 size={12} />
             </div>
-            <input
-              type="text"
+            <NodeViewInput
               value={node.attrs.title || ""}
-              onChange={(e) => updateAttributes({ title: e.target.value })}
+              onUpdate={(title) => updateAttributes({ title })}
               placeholder="Code Snippet Title..."
               className="flex-1 bg-transparent border-none outline-none text-[12px] font-bold tracking-wider text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
             />
@@ -138,43 +137,47 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
                   style={{
                     position: 'fixed',
                     top: dropdownRect.bottom + 8,
-                    left: dropdownRect.right - 192, // 192px is w-48
-                    width: '192px',
-                    zIndex: 9999,
+                    left: Math.max(16, Math.min(dropdownRect.right - 192, window.innerWidth - 208)),
+                    zIndex: 99999
                   }}
-                  className="bg-nb-surface border border-nb-outline-variant shadow-nb-2xl rounded-xl p-1.5 animate-in fade-in zoom-in-95 duration-200 ring-1 ring-nb-primary/10"
+                  className="w-48 bg-nb-surface border border-nb-outline-variant/30 rounded-2xl shadow-nb-2xl p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in-95 duration-100 max-h-64 overflow-y-auto"
                 >
-                  <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
-                    {Object.entries(LANGUAGES).map(([key, label]) => (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => {
-                          updateAttributes({ language: key });
-                          setIsDropdownOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[10px] font-bold tracking-widest transition-all text-left cursor-pointer active:scale-[0.98] ${node.attrs.language === key
-                            ? "bg-nb-primary/10 text-nb-primary"
-                            : "text-nb-on-surface-variant hover:bg-nb-surface-mid hover:text-nb-on-surface"
-                          }`}
-                      >
-                        <span className="uppercase">{label}</span>
-                        {node.attrs.language === key && <Check size={10} />}
-                      </button>
-                    ))}
-                  </div>
+                  {Object.entries(LANGUAGES).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => {
+                        updateAttributes({ language: key });
+                        setIsDropdownOpen(false);
+                      }}
+                      className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-left transition-colors text-xs font-semibold ${node.attrs.language === key
+                          ? "bg-nb-primary/10 text-nb-primary font-bold"
+                          : "text-nb-on-surface hover:bg-nb-surface-low"
+                        }`}
+                    >
+                      <span>{label}</span>
+                      {node.attrs.language === key && <Check size={12} className="text-nb-primary" />}
+                    </button>
+                  ))}
                 </div>,
                 document.body
               )}
             </div>
           </div>
         </div>
-        <div className="flex flex-row items-stretch">
-          <div contentEditable={false} className="select-none text-right px-4 py-6 border-r border-nb-outline-variant/10 text-nb-on-surface-variant/20 font-mono text-[14px] leading-[1.8] bg-nb-surface-low/30 min-w-[56px] shrink-0">
-            {lines.map((_, i) => (
-              <div key={i} className="h-[1.8em]">{i + 1}</div>
+
+        {/* Content View */}
+        <div className="flex bg-nb-surface-low/10 overflow-hidden relative group/code font-mono">
+          {/* Line Numbers */}
+          <div
+            contentEditable={false}
+            className="select-none py-6 pl-4 pr-3 text-right bg-transparent text-nb-on-surface-variant/30 font-mono text-[13px] leading-[1.8] border-r border-nb-outline-variant/10 min-w-10 shrink-0"
+          >
+            {lineNumbers.map((num) => (
+              <div key={num}>{num}</div>
             ))}
           </div>
+
           <NodeViewContent
             as="div"
             spellCheck="false"
@@ -184,10 +187,9 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
         </div>
 
         <div contentEditable={false} className="bg-nb-surface-low/30 border-t border-nb-outline-variant/10 px-4 py-2 flex items-center justify-center gap-2 group/caption">
-          <input
-            type="text"
+          <NodeViewInput
             value={node.attrs.caption || ""}
-            onChange={(e) => updateAttributes({ caption: e.target.value })}
+            onUpdate={(caption) => updateAttributes({ caption })}
             placeholder="What does this code do?"
             className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface/50 group-hover/caption:text-nb-on-surface focus:text-nb-on-surface focus:opacity-100 transition-all"
           />

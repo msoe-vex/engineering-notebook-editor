@@ -5,7 +5,8 @@ import { DATA_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from 
 let runner: BusyTexRunner | null = null;
 let xelatex: XeLatex | null = null;
 
-const GITHUB_RELEASE_URL = 'https://github.com/msoe-vex/engineering-notebook-editor/releases/download/v0.1.0';
+const APP_TAG = process.env.NEXT_PUBLIC_APP_VERSION || 'v0.1.0';
+const GITHUB_RELEASE_URL = `https://github.com/msoe-vex/engineering-notebook-editor/releases/download/${APP_TAG}`;
 
 export async function initBusyTex() {
   if (runner && runner.isInitialized()) return;
@@ -39,7 +40,7 @@ async function fetchAsset(path: string): Promise<Uint8Array> {
       return new Uint8Array(buffer);
     }
   } catch {
-    // Ignore local failure and try remote
+    // Ignore local failure and try remote release
   }
 
   // Fallback to remote release via proxy
@@ -47,10 +48,17 @@ async function fetchAsset(path: string): Promise<Uint8Array> {
   const remoteUrl = `${GITHUB_RELEASE_URL}/${filename}`;
   const proxiedUrl = `${window.location.origin}/api/busytex-proxy?url=${encodeURIComponent(remoteUrl)}`;
 
-  const response = await fetch(proxiedUrl);
-  if (!response.ok) throw new Error(`Failed to fetch asset from ${path} or ${remoteUrl}`);
-  const buffer = await response.arrayBuffer();
-  return new Uint8Array(buffer);
+  try {
+    const response = await fetch(proxiedUrl);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} ${response.statusText}`);
+    }
+    const buffer = await response.arrayBuffer();
+    return new Uint8Array(buffer);
+  } catch (error) {
+    console.error(`[BusyTex] Failed to fetch asset "${path}" from both local path and remote release (${remoteUrl}):`, error);
+    throw new Error(`Failed to load asset "${path}" from public or release: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 export interface CompileResult {
@@ -83,37 +91,58 @@ export async function compileNotebook(mode: CompileMode = "quality", onStatus?: 
     let packageFiles: string[] = [];
     try {
       const res = await fetch('/latex/manifest.json');
-      if (res.ok) packageFiles = await res.json();
-      else throw new Error();
+      if (res.ok) {
+        packageFiles = await res.json();
+      } else {
+        throw new Error(`HTTP ${res.status}`);
+      }
     } catch {
       const remoteManifestUrl = `${GITHUB_RELEASE_URL}/manifest.json`;
       const proxiedUrl = `${window.location.origin}/api/busytex-proxy?url=${encodeURIComponent(remoteManifestUrl)}`;
-      const res = await fetch(proxiedUrl);
-      if (res.ok) packageFiles = await res.json();
+      try {
+        const res = await fetch(proxiedUrl);
+        if (res.ok) {
+          packageFiles = await res.json();
+        } else {
+          throw new Error(`HTTP ${res.status}`);
+        }
+      } catch (manifestErr) {
+        console.error(`[BusyTex] Failed to load LaTeX manifest.json from both local (/latex/manifest.json) and remote release (${remoteManifestUrl}):`, manifestErr);
+      }
     }
 
     for (const pkg of packageFiles) {
       try {
-        // Try to pull main.tex and notebook.sty from workspace first
-        if (pkg === 'main.tex' || pkg === 'notebook.sty') {
-          const userContent = await store.getFileContent(pkg);
-          if (userContent) {
-            files.push({ path: pkg, content: userContent });
-            continue;
-          }
-        }
-
         const content = await fetchAsset(`/latex/${pkg}`);
         files.push({ path: pkg, content });
       } catch (e) {
-        console.warn(`Failed to pre-load ${pkg}`, e);
+        console.error(`[BusyTex] Failed to load LaTeX dependency "${pkg}" from public or release:`, e);
       }
     }
   } catch (e) {
-    console.error("Failed to load LaTeX dependencies", e);
+    console.error("[BusyTex] Failed to load LaTeX dependencies:", e);
   }
 
-  // 2. Map fonts (/fonts/*)
+  // 2. Map root template files (main.tex and notebook.sty) from workspace store or bundled template
+  const templateCoreFiles = ['main.tex', 'notebook.sty'];
+  for (const file of templateCoreFiles) {
+    try {
+      const userContent = await store.getFileContent(file);
+      if (userContent) {
+        files.push({ path: file, content: userContent });
+        continue;
+      }
+      const res = await fetch(`/notebook-template/${file}`);
+      if (res.ok) {
+        const text = await res.text();
+        files.push({ path: file, content: text });
+      }
+    } catch (e) {
+      console.error(`[BusyTex] Failed to load template file "${file}":`, e);
+    }
+  }
+
+  // 3. Map fonts (/notebook-template/fonts/*)
   onStatus?.("Loading typography assets...", 4, TOTAL_STEPS, 50);
   const fontFiles = [
     'inter/Inter-Regular.otf', 'inter/Inter-Bold.otf', 'inter/Inter-Italic.otf', 'inter/Inter-BoldItalic.otf',
@@ -122,10 +151,15 @@ export async function compileNotebook(mode: CompileMode = "quality", onStatus?: 
 
   for (const font of fontFiles) {
     try {
-      const content = await fetchAsset(`/fonts/${font}`);
-      files.push({ path: `fonts/${font}`, content });
+      const res = await fetch(`/notebook-template/fonts/${font}`);
+      if (res.ok) {
+        const buffer = await res.arrayBuffer();
+        files.push({ path: `fonts/${font}`, content: new Uint8Array(buffer) });
+      } else {
+        throw new Error(`HTTP ${res.status}`);
+      }
     } catch (e) {
-      console.warn(`Failed to pre-load font ${font}`, e);
+      console.error(`[BusyTex] Failed to load font "${font}" from /notebook-template/fonts:`, e);
     }
   }
 
@@ -141,10 +175,10 @@ export async function compileNotebook(mode: CompileMode = "quality", onStatus?: 
     files.push({ path: ENTRIES_INDEX_PATH, content: entriesIndexTex });
   }
 
-  // 4. Map entry .tex files
-  const entryIds = Object.keys(store.metadata.entries);
-  for (const entryId of entryIds) {
-    const entryTexPath = `${LATEX_DIR}/${entryId}.tex`;
+  // 4. Map entry .tex files (templates do not have or need .tex files)
+  const regularEntries = Object.values(store.metadata.entries).filter(entry => !entry.isTemplate);
+  for (const entry of regularEntries) {
+    const entryTexPath = `${LATEX_DIR}/${entry.id}.tex`;
     const tex = await store.getFileContent(entryTexPath);
     if (tex) {
       files.push({ path: entryTexPath, content: tex });

@@ -40,6 +40,7 @@ export interface EntryMetadata {
   updatedAt: string;
   date: string; // YYYY-MM-DD
   filename: string; // Path to the entry file (e.g. "entries/uuid.json")
+  isTemplate?: boolean; // When true, excluded from LaTeX entries.tex compilation and export
   resources?: Record<string, { title: string, caption: string, type: string }>; // block uuid -> metadata
   isValid?: boolean;
   references?: string[]; // List of target UUIDs this entry points to
@@ -60,6 +61,7 @@ export interface TeamMetadata {
   teamNumber: string;
   startDate?: string;
   endDate?: string;
+  autoCalculateDates?: boolean;
   organization: string;
   logo?: string; // Path to asset
   logoOriginal?: string; // Path to original asset
@@ -135,13 +137,7 @@ export function buildResourceTypeIndex(
   return resourceTypes;
 }
 
-export const DEFAULT_PHASES: ProjectPhase[] = [
-  { id: "define-problem", index: 1, name: "Define Problem", description: "Identifying the core issue, setting SMART goals, outlining constraints and deliverables.", iconName: "Goal", color: "#3b82f6" },
-  { id: "generate-concepts", index: 2, name: "Generate Concepts", description: "Brainstorming, research, prototyping, and decision matrices to evaluate potential solutions.", iconName: "Brain", color: "#a855f7" },
-  { id: "develop-solution", index: 3, name: "Develop Solution", description: "Creating CAD, detailed sketches, math calculations, graphical models, and pseudocode.", iconName: "PencilRuler", color: "#6366f1" },
-  { id: "construct-test", index: 4, name: "Construct and Test", description: "Building the robot, writing the code, executing test plans, and gathering qualitative/quantitative data.", iconName: "Hammer", color: "#f97316" },
-  { id: "evaluate-solution", index: 5, name: "Evaluate Solution", description: "Reflecting on constraints, event outcomes, and planning future improvements.", iconName: "SearchCheck", color: "#10b981" },
-];
+export const DEFAULT_PHASES: ProjectPhase[] = [];
 
 export const EMPTY_METADATA: NotebookMetadata = {
   version: 3,
@@ -152,6 +148,7 @@ export const EMPTY_METADATA: NotebookMetadata = {
     teamNumber: "",
     startDate: "",
     endDate: "",
+    autoCalculateDates: true,
     organization: "",
     members: []
   }
@@ -365,7 +362,6 @@ export async function dehydrateAssets(
           nextAttrs.filePath = compressedPath;
         }
         if (originalPath) nextAttrs.originalFilePath = originalPath;
-        delete nextAttrs.originalSrc;
 
         return { ...node, attrs: nextAttrs };
       }
@@ -425,6 +421,52 @@ export function updateEntryInIndex(
   return validateNotebookIntegrity(next);
 }
 
+/**
+ * Validate a single entry and return a list of error strings.
+ * Templates are exempt from author / date / phase requirements.
+ *
+ * @param entry       - The entry metadata to validate
+ * @param phases      - Available phase definitions (used to check phase validity)
+ * @param existingIds - Set of all known entry/resource IDs (for broken-reference checks)
+ */
+export function validateEntry(
+  entry: EntryMetadata,
+  phases: { index: number }[],
+  existingIds: Set<string>
+): string[] {
+  const errors: string[] = [];
+
+  if (!entry.title?.trim()) errors.push("Entry title is required.");
+
+  // Templates are exempt from author, date, and phase requirements
+  if (!entry.isTemplate) {
+    if (!entry.author?.trim()) errors.push("Author name is required.");
+    if (!entry.date?.trim()) errors.push("Date is required.");
+    if (typeof entry.phase !== "number" || !phases.some(p => p.index === entry.phase)) {
+      errors.push("Entry phase is required.");
+    }
+  }
+
+  // Check local resources (applies to both entries and templates)
+  if (entry.resources) {
+    for (const res of Object.values(entry.resources)) {
+      if (res.type === "rawLatex") continue;
+      const label = TYPE_LABELS[res.type] || res.type;
+      if (!res.title?.trim()) errors.push(`Title missing for ${label}.`);
+      if (!res.caption?.trim()) errors.push(`Caption missing for ${label}.`);
+    }
+  }
+
+  // Check internal references
+  if (entry.references) {
+    for (const refId of entry.references) {
+      if (!existingIds.has(refId)) errors.push(`Broken reference found: ${refId}`);
+    }
+  }
+
+  return errors;
+}
+
 /** 
  * Scans the entire notebook metadata and evaluates the integrity of every entry.
  * Checks for missing required fields, empty resource metadata, and dead internal links.
@@ -464,74 +506,64 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
     }
   }
 
-  // 3. Validate each entry
+  // Resolve phases — respect explicit empty array, fall back to DEFAULT_PHASES only when undefined
+  const phases = metadata.phases !== undefined ? metadata.phases : DEFAULT_PHASES;
+
+  // 3. Validate each entry using the shared helper
   for (const [id, entry] of Object.entries(newEntries)) {
-    const errors: string[] = [];
-    // use shared TYPE_LABELS from constants
+    const errors = validateEntry(entry, phases, existingIds);
+    newEntries[id] = { ...entry, isValid: errors.length === 0, validationErrors: errors };
+  }
 
-    // Check basic metadata
-    if (!entry.title?.trim()) errors.push("Entry title is required.");
-    if (!entry.author?.trim()) errors.push("Author name is required.");
-    if (!entry.date?.trim()) errors.push("Date is required.");
-
-    // Phase validation
-    // Respect an explicit empty phases array. Only fall back to DEFAULT_PHASES
-    // when `phases` is undefined (i.e., not provided).
-    const phases = metadata.phases !== undefined ? metadata.phases : DEFAULT_PHASES;
-    if (typeof entry.phase !== "number" || !phases.some(p => p.index === entry.phase)) {
-      errors.push("Entry phase is required.");
-    }
-
-    // Check local resources
-    if (entry.resources) {
-      for (const res of Object.values(entry.resources)) {
-        // rawLatex resources are not referenceable and shouldn't require title/caption
-        if (res.type === 'rawLatex') continue;
-
-        const label = TYPE_LABELS[res.type] || res.type;
-        if (!res.title?.trim()) errors.push(`Title missing for ${label}.`);
-        if (!res.caption?.trim()) {
-          errors.push(`Caption missing for ${label}.`);
-        }
-      }
-    }
-
-    // Check internal references
-    if (entry.references) {
-      for (const refId of entry.references) {
-        if (!existingIds.has(refId)) {
-          errors.push(`Broken reference found: ${refId}`);
-        }
-      }
-    }
-
-    newEntries[id] = {
-      ...entry,
-      isValid: errors.length === 0,
-      validationErrors: errors
+  // Canonicalize team metadata field order so JSON.stringify is completely deterministic
+  let canonicalTeam: TeamMetadata | undefined = undefined;
+  if (metadata.team) {
+    const t = metadata.team;
+    canonicalTeam = {
+      teamName: t.teamName || "",
+      teamNumber: t.teamNumber || "",
+      startDate: t.startDate || "",
+      endDate: t.endDate || "",
+      autoCalculateDates: t.autoCalculateDates ?? true,
+      organization: t.organization || "",
+      ...(t.logo ? { logo: t.logo } : {}),
+      ...(t.logoOriginal ? { logoOriginal: t.logoOriginal } : {}),
+      members: (t.members || []).map(m => ({
+        id: m.id,
+        name: m.name || "",
+        role: m.role || "",
+        ...(m.image ? { image: m.image } : {}),
+        ...(m.imageOriginal ? { imageOriginal: m.imageOriginal } : {})
+      }))
     };
   }
 
-  return {
-    ...metadata,
+  const result: NotebookMetadata = {
+    version: metadata.version || 3,
     entries: newEntries,
-    assetRefs
+    ...(canonicalTeam ? { team: canonicalTeam } : {}),
+    ...(metadata.phases ? { phases: metadata.phases } : {}),
+    ...(metadata.lastCompiled ? { lastCompiled: metadata.lastCompiled } : {}),
+    assetRefs,
   };
+
+  return result;
 }
 
-/** Check if an entry has all required metadata fields. */
+/** Check if an entry has all required metadata fields (template-aware). */
 export function isEntryValid(info: EntryMetadata): boolean {
   if (!info.title?.trim()) return false;
-  if (!info.author?.trim()) return false;
-  if (!info.date?.trim()) return false;
-  if (info.phase === null) return false;
-
+  if (!info.isTemplate) {
+    if (!info.author?.trim()) return false;
+    if (!info.date?.trim()) return false;
+    if (info.phase === null || info.phase === undefined) return false;
+  }
   if (info.resources) {
     for (const res of Object.values(info.resources)) {
+      if (res.type === "rawLatex") continue;
       if (!res.title?.trim() || !res.caption?.trim()) return false;
     }
   }
-
   return true;
 }
 
@@ -824,4 +856,219 @@ export function hydrateTeamAssets(team: TeamMetadata, assetCache: Map<string, st
   return hydrated;
 }
 
+/**
+ * 3-Way Merge for TeamMetadata (Base, Local, Remote).
+ * Merges top-level fields (teamName, teamNumber, org, logo) and member lists cleanly.
+ */
+export function mergeTeamMetadata(
+  base: TeamMetadata | undefined,
+  local: TeamMetadata | undefined,
+  remote: TeamMetadata | undefined
+): TeamMetadata | undefined {
+  if (!local && !remote) return undefined;
+  if (!local) return remote;
+  if (!remote) return local;
+  if (!base) {
+    return { ...remote, ...local };
+  }
 
+  // Merge top-level fields: if local changed from base, keep local; else remote
+  const teamName = JSON.stringify(local.teamName) !== JSON.stringify(base.teamName) ? local.teamName : remote.teamName;
+  const teamNumber = JSON.stringify(local.teamNumber) !== JSON.stringify(base.teamNumber) ? local.teamNumber : remote.teamNumber;
+  const organization = JSON.stringify(local.organization) !== JSON.stringify(base.organization) ? local.organization : remote.organization;
+  const startDate = JSON.stringify(local.startDate) !== JSON.stringify(base.startDate) ? local.startDate : remote.startDate;
+  const endDate = JSON.stringify(local.endDate) !== JSON.stringify(base.endDate) ? local.endDate : remote.endDate;
+  const logo = JSON.stringify(local.logo) !== JSON.stringify(base.logo) ? local.logo : remote.logo;
+  const logoOriginal = JSON.stringify(local.logoOriginal) !== JSON.stringify(base.logoOriginal) ? local.logoOriginal : remote.logoOriginal;
+
+  // 3-way merge members by member ID
+  const baseMembers = new Map((base.members || []).map(m => [m.id, m]));
+  const localMembers = new Map((local.members || []).map(m => [m.id, m]));
+  const remoteMembers = new Map((remote.members || []).map(m => [m.id, m]));
+
+  const allMemberIds = new Set([
+    ...Array.from(baseMembers.keys()),
+    ...Array.from(localMembers.keys()),
+    ...Array.from(remoteMembers.keys())
+  ]);
+
+  const mergedMembers: TeamMember[] = [];
+  for (const id of allMemberIds) {
+    const b = baseMembers.get(id);
+    const l = localMembers.get(id);
+    const r = remoteMembers.get(id);
+
+    if (!b && l && !r) { mergedMembers.push(l); continue; } // Added in local
+    if (!b && !l && r) { mergedMembers.push(r); continue; } // Added in remote
+    if (b && !l && r && JSON.stringify(b) === JSON.stringify(r)) continue; // Deleted in local
+    if (b && l && !r && JSON.stringify(b) === JSON.stringify(l)) continue; // Deleted in remote
+    if (b && l && r && JSON.stringify(b) !== JSON.stringify(l) && JSON.stringify(b) === JSON.stringify(r)) {
+      mergedMembers.push(l); continue; // Modified in local only
+    }
+    if (b && l && r && JSON.stringify(b) === JSON.stringify(l) && JSON.stringify(b) !== JSON.stringify(r)) {
+      mergedMembers.push(r); continue; // Modified in remote only
+    }
+    if (l) mergedMembers.push(l);
+    else if (r) mergedMembers.push(r);
+  }
+
+  const autoCalculateDates = JSON.stringify(local.autoCalculateDates) !== JSON.stringify(base.autoCalculateDates) ? local.autoCalculateDates : (remote.autoCalculateDates ?? true);
+
+  return {
+    teamName: teamName || "",
+    teamNumber: teamNumber || "",
+    startDate,
+    endDate,
+    autoCalculateDates: autoCalculateDates ?? true,
+    organization: organization || "",
+    logo,
+    logoOriginal,
+    members: mergedMembers
+  };
+}
+
+/**
+ * 3-Way Merge for ProjectPhases (Base, Local, Remote).
+ * Merges custom phases by Phase ID, preserving local or remote additions and updates.
+ */
+export function mergeProjectPhases(
+  base: ProjectPhase[] | undefined,
+  local: ProjectPhase[] | undefined,
+  remote: ProjectPhase[] | undefined
+): ProjectPhase[] | undefined {
+  if (!local && !remote) return undefined;
+  if (!local) return remote;
+  if (!remote) return local;
+  if (!base) return local.length > 0 ? local : remote;
+
+  const basePhases = new Map((base || []).map(p => [p.id, p]));
+  const localPhases = new Map((local || []).map(p => [p.id, p]));
+  const remotePhases = new Map((remote || []).map(p => [p.id, p]));
+
+  const allPhaseIds = new Set([
+    ...Array.from(basePhases.keys()),
+    ...Array.from(localPhases.keys()),
+    ...Array.from(remotePhases.keys())
+  ]);
+
+  const mergedPhases: ProjectPhase[] = [];
+  for (const id of allPhaseIds) {
+    const b = basePhases.get(id);
+    const l = localPhases.get(id);
+    const r = remotePhases.get(id);
+
+    if (!b && l && !r) { mergedPhases.push(l); continue; } // Added in local
+    if (!b && !l && r) { mergedPhases.push(r); continue; } // Added in remote
+    if (b && !l && r && JSON.stringify(b) === JSON.stringify(r)) continue; // Deleted in local
+    if (b && l && !r && JSON.stringify(b) === JSON.stringify(l)) continue; // Deleted in remote
+    if (b && l && r && JSON.stringify(b) !== JSON.stringify(l) && JSON.stringify(b) === JSON.stringify(r)) {
+      mergedPhases.push(l); continue; // Modified in local only
+    }
+    if (b && l && r && JSON.stringify(b) === JSON.stringify(l) && JSON.stringify(b) !== JSON.stringify(r)) {
+      mergedPhases.push(r); continue; // Modified in remote only
+    }
+    if (l) mergedPhases.push(l);
+    else if (r) mergedPhases.push(r);
+  }
+
+  // Ensure phases are sorted by index
+  return mergedPhases.sort((a, b) => a.index - b.index);
+}
+
+/**
+ * 3-Way Merge for NotebookMetadata (Base, Local, Remote).
+ * Automatically merges non-colliding entry metadata additions/modifications and preserves team/phase changes.
+ */
+export function mergeNotebookMetadata(
+  base: NotebookMetadata | null,
+  local: NotebookMetadata,
+  remote: NotebookMetadata
+): { merged: NotebookMetadata; hasCollisions: boolean; collidingEntryIds: string[] } {
+  const baseEntries = base?.entries || {};
+  const localEntries = local.entries || {};
+  const remoteEntries = remote.entries || {};
+
+  const mergedEntries: Record<string, EntryMetadata> = {};
+  const allEntryIds = new Set([
+    ...Object.keys(baseEntries),
+    ...Object.keys(localEntries),
+    ...Object.keys(remoteEntries)
+  ]);
+
+  const collidingEntryIds: string[] = [];
+
+  for (const id of allEntryIds) {
+    const b = baseEntries[id];
+    const l = localEntries[id];
+    const r = remoteEntries[id];
+
+    // Case 1: Only in local (newly created locally)
+    if (!b && l && !r) {
+      mergedEntries[id] = l;
+      continue;
+    }
+
+    // Case 2: Only in remote (newly created on remote)
+    if (!b && !l && r) {
+      mergedEntries[id] = r;
+      continue;
+    }
+
+    // Case 3: Deleted in local, unchanged in remote
+    if (b && !l && r && JSON.stringify(b) === JSON.stringify(r)) {
+      continue; // keep deleted
+    }
+
+    // Case 4: Deleted in remote, unchanged in local
+    if (b && l && !r && JSON.stringify(b) === JSON.stringify(l)) {
+      continue; // keep deleted
+    }
+
+    // Case 5: Modified in local, unchanged in remote
+    if (b && l && r && JSON.stringify(b) !== JSON.stringify(l) && JSON.stringify(b) === JSON.stringify(r)) {
+      mergedEntries[id] = l;
+      continue;
+    }
+
+    // Case 6: Modified in remote, unchanged in local
+    if (b && l && r && JSON.stringify(b) === JSON.stringify(l) && JSON.stringify(b) !== JSON.stringify(r)) {
+      mergedEntries[id] = r;
+      continue;
+    }
+
+    // Case 7: Same modifications in both
+    if (l && r && JSON.stringify(l) === JSON.stringify(r)) {
+      mergedEntries[id] = l;
+      continue;
+    }
+
+    // Case 8: True collision (both modified differently, or added same ID differently)
+    if (l && r) {
+      collidingEntryIds.push(id);
+      // For level 1, keep local but flag collision
+      mergedEntries[id] = l;
+    } else if (l) {
+      mergedEntries[id] = l;
+    } else if (r) {
+      mergedEntries[id] = r;
+    }
+  }
+
+  // 3-way merge team and phases
+  const team = mergeTeamMetadata(base?.team, local.team, remote.team);
+  const phases = mergeProjectPhases(base?.phases, local.phases, remote.phases);
+
+  const merged = validateNotebookIntegrity({
+    version: Math.max(local.version || 3, remote.version || 3),
+    entries: mergedEntries,
+    team: team || local.team,
+    phases: phases || local.phases,
+    lastCompiled: local.lastCompiled || remote.lastCompiled
+  });
+
+  return {
+    merged,
+    hasCollisions: collidingEntryIds.length > 0,
+    collidingEntryIds
+  };
+}

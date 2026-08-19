@@ -1,0 +1,268 @@
+{
+  "version": 3,
+  "content": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "heading",
+        "attrs": {
+          "level": 1,
+          "id": "019e2e73-7250-79d6-9940-4861c779eb31"
+        },
+        "content": [
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "bold"
+              }
+            ],
+            "text": "Define Problem"
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "attrs": {
+          "level": 2,
+          "id": "019e2e73-7250-77f9-844f-2c2b05d7c484"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Problem Statement"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "italic"
+              }
+            ],
+            "text": "(Explain what the problem is)"
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "attrs": {
+          "level": 2,
+          "id": "019e2e73-7250-7210-8764-40265896b149"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Design Statement"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "italic"
+              }
+            ],
+            "text": "(Explain what a potential solution would look like and how it would solve the problem)"
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "attrs": {
+          "level": 2,
+          "id": "019e2e76-6e7b-72bf-acf7-f557fcb22555"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Goals"
+          }
+        ]
+      },
+      {
+        "type": "notebookListItem",
+        "attrs": {
+          "indent": 1,
+          "listType": "bullet",
+          "restart": false
+        },
+        "content": [
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "italic"
+              }
+            ],
+            "text": "(Goal 1)"
+          }
+        ]
+      },
+      {
+        "type": "notebookListItem",
+        "attrs": {
+          "indent": 1,
+          "listType": "bullet",
+          "restart": false
+        },
+        "content": [
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "italic"
+              }
+            ],
+            "text": "(Goal 2)"
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "attrs": {
+          "level": 2,
+          "id": "019e2edb-af09-7c58-a594-93a125f60741"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Criteria"
+          }
+        ]
+      },
+      {
+        "type": "notebookListItem",
+        "attrs": {
+          "indent": 1,
+          "listType": "bullet",
+          "restart": false
+        },
+        "content": [
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "italic"
+              }
+            ],
+            "text": "(Criteria 1)"
+          }
+        ]
+      },
+      {
+        "type": "notebookListItem",
+        "attrs": {
+          "indent": 1,
+          "listType": "bullet",
+          "restart": false
+        },
+        "content": [
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "italic"
+              }
+            ],
+            "text": "(Criteria 2)"
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "attrs": {
+          "level": 2,
+          "id": "019e2edb-af09-7c58-a594-93a125f60741"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Constraints"
+          }
+        ]
+      },
+      {
+        "type": "notebookListItem",
+        "attrs": {
+          "indent": 1,
+          "listType": "bullet",
+          "restart": false
+        },
+        "content": [
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "italic"
+              }
+            ],
+            "text": "(Constraint 1)"
+          }
+        ]
+      },
+      {
+        "type": "notebookListItem",
+        "attrs": {
+          "indent": 1,
+          "listType": "bullet",
+          "restart": false
+        },
+        "content": [
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "italic"
+              }
+            ],
+            "text": "(Constraint 2)"
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "attrs": {
+          "level": 2,
+          "id": "019e2edd-da8d-7153-9a9a-2f77b51b5a10"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Deadlines"
+          }
+        ]
+      },
+      {
+        "type": "notebookListItem",
+        "attrs": {
+          "indent": 1,
+          "listType": "bullet",
+          "restart": false
+        },
+        "content": [
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "italic"
+              }
+            ],
+            "text": "(Deadline)"
+          }
+        ]
+      },
+      {
+        "type": "paragraph"
+      }
+    ]
+  }
+}

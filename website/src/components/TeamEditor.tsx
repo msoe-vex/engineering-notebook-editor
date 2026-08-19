@@ -3,11 +3,12 @@
 import React, { useState, useEffect, useMemo, memo, useCallback, useRef } from "react";
 import {
   Hash, User, Briefcase, Image as ImageIcon,
-   Check, X, Camera, Building2, Plus, Trash2, Users,
-  Palette, Shapes, Search, GripVertical, LucideIcon
+  X, Camera, Building2, Plus, Trash2, Users,
+  Palette, Shapes, Search, GripVertical, LucideIcon, Loader2
 } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import Image from "next/image";
+import { createPortal } from "react-dom";
 
 import {
   DndContext,
@@ -33,21 +34,61 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { TeamMetadata, TeamMember, ProjectPhase } from "@/lib/metadata";
 import { DEFAULT_PHASES, AVAILABLE_ICONS } from "@/lib/phases";
-import { generateUUID, formatDateMonthYear, compressImageToJpeg } from "@/lib/utils";
+import { fetchDefaultPhases } from "@/lib/defaultTemplates";
+import { generateUUID, formatDateMonthYear, compressImageToJpeg, getMimeTypeFromExtension } from "@/lib/utils";
 
 // ─── Sub-components for performance ──────────────────────────────────────────
+
+const PRESET_COLORS = [
+  "#3b82f6", // Blue
+  "#a855f7", // Purple
+  "#6366f1", // Indigo
+  "#f97316", // Orange
+  "#10b981", // Emerald
+  "#ec4899", // Pink
+  "#ef4444", // Red
+  "#eab308", // Yellow
+  "#06b6d4", // Cyan
+  "#14b8a6", // Teal
+  "#8b5cf6", // Violet
+  "#64748b", // Slate
+];
 
 const IconPicker = ({
   currentIcon,
   onSelect,
-  color
+  color,
+  onColorChange
 }: {
   currentIcon: string,
   onSelect: (iconName: string) => void,
-  color: string
+  color: string,
+  onColorChange: (color: string) => void
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
+
+  const updateCoords = () => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const popupWidth = 272; // w-68
+      const popupHeight = 320;
+      
+      // Calculate top position and clamp to screen bounds
+      let top = rect.top + rect.height / 2 - popupHeight / 2;
+      top = Math.max(16, Math.min(top, window.innerHeight - popupHeight - 16));
+
+      // Calculate left position (prefer right of button, fallback to left if overflow)
+      let left = rect.right + 16;
+      if (left + popupWidth > window.innerWidth - 16) {
+        left = rect.left - popupWidth - 16;
+      }
+
+      setCoords({ top, left });
+    }
+  };
 
   const filteredIcons = useMemo(() => {
     const q = search.toLowerCase();
@@ -59,51 +100,184 @@ const IconPicker = ({
   return (
     <div className="relative shrink-0">
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          if (!isOpen) {
+            updateCoords();
+          }
+          setIsOpen(!isOpen);
+        }}
         className="w-11 h-11 rounded-[14px] flex items-center justify-center border-2 transition-all cursor-pointer group hover:scale-105 active:scale-95 shadow-sm"
         style={{ backgroundColor: `${color}15`, color: color, borderColor: `${color}30` }}
-        title="Change Icon"
+        title="Customize Icon & Color"
       >
         <IconComp size={20} className="group-hover:rotate-12 transition-transform" />
       </button>
 
-      {isOpen && (
+      {isOpen && createPortal(
         <>
-          <div className="fixed inset-0 z-[190]" onClick={() => setIsOpen(false)} />
-          <div className="absolute top-1/2 left-full ml-4 -translate-y-1/2 w-60 bg-nb-surface border border-nb-outline-variant shadow-nb-2xl rounded-[20px] p-3 z-[200] animate-in fade-in slide-in-from-left-2 duration-200">
-            <div className="relative mb-2.5">
-              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-nb-on-surface-variant/40" />
-              <input
-                autoFocus
-                type="text"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search icons..."
-                className="w-full bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg pl-8 pr-2 py-1.5 text-[10px] font-bold text-nb-on-surface focus:outline-none focus:ring-2 focus:ring-nb-primary/20 transition-all"
-              />
-            </div>
-            <div className="grid grid-cols-4 gap-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1">
-              {filteredIcons.map(iconName => {
-                const PickerIcon = (LucideIcons as unknown as Record<string, LucideIcon>)[iconName] || Shapes;
-                return (
+          <div className="fixed inset-0 z-9998" onClick={() => setIsOpen(false)} />
+          <div
+            style={{
+              position: 'fixed',
+              top: coords.top,
+              left: coords.left,
+              zIndex: 9999
+            }}
+            className="w-68 bg-nb-surface border border-nb-outline-variant shadow-nb-2xl rounded-[20px] p-3.5 animate-in fade-in zoom-in-95 duration-150 space-y-3"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Color Section */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[9px] font-black uppercase tracking-wider text-nb-on-surface-variant/50">Theme Color</label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="color"
+                    value={color}
+                    onChange={e => onColorChange(e.target.value)}
+                    className="w-4 h-4 rounded border-0 p-0 cursor-pointer overflow-hidden bg-transparent shrink-0"
+                  />
+                  <span className="text-[9px] font-mono font-bold text-nb-on-surface-variant/70 uppercase">{color}</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-6 gap-1.5">
+                {PRESET_COLORS.map(preset => (
                   <button
-                    key={iconName}
+                    key={preset}
                     type="button"
-                    onClick={() => { onSelect(iconName); setIsOpen(false); }}
-                    className={`w-8 h-8 flex items-center justify-center rounded-md transition-all hover:scale-110 cursor-pointer ${currentIcon === iconName ? "bg-nb-primary text-white" : "bg-nb-surface-low border border-nb-outline-variant/20 text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary"}`}
-                  >
-                    <PickerIcon size={14} />
-                  </button>
-                );
-              })}
+                    onClick={() => onColorChange(preset)}
+                    className={`w-5 h-5 rounded-full transition-transform hover:scale-115 cursor-pointer flex items-center justify-center ${color.toLowerCase() === preset.toLowerCase() ? "ring-2 ring-nb-primary ring-offset-1" : ""}`}
+                    style={{ backgroundColor: preset }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t border-nb-outline-variant/30 pt-2.5">
+              <label className="block text-[9px] font-black uppercase tracking-wider text-nb-on-surface-variant/50 mb-2">Icon</label>
+              <div className="relative mb-2">
+                <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-nb-on-surface-variant/40" />
+                <input
+                  autoFocus
+                  type="text"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search icons..."
+                  className="w-full bg-nb-surface-low border border-nb-outline-variant/30 rounded-lg pl-8 pr-2 py-1.5 text-[10px] font-bold text-nb-on-surface focus:outline-none focus:ring-2 focus:ring-nb-primary/20 transition-all"
+                />
+              </div>
+              <div className="grid grid-cols-5 gap-1 max-h-36 overflow-y-auto custom-scrollbar pr-1">
+                {filteredIcons.map(iconName => {
+                  const PickerIcon = (LucideIcons as unknown as Record<string, LucideIcon>)[iconName] || Shapes;
+                  return (
+                    <button
+                      key={iconName}
+                      type="button"
+                      onClick={() => { onSelect(iconName); setIsOpen(false); }}
+                      className={`w-8 h-8 flex items-center justify-center rounded-md transition-all hover:scale-110 cursor-pointer ${currentIcon === iconName ? "bg-nb-primary text-white" : "bg-nb-surface-low border border-nb-outline-variant/20 text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary"}`}
+                    >
+                      <PickerIcon size={14} />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   );
 };
+
+const TeamAssetImage = memo(({
+  src,
+  alt,
+  className = "object-cover",
+  fallbackIcon
+}: {
+  src?: string;
+  alt: string;
+  className?: string;
+  fallbackIcon: React.ReactNode;
+}) => {
+  const isDataUrl = Boolean(src?.startsWith("data:"));
+  const [asyncSrc, setAsyncSrc] = useState("");
+  const [isLoading, setIsLoading] = useState(!isDataUrl && Boolean(src));
+
+  const resolvedSrc = isDataUrl ? (src || "") : asyncSrc;
+
+  useEffect(() => {
+    let active = true;
+    if (!src || src.startsWith("data:")) {
+      return;
+    }
+
+    const load = async () => {
+      setIsLoading(true);
+      try {
+        const { store } = await import("@/lib/store");
+        // 1. Check in-memory session cache
+        if (store.assetCache.has(src)) {
+          const cached = store.assetCache.get(src)!;
+          if (active) {
+            setAsyncSrc(cached);
+            setIsLoading(false);
+          }
+          return;
+        }
+
+        // 2. Fetch on-demand
+        const b64 = await store.getAssetBase64(src);
+        if (b64 && active) {
+          const dataUrl = b64.startsWith("data:") ? b64 : `data:${getMimeTypeFromExtension(src)};base64,${b64}`;
+          setAsyncSrc(dataUrl);
+          setIsLoading(false);
+          return;
+        }
+      } catch (e) {
+        console.warn("Failed to load team asset:", src, e);
+      }
+
+      if (active) {
+        setIsLoading(false);
+      }
+    };
+
+    void load();
+    return () => { active = false; };
+  }, [src]);
+
+  if (!src) {
+    return <>{fallbackIcon}</>;
+  }
+
+  return (
+    <div className="relative w-full h-full flex items-center justify-center">
+      {isLoading && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-nb-surface-low/80 backdrop-blur-[2px] animate-pulse">
+          <Loader2 size={24} className="animate-spin text-nb-primary mb-1.5 opacity-80" />
+          <span className="text-[9px] font-bold text-nb-on-surface-variant/60 tracking-wider uppercase">Loading</span>
+        </div>
+      )}
+      {resolvedSrc ? (
+        <Image
+          src={resolvedSrc}
+          alt={alt}
+          fill
+          className={`${className} transition-opacity duration-300 ${isLoading ? "opacity-0" : "opacity-100"}`}
+          unoptimized
+        />
+      ) : (
+        !isLoading && fallbackIcon
+      )}
+    </div>
+  );
+});
+
+TeamAssetImage.displayName = "TeamAssetImage";
 
 const PhaseCard = memo(({
   phase,
@@ -127,53 +301,35 @@ const PhaseCard = memo(({
     setPrevColor(phase.color);
   }
 
-  // Color confirmation logic
-  const hasColorChanged = localColor !== phase.color;
-
   return (
     <div
-      className={`flex-1 group flex items-center gap-4 p-3 rounded-2xl bg-nb-surface border border-nb-outline-variant hover:border-nb-primary/30 transition-all ${isOverlay ? 'shadow-nb-2xl border-nb-primary ring-2 ring-nb-primary/10' : ''}`}
+      className={`flex items-center gap-3 p-3.5 rounded-2xl bg-nb-surface border border-nb-outline-variant/60 hover:border-nb-primary/40 hover:shadow-nb-sm transition-all group ${isOverlay ? 'shadow-nb-xl border-nb-primary ring-2 ring-nb-primary/10' : ''}`}
     >
       <div
         {...attributes}
         {...listeners}
-        className="p-2 -ml-2 rounded-lg text-nb-on-surface-variant/20 hover:text-nb-on-surface-variant/60 hover:bg-nb-surface-low cursor-grab active:cursor-grabbing transition-all shrink-0"
+        className="p-1 rounded-lg text-nb-on-surface-variant/20 hover:text-nb-on-surface-variant/60 hover:bg-nb-surface-low cursor-grab active:cursor-grabbing transition-all shrink-0"
       >
-        <GripVertical size={16} />
+        <GripVertical size={14} />
       </div>
 
       <IconPicker
         currentIcon={phase.iconName}
-        color={localColor}
         onSelect={(name) => handlePhaseChange?.(phase.id, "iconName", name)}
+        color={localColor}
+        onColorChange={(newColor) => {
+          setLocalColor(newColor);
+          handlePhaseChange?.(phase.id, "color", newColor);
+        }}
       />
 
-      <div className="relative group/color shrink-0 flex items-center gap-2">
-        <input
-          type="color"
-          value={localColor}
-          onChange={e => setLocalColor(e.target.value)}
-          className="w-7 h-7 rounded-full border-2 border-white shadow-nb-sm cursor-pointer overflow-hidden p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-none [&::-webkit-color-swatch]:rounded-full"
-        />
-        {hasColorChanged && (
-          <button
-            type="button"
-            onClick={() => handlePhaseChange?.(phase.id, "color", localColor)}
-            className="p-1.5 rounded-xl bg-nb-primary text-white shadow-nb-lg hover:scale-110 active:scale-95 transition-all animate-in fade-in zoom-in-95 duration-200 cursor-pointer"
-            title="Confirm Color"
-          >
-            <Check size={12} />
-          </button>
-        )}
-      </div>
-
-      <div className="flex-1 min-w-0 space-y-2">
+      <div className="flex-1 min-w-0 space-y-1">
         <input
           type="text"
           value={phase.name}
           onChange={e => handlePhaseChange?.(phase.id, "name", e.target.value)}
           placeholder="Phase Name"
-          className="w-full bg-transparent border-none p-0 text-sm font-bold text-nb-on-surface focus:outline-none placeholder:text-nb-on-surface-variant/30"
+          className="w-full bg-transparent border-none p-0 text-xs font-black text-nb-on-surface focus:outline-none placeholder:text-nb-on-surface-variant/20 tracking-tight"
         />
         <textarea
           value={phase.description}
@@ -240,7 +396,7 @@ const MemberCard = memo(({
 
   return (
     <div
-      className={`group flex flex-col items-center gap-5 p-6 rounded-[32px] bg-nb-surface border border-nb-outline-variant hover:border-nb-primary/30 hover:shadow-nb-xl transition-all relative ${isOverlay ? 'shadow-nb-2xl border-nb-primary ring-2 ring-nb-primary/10' : ''}`}
+      className={`group flex flex-col items-center gap-5 p-6 rounded-4xl bg-nb-surface border border-nb-outline-variant hover:border-nb-primary/30 hover:shadow-nb-xl transition-all relative ${isOverlay ? 'shadow-nb-2xl border-nb-primary ring-2 ring-nb-primary/10' : ''}`}
     >
       <div
         {...attributes}
@@ -260,14 +416,13 @@ const MemberCard = memo(({
 
       {/* Member Avatar */}
       <div className="relative mt-2">
-        <div className="w-50 h-60 rounded-[32px] bg-nb-surface-low border-2 border-nb-outline-variant/30 overflow-hidden flex items-center justify-center shadow-inner">
-          {member.image ? (
-            <div className="relative w-full h-full">
-              <Image src={member.image} alt={member.name} fill className="object-cover" unoptimized />
-            </div>
-          ) : (
-            <User size={48} className="text-nb-on-surface-variant/10" />
-          )}
+        <div className="w-50 h-60 rounded-4xl bg-nb-surface-low border-2 border-nb-outline-variant/30 overflow-hidden flex items-center justify-center shadow-inner relative">
+          <TeamAssetImage
+            src={member.image}
+            alt={member.name || "Member"}
+            className="object-cover"
+            fallbackIcon={<User size={48} className="text-nb-on-surface-variant/10" />}
+          />
         </div>
 
         <div className="absolute -bottom-2 -right-2 flex flex-col gap-1">
@@ -351,7 +506,7 @@ const MemberRow = memo(({
     <div
       ref={setNodeRef}
       style={style}
-      className={`group/row ${isDragging ? 'z-[100]' : ''}`}
+      className={`group/row ${isDragging ? 'z-100' : ''}`}
     >
       <div className={`transition-all ${isDragging ? 'opacity-0 duration-0' : 'opacity-100 duration-200 delay-150'}`}>
         <MemberCard
@@ -395,7 +550,7 @@ const PhaseRow = memo(({
     <div
       ref={setNodeRef}
       style={style}
-      className={`group/row ${isDragging ? 'z-[100]' : ''}`}
+      className={`group/row ${isDragging ? 'z-100' : ''}`}
     >
       <div className={`transition-all ${isDragging ? 'opacity-0 duration-0' : 'opacity-100 duration-200 delay-150'}`}>
         <PhaseCard
@@ -428,14 +583,18 @@ export default function TeamEditor({
   const {
     metadata,
     saveTeam,
-    setPendingSave
+    setPendingSave,
+    isDiscarding
   } = useWorkspace();
 
   const initialData = useMemo(() => {
-    const data = metadata.team || { teamName: "", teamNumber: "", organization: "", logo: "", logoOriginal: "", members: [] };
+    const data = metadata.team || { teamName: "", teamNumber: "", organization: "", logo: "", logoOriginal: "", members: [], startDate: "", endDate: "", autoCalculateDates: true };
     return {
       ...data,
-      members: data.members.map(m => ({ ...m, id: m.id || generateUUID() }))
+      startDate: data.startDate || "",
+      endDate: data.endDate || "",
+      autoCalculateDates: data.autoCalculateDates ?? true,
+      members: (data.members || []).map((m, idx) => ({ ...m, id: m.id || `member-${idx}` }))
     };
   }, [metadata.team]);
 
@@ -447,11 +606,14 @@ export default function TeamEditor({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  const timeline = useMemo(() => {
-    const entryDates = Object.values(metadata.entries)
+  const autoTimeline = useMemo(() => {
+    const regularEntries = Object.values(metadata.entries)
+      .filter(e => !e.isTemplate && Boolean(e.date));
+
+    const entryDates = regularEntries
       .map(e => e.date)
-      .filter(Boolean)
       .sort();
+
     return {
       start: formatDateMonthYear(entryDates[0]),
       end: formatDateMonthYear(entryDates[entryDates.length - 1])
@@ -476,14 +638,19 @@ export default function TeamEditor({
   );
 
   useEffect(() => {
+    if (isDiscarding) {
+      setPendingSave(false);
+      return;
+    }
     if (hasChanges) {
       setPendingSave(true);
     }
-  }, [hasChanges, setPendingSave]);
+  }, [hasChanges, isDiscarding, setPendingSave]);
 
   useEffect(() => {
+    if (isDiscarding) return;
     const timer = setTimeout(() => {
-      if (hasChanges) {
+      if (hasChanges && !isDiscarding) {
         saveTeam(teamData, phases).then(() => {
           setSaveSuccess(true);
           setPendingSave(false);
@@ -491,7 +658,7 @@ export default function TeamEditor({
       }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [teamData, phases, hasChanges, saveTeam, setPendingSave]);
+  }, [teamData, phases, hasChanges, isDiscarding, saveTeam, setPendingSave]);
 
   const latestDataRef = useRef({ teamData, phases, hasChanges });
   useEffect(() => {
@@ -503,23 +670,23 @@ export default function TeamEditor({
   useEffect(() => {
     if (initialTab !== lastTabRef.current) {
       const { teamData: latestData, phases: latestPhases, hasChanges: changesExist } = latestDataRef.current;
-      if (changesExist) {
+      if (changesExist && !isDiscarding) {
         saveTeam(latestData, latestPhases);
         setPendingSave(false);
       }
       lastTabRef.current = initialTab;
     }
-  }, [initialTab, saveTeam, setPendingSave]);
+  }, [initialTab, isDiscarding, saveTeam, setPendingSave]);
 
   useEffect(() => {
     return () => {
       const { teamData: latestData, phases: latestPhases, hasChanges: changesExist } = latestDataRef.current;
-      if (changesExist) {
+      if (changesExist && !isDiscarding) {
         saveTeam(latestData, latestPhases);
         setPendingSave(false);
       }
     };
-  }, [saveTeam, setPendingSave]);
+  }, [isDiscarding, saveTeam, setPendingSave]);
 
   useEffect(() => {
     if (saveSuccess) {
@@ -532,40 +699,33 @@ export default function TeamEditor({
   const lastInitialDataRef = useRef(initialData);
   const lastInitialPhasesRef = useRef(initialPhases);
 
-  // Sync state with latest metadata after external discard/load
+  // Sync state with latest metadata ONLY when discarding pending changes externally
   useEffect(() => {
-    let cancelled = false;
-    const initialDataStr = JSON.stringify(initialData);
-    const lastInitialDataStr = JSON.stringify(lastInitialDataRef.current);
-
-    if (initialDataStr !== lastInitialDataStr) {
-      if (JSON.stringify(initialData) !== JSON.stringify(teamData)) {
-        queueMicrotask(() => {
-          if (!cancelled) setTeamData(initialData);
-        });
-      }
+    if (isDiscarding) {
       lastInitialDataRef.current = initialData;
+      const id = requestAnimationFrame(() => {
+        setTeamData(initialData);
+        setPendingSave(false);
+      });
+      return () => cancelAnimationFrame(id);
     }
-    return () => { cancelled = true; };
-  }, [initialData, teamData]);
+  }, [initialData, isDiscarding, setPendingSave]);
 
   useEffect(() => {
-    let cancelled = false;
     const initialPhasesStr = JSON.stringify(initialPhases);
     const lastInitialPhasesStr = JSON.stringify(lastInitialPhasesRef.current);
 
-    if (initialPhasesStr !== lastInitialPhasesStr) {
-      if (JSON.stringify(initialPhases) !== JSON.stringify(phases)) {
-        queueMicrotask(() => {
-          if (!cancelled) setPhases(initialPhases);
-        });
-      }
+    if (initialPhasesStr !== lastInitialPhasesStr || isDiscarding) {
       lastInitialPhasesRef.current = initialPhases;
+      const id = requestAnimationFrame(() => {
+        setPhases(initialPhases);
+        setPendingSave(false);
+      });
+      return () => cancelAnimationFrame(id);
     }
-    return () => { cancelled = true; };
-  }, [initialPhases, phases]);
+  }, [initialPhases, isDiscarding, setPendingSave]);
 
-  const handleFieldChange = (field: keyof TeamMetadata, value: string) => {
+  const handleFieldChange = <K extends keyof TeamMetadata>(field: K, value: TeamMetadata[K]) => {
     setTeamData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -677,8 +837,13 @@ export default function TeamEditor({
     setActiveId(null);
   };
 
-  const restoreDefaultPhases = useCallback(() => {
-    setPhases(DEFAULT_PHASES.map(p => ({ ...p })));
+  const restoreDefaultPhases = useCallback(async () => {
+    const defaultPhases = await fetchDefaultPhases();
+    if (defaultPhases && defaultPhases.length > 0) {
+      setPhases(defaultPhases.map(p => ({ ...p })));
+    } else {
+      setPhases(DEFAULT_PHASES.map(p => ({ ...p })));
+    }
   }, []);
 
   return (
@@ -691,7 +856,7 @@ export default function TeamEditor({
               <Users size={20} />
             </div>
             <div>
-              <h1 className="text-sm md:text-lg font-black text-nb-on-surface tracking-tight leading-tight">Project Configuration</h1>
+              <h1 className="text-sm md:text-lg font-black text-nb-on-surface tracking-tight leading-tight">Team Configuration</h1>
               <div className="hidden sm:flex items-center gap-2 text-[10px] font-black tracking-[0.2em] text-nb-on-surface-variant/40 uppercase">
                 <span>Identity, Team, and Design Process</span>
               </div>
@@ -704,7 +869,7 @@ export default function TeamEditor({
             <button
               onClick={onClose}
               className="p-2 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer"
-              title="Close Configuration"
+              title="Close Team Configuration"
             >
               <X size={20} />
             </button>
@@ -788,36 +953,94 @@ export default function TeamEditor({
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant ml-1">Project Timeline</label>
-                  <div className="flex gap-4">
-                    <div className="flex-1 bg-nb-surface-low border border-nb-outline-variant/30 rounded-2xl p-4">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant/40 mb-1">Start Date</p>
-                      <p className="text-sm font-black text-nb-on-surface">{timeline.start}</p>
-                    </div>
-                    <div className="flex-1 bg-nb-surface-low border border-nb-outline-variant/30 rounded-2xl p-4">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant/40 mb-1">End Date</p>
-                      <p className="text-sm font-black text-nb-on-surface">{timeline.end}</p>
-                    </div>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between ml-1">
+                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant">Project Timeline</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const isAuto = teamData.autoCalculateDates ?? true;
+                        if (isAuto) {
+                          // Switching to custom mode
+                          setTeamData(prev => ({
+                            ...prev,
+                            autoCalculateDates: false,
+                            startDate: prev.startDate || autoTimeline.start || "",
+                            endDate: prev.endDate || autoTimeline.end || ""
+                          }));
+                        } else {
+                          // Switching to auto mode
+                          setTeamData(prev => ({
+                            ...prev,
+                            autoCalculateDates: true,
+                            startDate: autoTimeline.start || "",
+                            endDate: autoTimeline.end || ""
+                          }));
+                        }
+                      }}
+                      className="text-[10px] font-bold text-nb-primary hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      <span>{!(teamData.autoCalculateDates ?? true) ? "Switch to Auto-Calculate" : "Set Custom Dates"}</span>
+                    </button>
                   </div>
-                  <p className="text-[10px] text-nb-on-surface-variant/60 italic ml-1 mt-1">Calculated from the earliest and latest entries.</p>
+
+                  {!(teamData.autoCalculateDates ?? true) ? (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-nb-on-surface-variant/70 ml-1">Start Date</label>
+                          <input
+                            type="text"
+                            value={teamData.startDate || ""}
+                            onChange={e => handleFieldChange("startDate", e.target.value)}
+                            placeholder="e.g. September 2025"
+                            className="w-full bg-nb-surface border border-nb-outline-variant rounded-xl px-3.5 py-2.5 text-xs font-bold text-nb-on-surface focus:outline-none focus:ring-2 focus:ring-nb-primary/20 focus:border-nb-primary transition-all"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-nb-on-surface-variant/70 ml-1">End Date</label>
+                          <input
+                            type="text"
+                            value={teamData.endDate || ""}
+                            onChange={e => handleFieldChange("endDate", e.target.value)}
+                            placeholder="e.g. April 2026"
+                            className="w-full bg-nb-surface border border-nb-outline-variant rounded-xl px-3.5 py-2.5 text-xs font-bold text-nb-on-surface focus:outline-none focus:ring-2 focus:ring-nb-primary/20 focus:border-nb-primary transition-all"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-nb-on-surface-variant/60 italic ml-1">Custom season range printed on the cover page.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <div className="flex gap-4">
+                        <div className="flex-1 bg-nb-surface-low border border-nb-outline-variant/30 rounded-2xl p-4">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant/40 mb-1">Start Date</p>
+                          <p className="text-sm font-black text-nb-on-surface">{autoTimeline.start || "No entries"}</p>
+                        </div>
+                        <div className="flex-1 bg-nb-surface-low border border-nb-outline-variant/30 rounded-2xl p-4">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant/40 mb-1">End Date</p>
+                          <p className="text-sm font-black text-nb-on-surface">{autoTimeline.end || "No entries"}</p>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-nb-on-surface-variant/60 italic ml-1">Automatically calculated from the earliest and latest entry dates (excluding templates).</p>
+                    </div>
+                  )}
                 </div>
 
               </div>
 
               {/* Right Column: Logo */}
-              <div className="flex flex-col items-center justify-center p-8 rounded-[32px] bg-nb-surface-low border border-nb-outline-variant/30 space-y-6">
-                <div className="relative group">
-                  <div className="w-48 h-48 rounded-[40px] bg-nb-surface border-4 border-white shadow-nb-lg overflow-hidden flex items-center justify-center">
-                    {teamData.logo ? (
-                      <div className="relative w-full h-full">
-                        <Image src={teamData.logo} alt="Logo" fill className="object-contain" unoptimized />
-                      </div>
-                    ) : (
-                      <ImageIcon size={48} className="text-nb-on-surface-variant/20" />
-                    )}
+              <div className="flex flex-col items-center justify-center p-8 rounded-4xl bg-nb-surface-low border border-nb-outline-variant/30 space-y-6">
+                <div className="relative group w-full max-w-70 flex justify-center">
+                  <div className="w-full aspect-square rounded-[36px] bg-nb-surface border-2 border-nb-outline-variant/30 shadow-nb-sm overflow-hidden flex items-center justify-center relative p-3">
+                    <TeamAssetImage
+                      src={teamData.logo}
+                      alt="Logo"
+                      className="object-contain p-2"
+                      fallbackIcon={<ImageIcon size={56} className="text-nb-on-surface-variant/20" />}
+                    />
                   </div>
-                  <label className="absolute -bottom-2 -right-2 p-4 rounded-2xl bg-nb-primary text-white shadow-lg shadow-nb-primary/30 cursor-pointer hover:scale-105 transition-transform">
+                  <label className="absolute -bottom-2 right-1 p-3.5 rounded-2xl bg-nb-primary text-white shadow-lg shadow-nb-primary/30 cursor-pointer hover:scale-105 transition-transform z-20">
                     <Camera size={20} />
                     <input
                       type="file"
@@ -909,7 +1132,7 @@ export default function TeamEditor({
                     {/* Static Numbers Column */}
                     <div className="flex flex-col gap-3 py-1">
                       {phases.map((_, i) => (
-                        <div key={i} className="w-10 h-[74px] flex items-center justify-center">
+                        <div key={i} className="w-10 h-18.5 flex items-center justify-center">
                           <span className="text-2xl font-black text-nb-on-surface-variant/10 select-none">
                             {i + 1}
                           </span>
@@ -932,7 +1155,7 @@ export default function TeamEditor({
                 </SortableContext>
                 <DragOverlay>
                   {activeId ? (
-                    <div className="w-[768px]">
+                    <div className="w-3xl">
                       <PhaseCard
                         phase={phases.find(p => p.id === activeId)!}
                         isOverlay
