@@ -702,9 +702,12 @@ export default function TeamEditor({
   // Sync state with latest metadata ONLY when discarding pending changes externally
   useEffect(() => {
     if (isDiscarding) {
-      setTeamData(initialData);
       lastInitialDataRef.current = initialData;
-      setPendingSave(false);
+      const id = requestAnimationFrame(() => {
+        setTeamData(initialData);
+        setPendingSave(false);
+      });
+      return () => cancelAnimationFrame(id);
     }
   }, [initialData, isDiscarding, setPendingSave]);
 
@@ -713,9 +716,12 @@ export default function TeamEditor({
     const lastInitialPhasesStr = JSON.stringify(lastInitialPhasesRef.current);
 
     if (initialPhasesStr !== lastInitialPhasesStr || isDiscarding) {
-      setPhases(initialPhases);
       lastInitialPhasesRef.current = initialPhases;
-      setPendingSave(false);
+      const id = requestAnimationFrame(() => {
+        setPhases(initialPhases);
+        setPendingSave(false);
+      });
+      return () => cancelAnimationFrame(id);
     }
   }, [initialPhases, isDiscarding, setPendingSave]);
 

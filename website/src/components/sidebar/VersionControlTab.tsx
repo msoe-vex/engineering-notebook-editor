@@ -74,7 +74,7 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
     });
   }, []);
 
-  const [baseMetadata, setBaseMetadata] = useState<any>(null);
+  const [baseMetadata, setBaseMetadata] = useState<import("@/lib/metadata").NotebookMetadata | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -130,8 +130,8 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
     // Check for entries/templates that changed only in notebook.json
     const metadataOnlyEntryIds = new Set<string>();
     if (baseMetadata?.entries && metadata?.entries) {
-      const baseEntries = baseMetadata.entries as Record<string, any>;
-      const currentEntries = metadata.entries as Record<string, any>;
+      const baseEntries = baseMetadata.entries as Record<string, import("@/lib/metadata").EntryMetadata>;
+      const currentEntries = metadata.entries as Record<string, import("@/lib/metadata").EntryMetadata>;
       for (const [id, entry] of Object.entries(currentEntries)) {
         if (!entryMap.has(id)) {
           const baseEntry = baseEntries[id];
@@ -219,7 +219,7 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
     }
 
     return groups;
-  }, [pendingChanges, metadata]);
+  }, [pendingChanges, metadata, baseMetadata]);
 
   const handleCommit = useCallback(async () => {
     if (!config) return;

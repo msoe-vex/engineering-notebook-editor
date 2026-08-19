@@ -457,7 +457,6 @@ export class EntryManager {
     const id = generateUUID();
     const createdAt = new Date().toISOString();
     const path = `${ENTRIES_DIR}/${id}.json`;
-    const latexPath = `${LATEX_DIR}/${id}.tex`;
 
     const newTemplate: EntryMetadata = {
       id,
