@@ -4,7 +4,7 @@ import { ExplorerFile } from "../types";
 import { getAllPending, getPending, stageChange, removeStaged } from "../db";
 import { fetchFileContent, fetchRawFileContent, checkGitHubFileExists } from "../github";
 import { writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, checkLocalFileExists } from "../fs";
-import { generateUUID, getMimeTypeFromExtension, formatDateMonthYear } from "../utils";
+import { generateUUID, getMimeTypeFromExtension, formatDateMonthYear, getLocalDateString } from "../utils";
 import { EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds } from "../metadata";
 import { generateAllEntriesLatex, generateTeamLatex, generatePhasesLatex, generateEntryLatex } from "../latex";
 import { IWorkspaceStore } from "./types";
@@ -267,6 +267,7 @@ export class EntryManager {
   async createEntry() {
     const id = generateUUID();
     const createdAt = new Date().toISOString();
+    const localDate = getLocalDateString();
     const path = `${ENTRIES_DIR}/${id}.json`;
     const latexPath = `${LATEX_DIR}/${id}.tex`;
 
@@ -275,13 +276,13 @@ export class EntryManager {
       title: "",
       author: localStorage.getItem("nb-last-author") || "",
       phase: null,
-      date: createdAt.split('T')[0], // Use simplified fallback or custom date if needed
+      date: localDate,
       createdAt, updatedAt: createdAt, filename: path
     };
 
     const wrapper = { version: 3, content: { type: "doc", content: [{ type: "paragraph" }] } };
     const jsonStr = JSON.stringify(wrapper, null, 2);
-    const initialLatex = `\\notebookentry{${newEntry.title}}{${createdAt.split('T')[0]}}{${newEntry.author}}{}{${id}}\n\n`;
+    const initialLatex = `\\notebookentry{${newEntry.title}}{${localDate}}{${newEntry.author}}{}{${id}}\n\n`;
 
     this.store.lastSavedContents.set(path, jsonStr);
     this.store.lastSavedContents.set(latexPath, initialLatex);
@@ -349,7 +350,7 @@ export class EntryManager {
 
     const newId = generateUUID();
     const createdAt = new Date().toISOString();
-    const todayDate = createdAt.split('T')[0];
+    const todayDate = getLocalDateString();
     const newPath = `${ENTRIES_DIR}/${newId}.json`;
     const newLatexPath = `${LATEX_DIR}/${newId}.tex`;
 
@@ -456,6 +457,7 @@ export class EntryManager {
   async createTemplate(templateData?: Partial<EntryMetadata>): Promise<string> {
     const id = generateUUID();
     const createdAt = new Date().toISOString();
+    const localDate = getLocalDateString();
     const path = `${ENTRIES_DIR}/${id}.json`;
 
     const newTemplate: EntryMetadata = {
@@ -463,7 +465,7 @@ export class EntryManager {
       title: templateData?.title || "New Template",
       author: templateData?.author || localStorage.getItem("nb-last-author") || "",
       phase: templateData?.phase ?? null,
-      date: templateData?.date || createdAt.split('T')[0],
+      date: templateData?.date || localDate,
       createdAt,
       updatedAt: createdAt,
       filename: path,
@@ -494,7 +496,7 @@ export class EntryManager {
   async createEntryFromTemplate(templateId: string): Promise<string> {
     const templateMeta = this.store.metadata.entries[templateId];
     const lastAuthor = (typeof window !== "undefined" ? localStorage.getItem("nb-last-author") : null) || "";
-    const todayDate = new Date().toISOString().split('T')[0];
+    const todayDate = getLocalDateString();
 
     return this.duplicateEntry(templateId, {
       asTemplate: false,
