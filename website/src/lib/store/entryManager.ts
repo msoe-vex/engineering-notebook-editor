@@ -242,11 +242,9 @@ export class EntryManager {
         this.store.assetCache.set(asset.path, dataUrl);
       }
 
-      // Save Entry JSON
-      if (this.store.lastSavedContents.get(mergedEntry.filename) !== entryJsonStr) {
-        await this.persistFile(mergedEntry.filename, entryJsonStr, `Auto-save: ${info.title}`);
-        this.store.lastSavedContents.set(mergedEntry.filename, entryJsonStr);
-      }
+      // Save Entry JSON (always write to ensure metadata edits like date/title/author trigger entry change tracking)
+      await this.persistFile(mergedEntry.filename, entryJsonStr, `Auto-save: ${info.title}`);
+      this.store.lastSavedContents.set(mergedEntry.filename, entryJsonStr);
 
       // Save LaTeX (only for regular entries, not templates)
       if (!mergedEntry.isTemplate) {

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import {
   GitBranch,
   CheckCircle2,
@@ -74,6 +74,25 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
     });
   }, []);
 
+  const [baseMetadata, setBaseMetadata] = useState<any>(null);
+
+  useEffect(() => {
+    let active = true;
+    getBaseFileContent(INDEX_PATH).then(content => {
+      if (!active) return;
+      if (content) {
+        try {
+          setBaseMetadata(JSON.parse(content));
+        } catch {
+          setBaseMetadata(null);
+        }
+      } else {
+        setBaseMetadata(null);
+      }
+    });
+    return () => { active = false; };
+  }, [getBaseFileContent, pendingChanges]);
+
   // Group pending changes logically
   const changeGroups = useMemo<ChangeGroup[]>(() => {
     if (!pendingChanges || pendingChanges.length === 0) return [];
@@ -108,6 +127,22 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
       }
     }
 
+    // Check for entries/templates that changed only in notebook.json
+    const metadataOnlyEntryIds = new Set<string>();
+    if (baseMetadata?.entries && metadata?.entries) {
+      const baseEntries = baseMetadata.entries as Record<string, any>;
+      const currentEntries = metadata.entries as Record<string, any>;
+      for (const [id, entry] of Object.entries(currentEntries)) {
+        if (!entryMap.has(id)) {
+          const baseEntry = baseEntries[id];
+          if (!baseEntry || JSON.stringify(baseEntry) !== JSON.stringify(entry)) {
+            entryMap.set(id, []);
+            metadataOnlyEntryIds.add(id);
+          }
+        }
+      }
+    }
+
     const groups: ChangeGroup[] = [];
 
     // 1. Grouped Entries
@@ -116,12 +151,13 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
       const title = entryMeta?.title || "Untitled Entry";
       const isNew = changes.some(c => c.changeType === 'create');
       const isDel = changes.some(c => c.operation === 'delete');
+      const isMetaOnly = metadataOnlyEntryIds.has(entryId);
 
       groups.push({
         id: `entry-${entryId}`,
         type: "entry",
         title,
-        subtitle: isDel ? "Deleted" : isNew ? "New Entry" : "Modified",
+        subtitle: isDel ? "Deleted" : isNew ? "New Entry" : isMetaOnly ? "Metadata Modified" : "Modified",
         changes,
         entryId
       });
@@ -401,15 +437,20 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
                     {/* Group Expanded Files */}
                     {isExpanded && (
                       <div className="bg-nb-surface-low/60 border-t border-nb-outline-variant/20 p-2 space-y-1.5 pl-4">
-                        {group.changes.map(c => {
-                          const fileName = c.path.split('/').pop() || c.path;
-                          const isDelete = c.operation === "delete";
-                          const isNew = c.changeType === "create";
-                          const isBinary = isBinaryFile(c.path);
-                          const isDiffOpen = openDiffPaths.has(c.path);
+                        {group.changes.length === 0 ? (
+                          <div className="text-[10px] italic text-nb-on-surface-variant/60 py-0.5">
+                            Metadata modified in notebook.json
+                          </div>
+                        ) : (
+                          group.changes.map(c => {
+                            const fileName = c.path.split('/').pop() || c.path;
+                            const isDelete = c.operation === "delete";
+                            const isNew = c.changeType === "create";
+                            const isBinary = isBinaryFile(c.path);
+                            const isDiffOpen = openDiffPaths.has(c.path);
 
-                          return (
-                            <div key={c.path} className="flex flex-col">
+                            return (
+                              <div key={c.path} className="flex flex-col">
                               <div
                                 onClick={() => !isBinary && toggleDiff(c.path)}
                                 className={`flex items-center justify-between text-[10px] text-nb-on-surface-variant py-1 px-1.5 rounded-lg ${!isBinary ? 'hover:bg-nb-surface-mid/60 cursor-pointer' : 'cursor-default'} transition-colors group ${isDiffOpen ? 'bg-nb-surface-mid/80 text-nb-on-surface' : ''}`}
@@ -460,7 +501,8 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
                               )}
                             </div>
                           );
-                        })}
+                        })
+                      )}
                       </div>
                     )}
                   </div>
