@@ -9,7 +9,7 @@
       "updatedAt": "2026-08-17T22:14:41.661Z",
       "date": "",
       "filename": "data/entries/01a00d05-17f6-7cf0-b2a6-c12c385d8cd2.json",
-      "order": 0,
+      "order": 4,
       "isTemplate": true,
       "resources": {
         "019e2f2d-1dd1-786d-9393-77da24edef94": {
@@ -31,7 +31,7 @@
       "updatedAt": "2026-08-17T22:13:06.340Z",
       "date": "",
       "filename": "data/entries/01a00d03-c46f-717f-b046-bf512bdd1d9d.json",
-      "order": 1,
+      "order": 3,
       "isTemplate": true,
       "resources": {
         "019e2f13-d57c-7544-bf91-b0e51edd2bda": {
@@ -75,7 +75,7 @@
       "updatedAt": "2026-08-17T22:11:23.343Z",
       "date": "",
       "filename": "data/entries/01a00cfb-5e56-79b5-a33f-3e6a94950b64.json",
-      "order": 3,
+      "order": 1,
       "isTemplate": true,
       "resources": {
         "019e2ee1-e249-7193-b019-ff994f7740bd": {
@@ -112,7 +112,7 @@
       "updatedAt": "2026-08-17T22:11:25.777Z",
       "date": "",
       "filename": "data/entries/01a00cf9-c38e-76d6-ba61-1ee2c71f954d.json",
-      "order": 4,
+      "order": 0,
       "isTemplate": true,
       "resources": {
         "019e2e73-7250-7210-8764-40265896b149": {

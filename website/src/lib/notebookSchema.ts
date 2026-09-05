@@ -421,14 +421,11 @@ export function insertionIndexForDatedEntry(
 }
 
 export function insertionIndexForTemplate(sorted: Identified<EntryMetadata>[]): number {
-  let lastTemplate = -1;
-  for (let i = 0; i < sorted.length; i++) {
-    if (sorted[i].isTemplate) lastTemplate = i;
-  }
-  return lastTemplate === -1 ? sorted.length : lastTemplate + 1;
+  const firstTemplate = sorted.findIndex((e) => e.isTemplate);
+  return firstTemplate === -1 ? 0 : firstTemplate;
 }
 
-/** After adding `id` to `metadata.entries`, densify global order (date for entries, after last template for templates). */
+/** After adding `id` to `metadata.entries`, densify global order (date for entries, front of templates for templates). */
 export function placeCreatedEntry(metadata: NotebookMetadata, id: string): NotebookMetadata {
   const created = metadata.entries[id];
   if (!created) return metadata;

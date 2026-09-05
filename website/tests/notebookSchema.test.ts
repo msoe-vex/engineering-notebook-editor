@@ -158,7 +158,7 @@ describe("placeCreatedEntry", () => {
     expect(sortedEntries(placed.entries).map((e) => e.id)).toEqual(["t", "past", "today", "future"]);
   });
 
-  it("appends a new template after existing templates", () => {
+  it("inserts a new template at the front of existing templates", () => {
     const withEntries = normalizeNotebookMetadata({
       version: 4,
       entries: {
@@ -170,7 +170,7 @@ describe("placeCreatedEntry", () => {
       team: { teamName: "", teamNumber: "", organization: "", members: {} },
     });
     const placed = placeCreatedEntry(withEntries, "t2");
-    expect(sortedEntries(placed.entries).map((e) => e.id)).toEqual(["t1", "t2", "e"]);
+    expect(sortedEntries(placed.entries).map((e) => e.id)).toEqual(["t2", "t1", "e"]);
   });
 });
 

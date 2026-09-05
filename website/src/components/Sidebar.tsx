@@ -111,26 +111,40 @@ export default function Sidebar({
   }, [entries, metadata]);
 
   const filteredEntries = useMemo(() => {
-    const list = [...augmentedEntries];
+    const byPath = (a: typeof augmentedEntries[0], b: typeof augmentedEntries[0]) =>
+      (a.path || a.name).localeCompare(b.path || b.name);
 
-    list.sort((a, b) => {
+    const entriesOnly = augmentedEntries.filter((e) => !e.isTemplate);
+    const templates = augmentedEntries.filter((e) => e.isTemplate);
+
+    entriesOnly.sort((a, b) => {
       if (sortBy === "title") {
         const valA = (a.title || a.name).toLowerCase();
         const valB = (b.title || b.name).toLowerCase();
         if (valA !== valB) {
           return sortDirection === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
         }
+        const orderA = a.order ?? 0;
+        const orderB = b.order ?? 0;
+        if (orderA !== orderB) return orderA - orderB;
+        return byPath(a, b);
       }
       const orderA = a.order ?? 0;
       const orderB = b.order ?? 0;
       if (orderA !== orderB) {
-        if (sortBy === "title") return orderA - orderB;
         return sortDirection === "asc" ? orderA - orderB : orderB - orderA;
       }
-      return (a.path || a.name).localeCompare(b.path || b.name);
+      return byPath(a, b);
     });
 
-    return list;
+    templates.sort((a, b) => {
+      const orderA = a.order ?? 0;
+      const orderB = b.order ?? 0;
+      if (orderA !== orderB) return orderA - orderB;
+      return byPath(a, b);
+    });
+
+    return [...entriesOnly, ...templates];
   }, [augmentedEntries, sortBy, sortDirection]);
 
   useEffect(() => {

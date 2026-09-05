@@ -14,7 +14,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   FileText, Plus, X, Calendar, SortAsc, SortDesc,
   ChevronDown, ChevronRight, ExternalLink, Trash2, FileJson, FileCode,
-  Download, Copy, Layers, FolderTree
+  Download, Copy, Layers, FolderTree, GripVertical
 } from "lucide-react";
 import ValidationTooltip from "./editor/ui/ValidationTooltip";
 
@@ -66,23 +66,22 @@ interface FileRowProps {
   onSelect: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
-  reorderable?: boolean;
   phaseLabel?: string;
+  dragHandle?: React.ReactNode;
+  rowRef?: (node: HTMLDivElement | null) => void;
+  rowStyle?: React.CSSProperties;
 }
 
 function FileRow({
   file, isOpened, isSelected, isPending, isDeleted, icon, isValid = true, validationErrors = [],
-  onSelect, onDoubleClick, onContextMenu, reorderable = false, phaseLabel
+  onSelect, onDoubleClick, onContextMenu, phaseLabel, dragHandle, rowRef, rowStyle
 }: FileRowProps) {
-  const rowRef = React.useRef<HTMLDivElement>(null);
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: file.path,
-    disabled: !reorderable,
-  });
+  const localRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
-    if (isOpened && rowRef.current) {
-      rowRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    const node = localRef.current;
+    if (isOpened && node) {
+      node.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
   }, [isOpened]);
 
@@ -123,12 +122,11 @@ function FileRow({
   return (
     <div
       ref={(node) => {
-        setNodeRef(node);
-        rowRef.current = node;
+        localRef.current = node;
+        rowRef?.(node);
       }}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.45 : 1 }}
-      {...(reorderable ? { ...attributes, ...listeners } : {})}
-      onClick={isDeleted || isDragging ? undefined : (e) => {
+      style={rowStyle}
+      onClick={isDeleted ? undefined : (e) => {
         onSelect(e);
         if (!(e.ctrlKey || e.metaKey || e.shiftKey)) onDoubleClick();
       }}
@@ -136,8 +134,7 @@ function FileRow({
       onContextMenu={isDeleted ? undefined : onContextMenu}
       title={tooltipLines.join(' · ')}
       className={`
-        group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all select-none border-2
-        ${reorderable ? "cursor-grab" : "cursor-pointer"}
+        group flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer select-none border-2
         ${isOpened
           ? 'bg-nb-tertiary text-white shadow-lg shadow-nb-tertiary/20 border-nb-tertiary'
           : isSelected
@@ -147,7 +144,8 @@ function FileRow({
         ${isDeleted ? 'opacity-30 grayscale' : ''}
       `}
     >
-      <div className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all ${isOpened ? 'bg-white/20 text-white' : isSelected ? 'bg-nb-tertiary/10 text-nb-tertiary' : 'bg-nb-surface-low text-nb-tertiary'}`}>
+      {dragHandle}
+      <div className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center ${isOpened ? 'bg-white/20 text-white' : isSelected ? 'bg-nb-tertiary/10 text-nb-tertiary' : 'bg-nb-surface-low text-nb-tertiary'}`}>
         {icon}
       </div>
 
@@ -174,6 +172,42 @@ function FileRow({
         <span className={`w-1.5 h-1.5 rounded-full shrink-0 animate-pulse shadow-sm ${isOpened ? 'bg-white' : 'bg-nb-tertiary shadow-nb-tertiary/50'}`} title="Staged change" />
       )}
     </div>
+  );
+}
+
+function restrictToVerticalAxis({ transform }: { transform: { x: number; y: number; scaleX: number; scaleY: number } }) {
+  return { ...transform, x: 0 };
+}
+
+function SortableTemplateRow(props: Omit<FileRowProps, "dragHandle" | "rowRef" | "rowStyle"> & { sortableId: string }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: props.sortableId,
+  });
+  const { sortableId: _sortableId, ...rowProps } = props;
+  return (
+    <FileRow
+      {...rowProps}
+      rowRef={setNodeRef}
+      rowStyle={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.4 : 1,
+        zIndex: isDragging ? 20 : undefined,
+      }}
+      dragHandle={
+        <button
+          type="button"
+          className={`shrink-0 p-0.5 rounded cursor-grab active:cursor-grabbing ${rowProps.isOpened ? "text-white/80" : "text-nb-on-surface-variant/50 hover:text-nb-on-surface"}`}
+          title="Drag to reorder"
+          aria-label="Drag to reorder"
+          onClick={(e) => e.stopPropagation()}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical size={14} />
+        </button>
+      }
+    />
   );
 }
 
@@ -313,8 +347,13 @@ export default function FileExplorer({
   const [isNewDropdownOpen, setIsNewDropdownOpen] = useState(false);
 
   const regularEntries = entries.filter(e => !e.isTemplate);
-  const templateEntries = entries.filter(e => e.isTemplate);
-  const canReorderTemplates = sortBy === "date" && !!onReorderTemplates;
+  const templateEntries = [...entries.filter(e => e.isTemplate)].sort((a, b) => {
+    const orderA = a.order ?? 0;
+    const orderB = b.order ?? 0;
+    if (orderA !== orderB) return orderA - orderB;
+    return (a.path || a.name).localeCompare(b.path || b.name);
+  });
+  const canReorderTemplates = !!onReorderTemplates;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -323,11 +362,11 @@ export default function FileExplorer({
 
   const handleTemplateDragEnd = (event: DragEndEvent) => {
     if (!canReorderTemplates || !event.over) return;
-    const from = templateEntries.findIndex((f) => f.path === event.active.id);
-    const to = templateEntries.findIndex((f) => f.path === event.over?.id);
+    const from = templateEntries.findIndex((f) => f.name.replace(".json", "") === event.active.id);
+    const to = templateEntries.findIndex((f) => f.name.replace(".json", "") === event.over?.id);
     if (from < 0 || to < 0 || from === to) return;
     const moved = arrayMove(templateEntries, from, to).map((f) => f.name.replace(".json", ""));
-    onReorderTemplates(sortDirection === "desc" ? [...moved].reverse() : moved);
+    onReorderTemplates(moved);
   };
 
   const handleContextMenu = (e: React.MouseEvent, file: ExplorerFile) => {
@@ -367,7 +406,7 @@ export default function FileExplorer({
           >
             <div className="flex items-center gap-1.5 truncate">
               {sortBy === "date" ? <Calendar size={13} className="text-nb-primary shrink-0" /> : <FileText size={13} className="text-nb-primary shrink-0" />}
-              <span className="truncate">Sort: {sortBy === "date" ? "Calendar" : "Title"}</span>
+              <span className="truncate">Entries: {sortBy === "date" ? "Calendar" : "Title"}</span>
             </div>
             <ChevronDown size={12} className={`text-nb-on-surface-variant transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
           </button>
@@ -407,7 +446,6 @@ export default function FileExplorer({
       </div>
 
       {/* Entries and Templates Content Area */}
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTemplateDragEnd}>
       {(() => {
         const entriesPane = (
           <Pane
@@ -491,8 +529,7 @@ export default function FileExplorer({
             hasItems={regularEntries.length > 0}
             className={isEntriesCollapsed ? "shrink-0" : "flex-1"}
           >
-            <SortableContext items={regularEntries.map((x) => x.path)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-1">
+            <div className="flex flex-col gap-1">
               {regularEntries.map((f) => {
                 const pConfig = typeof f.phase === "string" && f.phase ? phaseConfig[f.phase] : null;
                 const IconComponent = pConfig ? pConfig.icon : FileText;
@@ -525,7 +562,6 @@ export default function FileExplorer({
                 );
               })}
             </div>
-            </SortableContext>
           </Pane>
         );
 
@@ -555,13 +591,20 @@ export default function FileExplorer({
             }
             hasItems={templateEntries.length > 0}
           >
-            <SortableContext items={templateEntries.map((f) => f.path)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-1">
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              modifiers={[restrictToVerticalAxis]}
+              onDragEnd={handleTemplateDragEnd}
+            >
+            <SortableContext items={templateEntries.map((f) => f.name.replace(".json", ""))} strategy={verticalListSortingStrategy}>
+            <div className="flex flex-col gap-1">
               {templateEntries.map(f => {
                 const pConfig = typeof f.phase === "string" && f.phase ? phaseConfig[f.phase] : null;
                 const IconComponent = pConfig ? pConfig.icon : Layers;
                 const phase = typeof f.phase === "string" && f.phase ? availablePhases.find(p => p.id === f.phase) : null;
                 const iconStyle = phase ? { color: phase.color } : { color: "#9333ea" };
+                const templateId = f.name.replace(".json", "");
 
                 const icon = (
                   <IconComponent
@@ -571,27 +614,30 @@ export default function FileExplorer({
                   />
                 );
 
-                return (
-                  <FileRow
-                    key={f.path}
-                    file={f}
-                    isOpened={activePath === f.path}
-                    isSelected={selectedPaths.has(f.path)}
-                    isPending={pendingPaths.has(f.path)}
-                    isDeleted={deletedPaths.has(f.path)}
-                    icon={icon}
-                    isValid={f.isValid}
-                    validationErrors={f.validationErrors}
-                    reorderable={canReorderTemplates}
-                    phaseLabel={phase?.name}
-                    onSelect={(e) => onSelectEntry(f, e.ctrlKey || e.metaKey, e.shiftKey, templateEntries.map((x) => x.path))}
-                    onDoubleClick={() => onOpenEntry(f)}
-                    onContextMenu={(e) => handleContextMenu(e, f)}
-                  />
+                const rowProps = {
+                  file: f,
+                  isOpened: activePath === f.path,
+                  isSelected: selectedPaths.has(f.path),
+                  isPending: pendingPaths.has(f.path),
+                  isDeleted: deletedPaths.has(f.path),
+                  icon,
+                  isValid: f.isValid,
+                  validationErrors: f.validationErrors,
+                  phaseLabel: phase?.name,
+                  onSelect: (e: React.MouseEvent) => onSelectEntry(f, e.ctrlKey || e.metaKey, e.shiftKey, templateEntries.map((x) => x.path)),
+                  onDoubleClick: () => onOpenEntry(f),
+                  onContextMenu: (e: React.MouseEvent) => handleContextMenu(e, f),
+                };
+
+                return canReorderTemplates ? (
+                  <SortableTemplateRow key={f.path} sortableId={templateId} {...rowProps} />
+                ) : (
+                  <FileRow key={f.path} {...rowProps} />
                 );
               })}
             </div>
             </SortableContext>
+            </DndContext>
           </Pane>
         );
 
@@ -625,7 +671,6 @@ export default function FileExplorer({
           </div>
         );
       })()}
-      </DndContext>
 
       {/* Context Menu */}
       {contextMenu && (
