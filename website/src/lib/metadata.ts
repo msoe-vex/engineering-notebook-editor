@@ -1,6 +1,6 @@
 import { ASSETS_DIR, ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR, TYPE_LABELS, NOTEBOOK_VERSION } from "./constants";
 import { generateUUID } from "./utils";
-import { normalizeNotebookMetadata, mergeRecordById } from "./notebookSchema";
+import { normalizeNotebookMetadata, mergeRecordById, parseAuthors, formatAuthors } from "./notebookSchema";
 
 export { NOTEBOOK_VERSION };
 export {
@@ -17,6 +17,9 @@ export {
   reorderTemplateSequence,
   isNotebookValid,
   mergeRecordById,
+  parseAuthors,
+  formatAuthors,
+  authorsEqual,
 } from "./notebookSchema";
 
 export const getLocalDateString = () => {
@@ -26,6 +29,29 @@ export const getLocalDateString = () => {
   const day = String(d.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
+
+const LAST_AUTHORS_KEY = "nb-last-authors";
+const LAST_AUTHOR_KEY = "nb-last-author";
+
+export function readLastAuthors(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(LAST_AUTHORS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parseAuthors(parsed);
+    }
+  } catch { /* ignore */ }
+  return parseAuthors(localStorage.getItem(LAST_AUTHOR_KEY));
+}
+
+export function writeLastAuthors(authors: string[]): void {
+  if (typeof window === "undefined") return;
+  const clean = parseAuthors(authors);
+  if (clean.length === 0) return;
+  localStorage.setItem(LAST_AUTHORS_KEY, JSON.stringify(clean));
+  localStorage.setItem(LAST_AUTHOR_KEY, formatAuthors(clean));
+}
 
 /**
  * metadata.ts — resource ↔ entry relationship tracking.
@@ -54,7 +80,7 @@ export type Identified<T> = T & { id: string };
 
 export interface EntryMetadata {
   title: string;
-  author: string;
+  authors: string[];
   phase: string | null; // Phase dict key
   createdAt: string;
   updatedAt: string;
@@ -460,7 +486,7 @@ export function validateEntry(
 
   // Templates are exempt from author, date, and phase requirements
   if (!entry.isTemplate) {
-    if (!entry.author?.trim()) errors.push("Author name is required.");
+    if (!entry.authors?.some((name) => name.trim())) errors.push("Author name is required.");
     if (!entry.date?.trim()) errors.push("Date is required.");
     if (!entry.phase || !phaseIds.has(entry.phase)) {
       errors.push("Entry phase is required.");
@@ -491,7 +517,7 @@ export function validateEntry(
 export function isEntryValid(info: EntryMetadata): boolean {
   if (!info.title?.trim()) return false;
   if (!info.isTemplate) {
-    if (!info.author?.trim()) return false;
+    if (!info.authors?.some((name) => name.trim())) return false;
     if (!info.date?.trim()) return false;
     if (!info.phase) return false;
   }

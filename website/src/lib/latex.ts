@@ -1,5 +1,5 @@
 import { ASSETS_DIR } from "./constants";
-import { Identified, ProjectPhase, TeamMetadata, TipTapNode, sortedEntries, sortedMembers, sortedPhases } from "./metadata";
+import { Identified, ProjectPhase, TeamMetadata, TipTapNode, formatAuthors, sortedEntries, sortedMembers, sortedPhases } from "./metadata";
 
 export function latexPhaseRef(
   phase: string | null | undefined,
@@ -373,7 +373,7 @@ export const convertJsonToLatex = (input: TipTapNode | string, resourceTypes?: R
   return convertNodeToLatex(doc as TipTapNode, resourceTypes).replace(/\n{3,}/g, "\n\n").trim() + "\n";
 };
 
-export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: string, p: string | number | null, initialCreatedAt: string | undefined, id?: string, resourceTypes?: Record<string, string>, date?: string): string => {
+export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: string | string[], p: string | number | null, initialCreatedAt: string | undefined, id?: string, resourceTypes?: Record<string, string>, date?: string): string => {
   let dateObj = initialCreatedAt ? new Date(initialCreatedAt) : new Date();
 
   // Fallback for mangled timestamps (e.g. 2026-04-28T17-36-32)
@@ -394,7 +394,8 @@ export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: strin
   }
 
   const dateStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
-  let latex = `\\notebookentry{${escapeLaTeX(t)}}{${date || dateStr}}{${escapeLaTeX(a)}}{${p ?? ""}}{${id ?? ""}}\n\n`;
+  const authorStr = Array.isArray(a) ? formatAuthors(a) : a;
+  let latex = `\\notebookentry{${escapeLaTeX(t)}}{${date || dateStr}}{${escapeLaTeX(authorStr)}}{${p ?? ""}}{${id ?? ""}}\n\n`;
   latex += convertJsonToLatex(cnt, resolvedResourceTypes);
   return latex;
 };

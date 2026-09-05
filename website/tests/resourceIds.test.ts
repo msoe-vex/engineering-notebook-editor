@@ -33,7 +33,7 @@ describe("duplicate resource owners", () => {
   const entries: Record<string, EntryMetadata> = {
     live: {
       title: "Develop Solution",
-      author: "Ada",
+      authors: ["Ada"],
       phase: "develop-solution",
       date: "2026-05-11",
       createdAt: "",
@@ -47,7 +47,7 @@ describe("duplicate resource owners", () => {
     },
     template: {
       title: "Develop Solution Template",
-      author: "",
+      authors: [],
       phase: "develop-solution",
       date: "",
       createdAt: "",

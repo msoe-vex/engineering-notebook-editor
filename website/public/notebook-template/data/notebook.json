@@ -3,7 +3,7 @@
   "entries": {
     "01a00cf9-c38e-76d6-ba61-1ee2c71f954d": {
       "title": "Define Problem Template",
-      "author": "",
+      "authors": [],
       "phase": "define-problem",
       "createdAt": "2026-08-16T23:48:10.254Z",
       "updatedAt": "2026-08-17T22:11:25.777Z",
@@ -50,7 +50,7 @@
     },
     "01a00cfb-5e56-79b5-a33f-3e6a94950b64": {
       "title": "Generate Concepts Template",
-      "author": "",
+      "authors": [],
       "phase": "generate-concepts",
       "createdAt": "2026-08-16T23:49:55.414Z",
       "updatedAt": "2026-08-17T22:11:23.343Z",
@@ -87,7 +87,7 @@
     },
     "01a00cff-5bde-7274-afb0-93c09579c080": {
       "title": "Develop Solution Template",
-      "author": "",
+      "authors": [],
       "phase": "develop-solution",
       "createdAt": "2026-08-16T23:54:16.926Z",
       "updatedAt": "2026-08-17T22:11:36.602Z",
@@ -109,7 +109,7 @@
     },
     "01a00d03-c46f-717f-b046-bf512bdd1d9d": {
       "title": "Construct and Test Template",
-      "author": "",
+      "authors": [],
       "phase": "construct-test",
       "createdAt": "2026-08-16T23:59:05.839Z",
       "updatedAt": "2026-08-17T22:13:06.340Z",
@@ -131,7 +131,7 @@
     },
     "01a00d05-17f6-7cf0-b2a6-c12c385d8cd2": {
       "title": "Evaluate Solution Template",
-      "author": "",
+      "authors": [],
       "phase": "evaluate-solution",
       "createdAt": "2026-08-17T00:00:32.758Z",
       "updatedAt": "2026-08-17T22:14:41.661Z",

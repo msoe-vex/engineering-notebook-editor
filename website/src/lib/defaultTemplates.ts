@@ -67,7 +67,7 @@ export async function fetchDefaultNotebook(): Promise<DefaultNotebook> {
       const filename = `${ENTRIES_DIR}/${id}.json`;
       const cleanMeta: EntryMetadata = {
         ...entry,
-        author: "",
+        authors: [],
         filename,
         createdAt: today,
         updatedAt: today,

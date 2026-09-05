@@ -27,7 +27,7 @@ function dict(pairs: [string, Item][]): Record<string, Item> {
 
 function entry(partial: Partial<EntryMetadata> & { title: string }): EntryMetadata {
   return {
-    author: "x",
+    authors: ["x"],
     phase: null,
     date: "2026-09-01",
     createdAt: "",
@@ -212,7 +212,7 @@ describe("mergeNotebookMetadata", () => {
 
   it("marks the notebook invalid when a non-template entry is missing required fields", () => {
     const invalid = notebook({
-      a: { title: "", author: "", phase: null, date: "", isTemplate: false, order: 0 },
+      a: { title: "", authors: [], phase: null, date: "", isTemplate: false, order: 0 },
     });
     expect(isNotebookValid(invalid)).toBe(false);
   });

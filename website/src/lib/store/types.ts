@@ -26,7 +26,7 @@ export interface OpenFileState {
   tiptapContent: string;
   latex: string;
   title: string;
-  author: string;
+  authors: string[];
   phase: string | null;
   createdAt: string;
   updatedAt: string;
@@ -100,10 +100,10 @@ export interface IWorkspaceStore {
   createTemporaryProject(): Promise<string>;
   selectProject(id: string): Promise<void>;
   openEntry(id: string): Promise<void>;
-  updateDraft(tiptapContent: string | null, info: { title?: string; author?: string; phase?: string | null; date?: string }): void;
-  updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string | null; date: string }): Promise<void>;
+  updateDraft(tiptapContent: string | null, info: { title?: string; authors?: string[]; phase?: string | null; date?: string }): void;
+  updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; authors: string[]; phase: string | null; date: string }): Promise<void>;
   createEntry(): Promise<string>;
-  duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string; author?: string; phase?: string | null; date?: string }): Promise<string>;
+  duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string; authors?: string[]; phase?: string | null; date?: string }): Promise<string>;
   createTemplate(templateData?: Partial<EntryMetadata>): Promise<string>;
   createEntryFromTemplate(templateId: string): Promise<string>;
   repairDuplicateResourceIds(): Promise<boolean>;

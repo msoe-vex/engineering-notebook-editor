@@ -17,7 +17,7 @@ import {
 } from "@dnd-kit/core";
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Rows3, X } from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { sortedEntries } from "@/lib/metadata";
+import { formatAuthors, sortedEntries } from "@/lib/metadata";
 import { getPhaseConfig, getPhases } from "@/lib/phases";
 
 const UNDATED = "__undated__";
@@ -409,7 +409,7 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
       map[e.id] = {
         title: e.title,
         color: e.phase ? phaseConfig[e.phase]?.color : undefined,
-        author: e.author?.trim() || "",
+        author: formatAuthors(e.authors),
         phaseName: e.phase ? (phases.find((p) => p.id === e.phase)?.name || "") : "",
         date: formatEntryDate(e.date),
       };

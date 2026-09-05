@@ -17,6 +17,7 @@ import {
 import { ExplorerFile } from "@/lib/types";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { getPhases } from "@/lib/phases";
+import { formatAuthors } from "@/lib/metadata";
 
 interface SearchTabProps {
   entries: ExplorerFile[];
@@ -90,7 +91,7 @@ export default function SearchTab({
         ...f,
         id: entryId,
         title: meta?.title || f.title || "Untitled Entry",
-        author: meta?.author || f.author || "",
+        author: formatAuthors(meta?.authors) || f.author || "",
         phase: meta?.phase ?? f.phase ?? null,
         date: meta?.date || f.date || "",
         createdAt: meta?.createdAt,

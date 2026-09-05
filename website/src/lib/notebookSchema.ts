@@ -71,6 +71,26 @@ function asBool(value: unknown, fallback = false): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
+/** Parse `authors` arrays or a legacy comma-separated `author` string. */
+export function parseAuthors(value: unknown, fallback?: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((v) => asString(v).trim()).filter(Boolean);
+  }
+  const raw = asString(value) || asString(fallback);
+  if (!raw.trim()) return [];
+  return raw.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+export function formatAuthors(authors: string[] | undefined | null): string {
+  return (authors || []).map((s) => s.trim()).filter(Boolean).join(", ");
+}
+
+export function authorsEqual(a?: string[] | null, b?: string[] | null): boolean {
+  const aa = a || [];
+  const bb = b || [];
+  return aa.length === bb.length && aa.every((name, i) => name === bb[i]);
+}
+
 function dropId<T extends Record<string, unknown>>(obj: T): Omit<T, "id" | "index"> {
   const rest = { ...obj };
   delete rest.id;
@@ -159,7 +179,7 @@ function migrateEntries(
       sortUpdated: asString(item.updatedAt) || asString(item.createdAt),
       entry: {
         title: asString(item.title),
-        author: asString(item.author),
+        authors: parseAuthors(item.authors, item.author),
         phase,
         createdAt: asString(item.createdAt),
         updatedAt: asString(item.updatedAt) || asString(item.createdAt),
@@ -269,7 +289,7 @@ function canonicalEntry(e: EntryMetadata): EntryMetadata {
   }
   return {
     title: e.title || "",
-    author: e.author || "",
+    authors: parseAuthors(e.authors),
     phase: e.phase ?? null,
     createdAt: e.createdAt || "",
     updatedAt: e.updatedAt || "",

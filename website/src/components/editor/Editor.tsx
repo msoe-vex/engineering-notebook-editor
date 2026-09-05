@@ -8,7 +8,7 @@ import { TableGridSelector } from "./ui/TableGridSelector";
 import { createPortal } from "react-dom";
 import { saveAs } from "file-saver";
 import {
-  Save, Trash2, Loader2, User, X, FileCode,
+  Save, Trash2, Loader2, X, FileCode,
   Undo2, Redo2, ImagePlus, ChevronDown, ChevronUp, List, ListOrdered,
   Code, Table as TableIcon, Heading, Bold, Italic, Image as ImageIcon,
   Terminal, Link as LinkIcon, Underline as UnderlineIcon, Sigma,
@@ -37,8 +37,9 @@ import { generateEntryLatex, latexPhaseRef } from "@/lib/latex";
 import { getPhases, getPhaseConfig } from "@/lib/phases";
 import { store } from "@/lib/store";
 import AutocompleteInput from "./ui/AutocompleteInput";
+import AuthorsInput from "./ui/AuthorsInput";
 import DatePicker from "./ui/DatePicker";
-import { extractResources, extractReferences, TipTapNode, ensureResourceIds, buildResourceTypeIndex, validateEntry } from "@/lib/metadata";
+import { extractResources, extractReferences, TipTapNode, ensureResourceIds, buildResourceTypeIndex, validateEntry, formatAuthors } from "@/lib/metadata";
 import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng, compressImageToJpeg } from "@/lib/utils";
 import { NodeSelection } from "@tiptap/pm/state";
@@ -777,7 +778,7 @@ const EditorContent = React.memo(function EditorContent({
       ...entryIdMeta,
       id: entryId,
       title: openFile.title || "",
-      author: openFile.author || "",
+      authors: openFile.authors || [],
       date: openFile.date || "",
       phase: openFile.phase,
       isTemplate,
@@ -789,7 +790,7 @@ const EditorContent = React.memo(function EditorContent({
     const errors = validateEntry(entryToValidate, phases, existingIds);
 
     return { valid: errors.length === 0, errors };
-  }, [openFile.title, openFile.author, openFile.date, openFile.phase, editor, metadata, entryId]);
+  }, [openFile.title, openFile.authors, openFile.date, openFile.phase, editor, metadata, entryId]);
 
   // Local validation state for immediate UI feedback.
   // Editor is the sole authority on validity while open — parent isValid is only used for initial value.
@@ -807,7 +808,7 @@ const EditorContent = React.memo(function EditorContent({
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [openFile.title, openFile.author, openFile.phase, openFile.date, openFile.tiptapContent, editor?.state.doc.content, validate, localIsValid, validationErrors, entryId, setEntryValidity]);
+  }, [openFile.title, openFile.authors, openFile.phase, openFile.date, openFile.tiptapContent, editor?.state.doc.content, validate, localIsValid, validationErrors, entryId, setEntryValidity]);
 
   const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -877,7 +878,11 @@ const EditorContent = React.memo(function EditorContent({
     const authors = new Set<string>();
     // Add authors from existing entries
     Object.entries(metadata?.entries || {}).forEach(([id, e]) => {
-      if (id !== entryId && e.author?.trim()) authors.add(e.author.trim());
+      if (id !== entryId) {
+        for (const name of e.authors || []) {
+          if (name.trim()) authors.add(name.trim());
+        }
+      }
     });
     Object.values(metadata?.team?.members || {}).forEach((m) => {
       if (m.name?.trim()) authors.add(m.name.trim());
@@ -899,7 +904,7 @@ const EditorContent = React.memo(function EditorContent({
 
   // use module-level getSafeInsertPos
 
-  const generateLatex = useCallback((cnt: TipTapNode | string, t: string, a: string, p: string | null, d: string) => {
+  const generateLatex = useCallback((cnt: TipTapNode | string, t: string, a: string[], p: string | null, d: string) => {
     const id = filename.split('/').pop()?.replace('.json', '') || "";
 
     // Extract resources from the content to pass to generateEntryLatex
@@ -923,8 +928,8 @@ const EditorContent = React.memo(function EditorContent({
   }, [filename, initialCreatedAt, metadata.entries, metadata.phases]);
 
   const previewLatex = React.useMemo(() => {
-    return generateLatex(openFile.tiptapContent, openFile.title, openFile.author, openFile.phase, openFile.date);
-  }, [openFile.tiptapContent, openFile.title, openFile.author, openFile.phase, openFile.date, generateLatex]);
+    return generateLatex(openFile.tiptapContent, openFile.title, openFile.authors, openFile.phase, openFile.date);
+  }, [openFile.tiptapContent, openFile.title, openFile.authors, openFile.phase, openFile.date, generateLatex]);
 
   const handleSave = useCallback(async () => {
     const { valid, errors } = validate();
@@ -938,17 +943,17 @@ const EditorContent = React.memo(function EditorContent({
     try {
       await updateEntry(entryId, previewLatex, openFile.tiptapContent, {
         title: openFile.title,
-        author: openFile.author,
+        authors: openFile.authors,
         phase: openFile.phase,
         date: isTemplate ? "" : openFile.date
       });
     } catch (e) {
       console.error(e);
     }
-  }, [openFile.tiptapContent, openFile.title, openFile.author, openFile.phase, openFile.date, previewLatex, validate, updateEntry, entryId, isTemplate]);
+  }, [openFile.tiptapContent, openFile.title, openFile.authors, openFile.phase, openFile.date, previewLatex, validate, updateEntry, entryId, isTemplate]);
 
   const handleDownload = () => {
-    const latex = generateLatex(openFile.tiptapContent, openFile.title, openFile.author, openFile.phase, openFile.date);
+    const latex = generateLatex(openFile.tiptapContent, openFile.title, openFile.authors, openFile.phase, openFile.date);
     const blob = new Blob([latex], { type: "text/plain;charset=utf-8" });
     saveAs(blob, filename);
   };
@@ -1190,34 +1195,26 @@ const EditorContent = React.memo(function EditorContent({
                     />
                   )}
 
-                  <div className="flex flex-wrap items-center gap-2 md:gap-3 flex-1 md:flex-none">
+                  <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0 md:flex-none md:max-w-full">
                     {!isTemplate && (
                       <DatePicker
                         value={openFile.date || ""}
                         onChange={(val) => updateDraft(null, { date: val })}
-                        className="h-9 flex-1 min-w-35"
+                        className="h-9 w-44 shrink-0 overflow-hidden self-center"
                       />
                     )}
 
-                    <div
-                      className="h-9 flex-1 min-w-40 flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50"
-                    >
-                      <User size={15} className="text-nb-primary drop-shadow-sm shrink-0" />
-                      <AutocompleteInput
-                        type="text"
-                        autoComplete="off"
-                        value={openFile.author}
+                      <AuthorsInput
+                        authors={openFile.authors || []}
                         options={otherAuthors}
-                        onChange={(e) => { updateDraft(null, { author: e.target.value }); }}
-                        onSelectOption={(val) => { updateDraft(null, { author: val }); }}
+                        onChange={(authors) => updateDraft(null, { authors })}
                         placeholder="Author"
-                        className="bg-transparent border-none outline-none text-[13px] font-bold text-nb-on-surface-variant tracking-tight flex-1 min-w-0 placeholder:text-nb-on-surface-variant/20"
+                        className="h-9 w-52 shrink-0 self-center"
                       />
-                    </div>
 
                     <div
                       ref={phaseButtonRef}
-                      className="relative h-9 flex-1 min-w-60 flex items-center gap-2.5 px-3 rounded-xl border border-nb-outline-variant/30 bg-nb-surface-low transition-all"
+                      className="relative h-9 flex-1 basis-0 min-w-60 overflow-hidden flex items-center gap-2.5 px-3 rounded-xl border border-nb-outline-variant/30 bg-nb-surface-low transition-all self-center"
                     >
                       <div
                         className="absolute inset-0 z-10 cursor-pointer"
@@ -1329,7 +1326,7 @@ const EditorContent = React.memo(function EditorContent({
                   filename={filename}
                   content={parseInitialContent(openFile.tiptapContent)} // Initial load only
                   onChange={handleEditorChange}
-                  author={openFile.author}
+                  author={formatAuthors(openFile.authors)}
                   onEditorInit={setEditor}
                   onToggleLink={(fn) => { toggleLinkFn.current = fn; }}
                   entryId={entryId}

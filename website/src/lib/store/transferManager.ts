@@ -404,7 +404,7 @@ export class TransferManager {
 
           await this.store.persistFile(meta.filename, contentStr, `Import entry: ${meta.title}`);
           if (!meta.isTemplate) {
-            const latex = generateEntryLatex(doc, meta.title, meta.author, latexPhaseRef(meta.phase, this.store.metadata.phases), meta.createdAt, id, globalResourceTypes, meta.date);
+            const latex = generateEntryLatex(doc, meta.title, meta.authors, latexPhaseRef(meta.phase, this.store.metadata.phases), meta.createdAt, id, globalResourceTypes, meta.date);
             await this.store.persistFile(`${LATEX_DIR}/${id}.tex`, latex, `Import LaTeX: ${meta.title}`);
           }
         }

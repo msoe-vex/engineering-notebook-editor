@@ -9,6 +9,7 @@ import { ExplorerFile, TeamTab } from "@/lib/types";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { LATEX_DIR, ENTRIES_DIR } from "@/lib/constants";
 import { showNotification } from "./Notification";
+import { formatAuthors } from "@/lib/metadata";
 
 interface SidebarProps {
   selectedPaths: Set<string>;
@@ -97,7 +98,8 @@ export default function Sidebar({
       return {
         ...f,
         title: meta?.title || "",
-        author: meta?.author || "",
+        author: formatAuthors(meta?.authors),
+        authors: meta?.authors,
         phase: meta?.phase ?? null,
         timestamp: meta?.createdAt,
         updatedAt: meta?.updatedAt,

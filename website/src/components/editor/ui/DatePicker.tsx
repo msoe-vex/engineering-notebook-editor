@@ -67,7 +67,7 @@ export default function DatePicker({ value, onChange, className = "" }: DatePick
       }}
     >
       <CalendarIcon size={15} className="text-nb-primary shrink-0 drop-shadow-sm" />
-      <span className={`text-[12px] font-bold tracking-tight flex-1 truncate ${value ? 'text-nb-on-surface-variant' : 'text-nb-on-surface-variant/30'}`}>
+      <span className={`text-[12px] font-bold tracking-tight flex-1 min-w-0 truncate ${value ? 'text-nb-on-surface-variant' : 'text-nb-on-surface-variant/30'}`}>
         {value ? parseDateString(value).toLocaleDateString(undefined, { dateStyle: 'medium' }) : "Date"}
       </span>
 

@@ -16,6 +16,7 @@ export interface ExplorerFile {
   path: string;
   title?: string;
   author?: string;
+  authors?: string[];
   phase?: string | null;
   timestamp?: string;
   updatedAt?: string;

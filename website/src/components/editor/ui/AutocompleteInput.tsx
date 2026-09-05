@@ -6,6 +6,8 @@ interface AutocompleteInputProps extends React.InputHTMLAttributes<HTMLInputElem
   onSelectOption: (option: string) => void;
   dropdownClassName?: string;
   wrapperClassName?: string;
+  /** If set, the dropdown is positioned/sized from this element instead of the input wrapper. */
+  dropdownAnchorRef?: React.RefObject<HTMLElement | null>;
 }
 
 export default function AutocompleteInput({
@@ -13,6 +15,7 @@ export default function AutocompleteInput({
   onSelectOption,
   dropdownClassName = "",
   wrapperClassName = "",
+  dropdownAnchorRef,
   className = "",
   value,
   onChange,
@@ -33,12 +36,13 @@ export default function AutocompleteInput({
   }, []);
 
   const updateCoords = () => {
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
+    const node = dropdownAnchorRef?.current || containerRef.current;
+    if (node) {
+      const rect = node.getBoundingClientRect();
       setCoords({
-        top: rect.bottom + window.scrollY,
-        left: rect.left + window.scrollX,
-        width: rect.width
+        top: rect.bottom + 8,
+        left: rect.left,
+        width: Math.max(rect.width, 220)
       });
     }
   };
@@ -67,7 +71,7 @@ export default function AutocompleteInput({
         <ul
           style={{
             position: 'fixed',
-            top: coords.top + 8,
+            top: coords.top,
             left: coords.left,
             width: coords.width,
             zIndex: 9999
@@ -83,7 +87,7 @@ export default function AutocompleteInput({
                   onSelectOption(opt);
                   setIsOpen(false);
                 }}
-                className="px-3 py-1.5 text-xs text-nb-on-surface hover:bg-nb-surface-low cursor-pointer transition-colors truncate"
+                className="px-3 py-1.5 text-xs text-nb-on-surface hover:bg-nb-surface-low cursor-pointer transition-colors"
               >
                 {opt}
               </li>

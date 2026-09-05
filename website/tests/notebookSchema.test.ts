@@ -54,7 +54,21 @@ describe("normalizeNotebookMetadata", () => {
     expect(normalized.phases?.["define-problem"].order).toBe(0);
 
     const keys = Object.keys(JSON.parse(JSON.stringify(normalized.entries["e-1"])));
-    expect(keys.slice(0, 4)).toEqual(["title", "author", "phase", "createdAt"]);
+    expect(normalized.entries["e-1"].authors).toEqual(["Ada"]);
+    expect(keys.slice(0, 4)).toEqual(["title", "authors", "phase", "createdAt"]);
+  });
+
+  it("migrates a comma-separated author string into authors", () => {
+    const normalized = normalizeNotebookMetadata({
+      version: 4,
+      entries: {
+        e: { title: "E", author: "Ada, Grace", phase: null, date: "2026-09-01", createdAt: "", updatedAt: "", filename: "e", order: 0, isTemplate: false },
+      },
+      phases: {},
+      team: { teamName: "", teamNumber: "", organization: "", members: {} },
+    });
+    expect(normalized.entries.e.authors).toEqual(["Ada", "Grace"]);
+    expect(normalized.entries.e).not.toHaveProperty("author");
   });
 
   it("densifies duplicate and gapped order values", () => {

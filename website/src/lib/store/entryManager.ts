@@ -5,7 +5,7 @@ import { getAllPending, getPending, stageChange, removeStaged } from "../db";
 import { fetchFileContent, fetchRawFileContent, checkGitHubFileExists } from "../github";
 import { writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, checkLocalFileExists } from "../fs";
 import { generateUUID, getMimeTypeFromExtension, formatDateMonthYear, getLocalDateString } from "../utils";
-import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds, collectNotebookResourceIds, duplicateResourceOwners, canonicalResourceOwner, remapSelectedContentIds, placeCreatedEntry } from "../metadata";
+import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds, collectNotebookResourceIds, duplicateResourceOwners, canonicalResourceOwner, remapSelectedContentIds, placeCreatedEntry, formatAuthors, authorsEqual, parseAuthors, readLastAuthors, writeLastAuthors } from "../metadata";
 import { generateAllEntriesLatex, generateTeamLatex, generatePhasesLatex, generateEntryLatex, latexPhaseRef } from "../latex";
 import { IWorkspaceStore } from "./types";
 
@@ -86,7 +86,7 @@ export class EntryManager {
         tiptapContent: JSON.stringify(hydratedContent),
         latex: "",
         title: meta.title,
-        author: meta.author,
+        authors: meta.authors || [],
         phase: meta.phase,
         date: meta.date,
         createdAt: meta.createdAt,
@@ -107,14 +107,14 @@ export class EntryManager {
 
   updateDraft(
     tiptapContent: string | null,
-    info: { title?: string; author?: string; phase?: string | null; date?: string }
+    info: { title?: string; authors?: string[]; phase?: string | null; date?: string }
   ) {
     if (!this.store.openFile) return;
     const id = this.store.openFile.id;
 
     // Check if anything actually changed
     const titleChanged = info.title !== undefined && info.title !== this.store.openFile.title;
-    const authorChanged = info.author !== undefined && info.author !== this.store.openFile.author;
+    const authorChanged = info.authors !== undefined && !authorsEqual(info.authors, this.store.openFile.authors);
     const phaseChanged = info.phase !== undefined && info.phase !== this.store.openFile.phase;
     const dateChanged = info.date !== undefined && info.date !== this.store.openFile.date;
     const contentChanged = tiptapContent !== null && tiptapContent !== this.store.openFile.tiptapContent;
@@ -128,7 +128,7 @@ export class EntryManager {
       this.store.openFile.tiptapContent = tiptapContent;
     }
     if (info.title !== undefined) this.store.openFile.title = info.title;
-    if (info.author !== undefined) this.store.openFile.author = info.author;
+    if (info.authors !== undefined) this.store.openFile.authors = info.authors;
     if (info.phase !== undefined) this.store.openFile.phase = info.phase;
     if (info.date !== undefined) this.store.openFile.date = info.date;
     this.store.openFile.updatedAt = new Date().toISOString();
@@ -143,7 +143,7 @@ export class EntryManager {
           [id]: {
             ...existingEntry,
             ...(info.title !== undefined ? { title: info.title } : {}),
-            ...(info.author !== undefined ? { author: info.author } : {}),
+            ...(info.authors !== undefined ? { authors: info.authors } : {}),
             ...(info.phase !== undefined ? { phase: info.phase } : {}),
             ...(info.date !== undefined ? { date: info.date } : {}),
             updatedAt: this.store.openFile.updatedAt,
@@ -162,12 +162,12 @@ export class EntryManager {
     this.store.notifyStateChange();
   }
 
-  async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string | null; date: string }) {
+  async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; authors: string[]; phase: string | null; date: string }) {
     this.updateDraft(tiptapContent, info);
     await this.store.debouncedPersist.flush();
   }
 
-  async saveDraft(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string | null; date: string }) {
+  async saveDraft(id: string, latex: string, tiptapContent: string, info: { title: string; authors: string[]; phase: string | null; date: string }) {
     let contentJson = JSON.parse(tiptapContent);
     // Handle double-stringification and wrapping
     if (typeof contentJson === 'string') {
@@ -220,8 +220,8 @@ export class EntryManager {
     this.store.notifyStateChange();
     events.emit(EventNames.ENTRY_UPDATED, { id, ...info });
 
-    if (info.author) {
-      localStorage.setItem("nb-last-author", info.author);
+    if (info.authors?.length) {
+      writeLastAuthors(info.authors);
     }
 
     // 2. Queue background persistence
@@ -275,7 +275,7 @@ export class EntryManager {
 
     const newEntry: EntryMetadata = {
       title: "",
-      author: localStorage.getItem("nb-last-author") || "",
+      authors: readLastAuthors(),
       phase: null,
       date: localDate,
       createdAt, updatedAt: createdAt, filename: path,
@@ -284,7 +284,7 @@ export class EntryManager {
 
     const wrapper = { version: 3, content: { type: "doc", content: [{ type: "paragraph" }] } };
     const jsonStr = JSON.stringify(wrapper, null, 2);
-    const initialLatex = `\\notebookentry{${newEntry.title}}{${localDate}}{${newEntry.author}}{}{${id}}\n\n`;
+    const initialLatex = `\\notebookentry{${newEntry.title}}{${localDate}}{${formatAuthors(newEntry.authors)}}{}{${id}}\n\n`;
 
     this.store.lastSavedContents.set(path, jsonStr);
     this.store.lastSavedContents.set(latexPath, initialLatex);
@@ -307,7 +307,7 @@ export class EntryManager {
     return id;
   }
 
-  async duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string; author?: string; phase?: string | null; date?: string }): Promise<string> {
+  async duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string; authors?: string[]; phase?: string | null; date?: string }): Promise<string> {
     const sourceMeta = this.store.metadata.entries[sourceId];
     if (!sourceMeta) throw new Error("Source entry not found");
 
@@ -342,13 +342,13 @@ export class EntryManager {
       }
     }
 
-    const lastUsedAuthor = (typeof window !== "undefined" ? localStorage.getItem("nb-last-author") : null) || "";
+    const lastUsedAuthors = readLastAuthors();
 
-    const author = options?.author !== undefined
-      ? options.author
+    const authors = options?.authors !== undefined
+      ? parseAuthors(options.authors)
       : (!isTemplate && sourceMeta.isTemplate)
-      ? (lastUsedAuthor || sourceMeta.author || "")
-      : (sourceMeta.author || lastUsedAuthor);
+      ? (lastUsedAuthors.length ? lastUsedAuthors : parseAuthors(sourceMeta.authors))
+      : (parseAuthors(sourceMeta.authors).length ? sourceMeta.authors : lastUsedAuthors);
 
     const phase = options?.phase !== undefined
       ? options.phase
@@ -364,7 +364,7 @@ export class EntryManager {
 
     const newEntry: EntryMetadata = {
       title: newTitle,
-      author,
+      authors,
       phase,
       date,
       createdAt,
@@ -391,7 +391,7 @@ export class EntryManager {
     const newLatex = !isTemplate ? generateEntryLatex(
       contentJson,
       newTitle,
-      newEntry.author,
+      newEntry.authors,
       latexPhaseRef(newEntry.phase, this.store.metadata.phases),
       createdAt,
       newId,
@@ -439,7 +439,7 @@ export class EntryManager {
 
     const newTemplate: EntryMetadata = {
       title: templateData?.title || "New Template",
-      author: templateData?.author || localStorage.getItem("nb-last-author") || "",
+      authors: templateData?.authors || readLastAuthors(),
       phase: templateData?.phase ?? null,
       date: "",
       createdAt,
@@ -472,13 +472,13 @@ export class EntryManager {
 
   async createEntryFromTemplate(templateId: string): Promise<string> {
     const templateMeta = this.store.metadata.entries[templateId];
-    const lastAuthor = (typeof window !== "undefined" ? localStorage.getItem("nb-last-author") : null) || "";
+    const lastAuthors = readLastAuthors();
     const todayDate = getLocalDateString();
 
     return this.duplicateEntry(templateId, {
       asTemplate: false,
       title: templateMeta?.title || "New Entry",
-      author: lastAuthor || templateMeta?.author || "",
+      authors: lastAuthors.length ? lastAuthors : parseAuthors(templateMeta?.authors),
       phase: templateMeta?.phase ?? null,
       date: todayDate
     });

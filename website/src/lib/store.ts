@@ -1,4 +1,4 @@
-import { NotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, EntryMetadata, hydrateTeamAssets, TipTapNode, buildResourceTypeIndex, extractResources, mergeNotebookMetadata, moveEntryOnCalendar, reorderTemplateSequence, serializeNotebookMetadata } from "./metadata";
+import { NotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, EntryMetadata, hydrateTeamAssets, TipTapNode, buildResourceTypeIndex, extractResources, mergeNotebookMetadata, moveEntryOnCalendar, reorderTemplateSequence, serializeNotebookMetadata, formatAuthors, parseAuthors } from "./metadata";
 import { INDEX_PATH, ENTRIES_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from "./constants";
 import { generateEntryLatex, generateTeamLatex, generatePhasesLatex, generateAllEntriesLatex, latexPhaseRef } from "./latex";
 import { ExplorerFile, GitHubConfig, TeamTab } from "./types";
@@ -66,7 +66,7 @@ class WorkspaceStore implements IWorkspaceStore {
     const id = this.openFile.id;
     const tiptapContent = this.openFile.tiptapContent;
     const title = this.openFile.title;
-    const author = this.openFile.author;
+    const authors = this.openFile.authors;
     const phase = this.openFile.phase;
     const date = this.openFile.date;
 
@@ -81,7 +81,7 @@ class WorkspaceStore implements IWorkspaceStore {
     const latex = generateEntryLatex(
       tiptapContent,
       title,
-      author,
+      authors,
       latexPhaseRef(phase, this.metadata.phases),
       this.openFile.createdAt,
       id,
@@ -90,7 +90,7 @@ class WorkspaceStore implements IWorkspaceStore {
     );
 
     this.setPendingSave(false);
-    await this.entryManager.saveDraft(id, latex, tiptapContent, { title, author, phase, date });
+    await this.entryManager.saveDraft(id, latex, tiptapContent, { title, authors, phase, date });
   }, 800);
 
   get hydratedMetadata(): NotebookMetadata {
@@ -179,11 +179,11 @@ class WorkspaceStore implements IWorkspaceStore {
     return this.entryManager.openEntry(id);
   }
 
-  public updateDraft(tiptapContent: string | null, info: { title?: string; author?: string; phase?: string | null; date?: string }) {
+  public updateDraft(tiptapContent: string | null, info: { title?: string; authors?: string[]; phase?: string | null; date?: string }) {
     return this.entryManager.updateDraft(tiptapContent, info);
   }
 
-  public async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string | null; date: string }) {
+  public async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; authors: string[]; phase: string | null; date: string }) {
     return this.entryManager.updateEntry(id, latex, tiptapContent, info);
   }
 
@@ -199,7 +199,7 @@ class WorkspaceStore implements IWorkspaceStore {
     return this.entryManager.repairDuplicateResourceIds();
   }
 
-  public async duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string; author?: string; phase?: string | null; date?: string }) {
+  public async duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string; authors?: string[]; phase?: string | null; date?: string }) {
     return this.entryManager.duplicateEntry(sourceId, options);
   }
 
@@ -383,8 +383,11 @@ class WorkspaceStore implements IWorkspaceStore {
                 id,
                 localTitle: localMeta?.title || "Untitled",
                 remoteTitle: remoteMeta?.title || "Untitled",
-                localAuthor: localMeta?.author,
-                remoteAuthor: remoteMeta?.author,
+                localAuthor: formatAuthors(localMeta?.authors),
+                remoteAuthor: formatAuthors(parseAuthors(
+                  remoteMeta && typeof remoteMeta === "object" ? (remoteMeta as { authors?: unknown; author?: unknown }).authors : undefined,
+                  remoteMeta && typeof remoteMeta === "object" ? (remoteMeta as { authors?: unknown; author?: unknown }).author : undefined
+                )),
                 localDate: localMeta?.date,
                 remoteDate: remoteMeta?.date,
                 localUpdatedAt: localMeta?.updatedAt,
@@ -429,7 +432,7 @@ class WorkspaceStore implements IWorkspaceStore {
                 const localMeta = this.metadata.entries[entryId];
                 const newId = await this.entryManager.duplicateEntry(entryId, {
                   title: `${localMeta?.title || "Entry"} (Conflicted Copy)`,
-                  author: localMeta?.author,
+                  authors: localMeta?.authors,
                   phase: localMeta?.phase ?? null,
                   date: localMeta?.date,
                 });
