@@ -141,6 +141,24 @@ describe("sortedEntries", () => {
   });
 });
 
+describe("packTemplatesToFront", () => {
+  it("moves templates ahead of dated entries without shuffling either group", () => {
+    const normalized = normalizeNotebookMetadata({
+      version: 4,
+      entries: {
+        t1: { title: "T1", author: "", phase: null, date: "", createdAt: "", updatedAt: "", filename: "t1", order: 0, isTemplate: true },
+        e1: { title: "E1", author: "x", phase: null, date: "2026-09-01", createdAt: "", updatedAt: "", filename: "e1", order: 1, isTemplate: false },
+        t2: { title: "T2", author: "", phase: null, date: "", createdAt: "", updatedAt: "", filename: "t2", order: 2, isTemplate: true },
+        e2: { title: "E2", author: "x", phase: null, date: "2026-09-02", createdAt: "", updatedAt: "", filename: "e2", order: 3, isTemplate: false },
+      },
+      phases: {},
+      team: { teamName: "", teamNumber: "", organization: "", members: {} },
+    });
+    expect(sortedEntries(normalized.entries).map((e) => e.id)).toEqual(["t1", "t2", "e1", "e2"]);
+    expect(sortedEntries(normalized.entries).map((e) => e.order)).toEqual([0, 1, 2, 3]);
+  });
+});
+
 describe("placeCreatedEntry", () => {
   it("inserts a today entry before future-dated entries", () => {
     const withFuture = normalizeNotebookMetadata({
@@ -187,6 +205,6 @@ describe("reorderTemplateSequence", () => {
       team: { teamName: "", teamNumber: "", organization: "", members: {} },
     });
     const next = reorderTemplateSequence(base, ["t2", "t1"]);
-    expect(sortedEntries(next.entries).map((e) => e.id)).toEqual(["t2", "e", "t1"]);
+    expect(sortedEntries(next.entries).map((e) => e.id)).toEqual(["t2", "t1", "e"]);
   });
 });

@@ -209,6 +209,23 @@ function migrateEntries(
   return result;
 }
 
+/** Templates occupy 0..k-1; dated entries follow. Relative order within each group is kept. */
+export function packTemplatesToFront(
+  entries: Record<string, EntryMetadata>
+): Record<string, EntryMetadata> {
+  const sorted = sortedEntries(entries);
+  const packed = [
+    ...sorted.filter((e) => e.isTemplate),
+    ...sorted.filter((e) => !e.isTemplate),
+  ];
+  const result: Record<string, EntryMetadata> = {};
+  packed.forEach((item, i) => {
+    const { id, ...entry } = item;
+    result[id] = { ...entry, order: i };
+  });
+  return result;
+}
+
 function canonicalMember(m: TeamMember): TeamMember {
   return {
     name: m.name || "",
@@ -291,7 +308,7 @@ export function normalizeNotebookMetadata(raw: unknown): NotebookMetadata {
     members: migrateMembers(teamRaw.members),
   });
 
-  const entries = migrateEntries(source.entries, indexToKey);
+  const entries = packTemplatesToFront(migrateEntries(source.entries, indexToKey));
 
   const assetRefs: Record<string, string[]> = {};
   const trackAsset = (path: string, owner: string) => {

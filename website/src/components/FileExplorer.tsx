@@ -1,5 +1,4 @@
-import React, { useRef, useState } from "react";
-import { ImperativePanelHandle, Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
+﻿import React, { useState } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -13,12 +12,12 @@ import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } 
 import { CSS } from "@dnd-kit/utilities";
 import {
   FileText, Plus, X, Calendar, SortAsc, SortDesc,
-  ChevronDown, ChevronRight, ExternalLink, Trash2, FileJson, FileCode,
+  ChevronDown, ExternalLink, Trash2, FileJson, FileCode,
   Download, Copy, Layers, FolderTree, GripVertical
 } from "lucide-react";
 import ValidationTooltip from "./editor/ui/ValidationTooltip";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 import { ExplorerFile } from "@/lib/types";
 import { getPhases, getPhaseConfig } from "@/lib/phases";
@@ -51,7 +50,7 @@ interface FileExplorerProps {
   notebookMetadata?: NotebookMetadata;
 }
 
-// ─── Single file row ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Single file row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface FileRowProps {
   file: ExplorerFile;
@@ -132,7 +131,7 @@ function FileRow({
       }}
       onDoubleClick={isDeleted ? undefined : onDoubleClick}
       onContextMenu={isDeleted ? undefined : onContextMenu}
-      title={tooltipLines.join(' · ')}
+      title={tooltipLines.join(' Â· ')}
       className={`
         group flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer select-none border-2
         ${isOpened
@@ -211,103 +210,6 @@ function SortableTemplateRow(props: Omit<FileRowProps, "dragHandle" | "rowRef" |
   );
 }
 
-// ─── Pane ─────────────────────────────────────────────────────────────────────
-
-interface PaneProps {
-  id: string;
-  title: string;
-  count?: number;
-  isCollapsed?: boolean;
-  onToggleCollapse?: () => void;
-  actionLabel?: string;
-  actionIcon?: React.ReactNode;
-  onAction?: () => void;
-  actionComponent?: React.ReactNode;
-  children: React.ReactNode;
-  empty: React.ReactNode;
-  hasItems: boolean;
-  className?: string;
-  maxHeight?: string;
-}
-
-function Pane({
-  id,
-  title,
-  count,
-  isCollapsed = false,
-  onToggleCollapse,
-  actionLabel,
-  actionIcon,
-  onAction,
-  actionComponent,
-  children,
-  empty,
-  hasItems,
-  className = "flex-1",
-  maxHeight
-}: PaneProps) {
-  return (
-    <div id={id} className={`flex flex-col min-h-0 ${className}`}>
-      <div
-        onClick={onToggleCollapse}
-        className={`flex items-center justify-between px-3 py-2 border-b border-nb-outline-variant/30 shrink-0 bg-nb-surface-low/60 hover:bg-nb-surface-low transition-colors select-none ${
-          onToggleCollapse ? "cursor-pointer" : ""
-        }`}
-      >
-        <div className="flex items-center gap-1.5 min-w-0">
-          {onToggleCollapse && (
-            isCollapsed ? (
-              <ChevronRight size={12} className="text-nb-on-surface-variant/60 shrink-0" />
-            ) : (
-              <ChevronDown size={12} className="text-nb-on-surface-variant/60 shrink-0" />
-            )
-          )}
-          <span className="text-[11px] font-black uppercase tracking-wider text-nb-on-surface truncate">
-            {title}
-          </span>
-          {typeof count === "number" && (
-            <span className="text-[9px] font-bold text-nb-on-surface-variant/70 bg-nb-surface-high/60 px-1.5 py-0.2 rounded-full shrink-0">
-              {count}
-            </span>
-          )}
-        </div>
-        {actionComponent ? (
-          actionComponent
-        ) : actionLabel && onAction ? (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onAction();
-            }}
-            title={actionLabel}
-            className="flex items-center gap-1 text-[10px] font-bold text-nb-primary hover:underline transition-colors cursor-pointer shrink-0"
-          >
-            {actionIcon}
-            <span>{actionLabel}</span>
-          </button>
-        ) : null}
-      </div>
-
-      {!isCollapsed && (
-        <div
-          className="flex-1 overflow-y-auto p-2 min-h-0 bg-nb-surface-lowest/40"
-          style={maxHeight ? { maxHeight } : undefined}
-        >
-          {hasItems ? (
-            children
-          ) : typeof empty === "string" ? (
-            <div className="py-3 px-3 text-center rounded-lg border border-dashed border-nb-outline-variant/30 text-[10px] text-nb-on-surface-variant/60">
-              {empty}
-            </div>
-          ) : (
-            empty
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function FileExplorer({
   entries,
   activePath,
@@ -336,15 +238,11 @@ export default function FileExplorer({
 }: FileExplorerProps) {
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, file: ExplorerFile } | null>(null);
+  const [explorerTab, setExplorerTab] = useState<"entries" | "templates">("entries");
+  const [isNewDropdownOpen, setIsNewDropdownOpen] = useState(false);
 
   const availablePhases = getPhases(notebookMetadata?.phases);
   const phaseConfig = getPhaseConfig(availablePhases);
-
-  const [isTemplatesCollapsed, setIsTemplatesCollapsed] = useState(false);
-  const [isEntriesCollapsed, setIsEntriesCollapsed] = useState(false);
-  const entriesPanelRef = useRef<ImperativePanelHandle>(null);
-  const templatesPanelRef = useRef<ImperativePanelHandle>(null);
-  const [isNewDropdownOpen, setIsNewDropdownOpen] = useState(false);
 
   const regularEntries = entries.filter(e => !e.isTemplate);
   const templateEntries = [...entries.filter(e => e.isTemplate)].sort((a, b) => {
@@ -381,22 +279,53 @@ export default function FileExplorer({
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden min-h-0 bg-nb-surface-low select-none" onClick={() => { setContextMenu(null); setIsNewDropdownOpen(false); }}>
-      {/* Standardized Panel Header */}
-      <div className="p-3.5 border-b border-nb-outline-variant/30 flex items-center justify-between shrink-0 bg-nb-surface-low">
-        <div className="flex items-center gap-2">
-          <FolderTree size={15} className="text-nb-primary" />
-          <span className="text-[11px] font-black uppercase tracking-wider text-nb-on-surface">
-            Explorer
-          </span>
+      {/* Header + tabs */}
+      <div className="p-3.5 pb-0 border-b border-nb-outline-variant/30 shrink-0 bg-nb-surface-low">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <FolderTree size={15} className="text-nb-primary" />
+            <span className="text-[11px] font-black uppercase tracking-wider text-nb-on-surface">
+              Explorer
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[9px] font-bold text-nb-on-surface-variant/70 bg-nb-surface-high/60 px-2 py-0.5 rounded-full">
-            {entries.length} {entries.length === 1 ? "item" : "items"}
-          </span>
+        <div className="flex gap-1" role="tablist" aria-label="Explorer lists">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={explorerTab === "entries"}
+            onClick={() => { setExplorerTab("entries"); setIsSortOpen(false); }}
+            className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 text-[10px] font-black uppercase tracking-wider rounded-t-lg border border-b-0 transition-colors cursor-pointer ${
+              explorerTab === "entries"
+                ? "bg-nb-surface text-nb-primary border-nb-outline-variant/30"
+                : "bg-transparent text-nb-on-surface-variant border-transparent hover:text-nb-on-surface"
+            }`}
+          >
+            Entries
+            <span className="text-[9px] font-bold opacity-70 bg-nb-surface-high/60 px-1.5 py-0.5 rounded-full">
+              {regularEntries.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={explorerTab === "templates"}
+            onClick={() => { setExplorerTab("templates"); setIsSortOpen(false); setIsNewDropdownOpen(false); }}
+            className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 text-[10px] font-black uppercase tracking-wider rounded-t-lg border border-b-0 transition-colors cursor-pointer ${
+              explorerTab === "templates"
+                ? "bg-nb-surface text-nb-primary border-nb-outline-variant/30"
+                : "bg-transparent text-nb-on-surface-variant border-transparent hover:text-nb-on-surface"
+            }`}
+          >
+            Templates
+            <span className="text-[9px] font-bold opacity-70 bg-nb-surface-high/60 px-1.5 py-0.5 rounded-full">
+              {templateEntries.length}
+            </span>
+          </button>
         </div>
       </div>
 
-      {/* Sort Controls Bar */}
+      {explorerTab === "entries" && (
       <div className="px-3 py-2 bg-nb-surface border-b border-nb-outline-variant/30 flex items-center justify-between gap-2 shrink-0">
         {/* Sort Menu */}
         <div className="relative flex-1">
@@ -406,7 +335,7 @@ export default function FileExplorer({
           >
             <div className="flex items-center gap-1.5 truncate">
               {sortBy === "date" ? <Calendar size={13} className="text-nb-primary shrink-0" /> : <FileText size={13} className="text-nb-primary shrink-0" />}
-              <span className="truncate">Entries: {sortBy === "date" ? "Calendar" : "Title"}</span>
+              <span className="truncate">Sort: {sortBy === "date" ? "Calendar" : "Title"}</span>
             </div>
             <ChevronDown size={12} className={`text-nb-on-surface-variant transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
           </button>
@@ -443,99 +372,91 @@ export default function FileExplorer({
         >
           {sortDirection === "asc" ? <SortAsc size={15} className="text-nb-primary" /> : <SortDesc size={15} className="text-nb-primary" />}
         </button>
-      </div>
-
-      {/* Entries and Templates Content Area */}
-      {(() => {
-        const entriesPane = (
-          <Pane
-            id="explorer-entries-pane"
-            title="Entries"
-            count={regularEntries.length}
-            isCollapsed={isEntriesCollapsed}
-            onToggleCollapse={() => setIsEntriesCollapsed(!isEntriesCollapsed)}
-            actionComponent={
-              <div className="relative flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+        <div className="relative shrink-0" onClick={e => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={() => setIsNewDropdownOpen(!isNewDropdownOpen)}
+            title="New entry"
+            className={`flex items-center gap-1 text-[10px] font-bold text-nb-primary hover:underline transition-colors cursor-pointer px-1 py-0.5 rounded ${isNewDropdownOpen ? "bg-nb-primary/15" : ""}`}
+          >
+            <Plus size={11} />
+            <span>New</span>
+            <ChevronDown size={11} className={`transition-transform ${isNewDropdownOpen ? "rotate-180" : ""}`} />
+          </button>
+          {isNewDropdownOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setIsNewDropdownOpen(false)} />
+              <div className="absolute right-0 top-full mt-1.5 z-50 w-52 bg-nb-surface border border-nb-outline-variant rounded-xl shadow-xl py-1 animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-72">
                 <button
-                  onClick={() => onNewEntry()}
-                  title="New Blank Entry"
-                  className="flex items-center gap-1 text-[10px] font-bold text-nb-primary hover:underline transition-colors cursor-pointer px-1 py-0.5"
+                  onClick={() => {
+                    setIsNewDropdownOpen(false);
+                    onNewEntry();
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold text-nb-on-surface hover:bg-nb-surface-low transition-colors cursor-pointer text-left shrink-0"
                 >
-                  <Plus size={11} />
-                  <span>New</span>
+                  <FileText size={13} className="text-nb-primary shrink-0" />
+                  <span>Blank Entry</span>
                 </button>
-
-                <button
-                  onClick={() => setIsNewDropdownOpen(!isNewDropdownOpen)}
-                  title="Create from template..."
-                  className={`p-0.5 rounded transition-colors cursor-pointer text-nb-primary ${isNewDropdownOpen ? 'bg-nb-primary/15' : 'hover:bg-nb-surface-high'}`}
-                >
-                  <ChevronDown size={11} className={`transition-transform ${isNewDropdownOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {isNewDropdownOpen && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setIsNewDropdownOpen(false)} />
-                    <div className="absolute right-0 top-full mt-1.5 z-50 w-52 bg-nb-surface border border-nb-outline-variant rounded-xl shadow-xl py-1 animate-in fade-in zoom-in-95 duration-150">
+                <div className="px-3 py-1 text-[9px] font-black uppercase tracking-wider text-nb-on-surface-variant/50 border-t border-nb-outline-variant/20 mt-1 shrink-0">
+                  From Template
+                </div>
+                <div className="overflow-y-auto min-h-0">
+                {templateEntries.length > 0 ? (
+                  templateEntries.map(tmpl => {
+                    const tmplId = tmpl.name.replace('.json', '');
+                    const tmplPConfig = typeof tmpl.phase === "string" && tmpl.phase ? phaseConfig[tmpl.phase] : null;
+                    const TmplIcon = tmplPConfig ? tmplPConfig.icon : Layers;
+                    const tmplPhase = typeof tmpl.phase === "string" && tmpl.phase ? availablePhases.find(p => p.id === tmpl.phase) : null;
+                    const tmplIconColor = tmplPhase ? tmplPhase.color : "#9333ea";
+                    return (
                       <button
+                        key={tmpl.path}
                         onClick={() => {
                           setIsNewDropdownOpen(false);
-                          onNewEntry();
+                          if (onCreateFromTemplate) onCreateFromTemplate(tmplId);
                         }}
-                        className="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold text-nb-on-surface hover:bg-nb-surface-low transition-colors cursor-pointer text-left"
+                        className="w-full flex items-center gap-2 px-3 py-1.5 text-[10px] font-medium text-nb-on-surface hover:bg-nb-surface-low hover:text-nb-primary transition-colors cursor-pointer text-left"
                       >
-                        <FileText size={13} className="text-nb-primary shrink-0" />
-                        <span>Blank Entry</span>
+                        <TmplIcon size={12} style={{ color: tmplIconColor }} className="shrink-0" />
+                        <span className="truncate flex-1">{tmpl.title || "Untitled Template"}</span>
                       </button>
-
-                      <div className="px-3 py-1 text-[9px] font-black uppercase tracking-wider text-nb-on-surface-variant/50 border-t border-nb-outline-variant/20 mt-1">
-                        From Template
-                      </div>
-
-                      {templateEntries.length > 0 ? (
-                        templateEntries.map(tmpl => {
-                          const tmplId = tmpl.name.replace('.json', '');
-                          const tmplPConfig = typeof tmpl.phase === "string" && tmpl.phase ? phaseConfig[tmpl.phase] : null;
-                          const TmplIcon = tmplPConfig ? tmplPConfig.icon : Layers;
-                          const tmplPhase = typeof tmpl.phase === "string" && tmpl.phase ? availablePhases.find(p => p.id === tmpl.phase) : null;
-                          const tmplIconColor = tmplPhase ? tmplPhase.color : "#9333ea";
-                          return (
-                            <button
-                              key={tmpl.path}
-                              onClick={() => {
-                                setIsNewDropdownOpen(false);
-                                if (onCreateFromTemplate) {
-                                  onCreateFromTemplate(tmplId);
-                                }
-                              }}
-                              className="w-full flex items-center gap-2 px-3 py-1.5 text-[10px] font-medium text-nb-on-surface hover:bg-nb-surface-low hover:text-nb-primary transition-colors cursor-pointer text-left"
-                            >
-                              <TmplIcon size={12} style={{ color: tmplIconColor }} className="shrink-0" />
-                              <span className="truncate flex-1">{tmpl.title || "Untitled Template"}</span>
-                            </button>
-                          );
-                        })
-                      ) : (
-                        <div className="px-3 py-1.5 text-[10px] text-nb-on-surface-variant/60 italic">
-                          No templates yet
-                        </div>
-                      )}
-                    </div>
-                  </>
+                    );
+                  })
+                ) : (
+                  <div className="px-3 py-1.5 text-[10px] text-nb-on-surface-variant/60 italic">
+                    No templates yet
+                  </div>
                 )}
+                </div>
               </div>
-            }
-            empty="No entries yet."
-            hasItems={regularEntries.length > 0}
-            className={isEntriesCollapsed ? "shrink-0" : "flex-1"}
+            </>
+          )}
+        </div>
+      </div>
+      )}
+
+      {explorerTab === "templates" && (
+        <div className="px-3 py-2 bg-nb-surface border-b border-nb-outline-variant/30 flex items-center justify-end shrink-0">
+          <button
+            type="button"
+            onClick={onCreateTemplate}
+            className="flex items-center gap-1 text-[10px] font-bold text-nb-primary hover:underline transition-colors cursor-pointer"
           >
+            <Plus size={11} />
+            New
+          </button>
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto p-2 min-h-0 bg-nb-surface-lowest/40">
+        {explorerTab === "entries" ? (
+          regularEntries.length > 0 ? (
             <div className="flex flex-col gap-1">
               {regularEntries.map((f) => {
                 const pConfig = typeof f.phase === "string" && f.phase ? phaseConfig[f.phase] : null;
                 const IconComponent = pConfig ? pConfig.icon : FileText;
                 const phase = typeof f.phase === "string" && f.phase ? availablePhases.find(p => p.id === f.phase) : null;
                 const iconStyle = phase ? { color: phase.color } : undefined;
-
                 const icon = (
                   <IconComponent
                     size={16}
@@ -543,7 +464,6 @@ export default function FileExplorer({
                     className={activePath === f.path ? "text-white" : pConfig ? "" : "opacity-40"}
                   />
                 );
-
                 return (
                   <FileRow
                     key={f.path}
@@ -562,115 +482,70 @@ export default function FileExplorer({
                 );
               })}
             </div>
-          </Pane>
-        );
-
-        const templatesPane = (
-          <Pane
-            id="explorer-templates-pane"
-            title="Templates"
-            count={templateEntries.length}
-            isCollapsed={isTemplatesCollapsed}
-            onToggleCollapse={() => setIsTemplatesCollapsed(!isTemplatesCollapsed)}
-            actionLabel="New"
-            actionIcon={<Plus size={11} />}
-            onAction={onCreateTemplate}
-            className={isTemplatesCollapsed ? "shrink-0 border-t border-nb-outline-variant/30" : "flex-1 border-t border-nb-outline-variant/30"}
-            empty={
-              <div className="py-3 px-3 text-center rounded-lg border border-dashed border-nb-outline-variant/30 text-[10px] text-nb-on-surface-variant/60 flex flex-col items-center gap-1.5">
-                <span>No entry templates yet</span>
-                {onCreateTemplate && (
-                  <button
-                    onClick={onCreateTemplate}
-                    className="text-[9px] font-bold text-nb-primary hover:underline cursor-pointer"
-                  >
-                    Create Template +
-                  </button>
-                )}
-              </div>
-            }
-            hasItems={templateEntries.length > 0}
-          >
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              modifiers={[restrictToVerticalAxis]}
-              onDragEnd={handleTemplateDragEnd}
-            >
-            <SortableContext items={templateEntries.map((f) => f.name.replace(".json", ""))} strategy={verticalListSortingStrategy}>
-            <div className="flex flex-col gap-1">
-              {templateEntries.map(f => {
-                const pConfig = typeof f.phase === "string" && f.phase ? phaseConfig[f.phase] : null;
-                const IconComponent = pConfig ? pConfig.icon : Layers;
-                const phase = typeof f.phase === "string" && f.phase ? availablePhases.find(p => p.id === f.phase) : null;
-                const iconStyle = phase ? { color: phase.color } : { color: "#9333ea" };
-                const templateId = f.name.replace(".json", "");
-
-                const icon = (
-                  <IconComponent
-                    size={16}
-                    style={activePath === f.path ? { color: "inherit" } : iconStyle}
-                    className={activePath === f.path ? "text-white" : pConfig ? "" : "text-purple-600 dark:text-purple-400"}
-                  />
-                );
-
-                const rowProps = {
-                  file: f,
-                  isOpened: activePath === f.path,
-                  isSelected: selectedPaths.has(f.path),
-                  isPending: pendingPaths.has(f.path),
-                  isDeleted: deletedPaths.has(f.path),
-                  icon,
-                  isValid: f.isValid,
-                  validationErrors: f.validationErrors,
-                  phaseLabel: phase?.name,
-                  onSelect: (e: React.MouseEvent) => onSelectEntry(f, e.ctrlKey || e.metaKey, e.shiftKey, templateEntries.map((x) => x.path)),
-                  onDoubleClick: () => onOpenEntry(f),
-                  onContextMenu: (e: React.MouseEvent) => handleContextMenu(e, f),
-                };
-
-                return canReorderTemplates ? (
-                  <SortableTemplateRow key={f.path} sortableId={templateId} {...rowProps} />
-                ) : (
-                  <FileRow key={f.path} {...rowProps} />
-                );
-              })}
+          ) : (
+            <div className="py-3 px-3 text-center rounded-lg border border-dashed border-nb-outline-variant/30 text-[10px] text-nb-on-surface-variant/60">
+              No entries yet.
             </div>
+          )
+        ) : templateEntries.length > 0 ? (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            modifiers={[restrictToVerticalAxis]}
+            onDragEnd={handleTemplateDragEnd}
+          >
+            <SortableContext items={templateEntries.map((f) => f.name.replace(".json", ""))} strategy={verticalListSortingStrategy}>
+              <div className="flex flex-col gap-1">
+                {templateEntries.map(f => {
+                  const pConfig = typeof f.phase === "string" && f.phase ? phaseConfig[f.phase] : null;
+                  const IconComponent = pConfig ? pConfig.icon : Layers;
+                  const phase = typeof f.phase === "string" && f.phase ? availablePhases.find(p => p.id === f.phase) : null;
+                  const iconStyle = phase ? { color: phase.color } : { color: "#9333ea" };
+                  const templateId = f.name.replace(".json", "");
+                  const icon = (
+                    <IconComponent
+                      size={16}
+                      style={activePath === f.path ? { color: "inherit" } : iconStyle}
+                      className={activePath === f.path ? "text-white" : pConfig ? "" : "text-purple-600 dark:text-purple-400"}
+                    />
+                  );
+                  const rowProps = {
+                    file: f,
+                    isOpened: activePath === f.path,
+                    isSelected: selectedPaths.has(f.path),
+                    isPending: pendingPaths.has(f.path),
+                    isDeleted: deletedPaths.has(f.path),
+                    icon,
+                    isValid: f.isValid,
+                    validationErrors: f.validationErrors,
+                    phaseLabel: phase?.name,
+                    onSelect: (e: React.MouseEvent) => onSelectEntry(f, e.ctrlKey || e.metaKey, e.shiftKey, templateEntries.map((x) => x.path)),
+                    onDoubleClick: () => onOpenEntry(f),
+                    onContextMenu: (e: React.MouseEvent) => handleContextMenu(e, f),
+                  };
+                  return canReorderTemplates ? (
+                    <SortableTemplateRow key={f.path} sortableId={templateId} {...rowProps} />
+                  ) : (
+                    <FileRow key={f.path} {...rowProps} />
+                  );
+                })}
+              </div>
             </SortableContext>
-            </DndContext>
-          </Pane>
-        );
-
-        if (!isEntriesCollapsed && !isTemplatesCollapsed) {
-          return (
-            <PanelGroup direction="vertical" className="flex-1 min-h-0" id="file-explorer-vertical-group">
-              <Panel ref={entriesPanelRef} defaultSize={65} minSize={20} className="flex flex-col min-h-0">
-                {entriesPane}
-              </Panel>
-              <PanelResizeHandle
-                className="h-1.5 bg-nb-surface hover:bg-nb-primary/20 border-y border-nb-outline-variant/30 cursor-row-resize transition-colors shrink-0 flex items-center justify-center group/handle"
-                title="Double-click to reset size"
-                onDoubleClick={() => {
-                  entriesPanelRef.current?.resize(65);
-                  templatesPanelRef.current?.resize(35);
-                }}
+          </DndContext>
+        ) : (
+          <div className="py-3 px-3 text-center rounded-lg border border-dashed border-nb-outline-variant/30 text-[10px] text-nb-on-surface-variant/60 flex flex-col items-center gap-1.5">
+            <span>No entry templates yet</span>
+            {onCreateTemplate && (
+              <button
+                onClick={onCreateTemplate}
+                className="text-[9px] font-bold text-nb-primary hover:underline cursor-pointer"
               >
-                <div className="w-8 h-0.5 rounded-full bg-nb-outline-variant/50 group-hover/handle:bg-nb-primary transition-colors" />
-              </PanelResizeHandle>
-              <Panel ref={templatesPanelRef} defaultSize={35} minSize={20} className="flex flex-col min-h-0">
-                {templatesPane}
-              </Panel>
-            </PanelGroup>
-          );
-        }
-
-        return (
-          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            {entriesPane}
-            {templatesPane}
+                Create Template +
+              </button>
+            )}
           </div>
-        );
-      })()}
+        )}
+      </div>
 
       {/* Context Menu */}
       {contextMenu && (
