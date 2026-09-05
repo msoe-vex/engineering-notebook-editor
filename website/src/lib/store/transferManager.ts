@@ -115,7 +115,7 @@ export class TransferManager {
       
       const isSubset = !!entryIds;
       const exportMode = isSubset ? 'data-only' : mode;
-      const targets = entryIds || Object.keys(this.store.metadata.entries);
+      const targets = entryIds || this.store.metadata.entries.map(e => e.id);
       const assetPaths = new Set<string>();
 
       const addAssetPath = (assetPath?: string) => {
@@ -133,7 +133,7 @@ export class TransferManager {
       } else {
         const filteredEntries: Record<string, EntryMetadata> = {};
         for (const id of targets) {
-          const meta = this.store.metadata.entries[id];
+          const meta = this.store.metadata.entries.find(e => e.id === id);
           if (meta) filteredEntries[id] = meta;
         }
         zip.file(INDEX_PATH, JSON.stringify({
@@ -144,7 +144,7 @@ export class TransferManager {
 
       // Add entries json
       for (const id of targets) {
-        const meta = this.store.metadata.entries[id];
+        const meta = this.store.metadata.entries.find(e => e.id === id);
         if (!meta) continue;
 
         const contentStr = await this.getFileContent(meta.filename);
@@ -242,7 +242,7 @@ export class TransferManager {
       const { saveAs } = await import("file-saver");
       const name = entryIds
         ? (entryIds.length === 1
-          ? (this.store.metadata.entries[entryIds[0]]?.title || "entry").replace(/[^a-z0-9]/gi, '_').toLowerCase()
+          ? (this.store.metadata.entries.find(e => e.id === entryIds[0])?.title || "entry").replace(/[^a-z0-9]/gi, '_').toLowerCase()
           : "entries")
         : "notebook";
       saveAs(blob as Blob, `${name}.zip`);
@@ -290,7 +290,7 @@ export class TransferManager {
       }
 
       const usedIds = new Set<string>();
-      for (const existingEntry of Object.values(this.store.metadata.entries)) {
+      for (const existingEntry of this.store.metadata.entries) {
         usedIds.add(existingEntry.id);
         for (const resId of Object.keys(existingEntry.resources || {})) {
           usedIds.add(resId);
@@ -332,7 +332,7 @@ export class TransferManager {
       const assetList = Object.entries(assets as Record<string, string>);
 
       const remappedEntries: { id: string, doc: TipTapNode, meta: EntryMetadata }[] = [];
-      const newEntriesMap: Record<string, EntryMetadata> = {};
+      const newEntriesMap: EntryMetadata[] = [];
 
       for (const oldId of effectiveEntryIdList) {
         const entryWithContent = entries[oldId] as Record<string, unknown> & { content?: TipTapNode };
@@ -363,14 +363,14 @@ export class TransferManager {
         remappedMeta.resources = mergedResources;
 
         remappedEntries.push({ id: newId, doc: docWithIds, meta: remappedMeta });
-        newEntriesMap[newId] = remappedMeta;
+        newEntriesMap.push(remappedMeta);
       }
 
       const mergedEntries = entryImportMode === "none"
-        ? { ...this.store.metadata.entries }
+        ? Array.isArray(this.store.metadata.entries) ? [...this.store.metadata.entries] : Object.values(this.store.metadata.entries)
         : entryImportMode === "clear"
           ? newEntriesMap
-          : { ...this.store.metadata.entries, ...newEntriesMap };
+          : (() => { const m = new Map((Array.isArray(this.store.metadata.entries) ? this.store.metadata.entries : Object.values(this.store.metadata.entries)).map((e: any) => [e.id, e])); newEntriesMap.forEach((v: any) => m.set(v.id, v)); return Array.from(m.values()); })();
       const globalResourceTypes = buildResourceTypeIndex(entryImportMode === "none"
         ? this.store.metadata.entries
         : entryImportMode === "clear"
@@ -499,7 +499,7 @@ export class TransferManager {
           const raw = await entry.async("string");
           const parsed = JSON.parse(raw) as { version?: number; content?: TipTapNode } & Record<string, unknown>;
           const entryId = filename.split("/").pop()?.replace(/\.json$/, "") || generateUUID();
-          const metadata = parsedNotebookIndex?.entries?.[entryId] as Record<string, unknown> | undefined;
+          const metadata = Array.isArray(parsedNotebookIndex?.entries) ? parsedNotebookIndex.entries.find((e: any) => e.id === entryId) : (parsedNotebookIndex?.entries as any)?.[entryId];
           entries[entryId] = {
             ...(metadata || {}),
             content: parsed.content || parsed,

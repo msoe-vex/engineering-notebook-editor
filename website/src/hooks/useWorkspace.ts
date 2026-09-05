@@ -30,6 +30,7 @@ export function useWorkspace() {
     helpPath: store.helpPath,
     showCompiler: store.showCompiler,
     showAbout: store.showAbout,
+    showCalendar: store.showCalendar,
     isMainTexPresent: store.isMainTexPresent,
     workspaceVersion: store.workspaceVersion,
     isSaving: store.isSaving,
@@ -64,6 +65,7 @@ export function useWorkspace() {
         helpPath: s.helpPath,
         showCompiler: s.showCompiler,
         showAbout: s.showAbout,
+        showCalendar: s.showCalendar,
         isMainTexPresent: s.isMainTexPresent,
         workspaceVersion: s.workspaceVersion,
         isSaving: s.isSaving,
@@ -89,8 +91,9 @@ export function useWorkspace() {
   const selectProject = useCallback((id: string) => store.selectProject(id), []);
   const createEntry = useCallback(() => store.createEntry(), []);
   const deleteEntry = useCallback((file: ExplorerFile) => store.deleteEntry(file), []);
-  const updateDraft = useCallback((tiptapContent: string | null, info: { title?: string; author?: string; phase?: number | null; date?: string }) => store.updateDraft(tiptapContent, info), []);
-  const updateEntry = useCallback((id: string, latex: string, content: string, info: { title: string; author: string; phase: number | null; date: string }) => store.updateEntry(id, latex, content, info), []);
+  const updateDraft = useCallback((tiptapContent: string | null, info: { title?: string; author?: string; phase?: string | null; date?: string }) => store.updateDraft(tiptapContent, info), []);
+  const updateEntry = useCallback((id: string, latex: string, content: string, info: { title: string; author: string; phase: string | null; date: string; order?: number }) => store.updateEntry(id, latex, content, info), []);
+  const updateEntryMetadata = useCallback((id: string, info: { title?: string; author?: string; phase?: string | null; date?: string; order?: number }) => store.updateEntryMetadata(id, info), []);
   const saveTeam = useCallback((team: TeamMetadata, phases: ProjectPhase[]) => store.saveTeam(team, phases), []);
   const createGithubProject = useCallback((config: { owner: string; repo: string; branch: string; folderPath: string; name: string }) => store.createGithubProject(config), []);
   const createLocalProject = useCallback((handle: FileSystemDirectoryHandle, name: string) => store.createLocalProject(handle, name), []);
@@ -108,7 +111,7 @@ export function useWorkspace() {
   const importNotebook = useCallback((data: Record<string, unknown>, options?: ImportOptions) => store.importNotebook(data, options), []);
   const importNotebookArchive = useCallback((file: File, options?: ImportOptions) => store.importNotebookArchive(file, options), []);
   const setSelectedPaths = useCallback((pathsOrUpdater: Set<string> | ((prev: Set<string>) => Set<string>)) => store.setSelectedPaths(pathsOrUpdater), []);
-  const duplicateEntry = useCallback((sourceId: string, options?: { asTemplate?: boolean; title?: string; author?: string; phase?: number | null; date?: string }) => store.duplicateEntry(sourceId, options), []);
+  const duplicateEntry = useCallback((sourceId: string, options?: { asTemplate?: boolean; title?: string; author?: string; phase?: string | null; date?: string }) => store.duplicateEntry(sourceId, options), []);
   const createTemplate = useCallback((templateData?: Partial<import("@/lib/metadata").EntryMetadata>) => store.createTemplate(templateData), []);
   const createEntryFromTemplate = useCallback((templateId: string) => store.createEntryFromTemplate(templateId), []);
   const discardPathChange = useCallback((path: string) => store.discardPathChange(path), []);
@@ -118,8 +121,14 @@ export function useWorkspace() {
   const getCompiledPdfUrl = useCallback(() => store.getCompiledPdfUrl(), []);
   const saveCompiledPdf = useCallback((pdf: Uint8Array) => store.saveCompiledPdf(pdf), []);
 
+  const setShowCalendar = useCallback((val: boolean) => {
+    store.showCalendar = val;
+    store.notifyStateChange();
+  }, []);
+
   return {
     ...state,
+    setShowCalendar,
     getDBName,
     disconnect,
     refreshProjects,
@@ -132,6 +141,7 @@ export function useWorkspace() {
     deleteEntry,
     updateDraft,
     updateEntry,
+    updateEntryMetadata,
     saveTeam,
     createGithubProject,
     createLocalProject,

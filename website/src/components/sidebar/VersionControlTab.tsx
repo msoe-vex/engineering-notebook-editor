@@ -130,11 +130,11 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
     // Check for entries/templates that changed only in notebook.json
     const metadataOnlyEntryIds = new Set<string>();
     if (baseMetadata?.entries && metadata?.entries) {
-      const baseEntries = baseMetadata.entries as Record<string, import("@/lib/metadata").EntryMetadata>;
-      const currentEntries = metadata.entries as Record<string, import("@/lib/metadata").EntryMetadata>;
+      const baseEntries = baseMetadata.entries;
+      const currentEntries = metadata.entries;
       for (const [id, entry] of Object.entries(currentEntries)) {
         if (!entryMap.has(id)) {
-          const baseEntry = baseEntries[id];
+          const baseEntry = Array.isArray(baseEntries) ? baseEntries.find((e: any) => e.id === id) : (baseEntries as any)[id];
           if (!baseEntry || JSON.stringify(baseEntry) !== JSON.stringify(entry)) {
             entryMap.set(id, []);
             metadataOnlyEntryIds.add(id);

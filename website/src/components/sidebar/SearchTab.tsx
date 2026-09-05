@@ -66,7 +66,7 @@ export default function SearchTab({
   });
 
   const phases = metadata.phases || DEFAULT_PHASES;
-  const phaseMap = useMemo(() => new Map(phases.map(p => [p.index, p])), [phases]);
+  const phaseMap = useMemo(() => new Map(phases.map(p => [p.id as any, p])), [phases]);
 
   const allFieldsSelected = filters.titles && filters.authors && filters.figures && filters.dates;
 
@@ -153,14 +153,14 @@ export default function SearchTab({
       const resourceMatches: ResourceMatch[] = [];
       if (filters.figures && entry.resources) {
         for (const [resId, res] of Object.entries(entry.resources)) {
-          const resTitle = (res.title || "").toLowerCase();
-          const resCaption = (res.caption || "").toLowerCase();
+          const resTitle = ((res as any).title || "").toLowerCase();
+          const resCaption = ((res as any).caption || "").toLowerCase();
           if (resTitle.includes(q) || resCaption.includes(q)) {
-            const snippet = res.title ? `${res.title}${res.caption ? ` - ${res.caption}` : ""}` : res.caption || "Figure";
+            const snippet = (res as any).title ? `${(res as any).title}${(res as any).caption ? ` - ${(res as any).caption}` : ""}` : (res as any).caption || "Figure";
             resourceMatches.push({
               id: resId,
-              title: res.title,
-              caption: res.caption,
+              title: (res as any).title,
+              caption: (res as any).caption,
               snippet
             });
           }
@@ -229,7 +229,7 @@ export default function SearchTab({
           <input
             type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => setQuery(e.target.value as any)}
             placeholder="Search titles, authors, resources..."
             className="w-full pl-8 pr-16 py-2 bg-nb-surface border border-nb-outline-variant/50 rounded-xl text-[11px] text-nb-on-surface placeholder:text-nb-on-surface-variant/40 focus:outline-none focus:ring-1.5 focus:ring-nb-primary transition-all shadow-nb-xs"
             autoFocus
@@ -448,11 +448,11 @@ export default function SearchTab({
                           <button
                             key={phase.id}
                             onClick={() => {
-                              setSelectedPhase(phase.index);
+                              setSelectedPhase(phase.id as any);
                               setIsPhaseDropdownOpen(false);
                             }}
                             className={`w-full flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold transition-colors cursor-pointer min-w-0 overflow-hidden text-left ${
-                              selectedPhase === phase.index
+                              selectedPhase === (phase.id as any)
                                 ? "text-nb-primary bg-nb-primary/10"
                                 : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface"
                             }`}
@@ -485,7 +485,7 @@ export default function SearchTab({
                     <input
                       type="date"
                       value={dateRange?.start || ""}
-                      onChange={(e) => setDateRange({ start: e.target.value, end: dateRange?.end || "" })}
+                      onChange={(e) => setDateRange({ start: e.target.value as any, end: dateRange?.end || "" })}
                       className="w-full bg-nb-surface border border-nb-outline-variant/60 rounded-lg px-2 py-1 text-[10px] text-nb-on-surface focus:outline-none focus:border-nb-primary"
                     />
                   </div>
@@ -493,7 +493,7 @@ export default function SearchTab({
                     <input
                       type="date"
                       value={dateRange?.end || ""}
-                      onChange={(e) => setDateRange({ start: dateRange?.start || "", end: e.target.value })}
+                      onChange={(e) => setDateRange({ start: dateRange?.start || "", end: e.target.value as any })}
                       className="w-full bg-nb-surface border border-nb-outline-variant/60 rounded-lg px-2 py-1 text-[10px] text-nb-on-surface focus:outline-none focus:border-nb-primary"
                     />
                   </div>

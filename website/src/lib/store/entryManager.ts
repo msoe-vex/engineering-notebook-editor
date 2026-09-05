@@ -22,7 +22,7 @@ export class EntryManager {
       console.warn("Background persist flush failed during entry navigation:", e);
     });
 
-    const meta = this.store.metadata.entries[id];
+    const meta = this.store.metadata.entries.find(e => e.id === id);
 
     if (!meta) {
       this.store.navigateTo({ entry: null });
@@ -107,7 +107,7 @@ export class EntryManager {
 
   updateDraft(
     tiptapContent: string | null,
-    info: { title?: string; author?: string; phase?: number | null; date?: string }
+    info: { title?: string; author?: string; phase?: string | null; date?: string }
   ) {
     if (!this.store.openFile) return;
     const id = this.store.openFile.id;
@@ -134,7 +134,7 @@ export class EntryManager {
     this.store.openFile.updatedAt = new Date().toISOString();
 
     // 2. Synchronously update metadata in-memory for immediate UI feedback (Sidebar, etc.)
-    const existingEntry = this.store.metadata.entries[id];
+    const existingEntry = this.store.metadata.entries.find(e => e.id === id);
     if (existingEntry) {
       this.store.metadata = {
         ...this.store.metadata,
@@ -162,12 +162,62 @@ export class EntryManager {
     this.store.notifyStateChange();
   }
 
-  async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null; date: string }) {
+  async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string | null; date: string; order?: number }) {
     this.updateDraft(tiptapContent, info);
     await this.store.debouncedPersist.flush();
   }
 
-  async saveDraft(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null; date: string }) {
+  async updateEntryMetadata(id: string, info: { title?: string; author?: string; phase?: string | null; date?: string; order?: number }) {
+    if (this.store.openFile && this.store.openFile.id === id) {
+      this.updateDraft(null, info);
+      await this.store.debouncedPersist.flush();
+      return;
+    }
+
+    const existingEntry = (this.store as any).entriesById.get(id);
+    if (!existingEntry) return;
+
+    const mergedEntry = {
+      ...existingEntry,
+      ...info,
+      updatedAt: new Date().toISOString()
+    };
+
+    const newEntries = (this.store.metadata.entries as any[]).map((e: any) => e.id === id ? mergedEntry : e);
+
+    // Quick validate
+    this.store.metadata = {
+      ...this.store.metadata,
+      entries: newEntries as any
+    };
+
+    const listIdx = this.store.entries.findIndex((e: any) => e.path === existingEntry.filename);
+    if (listIdx >= 0) {
+      this.store.entries[listIdx] = { ...this.store.entries[listIdx], ...info } as any;
+    }
+
+    this.store.notifyStateChange();
+
+    await this.store.enqueue(async () => {
+      const contentStr = await this.store.getFileContent(existingEntry.filename);
+      if (!contentStr) return;
+
+      try {
+        const parsed = JSON.parse(contentStr);
+        let contentJson = typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
+        if (contentJson && contentJson.content && !contentJson.type) {
+          contentJson = contentJson.content;
+        }
+
+        await this.persistFile(existingEntry.filename, JSON.stringify({ version: 3, content: contentJson }, null, 2), `Update entry metadata: ${mergedEntry.title}`);
+        await this.persistFile((await import('../constants')).INDEX_PATH, JSON.stringify(this.store.metadata, null, 2), "Update notebook metadata");
+      } catch (e) {
+        console.error("Failed to update entry metadata on disk", e);
+      }
+    });
+  }
+
+  async saveDraft(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string | null; date: string }) {
     let contentJson = JSON.parse(tiptapContent);
     // Handle double-stringification and wrapping
     if (typeof contentJson === 'string') {
@@ -186,7 +236,7 @@ export class EntryManager {
       this.store.openFile = { ...this.store.openFile, ...info, tiptapContent, latex, updatedAt: new Date().toISOString() };
     }
 
-    const existingEntry = this.store.metadata.entries[id];
+    const existingEntry = this.store.metadata.entries.find(e => e.id === id);
     if (!existingEntry) return;
 
     const discoveredResources = extractResources(contentJson);
@@ -212,7 +262,7 @@ export class EntryManager {
 
     this.store.metadata = validateNotebookIntegrity({
       ...this.store.metadata,
-      entries: { ...this.store.metadata.entries, [id]: mergedEntry }
+      entries: this.store.metadata.entries.map(e => e.id === id ? mergedEntry : e)
     });
 
     this.store.notifyStateChange();
@@ -289,7 +339,7 @@ export class EntryManager {
 
     this.store.metadata = validateNotebookIntegrity({
       ...this.store.metadata,
-      entries: { ...this.store.metadata.entries, [id]: newEntry }
+      entries: [...this.store.metadata.entries, newEntry]
     });
     this.store.entries = [{ name: `${id}.json`, path }, ...this.store.entries];
     this.store.notifyStateChange();
@@ -305,8 +355,8 @@ export class EntryManager {
     return id;
   }
 
-  async duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string; author?: string; phase?: number | null; date?: string }): Promise<string> {
-    const sourceMeta = this.store.metadata.entries[sourceId];
+  async duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string; author?: string; phase?: string | null; date?: string }): Promise<string> {
+    const sourceMeta = this.store.metadata.entries.find(e => e.id === sourceId);
     if (!sourceMeta) throw new Error("Source entry not found");
 
     // Flush any pending debounced edits first and wait for the save to complete
@@ -428,7 +478,7 @@ export class EntryManager {
 
     this.store.metadata = validateNotebookIntegrity({
       ...this.store.metadata,
-      entries: { ...this.store.metadata.entries, [newId]: newEntry }
+      entries: [...this.store.metadata.entries, newEntry]
     });
     this.store.entries = [{ name: `${newId}.json`, path: newPath }, ...this.store.entries];
     this.store.notifyStateChange();
@@ -479,7 +529,7 @@ export class EntryManager {
 
     this.store.metadata = validateNotebookIntegrity({
       ...this.store.metadata,
-      entries: { ...this.store.metadata.entries, [id]: newTemplate }
+      entries: [...this.store.metadata.entries, newTemplate]
     });
     this.store.entries = [{ name: `${id}.json`, path }, ...this.store.entries];
     this.store.notifyStateChange();
@@ -494,7 +544,7 @@ export class EntryManager {
   }
 
   async createEntryFromTemplate(templateId: string): Promise<string> {
-    const templateMeta = this.store.metadata.entries[templateId];
+    const templateMeta = this.store.metadata.entries.find(e => e.id === templateId);
     const lastAuthor = (typeof window !== "undefined" ? localStorage.getItem("nb-last-author") : null) || "";
     const todayDate = getLocalDateString();
 
@@ -518,7 +568,7 @@ export class EntryManager {
   }
 
   setEntryValidity(id: string, isValid: boolean, validationErrors: string[] = []) {
-    const existingEntry = this.store.metadata.entries[id];
+    const existingEntry = this.store.metadata.entries.find(e => e.id === id);
     if (!existingEntry) return;
 
     if (existingEntry.isValid === isValid && JSON.stringify(existingEntry.validationErrors || []) === JSON.stringify(validationErrors)) {
@@ -595,12 +645,12 @@ export class EntryManager {
       this.store.lastSavedContents.delete(entryTexPath);
 
       // 2. Revert any staged asset files associated with this entry
-      const entryMeta = this.store.metadata.entries[entryId];
+      const entryMeta = this.store.metadata.entries.find(e => e.id === entryId);
       if (entryMeta?.assets) {
         for (const assetPath of entryMeta.assets) {
           // Only revert asset if it was newly staged and not shared by other non-discarded entries
-          const otherEntriesUsingAsset = Object.entries(this.store.metadata.entries)
-            .filter(([id, m]) => id !== entryId && m.assets?.includes(assetPath));
+          const otherEntriesUsingAsset = this.store.metadata.entries.map((e: any) => [e.id, e])
+            .filter(([id, m]: any) => id !== entryId && m.assets?.includes(assetPath));
           if (otherEntriesUsingAsset.length === 0) {
             await removeStaged(dbName, assetPath);
             this.store.assetCache.delete(assetPath);
@@ -774,7 +824,7 @@ export class EntryManager {
       await this.refreshPending();
 
       if (previousOpenId) {
-        if (this.store.metadata.entries[previousOpenId]) {
+        if (this.store.metadata.entries.find(e => e.id === previousOpenId)) {
           await this.openEntry(previousOpenId);
           return;
         }
@@ -836,7 +886,7 @@ export class EntryManager {
   }
 
   async updateLatexMetadata() {
-    const regularEntries = Object.values(this.store.metadata.entries)
+    const regularEntries = this.store.metadata.entries
       .filter(e => !e.isTemplate && Boolean(e.date));
 
     const entryDates = regularEntries

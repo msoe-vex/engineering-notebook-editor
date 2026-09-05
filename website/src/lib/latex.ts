@@ -385,7 +385,7 @@ export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: strin
   return latex;
 };
 
-export const generateAllEntriesLatex = (metadata: { entries: Record<string, { id: string, date: string, createdAt: string, updatedAt?: string, isTemplate?: boolean }> }, prefix: string = ""): string => {
+export const generateAllEntriesLatex = (metadata: { entries: { id: string, date: string, createdAt: string, updatedAt?: string, isTemplate?: boolean }[] }, prefix: string = ""): string => {
   const entries = Object.values(metadata.entries)
     .filter(entry => !entry.isTemplate)
     .sort((a, b) => {
@@ -445,8 +445,8 @@ export const generatePhasesLatex = (phases: ProjectPhase[]): string => {
 
     latex += `% Phase: ${p.name}\n`;
     latex += `\\definecolor{${colorName}}{HTML}{${hex}}\n`;
-    latex += `\\csdef{phasecolor@${p.index}}{${colorName}}\n`;
-    latex += `\\csdef{phasename@${p.index}}{${escapeLaTeX(p.name)}}\n\n`;
+    latex += `\\csdef{phasecolor@${p.id}}{${colorName}}\n`;
+    latex += `\\csdef{phasename@${p.id}}{${escapeLaTeX(p.name)}}\n\n`;
 
     // Add to phase list using the abstracted command
     phaseListLatex += `    \\notebookphase{${colorName}}{${escapeLaTeX(p.name)}}{${escapeLaTeX(p.description || "")}}\n`;

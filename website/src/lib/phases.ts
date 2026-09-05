@@ -39,7 +39,7 @@ export function getPhaseConfig(phases: ProjectPhase[]): Record<string, PhaseInfo
     // Dynamically get icon component
     const IconComponent = (Icons as unknown as Record<string, LucideIcon>)[p.iconName] || Icons.HelpCircle;
     
-    config[p.index] = {
+    config[p.id] = {
       icon: IconComponent,
       color: p.color,
       bg: `${p.color}1a`, // 10% opacity hex

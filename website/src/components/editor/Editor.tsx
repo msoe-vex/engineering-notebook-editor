@@ -899,7 +899,7 @@ const EditorContent = React.memo(function EditorContent({
 
   // use module-level getSafeInsertPos
 
-  const generateLatex = useCallback((cnt: TipTapNode | string, t: string, a: string, p: number | null, d: string) => {
+  const generateLatex = useCallback((cnt: TipTapNode | string, t: string, a: string, p: string | null, d: string) => {
     const id = filename.split('/').pop()?.replace('.json', '') || "";
 
     // Extract resources from the content to pass to generateEntryLatex
@@ -1230,12 +1230,12 @@ const EditorContent = React.memo(function EditorContent({
                       />
 
                       {activePhaseCfg && (
-                        <activePhaseCfg.icon size={15} className="shrink-0 drop-shadow-sm" style={{ color: availablePhases.find(p => p.index === openFile.phase)?.color }} />
+                        <activePhaseCfg.icon size={15} className="shrink-0 drop-shadow-sm" style={{ color: availablePhases.find(p => p.id as any === openFile.phase)?.color }} />
                       )}
 
                       {/* Metadata dropdown */}
                       <div className={`flex-1 w-full min-w-0 text-xs font-bold tracking-widest truncate ${openFile.phase !== null && phaseConfig[openFile.phase] ? phaseConfig[openFile.phase].text : "text-nb-on-surface-variant/60"}`}>
-                        {availablePhases.find(p => p.index === openFile.phase)?.name || "No Phase Selected"}
+                        {availablePhases.find(p => p.id as any === openFile.phase)?.name || "No Phase Selected"}
                       </div>
                       <ChevronDown size={12} className={`text-nb-on-surface-variant/40 shrink-0 transition-transform duration-200 ${activeMenu === "Phase" ? "rotate-180" : ""}`} />
 
@@ -1263,18 +1263,18 @@ const EditorContent = React.memo(function EditorContent({
                             </button>
                           )}
                           {availablePhases.map(p => {
-                            const cfg = phaseConfig[p.index];
+                            const cfg = phaseConfig[p.id as any];
                             const Icon = cfg.icon;
                             return (
                               <button
-                                key={p.id}
+                                key={p.id as any}
                                 type="button"
-                                onClick={() => { updateDraft(null, { phase: p.index }); setActiveMenu(null); }}
-                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[10px] font-bold tracking-widest transition-all text-left cursor-pointer active:scale-[0.98] ${openFile.phase === p.index ? `${cfg.bg} ${cfg.text} hover:brightness-90` : "text-nb-on-surface-variant hover:bg-nb-surface-mid hover:text-nb-on-surface hover:translate-x-1 hover:ring-1 hover:ring-nb-primary/20"}`}
+                                onClick={() => { updateDraft(null, { phase: p.id }); setActiveMenu(null); }}
+                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[10px] font-bold tracking-widest transition-all text-left cursor-pointer active:scale-[0.98] ${openFile.phase === p.id as any ? `${cfg.bg} ${cfg.text} hover:brightness-90` : "text-nb-on-surface-variant hover:bg-nb-surface-mid hover:text-nb-on-surface hover:translate-x-1 hover:ring-1 hover:ring-nb-primary/20"}`}
                               >
                                 <Icon size={14} style={{ color: p.color }} />
                                 <span className="flex-1">{p.name.toUpperCase()}</span>
-                                {openFile.phase === p.index && <LucideIcons.Check size={12} style={{ color: p.color }} />}
+                                {openFile.phase === p.id as any && <LucideIcons.Check size={12} style={{ color: p.color }} />}
                               </button>
                             );
                           })}

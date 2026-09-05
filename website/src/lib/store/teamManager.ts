@@ -17,7 +17,7 @@ export class TeamManager {
 
     // If auto-calculating dates, ensure startDate and endDate in notebook.json reflect the calculated dates
     if (cleanTeam.autoCalculateDates !== false) {
-      const regularEntries = Object.values(this.store.metadata.entries || {})
+      const regularEntries = (this.store.metadata.entries || [])
         .filter(e => !e.isTemplate && Boolean(e.date));
       const entryDates = regularEntries.map(e => e.date).sort();
       cleanTeam.startDate = entryDates.length > 0 ? formatDateMonthYear(entryDates[0]) : "";

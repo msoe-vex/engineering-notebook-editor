@@ -27,10 +27,11 @@ export interface OpenFileState {
   latex: string;
   title: string;
   author: string;
-  phase: number | null;
+  phase: string | null;
   createdAt: string;
   updatedAt: string;
   date: string;
+  order?: number;
 }
 
 export interface IWorkspaceStore {
@@ -51,6 +52,7 @@ export interface IWorkspaceStore {
   helpPath: string | null;
   showCompiler: boolean;
   showAbout: boolean;
+  showCalendar: boolean;
   openFile: OpenFileState | null;
   isLoading: boolean;
   loadingLabel: string;
@@ -97,10 +99,10 @@ export interface IWorkspaceStore {
   createTemporaryProject(): Promise<string>;
   selectProject(id: string): Promise<void>;
   openEntry(id: string): Promise<void>;
-  updateDraft(tiptapContent: string | null, info: { title?: string; author?: string; phase?: number | null; date?: string }): void;
-  updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null; date: string }): Promise<void>;
+  updateDraft(tiptapContent: string | null, info: { title?: string; author?: string; phase?: string | null; date?: string }): void;
+  updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string | null; date: string }): Promise<void>;
   createEntry(): Promise<string>;
-  duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string; author?: string; phase?: number | null; date?: string }): Promise<string>;
+  duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string; author?: string; phase?: string | null; date?: string }): Promise<string>;
   createTemplate(templateData?: Partial<EntryMetadata>): Promise<string>;
   createEntryFromTemplate(templateId: string): Promise<string>;
   refreshPending(): Promise<PendingChange[]>;

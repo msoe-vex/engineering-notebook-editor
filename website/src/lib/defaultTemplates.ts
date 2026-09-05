@@ -57,7 +57,7 @@ export async function fetchDefaultNotebook(): Promise<DefaultNotebook> {
     }
     const meta: NotebookMetadata = await metaRes.json();
 
-    const cleanedEntries: Record<string, EntryMetadata> = {};
+    const cleanedEntries: EntryMetadata[] = [];
     const entryContents: DefaultNotebookEntry[] = [];
     const today = new Date().toISOString();
 
@@ -74,7 +74,7 @@ export async function fetchDefaultNotebook(): Promise<DefaultNotebook> {
         isValid: undefined,
         validationErrors: undefined,
       };
-      cleanedEntries[id] = cleanMeta;
+      cleanedEntries.push(cleanMeta);
 
       const entryRes = await fetch(`${BASE_URL}/entries/${id}.json`);
       if (entryRes.ok) {

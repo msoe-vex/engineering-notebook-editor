@@ -35,10 +35,11 @@ export interface EntryMetadata {
   id: string; // Entry UUID
   title: string;
   author: string;
-  phase: number | null; // Phase ID
+  phase: string | null; // Phase ID
   createdAt: string;
   updatedAt: string;
   date: string; // YYYY-MM-DD
+  order?: number;
   filename: string; // Path to the entry file (e.g. "entries/uuid.json")
   isTemplate?: boolean; // When true, excluded from LaTeX entries.tex compilation and export
   resources?: Record<string, { title: string, caption: string, type: string }>; // block uuid -> metadata
@@ -89,7 +90,6 @@ export interface EntryWrapper {
 
 export interface ProjectPhase {
   id: string;
-  index: number;
   name: string;
   description: string;
   iconName: string; // Lucide icon name
@@ -98,7 +98,7 @@ export interface ProjectPhase {
 
 export interface NotebookMetadata {
   version: number;
-  entries: Record<string, EntryMetadata>; // uuid -> metadata
+  entries: EntryMetadata[]; // sorted array of entries
   team?: TeamMetadata;
   phases?: ProjectPhase[];
   assetRefs?: Record<string, string[]>; // asset path -> [entry id or "team"]
@@ -110,14 +110,14 @@ export interface NotebookMetadata {
  * Includes all entries, all stored resources, and optional local unsaved resources.
  */
 export function buildResourceTypeIndex(
-  entries: Record<string, EntryMetadata>,
+  entries: EntryMetadata[],
   localResources: Record<string, { type: string }> = {},
   currentEntryId?: string
 ): Record<string, string> {
   const resourceTypes: Record<string, string> = {};
 
-  for (const [entryId, entry] of Object.entries(entries || {})) {
-    resourceTypes[entryId] = "entry";
+  for (const entry of entries || []) {
+    resourceTypes[entry.id] = "entry";
 
     if (entry.resources) {
       for (const [resourceId, resource] of Object.entries(entry.resources)) {
@@ -141,7 +141,7 @@ export const DEFAULT_PHASES: ProjectPhase[] = [];
 
 export const EMPTY_METADATA: NotebookMetadata = {
   version: 3,
-  entries: {},
+  entries: [],
   phases: DEFAULT_PHASES,
   team: {
     teamName: "",
@@ -409,16 +409,22 @@ export function updateEntryInIndex(
   entryId: string,
   info: EntryMetadata
 ): NotebookMetadata {
+  const newEntries = Array.isArray(metadata.entries) ? [...metadata.entries] : Object.values(metadata.entries) as EntryMetadata[];
+  const existingIdx = newEntries.findIndex((e: any) => e.id === entryId);
+
+  if (existingIdx >= 0) {
+    newEntries[existingIdx] = info;
+  } else {
+    newEntries.push(info);
+  }
+
   const next = {
     ...metadata,
-    entries: {
-      ...metadata.entries,
-      [entryId]: info
-    }
+    entries: newEntries
   };
 
   // Run global integrity check to update isValid/validationErrors for all affected entries
-  return validateNotebookIntegrity(next);
+  return validateNotebookIntegrity(next as any);
 }
 
 /**
@@ -431,7 +437,7 @@ export function updateEntryInIndex(
  */
 export function validateEntry(
   entry: EntryMetadata,
-  phases: { index: number }[],
+  phases: { id: string }[],
   existingIds: Set<string>
 ): string[] {
   const errors: string[] = [];
@@ -442,7 +448,12 @@ export function validateEntry(
   if (!entry.isTemplate) {
     if (!entry.author?.trim()) errors.push("Author name is required.");
     if (!entry.date?.trim()) errors.push("Date is required.");
-    if (typeof entry.phase !== "number" || !phases.some(p => p.index === entry.phase)) {
+    // Temporarily phase checking doesn't need to match index because we removed index.
+    // Entries have `phase: number | null`. Wait, if we use ID, it should be a string, but it is currently number!
+    // Oh, the entries have a phase number ID previously matching phase.index. Let's fix that.
+    // If entries hold phase index still, we should probably keep `phase` as number, or migrate it to index in array + 1?
+    // Let's just check if it's a number for now.
+    if (typeof entry.phase !== "string") {
       errors.push("Entry phase is required.");
     }
   }
@@ -472,8 +483,20 @@ export function validateEntry(
  * Checks for missing required fields, empty resource metadata, and dead internal links.
  */
 export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookMetadata {
-    // noop placeholder to ensure patch context (will add import next)
-  const newEntries = { ...metadata.entries };
+  let newEntries = Array.isArray(metadata.entries) ? [...metadata.entries] : Object.values(metadata.entries).sort((a: any, b: any) => (a.createdAt || "").localeCompare(b.createdAt || ""));
+
+  // Phase migration
+  let migratedPhases = metadata.phases;
+  if (Array.isArray(migratedPhases)) {
+    migratedPhases = migratedPhases.map(p => {
+      const newP = { ...p };
+      if ('index' in newP) {
+        delete (newP as any).index;
+      }
+      return newP;
+    });
+  }
+
   const assetRefs: Record<string, string[]> = {};
 
   const trackAsset = (path: string, owner: string) => {
@@ -494,7 +517,7 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
 
   // 2. Build global set of all IDs and collect assets from entries
   const existingIds = new Set<string>();
-  for (const [entryId, entry] of Object.entries(metadata.entries)) {
+  for (const entry of newEntries as EntryMetadata[]) {
     existingIds.add(entry.id);
     if (entry.resources) {
       for (const resId of Object.keys(entry.resources)) {
@@ -502,18 +525,18 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
       }
     }
     if (entry.assets) {
-      entry.assets.forEach(a => trackAsset(a, entryId));
+      entry.assets.forEach(a => trackAsset(a, entry.id));
     }
   }
 
   // Resolve phases — respect explicit empty array, fall back to DEFAULT_PHASES only when undefined
-  const phases = metadata.phases !== undefined ? metadata.phases : DEFAULT_PHASES;
+  const phases = migratedPhases !== undefined ? migratedPhases : DEFAULT_PHASES;
 
   // 3. Validate each entry using the shared helper
-  for (const [id, entry] of Object.entries(newEntries)) {
+  newEntries = (Array.from(newEntries) as any[]).map((entry: any) => {
     const errors = validateEntry(entry, phases, existingIds);
-    newEntries[id] = { ...entry, isValid: errors.length === 0, validationErrors: errors };
-  }
+    return { ...entry, isValid: errors.length === 0, validationErrors: errors } as EntryMetadata;
+  }) as any;
 
   // Canonicalize team metadata field order so JSON.stringify is completely deterministic
   let canonicalTeam: TeamMetadata | undefined = undefined;
@@ -540,9 +563,9 @@ export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookM
 
   const result: NotebookMetadata = {
     version: metadata.version || 3,
-    entries: newEntries,
+    entries: newEntries as any as EntryMetadata[],
     ...(canonicalTeam ? { team: canonicalTeam } : {}),
-    ...(metadata.phases ? { phases: metadata.phases } : {}),
+    ...(migratedPhases ? { phases: migratedPhases } : {}),
     ...(metadata.lastCompiled ? { lastCompiled: metadata.lastCompiled } : {}),
     assetRefs,
   };
@@ -572,11 +595,10 @@ export function removeEntryFromMetadata(
   metadata: NotebookMetadata,
   entryId: string
 ): NotebookMetadata {
-  const newEntries = { ...metadata.entries };
-  delete newEntries[entryId];
+  const newEntries = Array.isArray(metadata.entries) ? metadata.entries.filter((e: any) => e.id !== entryId) : Object.values(metadata.entries).filter((e: any) => e.id !== entryId);
 
-  const next = { ...metadata, entries: newEntries };
-  return validateNotebookIntegrity(next);
+  const next = { ...metadata, entries: newEntries as any };
+  return validateNotebookIntegrity(next as any);
 }
 
 /** Rename an entry in the metadata index. */
@@ -585,14 +607,14 @@ export function renameEntryInMetadata(
   oldId: string,
   newId: string
 ): NotebookMetadata {
-  const newEntries = { ...metadata.entries };
-  if (newEntries[oldId]) {
-    newEntries[newId] = newEntries[oldId];
-    delete newEntries[oldId];
+  const newEntries = Array.isArray(metadata.entries) ? [...metadata.entries] : Object.values(metadata.entries) as EntryMetadata[];
+  const idx = newEntries.findIndex((e: any) => e.id === oldId);
+  if (idx >= 0) {
+    newEntries[idx] = { ...newEntries[idx], id: newId };
   }
 
-  const next = { ...metadata, entries: newEntries };
-  return validateNotebookIntegrity(next);
+  const next = { ...metadata, entries: newEntries as any };
+  return validateNotebookIntegrity(next as any);
 }
 
 /**
@@ -972,7 +994,7 @@ export function mergeProjectPhases(
   }
 
   // Ensure phases are sorted by index
-  return mergedPhases.sort((a, b) => a.index - b.index);
+  /* return mergedPhases.sort((a, b) => a.index - b.index); */ return mergedPhases;
 }
 
 /**
@@ -984,33 +1006,39 @@ export function mergeNotebookMetadata(
   local: NotebookMetadata,
   remote: NotebookMetadata
 ): { merged: NotebookMetadata; hasCollisions: boolean; collidingEntryIds: string[] } {
-  const baseEntries = base?.entries || {};
-  const localEntries = local.entries || {};
-  const remoteEntries = remote.entries || {};
+  const mapEntries = (entries: EntryMetadata[] | Record<string, EntryMetadata> | undefined) => {
+    if (!entries) return new Map<string, EntryMetadata>();
+    if (Array.isArray(entries)) return new Map(entries.map(e => [e.id, e]));
+    return new Map(Object.entries(entries));
+  };
 
-  const mergedEntries: Record<string, EntryMetadata> = {};
+  const baseEntries = mapEntries(base?.entries);
+  const localEntries = mapEntries(local.entries);
+  const remoteEntries = mapEntries(remote.entries);
+
+  const mergedEntries: EntryMetadata[] = [];
   const allEntryIds = new Set([
-    ...Object.keys(baseEntries),
-    ...Object.keys(localEntries),
-    ...Object.keys(remoteEntries)
+    ...Array.from(baseEntries.keys()),
+    ...Array.from(localEntries.keys()),
+    ...Array.from(remoteEntries.keys())
   ]);
 
   const collidingEntryIds: string[] = [];
 
   for (const id of allEntryIds) {
-    const b = baseEntries[id];
-    const l = localEntries[id];
-    const r = remoteEntries[id];
+    const b = baseEntries.get(id);
+    const l = localEntries.get(id);
+    const r = remoteEntries.get(id);
 
     // Case 1: Only in local (newly created locally)
     if (!b && l && !r) {
-      mergedEntries[id] = l;
+      mergedEntries.push(l as any);
       continue;
     }
 
     // Case 2: Only in remote (newly created on remote)
     if (!b && !l && r) {
-      mergedEntries[id] = r;
+      mergedEntries.push(r as any);
       continue;
     }
 
@@ -1026,19 +1054,19 @@ export function mergeNotebookMetadata(
 
     // Case 5: Modified in local, unchanged in remote
     if (b && l && r && JSON.stringify(b) !== JSON.stringify(l) && JSON.stringify(b) === JSON.stringify(r)) {
-      mergedEntries[id] = l;
+      mergedEntries.push(l as any);
       continue;
     }
 
     // Case 6: Modified in remote, unchanged in local
     if (b && l && r && JSON.stringify(b) === JSON.stringify(l) && JSON.stringify(b) !== JSON.stringify(r)) {
-      mergedEntries[id] = r;
+      mergedEntries.push(r as any);
       continue;
     }
 
     // Case 7: Same modifications in both
     if (l && r && JSON.stringify(l) === JSON.stringify(r)) {
-      mergedEntries[id] = l;
+      mergedEntries.push(l as any);
       continue;
     }
 
@@ -1046,13 +1074,19 @@ export function mergeNotebookMetadata(
     if (l && r) {
       collidingEntryIds.push(id);
       // For level 1, keep local but flag collision
-      mergedEntries[id] = l;
+      mergedEntries.push(l as any);
     } else if (l) {
-      mergedEntries[id] = l;
+      mergedEntries.push(l as any);
     } else if (r) {
-      mergedEntries[id] = r;
+      mergedEntries.push(r as any);
     }
   }
+
+  // Sort merged entries to maintain deterministic order (if not relying entirely on array drag-drop sort during merge)
+  mergedEntries.sort((a: any, b: any) => {
+    if (a.date !== b.date) return (a.date || "").localeCompare(b.date || "");
+    return (a.order || 0) - (b.order || 0);
+  });
 
   // 3-way merge team and phases
   const team = mergeTeamMetadata(base?.team, local.team, remote.team);

@@ -31,6 +31,7 @@ class WorkspaceStore implements IWorkspaceStore {
   public helpPath: string | null = null;
   public showCompiler: boolean = false;
   public showAbout: boolean = false;
+  public showCalendar: boolean = false;
   public openFile: OpenFileState | null = null;
   public isLoading = false;
   public loadingLabel = "";
@@ -176,12 +177,16 @@ class WorkspaceStore implements IWorkspaceStore {
     return this.entryManager.openEntry(id);
   }
 
-  public updateDraft(tiptapContent: string | null, info: { title?: string; author?: string; phase?: number | null; date?: string }) {
+  public updateDraft(tiptapContent: string | null, info: { title?: string; author?: string; phase?: string | null; date?: string }) {
     return this.entryManager.updateDraft(tiptapContent, info);
   }
 
-  public async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null; date: string }) {
+  public async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string | null; date: string; order?: number }) {
     return this.entryManager.updateEntry(id, latex, tiptapContent, info);
+  }
+
+  public async updateEntryMetadata(id: string, info: { title?: string; author?: string; phase?: string | null; date?: string; order?: number }) {
+    return this.entryManager.updateEntryMetadata(id, info);
   }
 
   public async createEntry() {
@@ -353,8 +358,8 @@ class WorkspaceStore implements IWorkspaceStore {
           if (hasCollisions && collidingEntryIds.length > 0) {
             // Level 2: Prompt user for resolution choice on conflicting entries
             const conflictsList = collidingEntryIds.map(id => {
-              const localMeta = this.metadata.entries[id];
-              const remoteMeta = remoteMetadata.entries?.[id];
+              const localMeta = this.metadata.entries.find(e => e.id === id);
+              const remoteMeta = Array.isArray(remoteMetadata.entries) ? remoteMetadata.entries.find((e: any) => e.id === id) : (remoteMetadata.entries as any)?.[id];
               return {
                 id,
                 localTitle: localMeta?.title || "Untitled",
@@ -385,7 +390,11 @@ class WorkspaceStore implements IWorkspaceStore {
             for (const [entryId, action] of Object.entries(resolutions)) {
               if (action === "keep_remote") {
                 // Discard local edits for this entry
-                merged.entries[entryId] = remoteMetadata.entries[entryId];
+                const remoteEntry = Array.isArray(remoteMetadata.entries) ? remoteMetadata.entries.find((e: any) => e.id === entryId) : (remoteMetadata.entries as any)?.[entryId];
+                const idx = merged.entries.findIndex(e => e.id === entryId);
+                if (idx >= 0 && remoteEntry) merged.entries[idx] = remoteEntry;
+                else if (remoteEntry) merged.entries.push(remoteEntry);
+
                 const entryJsonPath = `${ENTRIES_DIR}/${entryId}.json`;
                 const entryTexPath = `${LATEX_DIR}/${entryId}.tex`;
                 const remoteEntryJson = this.getFullPath(entryJsonPath);
@@ -402,7 +411,7 @@ class WorkspaceStore implements IWorkspaceStore {
                 this.lastSavedContents.delete(entryTexPath);
               } else if (action === "duplicate") {
                 // Keep remote version at entryId, duplicate local version as a new entry with copy title
-                const localMeta = this.metadata.entries[entryId];
+                const localMeta = this.metadata.entries.find(e => e.id === entryId);
                 const newId = await this.entryManager.duplicateEntry(entryId, {
                   title: `${localMeta?.title || "Entry"} (Conflicted Copy)`,
                   author: localMeta?.author,
@@ -411,11 +420,17 @@ class WorkspaceStore implements IWorkspaceStore {
                 });
 
                 // Set original entry in merged metadata to remote version
-                merged.entries[entryId] = remoteMetadata.entries[entryId];
+                const remoteEntry = Array.isArray(remoteMetadata.entries) ? remoteMetadata.entries.find((e: any) => e.id === entryId) : (remoteMetadata.entries as any)?.[entryId];
+                const idx = merged.entries.findIndex(e => e.id === entryId);
+                if (idx >= 0 && remoteEntry) merged.entries[idx] = remoteEntry;
+                else if (remoteEntry) merged.entries.push(remoteEntry);
+
                 // Include duplicated entry in merged metadata
-                const duplicatedMeta = this.metadata.entries[newId];
+                const duplicatedMeta = this.metadata.entries.find(e => e.id === newId);
                 if (duplicatedMeta) {
-                  merged.entries[newId] = duplicatedMeta;
+                  const dupIdx = merged.entries.findIndex(e => e.id === newId);
+                  if (dupIdx >= 0) merged.entries[dupIdx] = duplicatedMeta;
+                  else merged.entries.push(duplicatedMeta);
                   const newJsonPath = this.getFullPath(`${ENTRIES_DIR}/${newId}.json`);
                   const newTexPath = this.getFullPath(`${LATEX_DIR}/${newId}.tex`);
                   const newJsonContent = await this.getFileContent(`${ENTRIES_DIR}/${newId}.json`);
@@ -435,7 +450,7 @@ class WorkspaceStore implements IWorkspaceStore {
                 await removeStaged(dbName, `${ENTRIES_DIR}/${entryId}.json`);
                 await removeStaged(dbName, `${LATEX_DIR}/${entryId}.tex`);
               }
-              // "keep_local" keeps merged.entries[entryId] = local version (default in merged)
+              // "keep_local" keeps merged local version (default in merged)
             }
           }
           
@@ -542,7 +557,7 @@ class WorkspaceStore implements IWorkspaceStore {
         this.workspaceVersion++;
 
         if (currentOpenId) {
-          if (this.metadata.entries[currentOpenId]) {
+          if (this.metadata.entries.find(e => e.id === currentOpenId)) {
             await this.openEntry(currentOpenId);
           } else {
             this.openFile = null;
@@ -567,7 +582,7 @@ class WorkspaceStore implements IWorkspaceStore {
 
       // If the currently open file was affected by the commit or conflict resolution, reload it fresh from remote
       if (currentOpenId) {
-        if (this.metadata.entries[currentOpenId]) {
+        if (this.metadata.entries.find(e => e.id === currentOpenId)) {
           await this.openEntry(currentOpenId);
         } else {
           this.openFile = null;

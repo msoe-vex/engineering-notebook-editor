@@ -489,12 +489,12 @@ export class ProjectManager {
       await this.loadGitHubWorkspace();
     } else if (this.store.mode === "temporary") {
       // Re-populate entries from metadata for temporary mode
-      this.store.entries = Object.values(this.store.metadata.entries).map(e => ({
+      this.store.entries = this.store.metadata.entries.map(e => ({
         name: e.filename.split('/').pop() || '',
         path: e.filename
       })).sort((a, b) => {
-        const metaA = this.store.metadata.entries[a.path.split('/').pop()?.replace('.json', '') || ''];
-        const metaB = this.store.metadata.entries[b.path.split('/').pop()?.replace('.json', '') || ''];
+        const metaA = this.store.metadata.entries.find(e => e.id === (a.path.split('/').pop()?.replace('.json', '') || ''));
+        const metaB = this.store.metadata.entries.find(e => e.id === (b.path.split('/').pop()?.replace('.json', '') || ''));
         const timeA = metaA?.updatedAt || metaA?.createdAt || 0;
         const timeB = metaB?.updatedAt || metaB?.createdAt || 0;
         return new Date(timeB).getTime() - new Date(timeA).getTime();
