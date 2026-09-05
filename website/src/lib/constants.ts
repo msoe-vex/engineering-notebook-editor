@@ -9,6 +9,7 @@ export const ASSETS_ORIGINAL_DIR = `${ASSETS_DIR}/original`;
 export const ASSETS_COMPRESSED_DIR = `${ASSETS_DIR}/compressed`;
 export const LATEX_DIR = "latex/entries";
 export const INDEX_PATH = `${DATA_DIR}/notebook.json`;
+export const NOTEBOOK_VERSION = 4;
 export const ENTRIES_INDEX_PATH = "latex/entries.tex";
 export const TEAM_PATH = "latex/team.tex";
 export const PHASES_PATH = "latex/phases.tex";

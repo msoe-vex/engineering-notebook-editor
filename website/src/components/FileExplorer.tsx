@@ -407,9 +407,9 @@ export default function FileExplorer({
                       {templateEntries.length > 0 ? (
                         templateEntries.map(tmpl => {
                           const tmplId = tmpl.name.replace('.json', '');
-                          const tmplPConfig = typeof tmpl.phase === "number" ? phaseConfig[tmpl.phase] : null;
+                          const tmplPConfig = typeof tmpl.phase === "string" && tmpl.phase ? phaseConfig[tmpl.phase] : null;
                           const TmplIcon = tmplPConfig ? tmplPConfig.icon : Layers;
-                          const tmplPhase = typeof tmpl.phase === "number" ? availablePhases.find(p => p.index === tmpl.phase) : null;
+                          const tmplPhase = typeof tmpl.phase === "string" && tmpl.phase ? availablePhases.find(p => p.id === tmpl.phase) : null;
                           const tmplIconColor = tmplPhase ? tmplPhase.color : "#9333ea";
                           return (
                             <button
@@ -443,9 +443,9 @@ export default function FileExplorer({
           >
             <div className="space-y-1">
               {regularEntries.map((f) => {
-                const pConfig = typeof f.phase === "number" ? phaseConfig[f.phase] : null;
+                const pConfig = typeof f.phase === "string" && f.phase ? phaseConfig[f.phase] : null;
                 const IconComponent = pConfig ? pConfig.icon : FileText;
-                const phase = typeof f.phase === "number" ? availablePhases.find(p => p.index === f.phase) : null;
+                const phase = typeof f.phase === "string" && f.phase ? availablePhases.find(p => p.id === f.phase) : null;
                 const iconStyle = phase ? { color: phase.color } : undefined;
 
                 const icon = (
@@ -505,9 +505,9 @@ export default function FileExplorer({
           >
             <div className="space-y-1">
               {templateEntries.map(f => {
-                const pConfig = typeof f.phase === "number" ? phaseConfig[f.phase] : null;
+                const pConfig = typeof f.phase === "string" && f.phase ? phaseConfig[f.phase] : null;
                 const IconComponent = pConfig ? pConfig.icon : Layers;
-                const phase = typeof f.phase === "number" ? availablePhases.find(p => p.index === f.phase) : null;
+                const phase = typeof f.phase === "string" && f.phase ? availablePhases.find(p => p.id === f.phase) : null;
                 const iconStyle = phase ? { color: phase.color } : { color: "#9333ea" };
 
                 const icon = (

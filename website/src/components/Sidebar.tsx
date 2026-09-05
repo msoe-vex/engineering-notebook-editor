@@ -14,6 +14,9 @@ interface SidebarProps {
   selectedPaths: Set<string>;
   onSelectEntry: (file: ExplorerFile, multi: boolean, range: boolean, visiblePaths: string[]) => void;
   onOpenTeam: (tab?: TeamTab) => void;
+  onOpenCalendar?: () => void;
+  onOpenCompile?: () => void;
+  onOpenHelp?: () => void;
   showConfirm: (title: string, message: string, onConfirm: () => void, variant?: "danger" | "warning" | "info") => void;
   onNewEntry?: () => Promise<void>;
   onOpenEntry?: (file: ExplorerFile) => void;
@@ -24,6 +27,9 @@ export default function Sidebar({
   selectedPaths,
   onSelectEntry,
   onOpenTeam,
+  onOpenCalendar,
+  onOpenCompile,
+  onOpenHelp,
   showConfirm,
   onNewEntry,
   onOpenEntry,
@@ -254,8 +260,9 @@ export default function Sidebar({
         onSelectTab={setActiveTab}
         pendingCount={mode === "github" ? (pendingChanges || []).length : 0}
         onOpenTeam={onOpenTeam}
-        onOpenCompile={() => navigateTo({}, '/workspace/compile')}
-        onOpenHelp={() => navigateTo({}, '/workspace/help/getting-started')}
+        onOpenCalendar={onOpenCalendar}
+        onOpenCompile={onOpenCompile || (() => navigateTo({}, '/workspace/compile'))}
+        onOpenHelp={onOpenHelp || (() => navigateTo({}, '/workspace/help/getting-started'))}
       />
 
       {/* Main Tab Panel */}

@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
     "download:busytex": "tsx scripts/download-busytex.ts",
     "bundle:template": "tsx scripts/bundle-template.ts",
     "bundle:latex": "tsx scripts/bundle-template.ts",
@@ -66,7 +67,8 @@
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4.2.4",
     "tsx": "^4.19.3",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^3.2.4"
   },
   "overrides": {
     "react-latex-next": {

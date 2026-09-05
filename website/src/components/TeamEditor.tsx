@@ -32,7 +32,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { TeamMetadata, TeamMember, ProjectPhase } from "@/lib/metadata";
+import { TeamMetadata, TeamMember, ProjectPhase, Identified, sortedMembers, sortedPhases, recordFromIdentified } from "@/lib/metadata";
 import { DEFAULT_PHASES, AVAILABLE_ICONS } from "@/lib/phases";
 import { fetchDefaultPhases } from "@/lib/defaultTemplates";
 import { generateUUID, formatDateMonthYear, compressImageToJpeg, getMimeTypeFromExtension } from "@/lib/utils";
@@ -287,7 +287,7 @@ const PhaseCard = memo(({
   listeners,
   isOverlay = false
 }: {
-  phase: ProjectPhase,
+  phase: Identified<ProjectPhase>,
   handlePhaseChange?: (id: string, field: keyof ProjectPhase, value: string) => void,
   removePhase?: (id: string) => void,
   attributes?: DraggableAttributes,
@@ -367,7 +367,7 @@ const MemberCard = memo(({
   listeners,
   isOverlay = false
 }: {
-  member: TeamMember,
+  member: Identified<TeamMember>,
   handleMemberChange?: (id: string, field: keyof TeamMember, value: string) => void,
   removeMember?: (id: string) => void,
   attributes?: DraggableAttributes,
@@ -484,7 +484,7 @@ const MemberRow = memo(({
   handleMemberChange,
   removeMember
 }: {
-  member: TeamMember,
+  member: Identified<TeamMember>,
   handleMemberChange: (id: string, field: keyof TeamMember, value: string) => void,
   removeMember: (id: string) => void
 }) => {
@@ -528,7 +528,7 @@ const PhaseRow = memo(({
   handlePhaseChange,
   removePhase
 }: {
-  phase: ProjectPhase,
+  phase: Identified<ProjectPhase>,
   handlePhaseChange: (id: string, field: keyof ProjectPhase, value: string) => void,
   removePhase: (id: string) => void
 }) => {
@@ -587,21 +587,23 @@ export default function TeamEditor({
     isDiscarding
   } = useWorkspace();
 
-  const initialData = useMemo(() => {
-    const data = metadata.team || { teamName: "", teamNumber: "", organization: "", logo: "", logoOriginal: "", members: [], startDate: "", endDate: "", autoCalculateDates: true };
+type TeamForm = Omit<TeamMetadata, "members"> & { members: Identified<TeamMember>[] };
+
+  const initialData = useMemo((): TeamForm => {
+    const data = metadata.team || { teamName: "", teamNumber: "", organization: "", logo: "", logoOriginal: "", members: {}, startDate: "", endDate: "", autoCalculateDates: true };
     return {
       ...data,
       startDate: data.startDate || "",
       endDate: data.endDate || "",
       autoCalculateDates: data.autoCalculateDates ?? true,
-      members: (data.members || []).map((m, idx) => ({ ...m, id: m.id || `member-${idx}` }))
+      members: sortedMembers(data.members)
     };
   }, [metadata.team]);
 
-  const initialPhases = metadata.phases || DEFAULT_PHASES;
+  const initialPhases = useMemo(() => sortedPhases(metadata.phases || DEFAULT_PHASES), [metadata.phases]);
 
-  const [teamData, setTeamData] = useState<TeamMetadata>(initialData);
-  const [phases, setPhases] = useState<ProjectPhase[]>(initialPhases);
+  const [teamData, setTeamData] = useState<TeamForm>(initialData);
+  const [phases, setPhases] = useState<Identified<ProjectPhase>[]>(initialPhases);
   const activeTab = initialTab;
   const [activeId, setActiveId] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -625,6 +627,13 @@ export default function TeamEditor({
     return JSON.stringify(teamData) !== JSON.stringify(initialData) ||
            JSON.stringify(phases) !== JSON.stringify(initialPhases);
   }, [teamData, initialData, phases, initialPhases]);
+
+  const persistTeam = useCallback((data: TeamForm, nextPhases: Identified<ProjectPhase>[]) => {
+    return saveTeam(
+      { ...data, members: recordFromIdentified(data.members) },
+      recordFromIdentified(nextPhases)
+    );
+  }, [saveTeam]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -651,14 +660,14 @@ export default function TeamEditor({
     if (isDiscarding) return;
     const timer = setTimeout(() => {
       if (hasChanges && !isDiscarding) {
-        saveTeam(teamData, phases).then(() => {
+        persistTeam(teamData, phases).then(() => {
           setSaveSuccess(true);
           setPendingSave(false);
         }).catch(() => setPendingSave(false));
       }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [teamData, phases, hasChanges, isDiscarding, saveTeam, setPendingSave]);
+  }, [teamData, phases, hasChanges, isDiscarding, persistTeam, setPendingSave]);
 
   const latestDataRef = useRef({ teamData, phases, hasChanges });
   useEffect(() => {
@@ -671,22 +680,22 @@ export default function TeamEditor({
     if (initialTab !== lastTabRef.current) {
       const { teamData: latestData, phases: latestPhases, hasChanges: changesExist } = latestDataRef.current;
       if (changesExist && !isDiscarding) {
-        saveTeam(latestData, latestPhases);
+        persistTeam(latestData, latestPhases);
         setPendingSave(false);
       }
       lastTabRef.current = initialTab;
     }
-  }, [initialTab, isDiscarding, saveTeam, setPendingSave]);
+  }, [initialTab, isDiscarding, persistTeam, setPendingSave]);
 
   useEffect(() => {
     return () => {
       const { teamData: latestData, phases: latestPhases, hasChanges: changesExist } = latestDataRef.current;
       if (changesExist && !isDiscarding) {
-        saveTeam(latestData, latestPhases);
+        persistTeam(latestData, latestPhases);
         setPendingSave(false);
       }
     };
-  }, [isDiscarding, saveTeam, setPendingSave]);
+  }, [isDiscarding, persistTeam, setPendingSave]);
 
   useEffect(() => {
     if (saveSuccess) {
@@ -762,7 +771,7 @@ export default function TeamEditor({
   const addMember = () => {
     setTeamData(prev => ({
       ...prev,
-      members: [...prev.members, { id: generateUUID(), name: "", role: "", image: "", imageOriginal: "" }]
+      members: [...prev.members, { id: generateUUID(), name: "", role: "", order: prev.members.length, image: "", imageOriginal: "" }]
     }));
   };
 
@@ -791,10 +800,10 @@ export default function TeamEditor({
 
   const addPhase = useCallback(() => {
     setPhases(prev => {
-      const nextIndex = prev.length + 1;
+      const nextOrder = prev.length;
       return [...prev, {
         id: generateUUID(),
-        index: nextIndex,
+        order: nextOrder,
         name: "New Phase",
         description: "",
         iconName: "Shapes",
@@ -806,7 +815,7 @@ export default function TeamEditor({
   const removePhase = useCallback((id: string) => {
     setPhases(prev => {
       const filtered = prev.filter(p => p.id !== id);
-      return filtered.map((p, i) => ({ ...p, index: i + 1 }));
+      return filtered.map((p, i) => ({ ...p, order: i }));
     });
   }, []);
 
@@ -823,7 +832,7 @@ export default function TeamEditor({
           const newIndex = items.findIndex(p => p.id === over.id);
           const moved = arrayMove(items, oldIndex, newIndex);
           // Re-assign indices to match the new order (1-based)
-          return moved.map((p, i) => ({ ...p, index: i + 1 }));
+          return moved.map((p, i) => ({ ...p, order: i }));
         });
       } else if (activeTab === "members") {
         setTeamData(prev => {
@@ -839,11 +848,7 @@ export default function TeamEditor({
 
   const restoreDefaultPhases = useCallback(async () => {
     const defaultPhases = await fetchDefaultPhases();
-    if (defaultPhases && defaultPhases.length > 0) {
-      setPhases(defaultPhases.map(p => ({ ...p })));
-    } else {
-      setPhases(DEFAULT_PHASES.map(p => ({ ...p })));
-    }
+    setPhases(sortedPhases(defaultPhases || DEFAULT_PHASES));
   }, []);
 
   return (

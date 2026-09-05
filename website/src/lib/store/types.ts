@@ -27,7 +27,7 @@ export interface OpenFileState {
   latex: string;
   title: string;
   author: string;
-  phase: number | null;
+  phase: string | null;
   createdAt: string;
   updatedAt: string;
   date: string;
@@ -50,6 +50,7 @@ export interface IWorkspaceStore {
   showHelp: boolean;
   helpPath: string | null;
   showCompiler: boolean;
+  showCalendar: boolean;
   showAbout: boolean;
   openFile: OpenFileState | null;
   isLoading: boolean;
@@ -97,12 +98,13 @@ export interface IWorkspaceStore {
   createTemporaryProject(): Promise<string>;
   selectProject(id: string): Promise<void>;
   openEntry(id: string): Promise<void>;
-  updateDraft(tiptapContent: string | null, info: { title?: string; author?: string; phase?: number | null; date?: string }): void;
-  updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null; date: string }): Promise<void>;
+  updateDraft(tiptapContent: string | null, info: { title?: string; author?: string; phase?: string | null; date?: string }): void;
+  updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string | null; date: string }): Promise<void>;
   createEntry(): Promise<string>;
-  duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string; author?: string; phase?: number | null; date?: string }): Promise<string>;
+  duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string; author?: string; phase?: string | null; date?: string }): Promise<string>;
   createTemplate(templateData?: Partial<EntryMetadata>): Promise<string>;
   createEntryFromTemplate(templateId: string): Promise<string>;
+  repairDuplicateResourceIds(): Promise<boolean>;
   refreshPending(): Promise<PendingChange[]>;
   setEntryValidity(id: string, isValid: boolean, validationErrors?: string[]): void;
   discardPendingChanges(): Promise<void>;
@@ -112,7 +114,8 @@ export interface IWorkspaceStore {
   discardPhaseChanges(): Promise<void>;
   deleteEntry(file: ExplorerFile): Promise<void>;
   updateLatexMetadata(): Promise<void>;
-  saveTeam(team: TeamMetadata, phases?: ProjectPhase[]): Promise<void>;
+  saveTeam(team: TeamMetadata, phases?: Record<string, ProjectPhase>): Promise<void>;
+  reorderCalendarEntry(movedId: string, targetDate: string, dayIds: string[], toIndex: number): Promise<void>;
   hydrateTeamAssets(): Promise<void>;
   commitAll(config: GitHubConfig, customMessage?: string): Promise<void>;
   getFileContent(path: string): Promise<string | null>;

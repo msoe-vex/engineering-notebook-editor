@@ -11,6 +11,12 @@ export class NavigationManager {
 
   async handleUrlChange(url: URL = new URL(window.location.href)) {
     const path = url.pathname;
+    if (path.startsWith('/workspace/calendar')) {
+      this.store.showCalendar = true;
+    } else {
+      this.store.showCalendar = false;
+    }
+
     if (path.startsWith('/workspace/team')) {
       this.store.showTeamEditor = true;
       const tab = path.split('/').pop() as TeamTab;

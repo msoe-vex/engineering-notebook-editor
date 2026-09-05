@@ -1,7 +1,7 @@
 import { INDEX_PATH } from "../constants";
 import { getPending } from "../db";
 import { getMimeTypeFromExtension, blobFromBase64, formatDateMonthYear } from "../utils";
-import { TeamMetadata, ProjectPhase, dehydrateTeamAssets, validateNotebookIntegrity } from "../metadata";
+import { TeamMetadata, ProjectPhase, dehydrateTeamAssets, normalizeNotebookMetadata, serializeNotebookMetadata } from "../metadata";
 import { IWorkspaceStore } from "./types";
 
 export class TeamManager {
@@ -11,7 +11,7 @@ export class TeamManager {
     this.store = store;
   }
 
-  async saveTeam(team: TeamMetadata, phases?: ProjectPhase[]) {
+  async saveTeam(team: TeamMetadata, phases?: Record<string, ProjectPhase>) {
     const oldMeta = this.store.metadata;
     const { cleanTeam, newAssets } = await dehydrateTeamAssets(team);
 
@@ -25,13 +25,13 @@ export class TeamManager {
     }
 
     // Memory update
-    const updatedMeta = validateNotebookIntegrity({
+    const updatedMeta = normalizeNotebookMetadata({
       ...this.store.metadata,
       team: cleanTeam,
-      phases: phases || this.store.metadata.phases || []
+      phases: phases || this.store.metadata.phases || {}
     });
 
-    const metaStr = JSON.stringify(updatedMeta, null, 2);
+    const metaStr = serializeNotebookMetadata(updatedMeta);
 
     // Update memory (we'll keep the hydrated version in memory for the UI)
     const assetCache = new Map<string, string>();
@@ -74,7 +74,7 @@ export class TeamManager {
 
     if (team.logo) tasks.push(fetchAsset(team.logo));
     if (team.members) {
-      for (const m of team.members) {
+      for (const m of Object.values(team.members)) {
         if (m.image) tasks.push(fetchAsset(m.image));
       }
     }
@@ -100,7 +100,7 @@ export class TeamManager {
       };
 
       // 3. Persist updated metadata
-      await this.store.persistFile(INDEX_PATH, JSON.stringify(this.store.metadata, null, 2), "Update lastCompiled metadata");
+      await this.store.persistFile(INDEX_PATH, serializeNotebookMetadata(this.store.metadata), "Update lastCompiled metadata");
 
       this.store.notifyStateChange();
     });

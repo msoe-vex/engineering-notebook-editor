@@ -1,6 +1,6 @@
-import { NotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, EntryMetadata, hydrateTeamAssets, TipTapNode, buildResourceTypeIndex, extractResources, mergeNotebookMetadata } from "./metadata";
+import { NotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, EntryMetadata, hydrateTeamAssets, TipTapNode, buildResourceTypeIndex, extractResources, mergeNotebookMetadata, moveEntryOnCalendar, serializeNotebookMetadata } from "./metadata";
 import { INDEX_PATH, ENTRIES_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from "./constants";
-import { generateEntryLatex, generateTeamLatex, generatePhasesLatex, generateAllEntriesLatex } from "./latex";
+import { generateEntryLatex, generateTeamLatex, generatePhasesLatex, generateAllEntriesLatex, latexPhaseRef } from "./latex";
 import { ExplorerFile, GitHubConfig, TeamTab } from "./types";
 import { Project, getAllPending, removeStaged, PendingChange, clearBaseMetadata } from "./db";
 import { events, EventNames } from "./events";
@@ -30,6 +30,7 @@ class WorkspaceStore implements IWorkspaceStore {
   public showHelp: boolean = false;
   public helpPath: string | null = null;
   public showCompiler: boolean = false;
+  public showCalendar: boolean = false;
   public showAbout: boolean = false;
   public openFile: OpenFileState | null = null;
   public isLoading = false;
@@ -79,7 +80,7 @@ class WorkspaceStore implements IWorkspaceStore {
       tiptapContent,
       title,
       author,
-      phase === null ? "" : phase,
+      latexPhaseRef(phase, this.metadata.phases),
       this.openFile.createdAt,
       id,
       resourceTypes,
@@ -176,11 +177,11 @@ class WorkspaceStore implements IWorkspaceStore {
     return this.entryManager.openEntry(id);
   }
 
-  public updateDraft(tiptapContent: string | null, info: { title?: string; author?: string; phase?: number | null; date?: string }) {
+  public updateDraft(tiptapContent: string | null, info: { title?: string; author?: string; phase?: string | null; date?: string }) {
     return this.entryManager.updateDraft(tiptapContent, info);
   }
 
-  public async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null; date: string }) {
+  public async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: string | null; date: string }) {
     return this.entryManager.updateEntry(id, latex, tiptapContent, info);
   }
 
@@ -188,16 +189,20 @@ class WorkspaceStore implements IWorkspaceStore {
     return this.entryManager.createEntry();
   }
 
-  public async duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string }) {
+  public async createEntryFromTemplate(templateId: string) {
+    return this.entryManager.createEntryFromTemplate(templateId);
+  }
+
+  public async repairDuplicateResourceIds() {
+    return this.entryManager.repairDuplicateResourceIds();
+  }
+
+  public async duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string; author?: string; phase?: string | null; date?: string }) {
     return this.entryManager.duplicateEntry(sourceId, options);
   }
 
   public async createTemplate(templateData?: Partial<EntryMetadata>) {
     return this.entryManager.createTemplate(templateData);
-  }
-
-  public async createEntryFromTemplate(templateId: string) {
-    return this.entryManager.createEntryFromTemplate(templateId);
   }
 
   public async refreshPending() {
@@ -253,8 +258,17 @@ class WorkspaceStore implements IWorkspaceStore {
   }
 
   // ─── Delegated Team & Compile Management ────────────────────────────────────
-  public async saveTeam(team: TeamMetadata, phases?: ProjectPhase[]) {
+  public async saveTeam(team: TeamMetadata, phases?: Record<string, ProjectPhase>) {
     return this.teamManager.saveTeam(team, phases);
+  }
+
+  public async reorderCalendarEntry(movedId: string, targetDate: string, dayIds: string[], toIndex: number) {
+    this.metadata = moveEntryOnCalendar(this.metadata, movedId, targetDate, dayIds, toIndex);
+    this.notifyStateChange();
+    await this.enqueue(async () => {
+      await this.persistFile(INDEX_PATH, serializeNotebookMetadata(this.metadata), "Reorder calendar entries");
+      await this.updateLatexMetadata();
+    });
   }
 
   public async hydrateTeamAssets() {
@@ -440,7 +454,7 @@ class WorkspaceStore implements IWorkspaceStore {
           }
           
           this.metadata = merged;
-          const mergedIndexStr = JSON.stringify(merged, null, 2);
+          const mergedIndexStr = serializeNotebookMetadata(merged);
           const remoteNormalizedStr = JSON.stringify(remoteMetadata, null, 2);
           const isMetadataModified = mergedIndexStr !== remoteNormalizedStr;
           
@@ -480,14 +494,14 @@ class WorkspaceStore implements IWorkspaceStore {
             teamName: "",
             teamNumber: "",
             organization: "",
-            members: [],
+            members: {},
             ...rawTeam,
             startDate: effectiveStartDate,
             endDate: effectiveEndDate,
           };
 
           const teamTexContent = generateTeamLatex(teamInfo);
-          const phasesTexContent = generatePhasesLatex(merged.phases || []);
+          const phasesTexContent = generatePhasesLatex(merged.phases || {});
           const entriesTexContent = generateAllEntriesLatex(merged);
 
           const fullTeamPath = this.getFullPath(TEAM_PATH);

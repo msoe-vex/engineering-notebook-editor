@@ -29,6 +29,7 @@ export function useWorkspace() {
     showHelp: store.showHelp,
     helpPath: store.helpPath,
     showCompiler: store.showCompiler,
+    showCalendar: store.showCalendar,
     showAbout: store.showAbout,
     isMainTexPresent: store.isMainTexPresent,
     workspaceVersion: store.workspaceVersion,
@@ -63,6 +64,7 @@ export function useWorkspace() {
         showHelp: s.showHelp,
         helpPath: s.helpPath,
         showCompiler: s.showCompiler,
+        showCalendar: s.showCalendar,
         showAbout: s.showAbout,
         isMainTexPresent: s.isMainTexPresent,
         workspaceVersion: s.workspaceVersion,
@@ -89,9 +91,9 @@ export function useWorkspace() {
   const selectProject = useCallback((id: string) => store.selectProject(id), []);
   const createEntry = useCallback(() => store.createEntry(), []);
   const deleteEntry = useCallback((file: ExplorerFile) => store.deleteEntry(file), []);
-  const updateDraft = useCallback((tiptapContent: string | null, info: { title?: string; author?: string; phase?: number | null; date?: string }) => store.updateDraft(tiptapContent, info), []);
-  const updateEntry = useCallback((id: string, latex: string, content: string, info: { title: string; author: string; phase: number | null; date: string }) => store.updateEntry(id, latex, content, info), []);
-  const saveTeam = useCallback((team: TeamMetadata, phases: ProjectPhase[]) => store.saveTeam(team, phases), []);
+  const updateDraft = useCallback((tiptapContent: string | null, info: { title?: string; author?: string; phase?: string | null; date?: string }) => store.updateDraft(tiptapContent, info), []);
+  const updateEntry = useCallback((id: string, latex: string, content: string, info: { title: string; author: string; phase: string | null; date: string }) => store.updateEntry(id, latex, content, info), []);
+  const saveTeam = useCallback((team: TeamMetadata, phases: Record<string, ProjectPhase>) => store.saveTeam(team, phases), []);
   const createGithubProject = useCallback((config: { owner: string; repo: string; branch: string; folderPath: string; name: string }) => store.createGithubProject(config), []);
   const createLocalProject = useCallback((handle: FileSystemDirectoryHandle, name: string) => store.createLocalProject(handle, name), []);
   const createTemporaryProject = useCallback(() => store.createTemporaryProject(), []);
@@ -108,7 +110,7 @@ export function useWorkspace() {
   const importNotebook = useCallback((data: Record<string, unknown>, options?: ImportOptions) => store.importNotebook(data, options), []);
   const importNotebookArchive = useCallback((file: File, options?: ImportOptions) => store.importNotebookArchive(file, options), []);
   const setSelectedPaths = useCallback((pathsOrUpdater: Set<string> | ((prev: Set<string>) => Set<string>)) => store.setSelectedPaths(pathsOrUpdater), []);
-  const duplicateEntry = useCallback((sourceId: string, options?: { asTemplate?: boolean; title?: string; author?: string; phase?: number | null; date?: string }) => store.duplicateEntry(sourceId, options), []);
+  const duplicateEntry = useCallback((sourceId: string, options?: { asTemplate?: boolean; title?: string; author?: string; phase?: string | null; date?: string }) => store.duplicateEntry(sourceId, options), []);
   const createTemplate = useCallback((templateData?: Partial<import("@/lib/metadata").EntryMetadata>) => store.createTemplate(templateData), []);
   const createEntryFromTemplate = useCallback((templateId: string) => store.createEntryFromTemplate(templateId), []);
   const discardPathChange = useCallback((path: string) => store.discardPathChange(path), []);
@@ -117,6 +119,7 @@ export function useWorkspace() {
   const discardPhaseChanges = useCallback(() => store.discardPhaseChanges(), []);
   const getCompiledPdfUrl = useCallback(() => store.getCompiledPdfUrl(), []);
   const saveCompiledPdf = useCallback((pdf: Uint8Array) => store.saveCompiledPdf(pdf), []);
+  const reorderCalendarEntry = useCallback((movedId: string, targetDate: string, dayIds: string[], toIndex: number) => store.reorderCalendarEntry(movedId, targetDate, dayIds, toIndex), []);
 
   return {
     ...state,
@@ -156,6 +159,7 @@ export function useWorkspace() {
     openEntry: useCallback((id: string) => store.openEntry(id), []),
     getCompiledPdfUrl,
     saveCompiledPdf,
+    reorderCalendarEntry,
     isSaving: state.isSaving,
     isPendingSave: state.isPendingSave,
     isDiscarding: state.isDiscarding,

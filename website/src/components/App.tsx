@@ -16,6 +16,7 @@ import Home from "./Home";
 import Editor from "./editor/Editor";
 import WelcomePage from "./WelcomePage";
 import Sidebar from "./Sidebar";
+import CalendarView from "./CalendarView";
 import TeamEditor from "./TeamEditor";
 import NotebookCompiler from "./NotebookCompiler";
 import HelpPage from "./HelpPage";
@@ -47,7 +48,7 @@ export interface FileMetadata {
   content: string;
   title?: string;
   author?: string;
-  phase?: number | null;
+  phase?: string | null;
   createdAt?: string;
 }
 
@@ -95,6 +96,7 @@ export default function App() {
     showTeamEditor,
     teamTab,
     showCompiler,
+    showCalendar,
     showHelp,
     showAbout,
     helpPath,
@@ -638,8 +640,26 @@ export default function App() {
     if (isMobile) setUserSidebarPreference(false);
   }, [isMobile, navigateTo]);
 
+  const closeSidebar = () => setUserSidebarPreference(false);
+
   const handleOpenTeamEditor = (tab: TeamTab = "identity") => {
+    closeSidebar();
     navigateTo({}, `/workspace/team/${tab}`);
+  };
+
+  const handleOpenCalendar = () => {
+    closeSidebar();
+    navigateTo({}, "/workspace/calendar");
+  };
+
+  const handleOpenCompile = () => {
+    closeSidebar();
+    navigateTo({}, "/workspace/compile");
+  };
+
+  const handleOpenHelp = (path = "/workspace/help/getting-started") => {
+    closeSidebar();
+    navigateTo({}, path);
   };
 
   const handleDisconnect = async () => {
@@ -981,6 +1001,9 @@ export default function App() {
           onSelectEntry={handleSelectEntry}
           onOpenEntry={handleOpenEntry}
           onOpenTeam={handleOpenTeamEditor}
+          onOpenCalendar={handleOpenCalendar}
+          onOpenCompile={handleOpenCompile}
+          onOpenHelp={() => handleOpenHelp()}
           showConfirm={showConfirm}
           onNewEntry={handleNewEntry}
           onSelectAll={(paths) => setSelectedPaths(new Set(paths))}
@@ -1002,9 +1025,9 @@ export default function App() {
         onSetProjectRenameValue={setProjectRenameValue}
         onStartRename={() => { if (currentProject) { setProjectRenameValue(currentProject.name); setIsRenamingProject(true); } }}
         onEndRename={(save) => { if (save && currentProjectId) handleRenameProject(currentProjectId, projectRenameValue); setIsRenamingProject(false); }}
-        onOpenHelp={() => navigateTo({}, '/workspace/help')}
+        onOpenHelp={() => handleOpenHelp("/workspace/help")}
         onOpenTeam={handleOpenTeamEditor}
-        onOpenCompiler={() => navigateTo({}, '/workspace/compile')}
+        onOpenCompiler={handleOpenCompile}
         onImport={handleImportNotebook}
         onExport={handleExportNotebook}
         onDisconnect={handleDisconnect}
@@ -1070,6 +1093,10 @@ export default function App() {
               />
             )}
           </div>
+        ) : (showCalendar) ? (
+          <div className="flex-1 h-full overflow-hidden">
+            <CalendarView />
+          </div>
         ) : (showCompiler) ? (
           <div className="flex-1 flex flex-col min-h-0 relative h-full">
             <NotebookCompiler
@@ -1116,8 +1143,8 @@ export default function App() {
               onDisconnect={handleDisconnect}
               onOpenSidebar={() => { isToggleFromButton.current = true; setUserSidebarPreference(true); }}
               onOpenTeam={handleOpenTeamEditor}
-              onOpenCompiler={() => navigateTo({}, '/workspace/compile')}
-              onOpenHelp={() => navigateTo({}, '/workspace/help')}
+              onOpenCompiler={handleOpenCompile}
+              onOpenHelp={() => handleOpenHelp("/workspace/help")}
             />
           </div>
         )}

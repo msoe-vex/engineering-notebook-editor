@@ -8,7 +8,7 @@ import {
   deleteLocalFileAtPath,
   queueLocalOp
 } from "@/lib/fs";
-import { NotebookMetadata } from "@/lib/metadata";
+import { NotebookMetadata, serializeNotebookMetadata } from "@/lib/metadata";
 import { INDEX_PATH } from "@/lib/constants";
 
 export type WorkspaceMode = "local" | "github" | "temporary" | "none";
@@ -29,7 +29,7 @@ export function usePersistence({ mode, dbName, dirHandle, indexPath = INDEX_PATH
   }, [mode, dbName]);
 
   const saveMetadata = useCallback(async (metadata: NotebookMetadata, label = "Metadata update") => {
-    const metaStr = JSON.stringify(metadata, null, 2);
+    const metaStr = serializeNotebookMetadata(metadata);
     if (mode === "local" && dirHandle) {
       await queueLocalOp(() => writeLocalFile(dirHandle, indexPath, metaStr));
     } else if (mode === "github" || mode === "temporary") {

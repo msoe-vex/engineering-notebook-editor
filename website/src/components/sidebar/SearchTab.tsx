@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { ExplorerFile } from "@/lib/types";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { DEFAULT_PHASES } from "@/lib/phases";
+import { getPhases } from "@/lib/phases";
 
 interface SearchTabProps {
   entries: ExplorerFile[];
@@ -51,7 +51,7 @@ export default function SearchTab({
 }: SearchTabProps) {
   const { metadata } = useWorkspace();
   const [query, setQuery] = useState("");
-  const [selectedPhase, setSelectedPhase] = useState<number | null>(null);
+  const [selectedPhase, setSelectedPhase] = useState<string | null>(null);
   const [isPhaseDropdownOpen, setIsPhaseDropdownOpen] = useState(false);
   const [isSearchFieldsCollapsed, setIsSearchFieldsCollapsed] = useState(true);
   const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(true);
@@ -65,8 +65,8 @@ export default function SearchTab({
     dates: true
   });
 
-  const phases = metadata.phases || DEFAULT_PHASES;
-  const phaseMap = useMemo(() => new Map(phases.map(p => [p.index, p])), [phases]);
+  const phases = getPhases(metadata.phases);
+  const phaseMap = useMemo(() => new Map(phases.map(p => [p.id, p])), [phases]);
 
   const allFieldsSelected = filters.titles && filters.authors && filters.figures && filters.dates;
 
@@ -448,11 +448,11 @@ export default function SearchTab({
                           <button
                             key={phase.id}
                             onClick={() => {
-                              setSelectedPhase(phase.index);
+                              setSelectedPhase(phase.id);
                               setIsPhaseDropdownOpen(false);
                             }}
                             className={`w-full flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold transition-colors cursor-pointer min-w-0 overflow-hidden text-left ${
-                              selectedPhase === phase.index
+                              selectedPhase === phase.id
                                 ? "text-nb-primary bg-nb-primary/10"
                                 : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface"
                             }`}

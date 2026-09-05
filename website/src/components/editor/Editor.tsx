@@ -33,7 +33,7 @@ const LatexPreview = dynamic(() => import("./LatexPreview"), {
     </div>
   )
 });
-import { generateEntryLatex } from "@/lib/latex";
+import { generateEntryLatex, latexPhaseRef } from "@/lib/latex";
 import { getPhases, getPhaseConfig } from "@/lib/phases";
 import { store } from "@/lib/store";
 import AutocompleteInput from "./ui/AutocompleteInput";
@@ -752,8 +752,8 @@ const EditorContent = React.memo(function EditorContent({
     // Build the set of existing IDs (for references)
     const existingIds = new Set<string>();
     if (metadata?.entries) {
-      for (const entry of Object.values(metadata.entries)) {
-        existingIds.add(entry.id);
+      for (const [id, entry] of Object.entries(metadata.entries)) {
+        existingIds.add(id);
         if (entry.resources) {
           for (const resId of Object.keys(entry.resources)) {
             existingIds.add(resId);
@@ -784,7 +784,7 @@ const EditorContent = React.memo(function EditorContent({
       references: liveReferences.length > 0 ? liveReferences : (entryIdMeta?.references || [])
     };
 
-    const phases = metadata.phases || [];
+    const phases = metadata.phases || {};
     const errors = validateEntry(entryToValidate, phases, existingIds);
 
     return { valid: errors.length === 0, errors };
@@ -878,12 +878,11 @@ const EditorContent = React.memo(function EditorContent({
     Object.entries(metadata?.entries || {}).forEach(([id, e]) => {
       if (id !== entryId && e.author?.trim()) authors.add(e.author.trim());
     });
-    // Add team members
-    metadata?.team?.members?.forEach(m => {
+    Object.values(metadata?.team?.members || {}).forEach((m) => {
       if (m.name?.trim()) authors.add(m.name.trim());
     });
     return Array.from(authors).sort();
-  }, [metadata.entries, metadata.team?.members, entryId]);
+  }, [metadata.entries, metadata.team, entryId]);
 
   const otherTitles = React.useMemo(() => {
     const titles = new Set<string>();
@@ -899,7 +898,7 @@ const EditorContent = React.memo(function EditorContent({
 
   // use module-level getSafeInsertPos
 
-  const generateLatex = useCallback((cnt: TipTapNode | string, t: string, a: string, p: number | null, d: string) => {
+  const generateLatex = useCallback((cnt: TipTapNode | string, t: string, a: string, p: string | null, d: string) => {
     const id = filename.split('/').pop()?.replace('.json', '') || "";
 
     // Extract resources from the content to pass to generateEntryLatex
@@ -919,8 +918,8 @@ const EditorContent = React.memo(function EditorContent({
     const resources = typeof contentNode === 'object' && contentNode !== null ? extractResources(contentNode as TipTapNode) : {};
     const resourceTypes = buildResourceTypeIndex(metadata.entries, resources, id);
 
-    return generateEntryLatex(cnt, t, a, p === null ? "" : p, initialCreatedAt, id, resourceTypes, d);
-  }, [filename, initialCreatedAt, metadata.entries]);
+    return generateEntryLatex(cnt, t, a, latexPhaseRef(p, metadata.phases), initialCreatedAt, id, resourceTypes, d);
+  }, [filename, initialCreatedAt, metadata.entries, metadata.phases]);
 
   const previewLatex = React.useMemo(() => {
     return generateLatex(openFile.tiptapContent, openFile.title, openFile.author, openFile.phase, openFile.date);
@@ -1230,12 +1229,12 @@ const EditorContent = React.memo(function EditorContent({
                       />
 
                       {activePhaseCfg && (
-                        <activePhaseCfg.icon size={15} className="shrink-0 drop-shadow-sm" style={{ color: availablePhases.find(p => p.index === openFile.phase)?.color }} />
+                        <activePhaseCfg.icon size={15} className="shrink-0 drop-shadow-sm" style={{ color: availablePhases.find(p => p.id === openFile.phase)?.color }} />
                       )}
 
                       {/* Metadata dropdown */}
                       <div className={`flex-1 w-full min-w-0 text-xs font-bold tracking-widest truncate ${openFile.phase !== null && phaseConfig[openFile.phase] ? phaseConfig[openFile.phase].text : "text-nb-on-surface-variant/60"}`}>
-                        {availablePhases.find(p => p.index === openFile.phase)?.name || "No Phase Selected"}
+                        {availablePhases.find(p => p.id === openFile.phase)?.name || "No Phase Selected"}
                       </div>
                       <ChevronDown size={12} className={`text-nb-on-surface-variant/40 shrink-0 transition-transform duration-200 ${activeMenu === "Phase" ? "rotate-180" : ""}`} />
 
@@ -1263,18 +1262,19 @@ const EditorContent = React.memo(function EditorContent({
                             </button>
                           )}
                           {availablePhases.map(p => {
-                            const cfg = phaseConfig[p.index];
+                            const cfg = phaseConfig[p.id];
+                            if (!cfg) return null;
                             const Icon = cfg.icon;
                             return (
                               <button
                                 key={p.id}
                                 type="button"
-                                onClick={() => { updateDraft(null, { phase: p.index }); setActiveMenu(null); }}
-                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[10px] font-bold tracking-widest transition-all text-left cursor-pointer active:scale-[0.98] ${openFile.phase === p.index ? `${cfg.bg} ${cfg.text} hover:brightness-90` : "text-nb-on-surface-variant hover:bg-nb-surface-mid hover:text-nb-on-surface hover:translate-x-1 hover:ring-1 hover:ring-nb-primary/20"}`}
+                                onClick={() => { updateDraft(null, { phase: p.id }); setActiveMenu(null); }}
+                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[10px] font-bold tracking-widest transition-all text-left cursor-pointer active:scale-[0.98] ${openFile.phase === p.id ? `${cfg.bg} ${cfg.text} hover:brightness-90` : "text-nb-on-surface-variant hover:bg-nb-surface-mid hover:text-nb-on-surface hover:translate-x-1 hover:ring-1 hover:ring-nb-primary/20"}`}
                               >
                                 <Icon size={14} style={{ color: p.color }} />
                                 <span className="flex-1">{p.name.toUpperCase()}</span>
-                                {openFile.phase === p.index && <LucideIcons.Check size={12} style={{ color: p.color }} />}
+                                {openFile.phase === p.id && <LucideIcons.Check size={12} style={{ color: p.color }} />}
                               </button>
                             );
                           })}
