@@ -31,6 +31,8 @@ class WorkspaceStore implements IWorkspaceStore {
   public helpPath: string | null = null;
   public showCompiler: boolean = false;
   public showCalendar: boolean = false;
+  public calendarMode: "month" | "week" = "month";
+  public calendarCursor: string = "";
   public showAbout: boolean = false;
   public openFile: OpenFileState | null = null;
   public isLoading = false;
@@ -131,8 +133,8 @@ class WorkspaceStore implements IWorkspaceStore {
     return this.navigationManager.setSelectedPaths(pathsOrUpdater);
   }
 
-  public navigateTo(params: Record<string, string | null>, pathname?: string) {
-    return this.navigationManager.navigateTo(params, pathname);
+  public navigateTo(params: Record<string, string | null>, pathname?: string, options?: { replace?: boolean }) {
+    return this.navigationManager.navigateTo(params, pathname, options);
   }
 
   // ─── Delegated Project Management ───────────────────────────────────────────

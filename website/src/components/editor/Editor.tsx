@@ -1337,6 +1337,13 @@ const EditorContent = React.memo(function EditorContent({
           <PanelResizeHandle
             id="editor-preview-resizer"
             onDragging={setIsResizing}
+            onDoubleClick={() => {
+              editorPanelRef.current?.expand();
+              previewPanelRef.current?.expand();
+              editorPanelRef.current?.resize(50);
+              previewPanelRef.current?.resize(50);
+            }}
+            title="Double-click to reset size"
             className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${viewMode !== 'split' ? 'hidden' : ''}`}
           />
           <Panel

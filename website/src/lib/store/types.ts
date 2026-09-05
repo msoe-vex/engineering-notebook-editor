@@ -51,6 +51,8 @@ export interface IWorkspaceStore {
   helpPath: string | null;
   showCompiler: boolean;
   showCalendar: boolean;
+  calendarMode: "month" | "week";
+  calendarCursor: string;
   showAbout: boolean;
   openFile: OpenFileState | null;
   isLoading: boolean;
@@ -88,7 +90,7 @@ export interface IWorkspaceStore {
   initialize(): Promise<void>;
   handleUrlChange(url?: URL): Promise<void>;
   setSelectedPaths(pathsOrUpdater: Set<string> | ((prev: Set<string>) => Set<string>)): void;
-  navigateTo(params: Record<string, string | null>, pathname?: string): void;
+  navigateTo(params: Record<string, string | null>, pathname?: string, options?: { replace?: boolean }): void;
   refreshProjects(): Promise<void>;
   renameProject(id: string, name: string): Promise<void>;
   createGithubProject(config: { owner: string; repo: string; branch: string; folderPath: string; name: string }): Promise<string>;

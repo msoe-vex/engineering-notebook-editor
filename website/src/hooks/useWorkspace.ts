@@ -30,6 +30,8 @@ export function useWorkspace() {
     helpPath: store.helpPath,
     showCompiler: store.showCompiler,
     showCalendar: store.showCalendar,
+    calendarMode: store.calendarMode,
+    calendarCursor: store.calendarCursor,
     showAbout: store.showAbout,
     isMainTexPresent: store.isMainTexPresent,
     workspaceVersion: store.workspaceVersion,
@@ -65,6 +67,8 @@ export function useWorkspace() {
         helpPath: s.helpPath,
         showCompiler: s.showCompiler,
         showCalendar: s.showCalendar,
+        calendarMode: s.calendarMode,
+        calendarCursor: s.calendarCursor,
         showAbout: s.showAbout,
         isMainTexPresent: s.isMainTexPresent,
         workspaceVersion: s.workspaceVersion,
@@ -101,7 +105,7 @@ export function useWorkspace() {
   const refreshPending = useCallback(() => store.refreshPending(), []);
   const setEntryValidity = useCallback((id: string, isValid: boolean, validationErrors?: string[]) => store.setEntryValidity(id, isValid, validationErrors), []);
   const discardPendingChanges = useCallback(() => store.discardPendingChanges(), []);
-  const navigateTo = useCallback((params: Record<string, string | null>, path?: string) => store.navigateTo(params, path), []);
+  const navigateTo = useCallback((params: Record<string, string | null>, path?: string, options?: { replace?: boolean }) => store.navigateTo(params, path, options), []);
   const handleUrlChange = useCallback(() => store.handleUrlChange(), []);
   const getFileContent = useCallback((path: string) => store.getFileContent(path), []);
   const getBaseFileContent = useCallback((path: string) => store.getBaseFileContent(path), []);

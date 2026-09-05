@@ -101,6 +101,7 @@ export default function Sidebar({
         timestamp: meta?.createdAt,
         updatedAt: meta?.updatedAt,
         date: meta?.date,
+        order: meta?.order ?? 0,
         isTemplate: meta?.isTemplate || false,
         isValid: meta?.isValid !== false,
         validationErrors: meta?.validationErrors || []
@@ -112,24 +113,20 @@ export default function Sidebar({
     const list = [...augmentedEntries];
 
     list.sort((a, b) => {
-      let valA, valB;
       if (sortBy === "title") {
-        valA = a.title || a.name;
-        valB = b.title || b.name;
-      } else {
-        valA = a.date || a.timestamp || "";
-        valB = b.date || b.timestamp || "";
+        const valA = (a.title || a.name).toLowerCase();
+        const valB = (b.title || b.name).toLowerCase();
+        if (valA !== valB) {
+          return sortDirection === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        }
       }
-
-      if (valA < valB) return sortDirection === "asc" ? -1 : 1;
-      if (valA > valB) return sortDirection === "asc" ? 1 : -1;
-      
-      const tsA = a.updatedAt || a.timestamp || "";
-      const tsB = b.updatedAt || b.timestamp || "";
-      if (tsA < tsB) return sortDirection === "asc" ? -1 : 1;
-      if (tsA > tsB) return sortDirection === "asc" ? 1 : -1;
-
-      return 0;
+      const orderA = a.order ?? 0;
+      const orderB = b.order ?? 0;
+      if (orderA !== orderB) {
+        if (sortBy === "title") return orderA - orderB;
+        return sortDirection === "asc" ? orderA - orderB : orderB - orderA;
+      }
+      return (a.path || a.name).localeCompare(b.path || b.name);
     });
 
     return list;
@@ -154,7 +151,9 @@ export default function Sidebar({
         if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable || target.closest('.ProseMirror') || target.closest('[tabindex="0"]')) return;
 
         e.preventDefault();
-        onSelectAll(filteredEntries.map(f => f.path));
+        const selected = filteredEntries.filter((f) => selectedPaths.has(f.path));
+        const templatesOnly = selected.length > 0 && selected.every((f) => f.isTemplate);
+        onSelectAll(filteredEntries.filter((f) => !!f.isTemplate === templatesOnly).map((f) => f.path));
       }
     };
 
@@ -274,7 +273,7 @@ export default function Sidebar({
             selectedPaths={selectedPaths}
             pendingPaths={pendingPaths}
             deletedPaths={deletedPaths}
-            onSelectEntry={(file, multi, range) => onSelectEntry(file, multi, range, filteredEntries.map(e => e.path))}
+            onSelectEntry={onSelectEntry}
             onOpenEntry={handleOpenEntry}
             onCloseEntry={handleCloseEntry}
             onDownloadLatex={handleDownloadLatex}
@@ -288,7 +287,10 @@ export default function Sidebar({
             onDeleteMulti={handleConfirmDelete}
             onNewEntry={onNewEntry || createEntry}
             sortBy={sortBy}
-            onSortChange={setSortBy}
+            onSortChange={(val) => {
+              setSortBy(val);
+              setSortDirection(val === "title" ? "asc" : "desc");
+            }}
             sortDirection={sortDirection}
             onSortDirectionToggle={() => setSortDirection(prev => prev === "asc" ? "desc" : "asc")}
             notebookMetadata={metadata}

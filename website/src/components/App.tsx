@@ -609,7 +609,10 @@ export default function App() {
       const end = visiblePaths.indexOf(file.path);
       if (start !== -1 && end !== -1) {
         const [min, max] = [Math.min(start, end), Math.max(start, end)];
-        const newSelection = new Set(selectedPaths);
+        const newSelection = new Set<string>();
+        for (const path of selectedPaths) {
+          if (visiblePaths.includes(path)) newSelection.add(path);
+        }
         for (let i = min; i <= max; i++) {
           newSelection.add(visiblePaths[i]);
         }
@@ -640,25 +643,33 @@ export default function App() {
     if (isMobile) setUserSidebarPreference(false);
   }, [isMobile, navigateTo]);
 
-  const closeSidebar = () => setUserSidebarPreference(false);
+  const closeSidebarOnMobile = () => {
+    if (isMobile) setUserSidebarPreference(false);
+  };
 
   const handleOpenTeamEditor = (tab: TeamTab = "identity") => {
-    closeSidebar();
+    closeSidebarOnMobile();
     navigateTo({}, `/workspace/team/${tab}`);
   };
 
   const handleOpenCalendar = () => {
-    closeSidebar();
-    navigateTo({}, "/workspace/calendar");
+    closeSidebarOnMobile();
+    const now = new Date();
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    navigateTo({ month, week: null }, "/workspace/calendar");
+  };
+
+  const handleCloseCalendar = () => {
+    navigateTo({ month: null, week: null }, "/workspace/editor");
   };
 
   const handleOpenCompile = () => {
-    closeSidebar();
+    closeSidebarOnMobile();
     navigateTo({}, "/workspace/compile");
   };
 
   const handleOpenHelp = (path = "/workspace/help/getting-started") => {
-    closeSidebar();
+    closeSidebarOnMobile();
     navigateTo({}, path);
   };
 
@@ -1027,6 +1038,7 @@ export default function App() {
         onEndRename={(save) => { if (save && currentProjectId) handleRenameProject(currentProjectId, projectRenameValue); setIsRenamingProject(false); }}
         onOpenHelp={() => handleOpenHelp("/workspace/help")}
         onOpenTeam={handleOpenTeamEditor}
+        onOpenCalendar={handleOpenCalendar}
         onOpenCompiler={handleOpenCompile}
         onImport={handleImportNotebook}
         onExport={handleExportNotebook}
@@ -1095,7 +1107,7 @@ export default function App() {
           </div>
         ) : (showCalendar) ? (
           <div className="flex-1 h-full overflow-hidden">
-            <CalendarView />
+            <CalendarView onClose={handleCloseCalendar} />
           </div>
         ) : (showCompiler) ? (
           <div className="flex-1 flex flex-col min-h-0 relative h-full">
@@ -1204,6 +1216,12 @@ export default function App() {
               <PanelResizeHandle
                 id="sidebar-resizer"
                 onDragging={setIsSidebarDragging}
+                onDoubleClick={() => {
+                  if (!sidebarPanelRef.current) return;
+                  const percent = Math.max(18, Math.min(45, (360 / window.innerWidth) * 100));
+                  sidebarPanelRef.current.resize(percent);
+                }}
+                title="Double-click to reset size"
                 className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${!isSidebarOpen ? 'hidden' : ''}`}
               />
               <Panel id="main-panel" order={2} defaultSize={isSidebarOpen ? 100 - initialPercentSize : 100} minSize={30} className="flex flex-col">

@@ -22,6 +22,7 @@ export interface ExplorerFile {
   isValid?: boolean;
   isTemplate?: boolean;
   date?: string;
+  order?: number;
   validationErrors?: string[];
 }
 

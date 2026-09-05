@@ -41,7 +41,7 @@ export default function GitHubConnectionDialog({
   const [isLoadingRepos, setIsLoadingRepos] = useState(false);
   const [selectedRepo, setSelectedRepo] = useState<{ owner: string, repo: string, default_branch: string } | null>(null);
   const [folderPath, setFolderPath] = useState("");
-  const [showExplorer, setShowExplorer] = useState(false);
+  const [showExplorer, setShowExplorer] = useState(true);
   const [browsingPath, setBrowsingPath] = useState("");
   const [availableFolders, setAvailableFolders] = useState<GitHubFolder[]>([]);
   const [isLoadingFolders, setIsLoadingFolders] = useState(false);
@@ -226,6 +226,7 @@ export default function GitHubConnectionDialog({
                                     setSelectedRepo({ owner: repo.owner.login, repo: repo.name, default_branch: repo.default_branch });
                                     setBrowsingPath("");
                                     setFolderPath("");
+                                    setShowExplorer(true);
                                   }}
                                   className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xl transition-all text-left ${selectedRepo?.repo === repo.name
                                       ? "bg-nb-primary text-white shadow-lg shadow-nb-primary/20 cursor-pointer"

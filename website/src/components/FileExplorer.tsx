@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
+import React, { useRef, useState } from "react";
+import { ImperativePanelHandle, Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import {
   FileText, Plus, X, Calendar, SortAsc, SortDesc,
   ChevronDown, ChevronRight, ExternalLink, Trash2, FileJson, FileCode,
@@ -19,7 +19,7 @@ interface FileExplorerProps {
   selectedPaths: Set<string>;
   pendingPaths: Set<string>;
   deletedPaths: Set<string>;
-  onSelectEntry: (file: ExplorerFile, multi: boolean, range: boolean) => void;
+  onSelectEntry: (file: ExplorerFile, multi: boolean, range: boolean, visiblePaths: string[]) => void;
   onOpenEntry: (file: ExplorerFile) => void;
   onCloseEntry: (path: string) => void;
   onDownloadLatex: (file: ExplorerFile) => void;
@@ -75,7 +75,10 @@ function FileRow({
   return (
     <div
       ref={rowRef}
-      onClick={isDeleted ? undefined : onSelect}
+      onClick={isDeleted ? undefined : (e) => {
+        onSelect(e);
+        if (!(e.ctrlKey || e.metaKey || e.shiftKey)) onDoubleClick();
+      }}
       onDoubleClick={isDeleted ? undefined : onDoubleClick}
       onContextMenu={isDeleted ? undefined : onContextMenu}
       title={tooltipLines.join(' · ')}
@@ -276,6 +279,8 @@ export default function FileExplorer({
 
   const [isTemplatesCollapsed, setIsTemplatesCollapsed] = useState(false);
   const [isEntriesCollapsed, setIsEntriesCollapsed] = useState(false);
+  const entriesPanelRef = useRef<ImperativePanelHandle>(null);
+  const templatesPanelRef = useRef<ImperativePanelHandle>(null);
   const [isNewDropdownOpen, setIsNewDropdownOpen] = useState(false);
 
   const regularEntries = entries.filter(e => !e.isTemplate);
@@ -284,7 +289,7 @@ export default function FileExplorer({
   const handleContextMenu = (e: React.MouseEvent, file: ExplorerFile) => {
     e.preventDefault();
     if (!selectedPaths.has(file.path)) {
-      onSelectEntry(file, false, false);
+      onSelectEntry(file, false, false, [file.path]);
     }
     setContextMenu({ x: e.clientX, y: e.clientY, file });
   };
@@ -318,7 +323,7 @@ export default function FileExplorer({
           >
             <div className="flex items-center gap-1.5 truncate">
               {sortBy === "date" ? <Calendar size={13} className="text-nb-primary shrink-0" /> : <FileText size={13} className="text-nb-primary shrink-0" />}
-              <span className="truncate">Sort: {sortBy === "date" ? "Date" : "Title"}</span>
+              <span className="truncate">Sort: {sortBy === "date" ? "Calendar" : "Title"}</span>
             </div>
             <ChevronDown size={12} className={`text-nb-on-surface-variant transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
           </button>
@@ -333,7 +338,7 @@ export default function FileExplorer({
                   className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold transition-colors cursor-pointer ${sortBy === 'date' ? 'text-nb-primary bg-nb-primary/5' : 'text-nb-on-surface hover:bg-nb-surface-low'}`}
                 >
                   <Calendar size={14} />
-                  Date
+                  Calendar
                 </button>
                 <button
                   onClick={() => { onSortChange("title"); setIsSortOpen(false); }}
@@ -467,7 +472,7 @@ export default function FileExplorer({
                     icon={icon}
                     isValid={f.isValid}
                     validationErrors={f.validationErrors}
-                    onSelect={(e) => onSelectEntry(f, e.ctrlKey || e.metaKey, e.shiftKey)}
+                    onSelect={(e) => onSelectEntry(f, e.ctrlKey || e.metaKey, e.shiftKey, regularEntries.map((x) => x.path))}
                     onDoubleClick={() => onOpenEntry(f)}
                     onContextMenu={(e) => handleContextMenu(e, f)}
                   />
@@ -529,7 +534,7 @@ export default function FileExplorer({
                     icon={icon}
                     isValid={f.isValid}
                     validationErrors={f.validationErrors}
-                    onSelect={(e) => onSelectEntry(f, e.ctrlKey || e.metaKey, e.shiftKey)}
+                    onSelect={(e) => onSelectEntry(f, e.ctrlKey || e.metaKey, e.shiftKey, templateEntries.map((x) => x.path))}
                     onDoubleClick={() => onOpenEntry(f)}
                     onContextMenu={(e) => handleContextMenu(e, f)}
                   />
@@ -542,13 +547,20 @@ export default function FileExplorer({
         if (!isEntriesCollapsed && !isTemplatesCollapsed) {
           return (
             <PanelGroup direction="vertical" className="flex-1 min-h-0" id="file-explorer-vertical-group">
-              <Panel defaultSize={65} minSize={20} className="flex flex-col min-h-0">
+              <Panel ref={entriesPanelRef} defaultSize={65} minSize={20} className="flex flex-col min-h-0">
                 {entriesPane}
               </Panel>
-              <PanelResizeHandle className="h-1.5 bg-nb-surface hover:bg-nb-primary/20 border-y border-nb-outline-variant/30 cursor-row-resize transition-colors shrink-0 flex items-center justify-center group/handle">
+              <PanelResizeHandle
+                className="h-1.5 bg-nb-surface hover:bg-nb-primary/20 border-y border-nb-outline-variant/30 cursor-row-resize transition-colors shrink-0 flex items-center justify-center group/handle"
+                title="Double-click to reset size"
+                onDoubleClick={() => {
+                  entriesPanelRef.current?.resize(65);
+                  templatesPanelRef.current?.resize(35);
+                }}
+              >
                 <div className="w-8 h-0.5 rounded-full bg-nb-outline-variant/50 group-hover/handle:bg-nb-primary transition-colors" />
               </PanelResizeHandle>
-              <Panel defaultSize={35} minSize={20} className="flex flex-col min-h-0">
+              <Panel ref={templatesPanelRef} defaultSize={35} minSize={20} className="flex flex-col min-h-0">
                 {templatesPane}
               </Panel>
             </PanelGroup>
