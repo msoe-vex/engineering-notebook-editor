@@ -94,6 +94,12 @@ describe("calendar reorder", () => {
     expect(next.entries.a.date).toBe("2026-09-02");
     expect(sortedEntries(next.entries).filter((e) => e.date === "2026-09-02").map((e) => e.id)).toEqual(["a", "c"]);
   });
+
+  it("moves an entry to an earlier empty date and updates global order", () => {
+    const next = moveEntryOnCalendar(base, "c", "2026-08-01", [], 0);
+    expect(next.entries.c.date).toBe("2026-08-01");
+    expect(sortedEntries(next.entries).map((e) => e.id)).toEqual(["c", "a", "b"]);
+  });
 });
 
 describe("mergeNotebookMetadata", () => {
@@ -156,6 +162,21 @@ describe("packTemplatesToFront", () => {
     });
     expect(sortedEntries(normalized.entries).map((e) => e.id)).toEqual(["t1", "t2", "e1", "e2"]);
     expect(sortedEntries(normalized.entries).map((e) => e.order)).toEqual([0, 1, 2, 3]);
+  });
+
+  it("repacks dated entries into chronological order and keeps same-day order", () => {
+    const normalized = normalizeNotebookMetadata({
+      version: 4,
+      entries: {
+        t: { title: "T", author: "", phase: null, date: "", createdAt: "", updatedAt: "", filename: "t", order: 0, isTemplate: true },
+        later: { title: "Later", author: "x", phase: null, date: "2026-09-10", createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "", filename: "l", order: 1, isTemplate: false },
+        earlier: { title: "Earlier", author: "x", phase: null, date: "2026-09-01", createdAt: "2026-09-02T00:00:00.000Z", updatedAt: "", filename: "e", order: 2, isTemplate: false },
+        sameB: { title: "B", author: "x", phase: null, date: "2026-09-01", createdAt: "2026-09-03T00:00:00.000Z", updatedAt: "", filename: "b", order: 3, isTemplate: false },
+      },
+      phases: {},
+      team: { teamName: "", teamNumber: "", organization: "", members: {} },
+    });
+    expect(sortedEntries(normalized.entries).map((e) => e.id)).toEqual(["t", "earlier", "sameB", "later"]);
   });
 });
 

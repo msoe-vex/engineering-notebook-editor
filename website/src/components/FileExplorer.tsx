@@ -17,8 +17,6 @@ import {
 } from "lucide-react";
 import ValidationTooltip from "./editor/ui/ValidationTooltip";
 
-// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
 import { ExplorerFile } from "@/lib/types";
 import { getPhases, getPhaseConfig } from "@/lib/phases";
 import { NotebookMetadata } from "@/lib/metadata";
@@ -49,8 +47,6 @@ interface FileExplorerProps {
   onSortDirectionToggle: () => void;
   notebookMetadata?: NotebookMetadata;
 }
-
-// â”€â”€â”€ Single file row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface FileRowProps {
   file: ExplorerFile;
@@ -131,7 +127,7 @@ function FileRow({
       }}
       onDoubleClick={isDeleted ? undefined : onDoubleClick}
       onContextMenu={isDeleted ? undefined : onContextMenu}
-      title={tooltipLines.join(' Â· ')}
+      title={tooltipLines.join(" \u00b7 ")}
       className={`
         group flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer select-none border-2
         ${isOpened

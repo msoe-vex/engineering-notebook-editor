@@ -209,14 +209,28 @@ function migrateEntries(
   return result;
 }
 
-/** Templates occupy 0..k-1; dated entries follow. Relative order within each group is kept. */
+function compareDatedEntries(
+  a: Identified<EntryMetadata>,
+  b: Identified<EntryMetadata>
+): number {
+  const aDated = !!a.date;
+  const bDated = !!b.date;
+  if (aDated !== bDated) return aDated ? -1 : 1;
+  if (a.date !== b.date) return a.date.localeCompare(b.date);
+  if (a.order !== b.order) return a.order - b.order;
+  const created = (a.createdAt || "").localeCompare(b.createdAt || "");
+  if (created !== 0) return created;
+  return a.id.localeCompare(b.id);
+}
+
+/** Templates occupy 0..k-1. Dated entries follow in date order; same day keeps drag/`order`, then createdAt. */
 export function packTemplatesToFront(
   entries: Record<string, EntryMetadata>
 ): Record<string, EntryMetadata> {
   const sorted = sortedEntries(entries);
   const packed = [
     ...sorted.filter((e) => e.isTemplate),
-    ...sorted.filter((e) => !e.isTemplate),
+    ...sorted.filter((e) => !e.isTemplate).sort(compareDatedEntries),
   ];
   const result: Record<string, EntryMetadata> = {};
   packed.forEach((item, i) => {
@@ -411,14 +425,21 @@ export function moveEntryOnCalendar(
   const insertAt = Math.max(0, Math.min(toIndex, without.length));
   without.splice(insertAt, 0, movedId);
 
-  const global = sortedEntries(metadata.entries).map((e) => e.id);
-  const daySet = new Set(dayIdsBeforeMove.concat(movedId));
-  const firstDayPos = global.findIndex((id) => daySet.has(id));
-  const rest = global.filter((id) => !daySet.has(id));
-  const insertGlobalAt = firstDayPos === -1 ? rest.length : firstDayPos;
-  rest.splice(insertGlobalAt, 0, ...without);
+  const dateById: Record<string, string> = { [movedId]: targetDate };
+  const templates = sortedEntries(metadata.entries).filter((e) => e.isTemplate).map((e) => e.id);
+  const dated = sortedEntries(metadata.entries)
+    .filter((e) => !e.isTemplate && e.id !== movedId)
+    .map((e) => ({ ...e, date: dateById[e.id] ?? e.date }));
 
-  return reorderEntries(metadata, rest, { [movedId]: targetDate });
+  const before = dated.filter((e) => !!e.date && e.date < targetDate).map((e) => e.id);
+  const after = dated.filter((e) => !e.date || e.date > targetDate).map((e) => e.id);
+  const sameDayOthers = dated.filter((e) => e.date === targetDate).map((e) => e.id);
+  const dayOrder = without.filter((id) => id === movedId || sameDayOthers.includes(id));
+  for (const id of sameDayOthers) {
+    if (!dayOrder.includes(id)) dayOrder.push(id);
+  }
+
+  return reorderEntries(metadata, [...templates, ...before, ...dayOrder, ...after], dateById);
 }
 
 /** Index in `sorted` (excluding the new item) to insert a dated non-template. */

@@ -136,7 +136,7 @@ export class EntryManager {
     // 2. Synchronously update metadata in-memory for immediate UI feedback (Sidebar, etc.)
     const existingEntry = this.store.metadata.entries[id];
     if (existingEntry) {
-      this.store.metadata = {
+      this.store.metadata = normalizeNotebookMetadata({
         ...this.store.metadata,
         entries: {
           ...this.store.metadata.entries,
@@ -149,7 +149,7 @@ export class EntryManager {
             updatedAt: this.store.openFile.updatedAt,
           }
         }
-      };
+      });
     }
 
     // 3. Mark pending save as true
