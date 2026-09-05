@@ -404,6 +404,58 @@ export function moveEntryOnCalendar(
   return reorderEntries(metadata, rest, { [movedId]: targetDate });
 }
 
+/** Index in `sorted` (excluding the new item) to insert a dated non-template. */
+export function insertionIndexForDatedEntry(
+  sorted: Identified<EntryMetadata>[],
+  date: string
+): number {
+  let lastOnOrBefore = -1;
+  for (let i = 0; i < sorted.length; i++) {
+    const e = sorted[i];
+    if (e.isTemplate || !e.date) continue;
+    if (e.date <= date) lastOnOrBefore = i;
+  }
+  if (lastOnOrBefore !== -1) return lastOnOrBefore + 1;
+  const firstFuture = sorted.findIndex((e) => !e.isTemplate && !!e.date && e.date > date);
+  return firstFuture === -1 ? sorted.length : firstFuture;
+}
+
+export function insertionIndexForTemplate(sorted: Identified<EntryMetadata>[]): number {
+  let lastTemplate = -1;
+  for (let i = 0; i < sorted.length; i++) {
+    if (sorted[i].isTemplate) lastTemplate = i;
+  }
+  return lastTemplate === -1 ? sorted.length : lastTemplate + 1;
+}
+
+/** After adding `id` to `metadata.entries`, densify global order (date for entries, after last template for templates). */
+export function placeCreatedEntry(metadata: NotebookMetadata, id: string): NotebookMetadata {
+  const created = metadata.entries[id];
+  if (!created) return metadata;
+  const without = sortedEntries(metadata.entries).filter((e) => e.id !== id);
+  const at = created.isTemplate
+    ? insertionIndexForTemplate(without)
+    : insertionIndexForDatedEntry(without, created.date || "");
+  const ids = without.map((e) => e.id);
+  ids.splice(at, 0, id);
+  return reorderEntries(metadata, ids);
+}
+
+/** Replace the template subsequence in global order. `templateIds` is ascending-order (sortedEntries) sequence. */
+export function reorderTemplateSequence(
+  metadata: NotebookMetadata,
+  templateIds: string[]
+): NotebookMetadata {
+  const wanted = templateIds.filter((id) => metadata.entries[id]?.isTemplate);
+  if (wanted.length === 0) return metadata;
+  let i = 0;
+  const ids = sortedEntries(metadata.entries).map((e) => {
+    if (!e.isTemplate) return e.id;
+    return wanted[i++] ?? e.id;
+  });
+  return reorderEntries(metadata, ids);
+}
+
 function withoutOrder<T extends { order: number }>(item: T): string {
   const rest = { ...item };
   delete (rest as { order?: number }).order;

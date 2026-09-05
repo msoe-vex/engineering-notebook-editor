@@ -1,4 +1,4 @@
-import { NotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, EntryMetadata, hydrateTeamAssets, TipTapNode, buildResourceTypeIndex, extractResources, mergeNotebookMetadata, moveEntryOnCalendar, serializeNotebookMetadata } from "./metadata";
+import { NotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, EntryMetadata, hydrateTeamAssets, TipTapNode, buildResourceTypeIndex, extractResources, mergeNotebookMetadata, moveEntryOnCalendar, reorderTemplateSequence, serializeNotebookMetadata } from "./metadata";
 import { INDEX_PATH, ENTRIES_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from "./constants";
 import { generateEntryLatex, generateTeamLatex, generatePhasesLatex, generateAllEntriesLatex, latexPhaseRef } from "./latex";
 import { ExplorerFile, GitHubConfig, TeamTab } from "./types";
@@ -270,6 +270,14 @@ class WorkspaceStore implements IWorkspaceStore {
     await this.enqueue(async () => {
       await this.persistFile(INDEX_PATH, serializeNotebookMetadata(this.metadata), "Reorder calendar entries");
       await this.updateLatexMetadata();
+    });
+  }
+
+  public async reorderTemplates(templateIds: string[]) {
+    this.metadata = reorderTemplateSequence(this.metadata, templateIds);
+    this.notifyStateChange();
+    await this.enqueue(async () => {
+      await this.persistFile(INDEX_PATH, serializeNotebookMetadata(this.metadata), "Reorder templates");
     });
   }
 

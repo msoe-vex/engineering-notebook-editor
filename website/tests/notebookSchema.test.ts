@@ -3,6 +3,8 @@ import { mergeNotebookMetadata } from "@/lib/metadata";
 import {
   moveEntryOnCalendar,
   normalizeNotebookMetadata,
+  placeCreatedEntry,
+  reorderTemplateSequence,
   sortedEntries,
 } from "@/lib/notebookSchema";
 
@@ -136,5 +138,55 @@ describe("sortedEntries", () => {
       team: { teamName: "", teamNumber: "", organization: "", members: {} },
     });
     expect(sortedEntries(normalized.entries)[0].id).toBe("zed");
+  });
+});
+
+describe("placeCreatedEntry", () => {
+  it("inserts a today entry before future-dated entries", () => {
+    const withFuture = normalizeNotebookMetadata({
+      version: 4,
+      entries: {
+        t: { title: "T", author: "", phase: null, date: "", createdAt: "", updatedAt: "", filename: "t", order: 0, isTemplate: true },
+        past: { title: "Past", author: "x", phase: null, date: "2026-01-01", createdAt: "", updatedAt: "", filename: "p", order: 1, isTemplate: false },
+        future: { title: "Future", author: "x", phase: null, date: "2026-12-01", createdAt: "", updatedAt: "", filename: "f", order: 2, isTemplate: false },
+        today: { title: "Today", author: "x", phase: null, date: "2026-09-05", createdAt: "", updatedAt: "", filename: "n", order: 3, isTemplate: false },
+      },
+      phases: {},
+      team: { teamName: "", teamNumber: "", organization: "", members: {} },
+    });
+    const placed = placeCreatedEntry(withFuture, "today");
+    expect(sortedEntries(placed.entries).map((e) => e.id)).toEqual(["t", "past", "today", "future"]);
+  });
+
+  it("appends a new template after existing templates", () => {
+    const withEntries = normalizeNotebookMetadata({
+      version: 4,
+      entries: {
+        t1: { title: "T1", author: "", phase: null, date: "", createdAt: "", updatedAt: "", filename: "t1", order: 0, isTemplate: true },
+        e: { title: "E", author: "x", phase: null, date: "2026-09-05", createdAt: "", updatedAt: "", filename: "e", order: 1, isTemplate: false },
+        t2: { title: "T2", author: "", phase: null, date: "", createdAt: "", updatedAt: "", filename: "t2", order: 2, isTemplate: true },
+      },
+      phases: {},
+      team: { teamName: "", teamNumber: "", organization: "", members: {} },
+    });
+    const placed = placeCreatedEntry(withEntries, "t2");
+    expect(sortedEntries(placed.entries).map((e) => e.id)).toEqual(["t1", "t2", "e"]);
+  });
+});
+
+describe("reorderTemplateSequence", () => {
+  it("permutes templates without moving dated entries", () => {
+    const base = normalizeNotebookMetadata({
+      version: 4,
+      entries: {
+        t1: { title: "T1", author: "", phase: null, date: "", createdAt: "", updatedAt: "", filename: "t1", order: 0, isTemplate: true },
+        e: { title: "E", author: "x", phase: null, date: "2026-09-05", createdAt: "", updatedAt: "", filename: "e", order: 1, isTemplate: false },
+        t2: { title: "T2", author: "", phase: null, date: "", createdAt: "", updatedAt: "", filename: "t2", order: 2, isTemplate: true },
+      },
+      phases: {},
+      team: { teamName: "", teamNumber: "", organization: "", members: {} },
+    });
+    const next = reorderTemplateSequence(base, ["t2", "t1"]);
+    expect(sortedEntries(next.entries).map((e) => e.id)).toEqual(["t2", "e", "t1"]);
   });
 });

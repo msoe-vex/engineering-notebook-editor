@@ -118,6 +118,7 @@ export interface IWorkspaceStore {
   updateLatexMetadata(): Promise<void>;
   saveTeam(team: TeamMetadata, phases?: Record<string, ProjectPhase>): Promise<void>;
   reorderCalendarEntry(movedId: string, targetDate: string, dayIds: string[], toIndex: number): Promise<void>;
+  reorderTemplates(templateIds: string[]): Promise<void>;
   hydrateTeamAssets(): Promise<void>;
   commitAll(config: GitHubConfig, customMessage?: string): Promise<void>;
   getFileContent(path: string): Promise<string | null>;

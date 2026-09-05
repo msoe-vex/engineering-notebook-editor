@@ -744,6 +744,7 @@ const EditorContent = React.memo(function EditorContent({
 
   const [editor, setEditor] = useState<TiptapEditor | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const isTemplate = metadata.entries[entryId]?.isTemplate || false;
 
   const validate = useCallback(() => {
     const entryIdMeta = metadata.entries[entryId];
@@ -939,12 +940,12 @@ const EditorContent = React.memo(function EditorContent({
         title: openFile.title,
         author: openFile.author,
         phase: openFile.phase,
-        date: openFile.date
+        date: isTemplate ? "" : openFile.date
       });
     } catch (e) {
       console.error(e);
     }
-  }, [openFile.tiptapContent, openFile.title, openFile.author, openFile.phase, openFile.date, previewLatex, validate, updateEntry, entryId]);
+  }, [openFile.tiptapContent, openFile.title, openFile.author, openFile.phase, openFile.date, previewLatex, validate, updateEntry, entryId, isTemplate]);
 
   const handleDownload = () => {
     const latex = generateLatex(openFile.tiptapContent, openFile.title, openFile.author, openFile.phase, openFile.date);
@@ -1190,11 +1191,13 @@ const EditorContent = React.memo(function EditorContent({
                   )}
 
                   <div className="flex flex-wrap items-center gap-2 md:gap-3 flex-1 md:flex-none">
-                    <DatePicker
-                      value={openFile.date || ""}
-                      onChange={(val) => updateDraft(null, { date: val })}
-                      className="h-9 flex-1 min-w-35"
-                    />
+                    {!isTemplate && (
+                      <DatePicker
+                        value={openFile.date || ""}
+                        onChange={(val) => updateDraft(null, { date: val })}
+                        className="h-9 flex-1 min-w-35"
+                      />
+                    )}
 
                     <div
                       className="h-9 flex-1 min-w-40 flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all focus-within:border-nb-primary/50"

@@ -118,6 +118,7 @@ export default function SearchTab({
 
       // Date Range filter
       if (dateRange) {
+        if (entry.isTemplate) continue;
         const dStr = entry.date || (entry.createdAt ? entry.createdAt.split('T')[0] : null);
         if (!dStr) continue;
         const ts = new Date(dStr);
@@ -513,7 +514,7 @@ export default function SearchTab({
               <div
                 key={file.path}
                 onClick={() => onSelectEntry(file)}
-                title={[file.title || (file.isTemplate ? "Untitled Template" : "Untitled Entry"), file.author ? `By ${file.author}` : null, file.date || null].filter(Boolean).join(' · ')}
+                title={[file.title || (file.isTemplate ? "Untitled Template" : "Untitled Entry"), file.author ? `By ${file.author}` : null, file.isTemplate ? null : file.date || null].filter(Boolean).join(' · ')}
                 className="w-full text-left p-2.5 rounded-xl bg-nb-surface hover:bg-nb-surface-high/80 border border-nb-outline-variant/30 hover:border-nb-primary/40 transition-all cursor-pointer group shadow-nb-xs"
               >
                 <div className="flex items-start justify-between gap-2">
@@ -533,7 +534,7 @@ export default function SearchTab({
                           </span>
                         </span>
                       )}
-                      {file.date && (
+                      {file.date && !file.isTemplate && (
                         <span className="flex items-center gap-1 shrink-0">
                           <Calendar size={10} className="shrink-0 opacity-70" />
                           <span>

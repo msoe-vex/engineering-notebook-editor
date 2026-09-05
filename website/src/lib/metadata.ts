@@ -13,6 +13,8 @@ export {
   recordFromIdentified,
   reorderEntries,
   moveEntryOnCalendar,
+  placeCreatedEntry,
+  reorderTemplateSequence,
   isNotebookValid,
   mergeRecordById,
 } from "./notebookSchema";

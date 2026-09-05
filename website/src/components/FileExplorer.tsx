@@ -1,6 +1,17 @@
 import React, { useRef, useState } from "react";
 import { ImperativePanelHandle, Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import {
+  DndContext,
+  DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   FileText, Plus, X, Calendar, SortAsc, SortDesc,
   ChevronDown, ChevronRight, ExternalLink, Trash2, FileJson, FileCode,
   Download, Copy, Layers, FolderTree
@@ -32,6 +43,7 @@ interface FileExplorerProps {
   onDownloadMulti: (files: ExplorerFile[]) => void;
   onDeleteMulti: (files: ExplorerFile[]) => void;
   onNewEntry: () => void;
+  onReorderTemplates?: (templateIds: string[]) => void;
   sortBy: "date" | "title";
   onSortChange: (val: "date" | "title") => void;
   sortDirection: "asc" | "desc";
@@ -54,13 +66,19 @@ interface FileRowProps {
   onSelect: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
+  reorderable?: boolean;
+  phaseLabel?: string;
 }
 
 function FileRow({
   file, isOpened, isSelected, isPending, isDeleted, icon, isValid = true, validationErrors = [],
-  onSelect, onDoubleClick, onContextMenu
+  onSelect, onDoubleClick, onContextMenu, reorderable = false, phaseLabel
 }: FileRowProps) {
   const rowRef = React.useRef<HTMLDivElement>(null);
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: file.path,
+    disabled: !reorderable,
+  });
 
   React.useEffect(() => {
     if (isOpened && rowRef.current) {
@@ -70,12 +88,47 @@ function FileRow({
 
   const tooltipLines = [file.title || (file.isTemplate ? "Untitled Template" : "Untitled Entry")];
   if (file.author) tooltipLines.push(`By ${file.author}`);
-  if (file.date) tooltipLines.push(file.date);
+  if (!file.isTemplate && file.date) tooltipLines.push(file.date);
+
+  const subtitle = file.isTemplate
+    ? (phaseLabel || "Template")
+    : (() => {
+      const dateStr = file.date;
+      if (!dateStr) return "No date";
+      const match = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+      if (match) {
+        const y = parseInt(match[1], 10);
+        const m = parseInt(match[2], 10) - 1;
+        const d = parseInt(match[3], 10);
+        const localDate = new Date(y, m, d);
+        if (!isNaN(localDate.getTime())) {
+          return localDate.toLocaleDateString("en-US", {
+            month: "long",
+            day: "numeric",
+            year: "numeric"
+          });
+        }
+      }
+      const parsed = new Date(dateStr);
+      if (!isNaN(parsed.getTime())) {
+        return parsed.toLocaleDateString("en-US", {
+          month: "long",
+          day: "numeric",
+          year: "numeric"
+        });
+      }
+      return dateStr;
+    })();
 
   return (
     <div
-      ref={rowRef}
-      onClick={isDeleted ? undefined : (e) => {
+      ref={(node) => {
+        setNodeRef(node);
+        rowRef.current = node;
+      }}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.45 : 1 }}
+      {...(reorderable ? { ...attributes, ...listeners } : {})}
+      onClick={isDeleted || isDragging ? undefined : (e) => {
         onSelect(e);
         if (!(e.ctrlKey || e.metaKey || e.shiftKey)) onDoubleClick();
       }}
@@ -83,7 +136,8 @@ function FileRow({
       onContextMenu={isDeleted ? undefined : onContextMenu}
       title={tooltipLines.join(' · ')}
       className={`
-        group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer select-none border-2
+        group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all select-none border-2
+        ${reorderable ? "cursor-grab" : "cursor-pointer"}
         ${isOpened
           ? 'bg-nb-tertiary text-white shadow-lg shadow-nb-tertiary/20 border-nb-tertiary'
           : isSelected
@@ -102,33 +156,7 @@ function FileRow({
           {file.title || "Untitled Entry"}
         </span>
         <span className={`text-[9px] font-mono truncate mt-0.5 ${isOpened ? 'text-white/70' : 'opacity-40'}`}>
-          {(() => {
-            const dateStr = file.date;
-            if (!dateStr) return "No date";
-            const match = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-            if (match) {
-              const y = parseInt(match[1], 10);
-              const m = parseInt(match[2], 10) - 1;
-              const d = parseInt(match[3], 10);
-              const localDate = new Date(y, m, d);
-              if (!isNaN(localDate.getTime())) {
-                return localDate.toLocaleDateString("en-US", {
-                  month: "long",
-                  day: "numeric",
-                  year: "numeric"
-                });
-              }
-            }
-            const parsed = new Date(dateStr);
-            if (!isNaN(parsed.getTime())) {
-              return parsed.toLocaleDateString("en-US", {
-                month: "long",
-                day: "numeric",
-                year: "numeric"
-              });
-            }
-            return dateStr;
-          })()}
+          {subtitle}
         </span>
       </div>
 
@@ -265,6 +293,7 @@ export default function FileExplorer({
   onNewEntry,
   onCreateTemplate,
   onCreateFromTemplate,
+  onReorderTemplates,
   sortBy,
   onSortChange,
   sortDirection,
@@ -285,6 +314,21 @@ export default function FileExplorer({
 
   const regularEntries = entries.filter(e => !e.isTemplate);
   const templateEntries = entries.filter(e => e.isTemplate);
+  const canReorderTemplates = sortBy === "date" && !!onReorderTemplates;
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor)
+  );
+
+  const handleTemplateDragEnd = (event: DragEndEvent) => {
+    if (!canReorderTemplates || !event.over) return;
+    const from = templateEntries.findIndex((f) => f.path === event.active.id);
+    const to = templateEntries.findIndex((f) => f.path === event.over?.id);
+    if (from < 0 || to < 0 || from === to) return;
+    const moved = arrayMove(templateEntries, from, to).map((f) => f.name.replace(".json", ""));
+    onReorderTemplates(sortDirection === "desc" ? [...moved].reverse() : moved);
+  };
 
   const handleContextMenu = (e: React.MouseEvent, file: ExplorerFile) => {
     e.preventDefault();
@@ -363,6 +407,7 @@ export default function FileExplorer({
       </div>
 
       {/* Entries and Templates Content Area */}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTemplateDragEnd}>
       {(() => {
         const entriesPane = (
           <Pane
@@ -446,6 +491,7 @@ export default function FileExplorer({
             hasItems={regularEntries.length > 0}
             className={isEntriesCollapsed ? "shrink-0" : "flex-1"}
           >
+            <SortableContext items={regularEntries.map((x) => x.path)} strategy={verticalListSortingStrategy}>
             <div className="space-y-1">
               {regularEntries.map((f) => {
                 const pConfig = typeof f.phase === "string" && f.phase ? phaseConfig[f.phase] : null;
@@ -479,6 +525,7 @@ export default function FileExplorer({
                 );
               })}
             </div>
+            </SortableContext>
           </Pane>
         );
 
@@ -508,6 +555,7 @@ export default function FileExplorer({
             }
             hasItems={templateEntries.length > 0}
           >
+            <SortableContext items={templateEntries.map((f) => f.path)} strategy={verticalListSortingStrategy}>
             <div className="space-y-1">
               {templateEntries.map(f => {
                 const pConfig = typeof f.phase === "string" && f.phase ? phaseConfig[f.phase] : null;
@@ -534,6 +582,8 @@ export default function FileExplorer({
                     icon={icon}
                     isValid={f.isValid}
                     validationErrors={f.validationErrors}
+                    reorderable={canReorderTemplates}
+                    phaseLabel={phase?.name}
                     onSelect={(e) => onSelectEntry(f, e.ctrlKey || e.metaKey, e.shiftKey, templateEntries.map((x) => x.path))}
                     onDoubleClick={() => onOpenEntry(f)}
                     onContextMenu={(e) => handleContextMenu(e, f)}
@@ -541,6 +591,7 @@ export default function FileExplorer({
                 );
               })}
             </div>
+            </SortableContext>
           </Pane>
         );
 
@@ -574,6 +625,7 @@ export default function FileExplorer({
           </div>
         );
       })()}
+      </DndContext>
 
       {/* Context Menu */}
       {contextMenu && (

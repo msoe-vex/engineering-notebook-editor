@@ -124,6 +124,7 @@ export function useWorkspace() {
   const getCompiledPdfUrl = useCallback(() => store.getCompiledPdfUrl(), []);
   const saveCompiledPdf = useCallback((pdf: Uint8Array) => store.saveCompiledPdf(pdf), []);
   const reorderCalendarEntry = useCallback((movedId: string, targetDate: string, dayIds: string[], toIndex: number) => store.reorderCalendarEntry(movedId, targetDate, dayIds, toIndex), []);
+  const reorderTemplates = useCallback((templateIds: string[]) => store.reorderTemplates(templateIds), []);
 
   return {
     ...state,
@@ -164,6 +165,7 @@ export function useWorkspace() {
     getCompiledPdfUrl,
     saveCompiledPdf,
     reorderCalendarEntry,
+    reorderTemplates,
     isSaving: state.isSaving,
     isPendingSave: state.isPendingSave,
     isDiscarding: state.isDiscarding,

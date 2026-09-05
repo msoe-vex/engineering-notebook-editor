@@ -5,7 +5,7 @@ import { getAllPending, getPending, stageChange, removeStaged } from "../db";
 import { fetchFileContent, fetchRawFileContent, checkGitHubFileExists } from "../github";
 import { writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, checkLocalFileExists } from "../fs";
 import { generateUUID, getMimeTypeFromExtension, formatDateMonthYear, getLocalDateString } from "../utils";
-import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds, collectNotebookResourceIds, duplicateResourceOwners, canonicalResourceOwner, remapSelectedContentIds } from "../metadata";
+import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds, collectNotebookResourceIds, duplicateResourceOwners, canonicalResourceOwner, remapSelectedContentIds, placeCreatedEntry } from "../metadata";
 import { generateAllEntriesLatex, generateTeamLatex, generatePhasesLatex, generateEntryLatex, latexPhaseRef } from "../latex";
 import { IWorkspaceStore } from "./types";
 
@@ -289,10 +289,10 @@ export class EntryManager {
     this.store.lastSavedContents.set(path, jsonStr);
     this.store.lastSavedContents.set(latexPath, initialLatex);
 
-    this.store.metadata = normalizeNotebookMetadata({
+    this.store.metadata = placeCreatedEntry(normalizeNotebookMetadata({
       ...this.store.metadata,
       entries: { ...this.store.metadata.entries, [id]: newEntry }
-    });
+    }), id);
     this.store.entries = [{ name: `${id}.json`, path }, ...this.store.entries];
     this.store.notifyStateChange();
 
@@ -354,11 +354,13 @@ export class EntryManager {
       ? options.phase
       : (sourceMeta.phase ?? null);
 
-    const date = options?.date !== undefined
+    const date = isTemplate
+      ? ""
+      : options?.date !== undefined
       ? options.date
       : (!isTemplate && sourceMeta.isTemplate)
-      ? todayDate                                   // creating a new entry from a template → today
-      : (sourceMeta.date || todayDate);             // duplicating an entry or template → keep source date
+      ? todayDate
+      : (sourceMeta.date || todayDate);
 
     const newEntry: EntryMetadata = {
       title: newTitle,
@@ -402,10 +404,10 @@ export class EntryManager {
       this.store.lastSavedContents.set(newLatexPath, newLatex);
     }
 
-    this.store.metadata = normalizeNotebookMetadata({
+    this.store.metadata = placeCreatedEntry(normalizeNotebookMetadata({
       ...this.store.metadata,
       entries: { ...this.store.metadata.entries, [newId]: newEntry }
-    });
+    }), newId);
     this.store.entries = [{ name: `${newId}.json`, path: newPath }, ...this.store.entries];
     this.store.notifyStateChange();
 
@@ -433,14 +435,13 @@ export class EntryManager {
   async createTemplate(templateData?: Partial<EntryMetadata>): Promise<string> {
     const id = generateUUID();
     const createdAt = new Date().toISOString();
-    const localDate = getLocalDateString();
     const path = `${ENTRIES_DIR}/${id}.json`;
 
     const newTemplate: EntryMetadata = {
       title: templateData?.title || "New Template",
       author: templateData?.author || localStorage.getItem("nb-last-author") || "",
       phase: templateData?.phase ?? null,
-      date: templateData?.date || localDate,
+      date: "",
       createdAt,
       updatedAt: createdAt,
       filename: path,
@@ -453,10 +454,10 @@ export class EntryManager {
 
     this.store.lastSavedContents.set(path, jsonStr);
 
-    this.store.metadata = normalizeNotebookMetadata({
+    this.store.metadata = placeCreatedEntry(normalizeNotebookMetadata({
       ...this.store.metadata,
       entries: { ...this.store.metadata.entries, [id]: newTemplate }
-    });
+    }), id);
     this.store.entries = [{ name: `${id}.json`, path }, ...this.store.entries];
     this.store.notifyStateChange();
 

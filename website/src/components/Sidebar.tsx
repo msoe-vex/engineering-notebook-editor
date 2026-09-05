@@ -46,6 +46,7 @@ export default function Sidebar({
     createTemplate,
     createEntryFromTemplate,
     deleteEntry,
+    reorderTemplates,
     navigateTo,
     getFileContent,
     exportEntries
@@ -286,6 +287,7 @@ export default function Sidebar({
             onDownloadMulti={handleDownloadMulti}
             onDeleteMulti={handleConfirmDelete}
             onNewEntry={onNewEntry || createEntry}
+            onReorderTemplates={(ids) => { void reorderTemplates(ids); }}
             sortBy={sortBy}
             onSortChange={(val) => {
               setSortBy(val);
