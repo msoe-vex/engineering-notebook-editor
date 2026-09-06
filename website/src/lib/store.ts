@@ -34,6 +34,7 @@ class WorkspaceStore implements IWorkspaceStore {
   public calendarMode: "month" | "week" = "month";
   public calendarCursor: string = "";
   public showAbout: boolean = false;
+  public showSettings: boolean = false;
   public openFile: OpenFileState | null = null;
   public isLoading = false;
   public loadingLabel = "";

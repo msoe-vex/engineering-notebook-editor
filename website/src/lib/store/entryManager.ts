@@ -5,7 +5,7 @@ import { getAllPending, getPending, stageChange, removeStaged } from "../db";
 import { fetchFileContent, fetchRawFileContent, checkGitHubFileExists } from "../github";
 import { writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, checkLocalFileExists } from "../fs";
 import { generateUUID, getMimeTypeFromExtension, formatDateMonthYear, getLocalDateString } from "../utils";
-import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, carryForwardResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds, collectNotebookResourceIds, duplicateResourceOwners, canonicalResourceOwner, remapSelectedContentIds, placeCreatedEntry, formatAuthors, authorsEqual, parseAuthors, readLastAuthors, writeLastAuthors } from "../metadata";
+import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, carryForwardResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds, collectNotebookResourceIds, duplicateResourceOwners, canonicalResourceOwner, remapSelectedContentIds, placeCreatedEntry, formatAuthors, authorsEqual, parseAuthors, readLastAuthors } from "../metadata";
 import { generateAllEntriesLatex, generateTeamLatex, generatePhasesLatex, generateEntryLatex, latexPhaseRef } from "../latex";
 import { IWorkspaceStore } from "./types";
 
@@ -226,10 +226,6 @@ export class EntryManager {
 
     this.store.notifyStateChange();
     events.emit(EventNames.ENTRY_UPDATED, { id, ...info });
-
-    if (info.authors?.length && !authorsEqual(info.authors, existingEntry.authors)) {
-      writeLastAuthors(info.authors);
-    }
 
     // 2. Queue background persistence
     await this.store.enqueue(async () => {

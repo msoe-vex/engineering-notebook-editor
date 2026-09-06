@@ -4,7 +4,7 @@ import { GITHUB_ISSUES_URL } from "@/lib/constants";
 import React, { useState, useEffect } from "react";
 import {
   BookOpen, Moon, Sun, Folder, HardDrive, Trash2, Clock, Plus,
-  ArrowRight, History, Edit2, Check, X, AlertCircle, HelpCircle, MoreVertical
+  ArrowRight, History, Edit2, Check, X, AlertCircle, HelpCircle, MoreVertical, Settings
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import GitHubConnectionDialog from "./GitHubConnectionDialog";
@@ -30,6 +30,7 @@ interface HomeProps {
   onCloseGithubModal?: () => void;
   onOpenHelp: () => void;
   onOpenAbout: () => void;
+  onOpenSettings: () => void;
   pendingCounts?: Record<string, number>;
 }
 
@@ -52,6 +53,7 @@ export default function Home({
   onCloseGithubModal,
   onOpenHelp,
   onOpenAbout,
+  onOpenSettings,
 }: HomeProps) {
   const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -457,6 +459,13 @@ export default function Home({
         >
           <HelpCircle size={14} />
           Help & Guide
+        </button>
+        <button
+          onClick={onOpenSettings}
+          className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-3 md:px-4 md:py-2 rounded-xl bg-nb-surface border border-nb-outline-variant/30 text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary/50 transition-all shadow-nb-sm cursor-pointer"
+        >
+          <Settings size={14} />
+          Settings
         </button>
         <a
           href={GITHUB_ISSUES_URL}

@@ -73,10 +73,22 @@ export default function AuthorsInput({
   return (
     <div
       ref={containerRef}
+      role="button"
+      tabIndex={0}
+      aria-expanded={isOpen}
+      aria-haspopup="dialog"
+      aria-label={summary || placeholder}
       className={`flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all hover:border-nb-primary/50 relative cursor-pointer select-none overflow-hidden min-w-0 ${className}`}
       onClick={() => {
         if (!isOpen) updateCoords();
         setIsOpen((open) => !open);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          if (!isOpen) updateCoords();
+          setIsOpen((open) => !open);
+        }
       }}
     >
       <User size={15} className="text-nb-primary shrink-0 drop-shadow-sm" />
