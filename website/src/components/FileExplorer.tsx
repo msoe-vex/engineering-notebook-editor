@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+﻿import React, { useLayoutEffect, useRef, useState } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -231,6 +231,7 @@ export default function FileExplorer({
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, file: ExplorerFile } | null>(null);
   const [explorerTab, setExplorerTab] = useState<"entries" | "templates">("entries");
+  const [tabForPath, setTabForPath] = useState(activePath);
   const [isNewDropdownOpen, setIsNewDropdownOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -247,10 +248,10 @@ export default function FileExplorer({
   const canReorderTemplates = !!onReorderTemplates;
   const openEntry = entries.find((e) => e.path === activePath);
 
-  useEffect(() => {
-    if (!openEntry) return;
-    setExplorerTab(openEntry.isTemplate ? "templates" : "entries");
-  }, [activePath, openEntry?.isTemplate]);
+  if (tabForPath !== activePath) {
+    setTabForPath(activePath);
+    if (openEntry) setExplorerTab(openEntry.isTemplate ? "templates" : "entries");
+  }
 
   useLayoutEffect(() => {
     if (!isVisible || !activePath) return;
