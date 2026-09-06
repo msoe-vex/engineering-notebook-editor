@@ -1,5 +1,26 @@
-import { ASSETS_DIR, ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR, TYPE_LABELS } from "./constants";
+import { ASSETS_DIR, ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR, TYPE_LABELS, NOTEBOOK_VERSION } from "./constants";
 import { generateUUID } from "./utils";
+import { normalizeNotebookMetadata, mergeRecordById, parseAuthors, formatAuthors } from "./notebookSchema";
+
+export { NOTEBOOK_VERSION };
+export {
+  normalizeNotebookMetadata,
+  serializeNotebookMetadata,
+  sortedEntries,
+  sortedMembers,
+  sortedPhases,
+  withEntryId,
+  recordFromIdentified,
+  reorderEntries,
+  moveEntryOnCalendar,
+  placeCreatedEntry,
+  reorderTemplateSequence,
+  isNotebookValid,
+  mergeRecordById,
+  parseAuthors,
+  formatAuthors,
+  authorsEqual,
+} from "./notebookSchema";
 
 export const getLocalDateString = () => {
   const d = new Date();
@@ -9,18 +30,42 @@ export const getLocalDateString = () => {
   return `${year}-${month}-${day}`;
 };
 
+const LAST_AUTHORS_KEY = "nb-last-authors";
+const LAST_AUTHOR_KEY = "nb-last-author";
+
+export function readLastAuthors(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(LAST_AUTHORS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parseAuthors(parsed);
+    }
+  } catch { /* ignore */ }
+  return parseAuthors(localStorage.getItem(LAST_AUTHOR_KEY));
+}
+
+export function writeLastAuthors(authors: string[]): void {
+  if (typeof window === "undefined") return;
+  const clean = parseAuthors(authors);
+  if (clean.length === 0) return;
+  localStorage.setItem(LAST_AUTHORS_KEY, JSON.stringify(clean));
+  localStorage.setItem(LAST_AUTHOR_KEY, formatAuthors(clean));
+}
+
 /**
  * metadata.ts — resource ↔ entry relationship tracking.
  *
  * Notebook index (data/notebook.json) shape (high level):
  * {
- *   "version": 3,
+ *   "version": 4,
  *   "entries": { "<entryId>": { <EntryMetadata> } },
  *   "team": { <TeamMetadata> },
- *   "phases": [ <ProjectPhase[]> ],
- *   "assetRefs": { "<assetPath>": ["entries/<id>.json" ] },
+ *   "phases": { "<phaseId>": { <ProjectPhase> } },
+ *   "assetRefs": { "<assetPath>": ["<entryId>" | "team"] },
  *   "lastCompiled": "2026-05-22T..."
  * }
+ * Identity lives on dict keys. Values have `order` (dense 0..n-1), not nested `id`.
  *
  * This module operates primarily on TipTap JSON (the `content` stored
  * inside the `% METADATA: {...}` comment at the top of each entry .tex
@@ -31,15 +76,17 @@ export const getLocalDateString = () => {
  * `src/lib/constants.ts` as `TYPE_LABELS`.
  */
 
+export type Identified<T> = T & { id: string };
+
 export interface EntryMetadata {
-  id: string; // Entry UUID
   title: string;
-  author: string;
-  phase: number | null; // Phase ID
+  authors: string[];
+  phase: string | null; // Phase dict key
   createdAt: string;
   updatedAt: string;
   date: string; // YYYY-MM-DD
-  filename: string; // Path to the entry file (e.g. "entries/uuid.json")
+  filename: string; // Path to the entry file (e.g. "data/entries/uuid.json")
+  order: number;
   isTemplate?: boolean; // When true, excluded from LaTeX entries.tex compilation and export
   resources?: Record<string, { title: string, caption: string, type: string }>; // block uuid -> metadata
   isValid?: boolean;
@@ -49,9 +96,9 @@ export interface EntryMetadata {
 }
 
 export interface TeamMember {
-  id: string;
   name: string;
   role: string;
+  order: number;
   image?: string; // Path to asset
   imageOriginal?: string; // Path to original asset
 }
@@ -65,7 +112,7 @@ export interface TeamMetadata {
   organization: string;
   logo?: string; // Path to asset
   logoOriginal?: string; // Path to original asset
-  members: TeamMember[];
+  members: Record<string, TeamMember>;
 }
 
 export interface TipTapMark {
@@ -88,19 +135,18 @@ export interface EntryWrapper {
 }
 
 export interface ProjectPhase {
-  id: string;
-  index: number;
   name: string;
   description: string;
   iconName: string; // Lucide icon name
   color: string;    // Hex color
+  order: number;
 }
 
 export interface NotebookMetadata {
   version: number;
   entries: Record<string, EntryMetadata>; // uuid -> metadata
   team?: TeamMetadata;
-  phases?: ProjectPhase[];
+  phases?: Record<string, ProjectPhase>;
   assetRefs?: Record<string, string[]>; // asset path -> [entry id or "team"]
   lastCompiled?: string; // ISO string
 }
@@ -137,12 +183,12 @@ export function buildResourceTypeIndex(
   return resourceTypes;
 }
 
-export const DEFAULT_PHASES: ProjectPhase[] = [];
+export const DEFAULT_PHASES: Record<string, ProjectPhase> = {};
 
 export const EMPTY_METADATA: NotebookMetadata = {
-  version: 3,
+  version: NOTEBOOK_VERSION,
   entries: {},
-  phases: DEFAULT_PHASES,
+  phases: {},
   team: {
     teamName: "",
     teamNumber: "",
@@ -150,7 +196,7 @@ export const EMPTY_METADATA: NotebookMetadata = {
     endDate: "",
     autoCalculateDates: true,
     organization: "",
-    members: []
+    members: {}
   }
 };
 
@@ -409,16 +455,13 @@ export function updateEntryInIndex(
   entryId: string,
   info: EntryMetadata
 ): NotebookMetadata {
-  const next = {
+  return normalizeNotebookMetadata({
     ...metadata,
     entries: {
       ...metadata.entries,
       [entryId]: info
     }
-  };
-
-  // Run global integrity check to update isValid/validationErrors for all affected entries
-  return validateNotebookIntegrity(next);
+  });
 }
 
 /**
@@ -431,18 +474,21 @@ export function updateEntryInIndex(
  */
 export function validateEntry(
   entry: EntryMetadata,
-  phases: { index: number }[],
+  phases: Identified<ProjectPhase>[] | Record<string, ProjectPhase>,
   existingIds: Set<string>
 ): string[] {
   const errors: string[] = [];
+  const phaseIds = new Set(
+    Array.isArray(phases) ? phases.map(p => p.id) : Object.keys(phases || {})
+  );
 
   if (!entry.title?.trim()) errors.push("Entry title is required.");
 
   // Templates are exempt from author, date, and phase requirements
   if (!entry.isTemplate) {
-    if (!entry.author?.trim()) errors.push("Author name is required.");
+    if (!entry.authors?.some((name) => name.trim())) errors.push("Author name is required.");
     if (!entry.date?.trim()) errors.push("Date is required.");
-    if (typeof entry.phase !== "number" || !phases.some(p => p.index === entry.phase)) {
+    if (!entry.phase || !phaseIds.has(entry.phase)) {
       errors.push("Entry phase is required.");
     }
   }
@@ -467,96 +513,13 @@ export function validateEntry(
   return errors;
 }
 
-/** 
- * Scans the entire notebook metadata and evaluates the integrity of every entry.
- * Checks for missing required fields, empty resource metadata, and dead internal links.
- */
-export function validateNotebookIntegrity(metadata: NotebookMetadata): NotebookMetadata {
-    // noop placeholder to ensure patch context (will add import next)
-  const newEntries = { ...metadata.entries };
-  const assetRefs: Record<string, string[]> = {};
-
-  const trackAsset = (path: string, owner: string) => {
-    if (!path || path.startsWith("data:")) return; // Don't track hydrated data
-    if (!assetRefs[path]) assetRefs[path] = [];
-    if (!assetRefs[path].includes(owner)) assetRefs[path].push(owner);
-  };
-
-  // 1. Collect assets from team
-  if (metadata.team) {
-    if (metadata.team.logo) trackAsset(metadata.team.logo, "team");
-    if (metadata.team.logoOriginal) trackAsset(metadata.team.logoOriginal, "team");
-    metadata.team.members.forEach(m => {
-      if (m.image) trackAsset(m.image, "team");
-      if (m.imageOriginal) trackAsset(m.imageOriginal, "team");
-    });
-  }
-
-  // 2. Build global set of all IDs and collect assets from entries
-  const existingIds = new Set<string>();
-  for (const [entryId, entry] of Object.entries(metadata.entries)) {
-    existingIds.add(entry.id);
-    if (entry.resources) {
-      for (const resId of Object.keys(entry.resources)) {
-        existingIds.add(resId);
-      }
-    }
-    if (entry.assets) {
-      entry.assets.forEach(a => trackAsset(a, entryId));
-    }
-  }
-
-  // Resolve phases — respect explicit empty array, fall back to DEFAULT_PHASES only when undefined
-  const phases = metadata.phases !== undefined ? metadata.phases : DEFAULT_PHASES;
-
-  // 3. Validate each entry using the shared helper
-  for (const [id, entry] of Object.entries(newEntries)) {
-    const errors = validateEntry(entry, phases, existingIds);
-    newEntries[id] = { ...entry, isValid: errors.length === 0, validationErrors: errors };
-  }
-
-  // Canonicalize team metadata field order so JSON.stringify is completely deterministic
-  let canonicalTeam: TeamMetadata | undefined = undefined;
-  if (metadata.team) {
-    const t = metadata.team;
-    canonicalTeam = {
-      teamName: t.teamName || "",
-      teamNumber: t.teamNumber || "",
-      startDate: t.startDate || "",
-      endDate: t.endDate || "",
-      autoCalculateDates: t.autoCalculateDates ?? true,
-      organization: t.organization || "",
-      ...(t.logo ? { logo: t.logo } : {}),
-      ...(t.logoOriginal ? { logoOriginal: t.logoOriginal } : {}),
-      members: (t.members || []).map(m => ({
-        id: m.id,
-        name: m.name || "",
-        role: m.role || "",
-        ...(m.image ? { image: m.image } : {}),
-        ...(m.imageOriginal ? { imageOriginal: m.imageOriginal } : {})
-      }))
-    };
-  }
-
-  const result: NotebookMetadata = {
-    version: metadata.version || 3,
-    entries: newEntries,
-    ...(canonicalTeam ? { team: canonicalTeam } : {}),
-    ...(metadata.phases ? { phases: metadata.phases } : {}),
-    ...(metadata.lastCompiled ? { lastCompiled: metadata.lastCompiled } : {}),
-    assetRefs,
-  };
-
-  return result;
-}
-
 /** Check if an entry has all required metadata fields (template-aware). */
 export function isEntryValid(info: EntryMetadata): boolean {
   if (!info.title?.trim()) return false;
   if (!info.isTemplate) {
-    if (!info.author?.trim()) return false;
+    if (!info.authors?.some((name) => name.trim())) return false;
     if (!info.date?.trim()) return false;
-    if (info.phase === null || info.phase === undefined) return false;
+    if (!info.phase) return false;
   }
   if (info.resources) {
     for (const res of Object.values(info.resources)) {
@@ -575,8 +538,7 @@ export function removeEntryFromMetadata(
   const newEntries = { ...metadata.entries };
   delete newEntries[entryId];
 
-  const next = { ...metadata, entries: newEntries };
-  return validateNotebookIntegrity(next);
+  return normalizeNotebookMetadata({ ...metadata, entries: newEntries });
 }
 
 /** Rename an entry in the metadata index. */
@@ -591,17 +553,141 @@ export function renameEntryInMetadata(
     delete newEntries[oldId];
   }
 
-  const next = { ...metadata, entries: newEntries };
-  return validateNotebookIntegrity(next);
+  return normalizeNotebookMetadata({ ...metadata, entries: newEntries });
+}
+
+export function collectContentResourceIds(
+  doc: TipTapNode | TipTapNode[] | null | undefined,
+  into: Set<string> = new Set()
+): Set<string> {
+  if (!doc || typeof doc !== "object") return into;
+  const walk = (node: TipTapNode | TipTapNode[]) => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+    if (node.attrs?.id) into.add(node.attrs.id as string);
+    if (Array.isArray(node.content)) node.content.forEach(walk);
+  };
+  walk(doc);
+  return into;
+}
+
+export function uniqueResourceId(reserved: Set<string>): string {
+  let id = generateUUID();
+  while (reserved.has(id)) id = generateUUID();
+  reserved.add(id);
+  return id;
+}
+
+function isReferenceableResourceNode(node: TipTapNode): boolean {
+  if (!node?.type) return false;
+  if (node.type === "heading" || node.type === "image" || node.type === "table" || node.type === "codeBlock" || node.type === "mathBlock") {
+    return true;
+  }
+  return !!(node.attrs && (node.attrs.title !== undefined || node.attrs.caption !== undefined));
+}
+
+function collectResourceSlots(doc: TipTapNode | undefined, into: TipTapNode[] = []): TipTapNode[] {
+  const walk = (node: TipTapNode | undefined) => {
+    if (!node) return;
+    if (isReferenceableResourceNode(node)) into.push(node);
+    (node.content ?? []).forEach(walk);
+  };
+  walk(doc);
+  return into;
+}
+
+/** Copy attrs.id from a previous doc onto matching resource nodes that lost their id (e.g. TipTap serialize). */
+export function carryForwardResourceIds(
+  nextDoc: TipTapDoc | TipTapNode,
+  previousDoc: TipTapDoc | TipTapNode | null | undefined,
+  reservedIds: Set<string> = new Set()
+): TipTapDoc | TipTapNode {
+  if (!nextDoc || !previousDoc || typeof nextDoc !== "object" || typeof previousDoc !== "object") {
+    return nextDoc;
+  }
+  const prevSlots = collectResourceSlots(previousDoc as TipTapNode);
+  const nextSlots = collectResourceSlots(nextDoc as TipTapNode);
+  const taken = new Set<string>();
+  const count = Math.min(prevSlots.length, nextSlots.length);
+  for (let i = 0; i < count; i++) {
+    const next = nextSlots[i];
+    const prev = prevSlots[i];
+    const prevId = prev.attrs?.id as string | undefined;
+    if (next.attrs?.id || !prevId || next.type !== prev.type || taken.has(prevId)) continue;
+    if (!next.attrs) next.attrs = {};
+    (next.attrs as Record<string, unknown>).id = prevId;
+    taken.add(prevId);
+    reservedIds.add(prevId);
+  }
+  return nextDoc;
+}
+
+export function collectNotebookResourceIds(
+  entries: Record<string, EntryMetadata> | undefined,
+  excludeEntryId?: string
+): Set<string> {
+  const ids = new Set<string>();
+  for (const [entryId, entry] of Object.entries(entries || {})) {
+    if (excludeEntryId && entryId === excludeEntryId) continue;
+    ids.add(entryId);
+    for (const resId of Object.keys(entry.resources || {})) ids.add(resId);
+  }
+  return ids;
+}
+
+/** resourceId -> every entry that lists it in `resources`. Only ids with 2+ owners. */
+export function duplicateResourceOwners(
+  entries: Record<string, EntryMetadata> | undefined
+): Map<string, string[]> {
+  const owners = new Map<string, string[]>();
+  for (const [entryId, entry] of Object.entries(entries || {})) {
+    for (const resId of Object.keys(entry.resources || {})) {
+      const list = owners.get(resId) || [];
+      list.push(entryId);
+      owners.set(resId, list);
+    }
+  }
+  for (const [resId, list] of owners) {
+    if (list.length < 2) owners.delete(resId);
+  }
+  return owners;
+}
+
+export function canonicalResourceOwner(
+  entryIds: string[],
+  entries: Record<string, EntryMetadata>
+): string {
+  const ranked = [...entryIds].sort((a, b) => {
+    const ea = entries[a];
+    const eb = entries[b];
+    const ta = ea?.isTemplate ? 1 : 0;
+    const tb = eb?.isTemplate ? 1 : 0;
+    if (ta !== tb) return ta - tb;
+    return (ea?.order ?? 0) - (eb?.order ?? 0) || a.localeCompare(b);
+  });
+  return ranked[0];
 }
 
 /**
  * Recursively walks a TipTap document and generates new UUIDs for all nodes with an 'id' attribute.
  * Also updates any internal links (#uuid) that point to the newly remapped IDs.
  * If globalIdMap is provided, it will use and update it for cross-entry consistency.
+ * `reservedIds` are never used as newly generated ids (existing notebook resources).
  */
-export function remapContentIds(doc: TipTapDoc | TipTapNode[], globalIdMap: Map<string, string> = new Map()): { doc: TipTapDoc | TipTapNode[], idMap: Map<string, string> } {
+export function remapContentIds(
+  doc: TipTapDoc | TipTapNode[],
+  globalIdMap: Map<string, string> = new Map(),
+  reservedIds: Set<string> = new Set()
+): { doc: TipTapDoc | TipTapNode[], idMap: Map<string, string> } {
   if (!doc) return { doc: doc as TipTapDoc, idMap: globalIdMap };
+
+  const reserved = new Set(reservedIds);
+  for (const mapped of globalIdMap.values()) reserved.add(mapped);
+
+  const nextId = () => uniqueResourceId(reserved);
 
   // Pass 1: Collect and remap IDs for this doc specifically
   function collect(node: TipTapNode | TipTapNode[]) {
@@ -615,13 +701,13 @@ export function remapContentIds(doc: TipTapDoc | TipTapNode[], globalIdMap: Map<
     // For headings without IDs, assign new UUIDs
     if (node.type === "heading" && !node.attrs?.id) {
       if (!node.attrs) node.attrs = {};
-      const newId = generateUUID();
+      const newId = nextId();
       (node.attrs as Record<string, unknown>).id = newId;
-      globalIdMap.set(newId, newId); // Map to itself (no old ID to track)
+      globalIdMap.set(newId, newId);
     } else if (node.attrs?.id) {
       const oldId = node.attrs.id as string;
       if (!globalIdMap.has(oldId)) {
-        globalIdMap.set(oldId, generateUUID());
+        globalIdMap.set(oldId, nextId());
       }
     }
 
@@ -648,7 +734,7 @@ export function remapContentIds(doc: TipTapDoc | TipTapNode[], globalIdMap: Map<
         newNode.attrs = { ...node.attrs, id: globalIdMap.get(oldId) };
       } else {
         // This shouldn't happen due to Pass 1, but for safety:
-        const newId = generateUUID();
+        const newId = uniqueResourceId(reserved);
         globalIdMap.set(oldId, newId);
         newNode.attrs = { ...node.attrs, id: newId };
       }
@@ -700,32 +786,79 @@ export function remapContentIds(doc: TipTapDoc | TipTapNode[], globalIdMap: Map<
   return { doc: apply(doc) as TipTapDoc, idMap: globalIdMap };
 }
 
+/** Remap only the given node ids (and links to them). Other ids are left unchanged. */
+export function remapSelectedContentIds(
+  doc: TipTapDoc | TipTapNode[],
+  idsToChange: Set<string>,
+  reservedIds: Set<string> = new Set()
+): { doc: TipTapDoc | TipTapNode[]; idMap: Map<string, string> } {
+  const idMap = new Map<string, string>();
+  const reserved = new Set(reservedIds);
+  for (const oldId of idsToChange) {
+    idMap.set(oldId, uniqueResourceId(reserved));
+  }
+  if (idMap.size === 0) return { doc, idMap };
+
+  function apply(node: TipTapNode | TipTapNode[]): TipTapNode | TipTapNode[] {
+    if (!node || typeof node !== "object") return node;
+    if (Array.isArray(node)) return node.map((n) => apply(n) as TipTapNode);
+
+    const newNode = { ...node };
+    if (node.attrs?.id && idMap.has(node.attrs.id as string)) {
+      newNode.attrs = { ...node.attrs, id: idMap.get(node.attrs.id as string) };
+    }
+    if (Array.isArray(node.marks)) {
+      newNode.marks = node.marks.map((mark: TipTapMark) => {
+        if (mark.type !== "link") return mark;
+        const { href = "", resourceId } = (mark.attrs || {}) as { href?: string; resourceId?: string };
+        const nextAttrs = { ...mark.attrs } as Record<string, unknown>;
+        let changed = false;
+        if (href.startsWith("#") && idMap.has(href.substring(1))) {
+          const newId = idMap.get(href.substring(1));
+          nextAttrs.href = `#${newId}`;
+          nextAttrs.resourceId = newId;
+          changed = true;
+        } else if (resourceId && idMap.has(resourceId)) {
+          nextAttrs.resourceId = idMap.get(resourceId);
+          changed = true;
+        }
+        return changed ? { ...mark, attrs: nextAttrs } : mark;
+      });
+    }
+    if (Array.isArray(node.content)) {
+      newNode.content = node.content.map((n) => apply(n) as TipTapNode);
+    }
+    return newNode;
+  }
+
+  return { doc: apply(doc) as TipTapDoc, idMap };
+}
+
 /**
  * Ensures all referenceable resource nodes (headings, tables, code blocks, images, math blocks) have UUIDs in attrs.id.
  * Note: rawLatex is deliberately omitted as it is not referenceable.
  * Returns the modified document (mutates in place)
  */
-export function ensureResourceIds(doc: TipTapDoc | TipTapNode): TipTapDoc | TipTapNode {
+export function ensureResourceIds(
+  doc: TipTapDoc | TipTapNode,
+  reservedIds: Set<string> = new Set()
+): TipTapDoc | TipTapNode {
   if (!doc || typeof doc !== "object") return doc;
+  const reserved = new Set(reservedIds);
 
   function walk(node: TipTapNode | undefined) {
     if (!node) return;
 
-    // Determine whether this node should be treated as a referenceable resource.
-    // Instead of a hard-coded set, detect resource-like nodes by:
-    // - nodes that expose caption/title attrs (image/table/code blocks usually do),
-    // - headings (they become reference targets), or
-    // - well-known structural types that don't normally carry title/caption but must be ids.
     const hasTitleOrCaption = !!(node.attrs && (node.attrs.title !== undefined || node.attrs.caption !== undefined));
     const isHeading = node.type === "heading";
     const isStructuralResource = node.type === "image" || node.type === "table" || node.type === "codeBlock" || node.type === "mathBlock";
-
     const isResourceNode = hasTitleOrCaption || isHeading || isStructuralResource;
 
-    // Assign UUID to resource nodes without IDs
+    if (node.attrs?.id) reserved.add(node.attrs.id as string);
+
     if (node.type && isResourceNode && !node.attrs?.id) {
       if (!node.attrs) node.attrs = {};
-      (node.attrs as Record<string, unknown>).id = generateUUID();
+      (node.attrs as Record<string, unknown>).id = uniqueResourceId(reserved);
     }
 
     if (Array.isArray(node.content)) {
@@ -827,7 +960,7 @@ export async function dehydrateTeamAssets(team: TeamMetadata): Promise<{ cleanTe
 
   if (cleanTeam.logo) cleanTeam.logo = await processImg(cleanTeam.logo, ASSETS_COMPRESSED_DIR, true);
   if (cleanTeam.logoOriginal) cleanTeam.logoOriginal = await processImg(cleanTeam.logoOriginal, ASSETS_ORIGINAL_DIR);
-  for (const member of cleanTeam.members) {
+  for (const member of Object.values(cleanTeam.members || {})) {
     if (member.image) member.image = await processImg(member.image, ASSETS_COMPRESSED_DIR, true);
     if (member.imageOriginal) member.imageOriginal = await processImg(member.imageOriginal, ASSETS_ORIGINAL_DIR);
   }
@@ -849,7 +982,7 @@ export function hydrateTeamAssets(team: TeamMetadata, assetCache: Map<string, st
   };
   if (hydrated.logo) hydrated.logo = processImg(hydrated.logo);
   if (hydrated.logoOriginal) hydrated.logoOriginal = processImg(hydrated.logoOriginal);
-  for (const member of hydrated.members) {
+  for (const member of Object.values(hydrated.members || {})) {
     if (member.image) member.image = processImg(member.image);
     if (member.imageOriginal) member.imageOriginal = processImg(member.imageOriginal);
   }
@@ -858,7 +991,6 @@ export function hydrateTeamAssets(team: TeamMetadata, assetCache: Map<string, st
 
 /**
  * 3-Way Merge for TeamMetadata (Base, Local, Remote).
- * Merges top-level fields (teamName, teamNumber, org, logo) and member lists cleanly.
  */
 export function mergeTeamMetadata(
   base: TeamMetadata | undefined,
@@ -869,10 +1001,9 @@ export function mergeTeamMetadata(
   if (!local) return remote;
   if (!remote) return local;
   if (!base) {
-    return { ...remote, ...local };
+    return { ...remote, ...local, members: mergeRecordById(undefined, local.members, remote.members) };
   }
 
-  // Merge top-level fields: if local changed from base, keep local; else remote
   const teamName = JSON.stringify(local.teamName) !== JSON.stringify(base.teamName) ? local.teamName : remote.teamName;
   const teamNumber = JSON.stringify(local.teamNumber) !== JSON.stringify(base.teamNumber) ? local.teamNumber : remote.teamNumber;
   const organization = JSON.stringify(local.organization) !== JSON.stringify(base.organization) ? local.organization : remote.organization;
@@ -880,38 +1011,6 @@ export function mergeTeamMetadata(
   const endDate = JSON.stringify(local.endDate) !== JSON.stringify(base.endDate) ? local.endDate : remote.endDate;
   const logo = JSON.stringify(local.logo) !== JSON.stringify(base.logo) ? local.logo : remote.logo;
   const logoOriginal = JSON.stringify(local.logoOriginal) !== JSON.stringify(base.logoOriginal) ? local.logoOriginal : remote.logoOriginal;
-
-  // 3-way merge members by member ID
-  const baseMembers = new Map((base.members || []).map(m => [m.id, m]));
-  const localMembers = new Map((local.members || []).map(m => [m.id, m]));
-  const remoteMembers = new Map((remote.members || []).map(m => [m.id, m]));
-
-  const allMemberIds = new Set([
-    ...Array.from(baseMembers.keys()),
-    ...Array.from(localMembers.keys()),
-    ...Array.from(remoteMembers.keys())
-  ]);
-
-  const mergedMembers: TeamMember[] = [];
-  for (const id of allMemberIds) {
-    const b = baseMembers.get(id);
-    const l = localMembers.get(id);
-    const r = remoteMembers.get(id);
-
-    if (!b && l && !r) { mergedMembers.push(l); continue; } // Added in local
-    if (!b && !l && r) { mergedMembers.push(r); continue; } // Added in remote
-    if (b && !l && r && JSON.stringify(b) === JSON.stringify(r)) continue; // Deleted in local
-    if (b && l && !r && JSON.stringify(b) === JSON.stringify(l)) continue; // Deleted in remote
-    if (b && l && r && JSON.stringify(b) !== JSON.stringify(l) && JSON.stringify(b) === JSON.stringify(r)) {
-      mergedMembers.push(l); continue; // Modified in local only
-    }
-    if (b && l && r && JSON.stringify(b) === JSON.stringify(l) && JSON.stringify(b) !== JSON.stringify(r)) {
-      mergedMembers.push(r); continue; // Modified in remote only
-    }
-    if (l) mergedMembers.push(l);
-    else if (r) mergedMembers.push(r);
-  }
-
   const autoCalculateDates = JSON.stringify(local.autoCalculateDates) !== JSON.stringify(base.autoCalculateDates) ? local.autoCalculateDates : (remote.autoCalculateDates ?? true);
 
   return {
@@ -923,143 +1022,46 @@ export function mergeTeamMetadata(
     organization: organization || "",
     logo,
     logoOriginal,
-    members: mergedMembers
+    members: mergeRecordById(base.members, local.members, remote.members)
   };
 }
 
 /**
  * 3-Way Merge for ProjectPhases (Base, Local, Remote).
- * Merges custom phases by Phase ID, preserving local or remote additions and updates.
  */
 export function mergeProjectPhases(
-  base: ProjectPhase[] | undefined,
-  local: ProjectPhase[] | undefined,
-  remote: ProjectPhase[] | undefined
-): ProjectPhase[] | undefined {
+  base: Record<string, ProjectPhase> | undefined,
+  local: Record<string, ProjectPhase> | undefined,
+  remote: Record<string, ProjectPhase> | undefined
+): Record<string, ProjectPhase> | undefined {
   if (!local && !remote) return undefined;
   if (!local) return remote;
   if (!remote) return local;
-  if (!base) return local.length > 0 ? local : remote;
-
-  const basePhases = new Map((base || []).map(p => [p.id, p]));
-  const localPhases = new Map((local || []).map(p => [p.id, p]));
-  const remotePhases = new Map((remote || []).map(p => [p.id, p]));
-
-  const allPhaseIds = new Set([
-    ...Array.from(basePhases.keys()),
-    ...Array.from(localPhases.keys()),
-    ...Array.from(remotePhases.keys())
-  ]);
-
-  const mergedPhases: ProjectPhase[] = [];
-  for (const id of allPhaseIds) {
-    const b = basePhases.get(id);
-    const l = localPhases.get(id);
-    const r = remotePhases.get(id);
-
-    if (!b && l && !r) { mergedPhases.push(l); continue; } // Added in local
-    if (!b && !l && r) { mergedPhases.push(r); continue; } // Added in remote
-    if (b && !l && r && JSON.stringify(b) === JSON.stringify(r)) continue; // Deleted in local
-    if (b && l && !r && JSON.stringify(b) === JSON.stringify(l)) continue; // Deleted in remote
-    if (b && l && r && JSON.stringify(b) !== JSON.stringify(l) && JSON.stringify(b) === JSON.stringify(r)) {
-      mergedPhases.push(l); continue; // Modified in local only
-    }
-    if (b && l && r && JSON.stringify(b) === JSON.stringify(l) && JSON.stringify(b) !== JSON.stringify(r)) {
-      mergedPhases.push(r); continue; // Modified in remote only
-    }
-    if (l) mergedPhases.push(l);
-    else if (r) mergedPhases.push(r);
-  }
-
-  // Ensure phases are sorted by index
-  return mergedPhases.sort((a, b) => a.index - b.index);
+  if (!base) return Object.keys(local).length > 0 ? local : remote;
+  return mergeRecordById(base, local, remote);
 }
 
 /**
  * 3-Way Merge for NotebookMetadata (Base, Local, Remote).
- * Automatically merges non-colliding entry metadata additions/modifications and preserves team/phase changes.
  */
 export function mergeNotebookMetadata(
   base: NotebookMetadata | null,
   local: NotebookMetadata,
   remote: NotebookMetadata
 ): { merged: NotebookMetadata; hasCollisions: boolean; collidingEntryIds: string[] } {
-  const baseEntries = base?.entries || {};
-  const localEntries = local.entries || {};
-  const remoteEntries = remote.entries || {};
-
-  const mergedEntries: Record<string, EntryMetadata> = {};
-  const allEntryIds = new Set([
-    ...Object.keys(baseEntries),
-    ...Object.keys(localEntries),
-    ...Object.keys(remoteEntries)
-  ]);
-
   const collidingEntryIds: string[] = [];
+  const mergedEntries = mergeRecordById(
+    base?.entries,
+    local.entries,
+    remote.entries,
+    collidingEntryIds
+  );
 
-  for (const id of allEntryIds) {
-    const b = baseEntries[id];
-    const l = localEntries[id];
-    const r = remoteEntries[id];
-
-    // Case 1: Only in local (newly created locally)
-    if (!b && l && !r) {
-      mergedEntries[id] = l;
-      continue;
-    }
-
-    // Case 2: Only in remote (newly created on remote)
-    if (!b && !l && r) {
-      mergedEntries[id] = r;
-      continue;
-    }
-
-    // Case 3: Deleted in local, unchanged in remote
-    if (b && !l && r && JSON.stringify(b) === JSON.stringify(r)) {
-      continue; // keep deleted
-    }
-
-    // Case 4: Deleted in remote, unchanged in local
-    if (b && l && !r && JSON.stringify(b) === JSON.stringify(l)) {
-      continue; // keep deleted
-    }
-
-    // Case 5: Modified in local, unchanged in remote
-    if (b && l && r && JSON.stringify(b) !== JSON.stringify(l) && JSON.stringify(b) === JSON.stringify(r)) {
-      mergedEntries[id] = l;
-      continue;
-    }
-
-    // Case 6: Modified in remote, unchanged in local
-    if (b && l && r && JSON.stringify(b) === JSON.stringify(l) && JSON.stringify(b) !== JSON.stringify(r)) {
-      mergedEntries[id] = r;
-      continue;
-    }
-
-    // Case 7: Same modifications in both
-    if (l && r && JSON.stringify(l) === JSON.stringify(r)) {
-      mergedEntries[id] = l;
-      continue;
-    }
-
-    // Case 8: True collision (both modified differently, or added same ID differently)
-    if (l && r) {
-      collidingEntryIds.push(id);
-      // For level 1, keep local but flag collision
-      mergedEntries[id] = l;
-    } else if (l) {
-      mergedEntries[id] = l;
-    } else if (r) {
-      mergedEntries[id] = r;
-    }
-  }
-
-  // 3-way merge team and phases
   const team = mergeTeamMetadata(base?.team, local.team, remote.team);
   const phases = mergeProjectPhases(base?.phases, local.phases, remote.phases);
 
-  const merged = validateNotebookIntegrity({
-    version: Math.max(local.version || 3, remote.version || 3),
+  const merged = normalizeNotebookMetadata({
+    version: Math.max(local.version || NOTEBOOK_VERSION, remote.version || NOTEBOOK_VERSION),
     entries: mergedEntries,
     team: team || local.team,
     phases: phases || local.phases,
@@ -1072,3 +1074,4 @@ export function mergeNotebookMetadata(
     collidingEntryIds
   };
 }
+

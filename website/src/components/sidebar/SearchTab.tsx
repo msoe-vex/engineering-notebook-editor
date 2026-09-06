@@ -16,7 +16,8 @@ import {
 } from "lucide-react";
 import { ExplorerFile } from "@/lib/types";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { DEFAULT_PHASES } from "@/lib/phases";
+import { getPhases } from "@/lib/phases";
+import { formatAuthors } from "@/lib/metadata";
 
 interface SearchTabProps {
   entries: ExplorerFile[];
@@ -51,7 +52,7 @@ export default function SearchTab({
 }: SearchTabProps) {
   const { metadata } = useWorkspace();
   const [query, setQuery] = useState("");
-  const [selectedPhase, setSelectedPhase] = useState<number | null>(null);
+  const [selectedPhase, setSelectedPhase] = useState<string | null>(null);
   const [isPhaseDropdownOpen, setIsPhaseDropdownOpen] = useState(false);
   const [isSearchFieldsCollapsed, setIsSearchFieldsCollapsed] = useState(true);
   const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(true);
@@ -65,8 +66,8 @@ export default function SearchTab({
     dates: true
   });
 
-  const phases = metadata.phases || DEFAULT_PHASES;
-  const phaseMap = useMemo(() => new Map(phases.map(p => [p.index, p])), [phases]);
+  const phases = getPhases(metadata.phases);
+  const phaseMap = useMemo(() => new Map(phases.map(p => [p.id, p])), [phases]);
 
   const allFieldsSelected = filters.titles && filters.authors && filters.figures && filters.dates;
 
@@ -90,7 +91,7 @@ export default function SearchTab({
         ...f,
         id: entryId,
         title: meta?.title || f.title || "Untitled Entry",
-        author: meta?.author || f.author || "",
+        author: formatAuthors(meta?.authors) || f.author || "",
         phase: meta?.phase ?? f.phase ?? null,
         date: meta?.date || f.date || "",
         createdAt: meta?.createdAt,
@@ -118,6 +119,7 @@ export default function SearchTab({
 
       // Date Range filter
       if (dateRange) {
+        if (entry.isTemplate) continue;
         const dStr = entry.date || (entry.createdAt ? entry.createdAt.split('T')[0] : null);
         if (!dStr) continue;
         const ts = new Date(dStr);
@@ -448,11 +450,11 @@ export default function SearchTab({
                           <button
                             key={phase.id}
                             onClick={() => {
-                              setSelectedPhase(phase.index);
+                              setSelectedPhase(phase.id);
                               setIsPhaseDropdownOpen(false);
                             }}
                             className={`w-full flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold transition-colors cursor-pointer min-w-0 overflow-hidden text-left ${
-                              selectedPhase === phase.index
+                              selectedPhase === phase.id
                                 ? "text-nb-primary bg-nb-primary/10"
                                 : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface"
                             }`}
@@ -513,7 +515,7 @@ export default function SearchTab({
               <div
                 key={file.path}
                 onClick={() => onSelectEntry(file)}
-                title={[file.title || (file.isTemplate ? "Untitled Template" : "Untitled Entry"), file.author ? `By ${file.author}` : null, file.date || null].filter(Boolean).join(' · ')}
+                title={[file.title || (file.isTemplate ? "Untitled Template" : "Untitled Entry"), file.author ? `By ${file.author}` : null, file.isTemplate ? null : file.date || null].filter(Boolean).join(' · ')}
                 className="w-full text-left p-2.5 rounded-xl bg-nb-surface hover:bg-nb-surface-high/80 border border-nb-outline-variant/30 hover:border-nb-primary/40 transition-all cursor-pointer group shadow-nb-xs"
               >
                 <div className="flex items-start justify-between gap-2">
@@ -533,7 +535,7 @@ export default function SearchTab({
                           </span>
                         </span>
                       )}
-                      {file.date && (
+                      {file.date && !file.isTemplate && (
                         <span className="flex items-center gap-1 shrink-0">
                           <Calendar size={10} className="shrink-0 opacity-70" />
                           <span>

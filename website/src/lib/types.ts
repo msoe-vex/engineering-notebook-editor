@@ -16,12 +16,14 @@ export interface ExplorerFile {
   path: string;
   title?: string;
   author?: string;
-  phase?: number | null;
+  authors?: string[];
+  phase?: string | null;
   timestamp?: string;
   updatedAt?: string;
   isValid?: boolean;
   isTemplate?: boolean;
   date?: string;
+  order?: number;
   validationErrors?: string[];
 }
 

@@ -5,8 +5,8 @@ import { isBinaryFile, zipCompressionOptions, addTextFileToZip, addAssetFileToZi
 import { fetchFileContent, fetchRawFileContent } from "../github";
 import { getLocalFileContent } from "../fs";
 import { generateUUID, getMimeTypeFromExtension, normalizeBase64 } from "../utils";
-import { EntryMetadata, validateNotebookIntegrity, EMPTY_METADATA, TeamMetadata, ProjectPhase, remapContentIds, remapEntryMetadataIds, TipTapNode, ensureResourceIds, extractResources, buildResourceTypeIndex, extractImagePaths, NotebookMetadata } from "../metadata";
-import { generateEntryLatex } from "../latex";
+import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, remapContentIds, remapEntryMetadataIds, TipTapNode, ensureResourceIds, extractResources, buildResourceTypeIndex, extractImagePaths, NotebookMetadata, collectNotebookResourceIds, uniqueResourceId } from "../metadata";
+import { generateEntryLatex, latexPhaseRef } from "../latex";
 import { IWorkspaceStore, ImportOptions, EntryImportMode } from "./types";
 import type JSZipType from 'jszip';
 
@@ -129,7 +129,7 @@ export class TransferManager {
 
       // 1. Data Mode files
       if (!isSubset) {
-        zip.file(INDEX_PATH, JSON.stringify(this.store.metadata, null, 2));
+        zip.file(INDEX_PATH, serializeNotebookMetadata(this.store.metadata));
       } else {
         const filteredEntries: Record<string, EntryMetadata> = {};
         for (const id of targets) {
@@ -167,7 +167,7 @@ export class TransferManager {
       if (!isSubset && this.store.metadata.team) {
         addAssetPath(this.store.metadata.team.logo);
         addAssetPath(this.store.metadata.team.logoOriginal);
-        this.store.metadata.team.members.forEach(member => {
+        Object.values(this.store.metadata.team.members || {}).forEach(member => {
           addAssetPath(member.image);
           addAssetPath(member.imageOriginal);
         });
@@ -289,17 +289,11 @@ export class TransferManager {
         this.store.entries = [];
       }
 
-      const usedIds = new Set<string>();
-      for (const existingEntry of Object.values(this.store.metadata.entries)) {
-        usedIds.add(existingEntry.id);
-        for (const resId of Object.keys(existingEntry.resources || {})) {
-          usedIds.add(resId);
-        }
-      }
+      const usedIds = collectNotebookResourceIds(this.store.metadata.entries);
 
       if (entryImportMode === "keep") {
         for (const oldId of effectiveEntryIdList) {
-          const newId = usedIds.has(oldId) ? generateUUID() : oldId;
+          const newId = usedIds.has(oldId) ? uniqueResourceId(usedIds) : oldId;
           idMap.set(oldId, newId);
           usedIds.add(newId);
         }
@@ -311,7 +305,7 @@ export class TransferManager {
 
           for (const resId of Object.keys(resources)) {
             if (idMap.has(resId)) continue;
-            const newId = usedIds.has(resId) ? generateUUID() : resId;
+            const newId = usedIds.has(resId) ? uniqueResourceId(usedIds) : resId;
             idMap.set(resId, newId);
             usedIds.add(newId);
           }
@@ -319,11 +313,13 @@ export class TransferManager {
       } else {
         for (const oldId of effectiveEntryIdList) {
           idMap.set(oldId, oldId);
+          usedIds.add(oldId);
           const entryData = entries[oldId] as Record<string, unknown>;
           const resources = entryData.resources as Record<string, unknown> | undefined;
           if (resources) {
             for (const resId of Object.keys(resources)) {
               idMap.set(resId, resId);
+              usedIds.add(resId);
             }
           }
         }
@@ -339,11 +335,10 @@ export class TransferManager {
         const { content, ...entryMetadata } = entryWithContent;
         const newId = idMap.get(oldId)!;
 
-        const { doc: remappedDoc } = remapContentIds((content || {}) as TipTapNode, idMap);
-        const docWithIds = ensureResourceIds(remappedDoc as TipTapNode) as TipTapNode;
+        const { doc: remappedDoc } = remapContentIds((content || {}) as TipTapNode, idMap, usedIds);
+        const docWithIds = ensureResourceIds(remappedDoc as TipTapNode, usedIds) as TipTapNode;
 
         const remappedMeta = remapEntryMetadataIds(entryMetadata as unknown as EntryMetadata, idMap);
-        remappedMeta.id = newId;
         remappedMeta.filename = `${ENTRIES_DIR}/${newId}.json`;
 
         if (!remappedMeta.date) {
@@ -377,13 +372,13 @@ export class TransferManager {
           ? newEntriesMap
           : { ...this.store.metadata.entries, ...newEntriesMap });
 
-      const importedPhases = data.phases as ProjectPhase[] | undefined;
+      const importedPhases = data.phases as Record<string, ProjectPhase> | ProjectPhase[] | undefined;
       const importedTeam = data.team as TeamMetadata | undefined;
       const importedLastCompiled = pdf && typeof data.lastCompiled === "string"
         ? data.lastCompiled as string
         : undefined;
 
-      this.store.metadata = validateNotebookIntegrity({
+      this.store.metadata = normalizeNotebookMetadata({
         ...EMPTY_METADATA,
         ...this.store.metadata,
         entries: mergedEntries,
@@ -409,7 +404,7 @@ export class TransferManager {
 
           await this.store.persistFile(meta.filename, contentStr, `Import entry: ${meta.title}`);
           if (!meta.isTemplate) {
-            const latex = generateEntryLatex(doc, meta.title, meta.author, meta.phase, meta.createdAt, id, globalResourceTypes, meta.date);
+            const latex = generateEntryLatex(doc, meta.title, meta.authors, latexPhaseRef(meta.phase, this.store.metadata.phases), meta.createdAt, id, globalResourceTypes, meta.date);
             await this.store.persistFile(`${LATEX_DIR}/${id}.tex`, latex, `Import LaTeX: ${meta.title}`);
           }
         }
@@ -444,7 +439,7 @@ export class TransferManager {
           }
         }
 
-        await this.store.persistFile(INDEX_PATH, JSON.stringify(this.store.metadata, null, 2), "Import notebook metadata");
+        await this.store.persistFile(INDEX_PATH, serializeNotebookMetadata(this.store.metadata), "Import notebook metadata");
         await this.store.updateLatexMetadata();
       });
 

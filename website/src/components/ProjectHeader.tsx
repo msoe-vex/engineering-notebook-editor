@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import GithubIcon from "./GithubIcon";
 import {
   Menu, HelpCircle, Play, Loader2, Check,
-  MoreVertical, Download, Upload, ArrowLeftRight, Users, Edit3
+  MoreVertical, Download, Upload, ArrowLeftRight, Users, Edit3, CalendarDays
 } from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { ViewMode } from "./editor/ui/ViewToggle";
@@ -20,6 +20,7 @@ interface ProjectHeaderProps {
   onEndRename: (save: boolean) => void;
   onOpenHelp: () => void;
   onOpenTeam: () => void;
+  onOpenCalendar: () => void;
   onOpenCompiler: () => void;
   onImport: () => void;
   onExport: () => void;
@@ -37,6 +38,7 @@ export default function ProjectHeader({
   onEndRename,
   onOpenHelp,
   onOpenTeam,
+  onOpenCalendar,
   onOpenCompiler,
   onImport,
   onExport,
@@ -107,6 +109,7 @@ export default function ProjectHeader({
                 </div>
 
                 <MenuButton icon={<Play size={14} />} label="Compile Notebook" onClick={() => { onOpenCompiler(); setShowMenu(false); }} />
+                <MenuButton icon={<CalendarDays size={14} />} label="View Calendar" onClick={() => { onOpenCalendar(); setShowMenu(false); }} />
                 <MenuButton icon={<Users size={14} />} label="Team Configuration" onClick={() => { onOpenTeam(); setShowMenu(false); }} />
 
                 <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />

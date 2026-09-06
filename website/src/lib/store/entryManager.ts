@@ -5,8 +5,8 @@ import { getAllPending, getPending, stageChange, removeStaged } from "../db";
 import { fetchFileContent, fetchRawFileContent, checkGitHubFileExists } from "../github";
 import { writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, checkLocalFileExists } from "../fs";
 import { generateUUID, getMimeTypeFromExtension, formatDateMonthYear, getLocalDateString } from "../utils";
-import { EntryMetadata, validateNotebookIntegrity, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds } from "../metadata";
-import { generateAllEntriesLatex, generateTeamLatex, generatePhasesLatex, generateEntryLatex } from "../latex";
+import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, carryForwardResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds, collectNotebookResourceIds, duplicateResourceOwners, canonicalResourceOwner, remapSelectedContentIds, placeCreatedEntry, formatAuthors, authorsEqual, parseAuthors, readLastAuthors, writeLastAuthors } from "../metadata";
+import { generateAllEntriesLatex, generateTeamLatex, generatePhasesLatex, generateEntryLatex, latexPhaseRef } from "../latex";
 import { IWorkspaceStore } from "./types";
 
 export class EntryManager {
@@ -86,7 +86,7 @@ export class EntryManager {
         tiptapContent: JSON.stringify(hydratedContent),
         latex: "",
         title: meta.title,
-        author: meta.author,
+        authors: meta.authors || [],
         phase: meta.phase,
         date: meta.date,
         createdAt: meta.createdAt,
@@ -107,14 +107,14 @@ export class EntryManager {
 
   updateDraft(
     tiptapContent: string | null,
-    info: { title?: string; author?: string; phase?: number | null; date?: string }
+    info: { title?: string; authors?: string[]; phase?: string | null; date?: string }
   ) {
     if (!this.store.openFile) return;
     const id = this.store.openFile.id;
 
     // Check if anything actually changed
     const titleChanged = info.title !== undefined && info.title !== this.store.openFile.title;
-    const authorChanged = info.author !== undefined && info.author !== this.store.openFile.author;
+    const authorChanged = info.authors !== undefined && !authorsEqual(info.authors, this.store.openFile.authors);
     const phaseChanged = info.phase !== undefined && info.phase !== this.store.openFile.phase;
     const dateChanged = info.date !== undefined && info.date !== this.store.openFile.date;
     const contentChanged = tiptapContent !== null && tiptapContent !== this.store.openFile.tiptapContent;
@@ -128,7 +128,7 @@ export class EntryManager {
       this.store.openFile.tiptapContent = tiptapContent;
     }
     if (info.title !== undefined) this.store.openFile.title = info.title;
-    if (info.author !== undefined) this.store.openFile.author = info.author;
+    if (info.authors !== undefined) this.store.openFile.authors = info.authors;
     if (info.phase !== undefined) this.store.openFile.phase = info.phase;
     if (info.date !== undefined) this.store.openFile.date = info.date;
     this.store.openFile.updatedAt = new Date().toISOString();
@@ -136,20 +136,20 @@ export class EntryManager {
     // 2. Synchronously update metadata in-memory for immediate UI feedback (Sidebar, etc.)
     const existingEntry = this.store.metadata.entries[id];
     if (existingEntry) {
-      this.store.metadata = {
+      this.store.metadata = normalizeNotebookMetadata({
         ...this.store.metadata,
         entries: {
           ...this.store.metadata.entries,
           [id]: {
             ...existingEntry,
             ...(info.title !== undefined ? { title: info.title } : {}),
-            ...(info.author !== undefined ? { author: info.author } : {}),
+            ...(info.authors !== undefined ? { authors: info.authors } : {}),
             ...(info.phase !== undefined ? { phase: info.phase } : {}),
             ...(info.date !== undefined ? { date: info.date } : {}),
             updatedAt: this.store.openFile.updatedAt,
           }
         }
-      };
+      });
     }
 
     // 3. Mark pending save as true
@@ -162,12 +162,12 @@ export class EntryManager {
     this.store.notifyStateChange();
   }
 
-  async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null; date: string }) {
+  async updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; authors: string[]; phase: string | null; date: string }) {
     this.updateDraft(tiptapContent, info);
     await this.store.debouncedPersist.flush();
   }
 
-  async saveDraft(id: string, latex: string, tiptapContent: string, info: { title: string; author: string; phase: number | null; date: string }) {
+  async saveDraft(id: string, latex: string, tiptapContent: string, info: { title: string; authors: string[]; phase: string | null; date: string }) {
     let contentJson = JSON.parse(tiptapContent);
     // Handle double-stringification and wrapping
     if (typeof contentJson === 'string') {
@@ -177,8 +177,17 @@ export class EntryManager {
       contentJson = contentJson.content;
     }
 
-    // Ensure all tables, headings, codeBlocks, etc. have IDs!
-    contentJson = ensureResourceIds(contentJson) as TipTapNode;
+    const reserved = collectNotebookResourceIds(this.store.metadata.entries, id);
+    let previousDoc: TipTapNode | undefined;
+    const prevRaw = this.store.lastSavedContents.get(this.store.metadata.entries[id]?.filename || "");
+    if (prevRaw) {
+      try {
+        const parsed = JSON.parse(prevRaw);
+        previousDoc = parsed?.content && !parsed.type ? parsed.content : parsed;
+      } catch { /* ignore */ }
+    }
+    contentJson = carryForwardResourceIds(contentJson, previousDoc, reserved) as TipTapNode;
+    contentJson = ensureResourceIds(contentJson, reserved) as TipTapNode;
     tiptapContent = JSON.stringify(contentJson);
 
     // 1. Update memory immediately (Source of Truth)
@@ -210,7 +219,7 @@ export class EntryManager {
       assets: extractImagePaths(contentJson),
     };
 
-    this.store.metadata = validateNotebookIntegrity({
+    this.store.metadata = normalizeNotebookMetadata({
       ...this.store.metadata,
       entries: { ...this.store.metadata.entries, [id]: mergedEntry }
     });
@@ -218,8 +227,8 @@ export class EntryManager {
     this.store.notifyStateChange();
     events.emit(EventNames.ENTRY_UPDATED, { id, ...info });
 
-    if (info.author) {
-      localStorage.setItem("nb-last-author", info.author);
+    if (info.authors?.length) {
+      writeLastAuthors(info.authors);
     }
 
     // 2. Queue background persistence
@@ -259,7 +268,7 @@ export class EntryManager {
       await this.reconcileAssetRefs(existingEntry.assets || [], mergedEntry.assets || []);
 
       // Save Metadata
-      await this.persistFile(INDEX_PATH, JSON.stringify(this.store.metadata, null, 2), "Auto-save metadata");
+      await this.persistFile(INDEX_PATH, serializeNotebookMetadata(this.store.metadata), "Auto-save metadata");
       await this.store.updateLatexMetadata();
     });
   }
@@ -272,32 +281,32 @@ export class EntryManager {
     const latexPath = `${LATEX_DIR}/${id}.tex`;
 
     const newEntry: EntryMetadata = {
-      id,
       title: "",
-      author: localStorage.getItem("nb-last-author") || "",
+      authors: readLastAuthors(),
       phase: null,
       date: localDate,
-      createdAt, updatedAt: createdAt, filename: path
+      createdAt, updatedAt: createdAt, filename: path,
+      order: Object.keys(this.store.metadata.entries || {}).length
     };
 
     const wrapper = { version: 3, content: { type: "doc", content: [{ type: "paragraph" }] } };
     const jsonStr = JSON.stringify(wrapper, null, 2);
-    const initialLatex = `\\notebookentry{${newEntry.title}}{${localDate}}{${newEntry.author}}{}{${id}}\n\n`;
+    const initialLatex = `\\notebookentry{${newEntry.title}}{${localDate}}{${formatAuthors(newEntry.authors)}}{}{${id}}\n\n`;
 
     this.store.lastSavedContents.set(path, jsonStr);
     this.store.lastSavedContents.set(latexPath, initialLatex);
 
-    this.store.metadata = validateNotebookIntegrity({
+    this.store.metadata = placeCreatedEntry(normalizeNotebookMetadata({
       ...this.store.metadata,
       entries: { ...this.store.metadata.entries, [id]: newEntry }
-    });
+    }), id);
     this.store.entries = [{ name: `${id}.json`, path }, ...this.store.entries];
     this.store.notifyStateChange();
 
     this.store.enqueue(async () => {
       await this.persistFile(path, jsonStr, "New entry");
       await this.persistFile(latexPath, initialLatex, "Init LaTeX");
-      await this.persistFile(INDEX_PATH, JSON.stringify(this.store.metadata, null, 2), "Create entry metadata");
+      await this.persistFile(INDEX_PATH, serializeNotebookMetadata(this.store.metadata), "Create entry metadata");
       await this.store.updateLatexMetadata();
     });
 
@@ -305,48 +314,22 @@ export class EntryManager {
     return id;
   }
 
-  async duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string; author?: string; phase?: number | null; date?: string }): Promise<string> {
+  async duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string; authors?: string[]; phase?: string | null; date?: string }): Promise<string> {
     const sourceMeta = this.store.metadata.entries[sourceId];
     if (!sourceMeta) throw new Error("Source entry not found");
 
     // Flush any pending debounced edits first and wait for the save to complete
     await this.store.debouncedPersist.flush();
 
-    // 1. Get raw content JSON from openFile, memory cache, pending staged DB, or disk/remote
-    let contentJson: TipTapNode = { type: "doc", content: [{ type: "paragraph" }] };
-    if (this.store.openFile?.id === sourceId && this.store.openFile.tiptapContent) {
-      try {
-        contentJson = JSON.parse(this.store.openFile.tiptapContent);
-      } catch {}
-    } else {
-      let raw: string | null = null;
-      if (this.store.lastSavedContents.has(sourceMeta.filename)) {
-        raw = this.store.lastSavedContents.get(sourceMeta.filename)!;
-      } else {
-        const dbName = this.store.getDBName();
-        const pending = await getAllPending(dbName);
-        const stagedEntry = pending.find(p => p.path === sourceMeta.filename && p.operation === "upsert");
-        if (stagedEntry?.content) {
-          raw = stagedEntry.content;
-        } else if (this.store.mode === "local" && this.store.dirHandle) {
-          raw = (await getLocalFileContent(this.store.dirHandle, sourceMeta.filename)).text || null;
-        } else if (this.store.mode === "github" && this.store.config) {
-          raw = await fetchFileContent(this.store.config, this.store.getFullPath(sourceMeta.filename));
-        }
-      }
+    let contentJson = await this.readEntryTipTapDoc(sourceId, sourceMeta);
 
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          contentJson = parsed.content || parsed;
-        } catch {}
-      }
-    }
-
-    // Deep clone and remap all resource and heading UUIDs in duplicated doc
-    const remapped = remapContentIds(JSON.parse(JSON.stringify(contentJson)));
-    contentJson = ensureResourceIds(remapped.doc as TipTapNode) as TipTapNode;
+    // Deep clone and remap all resource and heading UUIDs so copies never share ids with the source or the rest of the notebook
+    const reserved = collectNotebookResourceIds(this.store.metadata.entries);
+    const remapped = remapContentIds(JSON.parse(JSON.stringify(contentJson)), new Map(), reserved);
+    contentJson = ensureResourceIds(remapped.doc as TipTapNode, reserved) as TipTapNode;
     const remappedEntryMeta = remapEntryMetadataIds(sourceMeta, remapped.idMap);
+    remappedEntryMeta.resources = extractResources(contentJson);
+    remappedEntryMeta.references = extractReferences(contentJson);
 
     const newId = generateUUID();
     const createdAt = new Date().toISOString();
@@ -366,33 +349,35 @@ export class EntryManager {
       }
     }
 
-    const lastUsedAuthor = (typeof window !== "undefined" ? localStorage.getItem("nb-last-author") : null) || "";
+    const lastUsedAuthors = readLastAuthors();
 
-    const author = options?.author !== undefined
-      ? options.author
+    const authors = options?.authors !== undefined
+      ? parseAuthors(options.authors)
       : (!isTemplate && sourceMeta.isTemplate)
-      ? (lastUsedAuthor || sourceMeta.author || "")
-      : (sourceMeta.author || lastUsedAuthor);
+      ? (lastUsedAuthors.length ? lastUsedAuthors : parseAuthors(sourceMeta.authors))
+      : (parseAuthors(sourceMeta.authors).length ? sourceMeta.authors : lastUsedAuthors);
 
     const phase = options?.phase !== undefined
       ? options.phase
       : (sourceMeta.phase ?? null);
 
-    const date = options?.date !== undefined
+    const date = isTemplate
+      ? ""
+      : options?.date !== undefined
       ? options.date
       : (!isTemplate && sourceMeta.isTemplate)
-      ? todayDate                                   // creating a new entry from a template → today
-      : (sourceMeta.date || todayDate);             // duplicating an entry or template → keep source date
+      ? todayDate
+      : (sourceMeta.date || todayDate);
 
     const newEntry: EntryMetadata = {
-      id: newId,
       title: newTitle,
-      author,
+      authors,
       phase,
       date,
       createdAt,
       updatedAt: createdAt,
       filename: newPath,
+      order: Object.keys(this.store.metadata.entries || {}).length,
       isTemplate: isTemplate || undefined,
       resources: remappedEntryMeta.resources,
       references: remappedEntryMeta.references,
@@ -413,8 +398,8 @@ export class EntryManager {
     const newLatex = !isTemplate ? generateEntryLatex(
       contentJson,
       newTitle,
-      newEntry.author,
-      newEntry.phase,
+      newEntry.authors,
+      latexPhaseRef(newEntry.phase, this.store.metadata.phases),
       createdAt,
       newId,
       resourceTypes,
@@ -426,10 +411,10 @@ export class EntryManager {
       this.store.lastSavedContents.set(newLatexPath, newLatex);
     }
 
-    this.store.metadata = validateNotebookIntegrity({
+    this.store.metadata = placeCreatedEntry(normalizeNotebookMetadata({
       ...this.store.metadata,
       entries: { ...this.store.metadata.entries, [newId]: newEntry }
-    });
+    }), newId);
     this.store.entries = [{ name: `${newId}.json`, path: newPath }, ...this.store.entries];
     this.store.notifyStateChange();
 
@@ -445,7 +430,7 @@ export class EntryManager {
       if (!isTemplate) {
         await this.persistFile(newLatexPath, newLatex, `Init LaTeX for: ${newTitle}`);
       }
-      await this.persistFile(INDEX_PATH, JSON.stringify(this.store.metadata, null, 2), "Update notebook metadata");
+      await this.persistFile(INDEX_PATH, serializeNotebookMetadata(this.store.metadata), "Update notebook metadata");
       await this.store.updateLatexMetadata();
     });
 
@@ -457,18 +442,17 @@ export class EntryManager {
   async createTemplate(templateData?: Partial<EntryMetadata>): Promise<string> {
     const id = generateUUID();
     const createdAt = new Date().toISOString();
-    const localDate = getLocalDateString();
     const path = `${ENTRIES_DIR}/${id}.json`;
 
     const newTemplate: EntryMetadata = {
-      id,
       title: templateData?.title || "New Template",
-      author: templateData?.author || localStorage.getItem("nb-last-author") || "",
+      authors: templateData?.authors || readLastAuthors(),
       phase: templateData?.phase ?? null,
-      date: templateData?.date || localDate,
+      date: "",
       createdAt,
       updatedAt: createdAt,
       filename: path,
+      order: Object.keys(this.store.metadata.entries || {}).length,
       isTemplate: true
     };
 
@@ -477,16 +461,16 @@ export class EntryManager {
 
     this.store.lastSavedContents.set(path, jsonStr);
 
-    this.store.metadata = validateNotebookIntegrity({
+    this.store.metadata = placeCreatedEntry(normalizeNotebookMetadata({
       ...this.store.metadata,
       entries: { ...this.store.metadata.entries, [id]: newTemplate }
-    });
+    }), id);
     this.store.entries = [{ name: `${id}.json`, path }, ...this.store.entries];
     this.store.notifyStateChange();
 
     this.store.enqueue(async () => {
       await this.persistFile(path, jsonStr, `Create template: ${newTemplate.title}`);
-      await this.persistFile(INDEX_PATH, JSON.stringify(this.store.metadata, null, 2), "Update notebook metadata");
+      await this.persistFile(INDEX_PATH, serializeNotebookMetadata(this.store.metadata), "Update notebook metadata");
     });
 
     this.store.navigateTo({ entry: id });
@@ -495,16 +479,90 @@ export class EntryManager {
 
   async createEntryFromTemplate(templateId: string): Promise<string> {
     const templateMeta = this.store.metadata.entries[templateId];
-    const lastAuthor = (typeof window !== "undefined" ? localStorage.getItem("nb-last-author") : null) || "";
+    const lastAuthors = readLastAuthors();
     const todayDate = getLocalDateString();
 
     return this.duplicateEntry(templateId, {
       asTemplate: false,
       title: templateMeta?.title || "New Entry",
-      author: lastAuthor || templateMeta?.author || "",
+      authors: lastAuthors.length ? lastAuthors : parseAuthors(templateMeta?.authors),
       phase: templateMeta?.phase ?? null,
       date: todayDate
     });
+  }
+
+  private async readEntryTipTapDoc(entryId: string, meta: EntryMetadata): Promise<TipTapNode> {
+    let contentJson: TipTapNode = { type: "doc", content: [{ type: "paragraph" }] };
+    if (this.store.openFile?.id === entryId && this.store.openFile.tiptapContent) {
+      try {
+        contentJson = JSON.parse(this.store.openFile.tiptapContent);
+      } catch { /* use empty */ }
+    } else {
+      let raw: string | null = null;
+      if (this.store.lastSavedContents.has(meta.filename)) {
+        raw = this.store.lastSavedContents.get(meta.filename)!;
+      } else {
+        const dbName = this.store.getDBName();
+        const pending = await getAllPending(dbName);
+        const stagedEntry = pending.find(p => p.path === meta.filename && p.operation === "upsert");
+        if (stagedEntry?.content) {
+          raw = stagedEntry.content;
+        } else if (this.store.mode === "local" && this.store.dirHandle) {
+          raw = (await getLocalFileContent(this.store.dirHandle, meta.filename)).text || null;
+        } else if ((this.store.mode === "github" || this.store.mode === "temporary") && this.store.config) {
+          raw = await fetchFileContent(this.store.config, this.store.getFullPath(meta.filename));
+        }
+      }
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          contentJson = parsed.content || parsed;
+        } catch { /* keep empty */ }
+      }
+    }
+    return contentJson;
+  }
+
+  /** Give colliding resource UUIDs (e.g. entry created from a template without remapping) unique ids. Prefer keeping non-template owners. */
+  async repairDuplicateResourceIds(): Promise<boolean> {
+    const dupes = duplicateResourceOwners(this.store.metadata.entries);
+    if (dupes.size === 0) return false;
+
+    const byEntry = new Map<string, Set<string>>();
+    for (const [resId, owners] of dupes) {
+      const keep = canonicalResourceOwner(owners, this.store.metadata.entries);
+      for (const entryId of owners) {
+        if (entryId === keep) continue;
+        const set = byEntry.get(entryId) ?? new Set<string>();
+        set.add(resId);
+        byEntry.set(entryId, set);
+      }
+    }
+    if (byEntry.size === 0) return false;
+
+    let nextMeta = this.store.metadata;
+    for (const [entryId, idsToChange] of byEntry) {
+      const meta = nextMeta.entries[entryId];
+      if (!meta) continue;
+      const content = await this.readEntryTipTapDoc(entryId, meta);
+      const reserved = collectNotebookResourceIds(nextMeta.entries, entryId);
+      const { doc, idMap } = remapSelectedContentIds(content, idsToChange, reserved);
+      const patched = remapEntryMetadataIds(meta, idMap);
+      patched.resources = extractResources(doc as TipTapNode);
+      patched.references = extractReferences(doc as TipTapNode);
+      const jsonStr = JSON.stringify({ version: 3, content: doc }, null, 2);
+      this.store.lastSavedContents.set(meta.filename, jsonStr);
+      await this.persistFile(meta.filename, jsonStr, `Remap duplicate resource ids: ${meta.title || entryId}`);
+      nextMeta = {
+        ...nextMeta,
+        entries: { ...nextMeta.entries, [entryId]: patched }
+      };
+    }
+
+    this.store.metadata = normalizeNotebookMetadata(nextMeta);
+    await this.persistFile(INDEX_PATH, serializeNotebookMetadata(this.store.metadata), "Dedupe resource ids");
+    this.store.notifyStateChange();
+    return true;
   }
 
   async refreshPending() {
@@ -563,7 +621,7 @@ export class EntryManager {
         lastCompiled: committedLastCompiled
       };
 
-      const currentMetaStr = JSON.stringify(this.store.metadata, null, 2);
+      const currentMetaStr = serializeNotebookMetadata(this.store.metadata);
       if (committedIndex && JSON.stringify(JSON.parse(committedIndex), null, 2) === currentMetaStr) {
         await removeStaged(dbName, INDEX_PATH);
         this.store.lastSavedContents.delete(INDEX_PATH);
@@ -611,7 +669,7 @@ export class EntryManager {
     // 3. If this entry was a newly created entry (never committed), clean it from metadata and explorer
     const committed = await this.getCommittedFileContent(entryJsonPath);
     if (!committed) {
-      this.store.metadata = validateNotebookIntegrity(removeEntryFromMetadata(this.store.metadata, entryId));
+      this.store.metadata = normalizeNotebookMetadata(removeEntryFromMetadata(this.store.metadata, entryId));
       this.store.entries = this.store.entries.filter(e => e.path !== entryJsonPath);
       if (this.store.openFile?.id === entryId) {
         this.store.openFile = null;
@@ -624,7 +682,7 @@ export class EntryManager {
         try {
           const parsed = JSON.parse(committedIndex);
           if (parsed.entries?.[entryId]) {
-            this.store.metadata = validateNotebookIntegrity({
+            this.store.metadata = normalizeNotebookMetadata({
               ...this.store.metadata,
               entries: {
                 ...this.store.metadata.entries,
@@ -642,7 +700,7 @@ export class EntryManager {
 
     // 4. Update or clear staged notebook.json
     const committedIndex = await this.getCommittedFileContent(INDEX_PATH);
-    const currentMetaStr = JSON.stringify(this.store.metadata, null, 2);
+    const currentMetaStr = serializeNotebookMetadata(this.store.metadata);
     if (committedIndex && JSON.stringify(JSON.parse(committedIndex), null, 2) === currentMetaStr) {
       // If metadata now matches committed state, remove staged notebook.json
       await removeStaged(dbName, INDEX_PATH);
@@ -683,13 +741,13 @@ export class EntryManager {
         } catch {}
       }
 
-      this.store.metadata = validateNotebookIntegrity({
+      this.store.metadata = normalizeNotebookMetadata({
         ...this.store.metadata,
         team: committedTeam
       });
 
       // 3. Update or clear staged notebook.json
-      const currentMetaStr = JSON.stringify(this.store.metadata, null, 2);
+      const currentMetaStr = serializeNotebookMetadata(this.store.metadata);
       if (committedIndex && JSON.stringify(JSON.parse(committedIndex), null, 2) === currentMetaStr) {
         await removeStaged(dbName, INDEX_PATH);
         this.store.lastSavedContents.delete(INDEX_PATH);
@@ -720,7 +778,7 @@ export class EntryManager {
 
       // 2. Fetch committed notebook.json to restore original phases
       const committedIndex = await this.getCommittedFileContent(INDEX_PATH);
-      let committedPhases: import("../metadata").ProjectPhase[] | undefined = undefined;
+      let committedPhases: Record<string, import("../metadata").ProjectPhase> | unknown = undefined;
       if (committedIndex) {
         try {
           const parsed = JSON.parse(committedIndex);
@@ -728,13 +786,13 @@ export class EntryManager {
         } catch {}
       }
 
-      this.store.metadata = validateNotebookIntegrity({
+      this.store.metadata = normalizeNotebookMetadata({
         ...this.store.metadata,
         phases: committedPhases
       });
 
       // 3. Update or clear staged notebook.json
-      const currentMetaStr = JSON.stringify(this.store.metadata, null, 2);
+      const currentMetaStr = serializeNotebookMetadata(this.store.metadata);
       if (committedIndex && JSON.stringify(JSON.parse(committedIndex), null, 2) === currentMetaStr) {
         await removeStaged(dbName, INDEX_PATH);
         this.store.lastSavedContents.delete(INDEX_PATH);
@@ -796,7 +854,7 @@ export class EntryManager {
       this.store.debouncedPersist.cancel();
     }
     const oldMeta = this.store.metadata;
-    const updatedMeta = validateNotebookIntegrity(removeEntryFromMetadata(this.store.metadata, id));
+    const updatedMeta = normalizeNotebookMetadata(removeEntryFromMetadata(this.store.metadata, id));
 
     // Memory update
     this.store.metadata = updatedMeta;
@@ -830,7 +888,7 @@ export class EntryManager {
       }
 
       await this.reconcileAssetRefs(oldMeta.assetRefs || {}, this.store.metadata.assetRefs || {});
-      await this.persistFile(INDEX_PATH, JSON.stringify(this.store.metadata, null, 2), "Delete entry");
+      await this.persistFile(INDEX_PATH, serializeNotebookMetadata(this.store.metadata), "Delete entry");
       await this.store.updateLatexMetadata();
     });
   }
@@ -856,14 +914,14 @@ export class EntryManager {
       teamName: "",
       teamNumber: "",
       organization: "",
-      members: [],
+      members: {},
       ...rawTeam,
       startDate: effectiveStartDate,
       endDate: effectiveEndDate
     };
 
     const teamLatex = generateTeamLatex(teamInfo);
-    const phasesLatex = generatePhasesLatex(this.store.metadata.phases || []);
+    const phasesLatex = generatePhasesLatex(this.store.metadata.phases || {});
     const allEntriesLatex = generateAllEntriesLatex(this.store.metadata);
 
     await this.persistFile(TEAM_PATH, teamLatex, "Update team.tex");

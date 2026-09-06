@@ -16,6 +16,7 @@ import Home from "./Home";
 import Editor from "./editor/Editor";
 import WelcomePage from "./WelcomePage";
 import Sidebar from "./Sidebar";
+import CalendarView from "./CalendarView";
 import TeamEditor from "./TeamEditor";
 import NotebookCompiler from "./NotebookCompiler";
 import HelpPage from "./HelpPage";
@@ -47,7 +48,7 @@ export interface FileMetadata {
   content: string;
   title?: string;
   author?: string;
-  phase?: number | null;
+  phase?: string | null;
   createdAt?: string;
 }
 
@@ -95,6 +96,9 @@ export default function App() {
     showTeamEditor,
     teamTab,
     showCompiler,
+    showCalendar,
+    calendarMode,
+    calendarCursor,
     showHelp,
     showAbout,
     helpPath,
@@ -607,7 +611,10 @@ export default function App() {
       const end = visiblePaths.indexOf(file.path);
       if (start !== -1 && end !== -1) {
         const [min, max] = [Math.min(start, end), Math.max(start, end)];
-        const newSelection = new Set(selectedPaths);
+        const newSelection = new Set<string>();
+        for (const path of selectedPaths) {
+          if (visiblePaths.includes(path)) newSelection.add(path);
+        }
         for (let i = min; i <= max; i++) {
           newSelection.add(visiblePaths[i]);
         }
@@ -638,8 +645,38 @@ export default function App() {
     if (isMobile) setUserSidebarPreference(false);
   }, [isMobile, navigateTo]);
 
+  const closeSidebarOnMobile = () => {
+    if (isMobile) setUserSidebarPreference(false);
+  };
+
   const handleOpenTeamEditor = (tab: TeamTab = "identity") => {
+    closeSidebarOnMobile();
     navigateTo({}, `/workspace/team/${tab}`);
+  };
+
+  const handleOpenCalendar = () => {
+    closeSidebarOnMobile();
+    const now = new Date();
+    const fallback = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(calendarCursor) ? calendarCursor : fallback;
+    navigateTo(
+      { date, view: calendarMode || "month", month: null, week: null },
+      "/workspace/calendar"
+    );
+  };
+
+  const handleCloseCalendar = () => {
+    navigateTo({ date: null, view: null, month: null, week: null }, "/workspace/editor");
+  };
+
+  const handleOpenCompile = () => {
+    closeSidebarOnMobile();
+    navigateTo({}, "/workspace/compile");
+  };
+
+  const handleOpenHelp = (path = "/workspace/help/getting-started") => {
+    closeSidebarOnMobile();
+    navigateTo({}, path);
   };
 
   const handleDisconnect = async () => {
@@ -981,6 +1018,9 @@ export default function App() {
           onSelectEntry={handleSelectEntry}
           onOpenEntry={handleOpenEntry}
           onOpenTeam={handleOpenTeamEditor}
+          onOpenCalendar={handleOpenCalendar}
+          onOpenCompile={handleOpenCompile}
+          onOpenHelp={() => handleOpenHelp()}
           showConfirm={showConfirm}
           onNewEntry={handleNewEntry}
           onSelectAll={(paths) => setSelectedPaths(new Set(paths))}
@@ -1002,9 +1042,10 @@ export default function App() {
         onSetProjectRenameValue={setProjectRenameValue}
         onStartRename={() => { if (currentProject) { setProjectRenameValue(currentProject.name); setIsRenamingProject(true); } }}
         onEndRename={(save) => { if (save && currentProjectId) handleRenameProject(currentProjectId, projectRenameValue); setIsRenamingProject(false); }}
-        onOpenHelp={() => navigateTo({}, '/workspace/help')}
+        onOpenHelp={() => handleOpenHelp("/workspace/help")}
         onOpenTeam={handleOpenTeamEditor}
-        onOpenCompiler={() => navigateTo({}, '/workspace/compile')}
+        onOpenCalendar={handleOpenCalendar}
+        onOpenCompiler={handleOpenCompile}
         onImport={handleImportNotebook}
         onExport={handleExportNotebook}
         onDisconnect={handleDisconnect}
@@ -1070,6 +1111,10 @@ export default function App() {
               />
             )}
           </div>
+        ) : (showCalendar) ? (
+          <div className="flex-1 h-full overflow-hidden">
+            <CalendarView onClose={handleCloseCalendar} />
+          </div>
         ) : (showCompiler) ? (
           <div className="flex-1 flex flex-col min-h-0 relative h-full">
             <NotebookCompiler
@@ -1116,8 +1161,8 @@ export default function App() {
               onDisconnect={handleDisconnect}
               onOpenSidebar={() => { isToggleFromButton.current = true; setUserSidebarPreference(true); }}
               onOpenTeam={handleOpenTeamEditor}
-              onOpenCompiler={() => navigateTo({}, '/workspace/compile')}
-              onOpenHelp={() => navigateTo({}, '/workspace/help')}
+              onOpenCompiler={handleOpenCompile}
+              onOpenHelp={() => handleOpenHelp("/workspace/help")}
             />
           </div>
         )}
@@ -1177,6 +1222,12 @@ export default function App() {
               <PanelResizeHandle
                 id="sidebar-resizer"
                 onDragging={setIsSidebarDragging}
+                onDoubleClick={() => {
+                  if (!sidebarPanelRef.current) return;
+                  const percent = Math.max(18, Math.min(45, (360 / window.innerWidth) * 100));
+                  sidebarPanelRef.current.resize(percent);
+                }}
+                title="Double-click to reset size"
                 className={`w-1.5 bg-nb-surface-mid hover:bg-nb-tertiary/40 transition-colors ${!isSidebarOpen ? 'hidden' : ''}`}
               />
               <Panel id="main-panel" order={2} defaultSize={isSidebarOpen ? 100 - initialPercentSize : 100} minSize={30} className="flex flex-col">

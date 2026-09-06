@@ -13,6 +13,7 @@ export const CustomHeading = Heading.extend({
       ...this.parent?.(),
       id: {
         default: null,
+        keepOnSplit: true,
         parseHTML: (element) => element.getAttribute("data-id"),
         renderHTML: (attributes) => {
           if (!attributes.id) return {};

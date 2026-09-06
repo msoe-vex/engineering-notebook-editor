@@ -1,5 +1,19 @@
 import { ASSETS_DIR } from "./constants";
-import { TipTapNode, ProjectPhase } from "./metadata";
+import { Identified, ProjectPhase, TeamMetadata, TipTapNode, formatAuthors, sortedEntries, sortedMembers, sortedPhases } from "./metadata";
+
+export function latexPhaseRef(
+  phase: string | null | undefined,
+  phases?: Record<string, ProjectPhase> | Identified<ProjectPhase>[]
+): string {
+  if (!phase) return "";
+  if (!phases) return "";
+  if (Array.isArray(phases)) {
+    const p = phases.find((x) => x.id === phase);
+    return p ? String(p.order + 1) : "";
+  }
+  const p = phases[phase];
+  return p ? String(p.order + 1) : "";
+}
 
 export const escapeLaTeX = (text?: string) =>
   (text || "")
@@ -359,7 +373,7 @@ export const convertJsonToLatex = (input: TipTapNode | string, resourceTypes?: R
   return convertNodeToLatex(doc as TipTapNode, resourceTypes).replace(/\n{3,}/g, "\n\n").trim() + "\n";
 };
 
-export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: string, p: string | number | null, initialCreatedAt: string | undefined, id?: string, resourceTypes?: Record<string, string>, date?: string): string => {
+export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: string | string[], p: string | number | null, initialCreatedAt: string | undefined, id?: string, resourceTypes?: Record<string, string>, date?: string): string => {
   let dateObj = initialCreatedAt ? new Date(initialCreatedAt) : new Date();
 
   // Fallback for mangled timestamps (e.g. 2026-04-28T17-36-32)
@@ -380,51 +394,42 @@ export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: strin
   }
 
   const dateStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
-  let latex = `\\notebookentry{${escapeLaTeX(t)}}{${date || dateStr}}{${escapeLaTeX(a)}}{${p ?? ""}}{${id ?? ""}}\n\n`;
+  const authorStr = Array.isArray(a) ? formatAuthors(a) : a;
+  let latex = `\\notebookentry{${escapeLaTeX(t)}}{${date || dateStr}}{${escapeLaTeX(authorStr)}}{${p ?? ""}}{${id ?? ""}}\n\n`;
   latex += convertJsonToLatex(cnt, resolvedResourceTypes);
   return latex;
 };
 
-export const generateAllEntriesLatex = (metadata: { entries: Record<string, { id: string, date: string, createdAt: string, updatedAt?: string, isTemplate?: boolean }> }, prefix: string = ""): string => {
-  const entries = Object.values(metadata.entries)
-    .filter(entry => !entry.isTemplate)
-    .sort((a, b) => {
-      const dateComp = (a.date || "").localeCompare(b.date || "");
-      if (dateComp !== 0) return dateComp;
-      const timeA = a.updatedAt || a.createdAt || "";
-      const timeB = b.updatedAt || b.createdAt || "";
-      return timeA.localeCompare(timeB);
-    });
+export const generateAllEntriesLatex = (metadata: { entries: Record<string, import("./metadata").EntryMetadata> }, prefix: string = ""): string => {
+  const entries = sortedEntries(metadata.entries).filter(entry => !entry.isTemplate);
 
   return entries
     .map(entry => `\\input{${prefix}latex/entries/${entry.id}.tex}`)
     .join("\n") + "\n";
 };
 
-import { TeamMetadata } from "./metadata";
-
 export const generateTeamLatex = (team: TeamMetadata): string => {
   const cleanImg = (p: string | undefined) => {
     if (!p) return "";
-    // Keep full project-relative path and only normalize leading ./ if present.
     if (p.startsWith("./")) return p.slice(2);
     return p;
   };
+
+  const members = sortedMembers(team.members);
 
   let latex = `\\teamname{${escapeLaTeX(team.teamName || "")}}\n`;
   latex += `\\teamnumber{${escapeLaTeX(team.teamNumber || "")}}\n`;
   latex += `\\startdate{${escapeLaTeX(team.startDate || "")}}\n`;
   latex += `\\projectenddate{${escapeLaTeX(team.endDate || "")}}\n`;
   latex += `\\organization{${escapeLaTeX(team.organization || "")}}\n`;
-  const teamWithOriginal = team as TeamMetadata & { logoOriginal?: string; members: Array<TeamMetadata["members"][number] & { imageOriginal?: string }> };
-  latex += `\\teamlogo{${cleanImg(teamWithOriginal.logo)}}{${cleanImg(teamWithOriginal.logoOriginal || teamWithOriginal.logo)}}\n\n`;
+  latex += `\\teamlogo{${cleanImg(team.logo)}}{${cleanImg(team.logoOriginal || team.logo)}}\n\n`;
 
   latex += `\\teammembers{\n`;
-  team.members.forEach((m, i) => {
-    latex += `    \\teammember{${escapeLaTeX(m.name)}}{${escapeLaTeX(m.role)}}{${cleanImg(m.image)}}{${cleanImg((m as TeamMetadata["members"][number] & { imageOriginal?: string }).imageOriginal || m.image)}}`;
-    if (i % 2 === 0 && i < team.members.length - 1) {
+  members.forEach((m, i) => {
+    latex += `    \\teammember{${escapeLaTeX(m.name)}}{${escapeLaTeX(m.role)}}{${cleanImg(m.image)}}{${cleanImg(m.imageOriginal || m.image)}}`;
+    if (i % 2 === 0 && i < members.length - 1) {
       latex += ` \\hfill`;
-    } else if (i < team.members.length - 1) {
+    } else if (i < members.length - 1) {
       latex += ` \\\\`;
     }
     latex += `\n`;
@@ -433,22 +438,22 @@ export const generateTeamLatex = (team: TeamMetadata): string => {
   return latex;
 };
 
-export const generatePhasesLatex = (phases: ProjectPhase[]): string => {
+export const generatePhasesLatex = (phases: Record<string, ProjectPhase> | Identified<ProjectPhase>[]): string => {
+  const list = Array.isArray(phases) ? [...phases].sort((a, b) => a.order - b.order) : sortedPhases(phases);
   let latex = "% DESIGN PROCESS PHASES - AUTOMATICALLY GENERATED\n\n";
 
   let phaseListLatex = "\\newcommand{\\phaselist}{\n";
 
-  phases.forEach((p) => {
-    // Create a color name based on the stable ID (safe for LaTeX)
+  list.forEach((p) => {
     const colorName = `PhaseID${p.id.toString().replace(/-/g, "")}`;
     const hex = p.color.startsWith("#") ? p.color.substring(1) : p.color;
+    const n = p.order + 1;
 
     latex += `% Phase: ${p.name}\n`;
     latex += `\\definecolor{${colorName}}{HTML}{${hex}}\n`;
-    latex += `\\csdef{phasecolor@${p.index}}{${colorName}}\n`;
-    latex += `\\csdef{phasename@${p.index}}{${escapeLaTeX(p.name)}}\n\n`;
+    latex += `\\csdef{phasecolor@${n}}{${colorName}}\n`;
+    latex += `\\csdef{phasename@${n}}{${escapeLaTeX(p.name)}}\n\n`;
 
-    // Add to phase list using the abstracted command
     phaseListLatex += `    \\notebookphase{${colorName}}{${escapeLaTeX(p.name)}}{${escapeLaTeX(p.description || "")}}\n`;
   });
 
@@ -456,3 +461,4 @@ export const generatePhasesLatex = (phases: ProjectPhase[]): string => {
 
   return latex + phaseListLatex;
 };
+

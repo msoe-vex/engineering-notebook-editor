@@ -17,7 +17,7 @@
 % \notebooksubscript{text}                                                : Applies subscript (with native word-wrapping)
 % \notebookcharsplit{text}                                                : Splits abnormally long unbreakable words at spaces in order to allow line wrapping
 % \notebookheader{formatted}{raw}{level}{label}                           : Section headers and TOC entries
-% \notebookentry{title}{date}{author}{phase}{label}                       : Notebook entry titles
+% \notebookentry{title}{date}{authors}{phase}{label}                     : Notebook entry titles (authors is a comma-separated list)
 % \notebookimage{compressed}{original}{title}{caption}{width}{label}      : Standardized figures, including support for compressed vs. original images
 % \begin{notebookcodeblock}{lang}{title}{caption}{label}                  : Standardized code blocks
 % \notebooktable{columns}{title}{content}{caption}{label}                 : Standardized tables
@@ -518,7 +518,7 @@
     \vspace{-0.2cm}
 
     {\color{\@entryphasecolor}\hrule height 6pt}\smallskip
-    {\noindent \small \textbf{Author:} \@entryauthor \hfill \textbf{Phase:} \@entryphase}\par
+    {\noindent \small \textbf{\IfSubStr{#3}{,}{Authors}{Author}:} \@entryauthor \hfill \textbf{Phase:} \@entryphase}\par
     \medskip
 }
 

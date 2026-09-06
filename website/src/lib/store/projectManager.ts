@@ -1,7 +1,7 @@
 import { Project, getProjects, getProject, saveProject, getProjectHandle, saveProjectHandle, getAllPending, stageChange, getBaseMetadata, saveBaseMetadata } from "../db";
 import { listLocalFiles, readLocalFile, writeLocalFile, ensureLocalDirectory, checkLocalFileExists } from "../fs";
 import { fetchFileContent, fetchDirectoryTree, checkGitHubFileExists, fetchGitHubUser, GitHubFile } from "../github";
-import { EMPTY_METADATA, validateNotebookIntegrity } from "../metadata";
+import { EMPTY_METADATA, normalizeNotebookMetadata, serializeNotebookMetadata } from "../metadata";
 import { events, EventNames } from "../events";
 import { generateDeterministicUUID, generateUUID } from "../utils";
 import { INDEX_PATH, ENTRIES_DIR, ASSETS_DIR, LATEX_DIR } from "../constants";
@@ -297,7 +297,7 @@ export class ProjectManager {
     try {
       const metaStr = await readLocalFile(this.store.dirHandle, INDEX_PATH);
       const parsed = JSON.parse(metaStr);
-      this.store.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...parsed });
+      this.store.metadata = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...parsed });
       this.store.baseMetadata = this.store.metadata;
     } catch {
       isNew = true;
@@ -309,10 +309,10 @@ export class ProjectManager {
         }
       } catch (e) {
         console.warn("Failed to load default notebook template for local workspace:", e);
-        this.store.metadata = validateNotebookIntegrity(EMPTY_METADATA);
+        this.store.metadata = normalizeNotebookMetadata(EMPTY_METADATA);
       }
       // Initialize notebook.json
-      await writeLocalFile(this.store.dirHandle, INDEX_PATH, JSON.stringify(this.store.metadata, null, 2));
+      await writeLocalFile(this.store.dirHandle, INDEX_PATH, serializeNotebookMetadata(this.store.metadata));
       this.store.entries = await listLocalFiles(this.store.dirHandle, ENTRIES_DIR);
     }
     this.store.isMainTexPresent = await checkLocalFileExists(this.store.dirHandle, "main.tex");
@@ -320,6 +320,7 @@ export class ProjectManager {
     if (isNew) {
       await this.store.updateLatexMetadata();
     }
+    await this.store.repairDuplicateResourceIds();
   }
 
   async grantLocalPermission(): Promise<boolean> {
@@ -419,18 +420,18 @@ export class ProjectManager {
     const persistedBase = hasPendingChanges ? await getBaseMetadata(dbName) : null;
 
     if (persistedBase) {
-      this.store.baseMetadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...persistedBase });
+      this.store.baseMetadata = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...persistedBase });
     } else if (remoteMetaStr) {
-      const freshBase = validateNotebookIntegrity({ ...EMPTY_METADATA, ...JSON.parse(remoteMetaStr) });
+      const freshBase = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...JSON.parse(remoteMetaStr) });
       this.store.baseMetadata = freshBase;
       await saveBaseMetadata(dbName, freshBase);
     }
 
     if (pendingMeta?.content) {
       const parsed = JSON.parse(pendingMeta.content);
-      this.store.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...parsed });
+      this.store.metadata = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...parsed });
     } else if (remoteMetaStr) {
-      this.store.metadata = validateNotebookIntegrity({ ...EMPTY_METADATA, ...JSON.parse(remoteMetaStr) });
+      this.store.metadata = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...JSON.parse(remoteMetaStr) });
     } else {
       isNew = true;
       try {
@@ -450,14 +451,14 @@ export class ProjectManager {
         }
       } catch (e) {
         console.warn("Failed to load default notebook template for GitHub workspace:", e);
-        this.store.metadata = validateNotebookIntegrity(EMPTY_METADATA);
+        this.store.metadata = normalizeNotebookMetadata(EMPTY_METADATA);
       }
 
       // Stage default notebook.json
       await stageChange(dbName, {
         path: INDEX_PATH,
         operation: "upsert",
-        content: JSON.stringify(this.store.metadata, null, 2),
+        content: serializeNotebookMetadata(this.store.metadata),
         label: "Initialize notebook.json with default templates",
         stagedAt: new Date().toISOString()
       });
@@ -479,6 +480,7 @@ export class ProjectManager {
     if (isNew) {
       await this.store.updateLatexMetadata();
     }
+    await this.store.repairDuplicateResourceIds();
     this.store.notifyStateChange();
   }
 

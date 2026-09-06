@@ -8,6 +8,8 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
     defaults:
       run:
         working-directory: website
@@ -28,6 +30,9 @@ jobs:
 
       - name: Run Lint
         run: npm run lint -- --max-warnings 0
+
+      - name: Run Tests
+        run: npm test
 
       - name: Run Build
         run: npm run build

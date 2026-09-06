@@ -2,7 +2,7 @@ import { Extension } from "@tiptap/react";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Slice, Fragment } from "@tiptap/pm/model";
 import { EditorView } from "@tiptap/pm/view";
-import { remapContentIds } from "@/lib/metadata";
+import { collectContentResourceIds, remapContentIds, TipTapNode } from "@/lib/metadata";
 
 interface InternalEditorView extends EditorView {
   isDraggingFromHere?: boolean;
@@ -37,8 +37,9 @@ export const IdRemapper = Extension.create({
             if ((this.editor.view as InternalEditorView).isInternalMove) {
               return slice;
             }
+            const reserved = collectContentResourceIds(this.editor.getJSON() as TipTapNode);
             const json = slice.content.toJSON();
-            const remapped = remapContentIds(json);
+            const remapped = remapContentIds(json, new Map(), reserved);
             try {
               const fragment = Fragment.fromJSON(this.editor.schema, remapped.doc);
               return new Slice(fragment, slice.openStart, slice.openEnd);

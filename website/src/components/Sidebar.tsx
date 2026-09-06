@@ -9,11 +9,15 @@ import { ExplorerFile, TeamTab } from "@/lib/types";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { LATEX_DIR, ENTRIES_DIR } from "@/lib/constants";
 import { showNotification } from "./Notification";
+import { formatAuthors } from "@/lib/metadata";
 
 interface SidebarProps {
   selectedPaths: Set<string>;
   onSelectEntry: (file: ExplorerFile, multi: boolean, range: boolean, visiblePaths: string[]) => void;
   onOpenTeam: (tab?: TeamTab) => void;
+  onOpenCalendar?: () => void;
+  onOpenCompile?: () => void;
+  onOpenHelp?: () => void;
   showConfirm: (title: string, message: string, onConfirm: () => void, variant?: "danger" | "warning" | "info") => void;
   onNewEntry?: () => Promise<void>;
   onOpenEntry?: (file: ExplorerFile) => void;
@@ -24,6 +28,9 @@ export default function Sidebar({
   selectedPaths,
   onSelectEntry,
   onOpenTeam,
+  onOpenCalendar,
+  onOpenCompile,
+  onOpenHelp,
   showConfirm,
   onNewEntry,
   onOpenEntry,
@@ -40,6 +47,7 @@ export default function Sidebar({
     createTemplate,
     createEntryFromTemplate,
     deleteEntry,
+    reorderTemplates,
     navigateTo,
     getFileContent,
     exportEntries
@@ -90,11 +98,13 @@ export default function Sidebar({
       return {
         ...f,
         title: meta?.title || "",
-        author: meta?.author || "",
+        author: formatAuthors(meta?.authors),
+        authors: meta?.authors,
         phase: meta?.phase ?? null,
         timestamp: meta?.createdAt,
         updatedAt: meta?.updatedAt,
         date: meta?.date,
+        order: meta?.order ?? 0,
         isTemplate: meta?.isTemplate || false,
         isValid: meta?.isValid !== false,
         validationErrors: meta?.validationErrors || []
@@ -103,30 +113,40 @@ export default function Sidebar({
   }, [entries, metadata]);
 
   const filteredEntries = useMemo(() => {
-    const list = [...augmentedEntries];
+    const byPath = (a: typeof augmentedEntries[0], b: typeof augmentedEntries[0]) =>
+      (a.path || a.name).localeCompare(b.path || b.name);
 
-    list.sort((a, b) => {
-      let valA, valB;
+    const entriesOnly = augmentedEntries.filter((e) => !e.isTemplate);
+    const templates = augmentedEntries.filter((e) => e.isTemplate);
+
+    entriesOnly.sort((a, b) => {
       if (sortBy === "title") {
-        valA = a.title || a.name;
-        valB = b.title || b.name;
-      } else {
-        valA = a.date || a.timestamp || "";
-        valB = b.date || b.timestamp || "";
+        const valA = (a.title || a.name).toLowerCase();
+        const valB = (b.title || b.name).toLowerCase();
+        if (valA !== valB) {
+          return sortDirection === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        }
+        const orderA = a.order ?? 0;
+        const orderB = b.order ?? 0;
+        if (orderA !== orderB) return orderA - orderB;
+        return byPath(a, b);
       }
-
-      if (valA < valB) return sortDirection === "asc" ? -1 : 1;
-      if (valA > valB) return sortDirection === "asc" ? 1 : -1;
-      
-      const tsA = a.updatedAt || a.timestamp || "";
-      const tsB = b.updatedAt || b.timestamp || "";
-      if (tsA < tsB) return sortDirection === "asc" ? -1 : 1;
-      if (tsA > tsB) return sortDirection === "asc" ? 1 : -1;
-
-      return 0;
+      const orderA = a.order ?? 0;
+      const orderB = b.order ?? 0;
+      if (orderA !== orderB) {
+        return sortDirection === "asc" ? orderA - orderB : orderB - orderA;
+      }
+      return byPath(a, b);
     });
 
-    return list;
+    templates.sort((a, b) => {
+      const orderA = a.order ?? 0;
+      const orderB = b.order ?? 0;
+      if (orderA !== orderB) return orderA - orderB;
+      return byPath(a, b);
+    });
+
+    return [...entriesOnly, ...templates];
   }, [augmentedEntries, sortBy, sortDirection]);
 
   useEffect(() => {
@@ -148,7 +168,9 @@ export default function Sidebar({
         if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable || target.closest('.ProseMirror') || target.closest('[tabindex="0"]')) return;
 
         e.preventDefault();
-        onSelectAll(filteredEntries.map(f => f.path));
+        const selected = filteredEntries.filter((f) => selectedPaths.has(f.path));
+        const templatesOnly = selected.length > 0 && selected.every((f) => f.isTemplate);
+        onSelectAll(filteredEntries.filter((f) => !!f.isTemplate === templatesOnly).map((f) => f.path));
       }
     };
 
@@ -254,8 +276,9 @@ export default function Sidebar({
         onSelectTab={setActiveTab}
         pendingCount={mode === "github" ? (pendingChanges || []).length : 0}
         onOpenTeam={onOpenTeam}
-        onOpenCompile={() => navigateTo({}, '/workspace/compile')}
-        onOpenHelp={() => navigateTo({}, '/workspace/help/getting-started')}
+        onOpenCalendar={onOpenCalendar}
+        onOpenCompile={onOpenCompile || (() => navigateTo({}, '/workspace/compile'))}
+        onOpenHelp={onOpenHelp || (() => navigateTo({}, '/workspace/help/getting-started'))}
       />
 
       {/* Main Tab Panel */}
@@ -267,7 +290,7 @@ export default function Sidebar({
             selectedPaths={selectedPaths}
             pendingPaths={pendingPaths}
             deletedPaths={deletedPaths}
-            onSelectEntry={(file, multi, range) => onSelectEntry(file, multi, range, filteredEntries.map(e => e.path))}
+            onSelectEntry={onSelectEntry}
             onOpenEntry={handleOpenEntry}
             onCloseEntry={handleCloseEntry}
             onDownloadLatex={handleDownloadLatex}
@@ -280,11 +303,16 @@ export default function Sidebar({
             onDownloadMulti={handleDownloadMulti}
             onDeleteMulti={handleConfirmDelete}
             onNewEntry={onNewEntry || createEntry}
+            onReorderTemplates={(ids) => { void reorderTemplates(ids); }}
             sortBy={sortBy}
-            onSortChange={setSortBy}
+            onSortChange={(val) => {
+              setSortBy(val);
+              setSortDirection(val === "title" ? "asc" : "desc");
+            }}
             sortDirection={sortDirection}
             onSortDirectionToggle={() => setSortDirection(prev => prev === "asc" ? "desc" : "asc")}
             notebookMetadata={metadata}
+            isVisible={activeTab === "explorer"}
           />
         </div>
 

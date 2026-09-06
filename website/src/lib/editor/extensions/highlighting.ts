@@ -100,8 +100,8 @@ export function getIntegrityDecorations(doc: import("@tiptap/pm/model").Node) {
   if (!metadata?.entries) return DecorationSet.create(doc, []);
 
   const validIds = new Set<string>();
-  for (const entry of Object.values(metadata.entries)) {
-    validIds.add(entry.id);
+  for (const [id, entry] of Object.entries(metadata.entries)) {
+    validIds.add(id);
     if (entry.resources) {
       for (const resId of Object.keys(entry.resources)) {
         validIds.add(resId);

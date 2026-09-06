@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 import * as fs from "fs";
 import * as path from "path";
 
+process.env.NEXT_TELEMETRY_DISABLED = "1";
+
 function getAppVersion(): string {
   try {
     const versionPath = path.resolve(__dirname, "../VERSION");

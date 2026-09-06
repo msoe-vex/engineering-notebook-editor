@@ -3,7 +3,7 @@
  * Source files live in /public/notebook-template/ and are copied from /notebook/.
  */
 
-import { EntryMetadata, NotebookMetadata, EMPTY_METADATA, validateNotebookIntegrity } from "./metadata";
+import { EntryMetadata, NotebookMetadata, EMPTY_METADATA, normalizeNotebookMetadata } from "./metadata";
 import { ENTRIES_DIR } from "./constants";
 
 const BASE_URL = "/notebook-template/data";
@@ -35,12 +35,12 @@ export async function fetchNotebookTemplateFile(relativePath: string): Promise<s
 export async function fetchDefaultPhases(): Promise<NotebookMetadata['phases']> {
   try {
     const metaRes = await fetch(`${BASE_URL}/notebook.json`);
-    if (!metaRes.ok) return [];
+    if (!metaRes.ok) return {};
     const meta: NotebookMetadata = await metaRes.json();
-    return meta.phases || [];
+    return meta.phases || {};
   } catch (err) {
     console.warn("Failed to fetch default phases:", err);
-    return [];
+    return {};
   }
 }
 
@@ -67,7 +67,7 @@ export async function fetchDefaultNotebook(): Promise<DefaultNotebook> {
       const filename = `${ENTRIES_DIR}/${id}.json`;
       const cleanMeta: EntryMetadata = {
         ...entry,
-        author: "",
+        authors: [],
         filename,
         createdAt: today,
         updatedAt: today,
@@ -83,17 +83,17 @@ export async function fetchDefaultNotebook(): Promise<DefaultNotebook> {
       }
     }
 
-    const cleanMetadata = validateNotebookIntegrity({
-      version: 3,
+    const cleanMetadata = normalizeNotebookMetadata({
+      version: 4,
       entries: cleanedEntries,
-      phases: meta.phases || [],
+      phases: meta.phases || {},
       team: {
         teamName: "",
         teamNumber: "",
         startDate: "",
         endDate: "",
         organization: "",
-        members: []
+        members: {}
       }
     });
 
