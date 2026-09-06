@@ -13,7 +13,8 @@ Use the export option by clicking the project name in the top of the editor to e
 - LaTeX source files when exporting the full project
 - Font assets when exporting the full project and when the archive contains them
 
-The export no longer includes a separate `notebook.index.json` manifest. The main notebook metadata file is `data/notebook.json`, which is the file the importer reads first.
+The main notebook metadata file is `data/notebook.json` (schema version 4). Entries, team members, and phases are dictionaries keyed by id. Sort position is a numeric `order` field on each value (not a nested `id`). Entry `phase` stores the phase key. Older version-3 notebooks are migrated automatically on load. A Calendar shortcut in the activity bar lets you drag entries between days and reorder them on the same day.
+
 
 ## Entry Export
 

@@ -1,6 +1,6 @@
 import * as Icons from "lucide-react";
 import { LucideIcon } from "lucide-react";
-import { ProjectPhase, DEFAULT_PHASES } from "./metadata";
+import { Identified, ProjectPhase, DEFAULT_PHASES, sortedPhases } from "./metadata";
 export { DEFAULT_PHASES };
 
 
@@ -21,29 +21,23 @@ export interface PhaseInfo {
   text: string;
 }
 
-export function getPhases(customPhases?: ProjectPhase[]): ProjectPhase[] {
-  // If caller explicitly provides an array (even empty), respect it.
-  // Only return DEFAULT_PHASES when `customPhases` is undefined.
-  if (customPhases === undefined) return DEFAULT_PHASES;
-  return customPhases;
+export function getPhases(customPhases?: Record<string, ProjectPhase> | Identified<ProjectPhase>[]): Identified<ProjectPhase>[] {
+  if (customPhases === undefined) return sortedPhases(DEFAULT_PHASES);
+  if (Array.isArray(customPhases)) return [...customPhases].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+  return sortedPhases(customPhases);
 }
 
-/**
- * Returns a Record<string, PhaseInfo> for the given phases.
- * In a real React app, you'd probably use a hook for this if it depends on metadata.
- */
-export function getPhaseConfig(phases: ProjectPhase[]): Record<string, PhaseInfo> {
+export function getPhaseConfig(phases: Identified<ProjectPhase>[]): Record<string, PhaseInfo> {
   const config: Record<string, PhaseInfo> = {};
   
   phases.forEach(p => {
-    // Dynamically get icon component
     const IconComponent = (Icons as unknown as Record<string, LucideIcon>)[p.iconName] || Icons.HelpCircle;
     
-    config[p.index] = {
+    config[p.id] = {
       icon: IconComponent,
       color: p.color,
-      bg: `${p.color}1a`, // 10% opacity hex
-      border: `${p.color}33`, // 20% opacity hex
+      bg: `${p.color}1a`,
+      border: `${p.color}33`,
       text: p.color
     };
   });

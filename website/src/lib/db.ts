@@ -302,10 +302,12 @@ export async function getPending(dbName: string, path: string): Promise<PendingC
 // ── Base Metadata Snapshot ──────────────────────────────────────────────────
 
 export async function saveBaseMetadata(dbName: string, metadata: import("./metadata").NotebookMetadata): Promise<void> {
+  const { serializeNotebookMetadata } = await import("./metadata");
+  const serialized = serializeNotebookMetadata(metadata);
   const db = await openDB(dbName);
   return new Promise((resolve, reject) => {
     const store = tx(db, WORKSPACE_STORE, "readwrite");
-    const req = store.put(JSON.stringify(metadata), "base-metadata");
+    const req = store.put(serialized, "base-metadata");
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });

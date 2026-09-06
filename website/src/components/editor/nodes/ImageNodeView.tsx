@@ -143,6 +143,8 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
               value={node.attrs.title || ""}
               onUpdate={(title) => updateAttributes({ title })}
               placeholder="Give this image a title..."
+              required
+              missingMessage="Title is required for this image."
               className="flex-1 bg-transparent border-none outline-none text-[12px] font-bold tracking-wider text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
             />
           </div>
@@ -232,6 +234,8 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
             value={node.attrs.caption || ""}
             onUpdate={(caption) => updateAttributes({ caption })}
             placeholder="Add figure description..."
+            required
+            missingMessage="Caption is required for this image."
             className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface/50 group-hover/caption:text-nb-on-surface focus:text-nb-on-surface focus:opacity-100 transition-all"
           />
         </div>
@@ -252,8 +256,9 @@ export const ImageWithCaption = TiptapImage.extend<ImageOptions & { dbName: stri
       ...this.parent!(),
       id: {
         default: null,
+        keepOnSplit: true,
         parseHTML: element => element.getAttribute('data-id'),
-        renderHTML: attributes => ({ 'data-id': attributes.id }),
+        renderHTML: attributes => (attributes.id ? { 'data-id': attributes.id } : {}),
       },
       alt: { default: "" },
       title: { default: "" },

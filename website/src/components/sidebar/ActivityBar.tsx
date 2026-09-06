@@ -8,6 +8,7 @@ import {
   Users,
   HelpCircle,
   Play,
+  CalendarDays,
   LucideIcon
 } from "lucide-react";
 import { TeamTab } from "@/lib/types";
@@ -19,6 +20,7 @@ interface ActivityBarProps {
   onSelectTab: (tab: SidebarTab) => void;
   pendingCount?: number;
   onOpenTeam: (tab?: TeamTab) => void;
+  onOpenCalendar?: () => void;
   onOpenCompile?: () => void;
   onOpenHelp?: () => void;
 }
@@ -62,6 +64,7 @@ export default function ActivityBar({
   onSelectTab,
   pendingCount = 0,
   onOpenTeam,
+  onOpenCalendar,
   onOpenCompile,
   onOpenHelp
 }: ActivityBarProps) {
@@ -114,6 +117,17 @@ export default function ActivityBar({
         >
           <Users size={18} className="group-hover:scale-110 transition-transform" />
         </button>
+
+        {onOpenCalendar && (
+          <button
+            onClick={onOpenCalendar}
+            title="Calendar"
+            aria-label="Calendar"
+            className="w-10 h-10 flex items-center justify-center rounded-xl text-nb-on-surface-variant hover:text-nb-on-surface hover:bg-nb-surface-high/60 transition-all cursor-pointer group"
+          >
+            <CalendarDays size={18} className="group-hover:scale-110 transition-transform" />
+          </button>
+        )}
 
         {onOpenHelp && (
           <button

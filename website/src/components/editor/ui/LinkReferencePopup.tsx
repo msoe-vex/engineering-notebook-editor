@@ -124,16 +124,16 @@ export function LinkReferencePopup({
         setQuery(href);
         if (attrs.resourceId) {
           let found = null;
-          for (const entry of Object.values(metadata?.entries || {})) {
+          for (const [entryId, entry] of Object.entries(metadata?.entries || {})) {
             const e = entry as EntryMetadata;
             const entryTitle = e.title?.trim() || "Untitled Entry";
             const entryDate = e.date || e.createdAt?.split('T')[0];
-            if (e.id === attrs.resourceId) {
-              found = { id: e.id, title: e.title, type: 'entry', entryTitle, entryDate };
+            if (entryId === attrs.resourceId) {
+              found = { id: entryId, title: e.title, type: 'entry', entryTitle, entryDate };
               break;
             }
             if (e.resources?.[attrs.resourceId]) {
-              found = { id: attrs.resourceId, entryId: e.id, ...e.resources[attrs.resourceId], entryTitle, entryDate };
+              found = { id: attrs.resourceId, entryId, ...e.resources[attrs.resourceId], entryTitle, entryDate };
               break;
             }
           }
