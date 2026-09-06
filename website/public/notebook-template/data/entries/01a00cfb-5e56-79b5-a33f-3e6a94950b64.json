@@ -96,12 +96,6 @@
             "type": "text",
             "marks": [
               {
-                "type": "textStyle",
-                "attrs": {
-                  "color": "#2d5a27"
-                }
-              },
-              {
                 "type": "bold"
               },
               {
@@ -109,22 +103,17 @@
               }
             ],
             "text": "Pros:"
-          },
-          {
-            "type": "text",
-            "marks": [
-              {
-                "type": "textStyle",
-                "attrs": {
-                  "color": "#2d5a27"
-                }
-              },
-              {
-                "type": "bold"
-              }
-            ],
-            "text": " "
-          },
+          }
+        ]
+      },
+      {
+        "type": "notebookListItem",
+        "attrs": {
+          "indent": 3,
+          "listType": "bullet",
+          "restart": false
+        },
+        "content": [
           {
             "type": "text",
             "marks": [
@@ -148,12 +137,6 @@
             "type": "text",
             "marks": [
               {
-                "type": "textStyle",
-                "attrs": {
-                  "color": "#ef4444"
-                }
-              },
-              {
                 "type": "bold"
               },
               {
@@ -161,11 +144,17 @@
               }
             ],
             "text": "Cons:"
-          },
-          {
-            "type": "text",
-            "text": " "
-          },
+          }
+        ]
+      },
+      {
+        "type": "notebookListItem",
+        "attrs": {
+          "indent": 3,
+          "listType": "bullet",
+          "restart": false
+        },
+        "content": [
           {
             "type": "text",
             "marks": [
@@ -230,12 +219,6 @@
             "type": "text",
             "marks": [
               {
-                "type": "textStyle",
-                "attrs": {
-                  "color": "rgb(45, 90, 39)"
-                }
-              },
-              {
                 "type": "bold"
               },
               {
@@ -243,22 +226,17 @@
               }
             ],
             "text": "Pros:"
-          },
-          {
-            "type": "text",
-            "marks": [
-              {
-                "type": "textStyle",
-                "attrs": {
-                  "color": "rgb(45, 90, 39)"
-                }
-              },
-              {
-                "type": "bold"
-              }
-            ],
-            "text": " "
-          },
+          }
+        ]
+      },
+      {
+        "type": "notebookListItem",
+        "attrs": {
+          "indent": 3,
+          "listType": "bullet",
+          "restart": false
+        },
+        "content": [
           {
             "type": "text",
             "marks": [
@@ -282,12 +260,6 @@
             "type": "text",
             "marks": [
               {
-                "type": "textStyle",
-                "attrs": {
-                  "color": "rgb(239, 68, 68)"
-                }
-              },
-              {
                 "type": "bold"
               },
               {
@@ -295,11 +267,17 @@
               }
             ],
             "text": "Cons:"
-          },
-          {
-            "type": "text",
-            "text": " "
-          },
+          }
+        ]
+      },
+      {
+        "type": "notebookListItem",
+        "attrs": {
+          "indent": 3,
+          "listType": "bullet",
+          "restart": false
+        },
+        "content": [
           {
             "type": "text",
             "marks": [
