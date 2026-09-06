@@ -227,7 +227,7 @@ export class EntryManager {
     this.store.notifyStateChange();
     events.emit(EventNames.ENTRY_UPDATED, { id, ...info });
 
-    if (info.authors?.length) {
+    if (info.authors?.length && !authorsEqual(info.authors, existingEntry.authors)) {
       writeLastAuthors(info.authors);
     }
 
