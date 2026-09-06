@@ -312,6 +312,7 @@ export default function Sidebar({
             sortDirection={sortDirection}
             onSortDirectionToggle={() => setSortDirection(prev => prev === "asc" ? "desc" : "asc")}
             notebookMetadata={metadata}
+            isVisible={activeTab === "explorer"}
           />
         </div>
 

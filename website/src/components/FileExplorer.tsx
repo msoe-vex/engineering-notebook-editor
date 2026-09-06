@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+﻿import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -46,6 +46,7 @@ interface FileExplorerProps {
   sortDirection: "asc" | "desc";
   onSortDirectionToggle: () => void;
   notebookMetadata?: NotebookMetadata;
+  isVisible?: boolean;
 }
 
 interface FileRowProps {
@@ -72,13 +73,6 @@ function FileRow({
   onSelect, onDoubleClick, onContextMenu, phaseLabel, dragHandle, rowRef, rowStyle
 }: FileRowProps) {
   const localRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    const node = localRef.current;
-    if (isOpened && node) {
-      node.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }
-  }, [isOpened]);
 
   const tooltipLines = [file.title || (file.isTemplate ? "Untitled Template" : "Untitled Entry")];
   if (file.author) tooltipLines.push(`By ${file.author}`);
@@ -120,6 +114,7 @@ function FileRow({
         localRef.current = node;
         rowRef?.(node);
       }}
+      data-explorer-path={file.path}
       style={rowStyle}
       onClick={isDeleted ? undefined : (e) => {
         onSelect(e);
@@ -230,12 +225,14 @@ export default function FileExplorer({
   onSortChange,
   sortDirection,
   onSortDirectionToggle,
-  notebookMetadata
+  notebookMetadata,
+  isVisible = true,
 }: FileExplorerProps) {
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, file: ExplorerFile } | null>(null);
   const [explorerTab, setExplorerTab] = useState<"entries" | "templates">("entries");
   const [isNewDropdownOpen, setIsNewDropdownOpen] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const availablePhases = getPhases(notebookMetadata?.phases);
   const phaseConfig = getPhaseConfig(availablePhases);
@@ -248,6 +245,18 @@ export default function FileExplorer({
     return (a.path || a.name).localeCompare(b.path || b.name);
   });
   const canReorderTemplates = !!onReorderTemplates;
+  const openEntry = entries.find((e) => e.path === activePath);
+
+  useEffect(() => {
+    if (!openEntry) return;
+    setExplorerTab(openEntry.isTemplate ? "templates" : "entries");
+  }, [activePath, openEntry?.isTemplate]);
+
+  useLayoutEffect(() => {
+    if (!isVisible || !activePath) return;
+    const node = listRef.current?.querySelector(`[data-explorer-path=${JSON.stringify(activePath)}]`);
+    node?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [isVisible, activePath, explorerTab]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -444,7 +453,7 @@ export default function FileExplorer({
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto p-2 min-h-0 bg-nb-surface-lowest/40">
+      <div ref={listRef} className="flex-1 overflow-y-auto p-2 min-h-0 bg-nb-surface-lowest/40">
         {explorerTab === "entries" ? (
           regularEntries.length > 0 ? (
             <div className="flex flex-col gap-1">
