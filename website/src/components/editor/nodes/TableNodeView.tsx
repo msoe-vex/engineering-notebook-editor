@@ -62,6 +62,8 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
               value={node.attrs.title || ""}
               onUpdate={(title) => updateAttributes({ title })}
               placeholder="Table Title..."
+              required
+              missingMessage="Title is required for this table."
               className="bg-transparent border-none outline-none text-[12px] font-bold tracking-wider text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30 w-48"
             />
           </div>
@@ -140,6 +142,8 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
             value={node.attrs.caption || ""}
             onUpdate={(caption) => updateAttributes({ caption })}
             placeholder="Describe this table..."
+            required
+            missingMessage="Caption is required for this table."
             className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface/50 group-hover/caption:text-nb-on-surface focus:text-nb-on-surface focus:opacity-100 transition-all"
           />
         </div>

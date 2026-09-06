@@ -1,15 +1,15 @@
 "use client";
 
-import React, { useState, useRef, useLayoutEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import { AlertTriangle, Info } from 'lucide-react';
+import React, { useState, useRef, useLayoutEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { AlertTriangle, Info } from "lucide-react";
 
 interface ValidationTooltipProps {
   errors: string[];
   size?: number;
   className?: string;
   iconContainerClassName?: string;
-  position?: 'left' | 'right' | 'bottom';
+  position?: "left" | "right" | "bottom";
 }
 
 export default function ValidationTooltip({
@@ -17,62 +17,67 @@ export default function ValidationTooltip({
   size = 12,
   className = "",
   iconContainerClassName = "",
-  position: preferredPosition = 'left'
+  position: preferredPosition = "left",
 }: ValidationTooltipProps) {
   const [isHovered, setIsHovered] = useState(false);
-  const [isReady, setIsReady] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
 
   const updatePosition = useCallback(() => {
-    if (!triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
-    const tooltipWidth = 256;
-    const tooltipHeight = 160;
+    const trigger = triggerRef.current;
+    const tooltip = tooltipRef.current;
+    if (!trigger || !tooltip) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const tip = tooltip.getBoundingClientRect();
+    const padding = 12;
+    const gap = 8;
 
     let top = 0;
     let left = 0;
-    const padding = 12;
 
-    // Initial placement based on preference
-    if (preferredPosition === 'left') {
+    if (preferredPosition === "left") {
       top = rect.top;
-      left = rect.left - tooltipWidth - 8;
-    } else if (preferredPosition === 'right') {
+      left = rect.left - tip.width - gap;
+    } else if (preferredPosition === "right") {
       top = rect.top;
-      left = rect.right + 8;
+      left = rect.right + gap;
     } else {
-      // Default: bottom
-      top = rect.bottom + 8;
-      left = rect.left + rect.width / 2 - tooltipWidth / 2;
+      top = rect.bottom + gap;
+      left = rect.left + rect.width / 2 - tip.width / 2;
     }
 
-    // Viewport constraints adjustment
     if (left < padding) left = padding;
-    if (left + tooltipWidth > window.innerWidth - padding) {
-      left = window.innerWidth - tooltipWidth - padding;
+    if (left + tip.width > window.innerWidth - padding) {
+      left = Math.max(padding, window.innerWidth - tip.width - padding);
+    }
+
+    const fitsBelow = rect.bottom + gap + tip.height <= window.innerHeight - padding;
+    const fitsAbove = rect.top - gap - tip.height >= padding;
+
+    if (preferredPosition === "bottom") {
+      if (!fitsBelow && fitsAbove) top = rect.top - tip.height - gap;
+    } else if (top + tip.height > window.innerHeight - padding) {
+      top = Math.max(padding, window.innerHeight - tip.height - padding);
     }
 
     if (top < padding) top = padding;
-    if (top + tooltipHeight > window.innerHeight - padding) {
-      top = rect.top - tooltipHeight - 8;
-      if (top < padding) top = rect.bottom + 8;
-    }
 
-    setPosition({ top, left });
-    setIsReady(true);
+    setCoords({ top, left });
   }, [preferredPosition]);
 
-  // We use useLayoutEffect to position it before the browser paints
   useLayoutEffect(() => {
-    if (isHovered && errors.length > 0) {
-      updatePosition();
-      window.addEventListener('scroll', updatePosition, true);
-      window.addEventListener('resize', updatePosition);
+    if (!isHovered || errors.length === 0) {
+      setCoords(null);
+      return;
     }
+    updatePosition();
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
     return () => {
-      window.removeEventListener('scroll', updatePosition, true);
-      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
     };
   }, [isHovered, updatePosition, errors.length]);
 
@@ -83,19 +88,21 @@ export default function ValidationTooltip({
       ref={triggerRef}
       className={`relative inline-block ${className}`}
       onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => {
-        setIsHovered(false);
-        setIsReady(false);
-      }}
+      onMouseLeave={() => setIsHovered(false)}
     >
       <div className={`shrink-0 flex items-center justify-center animate-pulse cursor-help ${iconContainerClassName}`}>
         <AlertTriangle size={size} />
       </div>
 
-      {isHovered && isReady && typeof document !== 'undefined' && createPortal(
+      {isHovered && typeof document !== "undefined" && createPortal(
         <div
-          className={`fixed z-[9999] w-64 p-4 bg-nb-surface/95 backdrop-blur-xl border border-nb-outline-variant shadow-2xl rounded-2xl animate-in fade-in zoom-in-95 duration-200 pointer-events-none`}
-          style={{ top: position.top, left: position.left }}
+          ref={tooltipRef}
+          className="fixed z-[9999] w-64 p-4 bg-nb-surface/95 backdrop-blur-xl border border-nb-outline-variant shadow-2xl rounded-2xl pointer-events-none"
+          style={{
+            top: coords?.top ?? 0,
+            left: coords?.left ?? 0,
+            visibility: coords ? "visible" : "hidden",
+          }}
         >
           <div className="flex items-center gap-2 mb-3 pb-2 border-b border-nb-outline-variant/30">
             <div className="w-5 h-5 rounded-md bg-amber-500/10 flex items-center justify-center">

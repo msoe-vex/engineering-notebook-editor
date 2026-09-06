@@ -1185,9 +1185,9 @@ const EditorContent = React.memo(function EditorContent({
                     />
                   </div>
 
-                  {!localIsValid && (
+                  {!localIsValid && validationErrors.filter((e) => !/missing for /i.test(e)).length > 0 && (
                     <ValidationTooltip
-                      errors={validationErrors.length > 0 ? validationErrors : ["Incomplete entry metadata or resource captions"]}
+                      errors={validationErrors.filter((e) => !/missing for /i.test(e))}
                       size={20}
                       className="mr-4"
                       iconContainerClassName="text-amber-500"

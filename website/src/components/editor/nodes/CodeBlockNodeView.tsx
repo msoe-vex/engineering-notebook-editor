@@ -113,6 +113,8 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
               value={node.attrs.title || ""}
               onUpdate={(title) => updateAttributes({ title })}
               placeholder="Code Snippet Title..."
+              required
+              missingMessage="Title is required for this code block."
               className="flex-1 bg-transparent border-none outline-none text-[12px] font-bold tracking-wider text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
             />
             <div className="relative shrink-0 ml-auto">
@@ -191,6 +193,8 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
             value={node.attrs.caption || ""}
             onUpdate={(caption) => updateAttributes({ caption })}
             placeholder="What does this code do?"
+            required
+            missingMessage="Caption is required for this code block."
             className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface/50 group-hover/caption:text-nb-on-surface focus:text-nb-on-surface focus:opacity-100 transition-all"
           />
         </div>

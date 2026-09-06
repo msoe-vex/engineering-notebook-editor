@@ -110,6 +110,8 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
               value={node.attrs.title || ""}
               onUpdate={(title) => updateAttributes({ title })}
               placeholder="Equation Title..."
+              required
+              missingMessage="Title is required for this equation."
               className="flex-1 bg-transparent border-none outline-none text-[12px] font-bold tracking-wider text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
             />
           </div>
@@ -195,6 +197,8 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
             value={node.attrs.caption || ""}
             onUpdate={(caption) => updateAttributes({ caption })}
             placeholder="Add a caption to this equation..."
+            required
+            missingMessage="Caption is required for this equation."
             className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface/50 group-hover/caption:text-nb-on-surface focus:text-nb-on-surface focus:opacity-100 transition-all"
           />
         </div>
