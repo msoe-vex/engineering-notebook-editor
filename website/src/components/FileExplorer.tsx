@@ -175,10 +175,10 @@ function restrictToVerticalAxis({ transform }: { transform: { x: number; y: numb
 }
 
 function SortableTemplateRow(props: Omit<FileRowProps, "dragHandle" | "rowRef" | "rowStyle"> & { sortableId: string }) {
+  const { sortableId, ...rowProps } = props;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: props.sortableId,
+    id: sortableId,
   });
-  const { sortableId: _sortableId, ...rowProps } = props;
   return (
     <FileRow
       {...rowProps}

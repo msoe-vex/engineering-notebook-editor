@@ -68,10 +68,7 @@ export default function ValidationTooltip({
   }, [preferredPosition]);
 
   useLayoutEffect(() => {
-    if (!isHovered || errors.length === 0) {
-      setCoords(null);
-      return;
-    }
+    if (!isHovered || errors.length === 0) return;
     updatePosition();
     window.addEventListener("scroll", updatePosition, true);
     window.addEventListener("resize", updatePosition);
@@ -88,7 +85,10 @@ export default function ValidationTooltip({
       ref={triggerRef}
       className={`relative inline-block ${className}`}
       onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseLeave={() => {
+        setIsHovered(false);
+        setCoords(null);
+      }}
     >
       <div className={`shrink-0 flex items-center justify-center animate-pulse cursor-help ${iconContainerClassName}`}>
         <AlertTriangle size={size} />

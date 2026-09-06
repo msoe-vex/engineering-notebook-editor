@@ -403,8 +403,10 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
   const modeRef = useRef(mode);
   const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navHoverRef = useRef<string | null>(null);
-  cursorRef.current = cursor;
-  modeRef.current = mode;
+  useEffect(() => {
+    cursorRef.current = cursor;
+    modeRef.current = mode;
+  }, [cursor, mode]);
   const commitView = useCallback((nextMode: "month" | "week", nextCursor: Date) => {
     navigateTo(
       {
@@ -494,10 +496,14 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
 
   const shift = (dir: number) => {
     if (modeRef.current === "month") {
-      commitView(modeRef.current, addMonthsClamped(cursorRef.current, dir));
+      const next = addMonthsClamped(cursorRef.current, dir);
+      cursorRef.current = next;
+      commitView(modeRef.current, next);
       return;
     }
-    commitView(modeRef.current, addDays(cursorRef.current, 7 * dir));
+    const next = addDays(cursorRef.current, 7 * dir);
+    cursorRef.current = next;
+    commitView(modeRef.current, next);
   };
 
   const handleDragOver = (event: DragOverEvent) => {
