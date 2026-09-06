@@ -97,6 +97,8 @@ export default function App() {
     teamTab,
     showCompiler,
     showCalendar,
+    calendarMode,
+    calendarCursor,
     showHelp,
     showAbout,
     helpPath,
@@ -655,12 +657,16 @@ export default function App() {
   const handleOpenCalendar = () => {
     closeSidebarOnMobile();
     const now = new Date();
-    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    navigateTo({ month, week: null }, "/workspace/calendar");
+    const fallback = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(calendarCursor) ? calendarCursor : fallback;
+    navigateTo(
+      { date, view: calendarMode || "month", month: null, week: null },
+      "/workspace/calendar"
+    );
   };
 
   const handleCloseCalendar = () => {
-    navigateTo({ month: null, week: null }, "/workspace/editor");
+    navigateTo({ date: null, view: null, month: null, week: null }, "/workspace/editor");
   };
 
   const handleOpenCompile = () => {

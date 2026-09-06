@@ -10,10 +10,6 @@ function toYmd(d: Date): string {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
-function monthParam(d: Date): string {
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
-}
-
 function parseMonthParam(value: string | null): Date | null {
   const match = value?.match(/^(\d{4})-(\d{2})$/);
   if (!match) return null;
@@ -41,21 +37,38 @@ export class NavigationManager {
 
     if (path.startsWith('/workspace/calendar')) {
       this.store.showCalendar = true;
+      const dateParam = parseDayParam(params.get("date"));
       const weekDate = parseDayParam(params.get("week"));
       const monthDate = parseMonthParam(params.get("month"));
-      if (weekDate) {
+      const viewParam = params.get("view");
+      const now = new Date();
+
+      if (dateParam) {
+        this.store.calendarCursor = toYmd(dateParam);
+        this.store.calendarMode = viewParam === "week" ? "week" : "month";
+      } else if (weekDate) {
         this.store.calendarMode = "week";
-        const sunday = new Date(weekDate);
-        sunday.setDate(sunday.getDate() - sunday.getDay());
-        this.store.calendarCursor = toYmd(sunday);
+        this.store.calendarCursor = toYmd(weekDate);
       } else if (monthDate) {
         this.store.calendarMode = "month";
         this.store.calendarCursor = toYmd(monthDate);
       } else {
-        const now = new Date();
         this.store.calendarMode = "month";
-        this.store.calendarCursor = toYmd(new Date(now.getFullYear(), now.getMonth(), 1));
-        url.searchParams.set("month", monthParam(now));
+        this.store.calendarCursor = toYmd(now);
+      }
+
+      const nextDate = this.store.calendarCursor;
+      const nextView = this.store.calendarMode;
+      if (
+        params.get("date") !== nextDate ||
+        params.get("view") !== nextView ||
+        params.has("month") ||
+        params.has("week")
+      ) {
+        url.searchParams.set("date", nextDate);
+        url.searchParams.set("view", nextView);
+        url.searchParams.delete("month");
+        url.searchParams.delete("week");
         window.history.replaceState({}, "", url.toString());
       }
     } else {

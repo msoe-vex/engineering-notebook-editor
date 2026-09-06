@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   DragEndEvent,
+  DragOverEvent,
   DragOverlay,
   KeyboardSensor,
   PointerSensor,
-  closestCorners,
   pointerWithin,
   CollisionDetection,
   useDraggable,
@@ -54,14 +54,26 @@ function addDays(d: Date, n: number): Date {
   return copy;
 }
 
+function addMonthsClamped(d: Date, n: number): Date {
+  const year = d.getFullYear();
+  const month = d.getMonth() + n;
+  const last = new Date(year, month + 1, 0).getDate();
+  return new Date(year, month, Math.min(d.getDate(), last));
+}
+
+function monthCells(year: number, month: number): Date[] {
+  const start = startOfWeek(new Date(year, month, 1));
+  return Array.from({ length: 42 }, (_, i) => addDays(start, i));
+}
+
 const calendarCollision: CollisionDetection = (args) => {
   const hits = pointerWithin(args);
+  const nav = hits.filter((hit) => String(hit.id).startsWith("nav:"));
+  if (nav.length > 0) return nav;
   const days = hits.filter((hit) => String(hit.id).startsWith("day:"));
   if (days.length > 0) return days;
   if (hits.length > 0) return hits;
-  const corners = closestCorners(args);
-  const cornerDays = corners.filter((hit) => String(hit.id).startsWith("day:"));
-  return cornerDays.length > 0 ? cornerDays : corners;
+  return [];
 };
 
 function pointerY(event: DragEndEvent): number | null {
@@ -173,6 +185,32 @@ function DayColumn({
         ))}
       </div>
     </div>
+  );
+}
+
+function CalNavButton({
+  navId,
+  label,
+  onClick,
+  children,
+}: {
+  navId: string;
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: navId, data: { type: "nav" } });
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      className={`nb-cal-nav ${isOver ? "is-drop" : ""}`}
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -360,19 +398,25 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerDate, setPickerDate] = useState(() => new Date());
   const [hover, setHover] = useState<{ id: string; x: number; y: number } | null>(null);
-
-  const commitView = (nextMode: "month" | "week", nextCursor: Date) => {
-    if (nextMode === "week") {
-      navigateTo(
-        { week: toYmd(startOfWeek(nextCursor)), month: null },
-        "/workspace/calendar",
-        { replace: true }
-      );
-    } else {
-      const month = `${nextCursor.getFullYear()}-${String(nextCursor.getMonth() + 1).padStart(2, "0")}`;
-      navigateTo({ month, week: null }, "/workspace/calendar", { replace: true });
-    }
-  };
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const cursorRef = useRef(cursor);
+  const modeRef = useRef(mode);
+  const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const navHoverRef = useRef<string | null>(null);
+  cursorRef.current = cursor;
+  modeRef.current = mode;
+  const commitView = useCallback((nextMode: "month" | "week", nextCursor: Date) => {
+    navigateTo(
+      {
+        date: toYmd(nextCursor),
+        view: nextMode,
+        month: null,
+        week: null,
+      },
+      "/workspace/calendar",
+      { replace: true }
+    );
+  }, [navigateTo]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -429,12 +473,6 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
 
   const today = toYmd(new Date());
 
-  const monthCells = useMemo(() => {
-    const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-    const gridStart = startOfWeek(first);
-    return Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
-  }, [cursor]);
-
   const weekDays = useMemo(() => {
     const start = startOfWeek(cursor);
     return Array.from({ length: 7 }, (_, i) => addDays(start, i));
@@ -444,16 +482,43 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
     ? `${MONTHS[cursor.getMonth()]} ${cursor.getFullYear()}`
     : `${weekDays[0].toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${weekDays[6].toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
 
+  const NAV_DWELL_MS = 500;
+
+  const clearNavTimer = () => {
+    if (navTimerRef.current) {
+      clearTimeout(navTimerRef.current);
+      navTimerRef.current = null;
+    }
+    navHoverRef.current = null;
+  };
+
   const shift = (dir: number) => {
-    const next = new Date(cursor);
-    if (mode === "month") next.setMonth(next.getMonth() + dir);
-    else next.setDate(next.getDate() + 7 * dir);
-    commitView(mode, next);
+    if (modeRef.current === "month") {
+      commitView(modeRef.current, addMonthsClamped(cursorRef.current, dir));
+      return;
+    }
+    commitView(modeRef.current, addDays(cursorRef.current, 7 * dir));
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const overId = event.over?.id != null ? String(event.over.id) : "";
+    if (overId !== "nav:prev" && overId !== "nav:next") {
+      clearNavTimer();
+      return;
+    }
+    if (navHoverRef.current === overId && navTimerRef.current) return;
+    clearNavTimer();
+    navHoverRef.current = overId;
+    const tick = () => {
+      shift(overId === "nav:prev" ? -1 : 1);
+      navTimerRef.current = setTimeout(tick, NAV_DWELL_MS);
+    };
+    navTimerRef.current = setTimeout(tick, NAV_DWELL_MS);
   };
 
   const resolveDrop = (event: DragEndEvent): { date: string; index: number } | null => {
     const overId = event.over?.id != null ? String(event.over.id) : "";
-    if (!overId) return null;
+    if (!overId || overId.startsWith("nav:")) return null;
     const movedId = String(event.active.id);
     const y = pointerY(event);
 
@@ -471,6 +536,7 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const movedId = String(event.active.id);
+    clearNavTimer();
     setActiveId(null);
     const drop = resolveDrop(event);
     if (!drop) return;
@@ -491,20 +557,51 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
     setHover({ id, x: rect.left + rect.width / 2, y: rect.bottom + 8 });
   };
 
-  const daysToRender = mode === "month" ? monthCells : weekDays;
   const hoverCard = hover ? cards[hover.id] : null;
+
+  const renderDay = (d: Date) => {
+    const key = toYmd(d);
+    return (
+      <DayColumn
+        key={key}
+        dateKey={key}
+        label={String(d.getDate())}
+        isToday={key === today}
+        isMuted={mode === "month" && d.getMonth() !== cursor.getMonth()}
+        ids={byDate[key] || []}
+        cards={cards}
+        onOpen={openEntry}
+        onHover={handleHover}
+      />
+    );
+  };
 
   return (
     <div className="nb-cal">
+      <DndContext
+        sensors={sensors}
+        collisionDetection={calendarCollision}
+        autoScroll={{
+          canScroll: (element) =>
+            element instanceof HTMLElement && element.classList.contains("nb-cal-day-list"),
+        }}
+        onDragStart={(e) => {
+          setActiveId(String(e.active.id));
+          setHover(null);
+          setPickerOpen(false);
+        }}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+      >
       <header className="nb-cal-header">
         <div className="flex items-center gap-3">
           <CalendarDays size={20} className="text-nb-primary" />
           <h1 className="text-lg font-bold tracking-tight text-nb-on-surface">Calendar</h1>
         </div>
         <div className="nb-cal-header-controls">
-          <button type="button" className="nb-cal-nav" onClick={() => shift(-1)} aria-label="Previous">
+          <CalNavButton navId="nav:prev" label="Previous" onClick={() => shift(-1)}>
             <ChevronLeft size={16} />
-          </button>
+          </CalNavButton>
           <div className="nb-cal-picker-wrap">
             <button
               type="button"
@@ -527,7 +624,8 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
                     selectedMonth={cursor.getFullYear() === pickerDate.getFullYear() ? cursor.getMonth() : -1}
                     years={pickerYears}
                     onPick={(month) => {
-                      commitView("month", new Date(pickerDate.getFullYear(), month, 1));
+                      const last = new Date(pickerDate.getFullYear(), month + 1, 0).getDate();
+                      commitView("month", new Date(pickerDate.getFullYear(), month, Math.min(cursor.getDate(), last)));
                       setPickerOpen(false);
                     }}
                     onSelectYear={(year) => setPickerDate((prev) => new Date(year, prev.getMonth(), 1))}
@@ -539,7 +637,7 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
                     selected={cursor}
                     monthItems={pickerMonths}
                     onPickWeek={(weekStart) => {
-                      commitView("week", weekStart);
+                      commitView("week", addDays(weekStart, cursor.getDay()));
                       setPickerOpen(false);
                     }}
                     onSelectMonth={(year, month) => setPickerDate(new Date(year, month, 1))}
@@ -549,9 +647,9 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
               </>
             )}
           </div>
-          <button type="button" className="nb-cal-nav" onClick={() => shift(1)} aria-label="Next">
+          <CalNavButton navId="nav:next" label="Next" onClick={() => shift(1)}>
             <ChevronRight size={16} />
-          </button>
+          </CalNavButton>
           <button type="button" className="nb-cal-today" onClick={() => { commitView(mode, new Date()); setPickerOpen(false); }}>
             Today
           </button>
@@ -576,16 +674,7 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
           )}
         </div>
       </header>
-
-      <DndContext
-        sensors={sensors}
-        collisionDetection={calendarCollision}
-        onDragStart={(e) => {
-          setActiveId(String(e.active.id));
-          setHover(null);
-        }}
-        onDragEnd={handleDragEnd}
-      >
+        <div className="nb-cal-body">
         {(byDate[UNDATED] || []).length > 0 && (
           <div className="nb-cal-undated">
             <DayColumn
@@ -603,29 +692,29 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
             <div key={d}>{d}</div>
           ))}
         </div>
-        <div className={`nb-cal-grid ${mode === "week" ? "is-week" : ""}`}>
-          {daysToRender.map((d) => {
-            const key = toYmd(d);
-            const muted = mode === "month" && d.getMonth() !== cursor.getMonth();
-            return (
-              <DayColumn
-                key={key}
-                dateKey={key}
-                label={String(d.getDate())}
-                isToday={key === today}
-                isMuted={muted}
-                ids={byDate[key] || []}
-                cards={cards}
-                onOpen={openEntry}
-                onHover={handleHover}
-              />
-            );
-          })}
+        <div
+          ref={scrollRef}
+          className={`nb-cal-scroll ${mode === "week" ? "is-week" : "is-month"}`}
+        >
+          {mode === "month" ? (
+            <section className="nb-cal-month-block">
+              <div className="nb-cal-grid">
+                {monthCells(cursor.getFullYear(), cursor.getMonth()).map((d) => renderDay(d))}
+              </div>
+            </section>
+          ) : (
+            <section className="nb-cal-week-block">
+              <div className="nb-cal-grid">
+                {weekDays.map((d) => renderDay(d))}
+              </div>
+            </section>
+          )}
+        </div>
         </div>
         <DragOverlay>
           {activeId ? <div className="nb-cal-card is-overlay">{cards[activeId]?.title || "Untitled"}</div> : null}
         </DragOverlay>
-        </DndContext>
+      </DndContext>
       {hoverCard && hover && (
         <div className="nb-cal-tip" style={{ left: hover.x, top: hover.y }} role="tooltip">
           <div className="nb-cal-tip-title">{hoverCard.title || "Untitled"}</div>
