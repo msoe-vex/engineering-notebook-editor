@@ -158,8 +158,9 @@ export const TableWithCaption = Table.extend({
       ...this.parent?.(),
       id: {
         default: null,
+        keepOnSplit: true,
         parseHTML: element => element.getAttribute('data-id'),
-        renderHTML: attributes => ({ 'data-id': attributes.id }),
+        renderHTML: attributes => (attributes.id ? { 'data-id': attributes.id } : {}),
       },
       caption: { default: "" },
       title: { default: "" },

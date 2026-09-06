@@ -256,8 +256,9 @@ export const ImageWithCaption = TiptapImage.extend<ImageOptions & { dbName: stri
       ...this.parent!(),
       id: {
         default: null,
+        keepOnSplit: true,
         parseHTML: element => element.getAttribute('data-id'),
-        renderHTML: attributes => ({ 'data-id': attributes.id }),
+        renderHTML: attributes => (attributes.id ? { 'data-id': attributes.id } : {}),
       },
       alt: { default: "" },
       title: { default: "" },

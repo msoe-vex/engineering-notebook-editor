@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canonicalResourceOwner,
+  carryForwardResourceIds,
   duplicateResourceOwners,
   remapContentIds,
   remapSelectedContentIds,
@@ -77,5 +78,28 @@ describe("duplicate resource owners", () => {
     const newId = (doc as TipTapNode).content?.[0]?.attrs?.id as string;
     expect(newId).not.toBe("019e2f01-4cf8-7e23-804c-1e8968f3de13");
     expect(idMap.get("019e2f01-4cf8-7e23-804c-1e8968f3de13")).toBe(newId);
+  });
+});
+
+describe("carryForwardResourceIds", () => {
+  it("restores ids lost on matching heading and table slots", () => {
+    const previous: TipTapNode = {
+      type: "doc",
+      content: [
+        heading("019e2ee1-e249-7193-b019-ff994f7740bd", "Generate Concepts"),
+        { type: "table", attrs: { id: "019e481d-f9a7-73b6-9333-d759fcc0d061", title: "Decision Matrix" } },
+      ],
+    };
+    const next: TipTapNode = {
+      type: "doc",
+      content: [
+        heading("", "Generate Concepts"),
+        { type: "table", attrs: { title: "Decision Matrix" } },
+      ],
+    };
+    delete next.content![0].attrs!.id;
+    carryForwardResourceIds(next, previous);
+    expect(next.content?.[0]?.attrs?.id).toBe("019e2ee1-e249-7193-b019-ff994f7740bd");
+    expect(next.content?.[1]?.attrs?.id).toBe("019e481d-f9a7-73b6-9333-d759fcc0d061");
   });
 });

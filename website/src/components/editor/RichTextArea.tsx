@@ -393,6 +393,8 @@ const RichTextArea = ({
       // Extract node type names from configured extensions dynamically
       const validNodes = new Set([
         "doc", "text", "paragraph", "blockquote", "horizontalRule",
+        "heading", "image", "table", "tableRow", "tableCell", "tableHeader",
+        "codeBlock", "mathBlock", "inlineMath", "bulletList", "orderedList", "listItem",
         ...extensions
           .filter(ext => ext && (ext as unknown as Record<string, unknown>).type === "node")
           .map(ext => (ext as unknown as Record<string, unknown>).name as string)
@@ -490,11 +492,19 @@ const RichTextArea = ({
     };
   }, []);
 
+  const allowUpdateRef = useRef(false);
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions,
     content: parseContent(content),
+    onCreate: () => {
+      requestAnimationFrame(() => {
+        allowUpdateRef.current = true;
+      });
+    },
     onUpdate: ({ editor }) => {
+      if (!allowUpdateRef.current) return;
       onChange(JSON.stringify(editor.getJSON()));
     },
     onSelectionUpdate: () => {

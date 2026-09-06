@@ -581,6 +581,50 @@ export function uniqueResourceId(reserved: Set<string>): string {
   return id;
 }
 
+function isReferenceableResourceNode(node: TipTapNode): boolean {
+  if (!node?.type) return false;
+  if (node.type === "heading" || node.type === "image" || node.type === "table" || node.type === "codeBlock" || node.type === "mathBlock") {
+    return true;
+  }
+  return !!(node.attrs && (node.attrs.title !== undefined || node.attrs.caption !== undefined));
+}
+
+function collectResourceSlots(doc: TipTapNode | undefined, into: TipTapNode[] = []): TipTapNode[] {
+  const walk = (node: TipTapNode | undefined) => {
+    if (!node) return;
+    if (isReferenceableResourceNode(node)) into.push(node);
+    (node.content ?? []).forEach(walk);
+  };
+  walk(doc);
+  return into;
+}
+
+/** Copy attrs.id from a previous doc onto matching resource nodes that lost their id (e.g. TipTap serialize). */
+export function carryForwardResourceIds(
+  nextDoc: TipTapDoc | TipTapNode,
+  previousDoc: TipTapDoc | TipTapNode | null | undefined,
+  reservedIds: Set<string> = new Set()
+): TipTapDoc | TipTapNode {
+  if (!nextDoc || !previousDoc || typeof nextDoc !== "object" || typeof previousDoc !== "object") {
+    return nextDoc;
+  }
+  const prevSlots = collectResourceSlots(previousDoc as TipTapNode);
+  const nextSlots = collectResourceSlots(nextDoc as TipTapNode);
+  const taken = new Set<string>();
+  const count = Math.min(prevSlots.length, nextSlots.length);
+  for (let i = 0; i < count; i++) {
+    const next = nextSlots[i];
+    const prev = prevSlots[i];
+    const prevId = prev.attrs?.id as string | undefined;
+    if (next.attrs?.id || !prevId || next.type !== prev.type || taken.has(prevId)) continue;
+    if (!next.attrs) next.attrs = {};
+    (next.attrs as Record<string, unknown>).id = prevId;
+    taken.add(prevId);
+    reservedIds.add(prevId);
+  }
+  return nextDoc;
+}
+
 export function collectNotebookResourceIds(
   entries: Record<string, EntryMetadata> | undefined,
   excludeEntryId?: string

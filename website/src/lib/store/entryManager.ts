@@ -5,7 +5,7 @@ import { getAllPending, getPending, stageChange, removeStaged } from "../db";
 import { fetchFileContent, fetchRawFileContent, checkGitHubFileExists } from "../github";
 import { writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, checkLocalFileExists } from "../fs";
 import { generateUUID, getMimeTypeFromExtension, formatDateMonthYear, getLocalDateString } from "../utils";
-import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds, collectNotebookResourceIds, duplicateResourceOwners, canonicalResourceOwner, remapSelectedContentIds, placeCreatedEntry, formatAuthors, authorsEqual, parseAuthors, readLastAuthors, writeLastAuthors } from "../metadata";
+import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, carryForwardResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds, collectNotebookResourceIds, duplicateResourceOwners, canonicalResourceOwner, remapSelectedContentIds, placeCreatedEntry, formatAuthors, authorsEqual, parseAuthors, readLastAuthors, writeLastAuthors } from "../metadata";
 import { generateAllEntriesLatex, generateTeamLatex, generatePhasesLatex, generateEntryLatex, latexPhaseRef } from "../latex";
 import { IWorkspaceStore } from "./types";
 
@@ -177,10 +177,17 @@ export class EntryManager {
       contentJson = contentJson.content;
     }
 
-    contentJson = ensureResourceIds(
-      contentJson,
-      collectNotebookResourceIds(this.store.metadata.entries, id)
-    ) as TipTapNode;
+    const reserved = collectNotebookResourceIds(this.store.metadata.entries, id);
+    let previousDoc: TipTapNode | undefined;
+    const prevRaw = this.store.lastSavedContents.get(this.store.metadata.entries[id]?.filename || "");
+    if (prevRaw) {
+      try {
+        const parsed = JSON.parse(prevRaw);
+        previousDoc = parsed?.content && !parsed.type ? parsed.content : parsed;
+      } catch { /* ignore */ }
+    }
+    contentJson = carryForwardResourceIds(contentJson, previousDoc, reserved) as TipTapNode;
+    contentJson = ensureResourceIds(contentJson, reserved) as TipTapNode;
     tiptapContent = JSON.stringify(contentJson);
 
     // 1. Update memory immediately (Source of Truth)
