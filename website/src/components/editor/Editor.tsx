@@ -37,11 +37,13 @@ import { generateEntryLatex, latexPhaseRef } from "@/lib/latex";
 import { getPhases, getPhaseConfig } from "@/lib/phases";
 import { store } from "@/lib/store";
 import AutocompleteInput from "./ui/AutocompleteInput";
+import GenerateButton from "./ui/GenerateButton";
 import AuthorsInput from "./ui/AuthorsInput";
 import DatePicker from "./ui/DatePicker";
 import { extractResources, extractReferences, TipTapNode, ensureResourceIds, buildResourceTypeIndex, validateEntry, formatAuthors } from "@/lib/metadata";
 import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng, compressImageToJpeg } from "@/lib/utils";
+import { generateEntryTitle } from "@/lib/genai";
 import { NodeSelection } from "@tiptap/pm/state";
 
 // Returns a safe insertion position for block nodes, or null to insert at selection
@@ -1170,7 +1172,7 @@ const EditorContent = React.memo(function EditorContent({
                 {/* Row 2: Metadata */}
                 <div className="px-4 md:px-6 py-2.5 flex flex-col gap-2 relative z-160 shrink-0 min-w-0">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 flex items-center gap-2">
                       <AutocompleteInput
                         type="text"
                         value={openFile.title}
@@ -1183,6 +1185,17 @@ const EditorContent = React.memo(function EditorContent({
                         }}
                         placeholder="Entry Title..."
                         className="w-full text-xl font-bold bg-transparent text-nb-on-surface outline-none placeholder:text-nb-outline-variant"
+                      />
+                      <GenerateButton
+                        label="Generate entry title"
+                        run={() => generateEntryTitle({
+                          title: openFile.title,
+                          body: editor?.getText() || "",
+                          date: openFile.date,
+                          authors: openFile.authors,
+                          phase: availablePhases.find(p => p.id === openFile.phase)?.name,
+                        })}
+                        onResult={(title) => updateDraft(null, { title })}
                       />
                     </div>
 
