@@ -1184,6 +1184,7 @@ const EditorContent = React.memo(function EditorContent({
                           updateDraft(null, { title: val });
                         }}
                         placeholder="Entry Title..."
+                        wrapperClassName="flex-1 min-w-0 w-full"
                         className="w-full text-xl font-bold bg-transparent text-nb-on-surface outline-none placeholder:text-nb-outline-variant"
                       />
                       <GenerateButton

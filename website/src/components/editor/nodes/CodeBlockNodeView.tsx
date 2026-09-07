@@ -112,6 +112,7 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
               <Code2 size={12} />
             </div>
             <NodeViewInput
+              editor={editor}
               value={node.attrs.title || ""}
               onUpdate={(title) => updateAttributes({ title })}
               placeholder="Code Snippet Title..."
@@ -203,6 +204,7 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
 
         <div contentEditable={false} className="bg-nb-surface-low/30 border-t border-nb-outline-variant/10 px-4 py-2 flex items-center justify-center gap-2 group/caption">
           <NodeViewInput
+            editor={editor}
             value={node.attrs.caption || ""}
             onUpdate={(caption) => updateAttributes({ caption })}
             placeholder="What does this code do?"

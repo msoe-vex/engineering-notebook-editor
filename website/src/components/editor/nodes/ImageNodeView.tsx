@@ -10,7 +10,7 @@ import { compressImageToJpeg, hashContent, convertSvgToPng, getExtensionFromData
 import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
 import { NodeViewInput } from "./NodeViewInput";
 import GenerateButton from "../ui/GenerateButton";
-export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName }: NodeViewProps & { dbName: string }) => {
+export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName, editor }: NodeViewProps & { dbName: string }) => {
   const isDataUrl = Boolean(node.attrs.src?.startsWith('data:'));
   const [resolvedSrc, setResolvedSrc] = useState(isDataUrl ? node.attrs.src : "");
   const [isVisible, setIsVisible] = useState(isDataUrl);
@@ -149,6 +149,7 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
           <div className="flex-1 flex items-center gap-3">
             <ImageIcon size={12} className="text-nb-primary shrink-0" />
             <NodeViewInput
+              editor={editor}
               value={node.attrs.title || ""}
               onUpdate={(title) => updateAttributes({ title })}
               placeholder="Give this image a title..."
@@ -246,6 +247,7 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
 
         <div contentEditable={false} className="bg-nb-surface-low/30 border-t border-nb-outline-variant/10 px-4 py-2 flex items-center justify-center gap-2 group/caption">
           <NodeViewInput
+            editor={editor}
             value={node.attrs.caption || ""}
             onUpdate={(caption) => updateAttributes({ caption })}
             placeholder="Add figure description..."

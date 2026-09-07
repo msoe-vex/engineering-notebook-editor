@@ -109,6 +109,7 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
           <div className="flex-1 flex items-center gap-1.5 shrink-0">
             <Sigma size={12} className="text-nb-primary" />
             <NodeViewInput
+              editor={editor}
               value={node.attrs.title || ""}
               onUpdate={(title) => updateAttributes({ title })}
               placeholder="Equation Title..."
@@ -206,6 +207,7 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
         {/* Caption Area */}
         <div contentEditable={false} className="bg-nb-surface-low/30 border-t border-nb-outline-variant/10 px-4 py-2 flex items-center justify-center gap-2 group/caption">
           <NodeViewInput
+            editor={editor}
             value={node.attrs.caption || ""}
             onUpdate={(caption) => updateAttributes({ caption })}
             placeholder="Add a caption to this equation..."

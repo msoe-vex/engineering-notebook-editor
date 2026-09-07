@@ -61,6 +61,7 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
           <div className="flex items-center gap-1.5 pr-3 border-r border-nb-outline-variant/20 mr-1 shrink-0">
             <TableIcon size={12} className="text-nb-primary" />
             <NodeViewInput
+              editor={editor}
               value={node.attrs.title || ""}
               onUpdate={(title) => updateAttributes({ title })}
               placeholder="Table Title..."
@@ -151,6 +152,7 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
 
         <div contentEditable={false} className="bg-nb-surface-low/30 border-t border-nb-outline-variant/10 px-4 py-2 flex items-center justify-center gap-2 group/caption">
           <NodeViewInput
+            editor={editor}
             value={node.attrs.caption || ""}
             onUpdate={(caption) => updateAttributes({ caption })}
             placeholder="Describe this table..."

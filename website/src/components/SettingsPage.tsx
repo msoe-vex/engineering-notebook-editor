@@ -187,8 +187,7 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
               aria-label="Model id"
             />
             <p className="text-xs text-nb-on-surface-variant/70 leading-relaxed ml-1">
-              Keys stay in this browser. Generate on a figure sends the image through this site to{" "}
-              {providerInfo.label}, then back — the vendor is billed, not Vercel. Create a key in{" "}
+              Keys stay in this browser. Get one from{" "}
               <a
                 href={providerInfo.keyUrl}
                 target="_blank"
@@ -197,8 +196,7 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
               >
                 {providerInfo.keyUrlLabel}
               </a>
-              . Leave the model id blank to use {providerInfo.defaultModel}. Switching providers keeps each key and model.
-              Sparkles on an entry title or on a figure, table, code, or equation field generate that title or caption.
+              . See Help → Generative AI for setup.
             </p>
           </section>
 

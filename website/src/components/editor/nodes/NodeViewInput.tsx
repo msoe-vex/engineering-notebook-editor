@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
+import type { TiptapEditor } from "@/lib/types";
 import ValidationTooltip from "../ui/ValidationTooltip";
 
 interface NodeViewInputProps {
@@ -9,6 +10,7 @@ interface NodeViewInputProps {
   style?: React.CSSProperties;
   required?: boolean;
   missingMessage?: string;
+  editor?: TiptapEditor | null;
 }
 
 /**
@@ -23,17 +25,16 @@ export function NodeViewInput({
   style,
   required = false,
   missingMessage = "This field is required.",
+  editor,
 }: NodeViewInputProps) {
   const [localValue, setLocalValue] = useState(value || "");
   const inputRef = useRef<HTMLInputElement>(null);
   const cursorPositionRef = useRef<number | null>(null);
   const showError = required && !localValue.trim();
 
-  // Sync with external value changes (e.g. entry switches, undo/redo)
+  // Sync with external value changes (undo/redo, generate, entry switches)
   useEffect(() => {
-    if (document.activeElement !== inputRef.current) {
-      setLocalValue(value || "");
-    }
+    setLocalValue(value || "");
   }, [value]);
 
   // Restore cursor position synchronously before browser paint after ProseMirror transaction
@@ -71,6 +72,21 @@ export function NodeViewInput({
         type="text"
         value={localValue}
         onChange={handleChange}
+        onKeyDown={(e) => {
+          if (!editor || editor.isDestroyed) return;
+          const mod = e.ctrlKey || e.metaKey;
+          if (!mod) return;
+          const key = e.key.toLowerCase();
+          if (key === "z" && !e.shiftKey) {
+            e.preventDefault();
+            e.stopPropagation();
+            editor.commands.undo();
+          } else if ((key === "z" && e.shiftKey) || key === "y") {
+            e.preventDefault();
+            e.stopPropagation();
+            editor.commands.redo();
+          }
+        }}
         placeholder={placeholder}
         className={className}
         style={style}
