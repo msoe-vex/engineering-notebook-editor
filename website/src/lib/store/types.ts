@@ -54,6 +54,7 @@ export interface IWorkspaceStore {
   calendarMode: "month" | "week";
   calendarCursor: string;
   showAbout: boolean;
+  showSettings: boolean;
   openFile: OpenFileState | null;
   isLoading: boolean;
   loadingLabel: string;

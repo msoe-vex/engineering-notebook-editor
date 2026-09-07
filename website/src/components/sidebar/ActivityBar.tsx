@@ -8,6 +8,7 @@ import {
   Users,
   HelpCircle,
   Play,
+  Settings,
   CalendarDays,
   LucideIcon
 } from "lucide-react";
@@ -23,6 +24,8 @@ interface ActivityBarProps {
   onOpenCalendar?: () => void;
   onOpenCompile?: () => void;
   onOpenHelp?: () => void;
+  onOpenSettings?: () => void;
+  settingsActive?: boolean;
 }
 
 interface TabButtonProps {
@@ -66,7 +69,9 @@ export default function ActivityBar({
   onOpenTeam,
   onOpenCalendar,
   onOpenCompile,
-  onOpenHelp
+  onOpenHelp,
+  onOpenSettings,
+  settingsActive = false,
 }: ActivityBarProps) {
   return (
     <aside
@@ -137,6 +142,21 @@ export default function ActivityBar({
             className="w-10 h-10 flex items-center justify-center rounded-xl text-nb-on-surface-variant hover:text-nb-on-surface hover:bg-nb-surface-high/60 transition-all cursor-pointer group"
           >
             <HelpCircle size={18} className="group-hover:scale-110 transition-transform" />
+          </button>
+        )}
+
+        {onOpenSettings && (
+          <button
+            onClick={onOpenSettings}
+            title="Settings"
+            aria-label="Settings"
+            className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all cursor-pointer group ${
+              settingsActive
+                ? "bg-nb-primary/15 text-nb-primary border border-nb-primary/30 shadow-xs"
+                : "text-nb-on-surface-variant hover:text-nb-on-surface hover:bg-nb-surface-high/60"
+            }`}
+          >
+            <Settings size={18} className="group-hover:scale-110 transition-transform" />
           </button>
         )}
       </div>

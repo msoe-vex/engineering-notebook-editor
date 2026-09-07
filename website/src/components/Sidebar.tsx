@@ -18,6 +18,8 @@ interface SidebarProps {
   onOpenCalendar?: () => void;
   onOpenCompile?: () => void;
   onOpenHelp?: () => void;
+  onOpenSettings?: () => void;
+  settingsActive?: boolean;
   showConfirm: (title: string, message: string, onConfirm: () => void, variant?: "danger" | "warning" | "info") => void;
   onNewEntry?: () => Promise<void>;
   onOpenEntry?: (file: ExplorerFile) => void;
@@ -31,6 +33,8 @@ export default function Sidebar({
   onOpenCalendar,
   onOpenCompile,
   onOpenHelp,
+  onOpenSettings,
+  settingsActive,
   showConfirm,
   onNewEntry,
   onOpenEntry,
@@ -279,6 +283,8 @@ export default function Sidebar({
         onOpenCalendar={onOpenCalendar}
         onOpenCompile={onOpenCompile || (() => navigateTo({}, '/workspace/compile'))}
         onOpenHelp={onOpenHelp || (() => navigateTo({}, '/workspace/help/getting-started'))}
+        onOpenSettings={onOpenSettings || (() => navigateTo({}, '/workspace/settings'))}
+        settingsActive={settingsActive}
       />
 
       {/* Main Tab Panel */}

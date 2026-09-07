@@ -22,6 +22,7 @@ import NotebookCompiler from "./NotebookCompiler";
 import HelpPage from "./HelpPage";
 import ProjectHeader from "./ProjectHeader";
 import AboutPage from "./AboutPage";
+import SettingsPage from "./SettingsPage";
 import ImportDecisionDialog from "./ImportDecisionDialog";
 import ImportConfirmDialog from "./ImportConfirmDialog";
 import ExportDecisionDialog from "./ExportDecisionDialog";
@@ -101,6 +102,7 @@ export default function App() {
     calendarCursor,
     showHelp,
     showAbout,
+    showSettings,
     helpPath,
     getCompiledPdfUrl,
     isSaving,
@@ -679,6 +681,19 @@ export default function App() {
     navigateTo({}, path);
   };
 
+  const handleOpenSettings = () => {
+    closeSidebarOnMobile();
+    navigateTo({ date: null, view: null, month: null, week: null }, "/workspace/settings");
+  };
+
+  const handleCloseSettings = () => {
+    if (currentProjectId) {
+      navigateTo({}, "/workspace/editor");
+    } else {
+      handleGoHome();
+    }
+  };
+
   const handleDisconnect = async () => {
     const proceed = async () => {
       await disconnect();
@@ -1021,6 +1036,8 @@ export default function App() {
           onOpenCalendar={handleOpenCalendar}
           onOpenCompile={handleOpenCompile}
           onOpenHelp={() => handleOpenHelp()}
+          onOpenSettings={handleOpenSettings}
+          settingsActive={showSettings}
           showConfirm={showConfirm}
           onNewEntry={handleNewEntry}
           onSelectAll={(paths) => setSelectedPaths(new Set(paths))}
@@ -1130,6 +1147,13 @@ export default function App() {
               isEmbedded={true}
             />
           </div>
+        ) : showSettings ? (
+          <div className="flex-1 flex flex-col min-h-0 relative h-full">
+            <SettingsPage
+              onClose={() => navigateTo({}, '/workspace/editor')}
+              isEmbedded={true}
+            />
+          </div>
         ) : (openFile || hasEntryInUrl) ? (
           <div className="flex-1 flex flex-col min-h-0 relative h-full">
             {!openFile && (
@@ -1194,6 +1218,7 @@ export default function App() {
             onCloseGithubModal={() => setAutoOpenGithubModal(false)}
             onOpenHelp={() => navigateTo({}, '/help')}
             onOpenAbout={() => navigateTo({}, '/about')}
+            onOpenSettings={() => navigateTo({}, '/settings')}
           />
         </div>
       ) : (
@@ -1245,6 +1270,10 @@ export default function App() {
           onClose={handleCloseHelp}
           navigateTo={navigateTo}
         />
+      )}
+
+      {showSettings && mode === "none" && (
+        <SettingsPage onClose={handleCloseSettings} />
       )}
 
       {/* Notifications */}

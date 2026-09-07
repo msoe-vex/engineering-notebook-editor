@@ -48,7 +48,11 @@ export function readLastAuthors(): string[] {
 export function writeLastAuthors(authors: string[]): void {
   if (typeof window === "undefined") return;
   const clean = parseAuthors(authors);
-  if (clean.length === 0) return;
+  if (clean.length === 0) {
+    localStorage.removeItem(LAST_AUTHORS_KEY);
+    localStorage.removeItem(LAST_AUTHOR_KEY);
+    return;
+  }
   localStorage.setItem(LAST_AUTHORS_KEY, JSON.stringify(clean));
   localStorage.setItem(LAST_AUTHOR_KEY, formatAuthors(clean));
 }

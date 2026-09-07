@@ -97,6 +97,12 @@ export class NavigationManager {
       this.store.showAbout = false;
     }
 
+    if (path === '/settings' || path === '/workspace/settings') {
+      this.store.showSettings = true;
+    } else {
+      this.store.showSettings = false;
+    }
+
     if (path.startsWith('/workspace/compile')) {
       this.store.showCompiler = true;
     } else {
