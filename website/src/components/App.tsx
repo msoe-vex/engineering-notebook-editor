@@ -661,8 +661,9 @@ export default function App() {
     const now = new Date();
     const fallback = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     const date = /^\d{4}-\d{2}-\d{2}$/.test(calendarCursor) ? calendarCursor : fallback;
+    const view = isMobile ? "week" : (calendarMode || "month");
     navigateTo(
-      { date, view: calendarMode || "month", month: null, week: null },
+      { date, view, month: null, week: null },
       "/workspace/calendar"
     );
   };
@@ -1060,6 +1061,7 @@ export default function App() {
         onStartRename={() => { if (currentProject) { setProjectRenameValue(currentProject.name); setIsRenamingProject(true); } }}
         onEndRename={(save) => { if (save && currentProjectId) handleRenameProject(currentProjectId, projectRenameValue); setIsRenamingProject(false); }}
         onOpenHelp={() => handleOpenHelp("/workspace/help")}
+        onOpenSettings={handleOpenSettings}
         onOpenTeam={handleOpenTeamEditor}
         onOpenCalendar={handleOpenCalendar}
         onOpenCompiler={handleOpenCompile}
@@ -1181,12 +1183,8 @@ export default function App() {
             <WelcomePage
               workspace={{ mode: mode as "local" | "github" | "temporary", label: workspaceLabel }}
               onNewEntry={handleNewEntry}
-              onImportEntry={() => importEntryInputRef.current?.click()}
               onDisconnect={handleDisconnect}
               onOpenSidebar={() => { isToggleFromButton.current = true; setUserSidebarPreference(true); }}
-              onOpenTeam={handleOpenTeamEditor}
-              onOpenCompiler={handleOpenCompile}
-              onOpenHelp={() => handleOpenHelp("/workspace/help")}
             />
           </div>
         )}
@@ -1216,9 +1214,7 @@ export default function App() {
             isExchangingGithubCode={isExchangingCode}
             autoOpenGithubModal={autoOpenGithubModal}
             onCloseGithubModal={() => setAutoOpenGithubModal(false)}
-            onOpenHelp={() => navigateTo({}, '/help')}
             onOpenAbout={() => navigateTo({}, '/about')}
-            onOpenSettings={() => navigateTo({}, '/settings')}
           />
         </div>
       ) : (

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import GithubIcon from "./GithubIcon";
 import {
   Menu, HelpCircle, Play, Loader2, Check,
-  MoreVertical, Download, Upload, ArrowLeftRight, Users, Edit3, CalendarDays
+  MoreVertical, Download, Upload, ArrowLeftRight, Users, Edit3, CalendarDays, Settings
 } from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { ViewMode } from "./editor/ui/ViewToggle";
@@ -19,6 +19,7 @@ interface ProjectHeaderProps {
   onStartRename: () => void;
   onEndRename: (save: boolean) => void;
   onOpenHelp: () => void;
+  onOpenSettings: () => void;
   onOpenTeam: () => void;
   onOpenCalendar: () => void;
   onOpenCompiler: () => void;
@@ -37,6 +38,7 @@ export default function ProjectHeader({
   onStartRename,
   onEndRename,
   onOpenHelp,
+  onOpenSettings,
   onOpenTeam,
   onOpenCalendar,
   onOpenCompiler,
@@ -65,7 +67,7 @@ export default function ProjectHeader({
     : null;
 
   return (
-    <div className="flex items-center justify-between px-4 h-14 bg-nb-surface border-b border-nb-outline-variant shrink-0 relative z-[200]">
+    <div className="flex items-center justify-between px-4 h-14 bg-nb-surface border-b border-nb-outline-variant shrink-0 relative z-200">
       <div className="flex items-center gap-2">
         <button
           onClick={onToggleSidebar}
@@ -88,7 +90,7 @@ export default function ProjectHeader({
               if (e.key === 'Enter') onEndRename(true);
               if (e.key === 'Escape') onEndRename(false);
             }}
-            className="bg-nb-surface-low border border-nb-primary/30 px-3 py-1 rounded-lg text-sm font-bold text-nb-on-surface outline-none focus:ring-2 focus:ring-nb-primary/30 w-full max-w-[300px]"
+            className="bg-nb-surface-low border border-nb-primary/30 px-3 py-1 rounded-lg text-sm font-bold text-nb-on-surface outline-none focus:ring-2 focus:ring-nb-primary/30 w-full max-w-75"
           />
         ) : (
           <div className="flex items-center gap-1 max-w-full min-w-0 relative" ref={menuRef}>
@@ -132,6 +134,7 @@ export default function ProjectHeader({
                 <div className="h-px bg-nb-outline-variant/30 my-1 mx-2" />
 
                 <MenuButton icon={<HelpCircle size={14} />} label="Help & Documentation" onClick={() => { onOpenHelp(); setShowMenu(false); }} />
+                <MenuButton icon={<Settings size={14} />} label="Settings" onClick={() => { onOpenSettings(); setShowMenu(false); }} />
                 <MenuButton icon={<ArrowLeftRight size={14} />} label="Change Workspace" onClick={() => { onDisconnect(); setShowMenu(false); }} />
               </div>
             )}

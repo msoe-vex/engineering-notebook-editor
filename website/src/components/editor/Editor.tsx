@@ -1168,53 +1168,55 @@ const EditorContent = React.memo(function EditorContent({
             <div className="min-h-0 overflow-hidden">
               <div className={`flex flex-col transition-all duration-500 ease-in-out ${isHeaderCollapsed ? '-translate-y-6' : 'translate-y-0'}`}>
                 {/* Row 2: Metadata */}
-                <div className="px-4 md:px-6 py-2.5 flex flex-wrap items-center gap-3 relative z-160 shrink-0">
-                  <div className="flex-1 min-w-70">
-                    <AutocompleteInput
-                      type="text"
-                      value={openFile.title}
-                      options={otherTitles}
-                      onChange={(e) => {
-                        updateDraft(null, { title: e.target.value });
-                      }}
-                      onSelectOption={(val) => {
-                        updateDraft(null, { title: val });
-                      }}
-                      placeholder="Entry Title..."
-                      className="w-full text-xl font-bold bg-transparent text-nb-on-surface outline-none placeholder:text-nb-outline-variant"
-                    />
+                <div className="px-4 md:px-6 py-2.5 flex flex-col gap-2 relative z-160 shrink-0 min-w-0">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex-1 min-w-0">
+                      <AutocompleteInput
+                        type="text"
+                        value={openFile.title}
+                        options={otherTitles}
+                        onChange={(e) => {
+                          updateDraft(null, { title: e.target.value });
+                        }}
+                        onSelectOption={(val) => {
+                          updateDraft(null, { title: val });
+                        }}
+                        placeholder="Entry Title..."
+                        className="w-full text-xl font-bold bg-transparent text-nb-on-surface outline-none placeholder:text-nb-outline-variant"
+                      />
+                    </div>
+
+                    {!localIsValid && validationErrors.filter((e) => !/missing for /i.test(e)).length > 0 && (
+                      <ValidationTooltip
+                        errors={validationErrors.filter((e) => !/missing for /i.test(e))}
+                        size={20}
+                        className="shrink-0"
+                        iconContainerClassName="text-amber-500"
+                        position="bottom"
+                      />
+                    )}
                   </div>
 
-                  {!localIsValid && validationErrors.filter((e) => !/missing for /i.test(e)).length > 0 && (
-                    <ValidationTooltip
-                      errors={validationErrors.filter((e) => !/missing for /i.test(e))}
-                      size={20}
-                      className="mr-4"
-                      iconContainerClassName="text-amber-500"
-                      position="bottom"
-                    />
-                  )}
-
-                  <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0 md:flex-none md:max-w-full">
+                  <div className={`grid w-full min-w-0 gap-2 ${isTemplate ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3"}`}>
                     {!isTemplate && (
                       <DatePicker
                         value={openFile.date || ""}
                         onChange={(val) => updateDraft(null, { date: val })}
-                        className="h-9 w-44 shrink-0 overflow-hidden self-center"
+                        className="h-9 w-full min-w-0 overflow-hidden"
                       />
                     )}
 
-                      <AuthorsInput
-                        authors={openFile.authors || []}
-                        options={otherAuthors}
-                        onChange={(authors) => updateDraft(null, { authors })}
-                        placeholder="Author"
-                        className="h-9 w-52 shrink-0 self-center"
-                      />
+                    <AuthorsInput
+                      authors={openFile.authors || []}
+                      options={otherAuthors}
+                      onChange={(authors) => updateDraft(null, { authors })}
+                      placeholder="Author"
+                      className="h-9 w-full min-w-0"
+                    />
 
                     <div
                       ref={phaseButtonRef}
-                      className="relative h-9 flex-1 basis-0 min-w-60 overflow-hidden flex items-center gap-2.5 px-3 rounded-xl border border-nb-outline-variant/30 bg-nb-surface-low transition-all self-center"
+                      className={`relative h-9 w-full min-w-0 overflow-hidden flex items-center gap-2.5 px-3 rounded-xl border border-nb-outline-variant/30 bg-nb-surface-low transition-all ${isTemplate ? "" : "sm:col-span-2 xl:col-span-1"}`}
                     >
                       <div
                         className="absolute inset-0 z-10 cursor-pointer"

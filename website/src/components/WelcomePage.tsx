@@ -1,34 +1,56 @@
 "use client";
 
-import { Users, BookOpen, FolderOpen, HardDrive, Plus, ArrowLeftRight, Upload, Play } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Plus, ChevronDown, FileText, Layers, HardDrive, ArrowLeftRight } from "lucide-react";
 import GithubIcon from "./GithubIcon";
 import Logo from "./Logo";
+import { useWorkspace } from "@/hooks/useWorkspace";
+import { sortedEntries } from "@/lib/metadata";
+import { getPhaseConfig, getPhases } from "@/lib/phases";
+import { showNotification } from "./Notification";
 
 interface WorkspaceInfo {
   mode: "github" | "local" | "temporary";
-  label: string; // e.g. "owner/repo" or folder name or "Temporary"
+  label: string;
 }
 
 interface WelcomePageProps {
   workspace: WorkspaceInfo;
   onNewEntry: () => void;
-  onImportEntry: () => void;
   onDisconnect: () => void;
   onOpenSidebar: () => void;
-  onOpenTeam: () => void;
-  onOpenCompiler: () => void;
-  onOpenHelp: () => void;
 }
 
-export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDisconnect, onOpenSidebar, onOpenTeam, onOpenCompiler, onOpenHelp }: WelcomePageProps) {
+export default function WelcomePage({ workspace, onNewEntry, onDisconnect, onOpenSidebar }: WelcomePageProps) {
+  const { metadata, createEntryFromTemplate, navigateTo } = useWorkspace();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const templates = useMemo(
+    () => sortedEntries(metadata.entries).filter((e) => e.isTemplate),
+    [metadata.entries]
+  );
+  const phases = getPhases(metadata.phases);
+  const phaseConfig = getPhaseConfig(phases);
+
   const ModeIcon =
     workspace.mode === "github" ? GithubIcon :
       workspace.mode === "local" ? HardDrive : ArrowLeftRight;
 
+  const handleFromTemplate = async (templateId: string) => {
+    setMenuOpen(false);
+    try {
+      const newId = await createEntryFromTemplate(templateId);
+      if (newId) navigateTo({ entry: newId, resource: null }, "/workspace/editor");
+      showNotification("Created new entry from template.", "success");
+    } catch (e) {
+      console.error(e);
+      showNotification("Failed to create entry from template.", "error");
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-full bg-nb-bg px-6 py-12">
       <div className="m-auto w-full max-w-2xl flex flex-col items-center">
-        {/* Header */}
         <div className="flex flex-col items-center gap-6 mb-12">
           <button
             onClick={onDisconnect}
@@ -48,94 +70,81 @@ export default function WelcomePage({ workspace, onNewEntry, onImportEntry, onDi
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl">
+        <div className="relative w-full max-w-md">
           <button
             id="welcome-new-entry"
-            onClick={onNewEntry}
-            className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left font-bold shadow-nb-lg transition-all active:scale-[0.98] group cursor-pointer"
+            type="button"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
+            className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left font-bold shadow-nb-lg transition-all active:scale-[0.98] group cursor-pointer w-full"
           >
             <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0 group-hover:bg-nb-primary/20 transition-colors">
               <Plus size={20} className="text-nb-primary" />
             </div>
-            <div>
+            <div className="flex-1 min-w-0">
               <div className="font-bold text-[10px] tracking-[0.2em] uppercase opacity-70">New Entry</div>
-              <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Start fresh entry</div>
+              <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Start a fresh entry</div>
             </div>
+            <ChevronDown size={18} className={`text-nb-on-surface-variant/50 shrink-0 transition-transform ${menuOpen ? "rotate-180" : ""}`} />
           </button>
 
-          <button
-            id="welcome-open-entry"
-            className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left transition-all active:scale-[0.98] group cursor-pointer"
-            onClick={onOpenSidebar}
-          >
-            <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0 group-hover:bg-nb-primary/20 transition-colors">
-              <FolderOpen size={20} className="text-nb-primary" />
-            </div>
-            <div>
-              <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Open Entry</div>
-              <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Select from sidebar</div>
-            </div>
-          </button>
-
-          <button
-            id="welcome-import-entry"
-            className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left transition-all active:scale-[0.98] group cursor-pointer"
-            onClick={onImportEntry}
-          >
-            <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0 group-hover:bg-nb-surface-high transition-colors">
-              <Upload size={20} className="text-nb-primary" />
-            </div>
-            <div>
-              <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Import Data</div>
-              <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Upload ZIP file</div>
-            </div>
-          </button>
-
-          <button
-            id="welcome-edit-team"
-            className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left transition-all active:scale-[0.98] group cursor-pointer"
-            onClick={() => onOpenTeam()}
-          >
-            <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0 group-hover:bg-nb-primary/20 transition-colors">
-              <Users size={20} className="text-nb-primary" />
-            </div>
-            <div>
-              <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Team Info</div>
-              <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Configure Team</div>
-            </div>
-          </button>
-
-          <button
-            id="welcome-compile"
-            className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left transition-all active:scale-[0.98] group cursor-pointer"
-            onClick={onOpenCompiler}
-          >
-            <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0 group-hover:bg-nb-primary/20 transition-colors">
-              <Play size={20} className="text-nb-primary" />
-            </div>
-            <div>
-              <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Compile & View</div>
-              <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Full Notebook PDF</div>
-            </div>
-          </button>
-
-          <button
-            id="welcome-help"
-            className="flex items-center gap-4 bg-nb-surface hover:bg-nb-surface-low border border-nb-outline-variant p-5 rounded-3xl text-left transition-all active:scale-[0.98] group cursor-pointer"
-            onClick={onOpenHelp}
-          >
-            <div className="w-10 h-10 rounded-xl bg-nb-primary/10 flex items-center justify-center shrink-0 group-hover:bg-nb-primary/20 transition-colors">
-              <BookOpen size={20} className="text-nb-primary" />
-            </div>
-            <div>
-              <div className="font-bold text-[10px] tracking-[0.2em] text-nb-on-surface uppercase opacity-50">Help & Guide</div>
-              <div className="text-nb-on-surface text-base font-bold mt-0.5 leading-tight">Learn how to use</div>
-            </div>
-          </button>
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+              <div className="absolute left-0 right-0 top-full mt-2 z-50 bg-nb-surface border border-nb-outline-variant rounded-2xl shadow-nb-xl py-1.5 animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-80">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onNewEntry();
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-nb-on-surface hover:bg-nb-surface-low transition-colors cursor-pointer text-left shrink-0"
+                >
+                  <FileText size={16} className="text-nb-primary shrink-0" />
+                  Blank entry
+                </button>
+                <div className="px-4 py-1.5 text-[9px] font-black uppercase tracking-wider text-nb-on-surface-variant/50 border-t border-nb-outline-variant/20 mt-1 shrink-0">
+                  From template
+                </div>
+                <div className="overflow-y-auto min-h-0 custom-scrollbar">
+                  {templates.length > 0 ? (
+                    templates.map((tmpl) => {
+                      const pConfig = tmpl.phase ? phaseConfig[tmpl.phase] : null;
+                      const TmplIcon = pConfig ? pConfig.icon : Layers;
+                      const color = tmpl.phase ? phases.find((p) => p.id === tmpl.phase)?.color : "#9333ea";
+                      return (
+                        <button
+                          key={tmpl.id}
+                          type="button"
+                          onClick={() => handleFromTemplate(tmpl.id)}
+                          className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-nb-on-surface hover:bg-nb-surface-low hover:text-nb-primary transition-colors cursor-pointer text-left"
+                        >
+                          <TmplIcon size={15} style={{ color }} className="shrink-0" />
+                          <span className="truncate">{tmpl.title || "Untitled Template"}</span>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="px-4 py-2 text-xs text-nb-on-surface-variant/60 italic">
+                      No templates yet
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
-        {/* Footer */}
+        <p className="mt-8 max-w-md text-center text-sm text-nb-on-surface-variant leading-relaxed">
+          Open existing entries from the{" "}
+          <button type="button" onClick={onOpenSidebar} className="font-bold text-nb-on-surface hover:text-nb-primary cursor-pointer">
+            sidebar
+          </button>
+          . Compile, team, calendar, import/export, help, and settings are in the{" "}
+          <span className="font-bold text-nb-on-surface">project menu</span>
+          {" "}(the name in the top bar).
+        </p>
+
         <div className="mt-16 text-center">
           <button
             id="welcome-disconnect"
