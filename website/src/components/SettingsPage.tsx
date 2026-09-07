@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import { Monitor, Moon, Settings, Sun, X } from "lucide-react";
 import { readLastAuthors, writeLastAuthors } from "@/lib/metadata";
@@ -18,31 +18,38 @@ const THEME_OPTIONS = [
   { id: "dark", label: "Dark", hint: "Always dark", icon: Moon },
 ] as const;
 
+function subscribeLastAuthors(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  return () => window.removeEventListener("storage", onChange);
+}
+
+function getLastAuthorsJson() {
+  return JSON.stringify(readLastAuthors());
+}
+
+function getEmptyAuthorsJson() {
+  return "[]";
+}
+
 export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPageProps) {
   const { theme, setTheme } = useTheme();
   const { metadata } = useWorkspace();
-  const [mounted, setMounted] = useState(false);
-  const [authors, setAuthors] = useState<string[]>([]);
+  const storedAuthorsJson = useSyncExternalStore(subscribeLastAuthors, getLastAuthorsJson, getEmptyAuthorsJson);
+  const [authorsOverride, setAuthorsOverride] = useState<string[] | null>(null);
+  const authors = authorsOverride ?? (JSON.parse(storedAuthorsJson) as string[]);
 
-  useEffect(() => {
-    setMounted(true);
-    setAuthors(readLastAuthors());
-  }, []);
-
-  const authorOptions = useMemo(() => {
-    const names = new Set<string>();
-    for (const entry of Object.values(metadata?.entries || {})) {
-      for (const name of entry.authors || []) {
-        if (name.trim()) names.add(name.trim());
-      }
+  const names = new Set<string>();
+  for (const entry of Object.values(metadata?.entries || {})) {
+    for (const name of entry.authors || []) {
+      if (name.trim()) names.add(name.trim());
     }
-    for (const member of Object.values(metadata?.team?.members || {})) {
-      if (member.name?.trim()) names.add(member.name.trim());
-    }
-    return Array.from(names).sort((a, b) => a.localeCompare(b));
-  }, [metadata.entries, metadata.team]);
+  }
+  for (const member of Object.values(metadata?.team?.members || {})) {
+    if (member.name?.trim()) names.add(member.name.trim());
+  }
+  const authorOptions = Array.from(names).sort((a, b) => a.localeCompare(b));
 
-  const selectedTheme = mounted ? (theme || "system") : "system";
+  const selectedTheme = theme || "system";
 
   return (
     <div className={isEmbedded ? "w-full h-full flex flex-col bg-nb-bg overflow-hidden" : "fixed inset-0 z-[600] bg-nb-bg flex flex-col animate-in fade-in duration-300"}>
@@ -79,7 +86,7 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
               placeholder="Add author"
               className="h-14 rounded-2xl bg-nb-surface border-nb-outline-variant px-4"
               onChange={(next) => {
-                setAuthors(next);
+                setAuthorsOverride(next);
                 writeLastAuthors(next);
               }}
             />
