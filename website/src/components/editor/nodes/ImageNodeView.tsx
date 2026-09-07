@@ -91,7 +91,7 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
     };
     load();
     return () => { active = false; };
-  }, [node.attrs.src, node.attrs.filePath, dbName, isVisible, updateAttributes]);
+  }, [node.attrs.src, node.attrs.filePath, dbName, isVisible]);
 
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault();

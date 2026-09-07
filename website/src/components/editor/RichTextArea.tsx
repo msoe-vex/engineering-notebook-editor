@@ -18,6 +18,7 @@ import {
   IntegrityPlugin,
   IdRemapper,
   CustomHeading,
+  NotebookDocAttrs,
 } from "@/lib/editor/extensions";
 import { Color } from "@tiptap/extension-color";
 import { TextStyle } from "@tiptap/extension-text-style";
@@ -116,6 +117,7 @@ const RichTextArea = ({
       }
     }),
     CustomHeading.configure({ levels: [1, 2] }),
+    NotebookDocAttrs,
     NotebookListItem,
     Highlight.configure({ multicolor: true }),
     CustomSuperscript,
