@@ -3,10 +3,9 @@ import { Project, getProjectDBName, getAllPending, getProjectHandle } from "@/li
 import { GITHUB_ISSUES_URL } from "@/lib/constants";
 import React, { useState, useEffect } from "react";
 import {
-  BookOpen, Moon, Sun, Folder, HardDrive, Trash2, Clock, Plus,
-  ArrowRight, History, Edit2, Check, X, AlertCircle, HelpCircle, MoreVertical, Settings
+  Folder, HardDrive, Trash2, Clock, Plus,
+  ArrowRight, History, Edit2, Check, X, MoreVertical
 } from "lucide-react";
-import { useTheme } from "next-themes";
 import GitHubConnectionDialog from "./GitHubConnectionDialog";
 import GithubIcon from "./GithubIcon";
 import Logo from "./Logo";
@@ -28,9 +27,7 @@ interface HomeProps {
   isExchangingGithubCode?: boolean;
   autoOpenGithubModal?: boolean;
   onCloseGithubModal?: () => void;
-  onOpenHelp: () => void;
   onOpenAbout: () => void;
-  onOpenSettings: () => void;
   pendingCounts?: Record<string, number>;
 }
 
@@ -51,11 +48,8 @@ export default function Home({
   isExchangingGithubCode = false,
   autoOpenGithubModal = false,
   onCloseGithubModal,
-  onOpenHelp,
   onOpenAbout,
-  onOpenSettings,
 }: HomeProps) {
-  const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [pendingCounts, setPendingCounts] = useState<Record<string, number>>({});
 
@@ -123,7 +117,6 @@ export default function Home({
     };
   }, [projects]);
 
-  const isDarkMode = resolvedTheme === "dark";
   const isMobile = useIsMobileDevice();
 
   const handleOpenFolder = async () => {
@@ -445,44 +438,24 @@ export default function Home({
         projects={projects}
       />
       {/* Footer */}
-      <div className="w-full max-w-4xl mt-12 flex flex-col md:flex-row items-center justify-center gap-3 md:gap-4 border-t border-nb-outline-variant/20 pt-8 px-4">
+      <p className="w-full max-w-xl mt-12 text-center text-sm text-nb-on-surface-variant leading-relaxed border-t border-nb-outline-variant/20 pt-8 px-4">
+        After you open a project, entries live in the sidebar. Compile, team, help, and settings are in the project menu (the name in the top bar).
+      </p>
+      <div className="w-full max-w-4xl mt-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 px-4 pb-4">
         <button
           onClick={onOpenAbout}
-          className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-3 md:px-4 md:py-2 rounded-xl bg-nb-surface border border-nb-outline-variant/30 text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary/50 transition-all shadow-nb-sm cursor-pointer"
+          className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary cursor-pointer"
         >
-          <BookOpen size={14} />
           About
-        </button>
-        <button
-          onClick={onOpenHelp}
-          className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-3 md:px-4 md:py-2 rounded-xl bg-nb-surface border border-nb-outline-variant/30 text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary/50 transition-all shadow-nb-sm cursor-pointer"
-        >
-          <HelpCircle size={14} />
-          Help & Guide
-        </button>
-        <button
-          onClick={onOpenSettings}
-          className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-3 md:px-4 md:py-2 rounded-xl bg-nb-surface border border-nb-outline-variant/30 text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary/50 transition-all shadow-nb-sm cursor-pointer"
-        >
-          <Settings size={14} />
-          Settings
         </button>
         <a
           href={GITHUB_ISSUES_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-3 md:px-4 md:py-2 rounded-xl bg-nb-surface border border-nb-outline-variant/30 text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary/50 transition-all shadow-nb-sm"
+          className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary"
         >
-          <AlertCircle size={14} />
           Report Issue
         </a>
-                <button
-          onClick={() => setTheme(isDarkMode ? "light" : "dark")}
-          className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-3 md:px-4 md:py-2 rounded-xl bg-nb-surface border border-nb-outline-variant/30 text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary hover:border-nb-primary/50 transition-all shadow-nb-sm cursor-pointer"
-        >
-          {isDarkMode ? <Sun size={14} /> : <Moon size={14} />}
-          <span>Switch to {isDarkMode ? "Light" : "Dark"} Mode</span>
-        </button>
       </div>
     </div>
   );

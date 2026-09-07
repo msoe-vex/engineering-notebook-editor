@@ -1,26 +1,38 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   DndContext,
   DragEndEvent,
   DragOverEvent,
   DragOverlay,
-  KeyboardSensor,
-  PointerSensor,
   pointerWithin,
   CollisionDetection,
   useDraggable,
   useDroppable,
-  useSensor,
-  useSensors,
 } from "@dnd-kit/core";
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Rows3, X } from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { formatAuthors, sortedEntries } from "@/lib/metadata";
 import { getPhaseConfig, getPhases } from "@/lib/phases";
+import { useAppDndSensors } from "@/lib/dndSensors";
 
 const UNDATED = "__undated__";
+const MOBILE_CAL_MQ = "(max-width: 1023px)";
+
+function subscribeMobileCal(onChange: () => void) {
+  const mq = window.matchMedia(MOBILE_CAL_MQ);
+  mq.addEventListener("change", onChange);
+  return () => mq.removeEventListener("change", onChange);
+}
+
+function useMobileCalendarLayout() {
+  return useSyncExternalStore(
+    subscribeMobileCal,
+    () => window.matchMedia(MOBILE_CAL_MQ).matches,
+    () => false
+  );
+}
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -137,7 +149,7 @@ function SortableCard({ id, title, color, onOpen, onHover }: CardProps) {
         if (!isDragging) onHover(e.currentTarget);
       }}
       onMouseLeave={() => onHover(null)}
-      className="nb-cal-card"
+      className="nb-cal-card touch-none"
       data-cal-entry={id}
     >
       {title || "Untitled"}
@@ -148,6 +160,7 @@ function SortableCard({ id, title, color, onOpen, onHover }: CardProps) {
 function DayColumn({
   dateKey,
   label,
+  weekday,
   isToday,
   isMuted,
   ids,
@@ -157,6 +170,7 @@ function DayColumn({
 }: {
   dateKey: string;
   label: string;
+  weekday?: string;
   isToday?: boolean;
   isMuted?: boolean;
   ids: string[];
@@ -171,7 +185,10 @@ function DayColumn({
       data-cal-day={dateKey}
       className={`nb-cal-day ${isToday ? "is-today" : ""} ${isMuted ? "is-muted" : ""} ${isOver ? "is-over" : ""}`}
     >
-      <div className="nb-cal-day-label">{label}</div>
+      <div className="nb-cal-day-label">
+        {weekday ? <span className="nb-cal-dow">{weekday} </span> : null}
+        {label}
+      </div>
       <div className="nb-cal-day-list">
         {ids.map((id) => (
           <SortableCard
@@ -392,7 +409,8 @@ function formatEntryDate(dateStr?: string): string {
 
 export default function CalendarView({ onClose }: { onClose?: () => void }) {
   const { metadata, navigateTo, reorderCalendarEntry, calendarMode, calendarCursor } = useWorkspace();
-  const mode = calendarMode;
+  const isMobileLayout = useMobileCalendarLayout();
+  const mode = isMobileLayout ? "week" : calendarMode;
   const cursor = useMemo(() => parseYmd(calendarCursor), [calendarCursor]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -420,10 +438,13 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
     );
   }, [navigateTo]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor)
-  );
+  useEffect(() => {
+    if (isMobileLayout && calendarMode === "month") {
+      commitView("week", cursor);
+    }
+  }, [isMobileLayout, calendarMode, cursor, commitView]);
+
+  const sensors = useAppDndSensors();
 
   const phases = getPhases(metadata.phases);
   const phaseConfig = getPhaseConfig(phases);
@@ -572,6 +593,7 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
         key={key}
         dateKey={key}
         label={String(d.getDate())}
+        weekday={["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()]}
         isToday={key === today}
         isMuted={mode === "month" && d.getMonth() !== cursor.getMonth()}
         ids={byDate[key] || []}
@@ -583,7 +605,7 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
   };
 
   return (
-    <div className="nb-cal">
+    <div className={`nb-cal ${mode === "week" ? "is-week" : "is-month"}`}>
       <DndContext
         sensors={sensors}
         collisionDetection={calendarCollision}
@@ -659,14 +681,16 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
           <button type="button" className="nb-cal-today" onClick={() => { commitView(mode, new Date()); setPickerOpen(false); }}>
             Today
           </button>
+          {isMobileLayout ? null : (
           <div className="nb-cal-toggle" role="tablist" aria-label="Calendar view">
             <button type="button" role="tab" aria-selected={mode === "month"} className={mode === "month" ? "is-active" : ""} onClick={() => { commitView("month", cursor); setPickerOpen(false); }}>
-              <LayoutGrid size={14} /> Month
+              <LayoutGrid size={14} /> <span className="nb-cal-toggle-label">Month</span>
             </button>
             <button type="button" role="tab" aria-selected={mode === "week"} className={mode === "week" ? "is-active" : ""} onClick={() => { commitView("week", cursor); setPickerOpen(false); }}>
-              <Rows3 size={14} /> Week
+              <Rows3 size={14} /> <span className="nb-cal-toggle-label">Week</span>
             </button>
           </div>
+          )}
           {onClose && (
             <button
               type="button"
@@ -695,7 +719,7 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
         )}
         <div className="nb-cal-weekdays">
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-            <div key={d}>{d}</div>
+            <div key={d}><span className="nb-cal-weekday-full">{d}</span><span className="nb-cal-weekday-short">{d.slice(0, 1)}</span></div>
           ))}
         </div>
         <div

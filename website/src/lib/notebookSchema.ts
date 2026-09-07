@@ -8,7 +8,7 @@ import type {
 } from "./metadata";
 import { validateEntry } from "./metadata";
 import { NOTEBOOK_VERSION } from "./constants";
-import { generateUUID } from "./utils";
+import { generateUUID, formatDateMonthYear } from "./utils";
 
 export function sortedByOrder<T extends { order: number }>(
   dict: Record<string, T> | undefined | null
@@ -325,6 +325,22 @@ function canonicalTeam(team: TeamMetadata | undefined): TeamMetadata | undefined
   };
 }
 
+function withAutoTeamDates(
+  team: TeamMetadata | undefined,
+  entries: Record<string, EntryMetadata>
+): TeamMetadata | undefined {
+  if (!team || team.autoCalculateDates === false) return team;
+  const dates = Object.values(entries)
+    .filter((e) => !e.isTemplate && Boolean(e.date))
+    .map((e) => e.date)
+    .sort();
+  return {
+    ...team,
+    startDate: dates.length ? formatDateMonthYear(dates[0]) : "",
+    endDate: dates.length ? formatDateMonthYear(dates[dates.length - 1]) : "",
+  };
+}
+
 /** Structural migrate + dense order + assetRefs + per-entry validity. */
 export function normalizeNotebookMetadata(raw: unknown): NotebookMetadata {
   const source = isRecord(raw) ? raw : {};
@@ -387,7 +403,7 @@ export function normalizeNotebookMetadata(raw: unknown): NotebookMetadata {
   const result: NotebookMetadata = {
     version: NOTEBOOK_VERSION,
     entries: nextEntries,
-    ...(team ? { team } : {}),
+    ...(team ? { team: withAutoTeamDates(team, entries) } : {}),
     phases: canonicalPhases,
     assetRefs,
     ...(typeof source.lastCompiled === "string" && source.lastCompiled

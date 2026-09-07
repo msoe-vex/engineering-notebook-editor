@@ -225,6 +225,42 @@ describe("placeCreatedEntry", () => {
     const placed = placeCreatedEntry(withEntries, "t2");
     expect(sortedEntries(placed.entries).map((e) => e.id)).toEqual(["t2", "t1", "e"]);
   });
+
+  it("writes auto team start/end from dated entries", () => {
+    const normalized = normalizeNotebookMetadata({
+      version: 4,
+      entries: {
+        t: { title: "T", author: "", phase: null, date: "", createdAt: "", updatedAt: "", filename: "t", order: 0, isTemplate: true },
+        a: { title: "A", author: "x", phase: null, date: "2026-09-02", createdAt: "", updatedAt: "", filename: "a", order: 1 },
+        b: { title: "B", author: "x", phase: null, date: "2026-11-18", createdAt: "", updatedAt: "", filename: "b", order: 2 },
+      },
+      phases: {},
+      team: { teamName: "Robo", teamNumber: "1", organization: "", members: {}, startDate: "January 2020", endDate: "February 2020" },
+    });
+    expect(normalized.team?.startDate).toBe("September 2026");
+    expect(normalized.team?.endDate).toBe("November 2026");
+  });
+
+  it("keeps custom team dates when auto-calculate is off", () => {
+    const normalized = normalizeNotebookMetadata({
+      version: 4,
+      entries: {
+        a: { title: "A", author: "x", phase: null, date: "2026-09-02", createdAt: "", updatedAt: "", filename: "a", order: 0 },
+      },
+      phases: {},
+      team: {
+        teamName: "Robo",
+        teamNumber: "1",
+        organization: "",
+        members: {},
+        autoCalculateDates: false,
+        startDate: "August 2025",
+        endDate: "May 2026",
+      },
+    });
+    expect(normalized.team?.startDate).toBe("August 2025");
+    expect(normalized.team?.endDate).toBe("May 2026");
+  });
 });
 
 describe("reorderTemplateSequence", () => {

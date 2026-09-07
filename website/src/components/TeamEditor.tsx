@@ -14,10 +14,6 @@ import {
   DndContext,
   closestCenter,
   closestCorners,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
   DragEndEvent,
   DragStartEvent,
   DragOverlay,
@@ -36,6 +32,7 @@ import { TeamMetadata, TeamMember, ProjectPhase, Identified, sortedMembers, sort
 import { DEFAULT_PHASES, AVAILABLE_ICONS } from "@/lib/phases";
 import { fetchDefaultPhases } from "@/lib/defaultTemplates";
 import { generateUUID, formatDateMonthYear, compressImageToJpeg, getMimeTypeFromExtension } from "@/lib/utils";
+import { useAppDndSensors } from "@/lib/dndSensors";
 
 // ─── Sub-components for performance ──────────────────────────────────────────
 
@@ -303,12 +300,12 @@ const PhaseCard = memo(({
 
   return (
     <div
-      className={`flex items-center gap-3 p-3.5 rounded-2xl bg-nb-surface border border-nb-outline-variant/60 hover:border-nb-primary/40 hover:shadow-nb-sm transition-all group ${isOverlay ? 'shadow-nb-xl border-nb-primary ring-2 ring-nb-primary/10' : ''}`}
+      className={`flex items-center gap-3 p-3.5 rounded-2xl bg-nb-surface border border-nb-outline-variant/60 hover:border-nb-primary/40 hover:shadow-nb-sm transition-all group w-full ${isOverlay ? 'shadow-nb-xl border-nb-primary ring-2 ring-nb-primary/10' : ''}`}
     >
       <div
         {...attributes}
         {...listeners}
-        className="p-1 rounded-lg text-nb-on-surface-variant/20 hover:text-nb-on-surface-variant/60 hover:bg-nb-surface-low cursor-grab active:cursor-grabbing transition-all shrink-0"
+        className="p-1 rounded-lg text-nb-on-surface-variant/20 hover:text-nb-on-surface-variant/60 hover:bg-nb-surface-low cursor-grab active:cursor-grabbing transition-all shrink-0 touch-none"
       >
         <GripVertical size={14} />
       </div>
@@ -331,17 +328,12 @@ const PhaseCard = memo(({
           placeholder="Phase Name"
           className="w-full bg-transparent border-none p-0 text-xs font-black text-nb-on-surface focus:outline-none placeholder:text-nb-on-surface-variant/20 tracking-tight"
         />
-        <textarea
+        <input
+          type="text"
           value={phase.description}
           onChange={e => handlePhaseChange?.(phase.id, "description", e.target.value)}
           placeholder="Describe what happens in this phase..."
-          rows={1}
-          className="w-full bg-transparent border-none p-0 text-[10px] font-medium text-nb-on-surface-variant focus:outline-none placeholder:text-nb-on-surface-variant/20 resize-none h-auto overflow-hidden leading-relaxed"
-          onInput={(e) => {
-            const target = e.target as HTMLTextAreaElement;
-            target.style.height = 'auto';
-            target.style.height = target.scrollHeight + 'px';
-          }}
+          className="w-full bg-transparent border-none p-0 text-[10px] font-medium text-nb-on-surface-variant focus:outline-none placeholder:text-nb-on-surface-variant/20 leading-relaxed whitespace-nowrap overflow-x-auto"
         />
       </div>
 
@@ -396,12 +388,12 @@ const MemberCard = memo(({
 
   return (
     <div
-      className={`group flex flex-col items-center gap-5 p-6 rounded-4xl bg-nb-surface border border-nb-outline-variant hover:border-nb-primary/30 hover:shadow-nb-xl transition-all relative ${isOverlay ? 'shadow-nb-2xl border-nb-primary ring-2 ring-nb-primary/10' : ''}`}
+      className={`group flex flex-col items-center gap-5 p-6 rounded-4xl bg-nb-surface border border-nb-outline-variant hover:border-nb-primary/30 hover:shadow-nb-xl transition-all relative w-full ${isOverlay ? 'shadow-nb-2xl border-nb-primary ring-2 ring-nb-primary/10' : ''}`}
     >
       <div
         {...attributes}
         {...listeners}
-        className="absolute left-4 top-4 p-2 rounded-lg text-nb-on-surface-variant/20 hover:text-nb-on-surface-variant/60 hover:bg-nb-surface-low cursor-grab active:cursor-grabbing transition-all shrink-0"
+        className="absolute left-4 top-4 p-2 rounded-lg text-nb-on-surface-variant/20 hover:text-nb-on-surface-variant/60 hover:bg-nb-surface-low cursor-grab active:cursor-grabbing transition-all shrink-0 touch-none"
       >
         <GripVertical size={16} />
       </div>
@@ -606,6 +598,7 @@ type TeamForm = Omit<TeamMetadata, "members"> & { members: Identified<TeamMember
   const [phases, setPhases] = useState<Identified<ProjectPhase>[]>(initialPhases);
   const activeTab = initialTab;
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [dragOverlayWidth, setDragOverlayWidth] = useState<number | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   const autoTimeline = useMemo(() => {
@@ -635,16 +628,7 @@ type TeamForm = Omit<TeamMetadata, "members"> & { members: Identified<TeamMember
     );
   }, [saveTeam]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 3,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+  const sensors = useAppDndSensors(sortableKeyboardCoordinates);
 
   useEffect(() => {
     if (isDiscarding) {
@@ -821,6 +805,7 @@ type TeamForm = Omit<TeamMetadata, "members"> & { members: Identified<TeamMember
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
+    setDragOverlayWidth(event.active.rect.current.initial?.width ?? null);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -844,6 +829,7 @@ type TeamForm = Omit<TeamMetadata, "members"> & { members: Identified<TeamMember
       }
     }
     setActiveId(null);
+    setDragOverlayWidth(null);
   };
 
   const restoreDefaultPhases = useCallback(async () => {
@@ -1109,7 +1095,7 @@ type TeamForm = Omit<TeamMetadata, "members"> & { members: Identified<TeamMember
                 </SortableContext>
                 <DragOverlay>
                   {activeId && teamData.members.find(m => m.id === activeId) ? (
-                    <div className="w-full max-w-[320px]">
+                    <div style={dragOverlayWidth ? { width: dragOverlayWidth } : undefined}>
                       <MemberCard
                         member={teamData.members.find(m => m.id === activeId)!}
                         isOverlay
@@ -1160,7 +1146,7 @@ type TeamForm = Omit<TeamMetadata, "members"> & { members: Identified<TeamMember
                 </SortableContext>
                 <DragOverlay>
                   {activeId ? (
-                    <div className="w-3xl">
+                    <div style={dragOverlayWidth ? { width: dragOverlayWidth } : undefined}>
                       <PhaseCard
                         phase={phases.find(p => p.id === activeId)!}
                         isOverlay

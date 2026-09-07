@@ -2,11 +2,7 @@
 import {
   DndContext,
   DragEndEvent,
-  KeyboardSensor,
-  PointerSensor,
   closestCenter,
-  useSensor,
-  useSensors,
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -20,6 +16,7 @@ import ValidationTooltip from "./editor/ui/ValidationTooltip";
 import { ExplorerFile } from "@/lib/types";
 import { getPhases, getPhaseConfig } from "@/lib/phases";
 import { NotebookMetadata } from "@/lib/metadata";
+import { useAppDndSensors } from "@/lib/dndSensors";
 
 interface FileExplorerProps {
   entries: ExplorerFile[];
@@ -61,7 +58,7 @@ interface FileRowProps {
   sortBy?: "date" | "title";
   onSelect: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
-  onContextMenu: (e: React.MouseEvent) => void;
+  onContextMenu: (e: React.MouseEvent, fromHold?: boolean) => void;
   phaseLabel?: string;
   dragHandle?: React.ReactNode;
   rowRef?: (node: HTMLDivElement | null) => void;
@@ -73,6 +70,16 @@ function FileRow({
   onSelect, onDoubleClick, onContextMenu, phaseLabel, dragHandle, rowRef, rowStyle
 }: FileRowProps) {
   const localRef = React.useRef<HTMLDivElement>(null);
+  const longPressTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pressStart = React.useRef({ x: 0, y: 0 });
+  const suppressClick = React.useRef(false);
+
+  const clearLongPress = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
 
   const tooltipLines = [file.title || (file.isTemplate ? "Untitled Template" : "Untitled Entry")];
   if (file.author) tooltipLines.push(`By ${file.author}`);
@@ -117,11 +124,41 @@ function FileRow({
       data-explorer-path={file.path}
       style={rowStyle}
       onClick={isDeleted ? undefined : (e) => {
+        if (suppressClick.current) {
+          suppressClick.current = false;
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
         onSelect(e);
         if (!(e.ctrlKey || e.metaKey || e.shiftKey)) onDoubleClick();
       }}
       onDoubleClick={isDeleted ? undefined : onDoubleClick}
       onContextMenu={isDeleted ? undefined : onContextMenu}
+      onPointerDown={isDeleted ? undefined : (e) => {
+        if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+        if ((e.target as HTMLElement).closest("[data-explorer-drag-handle]")) return;
+        suppressClick.current = false;
+        pressStart.current = { x: e.clientX, y: e.clientY };
+        clearLongPress();
+        longPressTimer.current = setTimeout(() => {
+          longPressTimer.current = null;
+          suppressClick.current = true;
+          onContextMenu({
+            preventDefault() {},
+            clientX: pressStart.current.x,
+            clientY: pressStart.current.y,
+          } as React.MouseEvent, true);
+        }, 480);
+      }}
+      onPointerMove={isDeleted ? undefined : (e) => {
+        if (!longPressTimer.current) return;
+        if (Math.hypot(e.clientX - pressStart.current.x, e.clientY - pressStart.current.y) > 12) {
+          clearLongPress();
+        }
+      }}
+      onPointerUp={clearLongPress}
+      onPointerCancel={clearLongPress}
       title={tooltipLines.join(" \u00b7 ")}
       className={`
         group flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer select-none border-2
@@ -187,7 +224,8 @@ function SortableTemplateRow(props: Omit<FileRowProps, "dragHandle" | "rowRef" |
       dragHandle={
         <button
           type="button"
-          className={`shrink-0 p-0.5 rounded cursor-grab active:cursor-grabbing ${rowProps.isOpened ? "text-white/80" : "text-nb-on-surface-variant/50 hover:text-nb-on-surface"}`}
+          data-explorer-drag-handle
+          className={`shrink-0 p-0.5 rounded cursor-grab active:cursor-grabbing touch-none ${rowProps.isOpened ? "text-white/80" : "text-nb-on-surface-variant/50 hover:text-nb-on-surface"}`}
           title="Drag to reorder"
           aria-label="Drag to reorder"
           onClick={(e) => e.stopPropagation()}
@@ -230,6 +268,7 @@ export default function FileExplorer({
 }: FileExplorerProps) {
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, file: ExplorerFile } | null>(null);
+  const suppressBackdropClose = useRef(false);
   const [explorerTab, setExplorerTab] = useState<"entries" | "templates">("entries");
   const [tabForPath, setTabForPath] = useState(activePath);
   const [isNewDropdownOpen, setIsNewDropdownOpen] = useState(false);
@@ -259,10 +298,7 @@ export default function FileExplorer({
     node?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [isVisible, activePath, explorerTab]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor)
-  );
+  const sensors = useAppDndSensors();
 
   const handleTemplateDragEnd = (event: DragEndEvent) => {
     if (!canReorderTemplates || !event.over) return;
@@ -273,12 +309,33 @@ export default function FileExplorer({
     onReorderTemplates(moved);
   };
 
-  const handleContextMenu = (e: React.MouseEvent, file: ExplorerFile) => {
+  const handleContextMenu = (e: React.MouseEvent, file: ExplorerFile, fromHold = false) => {
     e.preventDefault();
     if (!selectedPaths.has(file.path)) {
       onSelectEntry(file, false, false, [file.path]);
     }
     setContextMenu({ x: e.clientX, y: e.clientY, file });
+    if (!fromHold) return;
+
+    suppressBackdropClose.current = true;
+    const onUp = () => {
+      window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("pointercancel", onUp, true);
+      const swallowOutsideMenu = (ev: Event) => {
+        const target = ev.target as Node | null;
+        const menuEl = document.querySelector("[data-explorer-context-menu]");
+        if (target && menuEl?.contains(target)) return;
+        ev.stopPropagation();
+        ev.preventDefault();
+      };
+      window.addEventListener("click", swallowOutsideMenu, { capture: true, once: true });
+      window.addEventListener("contextmenu", swallowOutsideMenu, { capture: true, once: true });
+      window.setTimeout(() => {
+        suppressBackdropClose.current = false;
+      }, 400);
+    };
+    window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("pointercancel", onUp, true);
   };
 
   const selectedEntries = entries.filter(e => selectedPaths.has(e.path));
@@ -483,7 +540,7 @@ export default function FileExplorer({
                     validationErrors={f.validationErrors}
                     onSelect={(e) => onSelectEntry(f, e.ctrlKey || e.metaKey, e.shiftKey, regularEntries.map((x) => x.path))}
                     onDoubleClick={() => onOpenEntry(f)}
-                    onContextMenu={(e) => handleContextMenu(e, f)}
+                    onContextMenu={(e, fromHold) => handleContextMenu(e, f, fromHold)}
                   />
                 );
               })}
@@ -527,7 +584,7 @@ export default function FileExplorer({
                     phaseLabel: phase?.name,
                     onSelect: (e: React.MouseEvent) => onSelectEntry(f, e.ctrlKey || e.metaKey, e.shiftKey, templateEntries.map((x) => x.path)),
                     onDoubleClick: () => onOpenEntry(f),
-                    onContextMenu: (e: React.MouseEvent) => handleContextMenu(e, f),
+                    onContextMenu: (e: React.MouseEvent, fromHold?: boolean) => handleContextMenu(e, f, fromHold),
                   };
                   return canReorderTemplates ? (
                     <SortableTemplateRow key={f.path} sortableId={templateId} {...rowProps} />
@@ -556,8 +613,20 @@ export default function FileExplorer({
       {/* Context Menu */}
       {contextMenu && (
         <>
-          <div className="fixed inset-0 z-1100" onClick={() => setContextMenu(null)} onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }} />
           <div
+            className="fixed inset-0 z-1100"
+            onClick={() => {
+              if (suppressBackdropClose.current) return;
+              setContextMenu(null);
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              if (suppressBackdropClose.current) return;
+              setContextMenu(null);
+            }}
+          />
+          <div
+            data-explorer-context-menu
             className="fixed z-1200 w-56 bg-nb-surface border border-nb-outline-variant rounded-2xl shadow-2xl py-2 animate-in fade-in zoom-in-95 duration-200"
             style={{ left: Math.min(contextMenu.x, window.innerWidth - 240), top: Math.min(contextMenu.y, window.innerHeight - 300) }}
             onClick={e => e.stopPropagation()}
