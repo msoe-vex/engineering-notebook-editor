@@ -4,7 +4,7 @@ import { extractGeminiText, readProviderError, resolveTemperature } from "../sha
 export const gemini: GenAIProvider = {
   info: {
     id: "gemini",
-    label: "Gemini",
+    label: "Google",
     hint: "Google AI Studio",
     keyPlaceholder: "Google AI Studio API key",
     keyUrl: "https://aistudio.google.com/apikey",

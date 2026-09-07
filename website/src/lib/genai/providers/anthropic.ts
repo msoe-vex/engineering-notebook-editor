@@ -4,8 +4,8 @@ import { readProviderError, resolveTemperature } from "../shared";
 export const anthropic: GenAIProvider = {
   info: {
     id: "anthropic",
-    label: "Claude",
-    hint: "Anthropic Messages API",
+    label: "Anthropic",
+    hint: "Anthropic console",
     keyPlaceholder: "Anthropic API key",
     keyUrl: "https://console.anthropic.com/settings/keys",
     keyUrlLabel: "Anthropic console",

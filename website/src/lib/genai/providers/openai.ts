@@ -5,7 +5,7 @@ export const openai: GenAIProvider = {
   info: {
     id: "openai",
     label: "OpenAI",
-    hint: "GPT-4o mini vision",
+    hint: "OpenAI platform",
     keyPlaceholder: "OpenAI API key",
     keyUrl: "https://platform.openai.com/api-keys",
     keyUrlLabel: "OpenAI platform",
