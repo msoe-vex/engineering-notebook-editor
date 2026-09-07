@@ -915,7 +915,6 @@ const EditorContent = React.memo(function EditorContent({
   }, [updateDraft]);
 
   const titleRef = useRef(openFile.title);
-  titleRef.current = openFile.title;
 
   const applyEntryTitle = useCallback((title: string, addToHistory = true) => {
     updateDraft(null, { title });
@@ -923,7 +922,13 @@ const EditorContent = React.memo(function EditorContent({
   }, [editor, updateDraft]);
 
   useEffect(() => {
-    setNotebookTitle(editor, openFile.title || "", { addToHistory: false });
+    titleRef.current = openFile.title;
+  }, [openFile.title]);
+
+  // Seed the editor's title attr when the editor or entry changes, not on every keystroke
+  // (that would mark title edits as non-undoable).
+  useEffect(() => {
+    setNotebookTitle(editor, titleRef.current || "", { addToHistory: false });
   }, [editor, entryId]);
 
   useEffect(() => {

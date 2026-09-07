@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
+import React, { useState, useLayoutEffect, useRef } from "react";
 import type { TiptapEditor } from "@/lib/types";
 import ValidationTooltip from "../ui/ValidationTooltip";
 
@@ -28,14 +28,14 @@ export function NodeViewInput({
   editor,
 }: NodeViewInputProps) {
   const [localValue, setLocalValue] = useState(value || "");
+  const [prevValue, setPrevValue] = useState(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
+    setLocalValue(value || "");
+  }
   const inputRef = useRef<HTMLInputElement>(null);
   const cursorPositionRef = useRef<number | null>(null);
   const showError = required && !localValue.trim();
-
-  // Sync with external value changes (undo/redo, generate, entry switches)
-  useEffect(() => {
-    setLocalValue(value || "");
-  }, [value]);
 
   // Restore cursor position synchronously before browser paint after ProseMirror transaction
   useLayoutEffect(() => {
