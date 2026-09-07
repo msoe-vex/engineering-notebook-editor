@@ -8,7 +8,7 @@ The header of each entry contains important metadata fields:
 
 ### Entry Metadata
 
-- **Title**: A descriptive title for your entry.
+- **Title**: A descriptive title for your entry. Use the sparkles button (after setting up Generative AI in Settings) to draft a title from the entry body.
 - **Date**: Automatically set to the current date and time, but can be edited to reflect when the work was done.
 - **Author**: The name of the person who created the entry.
 - **Phase**: The design process phase that this entry corresponds to. You can customize the available phases in your project settings.
@@ -29,7 +29,7 @@ To link to another entry or a specific resource (like an image or a heading), us
 
 ### Rich Text & Images
 
-Drag and drop images directly into the editor. Use the toolbar for bold, italics, tables, and lists. Everything is automatically converted to clean LaTeX in the background.
+Drag and drop images directly into the editor. Use the toolbar for bold, italics, tables, and lists. Everything is automatically converted to clean LaTeX in the background. Sparkles on a figure, table, code, or equation field can draft its title or caption if you have an API key in Settings.
 
 ## Rich Text Area
 

@@ -5,6 +5,8 @@ import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { GripVertical, Trash2, Table as TableIcon, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Rows3, Columns3 } from "lucide-react";
 import { NodeViewInput } from "./NodeViewInput";
+import GenerateButton from "../ui/GenerateButton";
+import { generateResourceCaption, generateResourceTitle } from "@/lib/genai";
 export function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: NodeViewProps) {
   const [isCursorInside, setIsCursorInside] = useState(false);
   const [isHoveringToolbar, setIsHoveringToolbar] = useState(false);
@@ -59,12 +61,23 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
           <div className="flex items-center gap-1.5 pr-3 border-r border-nb-outline-variant/20 mr-1 shrink-0">
             <TableIcon size={12} className="text-nb-primary" />
             <NodeViewInput
+              editor={editor}
               value={node.attrs.title || ""}
               onUpdate={(title) => updateAttributes({ title })}
               placeholder="Table Title..."
               required
               missingMessage="Title is required for this table."
               className="bg-transparent border-none outline-none text-[12px] font-bold tracking-wider text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30 w-48"
+            />
+            <GenerateButton
+              label="Generate title"
+              run={() => generateResourceTitle({
+                type: "table",
+                title: node.attrs.title,
+                caption: node.attrs.caption,
+                text: node.textContent,
+              })}
+              onResult={(title) => updateAttributes({ title })}
             />
           </div>
 
@@ -139,12 +152,23 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
 
         <div contentEditable={false} className="bg-nb-surface-low/30 border-t border-nb-outline-variant/10 px-4 py-2 flex items-center justify-center gap-2 group/caption">
           <NodeViewInput
+            editor={editor}
             value={node.attrs.caption || ""}
             onUpdate={(caption) => updateAttributes({ caption })}
             placeholder="Describe this table..."
             required
             missingMessage="Caption is required for this table."
             className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface/50 group-hover/caption:text-nb-on-surface focus:text-nb-on-surface focus:opacity-100 transition-all"
+          />
+          <GenerateButton
+            label="Generate caption"
+            run={() => generateResourceCaption({
+              type: "table",
+              title: node.attrs.title,
+              caption: node.attrs.caption,
+              text: node.textContent,
+            })}
+            onResult={(caption) => updateAttributes({ caption })}
           />
         </div>
       </div>

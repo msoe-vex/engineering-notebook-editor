@@ -2,8 +2,18 @@
 
 import { useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
-import { Monitor, Moon, Settings, Sun, X } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Monitor, Moon, Settings, Sun, X } from "lucide-react";
 import { readLastAuthors, writeLastAuthors } from "@/lib/metadata";
+import {
+  GENAI_PROVIDERS,
+  getGenAIApiKey,
+  getGenAISettings,
+  getStoredGenAIModel,
+  setGenAIApiKey,
+  setGenAIModel,
+  setGenAIProvider,
+  subscribeGenAISettings,
+} from "@/lib/genai";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import AuthorsInput from "@/components/editor/ui/AuthorsInput";
 
@@ -31,12 +41,29 @@ function getEmptyAuthorsJson() {
   return "[]";
 }
 
+function getEmptyGenAIJson() {
+  return JSON.stringify({ provider: "gemini", keys: {}, models: {} });
+}
+
+function getGenAISettingsJson() {
+  return JSON.stringify(getGenAISettings());
+}
+
 export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPageProps) {
   const { theme, setTheme } = useTheme();
   const { metadata } = useWorkspace();
   const storedAuthorsJson = useSyncExternalStore(subscribeLastAuthors, getLastAuthorsJson, getEmptyAuthorsJson);
+  const storedGenAIJson = useSyncExternalStore(subscribeGenAISettings, getGenAISettingsJson, getEmptyGenAIJson);
   const [authorsOverride, setAuthorsOverride] = useState<string[] | null>(null);
+  const [apiKeyDraft, setApiKeyDraft] = useState<string | null>(null);
+  const [modelDraft, setModelDraft] = useState<string | null>(null);
+  const [showApiKey, setShowApiKey] = useState(false);
   const authors = authorsOverride ?? (JSON.parse(storedAuthorsJson) as string[]);
+  const genAI = JSON.parse(storedGenAIJson) as ReturnType<typeof getGenAISettings>;
+  const provider = genAI.provider;
+  const providerInfo = GENAI_PROVIDERS.find((p) => p.id === provider) || GENAI_PROVIDERS[0];
+  const apiKey = apiKeyDraft ?? getGenAIApiKey(provider);
+  const modelId = modelDraft ?? getStoredGenAIModel(provider);
 
   const names = new Set<string>();
   for (const entry of Object.values(metadata?.entries || {})) {
@@ -92,6 +119,84 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
             />
             <p className="text-xs text-nb-on-surface-variant/70 leading-relaxed ml-1 mb-6">
               Pre-fills the author list on new entries. Add one or more names; suggestions come from team members and authors already used in this notebook.
+            </p>
+          </section>
+
+          <section className="space-y-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant ml-1">
+              Generative AI
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {GENAI_PROVIDERS.map((info) => {
+                const active = provider === info.id;
+                return (
+                  <button
+                    key={info.id}
+                    type="button"
+                    onClick={() => {
+                      setApiKeyDraft(null);
+                      setModelDraft(null);
+                      setGenAIProvider(info.id);
+                    }}
+                    className={`flex flex-col items-start gap-1 rounded-2xl border px-4 py-3 text-left transition-all cursor-pointer ${
+                      active
+                        ? "border-nb-primary bg-nb-primary/10 text-nb-on-surface shadow-sm"
+                        : "border-nb-outline-variant bg-nb-surface text-nb-on-surface-variant hover:border-nb-primary/40 hover:text-nb-on-surface"
+                    }`}
+                  >
+                    <span className="text-sm font-black">{info.label}</span>
+                    <span className="text-[11px] font-medium opacity-70">{info.hint}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-2 rounded-2xl border border-nb-outline-variant bg-nb-surface px-4 h-14">
+              <KeyRound size={16} className="shrink-0 text-nb-primary" />
+              <input
+                type={showApiKey ? "text" : "password"}
+                value={apiKey}
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={providerInfo.keyPlaceholder}
+                onChange={(e) => {
+                  setApiKeyDraft(e.target.value);
+                  setGenAIApiKey(e.target.value, provider);
+                }}
+                className="flex-1 min-w-0 bg-transparent outline-none text-sm font-medium text-nb-on-surface placeholder:text-nb-on-surface-variant/40"
+              />
+              <button
+                type="button"
+                onClick={() => setShowApiKey((v) => !v)}
+                className="p-1.5 rounded-lg text-nb-on-surface-variant hover:text-nb-on-surface hover:bg-nb-surface-low cursor-pointer"
+                title={showApiKey ? "Hide key" : "Show key"}
+              >
+                {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+            <input
+              type="text"
+              value={modelId}
+              autoComplete="off"
+              spellCheck={false}
+              placeholder={providerInfo.defaultModel}
+              onChange={(e) => {
+                setModelDraft(e.target.value);
+                setGenAIModel(e.target.value, provider);
+              }}
+              className="w-full h-12 px-4 rounded-2xl border border-nb-outline-variant bg-nb-surface outline-none text-sm font-mono text-nb-on-surface placeholder:text-nb-on-surface-variant/40"
+              aria-label="Model id"
+            />
+            <p className="text-xs text-nb-on-surface-variant/70 leading-relaxed ml-1">
+              Keys stay in this browser. Get one from{" "}
+              <a
+                href={providerInfo.keyUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-nb-primary font-bold hover:underline"
+              >
+                {providerInfo.keyUrlLabel}
+              </a>
+              . See Help → Generative AI for setup.
             </p>
           </section>
 

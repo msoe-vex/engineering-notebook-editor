@@ -3,12 +3,14 @@ import { NodeViewWrapper, ReactNodeViewRenderer, NodeViewProps } from "@tiptap/r
 import { Image as TiptapImage, type ImageOptions } from "@tiptap/extension-image";
 import Image from "next/image";
 import { GripVertical, Trash2, Image as ImageIcon, Upload, Loader2 } from "lucide-react";
+import { generateResourceCaption, generateResourceTitle, type ResourceForAI } from "@/lib/genai";
 import { events, EventNames } from "@/lib/events";
 
 import { compressImageToJpeg, hashContent, convertSvgToPng, getExtensionFromDataUrl, getMimeTypeFromExtension } from "@/lib/utils";
 import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
 import { NodeViewInput } from "./NodeViewInput";
-export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName }: NodeViewProps & { dbName: string }) => {
+import GenerateButton from "../ui/GenerateButton";
+export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName, editor }: NodeViewProps & { dbName: string }) => {
   const isDataUrl = Boolean(node.attrs.src?.startsWith('data:'));
   const [resolvedSrc, setResolvedSrc] = useState(isDataUrl ? node.attrs.src : "");
   const [isVisible, setIsVisible] = useState(isDataUrl);
@@ -89,7 +91,7 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
     };
     load();
     return () => { active = false; };
-  }, [node.attrs.src, node.attrs.filePath, dbName, isVisible, updateAttributes]);
+  }, [node.attrs.src, node.attrs.filePath, dbName, isVisible]);
 
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -109,6 +111,13 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
   };
+
+  const resource = (): ResourceForAI => ({
+    type: "image",
+    title: node.attrs.title,
+    caption: node.attrs.caption,
+    imageDataUrl: resolvedSrc?.startsWith("data:") ? resolvedSrc : undefined,
+  });
 
   return (
     <NodeViewWrapper
@@ -140,12 +149,19 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
           <div className="flex-1 flex items-center gap-3">
             <ImageIcon size={12} className="text-nb-primary shrink-0" />
             <NodeViewInput
+              editor={editor}
               value={node.attrs.title || ""}
               onUpdate={(title) => updateAttributes({ title })}
               placeholder="Give this image a title..."
               required
               missingMessage="Title is required for this image."
               className="flex-1 bg-transparent border-none outline-none text-[12px] font-bold tracking-wider text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
+            />
+            <GenerateButton
+              label="Generate title"
+              disabled={!resolvedSrc?.startsWith("data:")}
+              run={() => generateResourceTitle(resource())}
+              onResult={(title) => updateAttributes({ title })}
             />
           </div>
           <div className="flex items-center gap-2">
@@ -231,12 +247,19 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
 
         <div contentEditable={false} className="bg-nb-surface-low/30 border-t border-nb-outline-variant/10 px-4 py-2 flex items-center justify-center gap-2 group/caption">
           <NodeViewInput
+            editor={editor}
             value={node.attrs.caption || ""}
             onUpdate={(caption) => updateAttributes({ caption })}
             placeholder="Add figure description..."
             required
             missingMessage="Caption is required for this image."
             className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface/50 group-hover/caption:text-nb-on-surface focus:text-nb-on-surface focus:opacity-100 transition-all"
+          />
+          <GenerateButton
+            label="Generate caption"
+            disabled={!resolvedSrc?.startsWith("data:")}
+            run={() => generateResourceCaption(resource())}
+            onResult={(caption) => updateAttributes({ caption })}
           />
         </div>
       </div>

@@ -37,12 +37,15 @@ import { generateEntryLatex, latexPhaseRef } from "@/lib/latex";
 import { getPhases, getPhaseConfig } from "@/lib/phases";
 import { store } from "@/lib/store";
 import AutocompleteInput from "./ui/AutocompleteInput";
+import GenerateButton from "./ui/GenerateButton";
 import AuthorsInput from "./ui/AuthorsInput";
 import DatePicker from "./ui/DatePicker";
 import { extractResources, extractReferences, TipTapNode, ensureResourceIds, buildResourceTypeIndex, validateEntry, formatAuthors } from "@/lib/metadata";
 import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng, compressImageToJpeg } from "@/lib/utils";
+import { generateEntryTitle } from "@/lib/genai";
 import { NodeSelection } from "@tiptap/pm/state";
+import { NOTEBOOK_TITLE_ATTR, setNotebookTitle } from "@/lib/editor/extensions";
 
 // Returns a safe insertion position for block nodes, or null to insert at selection
 export function getSafeInsertPos(ed: TiptapEditor | null): number | null {
@@ -899,8 +902,48 @@ const EditorContent = React.memo(function EditorContent({
   }, [metadata.entries, entryId]);
 
   const handleEditorChange = useCallback((newVal: string) => {
+    try {
+      const doc = JSON.parse(newVal) as { attrs?: Record<string, unknown> };
+      if (doc?.attrs && NOTEBOOK_TITLE_ATTR in doc.attrs) {
+        const rest = { ...doc.attrs };
+        delete rest[NOTEBOOK_TITLE_ATTR];
+        doc.attrs = Object.keys(rest).length > 0 ? rest : undefined;
+        newVal = JSON.stringify(doc);
+      }
+    } catch { /* keep original */ }
     updateDraft(newVal, {});
   }, [updateDraft]);
+
+  const titleRef = useRef(openFile.title);
+
+  const applyEntryTitle = useCallback((title: string, addToHistory = true) => {
+    updateDraft(null, { title });
+    setNotebookTitle(editor, title, { addToHistory });
+  }, [editor, updateDraft]);
+
+  useEffect(() => {
+    titleRef.current = openFile.title;
+  }, [openFile.title]);
+
+  // Seed the editor's title attr when the editor or entry changes, not on every keystroke
+  // (that would mark title edits as non-undoable).
+  useEffect(() => {
+    setNotebookTitle(editor, titleRef.current || "", { addToHistory: false });
+  }, [editor, entryId]);
+
+  useEffect(() => {
+    if (!editor) return;
+    const syncTitleFromHistory = () => {
+      const next = editor.state.doc.attrs[NOTEBOOK_TITLE_ATTR];
+      if (typeof next === "string" && next !== titleRef.current) {
+        updateDraft(null, { title: next });
+      }
+    };
+    editor.on("transaction", syncTitleFromHistory);
+    return () => {
+      editor.off("transaction", syncTitleFromHistory);
+    };
+  }, [editor, updateDraft]);
 
   // use module-level getSafeInsertPos
 
@@ -1170,19 +1213,44 @@ const EditorContent = React.memo(function EditorContent({
                 {/* Row 2: Metadata */}
                 <div className="px-4 md:px-6 py-2.5 flex flex-col gap-2 relative z-160 shrink-0 min-w-0">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 flex items-center gap-2">
                       <AutocompleteInput
                         type="text"
                         value={openFile.title}
                         options={otherTitles}
                         onChange={(e) => {
-                          updateDraft(null, { title: e.target.value });
+                          applyEntryTitle(e.target.value);
                         }}
                         onSelectOption={(val) => {
-                          updateDraft(null, { title: val });
+                          applyEntryTitle(val);
+                        }}
+                        onKeyDown={(e) => {
+                          if (!editor || editor.isDestroyed) return;
+                          const mod = e.ctrlKey || e.metaKey;
+                          if (!mod) return;
+                          const key = e.key.toLowerCase();
+                          if (key === "z" && !e.shiftKey) {
+                            e.preventDefault();
+                            editor.commands.undo();
+                          } else if ((key === "z" && e.shiftKey) || key === "y") {
+                            e.preventDefault();
+                            editor.commands.redo();
+                          }
                         }}
                         placeholder="Entry Title..."
+                        wrapperClassName="flex-1 min-w-0 w-full"
                         className="w-full text-xl font-bold bg-transparent text-nb-on-surface outline-none placeholder:text-nb-outline-variant"
+                      />
+                      <GenerateButton
+                        label="Generate entry title"
+                        run={() => generateEntryTitle({
+                          title: openFile.title,
+                          body: editor?.getText() || "",
+                          date: openFile.date,
+                          authors: openFile.authors,
+                          phase: availablePhases.find(p => p.id === openFile.phase)?.name,
+                        })}
+                        onResult={(title) => applyEntryTitle(title)}
                       />
                     </div>
 

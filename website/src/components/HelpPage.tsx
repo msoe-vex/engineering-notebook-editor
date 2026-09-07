@@ -14,7 +14,8 @@ import {
   Lightbulb,
   Loader2,
   ExternalLink,
-  Play
+  Play,
+  Sparkles
 } from "lucide-react";
 import GithubIcon from "./GithubIcon";
 
@@ -32,7 +33,7 @@ export default function HelpPage({ path, onClose, navigateTo, isEmbedded = false
   const baseHelpPath = isWorkspaceHelp ? '/workspace/help' : '/help';
 
   // Determine active tab from path or default
-  const validTabs = ['modes', 'local', 'github', 'editor', 'compiler', 'data', 'phases', 'tips', 'resources'];
+  const validTabs = ['modes', 'local', 'github', 'editor', 'compiler', 'data', 'genai', 'phases', 'tips', 'resources'];
   const activeTab = validTabs.includes(lastSegment) ? lastSegment : (isWorkspaceHelp ? 'editor' : 'modes');
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -129,6 +130,7 @@ export default function HelpPage({ path, onClose, navigateTo, isEmbedded = false
           <NavButton active={activeTab === 'editor'} onClick={() => setActiveTab('editor')} icon={<FileText size={16} />} label="Editor Guide" />
           <NavButton active={activeTab === 'compiler'} onClick={() => setActiveTab('compiler')} icon={<Play size={16} />} label="PDF Compilation" />
           <NavButton active={activeTab === 'data'} onClick={() => setActiveTab('data')} icon={<Layers size={16} />} label="Import / Export" />
+          <NavButton active={activeTab === 'genai'} onClick={() => setActiveTab('genai')} icon={<Sparkles size={16} />} label="Generative AI" />
 
           <div className="px-4 py-2 mt-4">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant/40">Best Practices</h3>

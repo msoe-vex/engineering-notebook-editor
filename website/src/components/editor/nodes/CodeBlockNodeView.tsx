@@ -4,6 +4,8 @@ import { NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer, NodeViewProps 
 import { CodeBlock, type CodeBlockOptions } from "@tiptap/extension-code-block";
 import { GripVertical, Trash2, Code2, ChevronDown, Check } from "lucide-react";
 import { NodeViewInput } from "./NodeViewInput";
+import GenerateButton from "../ui/GenerateButton";
+import { generateResourceCaption, generateResourceTitle } from "@/lib/genai";
 
 export const LANGUAGES: Record<string, string> = {
   plaintext: "Plain Text",
@@ -110,12 +112,24 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
               <Code2 size={12} />
             </div>
             <NodeViewInput
+              editor={editor}
               value={node.attrs.title || ""}
               onUpdate={(title) => updateAttributes({ title })}
               placeholder="Code Snippet Title..."
               required
               missingMessage="Title is required for this code block."
               className="flex-1 bg-transparent border-none outline-none text-[12px] font-bold tracking-wider text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
+            />
+            <GenerateButton
+              label="Generate title"
+              run={() => generateResourceTitle({
+                type: "codeBlock",
+                title: node.attrs.title,
+                caption: node.attrs.caption,
+                language: node.attrs.language,
+                text: node.textContent,
+              })}
+              onResult={(title) => updateAttributes({ title })}
             />
             <div className="relative shrink-0 ml-auto">
               <button
@@ -190,12 +204,24 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
 
         <div contentEditable={false} className="bg-nb-surface-low/30 border-t border-nb-outline-variant/10 px-4 py-2 flex items-center justify-center gap-2 group/caption">
           <NodeViewInput
+            editor={editor}
             value={node.attrs.caption || ""}
             onUpdate={(caption) => updateAttributes({ caption })}
             placeholder="What does this code do?"
             required
             missingMessage="Caption is required for this code block."
             className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface/50 group-hover/caption:text-nb-on-surface focus:text-nb-on-surface focus:opacity-100 transition-all"
+          />
+          <GenerateButton
+            label="Generate caption"
+            run={() => generateResourceCaption({
+              type: "codeBlock",
+              title: node.attrs.title,
+              caption: node.attrs.caption,
+              language: node.attrs.language,
+              text: node.textContent,
+            })}
+            onResult={(caption) => updateAttributes({ caption })}
           />
         </div>
       </div>
