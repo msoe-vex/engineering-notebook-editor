@@ -65,7 +65,7 @@ export default function HelpPage({ path, onClose, navigateTo, isEmbedded = false
   }, [activeTab]);
 
   return (
-    <div className={isEmbedded ? "w-full h-full flex flex-col bg-nb-bg overflow-hidden relative" : "fixed inset-0 z-[600] bg-nb-bg flex flex-col animate-in fade-in duration-300"}>
+    <div className={isEmbedded ? "w-full h-full flex flex-col bg-nb-bg overflow-hidden relative" : "fixed inset-0 z-600 bg-nb-bg flex flex-col animate-in fade-in duration-300"}>
       {/* Header */}
       <div className="h-14 border-b border-nb-outline-variant/30 flex items-center justify-between px-6 bg-nb-surface/50 backdrop-blur-xl shrink-0">
         <div className="flex items-center gap-3">
@@ -102,15 +102,16 @@ export default function HelpPage({ path, onClose, navigateTo, isEmbedded = false
         {/* Mobile Sidebar Backdrop */}
         {isSidebarOpen && (
           <div
-            className="fixed inset-0 z-[450] bg-nb-bg/60 backdrop-blur-sm md:hidden"
+            className="fixed inset-0 z-450 bg-nb-bg/60 backdrop-blur-sm md:hidden"
             onClick={() => setIsSidebarOpen(false)}
           />
         )}
 
         {/* Sidebar Nav */}
         <div className={`
-          fixed md:relative inset-y-0 left-0 z-[500] md:z-auto
+          fixed md:relative inset-y-0 left-0 z-500 md:z-auto
           w-72 md:w-64 border-r border-nb-outline-variant/30 p-6 flex flex-col gap-2 bg-nb-surface md:bg-nb-surface/20
+          overflow-y-auto custom-scrollbar
           transition-transform duration-300 ease-in-out
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}>
