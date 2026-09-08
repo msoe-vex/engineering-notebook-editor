@@ -9,7 +9,7 @@ import {
   Shield, Bold, Italic, List, Type, Sun, Moon,
   Sigma, Code, Image as ImageIcon, Table as TableIcon, Terminal, Link as LinkIcon,
   Users, Sparkles, Play,
-  Lock, WifiOff, ChevronDown
+  Lock, WifiOff, ChevronDown, Sliders, Calendar, UserCheck
 } from "lucide-react";
 import Logo from "@/components/icons/Logo";
 import GithubIcon from "@/components/icons/GithubIcon";
@@ -141,7 +141,7 @@ export default function AboutPage({ onClose, onTryIt, onOpenHelp }: AboutPagePro
               description="Everyone can contribute to the same shared notebook without learning LaTeX or installing heavy software."
             />
             <FeatureCard
-              icon={<Sparkles size={24} className="text-nb-tertiary" />}
+              icon={<Sliders size={24} className="text-nb-tertiary" />}
               title="Consistency by Default"
               description="Entry templates, autofill, and structured fields keep author, date, and design phase information aligned."
             />
@@ -173,52 +173,99 @@ export default function AboutPage({ onClose, onTryIt, onOpenHelp }: AboutPagePro
             <h2 className="text-4xl font-black text-nb-on-surface mb-4 tracking-tight">Features that matter in practice</h2>
             <p className="text-nb-on-surface-variant font-medium">ENGen combines usability, automation, and long-term portability.</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <FeatureCard
-              icon={<Sigma size={24} className="text-nb-primary" />}
-              title="Math Rendering"
-              description="Full support for Inline and Block LaTeX math. Write complex equations and see them rendered instantly with KaTeX."
-            />
-            <FeatureCard
-              icon={<Code size={24} className="text-nb-tertiary" />}
-              title="Code Blocks"
-              description="Document your software with syntax-highlighted code blocks. Perfect for sharing algorithms and control logic."
-            />
-            <FeatureCard
-              icon={<ImageIcon size={24} className="text-nb-primary" />}
-              title="Smart Images"
-              description="Drag and drop images with automatic captioning and sizing. All images are handled as standard LaTeX figures."
-            />
-            <FeatureCard
-              icon={<TableIcon size={24} className="text-nb-tertiary" />}
-              title="Dynamic Tables"
-              description="Create and manage complex data tables with ease. No more wrestling with LaTeX tabular environments."
-            />
-            <FeatureCard
-              icon={<Terminal size={24} className="text-nb-primary" />}
-              title="Raw LaTeX"
-              description="Need more control? Insert raw LaTeX blocks anywhere in your entry for custom formatting and advanced packages."
-            />
-            <FeatureCard
-              icon={<LinkIcon size={24} className="text-nb-tertiary" />}
-              title="Cross-References"
-              description="Automatically link to figures, tables, and other notebook entries. Build a connected web of documentation."
-            />
-            <FeatureCard
-              icon={<GithubIcon size={24} className="text-nb-primary" />}
-              title="GitHub Sync"
-              description="Keep the whole team on the same notebook with versioned sharing and a single source of truth."
-            />
-            <FeatureCard
-              icon={<Play size={24} className="text-nb-tertiary" />}
-              title="Browser-Based PDF Compilation"
-              description="Compile directly in the browser with no complex local setup, installs, or toolchain maintenance."
-            />
-            <FeatureCard
-              icon={<Download size={24} className="text-nb-primary" />}
-              title="Import / Export"
-              description="Move notebooks in and out easily for backup, sharing, and long-term future-proof archiving."
-            />
+          <div className="space-y-20">
+            {/* Category 1: Document & Design */}
+            <div>
+              <div className="mb-8">
+                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-nb-primary mb-2">The Daily Workbench</p>
+                <h3 className="text-2xl font-black text-nb-on-surface tracking-tight">Document & Design</h3>
+                <p className="text-sm text-nb-on-surface-variant font-medium mt-1">Rich technical documentation components designed for engineering notebooks.</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <FeatureCard
+                  icon={<Sigma size={24} className="text-nb-primary" />}
+                  title="Math Rendering"
+                  description="Full support for Inline and Block LaTeX math. Write equations and see them rendered instantly with KaTeX."
+                />
+                <FeatureCard
+                  icon={<Code size={24} className="text-nb-tertiary" />}
+                  title="Code Blocks"
+                  description="Document your robot software with syntax-highlighted code blocks for autonomous routines and control loops."
+                />
+                <FeatureCard
+                  icon={<ImageIcon size={24} className="text-nb-primary" />}
+                  title="Smart Figures"
+                  description="Drag and drop CAD screenshots and mechanism photos with automatic sizing and LaTeX figure formatting."
+                />
+                <FeatureCard
+                  icon={<TableIcon size={24} className="text-nb-tertiary" />}
+                  title="Dynamic Tables"
+                  description="Build trade-off studies, test logs, and BOM matrices with ease without writing LaTeX tabular syntax."
+                />
+              </div>
+            </div>
+
+            {/* Category 2: Team & Project Tracking */}
+            <div>
+              <div className="mb-8">
+                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-nb-tertiary mb-2">Organization & Workflow</p>
+                <h3 className="text-2xl font-black text-nb-on-surface tracking-tight">Team & Project Tracking</h3>
+                <p className="text-sm text-nb-on-surface-variant font-medium mt-1">Coordinate your subteams and stay aligned on design cycles throughout the season.</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <FeatureCard
+                  icon={<Calendar size={24} className="text-nb-primary" />}
+                  title="Timeline & Calendar"
+                  description="Visualize your season with interactive timeline and calendar views to keep your engineering cycles on schedule."
+                />
+                <FeatureCard
+                  icon={<UserCheck size={24} className="text-nb-tertiary" />}
+                  title="Team Management"
+                  description="Configure roster members, assign subteam roles, choose theme colors, and maintain consistent author attributions."
+                />
+                <FeatureCard
+                  icon={<GithubIcon size={24} className="text-nb-primary" />}
+                  title="GitHub Sync"
+                  description="Keep the whole team on the same notebook with versioned cloud backup and a single source of truth."
+                />
+                <FeatureCard
+                  icon={<Sparkles size={24} className="text-nb-tertiary" />}
+                  title="Generative AI"
+                  description="Bring your own API key (Gemini, OpenAI, or Anthropic) for instant AI-assisted title generation and smart captions."
+                />
+              </div>
+            </div>
+
+            {/* Category 3: Publishing & Portability */}
+            <div>
+              <div className="mb-8">
+                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-nb-primary mb-2">Deliverables & Standards</p>
+                <h3 className="text-2xl font-black text-nb-on-surface tracking-tight">Publishing & Portability</h3>
+                <p className="text-sm text-nb-on-surface-variant font-medium mt-1">Produce competition-ready PDFs and maintain plain-text, vendor-agnostic records.</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <FeatureCard
+                  icon={<Play size={24} className="text-nb-primary" />}
+                  title="In-Browser PDF Engine"
+                  description="Compile directly in your browser with zero local software installs, LaTeX distributions, or toolchain headaches."
+                />
+                <FeatureCard
+                  icon={<Terminal size={24} className="text-nb-tertiary" />}
+                  title="Raw LaTeX Control"
+                  description="Insert raw LaTeX blocks anywhere in your entry for custom packages, pgfplots, or specialized formatting."
+                />
+                <FeatureCard
+                  icon={<LinkIcon size={24} className="text-nb-primary" />}
+                  title="Cross-References"
+                  description="Automatically link figures, tables, and earlier entries to construct a cohesive, rubric-friendly design narrative."
+                />
+                <FeatureCard
+                  icon={<Download size={24} className="text-nb-tertiary" />}
+                  title="Import / Export"
+                  description="Export pure LaTeX zip archives or import existing projects for archiving, judging submission, and backups."
+                />
+              </div>
+            </div>
           </div>
 
           <div className="mt-20 flex justify-center">
