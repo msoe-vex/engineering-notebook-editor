@@ -11,19 +11,19 @@ interface NotificationProps {
 
 export const Notification = ({ message, type, t }: NotificationProps) => {
   const icons = {
-    success: <CheckCircle2 className="text-green-500" size={18} />,
-    error: <AlertCircle className="text-red-500" size={18} />,
-    warning: <AlertTriangle className="text-amber-500" size={18} />,
+    success: <CheckCircle2 className="text-emerald-600 dark:text-emerald-400" size={18} />,
+    error: <AlertCircle className="text-red-600 dark:text-red-400" size={18} />,
+    warning: <AlertTriangle className="text-amber-600 dark:text-amber-400" size={18} />,
     loading: <Loader2 className="text-nb-primary animate-spin" size={18} />,
     info: <Info className="text-nb-tertiary" size={18} />,
   };
 
   const bgColors = {
-    success: 'bg-green-50/50',
-    error: 'bg-red-50/50',
-    warning: 'bg-amber-50/50',
-    loading: 'bg-nb-primary/5',
-    info: 'bg-nb-tertiary/5',
+    success: 'bg-emerald-500/10 dark:bg-emerald-500/20',
+    error: 'bg-red-500/10 dark:bg-red-500/20',
+    warning: 'bg-amber-500/10 dark:bg-amber-500/20',
+    loading: 'bg-nb-primary/10 dark:bg-nb-primary/20',
+    info: 'bg-nb-tertiary/10 dark:bg-nb-tertiary/20',
   };
 
   return (
@@ -79,8 +79,6 @@ export const showNotification = (
     duration = options.duration;
   } else if (type === 'loading') {
     duration = Infinity;
-  } else if (type === 'error') {
-    duration = 20000;
   } else {
     duration = 4000;
   }

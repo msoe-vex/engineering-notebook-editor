@@ -1438,6 +1438,7 @@ export default function App() {
           right: 16,
           maxHeight: "calc(100vh - 32px)",
           overflowY: "auto",
+          overflowX: "hidden",
           pointerEvents: "none",
         }}
       />
