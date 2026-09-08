@@ -22,10 +22,12 @@ export {
   getProviderInfo,
   getStoredGenAIModel,
   hasGenAIApiKey,
+  isGenAIEnabled,
   isGenAIProviderId,
   resolveGenAIModel,
   runProviderGenerate,
   setGenAIApiKey,
+  setGenAIEnabled,
   setGenAIModel,
   setGenAIProvider,
   subscribeGenAISettings,
@@ -42,7 +44,9 @@ import {
 import {
   getGenAISettings,
   hasGenAIApiKey,
+  isGenAIEnabled,
   setGenAIApiKey,
+  setGenAIEnabled,
   setGenAIModel,
   setGenAIProvider,
 } from "./settings";
@@ -52,7 +56,9 @@ export { parseGeneratedText, parseImageDataUrl, resolveTemperature, sanitizeGenA
 
 export const genai: GenAI = {
   hasApiKey: hasGenAIApiKey,
+  isEnabled: isGenAIEnabled,
   getSettings: getGenAISettings,
+  setEnabled: setGenAIEnabled,
   setProvider: setGenAIProvider,
   setApiKey: setGenAIApiKey,
   setModel: setGenAIModel,

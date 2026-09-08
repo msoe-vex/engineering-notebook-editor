@@ -5,9 +5,10 @@ You can generate **entry titles** and **titles and captions** for figures, table
 ## Setup
 
 1. Open **Settings** from the activity bar gear or the project menu (the notebook name in the top bar).
-2. Under **Generative AI**, pick a provider: **Google**, **OpenAI**, or **Anthropic**.
-3. Paste an API key for that provider. Keys stay in **this browser only**. They are not saved in the notebook or in Git.
-4. Optionally type a **model id**. Leave it blank to use the built-in default for that provider (currently `gemini-3.5-flash-lite` for Google).
+2. Under **Generative AI**, turn **Enable Gen AI** on. Provider and API key fields stay hidden until then.
+3. Pick a provider: **Google**, **OpenAI**, or **Anthropic**.
+4. Paste an API key for that provider. Keys stay in **this browser only**. They are not saved in the notebook or in Git.
+5. Optionally type a **model id**. Leave it blank to use the built-in default for that provider (currently `gemini-3.5-flash-lite` for Google).
 
 Create a key from the provider’s site:
 

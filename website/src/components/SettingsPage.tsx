@@ -2,7 +2,7 @@
 
 import { useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
-import { Eye, EyeOff, KeyRound, Monitor, Moon, Settings, Sun, X } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Monitor, Moon, Settings, Sparkles, Sun, X } from "lucide-react";
 import { readLastAuthors, writeLastAuthors } from "@/lib/metadata";
 import {
   GENAI_PROVIDERS,
@@ -10,6 +10,7 @@ import {
   getGenAISettings,
   getStoredGenAIModel,
   setGenAIApiKey,
+  setGenAIEnabled,
   setGenAIModel,
   setGenAIProvider,
   subscribeGenAISettings,
@@ -42,7 +43,7 @@ function getEmptyAuthorsJson() {
 }
 
 function getEmptyGenAIJson() {
-  return JSON.stringify({ provider: "gemini", keys: {}, models: {} });
+  return JSON.stringify({ enabled: false, provider: "gemini", keys: {}, models: {} });
 }
 
 function getGenAISettingsJson() {
@@ -60,6 +61,7 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
   const [showApiKey, setShowApiKey] = useState(false);
   const authors = authorsOverride ?? (JSON.parse(storedAuthorsJson) as string[]);
   const genAI = JSON.parse(storedGenAIJson) as ReturnType<typeof getGenAISettings>;
+  const genAIOn = genAI.enabled === true;
   const provider = genAI.provider;
   const providerInfo = GENAI_PROVIDERS.find((p) => p.id === provider) || GENAI_PROVIDERS[0];
   const apiKey = apiKeyDraft ?? getGenAIApiKey(provider);
@@ -126,6 +128,40 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant ml-1">
               Generative AI
             </p>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={genAIOn}
+              onClick={() => setGenAIEnabled(!genAIOn)}
+              className={`w-full flex items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-left transition-all cursor-pointer ${
+                genAIOn
+                  ? "border-nb-primary bg-nb-primary/10 text-nb-on-surface shadow-sm"
+                  : "border-nb-outline-variant bg-nb-surface text-nb-on-surface-variant hover:border-nb-primary/40 hover:text-nb-on-surface"
+              }`}
+            >
+              <span className="flex items-center gap-3 min-w-0">
+                <Sparkles size={16} className={genAIOn ? "text-nb-primary shrink-0" : "shrink-0"} />
+                <span className="min-w-0">
+                  <span className="block text-sm font-black">Enable Gen AI</span>
+                  <span className="block text-[11px] font-medium opacity-70">
+                    Show sparkles buttons for titles and captions
+                  </span>
+                </span>
+              </span>
+              <span
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                  genAIOn ? "bg-nb-primary" : "bg-nb-outline-variant"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                    genAIOn ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </span>
+            </button>
+            {genAIOn && (
+              <>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {GENAI_PROVIDERS.map((info) => {
                 const active = provider === info.id;
@@ -198,6 +234,8 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
               </a>
               . See Help → Generative AI for setup.
             </p>
+              </>
+            )}
           </section>
 
           <section className="space-y-3">

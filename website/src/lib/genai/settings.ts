@@ -28,7 +28,7 @@ export function getProviderInfo(id: GenAIProviderId) {
 }
 
 function emptySettings(): GenAISettings {
-  return { provider: "gemini", keys: {}, models: {} };
+  return { enabled: false, provider: "gemini", keys: {}, models: {} };
 }
 
 export function getGenAISettings(): GenAISettings {
@@ -38,6 +38,7 @@ export function getGenAISettings(): GenAISettings {
     const raw = localStorage.getItem(GENAI_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<GenAISettings>;
+      if (parsed.enabled === true) settings.enabled = true;
       if (isGenAIProviderId(parsed.provider)) settings.provider = parsed.provider;
       if (parsed.keys && typeof parsed.keys === "object") {
         for (const id of GENAI_PROVIDERS.map((p) => p.id)) {
@@ -60,6 +61,16 @@ function persistSettings(settings: GenAISettings): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(GENAI_STORAGE_KEY, JSON.stringify(settings));
   window.dispatchEvent(new Event(GENAI_CHANGED_EVENT));
+}
+
+export function isGenAIEnabled(): boolean {
+  return getGenAISettings().enabled === true;
+}
+
+export function setGenAIEnabled(enabled: boolean): void {
+  const settings = getGenAISettings();
+  settings.enabled = enabled;
+  persistSettings(settings);
 }
 
 export function setGenAIProvider(id: GenAIProviderId): void {

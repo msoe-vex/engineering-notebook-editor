@@ -1,8 +1,11 @@
 import type { GenAIGenerateRequest, GenAIImagePart, GenAIProviderId } from "./types";
-import { getGenAIApiKey, getGenAISettings, resolveGenAIModel } from "./settings";
+import { getGenAIApiKey, getGenAISettings, isGenAIEnabled, resolveGenAIModel } from "./settings";
 import { resolveTemperature } from "./shared";
 
 export async function runGenerate(prompt: string, images?: GenAIImagePart[], temperature?: number): Promise<string> {
+  if (!isGenAIEnabled()) {
+    throw new Error("Generative AI is turned off in Settings.");
+  }
   const settings = getGenAISettings();
   const apiKey = getGenAIApiKey(settings.provider);
   if (!apiKey) {
