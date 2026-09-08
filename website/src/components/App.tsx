@@ -391,8 +391,16 @@ export default function App() {
   useEffect(() => {
     const unsubNotification = events.on(EventNames.SHOW_NOTIFICATION, (data: unknown) => {
       if (typeof data === 'object' && data !== null && 'message' in data) {
-        const notification = data as { message: string; type?: "success" | "error" | "warning" | "loading" | "info" };
-        showNotification(notification.message, notification.type || "info");
+        const notification = data as {
+          message: string;
+          type?: "success" | "error" | "warning" | "loading" | "info";
+          duration?: number;
+          persistent?: boolean;
+        };
+        showNotification(notification.message, notification.type || "info", {
+          duration: notification.duration,
+          persistent: notification.persistent,
+        });
       }
     });
 
@@ -1421,7 +1429,18 @@ export default function App() {
         />
       )}
       {/* Toast Container */}
-      <Toaster position="bottom-right" />
+      <Toaster
+        position="bottom-right"
+        containerStyle={{
+          top: 16,
+          left: 16,
+          bottom: 16,
+          right: 16,
+          maxHeight: "calc(100vh - 32px)",
+          overflowY: "auto",
+          pointerEvents: "none",
+        }}
+      />
       {/* About Page Overlay */}
       {showAbout && (
         <AboutPage

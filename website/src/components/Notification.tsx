@@ -30,22 +30,22 @@ export const Notification = ({ message, type, t }: NotificationProps) => {
     <div
       className={`${
         t.visible ? 'animate-in fade-in slide-in-from-right-4' : 'animate-out fade-out slide-out-to-right-4'
-      } max-w-md w-full bg-nb-surface shadow-nb-2xl rounded-2xl pointer-events-auto flex overflow-hidden`}
+      } max-w-md w-full max-h-[80vh] bg-nb-surface shadow-nb-2xl rounded-2xl pointer-events-auto flex overflow-hidden`}
     >
       <div className={`w-1.5 shrink-0 ${type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : type === 'warning' ? 'bg-amber-500' : type === 'info' ? 'bg-nb-tertiary' : 'bg-nb-primary'}`} />
       
-      <div className="flex-1 p-4 flex items-start gap-3">
+      <div className="flex-1 p-4 flex items-start gap-3 min-w-0">
         <div className={`shrink-0 p-2 rounded-xl ${bgColors[type]}`}>
           {icons[type]}
         </div>
         
-        <div className="flex-1 pt-0.5">
+        <div className="flex-1 pt-0.5 min-w-0">
           <p className="text-xs font-black text-nb-on-surface uppercase tracking-wider mb-0.5">
             {type === 'loading' ? 'Processing' : type.toUpperCase()}
           </p>
-          <p className="text-xs font-medium text-nb-on-surface-variant leading-relaxed">
+          <div className="text-xs font-medium text-nb-on-surface-variant leading-relaxed max-h-48 overflow-y-auto custom-scrollbar wrap-break-word select-text">
             {message}
-          </p>
+          </div>
         </div>
 
         <button
@@ -62,8 +62,30 @@ export const Notification = ({ message, type, t }: NotificationProps) => {
   );
 };
 
-export const showNotification = (message: string, type: NotificationType = 'info') => {
+export interface NotificationOptions {
+  duration?: number;
+  persistent?: boolean;
+}
+
+export const showNotification = (
+  message: string,
+  type: NotificationType = 'info',
+  options?: NotificationOptions
+) => {
+  let duration: number;
+  if (options?.persistent) {
+    duration = Infinity;
+  } else if (options?.duration !== undefined) {
+    duration = options.duration;
+  } else if (type === 'loading') {
+    duration = Infinity;
+  } else if (type === 'error') {
+    duration = 20000;
+  } else {
+    duration = 4000;
+  }
+
   toast.custom((t) => <Notification message={message} type={type} t={t} />, {
-    duration: type === 'loading' ? Infinity : 4000,
+    duration,
   });
 };
