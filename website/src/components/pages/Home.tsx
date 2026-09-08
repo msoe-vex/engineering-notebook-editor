@@ -1,10 +1,12 @@
 import { GitHubConfig, initiateGitHubLogin } from "@/lib/github/github";
 import { Project, getProjectDBName, getAllPending, getProjectHandle } from "@/lib/storage/db";
 import { GITHUB_ISSUES_URL } from "@/lib/constants";
+import { useTheme } from "next-themes";
 import React, { useState, useEffect } from "react";
 import {
   Folder, HardDrive, Trash2, Clock, Plus,
-  ArrowRight, History, Edit2, Check, X, MoreVertical
+  ArrowRight, History, Edit2, Check, X, MoreVertical,
+  Sun, Moon
 } from "lucide-react";
 import GitHubConnectionDialog from "@/components/dialogs/GitHubConnectionDialog";
 import GithubIcon from "@/components/icons/GithubIcon";
@@ -28,6 +30,7 @@ interface HomeProps {
   autoOpenGithubModal?: boolean;
   onCloseGithubModal?: () => void;
   onOpenAbout: () => void;
+  onOpenHelp: () => void;
   pendingCounts?: Record<string, number>;
 }
 
@@ -49,8 +52,10 @@ export default function Home({
   autoOpenGithubModal = false,
   onCloseGithubModal,
   onOpenAbout,
+  onOpenHelp,
 }: HomeProps) {
   const [mounted, setMounted] = useState(false);
+  const { setTheme, resolvedTheme } = useTheme();
   const [pendingCounts, setPendingCounts] = useState<Record<string, number>>({});
 
   // Form states for GitHub
@@ -438,15 +443,18 @@ export default function Home({
         projects={projects}
       />
       {/* Footer */}
-      <p className="w-full max-w-xl mt-12 text-center text-sm text-nb-on-surface-variant leading-relaxed border-t border-nb-outline-variant/20 pt-8 px-4">
-        After you open a project, entries live in the sidebar. Compile, team, help, and settings are in the project menu (the name in the top bar).
-      </p>
-      <div className="w-full max-w-4xl mt-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 px-4 pb-4">
+      <div className="w-full max-w-xl mt-12 pt-8 border-t border-nb-outline-variant/20 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 px-4 pb-6">
         <button
           onClick={onOpenAbout}
           className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary cursor-pointer"
         >
           About
+        </button>
+        <button
+          onClick={onOpenHelp}
+          className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary cursor-pointer"
+        >
+          Help & Docs
         </button>
         <a
           href={GITHUB_ISSUES_URL}
@@ -456,6 +464,25 @@ export default function Home({
         >
           Report Issue
         </a>
+        <button
+          type="button"
+          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+          className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary cursor-pointer"
+          title="Toggle Theme"
+          aria-label="Toggle Theme"
+        >
+          {mounted && resolvedTheme === "dark" ? (
+            <>
+              <Sun size={12} />
+              <span>Light Mode</span>
+            </>
+          ) : (
+            <>
+              <Moon size={12} />
+              <span>Dark Mode</span>
+            </>
+          )}
+        </button>
       </div>
     </div>
   );

@@ -128,6 +128,7 @@ export default function App() {
   const pendingActionRef = useRef<(() => void) | null>(null);
   const [isSaveLocked, setIsSaveLocked] = useState(false);
   const [isSidebarDragging, setIsSidebarDragging] = useState(false);
+  const [helpReturnTo, setHelpReturnTo] = useState<string | null>(null);
 
 
 
@@ -341,12 +342,16 @@ export default function App() {
   }, [checkUnsaved, navigateToHome]);
 
   const handleCloseHelp = useCallback(() => {
-    if (currentProjectId) {
+    if (helpReturnTo) {
+      const returnTo = helpReturnTo;
+      setHelpReturnTo(null);
+      navigateTo({}, returnTo);
+    } else if (currentProjectId) {
       navigateTo({}, '/workspace/editor');
     } else {
       handleGoHome();
     }
-  }, [currentProjectId, navigateTo, handleGoHome]);
+  }, [helpReturnTo, currentProjectId, navigateTo, handleGoHome]);
 
   useEffect(() => {
     if (!isSaving && !isPendingSave && !isDiscarding && !isCommitting && pendingActionRef.current) {
@@ -1222,6 +1227,10 @@ export default function App() {
             autoOpenGithubModal={autoOpenGithubModal}
             onCloseGithubModal={() => setAutoOpenGithubModal(false)}
             onOpenAbout={() => navigateTo({}, '/about')}
+            onOpenHelp={() => {
+              setHelpReturnTo(null);
+              navigateTo({}, '/help');
+            }}
           />
         </div>
       ) : (
@@ -1442,7 +1451,7 @@ export default function App() {
         }}
       />
       {/* About Page Overlay */}
-      {showAbout && (
+      {(showAbout || (showHelp && Boolean(helpReturnTo?.includes('about')))) && (
         <AboutPage
           onClose={() => {
             if (currentProjectId) navigateTo({}, '/workspace/editor');
@@ -1452,6 +1461,7 @@ export default function App() {
             navigateToHome();
           }}
           onOpenHelp={() => {
+            setHelpReturnTo(currentProjectId ? '/workspace/about' : '/about');
             navigateTo({}, '/help');
           }}
         />

@@ -65,7 +65,7 @@ export default function HelpPage({ path, onClose, navigateTo, isEmbedded = false
   }, [activeTab]);
 
   return (
-    <div className={isEmbedded ? "w-full h-full flex flex-col bg-nb-bg overflow-hidden relative" : "fixed inset-0 z-600 bg-nb-bg flex flex-col animate-in fade-in duration-300"}>
+    <div className={isEmbedded ? "w-full h-full flex flex-col bg-nb-bg overflow-hidden relative" : "fixed inset-0 z-1100 bg-nb-bg flex flex-col animate-in fade-in duration-300"}>
       {/* Header */}
       <div className="h-14 border-b border-nb-outline-variant/30 flex items-center justify-between px-6 bg-nb-surface/50 backdrop-blur-xl shrink-0">
         <div className="flex items-center gap-3">
