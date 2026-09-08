@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from "react";
-import GithubIcon from "./GithubIcon";
+import GithubIcon from "@/components/icons/GithubIcon";
 import {
   Menu, HelpCircle, Play, Loader2, Check,
   MoreVertical, Download, Upload, ArrowLeftRight, Users, Edit3, CalendarDays, Settings
 } from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { ViewMode } from "./editor/ui/ViewToggle";
+import { ViewMode } from "@/components/editor/ui/ViewToggle";
 
 interface ProjectHeaderProps {
   isSidebarOpen: boolean;

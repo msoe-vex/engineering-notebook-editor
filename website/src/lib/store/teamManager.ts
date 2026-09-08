@@ -1,7 +1,7 @@
 import { INDEX_PATH } from "../constants";
-import { getPending } from "../db";
+import { getPending } from "../storage/db";
 import { getMimeTypeFromExtension, blobFromBase64, formatDateMonthYear } from "../utils";
-import { TeamMetadata, ProjectPhase, dehydrateTeamAssets, normalizeNotebookMetadata, serializeNotebookMetadata } from "../metadata";
+import { TeamMetadata, ProjectPhase, dehydrateTeamAssets, normalizeNotebookMetadata, serializeNotebookMetadata } from "../notebook/metadata";
 import { IWorkspaceStore } from "./types";
 
 export class TeamManager {

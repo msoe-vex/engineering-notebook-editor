@@ -14,10 +14,11 @@ import {
   GitCompare,
   ExternalLink
 } from "lucide-react";
-import { PendingChange } from "@/lib/db";
+import { PendingChange } from "@/lib/storage/db";
+import { isBinaryFile } from "@/lib/storage/transferUtils";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { ENTRIES_DIR, LATEX_DIR, ASSETS_DIR, TEAM_PATH, PHASES_PATH, INDEX_PATH, ENTRIES_INDEX_PATH } from "@/lib/constants";
-import { isBinaryFile } from "@/lib/transferUtils";
+import { NotebookMetadata, EntryMetadata } from "@/lib/notebook/metadata";
 import DiffViewer from "./DiffViewer";
 
 interface VersionControlTabProps {
@@ -74,7 +75,7 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
     });
   }, []);
 
-  const [baseMetadata, setBaseMetadata] = useState<import("@/lib/metadata").NotebookMetadata | null>(null);
+  const [baseMetadata, setBaseMetadata] = useState<NotebookMetadata | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -130,8 +131,8 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
     // Check for entries/templates that changed only in notebook.json
     const metadataOnlyEntryIds = new Set<string>();
     if (baseMetadata?.entries && metadata?.entries) {
-      const baseEntries = baseMetadata.entries as Record<string, import("@/lib/metadata").EntryMetadata>;
-      const currentEntries = metadata.entries as Record<string, import("@/lib/metadata").EntryMetadata>;
+      const baseEntries = baseMetadata.entries as Record<string, EntryMetadata>;
+      const currentEntries = metadata.entries as Record<string, EntryMetadata>;
       for (const [id, entry] of Object.entries(currentEntries)) {
         if (!entryMap.has(id)) {
           const baseEntry = baseEntries[id];

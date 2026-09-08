@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { X, Loader2, Search, Check, Folder, Plus, ExternalLink, HardDrive } from "lucide-react";
-import GithubIcon from "./GithubIcon";
-import { GitHubConfig, GitHubRepo, fetchUserRepositories, fetchRepoFolders, isGitHub401 } from "@/lib/github";
+import GithubIcon from "@/components/icons/GithubIcon";
+import { GitHubConfig, GitHubRepo, fetchUserRepositories, fetchRepoFolders, isGitHub401 } from "@/lib/github/github";
 import { GITHUB_APP_INSTALL_URL } from "@/lib/constants";
-import { Project } from "@/lib/db";
+import { Project } from "@/lib/storage/db";
 
 interface GitHubConnectionDialogProps {
   isOpen: boolean;
@@ -98,12 +98,12 @@ export default function GitHubConnectionDialog({
   const isSetup = mode === "setup";
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-1000 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-nb-bg/80 backdrop-blur-md animate-in fade-in duration-300"
         onClick={onClose}
       />
-      <div className={`relative w-full ${isSetup && githubToken ? 'max-w-xl' : 'max-w-sm'} bg-nb-surface border border-nb-outline-variant/30 rounded-[32px] shadow-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-300 flex flex-col max-h-[90vh]`}>
+      <div className={`relative w-full ${isSetup && githubToken ? 'max-w-xl' : 'max-w-sm'} bg-nb-surface border border-nb-outline-variant/30 rounded-4xl shadow-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-300 flex flex-col max-h-[90vh]`}>
 
         {/* Header */}
         <div className="p-8 pb-4 flex items-center justify-between">
@@ -134,7 +134,7 @@ export default function GitHubConnectionDialog({
               </div>
               <div className="space-y-2">
                 <h3 className="font-bold text-nb-on-surface">{isExchangingCode ? 'Signing in...' : 'Sign in Required'}</h3>
-                <p className="text-xs text-nb-on-surface-variant max-w-[280px] mx-auto">
+                <p className="text-xs text-nb-on-surface-variant max-w-70 mx-auto">
                   {isExchangingCode
                     ? 'Completing GitHub authentication. This will only take a moment.'
                     : 'Authenticate with GitHub to discover your repositories and enable cloud synchronization.'}
@@ -168,13 +168,13 @@ export default function GitHubConnectionDialog({
                     href={GITHUB_APP_INSTALL_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[9px] font-black text-nb-on-surface-variant hover:text-nb-primary transition-colors uppercase tracking-[0.1em] flex items-center gap-1"
+                    className="text-[9px] font-black text-nb-on-surface-variant hover:text-nb-primary transition-colors uppercase tracking-widest flex items-center gap-1"
                   >
                     Permissions <ExternalLink size={10} />
                   </a>
                   <button
                     onClick={onSignOut}
-                    className="text-[9px] font-black text-nb-on-surface-variant hover:text-red-500 transition-colors uppercase tracking-[0.1em] cursor-pointer"
+                    className="text-[9px] font-black text-nb-on-surface-variant hover:text-red-500 transition-colors uppercase tracking-widest cursor-pointer"
                   >
                     Sign Out
                   </button>
@@ -196,7 +196,7 @@ export default function GitHubConnectionDialog({
                         onChange={(e) => setRepoSearch(e.target.value)}
                       />
                     </div>
-                    <div className="max-h-[140px] overflow-y-auto custom-scrollbar bg-nb-surface-low border border-nb-outline-variant/20 rounded-2xl p-1">
+                    <div className="max-h-35 overflow-y-auto custom-scrollbar bg-nb-surface-low border border-nb-outline-variant/20 rounded-2xl p-1">
                       {isLoadingRepos ? (
                         <div className="py-6 flex items-center justify-center">
                           <Loader2 size={18} className="text-nb-primary animate-spin" />
@@ -291,7 +291,7 @@ export default function GitHubConnectionDialog({
                             </React.Fragment>
                           ))}
                         </div>
-                        <div className="max-h-[140px] overflow-y-auto custom-scrollbar p-1">
+                        <div className="max-h-35 overflow-y-auto custom-scrollbar p-1">
                           {isLoadingFolders ? (
                             <div className="flex items-center justify-center py-8">
                               <Loader2 size={18} className="text-nb-primary animate-spin" />

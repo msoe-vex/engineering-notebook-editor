@@ -33,14 +33,14 @@ const LatexPreview = dynamic(() => import("./LatexPreview"), {
     </div>
   )
 });
-import { generateEntryLatex, latexPhaseRef } from "@/lib/latex";
-import { getPhases, getPhaseConfig } from "@/lib/phases";
+import { generateEntryLatex, latexPhaseRef } from "@/lib/latex/latex";
+import { getPhases, getPhaseConfig } from "@/lib/notebook/phases";
+import { extractResources, extractReferences, TipTapNode, ensureResourceIds, buildResourceTypeIndex, validateEntry, formatAuthors } from "@/lib/notebook/metadata";
 import { store } from "@/lib/store";
 import AutocompleteInput from "./ui/AutocompleteInput";
 import GenerateButton from "./ui/GenerateButton";
 import AuthorsInput from "./ui/AuthorsInput";
 import DatePicker from "./ui/DatePicker";
-import { extractResources, extractReferences, TipTapNode, ensureResourceIds, buildResourceTypeIndex, validateEntry, formatAuthors } from "@/lib/metadata";
 import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng, compressImageToJpeg } from "@/lib/utils";
 import { generateEntryTitle } from "@/lib/genai";

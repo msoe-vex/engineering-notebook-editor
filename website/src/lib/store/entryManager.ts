@@ -1,12 +1,12 @@
 import { INDEX_PATH, ENTRIES_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from "../constants";
 import { events, EventNames } from "../events";
 import { ExplorerFile } from "../types";
-import { getAllPending, getPending, stageChange, removeStaged } from "../db";
-import { fetchFileContent, fetchRawFileContent, checkGitHubFileExists } from "../github";
-import { writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, checkLocalFileExists } from "../fs";
+import { getAllPending, getPending, stageChange, removeStaged } from "../storage/db";
+import { writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, checkLocalFileExists } from "../storage/fs";
+import { fetchFileContent, fetchRawFileContent, checkGitHubFileExists } from "../github/github";
 import { generateUUID, getMimeTypeFromExtension, formatDateMonthYear, getLocalDateString } from "../utils";
-import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, carryForwardResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds, collectNotebookResourceIds, duplicateResourceOwners, canonicalResourceOwner, remapSelectedContentIds, placeCreatedEntry, formatAuthors, authorsEqual, parseAuthors, readLastAuthors } from "../metadata";
-import { generateAllEntriesLatex, generateTeamLatex, generatePhasesLatex, generateEntryLatex, latexPhaseRef } from "../latex";
+import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, carryForwardResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds, collectNotebookResourceIds, duplicateResourceOwners, canonicalResourceOwner, remapSelectedContentIds, placeCreatedEntry, formatAuthors, authorsEqual, parseAuthors, readLastAuthors, TeamMetadata, ProjectPhase } from "../notebook/metadata";
+import { generateAllEntriesLatex, generateTeamLatex, generatePhasesLatex, generateEntryLatex, latexPhaseRef } from "../latex/latex";
 import { IWorkspaceStore } from "./types";
 
 export class EntryManager {
@@ -729,7 +729,7 @@ export class EntryManager {
 
       // 2. Fetch committed notebook.json to restore original team data
       const committedIndex = await this.getCommittedFileContent(INDEX_PATH);
-      let committedTeam: import("../metadata").TeamMetadata | undefined = undefined;
+      let committedTeam: TeamMetadata | undefined = undefined;
       if (committedIndex) {
         try {
           const parsed = JSON.parse(committedIndex);
@@ -774,7 +774,7 @@ export class EntryManager {
 
       // 2. Fetch committed notebook.json to restore original phases
       const committedIndex = await this.getCommittedFileContent(INDEX_PATH);
-      let committedPhases: Record<string, import("../metadata").ProjectPhase> | unknown = undefined;
+      let committedPhases: Record<string, ProjectPhase> | unknown = undefined;
       if (committedIndex) {
         try {
           const parsed = JSON.parse(committedIndex);
@@ -817,7 +817,7 @@ export class EntryManager {
       await this.store.queue;
       const previousOpenId = this.store.openFile?.id ?? null;
 
-      const { clearAllPending, clearBaseMetadata } = await import("../db");
+      const { clearAllPending, clearBaseMetadata } = await import("../storage/db");
       await clearAllPending(dbName);
       await clearBaseMetadata(dbName);
 
@@ -900,7 +900,7 @@ export class EntryManager {
     const autoStartDate = entryDates.length > 0 ? entryDates[0] : "";
     const autoEndDate = entryDates.length > 0 ? entryDates[entryDates.length - 1] : "";
 
-    const rawTeam: Partial<import("../metadata").TeamMetadata> = this.store.metadata.team || {};
+    const rawTeam: Partial<TeamMetadata> = this.store.metadata.team || {};
     const isAuto = rawTeam.autoCalculateDates ?? true;
     const effectiveStartDate = (!isAuto && rawTeam.startDate) ? rawTeam.startDate : formatDateMonthYear(autoStartDate);
     const effectiveEndDate = (!isAuto && rawTeam.endDate) ? rawTeam.endDate : formatDateMonthYear(autoEndDate);

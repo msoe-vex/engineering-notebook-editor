@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { store, WorkspaceMode } from "@/lib/store";
 import { events, EventNames } from "@/lib/events";
 import { ExplorerFile, GitHubConfig } from "@/lib/types";
-import { TeamMetadata, ProjectPhase } from "@/lib/metadata";
+import { TeamMetadata, ProjectPhase, EntryMetadata } from "@/lib/notebook/metadata";
 import { ImportOptions } from "@/lib/store/types";
 
 export type { WorkspaceMode };
@@ -117,7 +117,7 @@ export function useWorkspace() {
   const importNotebookArchive = useCallback((file: File, options?: ImportOptions) => store.importNotebookArchive(file, options), []);
   const setSelectedPaths = useCallback((pathsOrUpdater: Set<string> | ((prev: Set<string>) => Set<string>)) => store.setSelectedPaths(pathsOrUpdater), []);
   const duplicateEntry = useCallback((sourceId: string, options?: { asTemplate?: boolean; title?: string; authors?: string[]; phase?: string | null; date?: string }) => store.duplicateEntry(sourceId, options), []);
-  const createTemplate = useCallback((templateData?: Partial<import("@/lib/metadata").EntryMetadata>) => store.createTemplate(templateData), []);
+  const createTemplate = useCallback((templateData?: Partial<EntryMetadata>) => store.createTemplate(templateData), []);
   const createEntryFromTemplate = useCallback((templateId: string) => store.createEntryFromTemplate(templateId), []);
   const discardPathChange = useCallback((path: string) => store.discardPathChange(path), []);
   const discardEntryChanges = useCallback((entryId: string) => store.discardEntryChanges(entryId), []);

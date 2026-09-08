@@ -2,14 +2,14 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import ActivityBar, { SidebarTab } from "./sidebar/ActivityBar";
-import FileExplorer from "./FileExplorer";
+import FileExplorer from "./workspace/FileExplorer";
 import SearchTab from "./sidebar/SearchTab";
 import VersionControlTab from "./sidebar/VersionControlTab";
 import { ExplorerFile, TeamTab } from "@/lib/types";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { LATEX_DIR, ENTRIES_DIR } from "@/lib/constants";
-import { showNotification } from "./Notification";
-import { formatAuthors } from "@/lib/metadata";
+import { showNotification } from "./overlays/Notification";
+import { formatAuthors } from "@/lib/notebook/metadata";
 
 interface SidebarProps {
   selectedPaths: Set<string>;

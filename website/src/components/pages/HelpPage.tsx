@@ -17,7 +17,7 @@ import {
   Play,
   Sparkles
 } from "lucide-react";
-import GithubIcon from "./GithubIcon";
+import GithubIcon from "@/components/icons/GithubIcon";
 
 interface HelpPageProps {
   path: string;

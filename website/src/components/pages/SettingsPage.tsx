@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import { Eye, EyeOff, KeyRound, Loader2, Monitor, Moon, Search, Settings, Sparkles, Sun, X } from "lucide-react";
-import { readLastAuthors, writeLastAuthors } from "@/lib/metadata";
+import { readLastAuthors, writeLastAuthors } from "@/lib/notebook/metadata";
 import {
   GENAI_PROVIDERS,
   getGenAIApiKey,

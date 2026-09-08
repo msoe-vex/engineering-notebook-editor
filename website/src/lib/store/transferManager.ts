@@ -1,12 +1,12 @@
 import { INDEX_PATH, ENTRIES_DIR, ASSETS_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from "../constants";
 import { events, EventNames } from "../events";
-import { getPending } from "../db";
-import { isBinaryFile, zipCompressionOptions, addTextFileToZip, addAssetFileToZip } from "../transferUtils";
-import { fetchFileContent, fetchRawFileContent } from "../github";
-import { getLocalFileContent } from "../fs";
+import { getPending } from "../storage/db";
+import { isBinaryFile, zipCompressionOptions, addTextFileToZip, addAssetFileToZip } from "../storage/transferUtils";
+import { getLocalFileContent } from "../storage/fs";
+import { fetchFileContent, fetchRawFileContent } from "../github/github";
 import { generateUUID, getMimeTypeFromExtension, normalizeBase64 } from "../utils";
-import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, remapContentIds, remapEntryMetadataIds, TipTapNode, ensureResourceIds, extractResources, buildResourceTypeIndex, extractImagePaths, NotebookMetadata, collectNotebookResourceIds, uniqueResourceId } from "../metadata";
-import { generateEntryLatex, latexPhaseRef } from "../latex";
+import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, remapContentIds, remapEntryMetadataIds, TipTapNode, ensureResourceIds, extractResources, buildResourceTypeIndex, extractImagePaths, NotebookMetadata, collectNotebookResourceIds, uniqueResourceId } from "../notebook/metadata";
+import { generateEntryLatex, latexPhaseRef } from "../latex/latex";
 import { IWorkspaceStore, ImportOptions, EntryImportMode } from "./types";
 import type JSZipType from 'jszip';
 
@@ -281,7 +281,7 @@ export class TransferManager {
       const effectiveEntryIdList = entryImportMode === "none" ? [] : entryIdList;
 
       if (this.store.mode === "temporary" && entryImportMode === "clear") {
-        const { clearAllPending, clearAllResources } = await import("../db");
+        const { clearAllPending, clearAllResources } = await import("../storage/db");
         const dbName = this.store.getDBName();
         await clearAllPending(dbName);
         await clearAllResources(dbName);

@@ -7,7 +7,7 @@ import {
   remapSelectedContentIds,
   type EntryMetadata,
   type TipTapNode,
-} from "@/lib/metadata";
+} from "@/lib/notebook/metadata";
 
 const heading = (id: string, text: string): TipTapNode => ({
   type: "heading",

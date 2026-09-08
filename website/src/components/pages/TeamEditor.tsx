@@ -28,11 +28,11 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { TeamMetadata, TeamMember, ProjectPhase, Identified, sortedMembers, sortedPhases, recordFromIdentified } from "@/lib/metadata";
-import { DEFAULT_PHASES, AVAILABLE_ICONS } from "@/lib/phases";
-import { fetchDefaultPhases } from "@/lib/defaultTemplates";
+import { TeamMetadata, TeamMember, ProjectPhase, Identified, sortedMembers, sortedPhases, recordFromIdentified } from "@/lib/notebook/metadata";
+import { DEFAULT_PHASES, AVAILABLE_ICONS } from "@/lib/notebook/phases";
+import { fetchDefaultPhases } from "@/lib/notebook/defaultTemplates";
 import { generateUUID, formatDateMonthYear, compressImageToJpeg, getMimeTypeFromExtension } from "@/lib/utils";
-import { useAppDndSensors } from "@/lib/dndSensors";
+import { useAppDndSensors } from "@/lib/dnd/dndSensors";
 
 // ─── Sub-components for performance ──────────────────────────────────────────
 

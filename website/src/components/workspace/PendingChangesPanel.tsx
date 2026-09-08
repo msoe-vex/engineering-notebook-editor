@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ChevronDown, Loader2 } from "lucide-react";
-import { PendingChange } from "@/lib/db";
+import { PendingChange } from "@/lib/storage/db";
  
 interface PendingChangesPanelProps {
   pendingChanges: PendingChange[];

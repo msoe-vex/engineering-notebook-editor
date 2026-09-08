@@ -2,12 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { Plus, ChevronDown, FileText, Layers, HardDrive, ArrowLeftRight } from "lucide-react";
-import GithubIcon from "./GithubIcon";
-import Logo from "./Logo";
+import GithubIcon from "@/components/icons/GithubIcon";
+import Logo from "@/components/icons/Logo";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { sortedEntries } from "@/lib/metadata";
-import { getPhaseConfig, getPhases } from "@/lib/phases";
-import { showNotification } from "./Notification";
+import { sortedEntries } from "@/lib/notebook/metadata";
+import { getPhaseConfig, getPhases } from "@/lib/notebook/phases";
+import { showNotification } from "@/components/overlays/Notification";
 
 interface WorkspaceInfo {
   mode: "github" | "local" | "temporary";

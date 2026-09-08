@@ -1,4 +1,4 @@
-﻿import React, { useLayoutEffect, useRef, useState } from "react";
+import React, { useLayoutEffect, useRef, useState } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -11,12 +11,12 @@ import {
   ChevronDown, ExternalLink, Trash2, FileJson, FileCode,
   Download, Copy, Layers, FolderTree, GripVertical
 } from "lucide-react";
-import ValidationTooltip from "./editor/ui/ValidationTooltip";
+import ValidationTooltip from "@/components/editor/ui/ValidationTooltip";
 
 import { ExplorerFile } from "@/lib/types";
-import { getPhases, getPhaseConfig } from "@/lib/phases";
-import { NotebookMetadata } from "@/lib/metadata";
-import { useAppDndSensors } from "@/lib/dndSensors";
+import { getPhases, getPhaseConfig } from "@/lib/notebook/phases";
+import { NotebookMetadata } from "@/lib/notebook/metadata";
+import { useAppDndSensors } from "@/lib/dnd/dndSensors";
 
 interface FileExplorerProps {
   entries: ExplorerFile[];

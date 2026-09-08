@@ -1,4 +1,4 @@
-import { GitHubFile } from "@/lib/github";
+import { GitHubFile } from "@/lib/github/github";
 
 interface LocalFile extends Partial<GitHubFile> {
   name: string;
@@ -35,7 +35,7 @@ export default function FileTree({ files, selectedPath, expandedPaths, onSelect,
     const parts = file.path.split('/');
     let current = root;
 
-    parts.forEach((part, index) => {
+    parts.forEach((part: string, index: number) => {
       const isLast = index === parts.length - 1;
       const path = parts.slice(0, index + 1).join('/');
 

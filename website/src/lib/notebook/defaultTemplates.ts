@@ -4,7 +4,7 @@
  */
 
 import { EntryMetadata, NotebookMetadata, EMPTY_METADATA, normalizeNotebookMetadata } from "./metadata";
-import { ENTRIES_DIR } from "./constants";
+import { ENTRIES_DIR } from "@/lib/constants";
 
 const BASE_URL = "/notebook-template/data";
 
