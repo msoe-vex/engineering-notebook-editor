@@ -1,5 +1,5 @@
-import type { GenAIProvider } from "../types";
-import { readProviderError, resolveTemperature } from "../shared";
+import type { GenAIModelOption, GenAIProvider } from "../types";
+import { isListedOpenAIVisionChatModel, readProviderError, resolveTemperature, trySanitizeGenAIModelId } from "../shared";
 
 export const openai: GenAIProvider = {
   info: {
@@ -39,5 +39,19 @@ export const openai: GenAIProvider = {
     const text = payload.choices?.[0]?.message?.content || "";
     if (!text.trim()) throw new Error("OpenAI returned an empty response.");
     return text;
+  },
+  async listModels(apiKey) {
+    const response = await fetch("https://api.openai.com/v1/models", {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (!response.ok) throw new Error(await readProviderError(response, "OpenAI model list failed"));
+    const payload = await response.json() as { data?: Array<{ id?: string }> };
+    const models: GenAIModelOption[] = [];
+    for (const model of payload.data || []) {
+      const id = trySanitizeGenAIModelId(model.id || "");
+      if (!id || !isListedOpenAIVisionChatModel(id)) continue;
+      models.push({ id, label: id });
+    }
+    return models;
   },
 };

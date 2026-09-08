@@ -391,7 +391,7 @@ export default function App() {
   useEffect(() => {
     const unsubNotification = events.on(EventNames.SHOW_NOTIFICATION, (data: unknown) => {
       if (typeof data === 'object' && data !== null && 'message' in data) {
-        const notification = data as { message: string; type?: "success" | "error" | "loading" | "info" };
+        const notification = data as { message: string; type?: "success" | "error" | "warning" | "loading" | "info" };
         showNotification(notification.message, notification.type || "info");
       }
     });

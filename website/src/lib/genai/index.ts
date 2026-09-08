@@ -6,6 +6,7 @@ export type {
   GenAI,
   GenAIGenerateRequest,
   GenAIImagePart,
+  GenAIModelOption,
   GenAIProvider,
   GenAIProviderId,
   GenAIProviderInfo,
@@ -22,10 +23,12 @@ export {
   getProviderInfo,
   getStoredGenAIModel,
   hasGenAIApiKey,
+  hasGenAIModel,
   isGenAIEnabled,
   isGenAIProviderId,
   resolveGenAIModel,
   runProviderGenerate,
+  runProviderListModels,
   setGenAIApiKey,
   setGenAIEnabled,
   setGenAIModel,
@@ -36,6 +39,10 @@ export { generateEntryTitle, generateResourceCaption, generateResourceTitle } fr
 
 import type { GenAI } from "./types";
 import {
+  isAnthropicImageInputModel,
+  isListedGeminiMultimodalModel,
+  isListedOpenAIChatModel,
+  isListedOpenAIVisionChatModel,
   parseGeneratedText,
   parseImageDataUrl,
   resolveTemperature,
@@ -44,6 +51,7 @@ import {
 import {
   getGenAISettings,
   hasGenAIApiKey,
+  hasGenAIModel,
   isGenAIEnabled,
   setGenAIApiKey,
   setGenAIEnabled,
@@ -52,10 +60,11 @@ import {
 } from "./settings";
 import { generateEntryTitle, generateResourceCaption, generateResourceTitle } from "./tasks";
 
-export { parseGeneratedText, parseImageDataUrl, resolveTemperature, sanitizeGenAIModelId };
+export { parseGeneratedText, parseImageDataUrl, resolveTemperature, sanitizeGenAIModelId, isListedOpenAIChatModel, isListedOpenAIVisionChatModel, isListedGeminiMultimodalModel, isAnthropicImageInputModel };
 
 export const genai: GenAI = {
   hasApiKey: hasGenAIApiKey,
+  hasModel: hasGenAIModel,
   isEnabled: isGenAIEnabled,
   getSettings: getGenAISettings,
   setEnabled: setGenAIEnabled,

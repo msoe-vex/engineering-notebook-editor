@@ -25,6 +25,9 @@ export async function POST(request: Request) {
   if (!body.apiKey || typeof body.apiKey !== "string") {
     return NextResponse.json({ error: "An API key is required." }, { status: 400 });
   }
+  if (!body.model || typeof body.model !== "string" || !body.model.trim()) {
+    return NextResponse.json({ error: "Choose a model in Settings before generating titles and captions." }, { status: 400 });
+  }
   if (!body.prompt || typeof body.prompt !== "string") {
     return NextResponse.json({ error: "A prompt is required." }, { status: 400 });
   }

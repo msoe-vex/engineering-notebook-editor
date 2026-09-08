@@ -57,6 +57,77 @@ export function sanitizeGenAIModelId(model: string): string {
   return next;
 }
 
+export function trySanitizeGenAIModelId(model: string): string | null {
+  try {
+    const id = sanitizeGenAIModelId(model);
+    return id || null;
+  } catch {
+    return null;
+  }
+}
+
+export function isListedOpenAIChatModel(id: string): boolean {
+  const n = id.toLowerCase();
+  const blocked = [
+    "embedding",
+    "whisper",
+    "tts",
+    "dall-e",
+    "davinci",
+    "babbage",
+    "moderation",
+    "realtime",
+    "transcribe",
+    "sora",
+    "image",
+    "audio",
+    "search",
+    "codex",
+    "computer-use",
+    "instruct",
+  ];
+  if (blocked.some((part) => n.includes(part))) return false;
+  return (
+    n.startsWith("gpt-")
+    || n.startsWith("o1")
+    || n.startsWith("o3")
+    || n.startsWith("o4")
+    || n.startsWith("chatgpt-")
+  );
+}
+
+/** OpenAI /v1/models has no vision flag; keep families known to accept images. */
+export function isListedOpenAIVisionChatModel(id: string): boolean {
+  if (!isListedOpenAIChatModel(id)) return false;
+  const n = id.toLowerCase();
+  if (n.startsWith("o1") || n.startsWith("o3") || n.startsWith("gpt-3.5")) return false;
+  return (
+    n.startsWith("gpt-4o")
+    || n.startsWith("gpt-4.1")
+    || n.startsWith("gpt-4.5")
+    || n.startsWith("gpt-5")
+    || n.startsWith("gpt-4-turbo")
+    || n.startsWith("gpt-4-vision")
+    || n.startsWith("chatgpt-")
+    || n.startsWith("o4")
+  );
+}
+
+export function isListedGeminiMultimodalModel(id: string, methods?: string[]): boolean {
+  if (!methods?.includes("generateContent")) return false;
+  const n = id.toLowerCase();
+  if (!n.startsWith("gemini-")) return false;
+  const blocked = ["embedding", "imagen", "veo", "tts", "aqa", "robotics"];
+  if (blocked.some((part) => n.includes(part))) return false;
+  if (n.includes("-image") || n.endsWith("image")) return false;
+  return true;
+}
+
+export function isAnthropicImageInputModel(capabilities?: { image_input?: { supported?: boolean } } | null): boolean {
+  if (!capabilities) return true;
+  return capabilities.image_input?.supported === true;
+}
+
 export function extractGeminiText(payload: {
   candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
 }): string {
