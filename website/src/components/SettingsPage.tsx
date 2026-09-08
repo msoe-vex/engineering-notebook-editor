@@ -61,10 +61,13 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
   const [apiKeyDraft, setApiKeyDraft] = useState<string | null>(null);
   const [modelDraft, setModelDraft] = useState<string | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
-  const [modelOptions, setModelOptions] = useState<GenAIModelOption[]>([]);
+  const [modelCatalog, setModelCatalog] = useState<{ query: string; options: GenAIModelOption[]; error: string | null }>({
+    query: "",
+    options: [],
+    error: null,
+  });
   const [modelsLoading, setModelsLoading] = useState(false);
-  const [modelsError, setModelsError] = useState<string | null>(null);
-  const [modelPickerOpen, setModelPickerOpen] = useState(false);
+  const [modelPickerFor, setModelPickerFor] = useState<string | null>(null);
   const [modelSearch, setModelSearch] = useState("");
   const modelPickerRef = useRef<HTMLDivElement>(null);
   const authors = authorsOverride ?? (JSON.parse(storedAuthorsJson) as string[]);
@@ -74,33 +77,29 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
   const providerInfo = GENAI_PROVIDERS.find((p) => p.id === provider) || GENAI_PROVIDERS[0];
   const apiKey = apiKeyDraft ?? getGenAIApiKey(provider);
   const modelId = modelDraft ?? getStoredGenAIModel(provider);
+  const modelsQuery = genAIOn && apiKey.trim() ? `${provider}:${apiKey.trim()}` : "";
+  const modelsBusy = Boolean(modelsQuery) && (modelsLoading || modelCatalog.query !== modelsQuery);
+  const modelPickerOpen = Boolean(modelsQuery) && modelPickerFor === modelsQuery;
+  const modelsError = modelCatalog.query === modelsQuery ? modelCatalog.error : null;
 
   useEffect(() => {
-    if (!genAIOn) {
-      setModelOptions([]);
-      setModelsError(null);
-      setModelsLoading(false);
-      return;
-    }
+    if (!modelsQuery) return;
     const key = apiKey.trim();
-    if (!key) {
-      setModelOptions([]);
-      setModelsError(null);
-      setModelsLoading(false);
-      return;
-    }
+    const query = modelsQuery;
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       setModelsLoading(true);
-      setModelsError(null);
       try {
         const models = await fetchGenAIModels(provider, key, controller.signal);
         if (controller.signal.aborted) return;
-        setModelOptions(models);
+        setModelCatalog({ query, options: models, error: null });
       } catch (error) {
         if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) return;
-        setModelOptions([]);
-        setModelsError(error instanceof Error ? error.message : "Could not load models.");
+        setModelCatalog({
+          query,
+          options: [],
+          error: error instanceof Error ? error.message : "Could not load models.",
+        });
       } finally {
         if (!controller.signal.aborted) setModelsLoading(false);
       }
@@ -109,29 +108,25 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [genAIOn, provider, apiKey]);
-
-  useEffect(() => {
-    setModelPickerOpen(false);
-    setModelSearch("");
-  }, [provider, apiKey]);
+  }, [modelsQuery, provider, apiKey]);
 
   useEffect(() => {
     if (!modelPickerOpen) return;
     const onPointerDown = (event: MouseEvent) => {
-      if (!modelPickerRef.current?.contains(event.target as Node)) setModelPickerOpen(false);
+      if (!modelPickerRef.current?.contains(event.target as Node)) setModelPickerFor(null);
     };
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [modelPickerOpen]);
 
   const filteredModels = useMemo(() => {
+    const options = modelCatalog.query === modelsQuery ? modelCatalog.options : [];
     const q = modelSearch.trim().toLowerCase();
-    if (!q) return modelOptions;
-    return modelOptions.filter((model) =>
+    if (!q) return options;
+    return options.filter((model) =>
       model.id.toLowerCase().includes(q) || model.label.toLowerCase().includes(q),
     );
-  }, [modelOptions, modelSearch]);
+  }, [modelCatalog, modelsQuery, modelSearch]);
 
   const names = new Set<string>();
   for (const entry of Object.values(metadata?.entries || {})) {
@@ -294,16 +289,16 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
                   type="button"
                   disabled={!apiKey.trim()}
                   onClick={() => {
-                    if (!apiKey.trim()) return;
+                    if (!modelsQuery) return;
                     setModelSearch("");
-                    setModelPickerOpen((open) => !open);
+                    setModelPickerFor((current) => (current === modelsQuery ? null : modelsQuery));
                   }}
                   className="p-1.5 rounded-lg text-nb-on-surface-variant hover:text-nb-on-surface hover:bg-nb-surface-low disabled:opacity-40 cursor-pointer"
-                  title={modelsLoading ? "Loading models…" : "Search models"}
+                  title={modelsBusy ? "Loading models…" : "Search models"}
                   aria-label="Search models"
                   aria-expanded={modelPickerOpen}
                 >
-                  {modelsLoading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                  {modelsBusy ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
                 </button>
               </div>
               {modelPickerOpen && (
@@ -326,7 +321,7 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
                       <p className="px-3 py-4 text-xs text-nb-on-surface-variant leading-relaxed">{modelsError}</p>
                     ) : filteredModels.length === 0 ? (
                       <p className="px-3 py-4 text-xs text-nb-on-surface-variant">
-                        {modelsLoading ? "Loading models…" : "No models match that search."}
+                        {modelsBusy ? "Loading models…" : "No models match that search."}
                       </p>
                     ) : (
                       filteredModels.map((model) => {
@@ -338,7 +333,7 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
                             onClick={() => {
                               setModelDraft(model.id);
                               setGenAIModel(model.id, provider);
-                              setModelPickerOpen(false);
+                              setModelPickerFor(null);
                             }}
                             className={`w-full text-left px-3 py-2 rounded-xl cursor-pointer ${
                               active

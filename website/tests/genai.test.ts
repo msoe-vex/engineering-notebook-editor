@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAnthropicImageInputModel, isGenAIProviderId, isListedGeminiMultimodalModel, isListedOpenAIChatModel, isListedOpenAIVisionChatModel, parseGeneratedText, parseImageDataUrl, sanitizeGenAIModelId } from "@/lib/genai";
+import { isAnthropicImageInputModel, isGenAIProviderId, isListedGeminiMultimodalModel, isListedOpenAIVisionChatModel, parseGeneratedText, parseImageDataUrl, sanitizeGenAIModelId } from "@/lib/genai";
 
 describe("parseGeneratedText", () => {
   it("strips quotes and fences", () => {
