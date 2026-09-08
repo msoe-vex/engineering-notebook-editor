@@ -108,11 +108,11 @@
       "validationErrors": []
     },
     "01a00d03-c46f-717f-b046-bf512bdd1d9d": {
-      "title": "Construct and Test Template",
+      "title": "Build and Test Template",
       "authors": [],
       "phase": "construct-test",
       "createdAt": "2026-08-16T23:59:05.839Z",
-      "updatedAt": "2026-08-17T22:13:06.340Z",
+      "updatedAt": "2026-09-08T18:50:05.383Z",
       "date": "",
       "filename": "data/entries/01a00d03-c46f-717f-b046-bf512bdd1d9d.json",
       "order": 3,
@@ -120,8 +120,8 @@
       "resources": {
         "019e2f13-d57c-7544-bf91-b0e51edd2bda": {
           "type": "heading",
-          "title": "Program & Test",
-          "caption": "Program & Test"
+          "title": "Build & Test",
+          "caption": "Build & Test"
         }
       },
       "references": [],
@@ -184,7 +184,7 @@
       "order": 2
     },
     "construct-test": {
-      "name": "Construct and Test",
+      "name": "Build and Test",
       "description": "Building the robot, writing the code, executing test plans, and gathering qualitative/quantitative data.",
       "iconName": "Hammer",
       "color": "#f97316",

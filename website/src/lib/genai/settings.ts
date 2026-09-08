@@ -1,4 +1,4 @@
-import type { GenAIProvider, GenAIProviderId, GenAISettings } from "./types";
+import type { GenAIModelOption, GenAIProvider, GenAIProviderId, GenAISettings } from "./types";
 import { resolveTemperature, sanitizeGenAIModelId } from "./shared";
 import { gemini } from "./providers/gemini";
 import { openai } from "./providers/openai";
@@ -28,7 +28,7 @@ export function getProviderInfo(id: GenAIProviderId) {
 }
 
 function emptySettings(): GenAISettings {
-  return { provider: "gemini", keys: {}, models: {} };
+  return { enabled: false, provider: "gemini", keys: {}, models: {} };
 }
 
 export function getGenAISettings(): GenAISettings {
@@ -38,6 +38,7 @@ export function getGenAISettings(): GenAISettings {
     const raw = localStorage.getItem(GENAI_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<GenAISettings>;
+      if (parsed.enabled === true) settings.enabled = true;
       if (isGenAIProviderId(parsed.provider)) settings.provider = parsed.provider;
       if (parsed.keys && typeof parsed.keys === "object") {
         for (const id of GENAI_PROVIDERS.map((p) => p.id)) {
@@ -60,6 +61,16 @@ function persistSettings(settings: GenAISettings): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(GENAI_STORAGE_KEY, JSON.stringify(settings));
   window.dispatchEvent(new Event(GENAI_CHANGED_EVENT));
+}
+
+export function isGenAIEnabled(): boolean {
+  return getGenAISettings().enabled === true;
+}
+
+export function setGenAIEnabled(enabled: boolean): void {
+  const settings = getGenAISettings();
+  settings.enabled = enabled;
+  persistSettings(settings);
 }
 
 export function setGenAIProvider(id: GenAIProviderId): void {
@@ -89,7 +100,7 @@ export function getStoredGenAIModel(provider?: GenAIProviderId): string {
 
 export function resolveGenAIModel(provider: GenAIProviderId, override?: string): string {
   const raw = (override ?? getStoredGenAIModel(provider)).trim();
-  if (!raw) return getProviderInfo(provider).defaultModel;
+  if (!raw) return "";
   return sanitizeGenAIModelId(raw);
 }
 
@@ -106,6 +117,10 @@ export function hasGenAIApiKey(provider?: GenAIProviderId): boolean {
   return getGenAIApiKey(provider).length > 0;
 }
 
+export function hasGenAIModel(provider?: GenAIProviderId): boolean {
+  return getStoredGenAIModel(provider).length > 0;
+}
+
 export function subscribeGenAISettings(onChange: () => void): () => void {
   const handler = () => onChange();
   window.addEventListener("storage", handler);
@@ -114,6 +129,23 @@ export function subscribeGenAISettings(onChange: () => void): () => void {
     window.removeEventListener("storage", handler);
     window.removeEventListener(GENAI_CHANGED_EVENT, handler);
   };
+}
+
+export async function runProviderListModels(
+  provider: GenAIProviderId,
+  apiKey: string,
+): Promise<GenAIModelOption[]> {
+  const key = apiKey.trim();
+  if (!key) throw new Error(`An API key is required for ${getProviderInfo(provider).label}.`);
+  const seen = new Set<string>();
+  const models: GenAIModelOption[] = [];
+  for (const model of await getProvider(provider).listModels(key)) {
+    if (seen.has(model.id)) continue;
+    seen.add(model.id);
+    models.push(model);
+  }
+  models.sort((a, b) => a.label.localeCompare(b.label));
+  return models;
 }
 
 export async function runProviderGenerate(
@@ -127,6 +159,7 @@ export async function runProviderGenerate(
   const key = apiKey.trim();
   if (!key) throw new Error(`An API key is required for ${getProviderInfo(provider).label}.`);
   const resolved = resolveGenAIModel(provider, model);
+  if (!resolved) throw new Error("Choose a model in Settings before generating titles and captions.");
   return getProvider(provider).generate({
     apiKey: key,
     model: resolved,

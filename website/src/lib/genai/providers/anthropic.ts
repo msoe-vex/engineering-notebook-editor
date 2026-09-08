@@ -1,5 +1,7 @@
-import type { GenAIProvider } from "../types";
-import { readProviderError, resolveTemperature } from "../shared";
+import type { GenAIModelOption, GenAIProvider } from "../types";
+import { isAnthropicImageInputModel, readProviderError, resolveTemperature, trySanitizeGenAIModelId } from "../shared";
+
+const MAX_PAGES = 8;
 
 export const anthropic: GenAIProvider = {
   info: {
@@ -42,5 +44,38 @@ export const anthropic: GenAIProvider = {
     const text = payload.content?.filter((part) => part.type === "text").map((part) => part.text || "").join("\n") || "";
     if (!text.trim()) throw new Error("Anthropic returned an empty response.");
     return text;
+  },
+  async listModels(apiKey) {
+    const models: GenAIModelOption[] = [];
+    let afterId = "";
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const url = new URL("https://api.anthropic.com/v1/models");
+      url.searchParams.set("limit", "100");
+      if (afterId) url.searchParams.set("after_id", afterId);
+      const response = await fetch(url, {
+        headers: {
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+      });
+      if (!response.ok) throw new Error(await readProviderError(response, "Anthropic model list failed"));
+      const payload = await response.json() as {
+        data?: Array<{
+          id?: string;
+          display_name?: string;
+          capabilities?: { image_input?: { supported?: boolean } } | null;
+        }>;
+        has_more?: boolean;
+        last_id?: string;
+      };
+      for (const model of payload.data || []) {
+        const id = trySanitizeGenAIModelId(model.id || "");
+        if (!id || !isAnthropicImageInputModel(model.capabilities)) continue;
+        models.push({ id, label: model.display_name?.trim() || id });
+      }
+      if (!payload.has_more || !payload.last_id) break;
+      afterId = payload.last_id;
+    }
+    return models;
   },
 };

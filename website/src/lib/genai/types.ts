@@ -25,12 +25,19 @@ export interface GenAIProviderInfo {
   defaultModel: string;
 }
 
+export interface GenAIModelOption {
+  id: string;
+  label: string;
+}
+
 export interface GenAIProvider {
   info: GenAIProviderInfo;
   generate(request: GenAIGenerateRequest): Promise<string>;
+  listModels(apiKey: string): Promise<GenAIModelOption[]>;
 }
 
 export interface GenAISettings {
+  enabled: boolean;
   provider: GenAIProviderId;
   keys: Partial<Record<GenAIProviderId, string>>;
   models: Partial<Record<GenAIProviderId, string>>;
@@ -55,7 +62,10 @@ export interface EntryForAI {
 
 export interface GenAI {
   hasApiKey(): boolean;
+  hasModel(): boolean;
+  isEnabled(): boolean;
   getSettings(): GenAISettings;
+  setEnabled(enabled: boolean): void;
   setProvider(id: GenAIProviderId): void;
   setApiKey(key: string, provider?: GenAIProviderId): void;
   setModel(model: string, provider?: GenAIProviderId): void;

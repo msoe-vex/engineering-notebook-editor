@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Loader2, Sparkles } from "lucide-react";
-import { hasGenAIApiKey } from "@/lib/genai";
+import { hasGenAIApiKey, hasGenAIModel, isGenAIEnabled, subscribeGenAISettings } from "@/lib/genai";
 import { events, EventNames } from "@/lib/events";
 
 interface GenerateButtonProps {
@@ -12,8 +12,19 @@ interface GenerateButtonProps {
   disabled?: boolean;
 }
 
+function getEnabledFlag() {
+  return isGenAIEnabled() ? "1" : "0";
+}
+
+function getEnabledServerFlag() {
+  return "0";
+}
+
 export default function GenerateButton({ label, run, onResult, disabled }: GenerateButtonProps) {
   const [busy, setBusy] = useState(false);
+  const enabled = useSyncExternalStore(subscribeGenAISettings, getEnabledFlag, getEnabledServerFlag) === "1";
+
+  if (!enabled) return null;
 
   return (
     <button
@@ -29,6 +40,13 @@ export default function GenerateButton({ label, run, onResult, disabled }: Gener
           events.emit(EventNames.SHOW_NOTIFICATION, {
             message: "Add an AI provider API key in Settings to generate titles and captions.",
             type: "error",
+          });
+          return;
+        }
+        if (!hasGenAIModel()) {
+          events.emit(EventNames.SHOW_NOTIFICATION, {
+            message: "Choose a model in Settings before generating titles and captions.",
+            type: "warning",
           });
           return;
         }
