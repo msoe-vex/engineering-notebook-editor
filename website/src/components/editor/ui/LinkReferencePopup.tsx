@@ -11,7 +11,7 @@ import {
   Filter,
   Search
 } from "lucide-react";
-import { extractResources, NotebookMetadata, EntryMetadata } from "@/lib/metadata";
+import { extractResources, NotebookMetadata, EntryMetadata } from "@/lib/notebook/metadata";
 import { store } from "@/lib/store";
 import type { TiptapEditor } from "@/lib/types";
 
@@ -283,11 +283,11 @@ export function LinkReferencePopup({
 
   return (
     <div 
-      className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-200"
+      className="fixed inset-0 z-1000 flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-200"
       onMouseDown={onClose}
     >
       <div
-        className="w-[360px] max-h-[90vh] bg-nb-surface border border-nb-outline-variant shadow-nb-3xl rounded-2xl p-5 animate-in zoom-in-95 duration-200 flex flex-col overflow-y-auto custom-scrollbar"
+        className="w-90 max-h-[90vh] bg-nb-surface border border-nb-outline-variant shadow-nb-3xl rounded-2xl p-5 animate-in zoom-in-95 duration-200 flex flex-col overflow-y-auto custom-scrollbar"
         onMouseDown={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -482,7 +482,7 @@ export function LinkReferencePopup({
                   <div className="flex items-center justify-between">
                     <span className="text-[9px] font-black uppercase tracking-wider text-nb-on-surface-variant/50">Matching Options ({filtered.length})</span>
                   </div>
-                  <div className="h-[150px] overflow-y-auto border border-nb-outline-variant/20 rounded-xl bg-nb-surface-low/50 p-1.5 space-y-1 custom-scrollbar">
+                  <div className="h-37.5 overflow-y-auto border border-nb-outline-variant/20 rounded-xl bg-nb-surface-low/50 p-1.5 space-y-1 custom-scrollbar">
                     {filtered.length === 0 ? (
                       <div className="h-full flex flex-col items-center justify-center text-center p-4">
                         <span className="text-[10px] font-bold text-nb-on-surface-variant/30">No resources found</span>

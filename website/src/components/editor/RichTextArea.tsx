@@ -42,7 +42,7 @@ import { LinkReferencePopup } from "./ui/LinkReferencePopup";
 
 import { generateUUID, hashContent, getExtensionFromDataUrl, convertSvgToPng, compressImageToJpeg } from "@/lib/utils";
 import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
-import { ensureResourceIds, sanitizeTipTapDoc } from "@/lib/metadata";
+import { ensureResourceIds, sanitizeTipTapDoc, TipTapNode } from "@/lib/notebook/metadata";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 
@@ -75,7 +75,7 @@ const CustomSubscript = Subscript.extend({
    ───────────────────────────────────────────────────────────────── */
 
 interface RichTextAreaProps {
-  content: string | import("@/lib/metadata").TipTapNode;
+  content: string | TipTapNode;
   onChange: (content: string) => void;
   onImageUpload?: (path: string, base64: string) => void;
   author?: string;
@@ -387,7 +387,7 @@ const RichTextArea = ({
     IdRemapper,
   ];
 
-  const parseContent = (raw: string | import("@/lib/metadata").TipTapNode) => {
+  const parseContent = (raw: string | TipTapNode) => {
     if (!raw) return "";
     try {
       const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;

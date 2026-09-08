@@ -13,9 +13,9 @@ import {
 } from "@dnd-kit/core";
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Rows3, X } from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { formatAuthors, sortedEntries } from "@/lib/metadata";
-import { getPhaseConfig, getPhases } from "@/lib/phases";
-import { useAppDndSensors } from "@/lib/dndSensors";
+import { formatAuthors, sortedEntries } from "@/lib/notebook/metadata";
+import { getPhaseConfig, getPhases } from "@/lib/notebook/phases";
+import { useAppDndSensors } from "@/lib/dnd/dndSensors";
 
 const UNDATED = "__undated__";
 const MOBILE_CAL_MQ = "(max-width: 1023px)";

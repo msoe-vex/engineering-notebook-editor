@@ -12,8 +12,8 @@ import {
   type ProjectPhase,
   type TeamMember,
   type TeamMetadata,
-} from "@/lib/metadata";
-import { mergeOrderKeys, mergeRecordById } from "@/lib/notebookSchema";
+} from "@/lib/notebook/metadata";
+import { mergeOrderKeys, mergeRecordById } from "@/lib/notebook/notebookSchema";
 
 type Item = { title: string; order: number };
 

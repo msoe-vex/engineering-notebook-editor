@@ -7,8 +7,8 @@ import type {
   TeamMetadata,
 } from "./metadata";
 import { validateEntry } from "./metadata";
-import { NOTEBOOK_VERSION } from "./constants";
-import { generateUUID, formatDateMonthYear } from "./utils";
+import { NOTEBOOK_VERSION } from "@/lib/constants";
+import { generateUUID, formatDateMonthYear } from "@/lib/utils";
 
 export function sortedByOrder<T extends { order: number }>(
   dict: Record<string, T> | undefined | null

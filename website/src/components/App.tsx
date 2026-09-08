@@ -4,43 +4,42 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useTheme } from "next-themes";
 import {
   fetchGitHubUser, initiateGitHubLogin, checkGitHubFileExists
-} from "@/lib/github";
-import { checkLocalFileExists } from "@/lib/fs";
-import GitHubConnectionDialog from "./GitHubConnectionDialog";
-import { ExplorerFile, TeamTab, GitHubConfig } from "@/lib/types";
+} from "@/lib/github/github";
 import {
   Project, deleteProject, deleteProjectHandle, deleteProjectDatabase,
   getProjectDBName
-} from "@/lib/db";
-import Home from "./Home";
+} from "@/lib/storage/db";
+import { checkLocalFileExists } from "@/lib/storage/fs";
+import { isBinaryFile } from "@/lib/storage/transferUtils";
+import { ExplorerFile, TeamTab, GitHubConfig } from "@/lib/types";
+import Home from "@/components/pages/Home";
+import WelcomePage from "@/components/pages/WelcomePage";
+import CalendarView from "@/components/pages/CalendarView";
+import TeamEditor from "@/components/pages/TeamEditor";
+import NotebookCompiler from "@/components/pages/NotebookCompiler";
+import HelpPage from "@/components/pages/HelpPage";
+import AboutPage from "@/components/pages/AboutPage";
+import SettingsPage from "@/components/pages/SettingsPage";
 import Editor from "./editor/Editor";
-import WelcomePage from "./WelcomePage";
 import Sidebar from "./Sidebar";
-import CalendarView from "./CalendarView";
-import TeamEditor from "./TeamEditor";
-import NotebookCompiler from "./NotebookCompiler";
-import HelpPage from "./HelpPage";
-import ProjectHeader from "./ProjectHeader";
-import AboutPage from "./AboutPage";
-import SettingsPage from "./SettingsPage";
-import ImportDecisionDialog from "./ImportDecisionDialog";
-import ImportConfirmDialog from "./ImportConfirmDialog";
-import ExportDecisionDialog from "./ExportDecisionDialog";
-import LoadingOverlay from "./LoadingOverlay";
-import Logo from "./Logo";
+import ProjectHeader from "@/components/workspace/ProjectHeader";
+import GitHubConnectionDialog from "@/components/dialogs/GitHubConnectionDialog";
+import ImportDecisionDialog from "@/components/dialogs/ImportDecisionDialog";
+import ImportConfirmDialog from "@/components/dialogs/ImportConfirmDialog";
+import ExportDecisionDialog from "@/components/dialogs/ExportDecisionDialog";
+import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
+import MergeConflictDialog, { ConflictingEntryInfo, ConflictAction } from "@/components/dialogs/MergeConflictDialog";
+import LoadingOverlay from "@/components/overlays/LoadingOverlay";
+import { showNotification } from "@/components/overlays/Notification";
+import Logo from "@/components/icons/Logo";
 import { ViewMode } from "./editor/ui/ViewToggle";
-import ConfirmationDialog from "./ConfirmationDialog";
-import MergeConflictDialog, { ConflictingEntryInfo, ConflictAction } from "./MergeConflictDialog";
-import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
+import { Panel, PanelGroup, PanelResizeHandle, ImperativePanelHandle } from "react-resizable-panels";
 import { HardDrive, X, Loader2, ArrowLeftRight, Sun, Moon } from "lucide-react";
-import { ImperativePanelHandle } from "react-resizable-panels";
 import { ENTRIES_DIR, INDEX_PATH } from "@/lib/constants";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { ImportOptions } from "@/lib/store/types";
 import { events, EventNames } from "@/lib/events";
 import { Toaster } from "react-hot-toast";
-import { showNotification } from "./Notification";
-import { isBinaryFile } from "@/lib/transferUtils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

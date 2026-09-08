@@ -16,8 +16,8 @@ import {
 } from "lucide-react";
 import { ExplorerFile } from "@/lib/types";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { getPhases } from "@/lib/phases";
-import { formatAuthors } from "@/lib/metadata";
+import { getPhases } from "@/lib/notebook/phases";
+import { formatAuthors } from "@/lib/notebook/metadata";
 
 interface SearchTabProps {
   entries: ExplorerFile[];

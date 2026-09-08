@@ -3,11 +3,11 @@
 import { useState, useEffect, useRef } from "react";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import dynamic from "next/dynamic";
-import { compileNotebook, CompileResult, CompileMode } from "@/lib/busytex";
-import { showNotification } from "./Notification";
+import { compileNotebook, CompileResult, CompileMode } from "@/lib/latex/busytex";
+import { showNotification } from "@/components/overlays/Notification";
 import { Play, Loader2, Calendar, FileText, X, RefreshCcw, Download, ChevronDown } from "lucide-react";
 
-const LatexPreview = dynamic(() => import("./editor/LatexPreview"), {
+const LatexPreview = dynamic(() => import("@/components/editor/LatexPreview"), {
   ssr: false,
   loading: () => (
     <div className="flex flex-col items-center justify-center h-full gap-4 bg-nb-bg/50 backdrop-blur-sm">

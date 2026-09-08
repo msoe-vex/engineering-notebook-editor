@@ -1,4 +1,4 @@
-import { getMimeTypeFromExtension } from './utils';
+import { getMimeTypeFromExtension } from '@/lib/utils';
 
 export const getLocalFileContent = async (rootHandle: FileSystemDirectoryHandle, path: string): Promise<{ text?: string; base64?: string; isBinary: boolean }> => {
   if (path.startsWith('data:')) {

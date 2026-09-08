@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Plus, User, X } from "lucide-react";
-import { formatAuthors } from "@/lib/metadata";
+import { formatAuthors } from "@/lib/notebook/metadata";
 
 interface AuthorsInputProps {
   authors: string[];

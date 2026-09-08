@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { Loader2, X } from "lucide-react";
-import { PendingChange } from "@/lib/db";
-import { computeLineDiff, FileDiffResult } from "@/lib/diffUtils";
+import { PendingChange } from "@/lib/storage/db";
+import { computeLineDiff, FileDiffResult } from "@/lib/diff/diffUtils";
 
 interface DiffViewerProps {
   change: PendingChange;

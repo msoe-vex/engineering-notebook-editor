@@ -9,7 +9,7 @@ export interface GitHubRepo {
   updated_at?: string | null;
 }
 
-import { GitHubConfig } from "./types";
+import { GitHubConfig } from "@/lib/types";
 export type { GitHubConfig };
 
 export interface GitChange {

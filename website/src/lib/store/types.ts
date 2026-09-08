@@ -1,6 +1,6 @@
-import { NotebookMetadata, TeamMetadata, ProjectPhase, EntryMetadata } from "../metadata";
+import { NotebookMetadata, TeamMetadata, ProjectPhase, EntryMetadata } from "../notebook/metadata";
 import { ExplorerFile, GitHubConfig, TeamTab } from "../types";
-import { Project, PendingChange } from "../db";
+import { Project, PendingChange } from "../storage/db";
 import { DebouncedFunction } from "../utils";
 
 export type { DebouncedFunction };

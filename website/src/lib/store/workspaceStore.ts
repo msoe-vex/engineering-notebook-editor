@@ -1,17 +1,17 @@
-import { NotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, EntryMetadata, hydrateTeamAssets, TipTapNode, buildResourceTypeIndex, extractResources, mergeNotebookMetadata, moveEntryOnCalendar, reorderTemplateSequence, serializeNotebookMetadata, formatAuthors, parseAuthors } from "./metadata";
-import { INDEX_PATH, ENTRIES_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from "./constants";
-import { generateEntryLatex, generateTeamLatex, generatePhasesLatex, generateAllEntriesLatex, latexPhaseRef } from "./latex";
-import { ExplorerFile, GitHubConfig, TeamTab } from "./types";
-import { Project, getAllPending, removeStaged, PendingChange, clearBaseMetadata } from "./db";
-import { events, EventNames } from "./events";
-import { WorkspaceMode, OpenFileState, IWorkspaceStore, DebouncedFunction, ImportOptions } from "./store/types";
+import { NotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, EntryMetadata, hydrateTeamAssets, TipTapNode, buildResourceTypeIndex, extractResources, mergeNotebookMetadata, moveEntryOnCalendar, reorderTemplateSequence, serializeNotebookMetadata, formatAuthors, parseAuthors } from "../notebook/metadata";
+import { INDEX_PATH, ENTRIES_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from "../constants";
+import { generateEntryLatex, generateTeamLatex, generatePhasesLatex, generateAllEntriesLatex, latexPhaseRef } from "../latex/latex";
+import { ExplorerFile, GitHubConfig, TeamTab } from "../types";
+import { Project, getAllPending, removeStaged, PendingChange, clearBaseMetadata } from "../storage/db";
+import { events, EventNames } from "../events";
+import { WorkspaceMode, OpenFileState, IWorkspaceStore, DebouncedFunction, ImportOptions } from "./types";
 export type { WorkspaceMode, OpenFileState, DebouncedFunction };
-import { debounceWithFlush, formatDateMonthYear } from "./utils";
-import { ProjectManager } from "./store/projectManager";
-import { EntryManager } from "./store/entryManager";
-import { TransferManager } from "./store/transferManager";
-import { TeamManager } from "./store/teamManager";
-import { NavigationManager } from "./store/navigationManager";
+import { debounceWithFlush, formatDateMonthYear } from "../utils";
+import { ProjectManager } from "./projectManager";
+import { EntryManager } from "./entryManager";
+import { TransferManager } from "./transferManager";
+import { TeamManager } from "./teamManager";
+import { NavigationManager } from "./navigationManager";
 
 class WorkspaceStore implements IWorkspaceStore {
   // ─── State ──────────────────────────────────────────────────────────────────
@@ -332,8 +332,8 @@ class WorkspaceStore implements IWorkspaceStore {
       await this.queue;
       const dbName = this.getDBName();
       const all = await getAllPending(dbName);
-      const { commitChanges } = await import("./github");
-      const { clearAllPending } = await import("./db");
+      const { commitChanges } = await import("../github/github");
+      const { clearAllPending } = await import("../storage/db");
 
       const gitChanges: { path: string; content: string | null; isBinary: boolean }[] = [];
 

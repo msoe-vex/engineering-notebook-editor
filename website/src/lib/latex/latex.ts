@@ -1,5 +1,5 @@
-import { ASSETS_DIR } from "./constants";
-import { Identified, ProjectPhase, TeamMetadata, TipTapNode, formatAuthors, sortedEntries, sortedMembers, sortedPhases } from "./metadata";
+import { ASSETS_DIR } from "@/lib/constants";
+import { Identified, ProjectPhase, TeamMetadata, TipTapNode, EntryMetadata, formatAuthors, sortedEntries, sortedMembers, sortedPhases } from "@/lib/notebook/metadata";
 
 export function latexPhaseRef(
   phase: string | null | undefined,
@@ -400,7 +400,7 @@ export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: strin
   return latex;
 };
 
-export const generateAllEntriesLatex = (metadata: { entries: Record<string, import("./metadata").EntryMetadata> }, prefix: string = ""): string => {
+export const generateAllEntriesLatex = (metadata: { entries: Record<string, EntryMetadata> }, prefix: string = ""): string => {
   const entries = sortedEntries(metadata.entries).filter(entry => !entry.isTemplate);
 
   return entries

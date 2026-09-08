@@ -1,14 +1,14 @@
-import { GitHubConfig, initiateGitHubLogin } from "@/lib/github";
-import { Project, getProjectDBName, getAllPending, getProjectHandle } from "@/lib/db";
+import { GitHubConfig, initiateGitHubLogin } from "@/lib/github/github";
+import { Project, getProjectDBName, getAllPending, getProjectHandle } from "@/lib/storage/db";
 import { GITHUB_ISSUES_URL } from "@/lib/constants";
 import React, { useState, useEffect } from "react";
 import {
   Folder, HardDrive, Trash2, Clock, Plus,
   ArrowRight, History, Edit2, Check, X, MoreVertical
 } from "lucide-react";
-import GitHubConnectionDialog from "./GitHubConnectionDialog";
-import GithubIcon from "./GithubIcon";
-import Logo from "./Logo";
+import GitHubConnectionDialog from "@/components/dialogs/GitHubConnectionDialog";
+import GithubIcon from "@/components/icons/GithubIcon";
+import Logo from "@/components/icons/Logo";
 import { events, EventNames } from "@/lib/events";
 import { useIsMobileDevice } from "@/hooks/useDevice";
 

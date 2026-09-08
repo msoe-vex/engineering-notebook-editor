@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { AlertTriangle, X, Copy, CheckCircle2, RotateCcw, GitMerge, GitCompare, ChevronDown, ChevronRight, FileText, Code } from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import DiffViewer from "./sidebar/DiffViewer";
+import DiffViewer from "@/components/sidebar/DiffViewer";
 import { LATEX_DIR, ENTRIES_DIR } from "@/lib/constants";
 
 export type ConflictAction = "keep_local" | "keep_remote" | "duplicate";

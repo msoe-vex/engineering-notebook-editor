@@ -2,7 +2,7 @@ import { Extension } from "@tiptap/react";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Slice, Fragment } from "@tiptap/pm/model";
 import { EditorView } from "@tiptap/pm/view";
-import { collectContentResourceIds, remapContentIds, TipTapNode } from "@/lib/metadata";
+import { collectContentResourceIds, remapContentIds, TipTapNode } from "@/lib/notebook/metadata";
 
 interface InternalEditorView extends EditorView {
   isDraggingFromHere?: boolean;

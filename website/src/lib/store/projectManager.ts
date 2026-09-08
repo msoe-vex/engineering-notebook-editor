@@ -1,13 +1,13 @@
-import { Project, getProjects, getProject, saveProject, getProjectHandle, saveProjectHandle, getAllPending, stageChange, getBaseMetadata, saveBaseMetadata } from "../db";
-import { listLocalFiles, readLocalFile, writeLocalFile, ensureLocalDirectory, checkLocalFileExists } from "../fs";
-import { fetchFileContent, fetchDirectoryTree, checkGitHubFileExists, fetchGitHubUser, GitHubFile } from "../github";
-import { EMPTY_METADATA, normalizeNotebookMetadata, serializeNotebookMetadata } from "../metadata";
+import { Project, getProjects, getProject, saveProject, getProjectHandle, saveProjectHandle, getAllPending, stageChange, getBaseMetadata, saveBaseMetadata } from "../storage/db";
+import { listLocalFiles, readLocalFile, writeLocalFile, ensureLocalDirectory, checkLocalFileExists } from "../storage/fs";
+import { fetchFileContent, fetchDirectoryTree, checkGitHubFileExists, fetchGitHubUser, GitHubFile } from "../github/github";
+import { EMPTY_METADATA, normalizeNotebookMetadata, serializeNotebookMetadata } from "../notebook/metadata";
+import { fetchDefaultNotebook } from "../notebook/defaultTemplates";
 import { events, EventNames } from "../events";
 import { generateDeterministicUUID, generateUUID } from "../utils";
 import { INDEX_PATH, ENTRIES_DIR, ASSETS_DIR, LATEX_DIR } from "../constants";
 import { IWorkspaceStore, WorkspaceMode } from "./types";
 import { isMobileDevice } from "@/hooks/useDevice";
-import { fetchDefaultNotebook } from "../defaultTemplates";
 
 export class ProjectManager {
   private store: IWorkspaceStore;
@@ -90,7 +90,7 @@ export class ProjectManager {
   }
 
   async createTemporaryProject() {
-    const { clearAllPending, clearAllResources } = await import("../db");
+    const { clearAllPending, clearAllResources } = await import("../storage/db");
     const dbName = "notebook-project-temporary";
     await clearAllPending(dbName);
     await clearAllResources(dbName);
@@ -105,7 +105,7 @@ export class ProjectManager {
     // For temporary workspaces, if this is the initial load of the session, clear the DB
     // to fulfill the UI promise of "Lost on reload".
     if (id === "temporary" && this.store.mode === "none") {
-      const { clearAllPending, clearAllResources } = await import("../db");
+      const { clearAllPending, clearAllResources } = await import("../storage/db");
       const dbName = "notebook-project-temporary";
       await clearAllPending(dbName);
       await clearAllResources(dbName);

@@ -1,6 +1,6 @@
 import { BusyTexRunner, XeLatex, FileInput } from 'texlyre-busytex';
-import { store } from './store';
-import { DATA_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from './constants';
+import { store } from '@/lib/store';
+import { DATA_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from '@/lib/constants';
 
 let runner: BusyTexRunner | null = null;
 let xelatex: XeLatex | null = null;

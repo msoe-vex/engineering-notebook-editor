@@ -301,8 +301,8 @@ export async function getPending(dbName: string, path: string): Promise<PendingC
 
 // ── Base Metadata Snapshot ──────────────────────────────────────────────────
 
-export async function saveBaseMetadata(dbName: string, metadata: import("./metadata").NotebookMetadata): Promise<void> {
-  const { serializeNotebookMetadata } = await import("./metadata");
+export async function saveBaseMetadata(dbName: string, metadata: import("@/lib/notebook/metadata").NotebookMetadata): Promise<void> {
+  const { serializeNotebookMetadata } = await import("@/lib/notebook/metadata");
   const serialized = serializeNotebookMetadata(metadata);
   const db = await openDB(dbName);
   return new Promise((resolve, reject) => {
@@ -313,7 +313,7 @@ export async function saveBaseMetadata(dbName: string, metadata: import("./metad
   });
 }
 
-export async function getBaseMetadata(dbName: string): Promise<import("./metadata").NotebookMetadata | null> {
+export async function getBaseMetadata(dbName: string): Promise<import("@/lib/notebook/metadata").NotebookMetadata | null> {
   const db = await openDB(dbName);
   return new Promise((resolve, reject) => {
     const store = tx(db, WORKSPACE_STORE, "readonly");

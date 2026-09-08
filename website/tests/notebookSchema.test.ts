@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { mergeNotebookMetadata } from "@/lib/metadata";
+import { mergeNotebookMetadata } from "@/lib/notebook/metadata";
 import {
   moveEntryOnCalendar,
   normalizeNotebookMetadata,
   placeCreatedEntry,
   reorderTemplateSequence,
   sortedEntries,
-} from "@/lib/notebookSchema";
+} from "@/lib/notebook/notebookSchema";
 
 describe("normalizeNotebookMetadata", () => {
   it("migrates v3 dict entries, member arrays, and numeric phases", () => {

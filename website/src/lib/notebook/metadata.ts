@@ -1,5 +1,5 @@
-import { ASSETS_DIR, ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR, TYPE_LABELS, NOTEBOOK_VERSION } from "./constants";
-import { generateUUID } from "./utils";
+import { ASSETS_DIR, ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR, TYPE_LABELS, NOTEBOOK_VERSION } from "@/lib/constants";
+import { generateUUID } from "@/lib/utils";
 import { normalizeNotebookMetadata, mergeRecordById, parseAuthors, formatAuthors } from "./notebookSchema";
 
 export { NOTEBOOK_VERSION };
@@ -377,7 +377,7 @@ export async function dehydrateAssets(
   doc: TipTapDoc,
   knownAssetPaths: string[] = []
 ): Promise<{ cleanDoc: TipTapDoc; newAssets: { path: string; base64: string }[] }> {
-  const { hashContent, getExtensionFromDataUrl } = await import("./utils");
+  const { hashContent, getExtensionFromDataUrl } = await import("@/lib/utils");
   const assets: { path: string; base64: string }[] = [];
   const knownPaths = new Set(knownAssetPaths);
 
@@ -944,7 +944,7 @@ export function remapEntryMetadataIds(entry: EntryMetadata, idMap: Map<string, s
  * Replaces Base64 data URLs with hashed asset paths in Team Metadata.
  */
 export async function dehydrateTeamAssets(team: TeamMetadata): Promise<{ cleanTeam: TeamMetadata; newAssets: { path: string; base64: string }[] }> {
-  const { hashContent, getExtensionFromDataUrl } = await import("./utils");
+  const { hashContent, getExtensionFromDataUrl } = await import("@/lib/utils");
   const assets: { path: string; base64: string }[] = [];
 
   const cleanTeam = JSON.parse(JSON.stringify(team)) as TeamMetadata;
