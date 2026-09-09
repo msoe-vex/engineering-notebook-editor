@@ -1,0 +1,206 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#090b0d" />
+      <stop offset="60%" stop-color="#101317" />
+      <stop offset="100%" stop-color="#161a20" />
+    </linearGradient>
+
+    <!-- Engineering Grid Pattern -->
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#ffffff" stroke-width="1" stroke-opacity="0.04" />
+    </pattern>
+    <pattern id="gridMajor" width="200" height="200" patternUnits="userSpaceOnUse">
+      <path d="M 200 0 L 0 0 0 200" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.08" />
+    </pattern>
+
+    <!-- Subtle Vignette / Glowing accents -->
+    <radialGradient id="redGlow" cx="18%" cy="28%" r="45%">
+      <stop offset="0%" stop-color="#d9282f" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#d9282f" stop-opacity="0" />
+    </radialGradient>
+
+    <radialGradient id="blueGlow" cx="85%" cy="85%" r="45%">
+      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.14" />
+      <stop offset="100%" stop-color="#3b82f6" stop-opacity="0" />
+    </radialGradient>
+
+    <linearGradient id="cardBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.04" />
+    </linearGradient>
+
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ef4444" />
+      <stop offset="100%" stop-color="#b01f25" />
+    </linearGradient>
+
+    <filter id="cardShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="20" stdDeviation="24" flood-color="#000000" flood-opacity="0.7" />
+    </filter>
+  </defs>
+
+  <!-- 1. Background Fill -->
+  <rect width="1200" height="630" fill="url(#bgGrad)" />
+
+  <!-- 2. Grid & Atmosphere Overlays -->
+  <rect width="1200" height="630" fill="url(#grid)" />
+  <rect width="1200" height="630" fill="url(#gridMajor)" />
+  <rect width="1200" height="630" fill="url(#redGlow)" />
+  <rect width="1200" height="630" fill="url(#blueGlow)" />
+
+  <!-- Red Accent Top Line -->
+  <rect x="0" y="0" width="1200" height="4" fill="url(#primaryGrad)" />
+
+  <!-- 3. Left Section: Branding & Content -->
+  <g transform="translate(80, 80)">
+    <!-- Logo Badge & Icon -->
+    <g transform="translate(0, 0)">
+      <rect width="84" height="84" rx="20" fill="url(#primaryGrad)" filter="url(#cardShadow)" />
+      <!-- Embedded ENGen Icon Geometry -->
+      <g transform="translate(8.4, 8.4) scale(0.2625)" fill="none">
+        <path d="M70 32 H176 Q182 32 186 36 L200 50 Q204 54 204 60 V206 C204 216 196 224 186 224 H70 C60 224 52 216 52 206 V50 C52 40 60 32 70 32 Z" stroke="white" stroke-width="14" stroke-linejoin="round"/>
+        <path d="M176 40 V54 Q176 60 182 60 H196" stroke="white" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="92" y1="40" x2="92" y2="216" stroke="white" stroke-width="14" stroke-linecap="round"/>
+        <line x1="118" y1="88" x2="176" y2="88" stroke="white" stroke-width="14" stroke-linecap="round"/>
+        <line x1="118" y1="128" x2="160" y2="128" stroke="white" stroke-width="14" stroke-linecap="round"/>
+        <line x1="118" y1="168" x2="176" y2="168" stroke="white" stroke-width="14" stroke-linecap="round"/>
+      </g>
+    </g>
+
+    <!-- Project Name & Monospace Tagline -->
+    <text x="108" y="52" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Arial, sans-serif" font-size="44" font-weight="800" fill="#ffffff" letter-spacing="-0.02em">ENGen</text>
+    <text x="108" y="78" font-family="'Consolas', 'Courier New', monospace" font-size="14" font-weight="600" fill="#94a3b8" letter-spacing="0.08em">ENGINEERING NOTEBOOK GENERATOR</text>
+
+    <!-- Main Headline -->
+    <g transform="translate(0, 142)">
+      <text font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Arial, sans-serif" font-size="46" font-weight="800" fill="#f8fafc" letter-spacing="-0.03em">
+        <tspan x="0" dy="0">Professional Robotics</tspan>
+        <tspan x="0" dy="56">Documentation.</tspan>
+        <tspan x="0" dy="56" fill="#ef4444">Powered by LaTeX.</tspan>
+      </text>
+    </g>
+
+    <!-- Subtitle description -->
+    <text x="0" y="338" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Arial, sans-serif" font-size="19" font-weight="400" fill="#94a3b8">
+      Designed for VEX, FTC &amp; competitive collegiate engineering teams.
+    </text>
+
+    <!-- Feature Pills -->
+    <g transform="translate(0, 380)">
+      <!-- Pill 1: VEX U & VRC -->
+      <g>
+        <rect width="138" height="38" rx="19" fill="#1e293b" stroke="#334155" stroke-width="1" />
+        <circle cx="20" cy="19" r="4.5" fill="#ef4444" />
+        <text x="34" y="24" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif" font-size="14" font-weight="600" fill="#e2e8f0">VEX U &amp; VRC</text>
+      </g>
+
+      <!-- Pill 2: FIRST Robotics -->
+      <g transform="translate(150, 0)">
+        <rect width="158" height="38" rx="19" fill="#1e293b" stroke="#334155" stroke-width="1" />
+        <circle cx="20" cy="19" r="4.5" fill="#3b82f6" />
+        <text x="34" y="24" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif" font-size="14" font-weight="600" fill="#e2e8f0">FIRST Robotics</text>
+      </g>
+
+      <!-- Pill 3: In-Browser LaTeX -->
+      <g transform="translate(320, 0)">
+        <rect width="168" height="38" rx="19" fill="#1e293b" stroke="#334155" stroke-width="1" />
+        <circle cx="20" cy="19" r="4.5" fill="#10b981" />
+        <text x="34" y="24" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif" font-size="14" font-weight="600" fill="#e2e8f0">In-Browser LaTeX</text>
+      </g>
+    </g>
+
+    <!-- Footer URL & Attribution -->
+    <g transform="translate(0, 460)">
+      <text font-family="'Consolas', 'Courier New', monospace" font-size="16" font-weight="700" fill="#ef4444">notebook.msoevex.com</text>
+      <text x="210" y="0" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif" font-size="15" fill="#64748b">•</text>
+      <text x="230" y="0" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif" font-size="15" font-weight="500" fill="#64748b">MSOE VEX Robotics</text>
+    </g>
+  </g>
+
+  <!-- 4. Right Section: Editor Mockup Card -->
+  <g transform="translate(685, 80)" filter="url(#cardShadow)">
+    <!-- Window Container -->
+    <rect width="435" height="465" rx="16" fill="#14171b" stroke="url(#cardBorder)" stroke-width="1.5" />
+
+    <!-- Window Title Bar -->
+    <rect width="435" height="42" rx="16" fill="#1c2026" />
+    <rect y="26" width="435" height="16" fill="#1c2026" /> <!-- sharp bottom corner -->
+    <line x1="0" y1="42" x2="435" y2="42" stroke="#282e36" stroke-width="1" />
+
+    <!-- Window Controls -->
+    <circle cx="22" cy="21" r="5" fill="#ef4444" />
+    <circle cx="38" cy="21" r="5" fill="#f59e0b" />
+    <circle cx="54" cy="21" r="5" fill="#10b981" />
+
+    <!-- Tab / Document Title -->
+    <rect x="76" y="8" width="180" height="26" rx="6" fill="#14171b" stroke="#282e36" stroke-width="1" />
+    <text x="92" y="25" font-family="'Consolas', 'Courier New', monospace" font-size="12" font-weight="600" fill="#cbd5e1">entry-042_chassis.tex</text>
+
+    <!-- Editor Content Snippet -->
+    <g transform="translate(24, 72)" font-family="'Consolas', 'Courier New', monospace" font-size="13">
+      <!-- Line 01 -->
+      <text x="0" y="0" fill="#64748b">01</text>
+      <text x="32" y="0" fill="#f43f5e">\section</text>
+      <text x="96" y="0" fill="#cbd5e1">{Drivetrain Gear Ratio}</text>
+
+      <!-- Line 02 -->
+      <text x="0" y="28" fill="#64748b">02</text>
+      <text x="32" y="28" fill="#38bdf8">\author</text>
+      <text x="92" y="28" fill="#cbd5e1">{MSOE VEX Engineering}</text>
+
+      <!-- Line 03 -->
+      <text x="0" y="56" fill="#64748b">03</text>
+      <text x="32" y="56" fill="#a78bfa">\date</text>
+      <text x="76" y="56" fill="#cbd5e1">{\today}</text>
+
+      <!-- Line 04 -->
+      <text x="0" y="84" fill="#64748b">04</text>
+
+      <!-- Line 05 -->
+      <text x="0" y="112" fill="#64748b">05</text>
+      <text x="32" y="112" fill="#f59e0b">% Decision Matrix Evaluation</text>
+
+      <!-- Line 06 -->
+      <text x="0" y="140" fill="#64748b">06</text>
+      <text x="32" y="140" fill="#cbd5e1">Target: </text>
+      <text x="96" y="140" fill="#38bdf8">\textbf</text>
+      <text x="156" y="140" fill="#cbd5e1">{600 RPM} direct drive</text>
+
+      <!-- Line 07 -->
+      <text x="0" y="168" fill="#64748b">07</text>
+      <text x="32" y="168" fill="#cbd5e1">Tangential wheel velocity:</text>
+
+      <!-- Line 08 -->
+      <text x="0" y="200" fill="#64748b">08</text>
+      <text x="32" y="200" fill="#f43f5e">\[</text>
+
+      <!-- Line 09 -->
+      <text x="0" y="228" fill="#64748b">09</text>
+      <text x="48" y="228" fill="#38bdf8">v_max</text>
+      <text x="98" y="228" fill="#cbd5e1"> = </text>
+      <text x="126" y="228" fill="#f43f5e">omega</text>
+      <text x="172" y="228" fill="#cbd5e1"> * </text>
+      <text x="194" y="228" fill="#f43f5e">r</text>
+      <text x="210" y="228" fill="#cbd5e1"> = </text>
+      <text x="236" y="228" fill="#34d399">2.14 m/s</text>
+
+      <!-- Line 10 -->
+      <text x="0" y="256" fill="#64748b">10</text>
+      <text x="32" y="256" fill="#f43f5e">\]</text>
+    </g>
+
+    <!-- Mini Compiled Output Preview Card at bottom -->
+    <g transform="translate(18, 354)">
+      <rect width="399" height="92" rx="10" fill="#0d1117" stroke="#282e36" stroke-width="1" />
+      <circle cx="20" cy="24" r="5" fill="#10b981" />
+      <text x="34" y="28" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif" font-size="12" font-weight="700" fill="#10b981">COMPILED PDF PREVIEW</text>
+      <text x="34" y="52" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif" font-size="13" font-weight="600" fill="#f1f5f9">Drivetrain Gear Ratio Analysis</text>
+      <text x="34" y="72" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif" font-size="11" fill="#94a3b8">Calculated tangential wheel velocity: 2.14 m/s (60:36 reduction)</text>
+      <rect x="330" y="16" width="54" height="22" rx="4" fill="#1e293b" stroke="#334155" stroke-width="1" />
+      <text x="343" y="31" font-family="'Consolas', monospace" font-size="11" font-weight="700" fill="#94a3b8">PASS</text>
+    </g>
+  </g>
+</svg>
+
