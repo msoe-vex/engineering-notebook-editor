@@ -11,6 +11,7 @@
     "download:busytex": "tsx scripts/download-busytex.ts",
     "bundle:template": "tsx scripts/bundle-template.ts",
     "bundle:latex": "tsx scripts/bundle-template.ts",
+    "generate:og": "tsx scripts/generate-og-banner.ts",
     "sync:version": "tsx scripts/sync-version.ts"
   },
   "dependencies": {
