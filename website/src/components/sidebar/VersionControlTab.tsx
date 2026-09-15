@@ -18,7 +18,7 @@ import { PendingChange } from "@/lib/storage/db";
 import { isBinaryFile } from "@/lib/storage/transferUtils";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { ENTRIES_DIR, LATEX_DIR, ASSETS_DIR, TEAM_PATH, PHASES_PATH, INDEX_PATH, ENTRIES_INDEX_PATH } from "@/lib/constants";
-import { NotebookMetadata, EntryMetadata } from "@/lib/notebook/metadata";
+import { NotebookMetadata, EntryMetadata, entryMetadataEqualIgnoringUpdatedAt } from "@/lib/notebook/metadata";
 import DiffViewer from "./DiffViewer";
 
 interface VersionControlTabProps {
@@ -136,7 +136,7 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
       for (const [id, entry] of Object.entries(currentEntries)) {
         if (!entryMap.has(id)) {
           const baseEntry = baseEntries[id];
-          if (!baseEntry || JSON.stringify(baseEntry) !== JSON.stringify(entry)) {
+          if (!baseEntry || !entryMetadataEqualIgnoringUpdatedAt(baseEntry, entry)) {
             entryMap.set(id, []);
             metadataOnlyEntryIds.add(id);
           }

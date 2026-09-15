@@ -58,6 +58,8 @@ export default function SearchTab({
   const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(true);
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
   const [showTemplates, setShowTemplates] = useState<"all" | "entries" | "templates">("all");
+  const [selectedAuthors, setSelectedAuthors] = useState<string[]>([]);
+  const [isAuthorDropdownOpen, setIsAuthorDropdownOpen] = useState(false);
 
   const [filters, setFilters] = useState<SearchFieldFilters>({
     titles: true,
@@ -87,11 +89,13 @@ export default function SearchTab({
     return entries.map(f => {
       const entryId = f.name.replace(".json", "");
       const meta = metadata.entries[entryId];
+      const authors = (meta?.authors || f.authors || []).map((a) => a.trim()).filter(Boolean);
       return {
         ...f,
         id: entryId,
         title: meta?.title || f.title || "Untitled Entry",
-        author: formatAuthors(meta?.authors) || f.author || "",
+        author: formatAuthors(authors) || f.author || "",
+        authors,
         phase: meta?.phase ?? f.phase ?? null,
         date: meta?.date || f.date || "",
         createdAt: meta?.createdAt,
@@ -101,6 +105,20 @@ export default function SearchTab({
       };
     });
   }, [entries, metadata]);
+
+  const availableAuthors = useMemo(() => {
+    const names = new Set<string>();
+    for (const entry of augmentedEntries) {
+      for (const name of entry.authors) names.add(name);
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [augmentedEntries]);
+
+  const toggleAuthor = useCallback((name: string) => {
+    setSelectedAuthors((prev) =>
+      prev.includes(name) ? prev.filter((a) => a !== name) : [...prev, name]
+    );
+  }, []);
 
   // High-performance instant in-memory metadata search grouped by Entry
   const results = useMemo<GroupedEntryResult[]>(() => {
@@ -115,6 +133,11 @@ export default function SearchTab({
 
       if (selectedPhase !== null && entry.phase !== selectedPhase) {
         continue;
+      }
+
+      if (selectedAuthors.length > 0) {
+        const hasAuthor = selectedAuthors.some((name) => entry.authors.includes(name));
+        if (!hasAuthor) continue;
       }
 
       // Date Range filter
@@ -132,7 +155,7 @@ export default function SearchTab({
       }
 
       if (!q) {
-        if (selectedPhase !== null || dateRange !== null) {
+        if (selectedPhase !== null || dateRange !== null || selectedAuthors.length > 0) {
           matchesList.push({
             file: entry,
             matchesTitle: true,
@@ -181,7 +204,7 @@ export default function SearchTab({
     }
 
     return matchesList;
-  }, [query, selectedPhase, dateRange, filters, augmentedEntries, showTemplates]);
+  }, [query, selectedPhase, selectedAuthors, dateRange, filters, augmentedEntries, showTemplates]);
 
   const highlightMatch = useCallback((text: string, q: string) => {
     if (!q.trim() || !text) return text;
@@ -203,7 +226,7 @@ export default function SearchTab({
 
   const selectedPhaseObj = selectedPhase !== null ? phaseMap.get(selectedPhase) : null;
   const activeFieldCount = (filters.titles ? 1 : 0) + (filters.authors ? 1 : 0) + (filters.figures ? 1 : 0) + (filters.dates ? 1 : 0);
-  const activeFiltersCount = (selectedPhase !== null ? 1 : 0) + (dateRange !== null ? 1 : 0) + (showTemplates !== "all" ? 1 : 0);
+  const activeFiltersCount = (selectedPhase !== null ? 1 : 0) + (dateRange !== null ? 1 : 0) + (showTemplates !== "all" ? 1 : 0) + (selectedAuthors.length > 0 ? 1 : 0);
 
   return (
     <div className="flex flex-col h-full bg-nb-surface-low select-none relative">
@@ -372,6 +395,7 @@ export default function SearchTab({
                       setSelectedPhase(null);
                       setDateRange(null);
                       setShowTemplates("all");
+                      setSelectedAuthors([]);
                     }}
                     className="text-[9px] font-bold text-red-500 hover:underline cursor-pointer"
                   >
@@ -403,12 +427,93 @@ export default function SearchTab({
                 </div>
               </div>
 
+              {/* Author Filter Dropdown */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[8px] font-bold uppercase tracking-wider text-nb-on-surface-variant/60 block">Author</label>
+                  {selectedAuthors.length > 0 && (
+                    <button
+                      onClick={() => setSelectedAuthors([])}
+                      className="text-[9px] font-bold text-red-500 hover:underline cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <div className="relative w-full min-w-0">
+                  <button
+                    onClick={() => {
+                      setIsPhaseDropdownOpen(false);
+                      setIsAuthorDropdownOpen(!isAuthorDropdownOpen);
+                    }}
+                    disabled={availableAuthors.length === 0}
+                    className="w-full flex items-center justify-between gap-1.5 px-2.5 py-1.5 bg-nb-surface border border-nb-outline-variant/50 rounded-lg text-[10px] font-bold text-nb-on-surface hover:border-nb-primary transition-all cursor-pointer shadow-nb-xs min-w-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
+                      <User size={12} className="text-nb-on-surface-variant/60 shrink-0" />
+                      <span className={`truncate block flex-1 text-left ${selectedAuthors.length === 0 ? "text-nb-on-surface-variant/80" : ""}`}>
+                        {selectedAuthors.length === 0
+                          ? "All Authors"
+                          : selectedAuthors.length === 1
+                            ? selectedAuthors[0]
+                            : `${selectedAuthors.length} authors`}
+                      </span>
+                    </div>
+                    <ChevronDown size={11} className={`text-nb-on-surface-variant/60 shrink-0 transition-transform ${isAuthorDropdownOpen ? "rotate-180" : ""}`} />
+                  </button>
+
+                  {isAuthorDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIsAuthorDropdownOpen(false)} />
+                      <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-nb-surface border border-nb-outline-variant rounded-xl shadow-nb-lg py-1 animate-in fade-in zoom-in-95 duration-150 max-h-48 overflow-y-auto w-full min-w-0">
+                        <button
+                          onClick={() => setSelectedAuthors([])}
+                          className={`w-full flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold transition-colors cursor-pointer min-w-0 overflow-hidden text-left ${
+                            selectedAuthors.length === 0
+                              ? "text-nb-primary bg-nb-primary/10"
+                              : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface"
+                          }`}
+                        >
+                          <User size={12} className="shrink-0" />
+                          <span className="truncate flex-1">All Authors</span>
+                        </button>
+
+                        {availableAuthors.map((name) => {
+                          const active = selectedAuthors.includes(name);
+                          return (
+                            <button
+                              key={name}
+                              onClick={() => toggleAuthor(name)}
+                              className={`w-full flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold transition-colors cursor-pointer min-w-0 overflow-hidden text-left ${
+                                active
+                                  ? "text-nb-primary bg-nb-primary/10"
+                                  : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface"
+                              }`}
+                            >
+                              <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border shrink-0 transition-all ${
+                                active ? "bg-nb-primary border-nb-primary text-nb-on-primary" : "border-nb-outline-variant bg-nb-surface"
+                              }`}>
+                                {active && <Check size={10} strokeWidth={3} />}
+                              </div>
+                              <span className="truncate flex-1">{name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
               {/* Phase Filter Dropdown */}
               <div className="space-y-1">
                 <label className="text-[8px] font-bold uppercase tracking-wider text-nb-on-surface-variant/60 block">Phase</label>
                 <div className="relative w-full min-w-0">
                   <button
-                    onClick={() => setIsPhaseDropdownOpen(!isPhaseDropdownOpen)}
+                    onClick={() => {
+                      setIsAuthorDropdownOpen(false);
+                      setIsPhaseDropdownOpen(!isPhaseDropdownOpen);
+                    }}
                     className="w-full flex items-center justify-between gap-1.5 px-2.5 py-1.5 bg-nb-surface border border-nb-outline-variant/50 rounded-lg text-[10px] font-bold text-nb-on-surface hover:border-nb-primary transition-all cursor-pointer shadow-nb-xs min-w-0"
                   >
                     <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">

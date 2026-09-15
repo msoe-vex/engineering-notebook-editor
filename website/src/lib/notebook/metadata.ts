@@ -6,6 +6,9 @@ export { NOTEBOOK_VERSION };
 export {
   normalizeNotebookMetadata,
   serializeNotebookMetadata,
+  serializeNotebookMetadataIgnoringUpdatedAt,
+  notebookIndexEqualIgnoringUpdatedAt,
+  entryMetadataEqualIgnoringUpdatedAt,
   sortedEntries,
   sortedMembers,
   sortedPhases,

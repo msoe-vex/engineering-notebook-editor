@@ -425,6 +425,46 @@ export function serializeNotebookMetadata(metadata: NotebookMetadata): string {
   return JSON.stringify(normalizeNotebookMetadata(metadata), null, 2);
 }
 
+/** Compare entry metadata while ignoring timestamp-only churn. */
+export function entryMetadataEqualIgnoringUpdatedAt(
+  a: EntryMetadata | undefined,
+  b: EntryMetadata | undefined
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return JSON.stringify({ ...a, updatedAt: "" }) === JSON.stringify({ ...b, updatedAt: "" });
+}
+
+/**
+ * Serialize notebook metadata with every entry `updatedAt` cleared.
+ * Keeps `lastCompiled` and all other fields so PDF / compile tracking still counts as a real change.
+ */
+export function serializeNotebookMetadataIgnoringUpdatedAt(metadata: NotebookMetadata): string {
+  const normalized = normalizeNotebookMetadata(metadata);
+  const entries: Record<string, EntryMetadata> = {};
+  for (const [id, entry] of Object.entries(normalized.entries)) {
+    entries[id] = { ...entry, updatedAt: "" };
+  }
+  return JSON.stringify({ ...normalized, entries }, null, 2);
+}
+
+/** True when two notebook.json payloads match aside from entry `updatedAt` values. */
+export function notebookIndexEqualIgnoringUpdatedAt(
+  a: string | null | undefined,
+  b: string | null | undefined
+): boolean {
+  if (a === b) return true;
+  if (a == null || b == null) return false;
+  try {
+    return (
+      serializeNotebookMetadataIgnoringUpdatedAt(JSON.parse(a) as NotebookMetadata) ===
+      serializeNotebookMetadataIgnoringUpdatedAt(JSON.parse(b) as NotebookMetadata)
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function isNotebookValid(metadata: NotebookMetadata): boolean {
   return sortedEntries(metadata.entries).every((e) => e.isValid !== false);
 }

@@ -1,4 +1,4 @@
-import { NotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, EntryMetadata, hydrateTeamAssets, TipTapNode, buildResourceTypeIndex, extractResources, moveEntryOnCalendar, reorderTemplateSequence, serializeNotebookMetadata, formatAuthors, parseAuthors, normalizeNotebookMetadata } from "../notebook/metadata";
+import { NotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, EntryMetadata, hydrateTeamAssets, TipTapNode, buildResourceTypeIndex, extractResources, moveEntryOnCalendar, reorderTemplateSequence, serializeNotebookMetadata, formatAuthors, parseAuthors, normalizeNotebookMetadata, notebookIndexEqualIgnoringUpdatedAt } from "../notebook/metadata";
 import { cloneNotebookMetadata, collectEntryFileIds, entryArtifactPaths, reconcileNotebookMerge } from "../notebook/mergeReconcile";
 import { INDEX_PATH, ENTRIES_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from "../constants";
 import { generateEntryLatex, generateTeamLatex, generatePhasesLatex, generateAllEntriesLatex, latexPhaseRef } from "../latex/latex";
@@ -351,7 +351,11 @@ class WorkspaceStore implements IWorkspaceStore {
             await removeStaged(dbName, change.path);
             continue;
           }
-        } else if (committedContent !== null && committedContent === nextContent) {
+        } else if (
+          committedContent !== null &&
+          (committedContent === nextContent ||
+            (change.path === INDEX_PATH && notebookIndexEqualIgnoringUpdatedAt(committedContent, nextContent)))
+        ) {
           await removeStaged(dbName, change.path);
           continue;
         }
@@ -494,8 +498,8 @@ class WorkspaceStore implements IWorkspaceStore {
 
           this.metadata = merged;
           const mergedIndexStr = serializeNotebookMetadata(merged);
-          const remoteNormalizedStr = JSON.stringify(remoteMetadata, null, 2);
-          const isMetadataModified = mergedIndexStr !== remoteNormalizedStr;
+          const remoteNormalizedStr = serializeNotebookMetadata(remoteMetadata);
+          const isMetadataModified = !notebookIndexEqualIgnoringUpdatedAt(mergedIndexStr, remoteNormalizedStr);
           
           const indexChangeIdx = gitChanges.findIndex(c => c.path === remoteIndexPath);
           if (isMetadataModified) {

@@ -5,7 +5,7 @@ import { getAllPending, getPending, stageChange, removeStaged, getBaseMetadata, 
 import { writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, checkLocalFileExists } from "../storage/fs";
 import { fetchFileContent, fetchRawFileContent, checkGitHubFileExists } from "../github/github";
 import { generateUUID, getMimeTypeFromExtension, formatDateMonthYear, getLocalDateString } from "../utils";
-import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, carryForwardResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds, collectNotebookResourceIds, duplicateResourceOwners, canonicalResourceOwner, remapSelectedContentIds, placeCreatedEntry, formatAuthors, authorsEqual, parseAuthors, readLastAuthors, TeamMetadata, ProjectPhase } from "../notebook/metadata";
+import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, notebookIndexEqualIgnoringUpdatedAt, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, carryForwardResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds, collectNotebookResourceIds, duplicateResourceOwners, canonicalResourceOwner, remapSelectedContentIds, placeCreatedEntry, formatAuthors, authorsEqual, parseAuthors, readLastAuthors, TeamMetadata, ProjectPhase } from "../notebook/metadata";
 import { cloneNotebookMetadata } from "../notebook/mergeReconcile";
 import { generateAllEntriesLatex, generateTeamLatex, generatePhasesLatex, generateEntryLatex, latexPhaseRef } from "../latex/latex";
 import { IWorkspaceStore } from "./types";
@@ -939,7 +939,10 @@ export class EntryManager {
       const changeType = committed === null ? "create" : "update";
 
       if (mode === "github") {
-        if (committed === content) {
+        const unchanged =
+          committed === content ||
+          (path === INDEX_PATH && notebookIndexEqualIgnoringUpdatedAt(committed, content));
+        if (unchanged) {
           if (staged) {
             await removeStaged(dbName, path);
             await this.refreshPending();
