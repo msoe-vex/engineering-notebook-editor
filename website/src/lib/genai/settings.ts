@@ -1,22 +1,32 @@
 import type { GenAIModelOption, GenAIProvider, GenAIProviderId, GenAISettings } from "./types";
-import { resolveTemperature, sanitizeGenAIModelId } from "./shared";
+import { resolveTemperature, sanitizeGenAIBaseUrl, sanitizeGenAIModelId, sanitizeLocalGenAIModelId } from "./shared";
 import { gemini } from "./providers/gemini";
 import { openai } from "./providers/openai";
 import { anthropic } from "./providers/anthropic";
+import { local } from "./providers/local";
 
 export const GENAI_STORAGE_KEY = "nb-genai-settings";
 export const GENAI_CHANGED_EVENT = "nb-genai-changed";
 
-export const GENAI_PROVIDERS = [gemini.info, openai.info, anthropic.info] as const;
+export const GENAI_PROVIDERS = [gemini.info, openai.info, anthropic.info, local.info] as const;
 
 const PROVIDERS: Record<GenAIProviderId, GenAIProvider> = {
   gemini,
   openai,
   anthropic,
+  local,
 };
 
 export function isGenAIProviderId(value: unknown): value is GenAIProviderId {
-  return value === "gemini" || value === "openai" || value === "anthropic";
+  return typeof value === "string" && Object.hasOwn(PROVIDERS, value);
+}
+
+export function providerRequiresApiKey(id: GenAIProviderId): boolean {
+  return getProviderInfo(id).requiresApiKey !== false;
+}
+
+export function providerNeedsBaseUrl(id: GenAIProviderId): boolean {
+  return getProviderInfo(id).needsBaseUrl === true;
 }
 
 export function getProvider(id: GenAIProviderId): GenAIProvider {
@@ -28,7 +38,7 @@ export function getProviderInfo(id: GenAIProviderId) {
 }
 
 function emptySettings(): GenAISettings {
-  return { enabled: false, provider: "gemini", keys: {}, models: {} };
+  return { enabled: false, provider: "gemini", keys: {}, models: {}, baseUrls: {} };
 }
 
 export function getGenAISettings(): GenAISettings {
@@ -50,6 +60,12 @@ export function getGenAISettings(): GenAISettings {
         for (const id of GENAI_PROVIDERS.map((p) => p.id)) {
           const model = parsed.models[id];
           if (typeof model === "string" && model.trim()) settings.models[id] = model.trim();
+        }
+      }
+      if (parsed.baseUrls && typeof parsed.baseUrls === "object") {
+        for (const id of GENAI_PROVIDERS.map((p) => p.id)) {
+          const url = parsed.baseUrls[id];
+          if (typeof url === "string" && url.trim()) settings.baseUrls[id] = url.trim();
         }
       }
     }
@@ -101,7 +117,27 @@ export function getStoredGenAIModel(provider?: GenAIProviderId): string {
 export function resolveGenAIModel(provider: GenAIProviderId, override?: string): string {
   const raw = (override ?? getStoredGenAIModel(provider)).trim();
   if (!raw) return "";
-  return sanitizeGenAIModelId(raw);
+  return providerNeedsBaseUrl(provider) ? sanitizeLocalGenAIModelId(raw) : sanitizeGenAIModelId(raw);
+}
+
+export function setGenAIBaseUrl(url: string, provider?: GenAIProviderId): void {
+  const settings = getGenAISettings();
+  const id = provider ?? settings.provider;
+  const next = url.trim();
+  if (!next) delete settings.baseUrls[id];
+  else settings.baseUrls[id] = next;
+  persistSettings(settings);
+}
+
+export function getGenAIBaseUrl(provider?: GenAIProviderId): string {
+  const settings = getGenAISettings();
+  return (settings.baseUrls[provider ?? settings.provider] || "").trim();
+}
+
+export function resolveGenAIBaseUrl(provider: GenAIProviderId, override?: string): string {
+  const raw = (override ?? getGenAIBaseUrl(provider)).trim();
+  if (!raw) return "";
+  return sanitizeGenAIBaseUrl(raw);
 }
 
 export function setGenAIModel(model: string, provider?: GenAIProviderId): void {
@@ -121,6 +157,13 @@ export function hasGenAIModel(provider?: GenAIProviderId): boolean {
   return getStoredGenAIModel(provider).length > 0;
 }
 
+export function canUseGenAI(provider?: GenAIProviderId): boolean {
+  const settings = getGenAISettings();
+  const id = provider ?? settings.provider;
+  if (providerNeedsBaseUrl(id)) return getGenAIBaseUrl(id).length > 0;
+  return hasGenAIApiKey(id);
+}
+
 export function subscribeGenAISettings(onChange: () => void): () => void {
   const handler = () => onChange();
   window.addEventListener("storage", handler);
@@ -134,12 +177,20 @@ export function subscribeGenAISettings(onChange: () => void): () => void {
 export async function runProviderListModels(
   provider: GenAIProviderId,
   apiKey: string,
+  baseUrl?: string,
+  signal?: AbortSignal,
 ): Promise<GenAIModelOption[]> {
   const key = apiKey.trim();
-  if (!key) throw new Error(`An API key is required for ${getProviderInfo(provider).label}.`);
+  if (providerRequiresApiKey(provider) && !key) {
+    throw new Error(`An API key is required for ${getProviderInfo(provider).label}.`);
+  }
+  const resolvedBaseUrl = providerNeedsBaseUrl(provider) ? resolveGenAIBaseUrl(provider, baseUrl) : undefined;
+  if (providerNeedsBaseUrl(provider) && !resolvedBaseUrl) {
+    throw new Error(`Add a local model URL in Settings to load models.`);
+  }
   const seen = new Set<string>();
   const models: GenAIModelOption[] = [];
-  for (const model of await getProvider(provider).listModels(key)) {
+  for (const model of await getProvider(provider).listModels(key, resolvedBaseUrl, signal)) {
     if (seen.has(model.id)) continue;
     seen.add(model.id);
     models.push(model);
@@ -155,16 +206,24 @@ export async function runProviderGenerate(
   prompt: string,
   images?: { mimeType: string; base64: string }[],
   temperature?: number,
+  baseUrl?: string,
 ): Promise<string> {
   const key = apiKey.trim();
-  if (!key) throw new Error(`An API key is required for ${getProviderInfo(provider).label}.`);
+  if (providerRequiresApiKey(provider) && !key) {
+    throw new Error(`An API key is required for ${getProviderInfo(provider).label}.`);
+  }
   const resolved = resolveGenAIModel(provider, model);
   if (!resolved) throw new Error("Choose a model in Settings before generating titles and captions.");
+  const resolvedBaseUrl = providerNeedsBaseUrl(provider) ? resolveGenAIBaseUrl(provider, baseUrl) : undefined;
+  if (providerNeedsBaseUrl(provider) && !resolvedBaseUrl) {
+    throw new Error("Add a local model URL in Settings to generate titles and captions.");
+  }
   return getProvider(provider).generate({
     apiKey: key,
     model: resolved,
     prompt,
     images,
     temperature: resolveTemperature(temperature),
+    baseUrl: resolvedBaseUrl,
   });
 }

@@ -22,6 +22,12 @@ export async function POST(request: Request) {
   if (!provider) {
     return NextResponse.json({ error: "Unknown AI provider." }, { status: 400 });
   }
+  if (provider === "local") {
+    return NextResponse.json(
+      { error: "Local OpenAI-compatible endpoints are called from the browser so 127.0.0.1 reaches your machine." },
+      { status: 400 },
+    );
+  }
   if (!body.apiKey || typeof body.apiKey !== "string") {
     return NextResponse.json({ error: "An API key is required." }, { status: 400 });
   }
