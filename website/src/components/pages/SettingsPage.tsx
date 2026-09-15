@@ -2,18 +2,22 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
-import { Eye, EyeOff, KeyRound, Loader2, Monitor, Moon, Search, Settings, Sparkles, Sun, X } from "lucide-react";
+import { Eye, EyeOff, Globe, KeyRound, Loader2, Monitor, Moon, Search, Settings, Sparkles, Sun, X } from "lucide-react";
 import { readLastAuthors, writeLastAuthors } from "@/lib/notebook/metadata";
 import {
   GENAI_PROVIDERS,
   getGenAIApiKey,
+  getGenAIBaseUrl,
   getGenAISettings,
   getStoredGenAIModel,
+  providerNeedsBaseUrl,
   setGenAIApiKey,
+  setGenAIBaseUrl,
   setGenAIEnabled,
   setGenAIModel,
   setGenAIProvider,
   subscribeGenAISettings,
+  sanitizeGenAIBaseUrl,
   type GenAIModelOption,
 } from "@/lib/genai";
 import { fetchGenAIModels } from "@/lib/genai/client";
@@ -45,7 +49,7 @@ function getEmptyAuthorsJson() {
 }
 
 function getEmptyGenAIJson() {
-  return JSON.stringify({ enabled: false, provider: "gemini", keys: {}, models: {} });
+  return JSON.stringify({ enabled: false, provider: "gemini", keys: {}, models: {}, baseUrls: {} });
 }
 
 function getGenAISettingsJson() {
@@ -59,6 +63,7 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
   const storedGenAIJson = useSyncExternalStore(subscribeGenAISettings, getGenAISettingsJson, getEmptyGenAIJson);
   const [authorsOverride, setAuthorsOverride] = useState<string[] | null>(null);
   const [apiKeyDraft, setApiKeyDraft] = useState<string | null>(null);
+  const [baseUrlDraft, setBaseUrlDraft] = useState<string | null>(null);
   const [modelDraft, setModelDraft] = useState<string | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [modelCatalog, setModelCatalog] = useState<{ query: string; options: GenAIModelOption[]; error: string | null }>({
@@ -76,8 +81,22 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
   const provider = genAI.provider;
   const providerInfo = GENAI_PROVIDERS.find((p) => p.id === provider) || GENAI_PROVIDERS[0];
   const apiKey = apiKeyDraft ?? getGenAIApiKey(provider);
+  const baseUrl = baseUrlDraft ?? getGenAIBaseUrl(provider);
   const modelId = modelDraft ?? getStoredGenAIModel(provider);
-  const modelsQuery = genAIOn && apiKey.trim() ? `${provider}:${apiKey.trim()}` : "";
+  const needsBaseUrl = providerNeedsBaseUrl(provider);
+  let resolvedLocalUrl = "";
+  if (needsBaseUrl && baseUrl.trim()) {
+    try {
+      resolvedLocalUrl = sanitizeGenAIBaseUrl(baseUrl);
+    } catch {
+      resolvedLocalUrl = "";
+    }
+  }
+  const modelsQuery = genAIOn
+    ? needsBaseUrl
+      ? (resolvedLocalUrl ? `${provider}:${resolvedLocalUrl}:${apiKey.trim()}` : "")
+      : (apiKey.trim() ? `${provider}:${apiKey.trim()}` : "")
+    : "";
   const modelsBusy = Boolean(modelsQuery) && (modelsLoading || modelCatalog.query !== modelsQuery);
   const modelPickerOpen = Boolean(modelsQuery) && modelPickerFor === modelsQuery;
   const modelsError = modelCatalog.query === modelsQuery ? modelCatalog.error : null;
@@ -90,7 +109,7 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
     const timer = window.setTimeout(async () => {
       setModelsLoading(true);
       try {
-        const models = await fetchGenAIModels(provider, key, controller.signal);
+        const models = await fetchGenAIModels(provider, key, controller.signal, baseUrl);
         if (controller.signal.aborted) return;
         setModelCatalog({ query, options: models, error: null });
       } catch (error) {
@@ -108,7 +127,7 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [modelsQuery, provider, apiKey]);
+  }, [modelsQuery, provider, apiKey, baseUrl]);
 
   useEffect(() => {
     if (!modelPickerOpen) return;
@@ -223,7 +242,7 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
             </button>
             {genAIOn && (
               <>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {GENAI_PROVIDERS.map((info) => {
                 const active = provider === info.id;
                 return (
@@ -232,6 +251,7 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
                     type="button"
                     onClick={() => {
                       setApiKeyDraft(null);
+                      setBaseUrlDraft(null);
                       setModelDraft(null);
                       setGenAIProvider(info.id);
                     }}
@@ -247,6 +267,24 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
                 );
               })}
             </div>
+            {needsBaseUrl && (
+            <div className="flex items-center gap-2 rounded-2xl border border-nb-outline-variant bg-nb-surface px-4 h-14">
+              <Globe size={16} className="shrink-0 text-nb-primary" />
+              <input
+                type="text"
+                value={baseUrl}
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={providerInfo.baseUrlPlaceholder || "http://127.0.0.1:1234/v1"}
+                onChange={(e) => {
+                  setBaseUrlDraft(e.target.value);
+                  setGenAIBaseUrl(e.target.value, provider);
+                }}
+                className="flex-1 min-w-0 bg-transparent outline-none text-sm font-medium text-nb-on-surface placeholder:text-nb-on-surface-variant/40"
+                aria-label="Local model URL"
+              />
+            </div>
+            )}
             <div className="flex items-center gap-2 rounded-2xl border border-nb-outline-variant bg-nb-surface px-4 h-14">
               <KeyRound size={16} className="shrink-0 text-nb-primary" />
               <input
@@ -287,7 +325,7 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
                 />
                 <button
                   type="button"
-                  disabled={!apiKey.trim()}
+                  disabled={!modelsQuery}
                   onClick={() => {
                     if (!modelsQuery) return;
                     setModelSearch("");
@@ -357,6 +395,14 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
               <p className="text-xs text-amber-600 dark:text-amber-400 leading-relaxed ml-1">{modelsError}</p>
             )}
             <p className="text-xs text-nb-on-surface-variant/70 leading-relaxed ml-1">
+              {needsBaseUrl ? (
+                <>
+                  URL and key stay in this browser. Use an OpenAI-compatible base such as{" "}
+                  <span className="font-mono">http://127.0.0.1:1234/v1</span>. An API key is optional. Enable CORS on
+                  the local server. See Help → Generative AI for setup.
+                </>
+              ) : (
+                <>
               Keys stay in this browser. Get one from{" "}
               <a
                 href={providerInfo.keyUrl}
@@ -367,6 +413,8 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
                 {providerInfo.keyUrlLabel}
               </a>
               . See Help → Generative AI for setup.
+                </>
+              )}
             </p>
               </>
             )}

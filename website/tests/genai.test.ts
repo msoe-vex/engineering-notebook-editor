@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAnthropicImageInputModel, isGenAIProviderId, isListedGeminiMultimodalModel, isListedOpenAIVisionChatModel, parseGeneratedText, parseImageDataUrl, sanitizeGenAIModelId } from "@/lib/genai";
+import { isAnthropicImageInputModel, isGenAIProviderId, isListedGeminiMultimodalModel, isListedOpenAIVisionChatModel, parseGeneratedText, parseImageDataUrl, sanitizeGenAIBaseUrl, sanitizeGenAIModelId, sanitizeLocalGenAIModelId } from "@/lib/genai";
 
 describe("parseGeneratedText", () => {
   it("strips quotes and fences", () => {
@@ -19,6 +19,7 @@ describe("parseImageDataUrl", () => {
 describe("isGenAIProviderId", () => {
   it("accepts known providers", () => {
     expect(isGenAIProviderId("openai")).toBe(true);
+    expect(isGenAIProviderId("local")).toBe(true);
     expect(isGenAIProviderId("claude")).toBe(false);
   });
 });
@@ -55,5 +56,36 @@ describe("sanitizeGenAIModelId", () => {
 
   it("rejects path characters", () => {
     expect(() => sanitizeGenAIModelId("../secret")).toThrow();
+  });
+});
+
+describe("sanitizeLocalGenAIModelId", () => {
+  it("accepts LM Studio and Ollama ids", () => {
+    expect(sanitizeLocalGenAIModelId("openai/gpt-oss-20b")).toBe("openai/gpt-oss-20b");
+    expect(sanitizeLocalGenAIModelId("qwen2.5:14b")).toBe("qwen2.5:14b");
+  });
+
+  it("rejects path traversal", () => {
+    expect(() => sanitizeLocalGenAIModelId("../secret")).toThrow();
+  });
+});
+
+describe("sanitizeGenAIBaseUrl", () => {
+  it("keeps loopback OpenAI-compatible URLs", () => {
+    expect(sanitizeGenAIBaseUrl("http://127.0.0.1:1234/v1")).toBe("http://127.0.0.1:1234/v1");
+    expect(sanitizeGenAIBaseUrl("http://localhost:1234/v1")).toBe("http://localhost:1234/v1");
+  });
+
+  it("appends /v1 when the path is empty", () => {
+    expect(sanitizeGenAIBaseUrl("http://127.0.0.1:1234")).toBe("http://127.0.0.1:1234/v1");
+  });
+
+  it("accepts a host without a scheme", () => {
+    expect(sanitizeGenAIBaseUrl("127.0.0.1:1234/v1")).toBe("http://127.0.0.1:1234/v1");
+  });
+
+  it("rejects non-http schemes", () => {
+    expect(() => sanitizeGenAIBaseUrl("javascript:alert(1)")).toThrow();
+    expect(() => sanitizeGenAIBaseUrl("file:///etc/passwd")).toThrow();
   });
 });

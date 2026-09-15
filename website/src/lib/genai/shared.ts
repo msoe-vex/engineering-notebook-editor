@@ -57,9 +57,75 @@ export function sanitizeGenAIModelId(model: string): string {
   return next;
 }
 
+/** Local / OpenAI-compatible ids often include `/` (LM Studio) or `:` (Ollama). */
+export function sanitizeLocalGenAIModelId(model: string): string {
+  const next = model.trim();
+  if (!next) return "";
+  if (next.includes("..") || next.includes("\\") || /[\s<>'"\u0000]/.test(next)) {
+    throw new Error("Invalid model id.");
+  }
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/.test(next)) {
+    throw new Error("Model id may only contain letters, numbers, dots, underscores, hyphens, colons, and slashes.");
+  }
+  return next;
+}
+
+export const LOCAL_GENAI_DEFAULT_BASE_URL = "http://127.0.0.1:1234/v1";
+
+export function sanitizeGenAIBaseUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  const candidate = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed) ? trimmed : `http://${trimmed}`;
+  let parsed: URL;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    throw new Error("Enter a valid URL, for example http://127.0.0.1:1234/v1.");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Base URL must start with http:// or https://.");
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error("Base URL must not include credentials.");
+  }
+  parsed.hash = "";
+  parsed.search = "";
+  const path = parsed.pathname.replace(/\/+$/, "");
+  parsed.pathname = path && path !== "/" ? path : "/v1";
+  return parsed.toString().replace(/\/+$/, "");
+}
+
+export function joinGenAIEndpoint(baseUrl: string, path: string): string {
+  return `${baseUrl.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
+}
+
+export async function fetchOpenAICompatible(
+  url: string,
+  init: RequestInit,
+  fallback: string,
+): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") throw error;
+    throw new Error(
+      `${fallback} Could not reach ${url}. If this is a local server, make sure it is running and CORS is enabled for this site.`,
+    );
+  }
+}
+
 export function trySanitizeGenAIModelId(model: string): string | null {
   try {
     const id = sanitizeGenAIModelId(model);
+    return id || null;
+  } catch {
+    return null;
+  }
+}
+
+export function trySanitizeLocalGenAIModelId(model: string): string | null {
+  try {
+    const id = sanitizeLocalGenAIModelId(model);
     return id || null;
   } catch {
     return null;
