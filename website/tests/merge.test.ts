@@ -14,6 +14,7 @@ import {
   type TeamMetadata,
 } from "@/lib/notebook/metadata";
 import { mergeOrderKeys, mergeRecordById } from "@/lib/notebook/notebookSchema";
+import { cloneNotebookMetadata, collectEntryFileIds, reconcileNotebookMerge } from "@/lib/notebook/mergeReconcile";
 
 type Item = { title: string; order: number };
 
@@ -281,5 +282,68 @@ describe("mergeNotebookMetadata with validEntryIds", () => {
 
     expect(Object.keys(merged.entries).sort()).toEqual(["e1", "e3"]);
     expect(merged.entries.e2).toBeUndefined();
+  });
+
+  it("preserves both local-added and remote-added entries when base is null (fallback)", () => {
+    const local = notebook({ e1: { title: "Entry 1" }, localNew: { title: "Local Entry" } });
+    const remote = notebook({ e1: { title: "Entry 1" }, remoteNew: { title: "Remote Entry" } });
+    const validEntryIds = new Set(["e1", "localNew", "remoteNew"]);
+
+    const { merged } = mergeNotebookMetadata(null, local, remote, { validEntryIds });
+
+    expect(Object.keys(merged.entries).sort()).toEqual(["e1", "localNew", "remoteNew"]);
+    expect(merged.entries.localNew.title).toBe("Local Entry");
+    expect(merged.entries.remoteNew.title).toBe("Remote Entry");
+  });
+
+  it("preserves both local-added and remote-added entries with a valid base snapshot", () => {
+    const base = notebook({ e1: { title: "Entry 1" } });
+    const local = notebook({ e1: { title: "Entry 1" }, localNew: { title: "Local Entry" } });
+    const remote = notebook({ e1: { title: "Entry 1" }, remoteNew: { title: "Remote Entry" } });
+    const validEntryIds = new Set(["e1", "localNew", "remoteNew"]);
+
+    const { merged } = mergeNotebookMetadata(base, local, remote, { validEntryIds });
+
+    expect(Object.keys(merged.entries).sort()).toEqual(["e1", "localNew", "remoteNew"]);
+    expect(merged.entries.localNew.title).toBe("Local Entry");
+    expect(merged.entries.remoteNew.title).toBe("Remote Entry");
+  });
+});
+
+describe("reconcileNotebookMerge", () => {
+  it("cloneNotebookMetadata is independent of later local edits", () => {
+    const remote = notebook({ e1: { title: "Entry 1" } });
+    const base = cloneNotebookMetadata(remote);
+    remote.entries.e1.title = "Mutated";
+    expect(base.entries.e1.title).toBe("Entry 1");
+  });
+
+  it("keeps a local add and a remote add when the stored base was polluted with local edits", () => {
+    const pollutedBase = notebook({ e1: { title: "Entry 1" }, localNew: { title: "Local Entry" } });
+    const local = pollutedBase;
+    const remote = notebook({ e1: { title: "Entry 1" }, remoteNew: { title: "Remote Entry" } });
+    const { fileIds, pendingUpsertIds } = collectEntryFileIds(
+      ["data/entries/e1.json", "data/entries/localNew.json", "data/entries/remoteNew.json"],
+      [{ path: "data/entries/localNew.json", operation: "upsert" }]
+    );
+
+    const { merged, orphanIds } = reconcileNotebookMerge(pollutedBase, local, remote, { fileIds, pendingUpsertIds });
+    expect(Object.keys(merged.entries).sort()).toEqual(["e1", "localNew", "remoteNew"]);
+    expect(merged.entries.localNew.title).toBe("Local Entry");
+    expect(orphanIds).toEqual([]);
+  });
+
+  it("marks leftover json as orphan when remote removed the entry from metadata", () => {
+    const base = notebook({ e1: { title: "Entry 1" }, orphan: { title: "Gone" } });
+    const local = notebook({ e1: { title: "Entry 1" }, orphan: { title: "Gone" } });
+    const remote = notebook({ e1: { title: "Entry 1" } });
+    const { fileIds, pendingUpsertIds } = collectEntryFileIds(
+      ["data/entries/e1.json", "data/entries/orphan.json"],
+      []
+    );
+
+    const { merged, orphanIds } = reconcileNotebookMerge(base, local, remote, { fileIds, pendingUpsertIds });
+    expect(Object.keys(merged.entries)).toEqual(["e1"]);
+    expect(orphanIds).toEqual(["orphan"]);
   });
 });

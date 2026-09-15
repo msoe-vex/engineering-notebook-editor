@@ -149,7 +149,8 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
     // 1. Grouped Entries
     for (const [entryId, changes] of entryMap.entries()) {
       const entryMeta = metadata.entries[entryId];
-      const title = entryMeta?.title || "Untitled Entry";
+      const baseEntry = (baseMetadata?.entries as Record<string, EntryMetadata> | undefined)?.[entryId];
+      const title = (entryMeta?.title || baseEntry?.title || "").trim() || "Untitled Entry";
       const isNew = changes.some(c => c.changeType === 'create');
       const isDel = changes.some(c => c.operation === 'delete');
       const isMetaOnly = metadataOnlyEntryIds.has(entryId);

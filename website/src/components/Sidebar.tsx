@@ -66,9 +66,11 @@ export default function Sidebar({
 
     const isTemplate = files.some(f => f.isTemplate);
     const itemType = isTemplate ? "Template" : "Entry";
+    const defaultTitle = isTemplate ? "Untitled Template" : "Untitled Entry";
+    const displayTitle = (files[0].title || "").trim() || defaultTitle;
     const title = files.length === 1 ? `Delete ${itemType}` : `Delete Multiple ${itemType}s`;
     const message = files.length === 1
-      ? `Are you sure you want to delete "${files[0].title || "Untitled"}"? This action cannot be undone.`
+      ? `Are you sure you want to delete "${displayTitle}"? This action cannot be undone.`
       : `Are you sure you want to delete ${files.length} items? This action cannot be undone.`;
 
     showConfirm(
@@ -101,7 +103,7 @@ export default function Sidebar({
       const meta = metadata.entries[entryId];
       return {
         ...f,
-        title: meta?.title || "",
+        title: (meta?.title || f.title || "").trim(),
         author: formatAuthors(meta?.authors),
         authors: meta?.authors,
         phase: meta?.phase ?? null,
@@ -160,7 +162,7 @@ export default function Sidebar({
         if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
 
         if (selectedPaths.size === 0) return;
-        const toDelete = entries.filter(f => selectedPaths.has(f.path));
+        const toDelete = augmentedEntries.filter(f => selectedPaths.has(f.path));
         if (toDelete.length > 0) {
           e.preventDefault();
           handleConfirmDelete(toDelete);
@@ -180,7 +182,7 @@ export default function Sidebar({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedPaths, entries, handleConfirmDelete, onSelectAll, filteredEntries]);
+  }, [selectedPaths, augmentedEntries, handleConfirmDelete, onSelectAll, filteredEntries]);
 
   const handleOpenEntry = useCallback((file: ExplorerFile, resourceId?: string) => {
     if (onOpenEntry && !resourceId) {

@@ -6,6 +6,7 @@ import { writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, checkLocalF
 import { fetchFileContent, fetchRawFileContent, checkGitHubFileExists } from "../github/github";
 import { generateUUID, getMimeTypeFromExtension, formatDateMonthYear, getLocalDateString } from "../utils";
 import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, carryForwardResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds, collectNotebookResourceIds, duplicateResourceOwners, canonicalResourceOwner, remapSelectedContentIds, placeCreatedEntry, formatAuthors, authorsEqual, parseAuthors, readLastAuthors, TeamMetadata, ProjectPhase } from "../notebook/metadata";
+import { cloneNotebookMetadata } from "../notebook/mergeReconcile";
 import { generateAllEntriesLatex, generateTeamLatex, generatePhasesLatex, generateEntryLatex, latexPhaseRef } from "../latex/latex";
 import { IWorkspaceStore } from "./types";
 
@@ -954,7 +955,7 @@ export class EntryManager {
       if (mode === "github") {
         const existingBase = await getBaseMetadata(dbName);
         if (!existingBase && this.store.baseMetadata) {
-          await saveBaseMetadata(dbName, this.store.baseMetadata);
+          await saveBaseMetadata(dbName, cloneNotebookMetadata(this.store.baseMetadata));
         }
       }
 

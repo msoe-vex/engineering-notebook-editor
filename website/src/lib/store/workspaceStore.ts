@@ -1,8 +1,9 @@
-import { NotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, EntryMetadata, hydrateTeamAssets, TipTapNode, buildResourceTypeIndex, extractResources, mergeNotebookMetadata, moveEntryOnCalendar, reorderTemplateSequence, serializeNotebookMetadata, formatAuthors, parseAuthors } from "../notebook/metadata";
+import { NotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, EntryMetadata, hydrateTeamAssets, TipTapNode, buildResourceTypeIndex, extractResources, moveEntryOnCalendar, reorderTemplateSequence, serializeNotebookMetadata, formatAuthors, parseAuthors, normalizeNotebookMetadata } from "../notebook/metadata";
+import { cloneNotebookMetadata, collectEntryFileIds, entryArtifactPaths, reconcileNotebookMerge } from "../notebook/mergeReconcile";
 import { INDEX_PATH, ENTRIES_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from "../constants";
 import { generateEntryLatex, generateTeamLatex, generatePhasesLatex, generateAllEntriesLatex, latexPhaseRef } from "../latex/latex";
 import { ExplorerFile, GitHubConfig, TeamTab } from "../types";
-import { Project, getAllPending, removeStaged, PendingChange, clearBaseMetadata } from "../storage/db";
+import { Project, getAllPending, removeStaged, PendingChange, clearBaseMetadata, getBaseMetadata, stageChange } from "../storage/db";
 import { events, EventNames } from "../events";
 import { WorkspaceMode, OpenFileState, IWorkspaceStore, DebouncedFunction, ImportOptions } from "./types";
 export type { WorkspaceMode, OpenFileState, DebouncedFunction };
@@ -370,27 +371,19 @@ class WorkspaceStore implements IWorkspaceStore {
       const remoteIndexContent = await this.transferManager.getBaseFileContent(INDEX_PATH);
       if (remoteIndexContent) {
         try {
-          const remoteMetadata = JSON.parse(remoteIndexContent);
-          const baseIndex = await this.getCommittedFileContent(INDEX_PATH);
-          const baseMetadata = this.baseMetadata || (baseIndex ? JSON.parse(baseIndex) : null);
+          const remoteMetadata = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...JSON.parse(remoteIndexContent) });
+          const persistedBase = await getBaseMetadata(dbName);
+          const baseMetadata = persistedBase
+            ? normalizeNotebookMetadata({ ...EMPTY_METADATA, ...persistedBase })
+            : (this.baseMetadata ? cloneNotebookMetadata(this.baseMetadata) : null);
 
-          // Build validEntryIds: remote entries that exist on remote tree + local entries staged as upsert
-          const validEntryIds = new Set<string>();
-          for (const entry of this.entries) {
-            const match = entry.path.match(new RegExp(`^${ENTRIES_DIR}/([^/]+)\\.json$`));
-            if (match) validEntryIds.add(match[1]);
-          }
-          for (const change of all) {
-            if (change.path.startsWith(ENTRIES_DIR) && change.path.endsWith(".json")) {
-              const match = change.path.match(new RegExp(`^${ENTRIES_DIR}/([^/]+)\\.json$`));
-              if (match) {
-                if (change.operation === "upsert") validEntryIds.add(match[1]);
-                else if (change.operation === "delete") validEntryIds.delete(match[1]);
-              }
-            }
-          }
-
-          const { merged, hasCollisions, collidingEntryIds } = mergeNotebookMetadata(baseMetadata, this.metadata, remoteMetadata, { validEntryIds });
+          const { fileIds, pendingUpsertIds } = collectEntryFileIds(this.entries.map(e => e.path), all);
+          let { merged, hasCollisions, collidingEntryIds, orphanIds } = reconcileNotebookMerge(
+            baseMetadata,
+            this.metadata,
+            remoteMetadata,
+            { fileIds, pendingUpsertIds }
+          );
 
           if (hasCollisions && collidingEntryIds.length > 0) {
             // Level 2: Prompt user for resolution choice on conflicting entries
@@ -483,7 +476,22 @@ class WorkspaceStore implements IWorkspaceStore {
               // "keep_local" keeps merged.entries[entryId] = local version (default in merged)
             }
           }
-          
+
+          for (const id of orphanIds) {
+            const { jsonPath, texPath } = entryArtifactPaths(id);
+            const fullJson = this.getFullPath(jsonPath);
+            const fullTex = this.getFullPath(texPath);
+            const jsonIdx = gitChanges.findIndex(c => c.path === fullJson);
+            if (jsonIdx >= 0) gitChanges[jsonIdx].content = null;
+            else gitChanges.push({ path: fullJson, content: null, isBinary: false });
+            const texIdx = gitChanges.findIndex(c => c.path === fullTex);
+            if (texIdx >= 0) gitChanges[texIdx].content = null;
+            else gitChanges.push({ path: fullTex, content: null, isBinary: false });
+            await stageChange(dbName, { path: jsonPath, operation: "delete", label: "Remove orphaned entry", stagedAt: new Date().toISOString() });
+            await stageChange(dbName, { path: texPath, operation: "delete", label: "Remove orphaned LaTeX", stagedAt: new Date().toISOString() });
+            this.entries = this.entries.filter(e => e.path !== jsonPath);
+          }
+
           this.metadata = merged;
           const mergedIndexStr = serializeNotebookMetadata(merged);
           const remoteNormalizedStr = JSON.stringify(remoteMetadata, null, 2);

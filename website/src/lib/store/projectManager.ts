@@ -1,7 +1,8 @@
-import { Project, getProjects, getProject, saveProject, getProjectHandle, saveProjectHandle, getAllPending, stageChange, getBaseMetadata, saveBaseMetadata } from "../storage/db";
+import { Project, getProjects, getProject, saveProject, getProjectHandle, saveProjectHandle, getAllPending, stageChange, getBaseMetadata, saveBaseMetadata, removeStaged } from "../storage/db";
 import { listLocalFiles, readLocalFile, writeLocalFile, ensureLocalDirectory, checkLocalFileExists } from "../storage/fs";
 import { fetchFileContent, fetchDirectoryTree, checkGitHubFileExists, fetchGitHubUser, GitHubFile } from "../github/github";
-import { EMPTY_METADATA, mergeNotebookMetadata, normalizeNotebookMetadata, serializeNotebookMetadata } from "../notebook/metadata";
+import { EMPTY_METADATA, normalizeNotebookMetadata, serializeNotebookMetadata } from "../notebook/metadata";
+import { cloneNotebookMetadata, collectEntryFileIds, entryArtifactPaths, jsonEntryIdFromPath, reconcileNotebookMerge } from "../notebook/mergeReconcile";
 import { fetchDefaultNotebook } from "../notebook/defaultTemplates";
 import { events, EventNames } from "../events";
 import { generateDeterministicUUID, generateUUID } from "../utils";
@@ -298,7 +299,7 @@ export class ProjectManager {
       const metaStr = await readLocalFile(this.store.dirHandle, INDEX_PATH);
       const parsed = JSON.parse(metaStr);
       this.store.metadata = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...parsed });
-      this.store.baseMetadata = this.store.metadata;
+      this.store.baseMetadata = cloneNotebookMetadata(this.store.metadata);
     } catch {
       isNew = true;
       try {
@@ -427,41 +428,33 @@ export class ProjectManager {
       }
     }
 
-    if (persistedBase) {
-      this.store.baseMetadata = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...persistedBase });
-    } else if (remoteMeta) {
-      this.store.baseMetadata = remoteMeta;
-      await saveBaseMetadata(dbName, remoteMeta);
-    }
+    const { fileIds, pendingUpsertIds } = collectEntryFileIds(entryFiles.map(f => f.path), pending);
 
-    // Build the set of valid entry IDs: any entry whose JSON file exists remotely OR is staged locally as an upsert
-    const validEntryIds = new Set<string>();
-    for (const f of entryFiles) {
-      const match = f.path.match(new RegExp(`^${ENTRIES_DIR}/([^/]+)\\.json$`));
-      if (match) validEntryIds.add(match[1]);
-    }
-    for (const p of pending) {
-      if (p.path.startsWith(ENTRIES_DIR) && p.path.endsWith(".json")) {
-        const match = p.path.match(new RegExp(`^${ENTRIES_DIR}/([^/]+)\\.json$`));
-        if (match) {
-          if (p.operation === "upsert") {
-            validEntryIds.add(match[1]);
-          } else if (p.operation === "delete") {
-            validEntryIds.delete(match[1]);
-          }
-        }
-      }
+    if (persistedBase) {
+      this.store.baseMetadata = cloneNotebookMetadata(normalizeNotebookMetadata({ ...EMPTY_METADATA, ...persistedBase }));
+    } else if (!hasPendingChanges && remoteMeta) {
+      this.store.baseMetadata = cloneNotebookMetadata(remoteMeta);
+      await saveBaseMetadata(dbName, this.store.baseMetadata);
+    } else {
+      this.store.baseMetadata = null;
     }
 
     if (pendingMeta?.content && remoteMeta) {
-      // Both local pending metadata and remote metadata exist: perform 3-way merge on reload
       const localMeta = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...JSON.parse(pendingMeta.content) });
-      const baseMeta = this.store.baseMetadata || remoteMeta;
-      const { merged, hasCollisions } = mergeNotebookMetadata(baseMeta, localMeta, remoteMeta, { validEntryIds });
+      const { merged, orphanIds } = reconcileNotebookMerge(this.store.baseMetadata, localMeta, remoteMeta, {
+        fileIds,
+        pendingUpsertIds,
+      });
+      for (const id of orphanIds) {
+        const { jsonPath, texPath } = entryArtifactPaths(id);
+        mergedEntries = mergedEntries.filter(e => e.path !== jsonPath);
+        await removeStaged(dbName, jsonPath);
+        await removeStaged(dbName, texPath);
+        await stageChange(dbName, { path: jsonPath, operation: "delete", label: "Remove orphaned entry", stagedAt: new Date().toISOString() });
+        await stageChange(dbName, { path: texPath, operation: "delete", label: "Remove orphaned LaTeX", stagedAt: new Date().toISOString() });
+      }
 
       this.store.metadata = merged;
-      // If non-conflicting updates occurred (e.g. remote added/edited/deleted other entries),
-      // update the local staged notebook.json so pending changes stay in sync with remote
       const mergedSerialized = serializeNotebookMetadata(merged);
       if (mergedSerialized !== pendingMeta.content) {
         await stageChange(dbName, {
@@ -475,7 +468,7 @@ export class ProjectManager {
       const parsed = JSON.parse(pendingMeta.content);
       this.store.metadata = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...parsed });
     } else if (remoteMeta) {
-      this.store.metadata = remoteMeta;
+      this.store.metadata = cloneNotebookMetadata(remoteMeta);
     } else {
       isNew = true;
       try {
@@ -509,15 +502,21 @@ export class ProjectManager {
       await this.store.refreshPending();
     }
 
-    for (const p of pending) {
-      if (p.path.startsWith(ENTRIES_DIR) && p.path.endsWith('.json')) {
-        if (p.operation === "upsert" && !mergedEntries.some(e => e.path === p.path)) {
-          mergedEntries.push({ name: p.path.split('/').pop() || '', path: p.path });
-        } else if (p.operation === "delete") {
-          mergedEntries = mergedEntries.filter(e => e.path !== p.path);
-        }
+    const latestPending = await getAllPending(dbName);
+    for (const p of latestPending) {
+      const id = jsonEntryIdFromPath(p.path);
+      if (!id) continue;
+      if (p.operation === "upsert" && !mergedEntries.some(e => e.path === p.path)) {
+        mergedEntries.push({ name: p.path.split('/').pop() || '', path: p.path });
+      } else if (p.operation === "delete") {
+        mergedEntries = mergedEntries.filter(e => e.path !== p.path);
       }
     }
+    const metaIds = new Set(Object.keys(this.store.metadata.entries));
+    mergedEntries = mergedEntries.filter(e => {
+      const id = jsonEntryIdFromPath(e.path);
+      return !id || metaIds.has(id);
+    });
     this.store.entries = mergedEntries;
     this.store.isMainTexPresent = isMainTexPresent;
 
