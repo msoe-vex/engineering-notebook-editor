@@ -58,7 +58,7 @@ Following a structured design process is a core requirement for a high-scoring e
 
 > **Tip:** This is your blueprint. Someone should be able to build your design just by looking at this section.
 
-## 4. Construct & Test
+## 4. Build Solution
 
 **What to include:**
 
@@ -67,20 +67,27 @@ Following a structured design process is a core requirement for a high-scoring e
   - This could include code snippets for programming, wiring diagrams for electronics, or step-by-step assembly instructions.
 - **Parts list and instructions**
   - Include a comprehensive parts list with quantities and sources.
-  - Provide overview of instructions for how to build your design.
+  - Provide an overview of instructions for how to build your design.
+
+> **Tip:** Clearly document assembly steps and modifications as they happen. Someone should be able to reproduce your physical build or software implementation from your notes.
+
+## 5. Test Solution
+
+**What to include:**
+
 - **Test Plan**
   - Test cases with expected outcomes
   - Data collection methods
-  - Test results with analysis
+  - Procedures and conditions for testing
 - **Quantitative Data**
   - Tables summarizing your test data
   - Charts and graphs to visualize performance metrics (e.g., velocity vs. time, accuracy comparisons)
 - **Brief analysis of results**
-  - Discuss whether your design met the criteria and constraints based on your test data, but save your full analysis for the next section.
+  - Discuss whether your design met the criteria and constraints based on your test data, but save your full reflective analysis for the evaluation phase.
 
 > **Tip:** Document your failures just as much as your successes. Use quantitative data to back up your conclusions, not just qualitative observations.
 
-## 5. Evaluate Solution
+## 6. Evaluate Solution
 
 **What to include:**
 
