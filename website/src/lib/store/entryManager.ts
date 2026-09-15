@@ -351,6 +351,8 @@ export class EntryManager {
       ? parseAuthors(options.authors)
       : (!isTemplate && sourceMeta.isTemplate)
       ? (lastUsedAuthors.length ? lastUsedAuthors : parseAuthors(sourceMeta.authors))
+      : isTemplate
+      ? parseAuthors(sourceMeta.authors)
       : (parseAuthors(sourceMeta.authors).length ? sourceMeta.authors : lastUsedAuthors);
 
     const phase = options?.phase !== undefined
@@ -442,7 +444,7 @@ export class EntryManager {
 
     const newTemplate: EntryMetadata = {
       title: templateData?.title || "New Template",
-      authors: templateData?.authors || readLastAuthors(),
+      authors: templateData?.authors || [],
       phase: templateData?.phase ?? null,
       date: "",
       createdAt,
