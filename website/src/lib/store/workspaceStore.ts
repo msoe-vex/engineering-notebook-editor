@@ -373,7 +373,24 @@ class WorkspaceStore implements IWorkspaceStore {
           const remoteMetadata = JSON.parse(remoteIndexContent);
           const baseIndex = await this.getCommittedFileContent(INDEX_PATH);
           const baseMetadata = this.baseMetadata || (baseIndex ? JSON.parse(baseIndex) : null);
-          const { merged, hasCollisions, collidingEntryIds } = mergeNotebookMetadata(baseMetadata, this.metadata, remoteMetadata);
+
+          // Build validEntryIds: remote entries that exist on remote tree + local entries staged as upsert
+          const validEntryIds = new Set<string>();
+          for (const entry of this.entries) {
+            const match = entry.path.match(new RegExp(`^${ENTRIES_DIR}/([^/]+)\\.json$`));
+            if (match) validEntryIds.add(match[1]);
+          }
+          for (const change of all) {
+            if (change.path.startsWith(ENTRIES_DIR) && change.path.endsWith(".json")) {
+              const match = change.path.match(new RegExp(`^${ENTRIES_DIR}/([^/]+)\\.json$`));
+              if (match) {
+                if (change.operation === "upsert") validEntryIds.add(match[1]);
+                else if (change.operation === "delete") validEntryIds.delete(match[1]);
+              }
+            }
+          }
+
+          const { merged, hasCollisions, collidingEntryIds } = mergeNotebookMetadata(baseMetadata, this.metadata, remoteMetadata, { validEntryIds });
 
           if (hasCollisions && collidingEntryIds.length > 0) {
             // Level 2: Prompt user for resolution choice on conflicting entries

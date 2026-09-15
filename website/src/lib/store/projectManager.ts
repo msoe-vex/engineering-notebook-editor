@@ -1,7 +1,7 @@
 import { Project, getProjects, getProject, saveProject, getProjectHandle, saveProjectHandle, getAllPending, stageChange, getBaseMetadata, saveBaseMetadata } from "../storage/db";
 import { listLocalFiles, readLocalFile, writeLocalFile, ensureLocalDirectory, checkLocalFileExists } from "../storage/fs";
 import { fetchFileContent, fetchDirectoryTree, checkGitHubFileExists, fetchGitHubUser, GitHubFile } from "../github/github";
-import { EMPTY_METADATA, normalizeNotebookMetadata, serializeNotebookMetadata } from "../notebook/metadata";
+import { EMPTY_METADATA, mergeNotebookMetadata, normalizeNotebookMetadata, serializeNotebookMetadata } from "../notebook/metadata";
 import { fetchDefaultNotebook } from "../notebook/defaultTemplates";
 import { events, EventNames } from "../events";
 import { generateDeterministicUUID, generateUUID } from "../utils";
@@ -417,21 +417,65 @@ export class ProjectManager {
 
     // Load persisted baseMetadata from IndexedDB if pending changes exist, otherwise advance to latest remote version
     const hasPendingChanges = pending.length > 0;
-    const persistedBase = hasPendingChanges ? await getBaseMetadata(dbName) : null;
+    let persistedBase = hasPendingChanges ? await getBaseMetadata(dbName) : null;
+    let remoteMeta: import("../notebook/metadata").NotebookMetadata | null = null;
+    if (remoteMetaStr) {
+      try {
+        remoteMeta = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...JSON.parse(remoteMetaStr) });
+      } catch (err) {
+        console.warn("Failed to parse remote notebook metadata:", err);
+      }
+    }
 
     if (persistedBase) {
       this.store.baseMetadata = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...persistedBase });
-    } else if (remoteMetaStr) {
-      const freshBase = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...JSON.parse(remoteMetaStr) });
-      this.store.baseMetadata = freshBase;
-      await saveBaseMetadata(dbName, freshBase);
+    } else if (remoteMeta) {
+      this.store.baseMetadata = remoteMeta;
+      await saveBaseMetadata(dbName, remoteMeta);
     }
 
-    if (pendingMeta?.content) {
+    // Build the set of valid entry IDs: any entry whose JSON file exists remotely OR is staged locally as an upsert
+    const validEntryIds = new Set<string>();
+    for (const f of entryFiles) {
+      const match = f.path.match(new RegExp(`^${ENTRIES_DIR}/([^/]+)\\.json$`));
+      if (match) validEntryIds.add(match[1]);
+    }
+    for (const p of pending) {
+      if (p.path.startsWith(ENTRIES_DIR) && p.path.endsWith(".json")) {
+        const match = p.path.match(new RegExp(`^${ENTRIES_DIR}/([^/]+)\\.json$`));
+        if (match) {
+          if (p.operation === "upsert") {
+            validEntryIds.add(match[1]);
+          } else if (p.operation === "delete") {
+            validEntryIds.delete(match[1]);
+          }
+        }
+      }
+    }
+
+    if (pendingMeta?.content && remoteMeta) {
+      // Both local pending metadata and remote metadata exist: perform 3-way merge on reload
+      const localMeta = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...JSON.parse(pendingMeta.content) });
+      const baseMeta = this.store.baseMetadata || remoteMeta;
+      const { merged, hasCollisions } = mergeNotebookMetadata(baseMeta, localMeta, remoteMeta, { validEntryIds });
+
+      this.store.metadata = merged;
+      // If non-conflicting updates occurred (e.g. remote added/edited/deleted other entries),
+      // update the local staged notebook.json so pending changes stay in sync with remote
+      const mergedSerialized = serializeNotebookMetadata(merged);
+      if (mergedSerialized !== pendingMeta.content) {
+        await stageChange(dbName, {
+          ...pendingMeta,
+          content: mergedSerialized,
+          stagedAt: new Date().toISOString()
+        });
+        await this.store.refreshPending();
+      }
+    } else if (pendingMeta?.content) {
       const parsed = JSON.parse(pendingMeta.content);
       this.store.metadata = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...parsed });
-    } else if (remoteMetaStr) {
-      this.store.metadata = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...JSON.parse(remoteMetaStr) });
+    } else if (remoteMeta) {
+      this.store.metadata = remoteMeta;
     } else {
       isNew = true;
       try {

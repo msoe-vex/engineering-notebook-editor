@@ -1,7 +1,7 @@
 import { INDEX_PATH, ENTRIES_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from "../constants";
 import { events, EventNames } from "../events";
 import { ExplorerFile } from "../types";
-import { getAllPending, getPending, stageChange, removeStaged } from "../storage/db";
+import { getAllPending, getPending, stageChange, removeStaged, getBaseMetadata, saveBaseMetadata } from "../storage/db";
 import { writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, checkLocalFileExists } from "../storage/fs";
 import { fetchFileContent, fetchRawFileContent, checkGitHubFileExists } from "../github/github";
 import { generateUUID, getMimeTypeFromExtension, formatDateMonthYear, getLocalDateString } from "../utils";
@@ -949,6 +949,13 @@ export class EntryManager {
 
       if (staged?.operation === "upsert" && staged.content === content) {
         return;
+      }
+
+      if (mode === "github") {
+        const existingBase = await getBaseMetadata(dbName);
+        if (!existingBase && this.store.baseMetadata) {
+          await saveBaseMetadata(dbName, this.store.baseMetadata);
+        }
       }
 
       await stageChange(dbName, { path, content, operation: "upsert", changeType, label, stagedAt: new Date().toISOString() });

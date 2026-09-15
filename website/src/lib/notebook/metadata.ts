@@ -1051,15 +1051,30 @@ export function mergeProjectPhases(
 export function mergeNotebookMetadata(
   base: NotebookMetadata | null,
   local: NotebookMetadata,
-  remote: NotebookMetadata
+  remote: NotebookMetadata,
+  options?: {
+    validEntryIds?: Set<string>;
+  }
 ): { merged: NotebookMetadata; hasCollisions: boolean; collidingEntryIds: string[] } {
   const collidingEntryIds: string[] = [];
-  const mergedEntries = mergeRecordById(
+  let mergedEntries = mergeRecordById(
     base?.entries,
     local.entries,
     remote.entries,
     collidingEntryIds
   );
+
+  // Filter out ghost entries if validEntryIds is provided
+  if (options?.validEntryIds) {
+    const valid = options.validEntryIds;
+    const filtered: Record<string, EntryMetadata> = {};
+    for (const [id, entry] of Object.entries(mergedEntries)) {
+      if (valid.has(id)) {
+        filtered[id] = entry;
+      }
+    }
+    mergedEntries = filtered;
+  }
 
   const team = mergeTeamMetadata(base?.team, local.team, remote.team);
   const phases = mergeProjectPhases(base?.phases, local.phases, remote.phases);

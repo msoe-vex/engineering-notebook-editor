@@ -268,3 +268,18 @@ describe("mergeProjectPhases", () => {
     expect(merged?.define.name).toBe("Define Local");
   });
 });
+
+describe("mergeNotebookMetadata with validEntryIds", () => {
+  it("drops entries not in validEntryIds even if base had them or local thought it added them", () => {
+    const base = notebook({ e1: { title: "Entry 1" }, e2: { title: "Entry 2" } });
+    const local = notebook({ e1: { title: "Entry 1" }, e2: { title: "Entry 2" }, e3: { title: "Entry 3" } });
+    const remote = notebook({ e1: { title: "Entry 1" } }); // e2 deleted on remote
+
+    // e3 is newly created locally and valid; e1 exists; e2 is gone from disk
+    const validEntryIds = new Set(["e1", "e3"]);
+    const { merged } = mergeNotebookMetadata(base, local, remote, { validEntryIds });
+
+    expect(Object.keys(merged.entries).sort()).toEqual(["e1", "e3"]);
+    expect(merged.entries.e2).toBeUndefined();
+  });
+});
