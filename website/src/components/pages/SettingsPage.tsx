@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
-import { Eye, EyeOff, Globe, KeyRound, Loader2, Monitor, Moon, Search, Settings, Sparkles, Sun, X } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff, Globe, KeyRound, Loader2, Monitor, Moon, Search, Settings, Sparkles, Sun, X } from "lucide-react";
 import { readLastAuthors, writeLastAuthors } from "@/lib/notebook/metadata";
 import {
   GENAI_PROVIDERS,
@@ -208,6 +208,25 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant ml-1">
               Generative AI
             </p>
+            <div
+              role="note"
+              className="rounded-2xl border-2 border-amber-500/70 bg-amber-500/10 px-4 py-4 text-nb-on-surface"
+            >
+              <p className="flex items-start gap-2.5 text-sm font-black tracking-tight">
+                <AlertTriangle size={18} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                <span>Disclaimer — competition rules and author responsibility</span>
+              </p>
+              <div className="mt-2 ml-[30px] space-y-2 text-xs leading-relaxed font-medium text-nb-on-surface/90">
+                <p>
+                  <strong className="font-black">Do not use generative AI if your competition (or school) rules disallow it.</strong>{" "}
+                  Turning this on does not make AI-assisted writing allowed for your event. Check the current rules yourself.
+                </p>
+                <p>
+                  <strong className="font-black">Even when AI assistance is allowed, every listed author is responsible for the notebook.</strong>{" "}
+                  Review all generated titles, captions, and other text. Verify accuracy, that it reflects work the team actually did, and that it meets originality and citation requirements. Generated wording is a draft, not a substitute for engineering judgment.
+                </p>
+              </div>
+            </div>
             <button
               type="button"
               role="switch"

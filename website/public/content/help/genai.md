@@ -1,5 +1,11 @@
 # Generative AI
 
+> **Disclaimer — read this before you turn Gen AI on.**
+>
+> **Do not use generative AI if your competition (or school) rules disallow it.** Enabling this feature does not make AI-assisted writing legal or acceptable for your event. Check the current rules yourself.
+>
+> **Even when AI assistance is allowed, every listed author is responsible for the notebook.** Review all generated titles, captions, and other text. Verify accuracy, that it reflects work the team actually did, and that it meets originality and citation requirements. Generated wording is a draft, not a substitute for engineering judgment.
+
 You can generate **entry titles** and **titles and captions** for figures, tables, code snippets, and equations. The notebook does not invent images; it only writes text from what you already put in the entry.
 
 ## Setup

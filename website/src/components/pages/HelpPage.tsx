@@ -189,7 +189,10 @@ export default function HelpPage({ path, onClose, navigateTo, isEmbedded = false
                       );
                     },
                     blockquote: ({ children }) => (
-                      <div className="my-6 rounded-r-2xl border-l-4 border-nb-primary bg-nb-primary/5 px-6 py-5 italic text-nb-on-surface leading-relaxed [&>p]:mb-3 [&>p:last-child]:mb-0">
+                      <div className={activeTab === "genai"
+                        ? "my-8 not-italic rounded-2xl border-2 border-amber-500/70 bg-amber-500/10 px-6 py-5 text-nb-on-surface leading-relaxed font-medium [&>p]:mb-3 [&>p:last-child]:mb-0"
+                        : "my-6 rounded-r-2xl border-l-4 border-nb-primary bg-nb-primary/5 px-6 py-5 italic text-nb-on-surface leading-relaxed [&>p]:mb-3 [&>p:last-child]:mb-0"
+                      }>
                         {children}
                       </div>
                     ),
