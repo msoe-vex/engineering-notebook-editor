@@ -27,7 +27,7 @@ export const getOctokit = (token: string) => {
     auth: token,
     headers: {
       "X-GitHub-Api-Version": "2026-03-10",
-      "Accept": "application/vnd.github+json",
+      "Accept": "application/vnd.github+json"
     }
   });
 

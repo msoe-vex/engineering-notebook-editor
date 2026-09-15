@@ -1,11 +1,12 @@
 import { INDEX_PATH, ENTRIES_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from "../constants";
 import { events, EventNames } from "../events";
 import { ExplorerFile } from "../types";
-import { getAllPending, getPending, stageChange, removeStaged } from "../storage/db";
+import { getAllPending, getPending, stageChange, removeStaged, getBaseMetadata, saveBaseMetadata } from "../storage/db";
 import { writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, checkLocalFileExists } from "../storage/fs";
 import { fetchFileContent, fetchRawFileContent, checkGitHubFileExists } from "../github/github";
 import { generateUUID, getMimeTypeFromExtension, formatDateMonthYear, getLocalDateString } from "../utils";
-import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, carryForwardResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds, collectNotebookResourceIds, duplicateResourceOwners, canonicalResourceOwner, remapSelectedContentIds, placeCreatedEntry, formatAuthors, authorsEqual, parseAuthors, readLastAuthors, TeamMetadata, ProjectPhase } from "../notebook/metadata";
+import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, notebookIndexEqualIgnoringUpdatedAt, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, carryForwardResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds, collectNotebookResourceIds, duplicateResourceOwners, canonicalResourceOwner, remapSelectedContentIds, placeCreatedEntry, formatAuthors, authorsEqual, parseAuthors, readLastAuthors, TeamMetadata, ProjectPhase } from "../notebook/metadata";
+import { cloneNotebookMetadata } from "../notebook/mergeReconcile";
 import { generateAllEntriesLatex, generateTeamLatex, generatePhasesLatex, generateEntryLatex, latexPhaseRef } from "../latex/latex";
 import { IWorkspaceStore } from "./types";
 
@@ -335,11 +336,11 @@ export class EntryManager {
 
     const isTemplate = options?.asTemplate ?? sourceMeta.isTemplate ?? false;
     let newTitle = options?.title;
-    if (!newTitle) {
+    if (newTitle === undefined) {
       if (options?.asTemplate && !sourceMeta.isTemplate) {
         newTitle = `${sourceMeta.title || "Untitled"} Template`;
       } else if (!isTemplate && sourceMeta.isTemplate) {
-        newTitle = sourceMeta.title || "New Entry";
+        newTitle = "";
       } else {
         newTitle = `${sourceMeta.title || "Untitled"} (Copy)`;
       }
@@ -351,6 +352,8 @@ export class EntryManager {
       ? parseAuthors(options.authors)
       : (!isTemplate && sourceMeta.isTemplate)
       ? (lastUsedAuthors.length ? lastUsedAuthors : parseAuthors(sourceMeta.authors))
+      : isTemplate
+      ? parseAuthors(sourceMeta.authors)
       : (parseAuthors(sourceMeta.authors).length ? sourceMeta.authors : lastUsedAuthors);
 
     const phase = options?.phase !== undefined
@@ -422,9 +425,9 @@ export class EntryManager {
         const dataUrl = `data:${getMimeTypeFromExtension(asset.path)};base64,${asset.base64}`;
         this.store.assetCache.set(asset.path, dataUrl);
       }
-      await this.persistFile(newPath, jsonStr, `Create entry: ${newTitle}`);
+      await this.persistFile(newPath, jsonStr, newTitle ? `Create entry: ${newTitle}` : "Create entry");
       if (!isTemplate) {
-        await this.persistFile(newLatexPath, newLatex, `Init LaTeX for: ${newTitle}`);
+        await this.persistFile(newLatexPath, newLatex, newTitle ? `Init LaTeX for: ${newTitle}` : "Init LaTeX");
       }
       await this.persistFile(INDEX_PATH, serializeNotebookMetadata(this.store.metadata), "Update notebook metadata");
       await this.store.updateLatexMetadata();
@@ -442,7 +445,7 @@ export class EntryManager {
 
     const newTemplate: EntryMetadata = {
       title: templateData?.title || "New Template",
-      authors: templateData?.authors || readLastAuthors(),
+      authors: templateData?.authors || [],
       phase: templateData?.phase ?? null,
       date: "",
       createdAt,
@@ -480,7 +483,7 @@ export class EntryManager {
 
     return this.duplicateEntry(templateId, {
       asTemplate: false,
-      title: templateMeta?.title || "New Entry",
+      title: "",
       authors: lastAuthors.length ? lastAuthors : parseAuthors(templateMeta?.authors),
       phase: templateMeta?.phase ?? null,
       date: todayDate
@@ -936,7 +939,10 @@ export class EntryManager {
       const changeType = committed === null ? "create" : "update";
 
       if (mode === "github") {
-        if (committed === content) {
+        const unchanged =
+          committed === content ||
+          (path === INDEX_PATH && notebookIndexEqualIgnoringUpdatedAt(committed, content));
+        if (unchanged) {
           if (staged) {
             await removeStaged(dbName, path);
             await this.refreshPending();
@@ -947,6 +953,13 @@ export class EntryManager {
 
       if (staged?.operation === "upsert" && staged.content === content) {
         return;
+      }
+
+      if (mode === "github") {
+        const existingBase = await getBaseMetadata(dbName);
+        if (!existingBase && this.store.baseMetadata) {
+          await saveBaseMetadata(dbName, cloneNotebookMetadata(this.store.baseMetadata));
+        }
       }
 
       await stageChange(dbName, { path, content, operation: "upsert", changeType, label, stagedAt: new Date().toISOString() });

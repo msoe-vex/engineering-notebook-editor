@@ -423,7 +423,8 @@ export default function App() {
       }
 
       if (options?.loginOnly) {
-        setShowGitHubLoginOnly(true);
+        const state = pId ? `?project=${pId}` : window.location.search;
+        initiateGitHubLogin(process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID, window.location.origin, state);
       } else {
         setAutoOpenGithubModal(true);
       }

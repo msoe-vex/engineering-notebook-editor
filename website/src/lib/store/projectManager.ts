@@ -1,7 +1,8 @@
-import { Project, getProjects, getProject, saveProject, getProjectHandle, saveProjectHandle, getAllPending, stageChange, getBaseMetadata, saveBaseMetadata } from "../storage/db";
+import { Project, getProjects, getProject, saveProject, getProjectHandle, saveProjectHandle, getAllPending, stageChange, getBaseMetadata, saveBaseMetadata, removeStaged } from "../storage/db";
 import { listLocalFiles, readLocalFile, writeLocalFile, ensureLocalDirectory, checkLocalFileExists } from "../storage/fs";
 import { fetchFileContent, fetchDirectoryTree, checkGitHubFileExists, fetchGitHubUser, GitHubFile } from "../github/github";
-import { EMPTY_METADATA, normalizeNotebookMetadata, serializeNotebookMetadata } from "../notebook/metadata";
+import { EMPTY_METADATA, normalizeNotebookMetadata, serializeNotebookMetadata, notebookIndexEqualIgnoringUpdatedAt } from "../notebook/metadata";
+import { cloneNotebookMetadata, collectEntryFileIds, entryArtifactPaths, jsonEntryIdFromPath, reconcileNotebookMerge } from "../notebook/mergeReconcile";
 import { fetchDefaultNotebook } from "../notebook/defaultTemplates";
 import { events, EventNames } from "../events";
 import { generateDeterministicUUID, generateUUID } from "../utils";
@@ -247,8 +248,8 @@ export class ProjectManager {
               err.status === 404 ? "Repository or folder not found." :
                 "Failed to connect to GitHub. Check your internet or token.";
           if (err.status === 401) {
-            events.emit(EventNames.SHOW_GITHUB_LOGIN, { loginOnly: true, projectId: project.id });
             events.emit(EventNames.GITHUB_SESSION_EXPIRED);
+            events.emit(EventNames.SHOW_GITHUB_LOGIN, { loginOnly: true, projectId: project.id });
           } else {
             events.emit(EventNames.SHOW_NOTIFICATION, { message: msg, type: "error" });
           }
@@ -298,7 +299,7 @@ export class ProjectManager {
       const metaStr = await readLocalFile(this.store.dirHandle, INDEX_PATH);
       const parsed = JSON.parse(metaStr);
       this.store.metadata = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...parsed });
-      this.store.baseMetadata = this.store.metadata;
+      this.store.baseMetadata = cloneNotebookMetadata(this.store.metadata);
     } catch {
       isNew = true;
       try {
@@ -418,20 +419,60 @@ export class ProjectManager {
     // Load persisted baseMetadata from IndexedDB if pending changes exist, otherwise advance to latest remote version
     const hasPendingChanges = pending.length > 0;
     const persistedBase = hasPendingChanges ? await getBaseMetadata(dbName) : null;
-
-    if (persistedBase) {
-      this.store.baseMetadata = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...persistedBase });
-    } else if (remoteMetaStr) {
-      const freshBase = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...JSON.parse(remoteMetaStr) });
-      this.store.baseMetadata = freshBase;
-      await saveBaseMetadata(dbName, freshBase);
+    let remoteMeta: import("../notebook/metadata").NotebookMetadata | null = null;
+    if (remoteMetaStr) {
+      try {
+        remoteMeta = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...JSON.parse(remoteMetaStr) });
+      } catch (err) {
+        console.warn("Failed to parse remote notebook metadata:", err);
+      }
     }
 
-    if (pendingMeta?.content) {
+    const { fileIds, pendingUpsertIds } = collectEntryFileIds(entryFiles.map(f => f.path), pending);
+
+    if (persistedBase) {
+      this.store.baseMetadata = cloneNotebookMetadata(normalizeNotebookMetadata({ ...EMPTY_METADATA, ...persistedBase }));
+    } else if (!hasPendingChanges && remoteMeta) {
+      this.store.baseMetadata = cloneNotebookMetadata(remoteMeta);
+      await saveBaseMetadata(dbName, this.store.baseMetadata);
+    } else {
+      this.store.baseMetadata = null;
+    }
+
+    if (pendingMeta?.content && remoteMeta) {
+      const localMeta = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...JSON.parse(pendingMeta.content) });
+      const { merged, orphanIds } = reconcileNotebookMerge(this.store.baseMetadata, localMeta, remoteMeta, {
+        fileIds,
+        pendingUpsertIds,
+      });
+      for (const id of orphanIds) {
+        const { jsonPath, texPath } = entryArtifactPaths(id);
+        mergedEntries = mergedEntries.filter(e => e.path !== jsonPath);
+        await removeStaged(dbName, jsonPath);
+        await removeStaged(dbName, texPath);
+        await stageChange(dbName, { path: jsonPath, operation: "delete", label: "Remove orphaned entry", stagedAt: new Date().toISOString() });
+        await stageChange(dbName, { path: texPath, operation: "delete", label: "Remove orphaned LaTeX", stagedAt: new Date().toISOString() });
+      }
+
+      this.store.metadata = merged;
+      const mergedSerialized = serializeNotebookMetadata(merged);
+      const remoteSerialized = serializeNotebookMetadata(remoteMeta);
+      if (notebookIndexEqualIgnoringUpdatedAt(mergedSerialized, remoteSerialized)) {
+        await removeStaged(dbName, INDEX_PATH);
+        await this.store.refreshPending();
+      } else if (mergedSerialized !== pendingMeta.content) {
+        await stageChange(dbName, {
+          ...pendingMeta,
+          content: mergedSerialized,
+          stagedAt: new Date().toISOString()
+        });
+        await this.store.refreshPending();
+      }
+    } else if (pendingMeta?.content) {
       const parsed = JSON.parse(pendingMeta.content);
       this.store.metadata = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...parsed });
-    } else if (remoteMetaStr) {
-      this.store.metadata = normalizeNotebookMetadata({ ...EMPTY_METADATA, ...JSON.parse(remoteMetaStr) });
+    } else if (remoteMeta) {
+      this.store.metadata = cloneNotebookMetadata(remoteMeta);
     } else {
       isNew = true;
       try {
@@ -465,15 +506,21 @@ export class ProjectManager {
       await this.store.refreshPending();
     }
 
-    for (const p of pending) {
-      if (p.path.startsWith(ENTRIES_DIR) && p.path.endsWith('.json')) {
-        if (p.operation === "upsert" && !mergedEntries.some(e => e.path === p.path)) {
-          mergedEntries.push({ name: p.path.split('/').pop() || '', path: p.path });
-        } else if (p.operation === "delete") {
-          mergedEntries = mergedEntries.filter(e => e.path !== p.path);
-        }
+    const latestPending = await getAllPending(dbName);
+    for (const p of latestPending) {
+      const id = jsonEntryIdFromPath(p.path);
+      if (!id) continue;
+      if (p.operation === "upsert" && !mergedEntries.some(e => e.path === p.path)) {
+        mergedEntries.push({ name: p.path.split('/').pop() || '', path: p.path });
+      } else if (p.operation === "delete") {
+        mergedEntries = mergedEntries.filter(e => e.path !== p.path);
       }
     }
+    const metaIds = new Set(Object.keys(this.store.metadata.entries));
+    mergedEntries = mergedEntries.filter(e => {
+      const id = jsonEntryIdFromPath(e.path);
+      return !id || metaIds.has(id);
+    });
     this.store.entries = mergedEntries;
     this.store.isMainTexPresent = isMainTexPresent;
 

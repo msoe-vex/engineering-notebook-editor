@@ -5,13 +5,12 @@ Here are some official and community resources to help you create a world-class 
 ## Official VEX Documentation
 
 - [Getting Started with Engineering Notebooks](https://kb.vex.com/hc/en-us/articles/49010276056596-Getting-Started-with-Engineering-Notebooks)
-- [Engineering Design Process](https://v5rc-kb.recf.org/hc/en-us/articles/9628278280215-Engineering-Design-Process)
-- [Advanced Engineering Notebook Techniques](https://v5rc-kb.recf.org/hc/en-us/articles/9662058169495-Advanced-Engineering-Notebook-Techniques)
+- [Engineering Design Process](https://kb.vex.com/hc/en-us/articles/8780653442964-Get-Started-Engineering#engineering-design-process-header-4)
 
 ## Judging & Rubrics
 
-- [Engineering Notebook Rubric (PDF)](https://kb.roboticseducation.org/hc/en-us/articles/4461349729047-Judging-Resource-Engineering-Notebook-Rubric#download-the-printable-pdf-pYEdK)
-- [Guide to Judging: Engineering Notebooks](https://kb.roboticseducation.org/hc/en-us/articles/4969763478167-Guide-to-Judging-Judging-Engineering-Notebooks)
+- [Engineering Notebook Rubric](https://library.globalrobotics.org/hc/en-us/articles/51134310278804-Engineering-Notebook-Rubrics)
+- [Competition Judging Overview](https://library.globalrobotics.org/hc/en-us/articles/50473477689364-Competition-Judging-Overview)
 
 ## Design Process Resources
 

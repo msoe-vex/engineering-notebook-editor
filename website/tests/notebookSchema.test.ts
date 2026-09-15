@@ -3,6 +3,8 @@ import { mergeNotebookMetadata } from "@/lib/notebook/metadata";
 import {
   moveEntryOnCalendar,
   normalizeNotebookMetadata,
+  notebookIndexEqualIgnoringUpdatedAt,
+  entryMetadataEqualIgnoringUpdatedAt,
   placeCreatedEntry,
   reorderTemplateSequence,
   sortedEntries,
@@ -277,5 +279,55 @@ describe("reorderTemplateSequence", () => {
     });
     const next = reorderTemplateSequence(base, ["t2", "t1"]);
     expect(sortedEntries(next.entries).map((e) => e.id)).toEqual(["t2", "t1", "e"]);
+  });
+});
+
+describe("notebookIndexEqualIgnoringUpdatedAt", () => {
+  const base = normalizeNotebookMetadata({
+    version: 4,
+    entries: {
+      e1: {
+        title: "Kickoff",
+        authors: ["Ada"],
+        phase: null,
+        date: "2026-09-01",
+        createdAt: "2026-09-01T00:00:00.000Z",
+        updatedAt: "2026-09-01T00:00:00.000Z",
+        filename: "data/entries/e1.json",
+        order: 0,
+      },
+    },
+    phases: {},
+    team: { teamName: "", teamNumber: "", organization: "", members: {} },
+    lastCompiled: "2026-09-01T12:00:00.000Z",
+  });
+
+  it("treats entry updatedAt-only differences as equal", () => {
+    const touched = normalizeNotebookMetadata({
+      ...base,
+      entries: {
+        e1: { ...base.entries.e1, updatedAt: "2026-09-14T23:00:00.000Z" },
+      },
+    });
+    expect(notebookIndexEqualIgnoringUpdatedAt(JSON.stringify(base), JSON.stringify(touched))).toBe(true);
+    expect(entryMetadataEqualIgnoringUpdatedAt(base.entries.e1, touched.entries.e1)).toBe(true);
+  });
+
+  it("still treats lastCompiled changes as different", () => {
+    const compiled = normalizeNotebookMetadata({
+      ...base,
+      lastCompiled: "2026-09-14T23:00:00.000Z",
+    });
+    expect(notebookIndexEqualIgnoringUpdatedAt(JSON.stringify(base), JSON.stringify(compiled))).toBe(false);
+  });
+
+  it("still treats title changes as different", () => {
+    const renamed = normalizeNotebookMetadata({
+      ...base,
+      entries: {
+        e1: { ...base.entries.e1, title: "Renamed", updatedAt: "2026-09-14T23:00:00.000Z" },
+      },
+    });
+    expect(notebookIndexEqualIgnoringUpdatedAt(JSON.stringify(base), JSON.stringify(renamed))).toBe(false);
   });
 });

@@ -10,6 +10,37 @@ import { generateEntryLatex, latexPhaseRef } from "../latex/latex";
 import { IWorkspaceStore, ImportOptions, EntryImportMode } from "./types";
 import type JSZipType from 'jszip';
 
+/** Asset paths referenced by the entries/team that will actually be written on import. */
+export function collectImportAssetPaths(params: {
+  entries?: Record<string, EntryMetadata>;
+  entryDocs?: TipTapNode[];
+  team?: TeamMetadata | null;
+}): Set<string> {
+  const paths = new Set<string>();
+  const add = (path?: string | null) => {
+    if (path && path.startsWith(`${ASSETS_DIR}/`)) paths.add(path);
+  };
+
+  for (const entry of Object.values(params.entries || {})) {
+    for (const asset of entry.assets || []) add(asset);
+  }
+  for (const doc of params.entryDocs || []) {
+    for (const asset of extractImagePaths(doc)) add(asset);
+  }
+
+  const team = params.team;
+  if (team) {
+    add(team.logo);
+    add(team.logoOriginal);
+    for (const member of Object.values(team.members || {})) {
+      add(member.image);
+      add(member.imageOriginal);
+    }
+  }
+
+  return paths;
+}
+
 export class TransferManager {
   private store: IWorkspaceStore;
 
@@ -357,6 +388,9 @@ export class TransferManager {
         }
         remappedMeta.resources = mergedResources;
 
+        const imagePaths = extractImagePaths(docWithIds);
+        remappedMeta.assets = [...new Set([...(remappedMeta.assets || []), ...imagePaths])];
+
         remappedEntries.push({ id: newId, doc: docWithIds, meta: remappedMeta });
         newEntriesMap[newId] = remappedMeta;
       }
@@ -387,11 +421,18 @@ export class TransferManager {
         ...(importedTeam && options?.overwriteTeam ? { team: importedTeam } : {}),
       });
 
+      const neededAssets = collectImportAssetPaths({
+        entries: newEntriesMap,
+        entryDocs: remappedEntries.map((item) => item.doc),
+        team: importedTeam && options?.overwriteTeam ? importedTeam : null,
+      });
+
       const extraFiles = { ...(latexFiles || {}), ...(files || {}) };
 
       await this.store.enqueue(async () => {
-        // Write assets
+        // Write only assets referenced by imported entries and/or team metadata
         for (const [path, base64] of assetList) {
+          if (!neededAssets.has(path)) continue;
           const dataUrl = `data:${getMimeTypeFromExtension(path)};base64,${base64}`;
           this.store.assetCache.set(path, dataUrl);
           await this.store.persistFile(path, base64, `Import asset: ${path}`, true);

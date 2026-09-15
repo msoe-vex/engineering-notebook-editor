@@ -17,7 +17,9 @@ export {
   GENAI_CHANGED_EVENT,
   GENAI_PROVIDERS,
   GENAI_STORAGE_KEY,
+  canUseGenAI,
   getGenAIApiKey,
+  getGenAIBaseUrl,
   getGenAISettings,
   getProvider,
   getProviderInfo,
@@ -26,10 +28,14 @@ export {
   hasGenAIModel,
   isGenAIEnabled,
   isGenAIProviderId,
+  providerNeedsBaseUrl,
+  providerRequiresApiKey,
+  resolveGenAIBaseUrl,
   resolveGenAIModel,
   runProviderGenerate,
   runProviderListModels,
   setGenAIApiKey,
+  setGenAIBaseUrl,
   setGenAIEnabled,
   setGenAIModel,
   setGenAIProvider,
@@ -46,7 +52,9 @@ import {
   parseGeneratedText,
   parseImageDataUrl,
   resolveTemperature,
+  sanitizeGenAIBaseUrl,
   sanitizeGenAIModelId,
+  sanitizeLocalGenAIModelId,
 } from "./shared";
 import {
   getGenAISettings,
@@ -54,13 +62,14 @@ import {
   hasGenAIModel,
   isGenAIEnabled,
   setGenAIApiKey,
+  setGenAIBaseUrl,
   setGenAIEnabled,
   setGenAIModel,
   setGenAIProvider,
 } from "./settings";
 import { generateEntryTitle, generateResourceCaption, generateResourceTitle } from "./tasks";
 
-export { parseGeneratedText, parseImageDataUrl, resolveTemperature, sanitizeGenAIModelId, isListedOpenAIChatModel, isListedOpenAIVisionChatModel, isListedGeminiMultimodalModel, isAnthropicImageInputModel };
+export { parseGeneratedText, parseImageDataUrl, resolveTemperature, sanitizeGenAIBaseUrl, sanitizeGenAIModelId, sanitizeLocalGenAIModelId, isListedOpenAIChatModel, isListedOpenAIVisionChatModel, isListedGeminiMultimodalModel, isAnthropicImageInputModel };
 
 export const genai: GenAI = {
   hasApiKey: hasGenAIApiKey,
@@ -70,6 +79,7 @@ export const genai: GenAI = {
   setEnabled: setGenAIEnabled,
   setProvider: setGenAIProvider,
   setApiKey: setGenAIApiKey,
+  setBaseUrl: setGenAIBaseUrl,
   setModel: setGenAIModel,
   generateResourceTitle,
   generateResourceCaption,

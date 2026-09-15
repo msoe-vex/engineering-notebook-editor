@@ -1,4 +1,4 @@
-export type GenAIProviderId = "gemini" | "openai" | "anthropic";
+export type GenAIProviderId = "gemini" | "openai" | "anthropic" | "local";
 
 export const GENAI_DEFAULT_TEMPERATURE = 0.4;
 
@@ -13,6 +13,7 @@ export interface GenAIGenerateRequest {
   prompt: string;
   temperature?: number;
   images?: GenAIImagePart[];
+  baseUrl?: string;
 }
 
 export interface GenAIProviderInfo {
@@ -23,6 +24,9 @@ export interface GenAIProviderInfo {
   keyUrl: string;
   keyUrlLabel: string;
   defaultModel: string;
+  requiresApiKey?: boolean;
+  needsBaseUrl?: boolean;
+  baseUrlPlaceholder?: string;
 }
 
 export interface GenAIModelOption {
@@ -33,7 +37,7 @@ export interface GenAIModelOption {
 export interface GenAIProvider {
   info: GenAIProviderInfo;
   generate(request: GenAIGenerateRequest): Promise<string>;
-  listModels(apiKey: string): Promise<GenAIModelOption[]>;
+  listModels(apiKey: string, baseUrl?: string, signal?: AbortSignal): Promise<GenAIModelOption[]>;
 }
 
 export interface GenAISettings {
@@ -41,6 +45,7 @@ export interface GenAISettings {
   provider: GenAIProviderId;
   keys: Partial<Record<GenAIProviderId, string>>;
   models: Partial<Record<GenAIProviderId, string>>;
+  baseUrls: Partial<Record<GenAIProviderId, string>>;
 }
 
 export interface ResourceForAI {
@@ -68,6 +73,7 @@ export interface GenAI {
   setEnabled(enabled: boolean): void;
   setProvider(id: GenAIProviderId): void;
   setApiKey(key: string, provider?: GenAIProviderId): void;
+  setBaseUrl(url: string, provider?: GenAIProviderId): void;
   setModel(model: string, provider?: GenAIProviderId): void;
   generateResourceTitle(resource: ResourceForAI): Promise<string>;
   generateResourceCaption(resource: ResourceForAI): Promise<string>;

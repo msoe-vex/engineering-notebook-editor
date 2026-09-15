@@ -2,7 +2,7 @@
 
 import { useState, useSyncExternalStore } from "react";
 import { Loader2, Sparkles } from "lucide-react";
-import { hasGenAIApiKey, hasGenAIModel, isGenAIEnabled, subscribeGenAISettings } from "@/lib/genai";
+import { canUseGenAI, getGenAISettings, hasGenAIModel, isGenAIEnabled, providerNeedsBaseUrl, subscribeGenAISettings } from "@/lib/genai";
 import { events, EventNames } from "@/lib/events";
 
 interface GenerateButtonProps {
@@ -36,9 +36,11 @@ export default function GenerateButton({ label, run, onResult, disabled }: Gener
         e.preventDefault();
         e.stopPropagation();
         if (busy || disabled) return;
-        if (!hasGenAIApiKey()) {
+        if (!canUseGenAI()) {
           events.emit(EventNames.SHOW_NOTIFICATION, {
-            message: "Add an AI provider API key in Settings to generate titles and captions.",
+            message: providerNeedsBaseUrl(getGenAISettings().provider)
+              ? "Add a local model URL in Settings to generate titles and captions."
+              : "Add an AI provider API key in Settings to generate titles and captions.",
             type: "error",
           });
           return;

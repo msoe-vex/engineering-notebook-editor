@@ -2,18 +2,22 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
-import { Eye, EyeOff, KeyRound, Loader2, Monitor, Moon, Search, Settings, Sparkles, Sun, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, Eye, EyeOff, Globe, KeyRound, Loader2, Monitor, Moon, Search, Settings, Sparkles, Sun, X } from "lucide-react";
 import { readLastAuthors, writeLastAuthors } from "@/lib/notebook/metadata";
 import {
   GENAI_PROVIDERS,
   getGenAIApiKey,
+  getGenAIBaseUrl,
   getGenAISettings,
   getStoredGenAIModel,
+  providerNeedsBaseUrl,
   setGenAIApiKey,
+  setGenAIBaseUrl,
   setGenAIEnabled,
   setGenAIModel,
   setGenAIProvider,
   subscribeGenAISettings,
+  sanitizeGenAIBaseUrl,
   type GenAIModelOption,
 } from "@/lib/genai";
 import { fetchGenAIModels } from "@/lib/genai/client";
@@ -45,7 +49,7 @@ function getEmptyAuthorsJson() {
 }
 
 function getEmptyGenAIJson() {
-  return JSON.stringify({ enabled: false, provider: "gemini", keys: {}, models: {} });
+  return JSON.stringify({ enabled: false, provider: "gemini", keys: {}, models: {}, baseUrls: {} });
 }
 
 function getGenAISettingsJson() {
@@ -59,6 +63,7 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
   const storedGenAIJson = useSyncExternalStore(subscribeGenAISettings, getGenAISettingsJson, getEmptyGenAIJson);
   const [authorsOverride, setAuthorsOverride] = useState<string[] | null>(null);
   const [apiKeyDraft, setApiKeyDraft] = useState<string | null>(null);
+  const [baseUrlDraft, setBaseUrlDraft] = useState<string | null>(null);
   const [modelDraft, setModelDraft] = useState<string | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [modelCatalog, setModelCatalog] = useState<{ query: string; options: GenAIModelOption[]; error: string | null }>({
@@ -69,15 +74,31 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelPickerFor, setModelPickerFor] = useState<string | null>(null);
   const [modelSearch, setModelSearch] = useState("");
+  const [providerPickerOpen, setProviderPickerOpen] = useState(false);
   const modelPickerRef = useRef<HTMLDivElement>(null);
+  const providerPickerRef = useRef<HTMLDivElement>(null);
   const authors = authorsOverride ?? (JSON.parse(storedAuthorsJson) as string[]);
   const genAI = JSON.parse(storedGenAIJson) as ReturnType<typeof getGenAISettings>;
   const genAIOn = genAI.enabled === true;
   const provider = genAI.provider;
   const providerInfo = GENAI_PROVIDERS.find((p) => p.id === provider) || GENAI_PROVIDERS[0];
   const apiKey = apiKeyDraft ?? getGenAIApiKey(provider);
+  const baseUrl = baseUrlDraft ?? getGenAIBaseUrl(provider);
   const modelId = modelDraft ?? getStoredGenAIModel(provider);
-  const modelsQuery = genAIOn && apiKey.trim() ? `${provider}:${apiKey.trim()}` : "";
+  const needsBaseUrl = providerNeedsBaseUrl(provider);
+  let resolvedLocalUrl = "";
+  if (needsBaseUrl && baseUrl.trim()) {
+    try {
+      resolvedLocalUrl = sanitizeGenAIBaseUrl(baseUrl);
+    } catch {
+      resolvedLocalUrl = "";
+    }
+  }
+  const modelsQuery = genAIOn
+    ? needsBaseUrl
+      ? (resolvedLocalUrl ? `${provider}:${resolvedLocalUrl}:${apiKey.trim()}` : "")
+      : (apiKey.trim() ? `${provider}:${apiKey.trim()}` : "")
+    : "";
   const modelsBusy = Boolean(modelsQuery) && (modelsLoading || modelCatalog.query !== modelsQuery);
   const modelPickerOpen = Boolean(modelsQuery) && modelPickerFor === modelsQuery;
   const modelsError = modelCatalog.query === modelsQuery ? modelCatalog.error : null;
@@ -90,7 +111,7 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
     const timer = window.setTimeout(async () => {
       setModelsLoading(true);
       try {
-        const models = await fetchGenAIModels(provider, key, controller.signal);
+        const models = await fetchGenAIModels(provider, key, controller.signal, baseUrl);
         if (controller.signal.aborted) return;
         setModelCatalog({ query, options: models, error: null });
       } catch (error) {
@@ -108,16 +129,18 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [modelsQuery, provider, apiKey]);
+  }, [modelsQuery, provider, apiKey, baseUrl]);
 
   useEffect(() => {
-    if (!modelPickerOpen) return;
+    if (!modelPickerOpen && !providerPickerOpen) return;
     const onPointerDown = (event: MouseEvent) => {
-      if (!modelPickerRef.current?.contains(event.target as Node)) setModelPickerFor(null);
+      const target = event.target as Node;
+      if (modelPickerOpen && !modelPickerRef.current?.contains(target)) setModelPickerFor(null);
+      if (providerPickerOpen && !providerPickerRef.current?.contains(target)) setProviderPickerOpen(false);
     };
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
-  }, [modelPickerOpen]);
+  }, [modelPickerOpen, providerPickerOpen]);
 
   const filteredModels = useMemo(() => {
     const options = modelCatalog.query === modelsQuery ? modelCatalog.options : [];
@@ -189,6 +212,25 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant ml-1">
               Generative AI
             </p>
+            <div
+              role="note"
+              className="rounded-2xl border-2 border-amber-500/70 bg-amber-500/10 px-4 py-4 text-nb-on-surface"
+            >
+              <p className="flex items-start gap-2.5 text-sm font-black tracking-tight">
+                <AlertTriangle size={18} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                <span>Disclaimer — competition rules and author responsibility</span>
+              </p>
+              <div className="mt-2 ml-[30px] space-y-2 text-xs leading-relaxed font-medium text-nb-on-surface/90">
+                <p>
+                  <strong className="font-black">Do not use generative AI if your competition (or school) rules disallow it.</strong>{" "}
+                  Turning this on does not make AI-assisted writing allowed for your event. Check the current rules yourself.
+                </p>
+                <p>
+                  <strong className="font-black">Even when AI assistance is allowed, every listed author is responsible for the notebook.</strong>{" "}
+                  Review all generated titles, captions, and other text. Verify accuracy, that it reflects work the team actually did, and that it meets originality and citation requirements. Generated wording is a draft, not a substitute for engineering judgment.
+                </p>
+              </div>
+            </div>
             <button
               type="button"
               role="switch"
@@ -222,153 +264,214 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
               </span>
             </button>
             {genAIOn && (
-              <>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {GENAI_PROVIDERS.map((info) => {
-                const active = provider === info.id;
-                return (
+              <div className="space-y-3">
+                <div ref={providerPickerRef} className="relative">
                   <button
-                    key={info.id}
                     type="button"
+                    aria-label="AI provider"
+                    aria-expanded={providerPickerOpen}
+                    aria-haspopup="listbox"
                     onClick={() => {
-                      setApiKeyDraft(null);
-                      setModelDraft(null);
-                      setGenAIProvider(info.id);
+                      setModelPickerFor(null);
+                      setProviderPickerOpen((open) => !open);
                     }}
-                    className={`flex flex-col items-start gap-1 rounded-2xl border px-4 py-3 text-left transition-all cursor-pointer ${
-                      active
-                        ? "border-nb-primary bg-nb-primary/10 text-nb-on-surface shadow-sm"
-                        : "border-nb-outline-variant bg-nb-surface text-nb-on-surface-variant hover:border-nb-primary/40 hover:text-nb-on-surface"
-                    }`}
+                    className="w-full flex items-center justify-between gap-3 rounded-2xl border border-nb-outline-variant bg-nb-surface px-4 h-14 text-left transition-colors cursor-pointer hover:border-nb-primary/40"
                   >
-                    <span className="text-sm font-black">{info.label}</span>
-                    <span className="text-[11px] font-medium opacity-70">{info.hint}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex items-center gap-2 rounded-2xl border border-nb-outline-variant bg-nb-surface px-4 h-14">
-              <KeyRound size={16} className="shrink-0 text-nb-primary" />
-              <input
-                type={showApiKey ? "text" : "password"}
-                value={apiKey}
-                autoComplete="off"
-                spellCheck={false}
-                placeholder={providerInfo.keyPlaceholder}
-                onChange={(e) => {
-                  setApiKeyDraft(e.target.value);
-                  setGenAIApiKey(e.target.value, provider);
-                }}
-                className="flex-1 min-w-0 bg-transparent outline-none text-sm font-medium text-nb-on-surface placeholder:text-nb-on-surface-variant/40"
-              />
-              <button
-                type="button"
-                onClick={() => setShowApiKey((v) => !v)}
-                className="p-1.5 rounded-lg text-nb-on-surface-variant hover:text-nb-on-surface hover:bg-nb-surface-low cursor-pointer"
-                title={showApiKey ? "Hide key" : "Show key"}
-              >
-                {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-            <div ref={modelPickerRef} className="relative">
-              <div className="flex items-center gap-2 rounded-2xl border border-nb-outline-variant bg-nb-surface px-4 h-12">
-                <input
-                  type="text"
-                  value={modelId}
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder="Model id"
-                  onChange={(e) => {
-                    setModelDraft(e.target.value);
-                    setGenAIModel(e.target.value, provider);
-                  }}
-                  className="flex-1 min-w-0 bg-transparent outline-none text-sm font-mono text-nb-on-surface placeholder:text-nb-on-surface-variant/40"
-                  aria-label="Model id"
-                />
-                <button
-                  type="button"
-                  disabled={!apiKey.trim()}
-                  onClick={() => {
-                    if (!modelsQuery) return;
-                    setModelSearch("");
-                    setModelPickerFor((current) => (current === modelsQuery ? null : modelsQuery));
-                  }}
-                  className="p-1.5 rounded-lg text-nb-on-surface-variant hover:text-nb-on-surface hover:bg-nb-surface-low disabled:opacity-40 cursor-pointer"
-                  title={modelsBusy ? "Loading models…" : "Search models"}
-                  aria-label="Search models"
-                  aria-expanded={modelPickerOpen}
-                >
-                  {modelsBusy ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-                </button>
-              </div>
-              {modelPickerOpen && (
-                <div className="absolute left-0 right-0 top-full mt-2 z-20 rounded-2xl border border-nb-outline-variant bg-nb-surface shadow-nb-xl p-2">
-                  <div className="flex items-center gap-2 rounded-xl border border-nb-outline-variant/40 bg-nb-surface-low px-3 h-10 mb-2">
-                    <Search size={14} className="shrink-0 text-nb-on-surface-variant/50" />
-                    <input
-                      type="text"
-                      value={modelSearch}
-                      autoFocus
-                      autoComplete="off"
-                      spellCheck={false}
-                      placeholder="Filter models…"
-                      onChange={(e) => setModelSearch(e.target.value)}
-                      className="flex-1 min-w-0 bg-transparent outline-none text-sm text-nb-on-surface placeholder:text-nb-on-surface-variant/40"
+                    <span className="min-w-0">
+                      <span className="block text-sm font-black text-nb-on-surface truncate">{providerInfo.label}</span>
+                      <span className="block text-[11px] font-medium text-nb-on-surface-variant/70 truncate">{providerInfo.hint}</span>
+                    </span>
+                    <ChevronDown
+                      size={16}
+                      className={`shrink-0 text-nb-on-surface-variant transition-transform ${providerPickerOpen ? "rotate-180" : ""}`}
                     />
-                  </div>
-                  <div className="max-h-56 overflow-y-auto custom-scrollbar">
-                    {modelsError ? (
-                      <p className="px-3 py-4 text-xs text-nb-on-surface-variant leading-relaxed">{modelsError}</p>
-                    ) : filteredModels.length === 0 ? (
-                      <p className="px-3 py-4 text-xs text-nb-on-surface-variant">
-                        {modelsBusy ? "Loading models…" : "No models match that search."}
-                      </p>
-                    ) : (
-                      filteredModels.map((model) => {
-                        const active = modelId === model.id;
+                  </button>
+                  {providerPickerOpen && (
+                    <div
+                      role="listbox"
+                      aria-label="AI providers"
+                      className="absolute left-0 right-0 top-full mt-2 z-20 rounded-2xl border border-nb-outline-variant bg-nb-surface shadow-nb-xl p-2"
+                    >
+                      {GENAI_PROVIDERS.map((info) => {
+                        const active = provider === info.id;
                         return (
                           <button
-                            key={model.id}
+                            key={info.id}
                             type="button"
+                            role="option"
+                            aria-selected={active}
                             onClick={() => {
-                              setModelDraft(model.id);
-                              setGenAIModel(model.id, provider);
-                              setModelPickerFor(null);
+                              setApiKeyDraft(null);
+                              setBaseUrlDraft(null);
+                              setModelDraft(null);
+                              setGenAIProvider(info.id);
+                              setProviderPickerOpen(false);
                             }}
-                            className={`w-full text-left px-3 py-2 rounded-xl cursor-pointer ${
+                            className={`w-full text-left px-3 py-2.5 rounded-xl cursor-pointer ${
                               active
                                 ? "bg-nb-primary/10 text-nb-on-surface"
                                 : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface"
                             }`}
                           >
-                            <span className="block text-sm font-bold truncate">{model.label}</span>
-                            {model.label !== model.id && (
-                              <span className="block text-[11px] font-mono opacity-70 truncate">{model.id}</span>
-                            )}
+                            <span className="block text-sm font-bold truncate">{info.label}</span>
+                            <span className="block text-[11px] font-medium opacity-70 truncate">{info.hint}</span>
                           </button>
                         );
-                      })
-                    )}
-                  </div>
+                      })}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            {modelsError && (
-              <p className="text-xs text-amber-600 dark:text-amber-400 leading-relaxed ml-1">{modelsError}</p>
-            )}
-            <p className="text-xs text-nb-on-surface-variant/70 leading-relaxed ml-1">
-              Keys stay in this browser. Get one from{" "}
-              <a
-                href={providerInfo.keyUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-nb-primary font-bold hover:underline"
-              >
-                {providerInfo.keyUrlLabel}
-              </a>
-              . See Help → Generative AI for setup.
-            </p>
-              </>
+                {needsBaseUrl && (
+                  <div className="flex items-center gap-2 rounded-2xl border border-nb-outline-variant bg-nb-surface px-4 h-14">
+                    <Globe size={16} className="shrink-0 text-nb-primary" />
+                    <input
+                      type="text"
+                      value={baseUrl}
+                      autoComplete="off"
+                      spellCheck={false}
+                      placeholder={providerInfo.baseUrlPlaceholder || "http://127.0.0.1:1234/v1"}
+                      onChange={(e) => {
+                        setBaseUrlDraft(e.target.value);
+                        setGenAIBaseUrl(e.target.value, provider);
+                      }}
+                      className="flex-1 min-w-0 bg-transparent outline-none text-sm font-medium text-nb-on-surface placeholder:text-nb-on-surface-variant/40"
+                      aria-label="Local model URL"
+                    />
+                  </div>
+                )}
+                <div className="flex items-center gap-2 rounded-2xl border border-nb-outline-variant bg-nb-surface px-4 h-14">
+                  <KeyRound size={16} className="shrink-0 text-nb-primary" />
+                  <input
+                    type={showApiKey ? "text" : "password"}
+                    value={apiKey}
+                    autoComplete="off"
+                    spellCheck={false}
+                    placeholder={providerInfo.keyPlaceholder}
+                    onChange={(e) => {
+                      setApiKeyDraft(e.target.value);
+                      setGenAIApiKey(e.target.value, provider);
+                    }}
+                    className="flex-1 min-w-0 bg-transparent outline-none text-sm font-medium text-nb-on-surface placeholder:text-nb-on-surface-variant/40"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey((v) => !v)}
+                    className="p-1.5 rounded-lg text-nb-on-surface-variant hover:text-nb-on-surface hover:bg-nb-surface-low cursor-pointer"
+                    title={showApiKey ? "Hide key" : "Show key"}
+                  >
+                    {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                <div ref={modelPickerRef} className="relative">
+                  <div className="flex items-center gap-2 rounded-2xl border border-nb-outline-variant bg-nb-surface px-4 h-14">
+                    <input
+                      type="text"
+                      value={modelId}
+                      autoComplete="off"
+                      spellCheck={false}
+                      placeholder="Model id"
+                      onChange={(e) => {
+                        setModelDraft(e.target.value);
+                        setGenAIModel(e.target.value, provider);
+                      }}
+                      className="flex-1 min-w-0 bg-transparent outline-none text-sm font-mono text-nb-on-surface placeholder:text-nb-on-surface-variant/40"
+                      aria-label="Model id"
+                    />
+                    <button
+                      type="button"
+                      disabled={!modelsQuery}
+                      onClick={() => {
+                        if (!modelsQuery) return;
+                        setModelSearch("");
+                        setProviderPickerOpen(false);
+                        setModelPickerFor((current) => (current === modelsQuery ? null : modelsQuery));
+                      }}
+                      className="p-1.5 rounded-lg text-nb-on-surface-variant hover:text-nb-on-surface hover:bg-nb-surface-low disabled:opacity-40 cursor-pointer"
+                      title={modelsBusy ? "Loading models…" : "Search models"}
+                      aria-label="Search models"
+                      aria-expanded={modelPickerOpen}
+                    >
+                      {modelsBusy ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                    </button>
+                  </div>
+                  {modelPickerOpen && (
+                    <div className="absolute left-0 right-0 top-full mt-2 z-20 rounded-2xl border border-nb-outline-variant bg-nb-surface shadow-nb-xl p-2">
+                      <div className="flex items-center gap-2 rounded-xl border border-nb-outline-variant/40 bg-nb-surface-low px-3 h-10 mb-2">
+                        <Search size={14} className="shrink-0 text-nb-on-surface-variant/50" />
+                        <input
+                          type="text"
+                          value={modelSearch}
+                          autoFocus
+                          autoComplete="off"
+                          spellCheck={false}
+                          placeholder="Filter models…"
+                          onChange={(e) => setModelSearch(e.target.value)}
+                          className="flex-1 min-w-0 bg-transparent outline-none text-sm text-nb-on-surface placeholder:text-nb-on-surface-variant/40"
+                        />
+                      </div>
+                      <div className="max-h-56 overflow-y-auto custom-scrollbar">
+                        {modelsError ? (
+                          <p className="px-3 py-4 text-xs text-nb-on-surface-variant leading-relaxed">{modelsError}</p>
+                        ) : filteredModels.length === 0 ? (
+                          <p className="px-3 py-4 text-xs text-nb-on-surface-variant">
+                            {modelsBusy ? "Loading models…" : "No models match that search."}
+                          </p>
+                        ) : (
+                          filteredModels.map((model) => {
+                            const active = modelId === model.id;
+                            return (
+                              <button
+                                key={model.id}
+                                type="button"
+                                onClick={() => {
+                                  setModelDraft(model.id);
+                                  setGenAIModel(model.id, provider);
+                                  setModelPickerFor(null);
+                                }}
+                                className={`w-full text-left px-3 py-2 rounded-xl cursor-pointer ${
+                                  active
+                                    ? "bg-nb-primary/10 text-nb-on-surface"
+                                    : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface"
+                                }`}
+                              >
+                                <span className="block text-sm font-bold truncate">{model.label}</span>
+                                {model.label !== model.id && (
+                                  <span className="block text-[11px] font-mono opacity-70 truncate">{model.id}</span>
+                                )}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {modelsError && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 leading-relaxed ml-1">{modelsError}</p>
+                )}
+                <p className="text-xs text-nb-on-surface-variant/70 leading-relaxed ml-1">
+                  {needsBaseUrl ? (
+                    <>
+                      URL and key stay in this browser. Use an OpenAI-compatible base such as{" "}
+                      <span className="font-mono">http://127.0.0.1:1234/v1</span>. An API key is optional. Enable CORS on
+                      the local server. See Help → Generative AI for setup.
+                    </>
+                  ) : (
+                    <>
+                      Keys stay in this browser. Get one from{" "}
+                      <a
+                        href={providerInfo.keyUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-nb-primary font-bold hover:underline"
+                      >
+                        {providerInfo.keyUrlLabel}
+                      </a>
+                      . See Help → Generative AI for setup.
+                    </>
+                  )}
+                </p>
+              </div>
             )}
           </section>
 

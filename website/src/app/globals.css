@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Match next-themes `attribute="class"` so dark: follows the app theme, not OS preference. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ═══════════════════════════════════════════════════════════════
    TECHNICAL PRECISION DESIGN SYSTEM
    Palette from DESIGN.MD
