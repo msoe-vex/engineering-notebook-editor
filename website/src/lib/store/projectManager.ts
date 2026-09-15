@@ -247,8 +247,8 @@ export class ProjectManager {
               err.status === 404 ? "Repository or folder not found." :
                 "Failed to connect to GitHub. Check your internet or token.";
           if (err.status === 401) {
-            events.emit(EventNames.SHOW_GITHUB_LOGIN, { loginOnly: true, projectId: project.id });
             events.emit(EventNames.GITHUB_SESSION_EXPIRED);
+            events.emit(EventNames.SHOW_GITHUB_LOGIN, { loginOnly: true, projectId: project.id });
           } else {
             events.emit(EventNames.SHOW_NOTIFICATION, { message: msg, type: "error" });
           }
