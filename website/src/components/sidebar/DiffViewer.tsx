@@ -87,12 +87,12 @@ export default function DiffViewer({ change, getBaseContent, getFileContent, onC
           {diff && !isLoading && (
             <div className="flex items-center gap-1 shrink-0 text-[9px] font-mono font-bold">
               {diff.additions > 0 && (
-                <span className="text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1 py-0.2 rounded">
+                <span className="text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-500/10 px-1 py-0.2 rounded">
                   +{diff.additions}
                 </span>
               )}
               {diff.deletions > 0 && (
-                <span className="text-red-600 dark:text-red-400 bg-red-500/10 px-1 py-0.2 rounded">
+                <span className="text-red-700 dark:text-red-400 bg-red-100 dark:bg-red-500/10 px-1 py-0.2 rounded">
                   -{diff.deletions}
                 </span>
               )}
@@ -181,33 +181,46 @@ export default function DiffViewer({ change, getBaseContent, getFileContent, onC
 
                 const isAdded = line.type === "added";
                 const isDeleted = line.type === "deleted";
+                const rowTone = isAdded
+                  ? "bg-emerald-50 dark:bg-emerald-500/20"
+                  : isDeleted
+                    ? "bg-red-50 dark:bg-red-500/20"
+                    : "hover:bg-nb-surface-low/50";
+                const contentTone = isAdded
+                  ? "text-emerald-900 dark:text-emerald-100"
+                  : isDeleted
+                    ? "text-red-900 dark:text-red-100"
+                    : "text-nb-on-surface-variant";
+                const gutterTone = isAdded
+                  ? "bg-emerald-100/90 text-emerald-800/70 dark:bg-emerald-500/10 dark:text-emerald-200/50"
+                  : isDeleted
+                    ? "bg-red-100/90 text-red-800/70 dark:bg-red-500/10 dark:text-red-200/50"
+                    : "text-nb-on-surface-variant/40";
+                const markerTone = isAdded
+                  ? "text-emerald-700 dark:text-emerald-400"
+                  : isDeleted
+                    ? "text-red-700 dark:text-red-400"
+                    : "text-transparent";
 
                 return (
-                  <tr
-                    key={idx}
-                    className={`
-                      ${isAdded ? "bg-emerald-500/15 dark:bg-emerald-500/20 text-emerald-900 dark:text-emerald-200" : ""}
-                      ${isDeleted ? "bg-red-500/15 dark:bg-red-500/20 text-red-900 dark:text-red-200" : ""}
-                      ${!isAdded && !isDeleted ? "text-nb-on-surface-variant hover:bg-nb-surface-low/50" : ""}
-                    `}
-                  >
+                  <tr key={idx} className={rowTone}>
                     {/* Old line number */}
-                    <td className="w-6 px-1.5 py-0.5 text-right select-none opacity-40 text-[9px] border-r border-nb-outline-variant/20 font-mono">
+                    <td className={`w-6 px-1.5 py-0.5 text-right select-none text-[9px] border-r border-nb-outline-variant/20 font-mono ${gutterTone}`}>
                       {line.oldLineNumber ?? ""}
                     </td>
 
                     {/* New line number */}
-                    <td className="w-6 px-1.5 py-0.5 text-right select-none opacity-40 text-[9px] border-r border-nb-outline-variant/20 font-mono">
+                    <td className={`w-6 px-1.5 py-0.5 text-right select-none text-[9px] border-r border-nb-outline-variant/20 font-mono ${gutterTone}`}>
                       {line.newLineNumber ?? ""}
                     </td>
 
                     {/* Prefix symbol */}
-                    <td className="w-4 px-1 py-0.5 text-center select-none font-bold text-[10px]">
+                    <td className={`w-4 px-1 py-0.5 text-center select-none font-bold text-[10px] ${markerTone}`}>
                       {isAdded ? "+" : isDeleted ? "-" : " "}
                     </td>
 
                     {/* Code Content */}
-                    <td className="px-1.5 py-0.5 whitespace-pre font-mono break-all">
+                    <td className={`px-1.5 py-0.5 whitespace-pre font-mono break-all ${contentTone}`}>
                       {line.content || " "}
                     </td>
                   </tr>

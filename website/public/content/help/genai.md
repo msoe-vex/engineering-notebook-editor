@@ -12,7 +12,7 @@ You can generate **entry titles** and **titles and captions** for figures, table
 
 1. Open **Settings** from the activity bar gear or the project menu (the notebook name in the top bar).
 2. Under **Generative AI**, turn **Enable Gen AI** on. Provider and API key fields stay hidden until then.
-3. Pick a provider: **Google**, **OpenAI**, **Anthropic**, or **Local**.
+3. Pick a provider from the dropdown: **Google**, **OpenAI**, **Anthropic**, or **Local**.
 4. For Google, OpenAI, or Anthropic, paste an API key. For **Local**, paste the OpenAI-compatible base URL (for example `http://127.0.0.1:1234/v1`) and an API key only if the server requires one. Values stay in **this browser only**. They are not saved in the notebook or in Git.
 5. Type a **model id**, or use the search icon to pick from the list. Cloud lists are filtered to models that can take **text and images** (needed for figure captions). Generation warns if no model is set.
 
