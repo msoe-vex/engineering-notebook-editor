@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, Plus, User, X } from "lucide-react";
+import { Check, ChevronDown, Copy, Plus, User, X } from "lucide-react";
 import { formatAuthors } from "@/lib/notebook/metadata";
 
 interface AuthorsInputProps {
@@ -20,18 +20,46 @@ export default function AuthorsInput({
 }: AuthorsInputProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState("");
+  const [copied, setCopied] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 280 });
 
-  const commit = (raw: string) => {
-    const name = raw.trim().replace(/,+$/, "").trim();
-    if (!name) return;
-    if (!authors.some((a) => a.toLowerCase() === name.toLowerCase())) {
-      onChange([...authors, name]);
+  const sortAlphabetical = (list: string[]) =>
+    [...list].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+
+  const sortedAuthors = sortAlphabetical(authors);
+
+  const addAuthors = (names: string[]) => {
+    const next = [...authors];
+    for (const rawName of names) {
+      const name = rawName.trim().replace(/,+$/, "").trim();
+      if (name && !next.some((a) => a.toLowerCase() === name.toLowerCase())) {
+        next.push(name);
+      }
     }
+    if (next.length !== authors.length) {
+      onChange(sortAlphabetical(next));
+    }
+  };
+
+  const commit = (raw: string) => {
+    if (!raw.trim()) return;
+    const parts = raw.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+    addAuthors(parts);
     setDraft("");
+  };
+
+  const handleCopy = async () => {
+    if (authors.length === 0) return;
+    try {
+      await navigator.clipboard.writeText(formatAuthors(authors));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Ignore clipboard write failures
+    }
   };
 
   const suggestions = options.filter((opt) => {
@@ -84,6 +112,7 @@ export default function AuthorsInput({
         setIsOpen((open) => !open);
       }}
       onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           if (!isOpen) updateCoords();
@@ -109,11 +138,25 @@ export default function AuthorsInput({
           }}
           className="p-3 bg-nb-surface border border-nb-outline-variant shadow-nb-xl rounded-2xl animate-in fade-in zoom-in-95 duration-200"
           onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between mb-2.5">
-            <label className="block text-[9px] font-black uppercase tracking-wider text-nb-on-surface-variant/50">
-              {authors.length === 1 ? "Author" : "Authors"}
-            </label>
+            <div className="flex items-center gap-1.5">
+              <label className="block text-[9px] font-black uppercase tracking-wider text-nb-on-surface-variant/50">
+                {authors.length === 1 ? "Author" : "Authors"}
+              </label>
+              {authors.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  title="Copy author list"
+                  aria-label="Copy author list"
+                  className="p-0.5 rounded text-nb-on-surface-variant/50 hover:text-nb-primary hover:bg-nb-surface-low transition-colors cursor-pointer"
+                >
+                  {copied ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
+                </button>
+              )}
+            </div>
             <button
               type="button"
               onClick={() => { setIsOpen(false); setDraft(""); }}
@@ -123,9 +166,9 @@ export default function AuthorsInput({
             </button>
           </div>
 
-          {authors.length > 0 && (
+          {sortedAuthors.length > 0 && (
             <ul className="mb-2.5 max-h-36 overflow-y-auto space-y-1">
-              {authors.map((name) => (
+              {sortedAuthors.map((name) => (
                 <li
                   key={name}
                   className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-nb-surface-low text-[12px] font-bold text-nb-on-surface"
@@ -135,7 +178,7 @@ export default function AuthorsInput({
                     type="button"
                     className="shrink-0 p-0.5 rounded text-nb-on-surface-variant/50 hover:text-red-500 hover:bg-nb-surface-mid cursor-pointer"
                     aria-label={`Remove ${name}`}
-                    onClick={() => onChange(authors.filter((a) => a !== name))}
+                    onClick={() => onChange(sortAlphabetical(authors.filter((a) => a !== name)))}
                   >
                     <X size={12} />
                   </button>
@@ -145,15 +188,36 @@ export default function AuthorsInput({
           )}
 
           <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 focus-within:border-nb-primary/50">
-            <Plus size={13} className="text-nb-primary shrink-0" />
+            <button
+              type="button"
+              onClick={() => {
+                commit(draft);
+                inputRef.current?.focus();
+              }}
+              aria-label="Add author"
+              title="Add author"
+              className="p-0.5 -m-0.5 rounded text-nb-primary hover:bg-nb-surface-mid transition-colors cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-default"
+              disabled={!draft.trim()}
+            >
+              <Plus size={13} />
+            </button>
             <input
               ref={inputRef}
               type="text"
               autoComplete="off"
               value={draft}
-              placeholder="Add name"
+              placeholder="Add or paste names (comma-separated)"
               className="flex-1 min-w-0 bg-transparent border-none outline-none text-[12px] font-bold text-nb-on-surface placeholder:text-nb-on-surface-variant/30"
               onChange={(e) => setDraft(e.target.value)}
+              onPaste={(e) => {
+                const pasted = e.clipboardData.getData("text");
+                if (pasted && (pasted.includes(",") || pasted.includes("\n"))) {
+                  e.preventDefault();
+                  const names = pasted.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+                  addAuthors(names);
+                  setDraft("");
+                }
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === ",") {
                   e.preventDefault();

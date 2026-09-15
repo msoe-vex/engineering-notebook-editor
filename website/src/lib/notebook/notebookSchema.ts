@@ -71,18 +71,26 @@ function asBool(value: unknown, fallback = false): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
-/** Parse `authors` arrays or a legacy comma-separated `author` string. */
+/** Parse `authors` arrays or a legacy comma-separated `author` string, sorted alphabetically. */
 export function parseAuthors(value: unknown, fallback?: unknown): string[] {
+  let list: string[] = [];
   if (Array.isArray(value)) {
-    return value.map((v) => asString(v).trim()).filter(Boolean);
+    list = value.map((v) => asString(v).trim()).filter(Boolean);
+  } else {
+    const raw = asString(value) || asString(fallback);
+    if (raw.trim()) {
+      list = raw.split(",").map((s) => s.trim()).filter(Boolean);
+    }
   }
-  const raw = asString(value) || asString(fallback);
-  if (!raw.trim()) return [];
-  return raw.split(",").map((s) => s.trim()).filter(Boolean);
+  return [...list].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 }
 
 export function formatAuthors(authors: string[] | undefined | null): string {
-  return (authors || []).map((s) => s.trim()).filter(Boolean).join(", ");
+  return [...(authors || [])]
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+    .join(", ");
 }
 
 export function authorsEqual(a?: string[] | null, b?: string[] | null): boolean {
