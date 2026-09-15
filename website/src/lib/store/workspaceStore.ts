@@ -378,7 +378,7 @@ class WorkspaceStore implements IWorkspaceStore {
             : (this.baseMetadata ? cloneNotebookMetadata(this.baseMetadata) : null);
 
           const { fileIds, pendingUpsertIds } = collectEntryFileIds(this.entries.map(e => e.path), all);
-          let { merged, hasCollisions, collidingEntryIds, orphanIds } = reconcileNotebookMerge(
+          const { merged, hasCollisions, collidingEntryIds, orphanIds } = reconcileNotebookMerge(
             baseMetadata,
             this.metadata,
             remoteMetadata,

@@ -418,7 +418,7 @@ export class ProjectManager {
 
     // Load persisted baseMetadata from IndexedDB if pending changes exist, otherwise advance to latest remote version
     const hasPendingChanges = pending.length > 0;
-    let persistedBase = hasPendingChanges ? await getBaseMetadata(dbName) : null;
+    const persistedBase = hasPendingChanges ? await getBaseMetadata(dbName) : null;
     let remoteMeta: import("../notebook/metadata").NotebookMetadata | null = null;
     if (remoteMetaStr) {
       try {
