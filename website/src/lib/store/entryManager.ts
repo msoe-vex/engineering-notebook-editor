@@ -335,11 +335,11 @@ export class EntryManager {
 
     const isTemplate = options?.asTemplate ?? sourceMeta.isTemplate ?? false;
     let newTitle = options?.title;
-    if (!newTitle) {
+    if (newTitle === undefined) {
       if (options?.asTemplate && !sourceMeta.isTemplate) {
         newTitle = `${sourceMeta.title || "Untitled"} Template`;
       } else if (!isTemplate && sourceMeta.isTemplate) {
-        newTitle = sourceMeta.title || "New Entry";
+        newTitle = "";
       } else {
         newTitle = `${sourceMeta.title || "Untitled"} (Copy)`;
       }
@@ -422,9 +422,9 @@ export class EntryManager {
         const dataUrl = `data:${getMimeTypeFromExtension(asset.path)};base64,${asset.base64}`;
         this.store.assetCache.set(asset.path, dataUrl);
       }
-      await this.persistFile(newPath, jsonStr, `Create entry: ${newTitle}`);
+      await this.persistFile(newPath, jsonStr, newTitle ? `Create entry: ${newTitle}` : "Create entry");
       if (!isTemplate) {
-        await this.persistFile(newLatexPath, newLatex, `Init LaTeX for: ${newTitle}`);
+        await this.persistFile(newLatexPath, newLatex, newTitle ? `Init LaTeX for: ${newTitle}` : "Init LaTeX");
       }
       await this.persistFile(INDEX_PATH, serializeNotebookMetadata(this.store.metadata), "Update notebook metadata");
       await this.store.updateLatexMetadata();
@@ -480,7 +480,7 @@ export class EntryManager {
 
     return this.duplicateEntry(templateId, {
       asTemplate: false,
-      title: templateMeta?.title || "New Entry",
+      title: "",
       authors: lastAuthors.length ? lastAuthors : parseAuthors(templateMeta?.authors),
       phase: templateMeta?.phase ?? null,
       date: todayDate
