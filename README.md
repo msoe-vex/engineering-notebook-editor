@@ -1,9 +1,15 @@
 # Engineering Notebook Editor
 
-This repository contains two related parts of the VEX engineering notebook system:
+This repository contains the engineering notebook platform codebase, organized into Cloud Run-oriented services:
 
-- `website/`: the Next.js editor and sync UI
+- `website/`: the Next.js frontend container
   - For more details, see the [README in the `website/` folder](website/README.md)
+- `services/core/`: Fastify core API (auth adapter, org/notebook APIs, admin metrics, asset routes)
+- `services/collab/`: Hocuspocus/Yjs real-time collaboration service
+- `services/agents/`: Fastify rubric agent service (BYOK + grant-gated platform AI routing)
+- `packages/shared/`: shared cross-service types
+- `infra/`: local compose and deployment scaffolding
+- `loadtest/`: k6 load test scripts
 - `notebook/`: the LaTeX source and generated notebook output
   - For more details, see the [README in the `notebook/` folder](notebook/README.md)
 
@@ -18,6 +24,20 @@ npm run dev
 ```
 
 The app runs at [http://localhost:3000](http://localhost:3000) by default.
+
+### Multi-service Local Development
+
+To run website + core + collaboration + agents together:
+
+```bash
+cd infra
+docker compose up --build
+```
+
+See:
+
+- [`docs/microservices-architecture.md`](docs/microservices-architecture.md)
+- [`docs/api-contracts.md`](docs/api-contracts.md)
 
 Before merging changes into `main`, run both checks from `website/`:
 
@@ -58,19 +78,15 @@ If you are using Vercel previews, make sure the same env vars are configured for
 
 ## Deployment
 
-The `website/` app is designed to deploy on Vercel:
+Primary target hosting is Google Cloud Run with one container per service (`website`, `services/core`, `services/collab`, `services/agents`).
 
-- Import the GitHub repository into Vercel
-- Set the root directory to `website`
-- Let Vercel build automatically on pushes to the connected branch
-- Add `NEXT_PUBLIC_GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` in the Vercel project environment settings
-- Add a custom domain in Vercel and point DNS to the Vercel deployment
+For local parity, use `infra/docker-compose.yml`.
 
 For notebook/PDF work, see `notebook/README.md`.
 
 ## Release Workflow (For Web Editor)
 
-To ensure the web editor can compile PDFs efficiently without bloating the Git repository or hitting GitHub LFS limits, we bundle the notebook template directly into `website/public/notebook-template/` and host external LaTeX engine/packages as GitHub Release assets.
+To ensure the web editor can compile PDFs efficiently without bloating the Git repository, bundle notebook template files and publish BusyTeX/LaTeX static assets to cloud storage.
 
 ### 1. Prepare Assets
 
@@ -82,17 +98,15 @@ Run the following from the `website/` directory:
   - Bundles the complete notebook template (`notebook/main.tex`, `notebook/notebook.sty`, `notebook/fonts/`, and `notebook/data/`) into `website/public/notebook-template/`.
   - Scans and gathers external LaTeX package dependencies into `website/public/latex/` with `manifest.json`.
 
-### 2. Upload to Release (LaTeX Engine & Packages Only)
+### 2. Upload BusyTeX Assets to Cloud Storage
 
-1. Create or edit a release tag on GitHub (e.g., `v0.1.0`).
-2. Upload **all** files from `website/public/busytex/` and `website/public/latex/` to the release assets.
-3. You can then delete the local copies from `website/public/busytex/` and `website/public/latex/` to keep your git repo clean and lightweight (while `website/public/notebook-template/` remains the bundled template for the app).
-   > [!NOTE]
-   > Keeping `website/public/busytex/` and `website/public/latex/` locally enables **100% offline-ready local development**!
+1. Build or download BusyTeX + LaTeX package assets locally.
+2. Upload files to your versioned cloud bucket path (for example `static/busytex/{appVersion}` and `static/latex-template/{appVersion}`).
+3. Configure website/core env vars to serve or redirect static asset requests from those cloud paths.
 
 ### 3. How it Works (Development vs. Production)
 
 - **Template Files**: The app serves `main.tex`, `notebook.sty`, typography fonts, and initial template entries directly from `website/public/notebook-template/`.
 - **LaTeX Engine & Packages**:
-  - **Local Development**: In dev mode, the app serves the WASM engine and TeX Live packages directly from your local `website/public/` directory if present.
-  - **Production / Deployment**: In production, Next.js automatically rewrites/proxies `/busytex/...` and `/latex/...` routes via an edge function to the official GitHub Release `GITHUB_RELEASE_URL` (configured in `website/src/lib/busytex.ts`), meaning you never have to commit large WASM binaries or hundreds of LaTeX package files to Git!
+  - **Local Development**: In dev mode, the app can serve WASM engine and TeX packages from local `website/public/`.
+  - **Production / Deployment**: In cloud deployments, static assets should be served from cloud object storage through core-owned route space.

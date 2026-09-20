@@ -1,0 +1,14 @@
+{
+  "name": "engineering-notebook-collab-service",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@hocuspocus/server": "^3.4.0",
+    "yjs": "^13.6.19",
+    "tsx": "^4.20.5"
+  }
+}
