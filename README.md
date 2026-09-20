@@ -1,9 +1,12 @@
 # Engineering Notebook Editor
 
-This repository contains two related parts of the VEX engineering notebook system:
+This repository contains the engineering notebook platform codebase, now organized into cloud-ready services:
 
-- `website/`: the Next.js editor and sync UI
+- `website/`: the Next.js core gateway and frontend
   - For more details, see the [README in the `website/` folder](website/README.md)
+- `server/`: the Hocuspocus/Yjs real-time collaboration service
+- `judge/`: the FastAPI rubric judging service
+- `packages/shared/`: shared cross-service types
 - `notebook/`: the LaTeX source and generated notebook output
   - For more details, see the [README in the `notebook/` folder](notebook/README.md)
 
@@ -18,6 +21,19 @@ npm run dev
 ```
 
 The app runs at [http://localhost:3000](http://localhost:3000) by default.
+
+### Multi-service Local Development
+
+To run core + collaboration + judge services together:
+
+```bash
+docker compose up --build
+```
+
+See:
+
+- [`docs/microservices-architecture.md`](docs/microservices-architecture.md)
+- [`docs/api-contracts.md`](docs/api-contracts.md)
 
 Before merging changes into `main`, run both checks from `website/`:
 
