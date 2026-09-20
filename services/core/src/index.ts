@@ -4,6 +4,26 @@ import { getMetrics, observeRequest, setActiveCollaborationConnections } from ".
 
 const app = Fastify({ logger: true });
 const auth = new FirebaseAuthAdapter();
+const authAttempts = new Map<string, { count: number; windowStart: number }>();
+
+function allowAuthRequest(ip: string): boolean {
+  const now = Date.now();
+  const windowMs = 60_000;
+  const maxRequestsPerWindow = 30;
+  const current = authAttempts.get(ip);
+
+  if (!current || now - current.windowStart > windowMs) {
+    authAttempts.set(ip, { count: 1, windowStart: now });
+    return true;
+  }
+
+  if (current.count >= maxRequestsPerWindow) {
+    return false;
+  }
+
+  current.count += 1;
+  return true;
+}
 
 app.addHook("onRequest", async (request) => {
   (request as { _start?: number })._start = Date.now();
@@ -17,6 +37,11 @@ app.addHook("onResponse", async (request, reply) => {
 app.get("/health", async () => ({ status: "ok", service: "core" }));
 
 app.get("/api/admin/metrics", async (request, reply) => {
+  const ip = request.ip || "unknown";
+  if (!allowAuthRequest(`${ip}:admin-metrics`)) {
+    return reply.code(429).send({ error: "too many requests" });
+  }
+
   const role = request.headers["x-platform-role"];
   if (role !== "service_admin") {
     return reply.code(403).send({ error: "forbidden" });
@@ -32,9 +57,9 @@ app.get("/api/admin/metrics", async (request, reply) => {
 });
 
 app.get("/orgs", async () => []);
-app.post("/orgs", async (request) => ({ id: "org-placeholder", ...(request.body as object) }));
+app.post("/orgs", async () => ({ id: "org-placeholder", created: true }));
 app.get("/orgs/:orgId/notebooks", async () => []);
-app.post("/orgs/:orgId/notebooks", async (request) => ({ id: "notebook-placeholder", ...(request.body as object) }));
+app.post("/orgs/:orgId/notebooks", async () => ({ id: "notebook-placeholder", created: true }));
 
 app.get("/assets/busytex/*", async () => ({ message: "BusyTeX asset proxy placeholder" }));
 
@@ -45,6 +70,11 @@ app.post("/internal/collab/connections", async (request) => {
 });
 
 app.get("/auth/session", async (request, reply) => {
+  const ip = request.ip || "unknown";
+  if (!allowAuthRequest(ip)) {
+    return reply.code(429).send({ error: "too many requests" });
+  }
+
   const header = request.headers.authorization;
   const token = typeof header === "string" ? header.replace(/^Bearer\s+/i, "") : "";
   if (!token) return reply.code(401).send({ error: "missing token" });
