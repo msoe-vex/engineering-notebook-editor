@@ -9,17 +9,17 @@ const pendingFlushes = new Map<string, ReturnType<typeof setTimeout>>();
 
 const server = new Server({
   port,
-  async onAuthenticate({ token }) {
+  async onAuthenticate({ request }) {
     if (authDisabled) return;
-    if (!token) {
-      throw new Error("Missing session token");
-    }
+
+    const authHeader = request.headers?.authorization;
+    const token = typeof authHeader === "string" ? authHeader.replace(/^Bearer\s+/i, "") : "";
+
+    if (!token) throw new Error("Missing session token");
   },
   async onLoadDocument({ documentName, document }) {
     const existing = docs.get(documentName);
-    if (existing) {
-      Y.applyUpdate(document as Y.Doc, existing);
-    }
+    if (existing) Y.applyUpdate(document as Y.Doc, existing);
   },
   async onStoreDocument({ documentName, document }) {
     const existingTimer = pendingFlushes.get(documentName);
@@ -35,5 +35,4 @@ const server = new Server({
 });
 
 await server.listen();
-
 process.stdout.write(`Collaboration service listening on ${server.webSocketURL}\n`);

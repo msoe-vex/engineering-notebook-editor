@@ -1,16 +1,21 @@
 services:
-  core:
+  website:
     build:
-      context: ./website
+      context: ../website
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
-    environment:
-      - NEXT_TELEMETRY_DISABLED=1
+
+  core:
+    build:
+      context: ../services/core
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
 
   collab:
     build:
-      context: ./server
+      context: ../services/collab
       dockerfile: Dockerfile
     ports:
       - "1234:1234"
@@ -18,11 +23,9 @@ services:
       - PORT=1234
       - COLLAB_AUTH_DISABLED=true
 
-  judge:
+  agents:
     build:
-      context: ./judge
+      context: ../services/agents
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
-    environment:
-      - PORT=8000

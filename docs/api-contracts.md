@@ -1,45 +1,25 @@
-# API Contracts (Initial)
+# Service Contracts (Scaffold)
 
-## Core (`website`)
-
-- `GET /api/admin/metrics` (planned): Admin-only telemetry aggregation endpoint.
-
-## Collaboration (`server`)
-
-- `WSS /` (Hocuspocus)
-  - Auth token header: `Authorization: ******` (or disabled in local dev)
-  - Payloads: Yjs update frames handled by Hocuspocus/Y-protocol.
-
-## Judge (`judge`)
+## Core (`services/core`)
 
 - `GET /health`
-  - Response: `{ "status": "ok" }`
+- `GET /api/admin/metrics` (requires `x-platform-role: service_admin`)
+- `GET /orgs`
+- `POST /orgs`
+- `GET /orgs/:orgId/notebooks`
+- `POST /orgs/:orgId/notebooks`
+- `GET /assets/busytex/*` (placeholder route space for GCS-backed static assets)
+- `GET /auth/session` (requires a bearer session token header)
 
-- `POST /judge/evaluate`
-  - Request:
-    ```json
-    {
-      "project_id": "project-123",
-      "rubric": "REC Foundation Design Award",
-      "entry_ids": ["entry-1", "entry-2"]
-    }
-    ```
-  - Response:
-    ```json
-    {
-      "projectId": "project-123",
-      "rubric": "REC Foundation Design Award",
-      "summary": "Stub rubric audit response. Connect this endpoint to your LLM provider for full scoring.",
-      "scores": {
-        "design_cycle_completeness": 0,
-        "chronological_consistency": 0,
-        "test_repeatability": 0
-      },
-      "advice": [
-        {
-          "entryId": "entry-1",
-          "message": "Add evidence of iteration and measurable test outcomes."
-        }
-      ]
-    }
-    ```
+## Collaboration (`services/collab`)
+
+- `WSS /` (Hocuspocus)
+  - Auth token header required unless `COLLAB_AUTH_DISABLED=true`
+  - Doc persistence: debounced in-memory snapshot placeholder
+
+## Agents (`services/agents`)
+
+- `GET /health`
+- `POST /v1/notebooks/:notebookId/audit`
+  - Body: `{ "provider": "byok" | "vertex", "rubric"?: string }`
+  - `provider=vertex` requires header `x-platform-ai-grant: true`
