@@ -113,7 +113,16 @@ export function NodeViewInput({
     }
 
     if (document.activeElement === el) {
-      restoreSelection();
+      const sel = selectionRef.current;
+      if (!sel) return;
+      const max = el.value.length;
+      const start = Math.max(0, Math.min(sel.start, max));
+      const end = Math.max(0, Math.min(sel.end, max));
+      try {
+        el.setSelectionRange(start, end);
+      } catch {
+        /* some input types reject setSelectionRange */
+      }
     }
   }, [localValue, multiline, inputRef]);
 
