@@ -10,6 +10,7 @@ import { GripVertical, Trash2, Table as TableIcon, ChevronUp, ChevronDown, Chevr
 import { NodeViewInput } from "./NodeViewInput";
 import GenerateButton from "../ui/GenerateButton";
 import { generateResourceCaption, generateResourceTitle } from "@/lib/genai";
+import { patchNodeViewAttrs } from "./patchNodeViewAttrs";
 
 export type CellSnapshot = {
   type: string;
@@ -86,7 +87,7 @@ export function transposeTableNode(editor: Editor, tablePos: number): boolean {
   return true;
 }
 
-export function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: NodeViewProps) {
+export function TableNodeView({ node, deleteNode, editor, selected, getPos }: NodeViewProps) {
   const [isCursorInside, setIsCursorInside] = useState(false);
   const [isHoveringToolbar, setIsHoveringToolbar] = useState(false);
   const [dragEnabled, setDragEnabled] = useState(false);
@@ -148,8 +149,9 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
             <TableIcon size={12} className="text-nb-primary" />
             <NodeViewInput
               editor={editor}
+              getPos={getPos}
+              attr="title"
               value={node.attrs.title || ""}
-              onUpdate={(title) => updateAttributes({ title })}
               placeholder="Table Title..."
               required
               missingMessage="Title is required for this table."
@@ -163,7 +165,7 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
                 caption: node.attrs.caption,
                 text: node.textContent,
               })}
-              onResult={(title) => updateAttributes({ title })}
+              onResult={(title) => patchNodeViewAttrs(editor, getPos, { title })}
             />
           </div>
 
@@ -251,8 +253,9 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
         <div contentEditable={false} className="bg-nb-surface-low/30 border-t border-nb-outline-variant/10 px-4 py-2 flex items-start justify-center gap-2 group/caption">
           <NodeViewInput
             editor={editor}
+            getPos={getPos}
+            attr="caption"
             value={node.attrs.caption || ""}
-            onUpdate={(caption) => updateAttributes({ caption })}
             placeholder="Describe this table..."
             required
             missingMessage="Caption is required for this table."
@@ -267,7 +270,7 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
               caption: node.attrs.caption,
               text: node.textContent,
             })}
-            onResult={(caption) => updateAttributes({ caption })}
+            onResult={(caption) => patchNodeViewAttrs(editor, getPos, { caption })}
           />
         </div>
       </div>
@@ -291,7 +294,12 @@ export const TableWithCaption = Table.extend({
   },
   draggable: true,
   addNodeView() {
-    return ReactNodeViewRenderer(TableNodeView);
+    return ReactNodeViewRenderer(TableNodeView, {
+      stopEvent: ({ event }) => {
+        const target = event.target as HTMLElement;
+        return !!(target?.closest("input") || target?.closest("textarea"));
+      },
+    });
   },
 });
 

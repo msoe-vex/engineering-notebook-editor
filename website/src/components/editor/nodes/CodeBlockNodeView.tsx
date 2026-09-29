@@ -6,6 +6,7 @@ import { GripVertical, Trash2, Code2, ChevronDown, Check } from "lucide-react";
 import { NodeViewInput } from "./NodeViewInput";
 import GenerateButton from "../ui/GenerateButton";
 import { generateResourceCaption, generateResourceTitle } from "@/lib/genai";
+import { patchNodeViewAttrs } from "./patchNodeViewAttrs";
 
 export const LANGUAGES: Record<string, string> = {
   plaintext: "Plain Text",
@@ -113,8 +114,9 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
             </div>
             <NodeViewInput
               editor={editor}
+              getPos={getPos}
+              attr="title"
               value={node.attrs.title || ""}
-              onUpdate={(title) => updateAttributes({ title })}
               placeholder="Code Snippet Title..."
               required
               missingMessage="Title is required for this code block."
@@ -129,7 +131,7 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
                 language: node.attrs.language,
                 text: node.textContent,
               })}
-              onResult={(title) => updateAttributes({ title })}
+              onResult={(title) => patchNodeViewAttrs(editor, getPos, { title })}
             />
             <div className="relative shrink-0 ml-auto">
               <button
@@ -205,8 +207,9 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
         <div contentEditable={false} className="bg-nb-surface-low/30 border-t border-nb-outline-variant/10 px-4 py-2 flex items-start justify-center gap-2 group/caption">
           <NodeViewInput
             editor={editor}
+            getPos={getPos}
+            attr="caption"
             value={node.attrs.caption || ""}
-            onUpdate={(caption) => updateAttributes({ caption })}
             placeholder="What does this code do?"
             required
             missingMessage="Caption is required for this code block."
@@ -222,7 +225,7 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
               language: node.attrs.language,
               text: node.textContent,
             })}
-            onResult={(caption) => updateAttributes({ caption })}
+            onResult={(caption) => patchNodeViewAttrs(editor, getPos, { caption })}
           />
         </div>
       </div>
@@ -258,7 +261,12 @@ export const CustomCodeBlock = CodeBlock.extend({
   },
   draggable: true,
   addNodeView() {
-    return ReactNodeViewRenderer(CodeBlockNodeView);
+    return ReactNodeViewRenderer(CodeBlockNodeView, {
+      stopEvent: ({ event }) => {
+        const target = event.target as HTMLElement;
+        return !!(target?.closest("input") || target?.closest("textarea") || target?.closest("select"));
+      },
+    });
   },
   addKeyboardShortcuts() {
     return {

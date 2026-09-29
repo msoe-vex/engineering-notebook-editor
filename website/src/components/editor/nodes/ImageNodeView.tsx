@@ -10,7 +10,8 @@ import { compressImageToJpeg, hashContent, convertSvgToPng, getExtensionFromData
 import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
 import { NodeViewInput } from "./NodeViewInput";
 import GenerateButton from "../ui/GenerateButton";
-export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName, editor }: NodeViewProps & { dbName: string }) => {
+import { patchNodeViewAttrs } from "./patchNodeViewAttrs";
+export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName, editor, getPos }: NodeViewProps & { dbName: string }) => {
   const isDataUrl = Boolean(node.attrs.src?.startsWith('data:'));
   const [resolvedSrc, setResolvedSrc] = useState(isDataUrl ? node.attrs.src : "");
   const [isVisible, setIsVisible] = useState(isDataUrl);
@@ -150,8 +151,9 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
             <ImageIcon size={12} className="text-nb-primary shrink-0" />
             <NodeViewInput
               editor={editor}
+              getPos={getPos}
+              attr="title"
               value={node.attrs.title || ""}
-              onUpdate={(title) => updateAttributes({ title })}
               placeholder="Give this image a title..."
               required
               missingMessage="Title is required for this image."
@@ -161,7 +163,7 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
               label="Generate title"
               disabled={!resolvedSrc?.startsWith("data:")}
               run={() => generateResourceTitle(resource())}
-              onResult={(title) => updateAttributes({ title })}
+              onResult={(title) => patchNodeViewAttrs(editor, getPos, { title })}
             />
           </div>
           <div className="flex items-center gap-2">
@@ -256,8 +258,9 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
         <div contentEditable={false} className="bg-nb-surface-low/30 border-t border-nb-outline-variant/10 px-4 py-2 flex items-start justify-center gap-2 group/caption">
           <NodeViewInput
             editor={editor}
+            getPos={getPos}
+            attr="caption"
             value={node.attrs.caption || ""}
-            onUpdate={(caption) => updateAttributes({ caption })}
             placeholder="Add figure description..."
             required
             missingMessage="Caption is required for this image."
@@ -268,7 +271,7 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
             label="Generate caption"
             disabled={!resolvedSrc?.startsWith("data:")}
             run={() => generateResourceCaption(resource())}
-            onResult={(caption) => updateAttributes({ caption })}
+            onResult={(caption) => patchNodeViewAttrs(editor, getPos, { caption })}
           />
         </div>
       </div>
@@ -302,6 +305,16 @@ export const ImageWithCaption = TiptapImage.extend<ImageOptions & { dbName: stri
   },
   draggable: true,
   addNodeView() {
-    return ReactNodeViewRenderer((props) => <ImageNodeView {...props as NodeViewProps} dbName={(this.options as unknown as { dbName: string }).dbName} />);
+    const dbName = (this.options as unknown as { dbName: string }).dbName;
+    const View = (props: NodeViewProps) => (
+      <ImageNodeView {...props} dbName={dbName} />
+    );
+    View.displayName = "ImageWithCaptionView";
+    return ReactNodeViewRenderer(View, {
+      stopEvent: ({ event }) => {
+        const target = event.target as HTMLElement;
+        return !!(target?.closest("input") || target?.closest("textarea"));
+      },
+    });
   },
 });
