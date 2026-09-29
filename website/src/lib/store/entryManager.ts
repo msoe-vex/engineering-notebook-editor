@@ -262,7 +262,7 @@ export class EntryManager {
         } catch { /* use as is */ }
       }
 
-      const { cleanDoc, newAssets } = await dehydrateAssets(contentObj, existingEntry.assets || []);
+      const { cleanDoc, newAssets } = await dehydrateAssets(contentObj);
       // Assets must come from the dehydrated doc. Pre-dehydrate extraction misses
       // pasted images that only have data: src (no filePath yet), which then caused
       // reconcileAssetRefs to delete shared assets still in use.
@@ -424,7 +424,7 @@ export class EntryManager {
       assets: sourceMeta.assets ? [...sourceMeta.assets] : undefined
     };
 
-    const { cleanDoc, newAssets } = await dehydrateAssets(contentJson, newEntry.assets || []);
+    const { cleanDoc, newAssets } = await dehydrateAssets(contentJson);
     const wrapper = { version: 3, content: cleanDoc };
     const jsonStr = JSON.stringify(wrapper, null, 2);
 

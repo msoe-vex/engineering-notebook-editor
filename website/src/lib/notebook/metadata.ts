@@ -379,8 +379,7 @@ export function removeImageFromDoc(doc: TipTapDoc, deletedPath: string): TipTapD
  * newAssets is a list of { path, base64 } to be saved.
  */
 export async function dehydrateAssets(
-  doc: TipTapDoc,
-  _knownAssetPaths: string[] = []
+  doc: TipTapDoc
 ): Promise<{ cleanDoc: TipTapDoc; newAssets: { path: string; base64: string }[] }> {
   const { hashContent, getExtensionFromDataUrl } = await import("@/lib/utils");
   const assets: { path: string; base64: string }[] = [];

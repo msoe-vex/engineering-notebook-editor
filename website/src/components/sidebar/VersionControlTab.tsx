@@ -135,7 +135,9 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
       // isValid/validationErrors are re-derived on normalize/save — don't treat UI-only
       // validity flips as pending metadata changes. updatedAt IS a real staged field.
       const strip = (e: EntryMetadata) => {
-        const { isValid: _v, validationErrors: _e, ...rest } = e;
+        const rest = { ...e };
+        delete rest.isValid;
+        delete rest.validationErrors;
         return rest;
       };
       return JSON.stringify(strip(a)) === JSON.stringify(strip(b));

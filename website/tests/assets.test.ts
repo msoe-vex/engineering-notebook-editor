@@ -54,7 +54,7 @@ describe("dehydrateAssets", () => {
       }],
     };
 
-    const { cleanDoc, newAssets } = await dehydrateAssets(doc, [knownPath]);
+    const { cleanDoc, newAssets } = await dehydrateAssets(doc);
 
     expect(newAssets.some((a) => a.path === knownPath)).toBe(true);
     expect(extractImagePaths(cleanDoc)).toContain(knownPath);
@@ -69,7 +69,7 @@ describe("dehydrateAssets", () => {
       ],
     };
 
-    const { cleanDoc, newAssets } = await dehydrateAssets(doc, []);
+    const { cleanDoc, newAssets } = await dehydrateAssets(doc);
     const paths = extractImagePaths(cleanDoc);
 
     expect(newAssets.length).toBeGreaterThan(0);
@@ -84,7 +84,6 @@ describe("dehydrateAssets", () => {
   it("re-emits the same hashed path after a prior delete (replace-same-image)", async () => {
     const compressedHash = await hashContent(jpegB64);
     const path = `${ASSETS_COMPRESSED_DIR}/${compressedHash}.jpg`;
-    const knownThenDeleted = [path];
 
     const replaced: TipTapNode = {
       type: "doc",
@@ -99,7 +98,7 @@ describe("dehydrateAssets", () => {
       }],
     };
 
-    const { newAssets } = await dehydrateAssets(replaced, knownThenDeleted);
+    const { newAssets } = await dehydrateAssets(replaced);
     expect(newAssets.find((a) => a.path === path)?.base64).toBe(jpegB64);
   });
 });
