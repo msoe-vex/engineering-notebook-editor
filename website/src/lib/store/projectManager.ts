@@ -1,7 +1,7 @@
 import { Project, getProjects, getProject, saveProject, getProjectHandle, saveProjectHandle, getAllPending, stageChange, getBaseMetadata, saveBaseMetadata, removeStaged } from "../storage/db";
 import { listLocalFiles, readLocalFile, writeLocalFile, ensureLocalDirectory, checkLocalFileExists } from "../storage/fs";
 import { fetchFileContent, fetchDirectoryTree, checkGitHubFileExists, fetchGitHubUser, GitHubFile } from "../github/github";
-import { EMPTY_METADATA, normalizeNotebookMetadata, serializeNotebookMetadata, notebookIndexEqualIgnoringUpdatedAt } from "../notebook/metadata";
+import { EMPTY_METADATA, normalizeNotebookMetadata, serializeNotebookMetadata } from "../notebook/metadata";
 import { cloneNotebookMetadata, collectEntryFileIds, entryArtifactPaths, jsonEntryIdFromPath, reconcileNotebookMerge } from "../notebook/mergeReconcile";
 import { fetchDefaultNotebook } from "../notebook/defaultTemplates";
 import { events, EventNames } from "../events";
@@ -322,6 +322,7 @@ export class ProjectManager {
       await this.store.updateLatexMetadata();
     }
     await this.store.repairDuplicateResourceIds();
+    await this.store.syncAllEntryResourcesFromFiles();
   }
 
   async grantLocalPermission(): Promise<boolean> {
@@ -457,7 +458,7 @@ export class ProjectManager {
       this.store.metadata = merged;
       const mergedSerialized = serializeNotebookMetadata(merged);
       const remoteSerialized = serializeNotebookMetadata(remoteMeta);
-      if (notebookIndexEqualIgnoringUpdatedAt(mergedSerialized, remoteSerialized)) {
+      if (mergedSerialized === remoteSerialized) {
         await removeStaged(dbName, INDEX_PATH);
         await this.store.refreshPending();
       } else if (mergedSerialized !== pendingMeta.content) {
@@ -528,6 +529,7 @@ export class ProjectManager {
       await this.store.updateLatexMetadata();
     }
     await this.store.repairDuplicateResourceIds();
+    await this.store.syncAllEntryResourcesFromFiles();
     this.store.notifyStateChange();
   }
 

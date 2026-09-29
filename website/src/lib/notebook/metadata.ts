@@ -9,6 +9,7 @@ export {
   serializeNotebookMetadataIgnoringUpdatedAt,
   notebookIndexEqualIgnoringUpdatedAt,
   entryMetadataEqualIgnoringUpdatedAt,
+  resourcesEqual,
   sortedEntries,
   sortedMembers,
   sortedPhases,

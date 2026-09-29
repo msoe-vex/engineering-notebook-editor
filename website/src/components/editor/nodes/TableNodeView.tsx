@@ -1,12 +1,91 @@
 import React, { useState } from "react";
 import { NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer, NodeViewProps } from "@tiptap/react";
+import type { Editor } from "@tiptap/core";
+import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
+import { TextSelection } from "@tiptap/pm/state";
 import { Table } from "@tiptap/extension-table";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
-import { GripVertical, Trash2, Table as TableIcon, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Rows3, Columns3 } from "lucide-react";
+import { GripVertical, Trash2, Table as TableIcon, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Rows3, Columns3, FlipHorizontal2 } from "lucide-react";
 import { NodeViewInput } from "./NodeViewInput";
 import GenerateButton from "../ui/GenerateButton";
 import { generateResourceCaption, generateResourceTitle } from "@/lib/genai";
+
+export type CellSnapshot = {
+  type: string;
+  attrs: Record<string, unknown>;
+  content: unknown;
+};
+
+const emptyCell = (): CellSnapshot => ({
+  type: "tableCell",
+  attrs: { colspan: 1, rowspan: 1, colwidth: null },
+  content: [{ type: "paragraph" }],
+});
+
+/** Pure transpose of a cell grid (rows ↔ columns). Exported for tests. */
+export function transposeCellGrid(grid: CellSnapshot[][]): CellSnapshot[][] {
+  if (grid.length === 0) return [];
+  const rowCount = grid.length;
+  const colCount = Math.max(...grid.map((r) => r.length));
+  const transposed: CellSnapshot[][] = [];
+  for (let c = 0; c < colCount; c++) {
+    const row: CellSnapshot[] = [];
+    for (let r = 0; r < rowCount; r++) {
+      row.push(grid[r][c] ?? emptyCell());
+    }
+    transposed.push(row);
+  }
+  return transposed;
+}
+
+/** Swap rows/columns of a TipTap table node in place. */
+export function transposeTableNode(editor: Editor, tablePos: number): boolean {
+  const { state } = editor;
+  const tableNode = state.doc.nodeAt(tablePos);
+  if (!tableNode || tableNode.type.name !== "table") return false;
+
+  const grid: CellSnapshot[][] = [];
+  tableNode.forEach((rowNode: ProseMirrorNode) => {
+    if (rowNode.type.name !== "tableRow") return;
+    const row: CellSnapshot[] = [];
+    rowNode.forEach((cellNode: ProseMirrorNode) => {
+      row.push({
+        type: cellNode.type.name,
+        attrs: {
+          ...cellNode.attrs,
+          // Merged cells cannot survive a transpose cleanly — flatten them.
+          colspan: 1,
+          rowspan: 1,
+          colwidth: null,
+        },
+        content: cellNode.content.toJSON() ?? [{ type: "paragraph" }],
+      });
+    });
+    if (row.length > 0) grid.push(row);
+  });
+
+  const transposed = transposeCellGrid(grid);
+  if (transposed.length === 0) return false;
+
+  let newTable: ProseMirrorNode;
+  try {
+    newTable = state.schema.nodeFromJSON({
+      type: "table",
+      attrs: tableNode.attrs,
+      content: transposed.map((cells) => ({ type: "tableRow", content: cells })),
+    });
+  } catch {
+    return false;
+  }
+
+  const tr = state.tr.replaceWith(tablePos, tablePos + tableNode.nodeSize, newTable);
+  tr.setSelection(TextSelection.near(tr.doc.resolve(Math.min(tablePos + 1, tr.doc.content.size))));
+  editor.view.dispatch(tr);
+  editor.view.focus();
+  return true;
+}
+
 export function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: NodeViewProps) {
   const [isCursorInside, setIsCursorInside] = useState(false);
   const [isHoveringToolbar, setIsHoveringToolbar] = useState(false);
@@ -16,23 +95,30 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
     const check = () => {
       try {
         const pos = getPos();
-        if (typeof pos !== 'number' || pos < 0) return;
+        if (typeof pos !== "number" || pos < 0) return;
         const { from, to } = editor.state.selection;
         setIsCursorInside(from >= pos && to <= pos + node.nodeSize);
-      } catch { }
+      } catch { /* ignore */ }
     };
     check();
-    editor.on('selectionUpdate', check);
-    return () => { editor.off('selectionUpdate', check); };
+    editor.on("selectionUpdate", check);
+    return () => { editor.off("selectionUpdate", check); };
   }, [editor, getPos, node.nodeSize]);
 
   const active = selected || isCursorInside || isHoveringToolbar;
+
+  const handleTranspose = () => {
+    const pos = getPos();
+    if (typeof pos !== "number" || pos < 0) return;
+    transposeTableNode(editor, pos);
+  };
 
   return (
     <NodeViewWrapper
       draggable={dragEnabled}
       data-id={node.attrs.id}
-      className={`my-6 group relative w-full transition ${active ? 'z-100' : 'z-10'} pl-12`}>
+      className={`my-6 group relative w-full transition ${active ? "z-100" : "z-10"} pl-12`}
+    >
       <div contentEditable={false} className="absolute left-0 top-0 bottom-0 w-8 flex flex-col items-center justify-center gap-2 z-70">
         <div
           data-drag-handle
@@ -51,7 +137,7 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
         </button>
       </div>
 
-      <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${active ? 'ring-2 ring-nb-primary/50' : ''}`}>
+      <div className={`rounded-xl border border-nb-outline-variant/30 overflow-hidden bg-nb-surface transition-all duration-300 ${active ? "ring-2 ring-nb-primary/50" : ""}`}>
         <div
           contentEditable={false}
           onMouseEnter={() => setIsHoveringToolbar(true)}
@@ -81,7 +167,7 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
             />
           </div>
 
-          <div className={`flex items-center gap-0.5 shrink-0 transition-opacity duration-200 ${isCursorInside || isHoveringToolbar ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
+          <div className={`flex items-center gap-0.5 shrink-0 transition-opacity duration-200 ${isCursorInside || isHoveringToolbar ? "opacity-100" : "opacity-30 pointer-events-none"}`}>
             <div className="flex items-center bg-nb-surface border border-nb-outline-variant/30 p-0.5 rounded-lg shadow-sm">
               <div className="px-1.5 text-nb-on-surface-variant/40 border-r border-nb-outline-variant/10 mr-0.5">
                 <Rows3 size={12} />
@@ -143,11 +229,23 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
                 <Trash2 size={12} />
               </button>
             </div>
+
+            <div className="flex items-center bg-nb-surface border border-nb-outline-variant/30 p-0.5 ml-1.5 rounded-lg shadow-sm">
+              <button
+                onMouseDown={(e) => { e.preventDefault(); }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleTranspose(); }}
+                className="flex items-center gap-1.5 px-2 py-1.5 hover:bg-nb-surface-high rounded transition-colors text-nb-on-surface-variant hover:text-nb-primary"
+                title="Transpose Table (swap rows and columns)"
+              >
+                <FlipHorizontal2 size={12} />
+                <span className="text-[10px] font-bold tracking-wider uppercase">Transpose</span>
+              </button>
+            </div>
           </div>
         </div>
 
         <div className="w-full overflow-x-auto custom-scrollbar">
-          <NodeViewContent as={"table" as unknown as "div"} className="table-auto mx-auto" style={{ margin: '0 auto' }} />
+          <NodeViewContent as={"table" as unknown as "div"} className="table-auto mx-auto" style={{ margin: "0 auto" }} />
         </div>
 
         <div contentEditable={false} className="bg-nb-surface-low/30 border-t border-nb-outline-variant/10 px-4 py-2 flex items-start justify-center gap-2 group/caption">
@@ -184,8 +282,8 @@ export const TableWithCaption = Table.extend({
       id: {
         default: null,
         keepOnSplit: true,
-        parseHTML: element => element.getAttribute('data-id'),
-        renderHTML: attributes => (attributes.id ? { 'data-id': attributes.id } : {}),
+        parseHTML: (element) => element.getAttribute("data-id"),
+        renderHTML: (attributes) => (attributes.id ? { "data-id": attributes.id } : {}),
       },
       caption: { default: "" },
       title: { default: "" },
@@ -198,9 +296,9 @@ export const TableWithCaption = Table.extend({
 });
 
 export const RestrictedTableCell = TableCell.extend({
-  content: 'paragraph+',
+  content: "paragraph+",
 });
 
 export const RestrictedTableHeader = TableHeader.extend({
-  content: 'paragraph+',
+  content: "paragraph+",
 });

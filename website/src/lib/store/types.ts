@@ -108,6 +108,7 @@ export interface IWorkspaceStore {
   createTemplate(templateData?: Partial<EntryMetadata>): Promise<string>;
   createEntryFromTemplate(templateId: string): Promise<string>;
   repairDuplicateResourceIds(): Promise<boolean>;
+  syncAllEntryResourcesFromFiles(): Promise<boolean>;
   refreshPending(): Promise<PendingChange[]>;
   setEntryValidity(id: string, isValid: boolean, validationErrors?: string[]): void;
   discardPendingChanges(): Promise<void>;

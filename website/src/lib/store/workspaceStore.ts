@@ -1,4 +1,4 @@
-import { NotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, EntryMetadata, hydrateTeamAssets, TipTapNode, buildResourceTypeIndex, extractResources, moveEntryOnCalendar, reorderTemplateSequence, serializeNotebookMetadata, formatAuthors, parseAuthors, normalizeNotebookMetadata, notebookIndexEqualIgnoringUpdatedAt } from "../notebook/metadata";
+import { NotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, EntryMetadata, hydrateTeamAssets, TipTapNode, buildResourceTypeIndex, extractResources, moveEntryOnCalendar, reorderTemplateSequence, serializeNotebookMetadata, formatAuthors, parseAuthors, normalizeNotebookMetadata } from "../notebook/metadata";
 import { cloneNotebookMetadata, collectEntryFileIds, entryArtifactPaths, reconcileNotebookMerge } from "../notebook/mergeReconcile";
 import { INDEX_PATH, ENTRIES_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from "../constants";
 import { generateEntryLatex, generateTeamLatex, generatePhasesLatex, generateAllEntriesLatex, latexPhaseRef } from "../latex/latex";
@@ -201,6 +201,10 @@ class WorkspaceStore implements IWorkspaceStore {
     return this.entryManager.repairDuplicateResourceIds();
   }
 
+  public async syncAllEntryResourcesFromFiles() {
+    return this.entryManager.syncAllEntryResourcesFromFiles();
+  }
+
   public async duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string; authors?: string[]; phase?: string | null; date?: string }) {
     return this.entryManager.duplicateEntry(sourceId, options);
   }
@@ -268,9 +272,43 @@ class WorkspaceStore implements IWorkspaceStore {
 
   public async reorderCalendarEntry(movedId: string, targetDate: string, dayIds: string[], toIndex: number) {
     this.metadata = moveEntryOnCalendar(this.metadata, movedId, targetDate, dayIds, toIndex);
+    // Keep the open editor in sync — otherwise the next auto-save writes the old date
+    // back into notebook.json and clears the pending metadata change.
+    if (this.openFile?.id === movedId) {
+      this.openFile = { ...this.openFile, date: targetDate, updatedAt: new Date().toISOString() };
+    }
     this.notifyStateChange();
     await this.enqueue(async () => {
       await this.persistFile(INDEX_PATH, serializeNotebookMetadata(this.metadata), "Reorder calendar entries");
+      const entry = this.metadata.entries[movedId];
+      if (entry && !entry.isTemplate) {
+        const latexPath = `${LATEX_DIR}/${movedId}.tex`;
+        let contentJson: TipTapNode | null = null;
+        try {
+          const raw = this.lastSavedContents.get(entry.filename)
+            || await this.getFileContent(entry.filename);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            contentJson = parsed?.content && !parsed.type ? parsed.content : parsed;
+          }
+        } catch { /* fall through */ }
+        if (contentJson) {
+          const resources = extractResources(contentJson);
+          const resourceTypes = buildResourceTypeIndex(this.metadata.entries, resources, movedId);
+          const latex = generateEntryLatex(
+            JSON.stringify(contentJson),
+            entry.title,
+            entry.authors,
+            latexPhaseRef(entry.phase, this.metadata.phases),
+            entry.createdAt,
+            movedId,
+            resourceTypes,
+            entry.date
+          );
+          await this.persistFile(latexPath, latex, `Update date LaTeX: ${entry.title}`);
+          this.lastSavedContents.set(latexPath, latex);
+        }
+      }
       await this.updateLatexMetadata();
     });
   }
@@ -351,11 +389,7 @@ class WorkspaceStore implements IWorkspaceStore {
             await removeStaged(dbName, change.path);
             continue;
           }
-        } else if (
-          committedContent !== null &&
-          (committedContent === nextContent ||
-            (change.path === INDEX_PATH && notebookIndexEqualIgnoringUpdatedAt(committedContent, nextContent)))
-        ) {
+        } else if (committedContent !== null && committedContent === nextContent) {
           await removeStaged(dbName, change.path);
           continue;
         }
@@ -499,7 +533,7 @@ class WorkspaceStore implements IWorkspaceStore {
           this.metadata = merged;
           const mergedIndexStr = serializeNotebookMetadata(merged);
           const remoteNormalizedStr = serializeNotebookMetadata(remoteMetadata);
-          const isMetadataModified = !notebookIndexEqualIgnoringUpdatedAt(mergedIndexStr, remoteNormalizedStr);
+          const isMetadataModified = mergedIndexStr !== remoteNormalizedStr;
           
           const indexChangeIdx = gitChanges.findIndex(c => c.path === remoteIndexPath);
           if (isMetadataModified) {

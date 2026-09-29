@@ -18,7 +18,7 @@ import { PendingChange } from "@/lib/storage/db";
 import { isBinaryFile } from "@/lib/storage/transferUtils";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { ENTRIES_DIR, LATEX_DIR, ASSETS_DIR, TEAM_PATH, PHASES_PATH, INDEX_PATH, ENTRIES_INDEX_PATH } from "@/lib/constants";
-import { NotebookMetadata, EntryMetadata, entryMetadataEqualIgnoringUpdatedAt } from "@/lib/notebook/metadata";
+import { NotebookMetadata, EntryMetadata } from "@/lib/notebook/metadata";
 import DiffViewer from "./DiffViewer";
 
 interface VersionControlTabProps {
@@ -130,16 +130,54 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
 
     // Check for entries/templates that changed only in notebook.json
     const metadataOnlyEntryIds = new Set<string>();
+    const metadataFieldNotes = new Map<string, string[]>();
+    const entryFieldsEqualForPending = (a: EntryMetadata, b: EntryMetadata) => {
+      // isValid/validationErrors are re-derived on normalize/save — don't treat UI-only
+      // validity flips as pending metadata changes. updatedAt IS a real staged field.
+      const strip = (e: EntryMetadata) => {
+        const { isValid: _v, validationErrors: _e, ...rest } = e;
+        return rest;
+      };
+      return JSON.stringify(strip(a)) === JSON.stringify(strip(b));
+    };
     if (baseMetadata?.entries && metadata?.entries) {
       const baseEntries = baseMetadata.entries as Record<string, EntryMetadata>;
       const currentEntries = metadata.entries as Record<string, EntryMetadata>;
       for (const [id, entry] of Object.entries(currentEntries)) {
-        if (!entryMap.has(id)) {
-          const baseEntry = baseEntries[id];
-          if (!baseEntry || !entryMetadataEqualIgnoringUpdatedAt(baseEntry, entry)) {
+        const baseEntry = baseEntries[id];
+        if (!baseEntry) {
+          if (!entryMap.has(id)) {
             entryMap.set(id, []);
             metadataOnlyEntryIds.add(id);
           }
+          continue;
+        }
+        if (entryFieldsEqualForPending(baseEntry, entry)) continue;
+
+        const notes: string[] = [];
+        if (baseEntry.date !== entry.date) notes.push("date");
+        if (baseEntry.title !== entry.title) notes.push("title");
+        if (baseEntry.phase !== entry.phase) notes.push("phase");
+        if (JSON.stringify(baseEntry.authors || []) !== JSON.stringify(entry.authors || [])) notes.push("authors");
+        if ((baseEntry.updatedAt || "") !== (entry.updatedAt || "")) notes.push("updated");
+        if (notes.length > 0) metadataFieldNotes.set(id, notes);
+
+        if (!entryMap.has(id)) {
+          entryMap.set(id, []);
+          metadataOnlyEntryIds.add(id);
+        }
+      }
+    }
+
+    // Attach pending notebook.json to entry groups that have metadata field changes,
+    // so date/validation updates aren't only buried under "Project Index".
+    const indexChange = metaChanges.find((p) => p.path === INDEX_PATH);
+    if (indexChange) {
+      for (const id of metadataFieldNotes.keys()) {
+        const list = entryMap.get(id);
+        if (!list) continue;
+        if (!list.some((c) => c.path === INDEX_PATH)) {
+          list.push(indexChange);
         }
       }
     }
@@ -154,12 +192,18 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
       const isNew = changes.some(c => c.changeType === 'create');
       const isDel = changes.some(c => c.operation === 'delete');
       const isMetaOnly = metadataOnlyEntryIds.has(entryId);
+      const fieldNotes = metadataFieldNotes.get(entryId);
+      const metaNote = fieldNotes?.length
+        ? `Metadata: ${fieldNotes.join(", ")}`
+        : isMetaOnly
+          ? "Metadata Modified"
+          : null;
 
       groups.push({
         id: `entry-${entryId}`,
         type: "entry",
         title,
-        subtitle: isDel ? "Deleted" : isNew ? "New Entry" : isMetaOnly ? "Metadata Modified" : "Modified",
+        subtitle: isDel ? "Deleted" : isNew ? "New Entry" : metaNote || "Modified",
         changes,
         entryId
       });
