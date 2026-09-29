@@ -239,9 +239,19 @@ export class EntryManager {
       }
 
       const { cleanDoc, newAssets } = await dehydrateAssets(contentObj, existingEntry.assets || []);
+      // Assets must come from the dehydrated doc. Pre-dehydrate extraction misses
+      // pasted images that only have data: src (no filePath yet), which then caused
+      // reconcileAssetRefs to delete shared assets still in use.
+      const nextAssets = extractImagePaths(cleanDoc);
+      const entryWithAssets: EntryMetadata = { ...this.store.metadata.entries[id], assets: nextAssets };
+      this.store.metadata = normalizeNotebookMetadata({
+        ...this.store.metadata,
+        entries: { ...this.store.metadata.entries, [id]: entryWithAssets }
+      });
+
       const entryJsonStr = JSON.stringify({ version: 3, content: cleanDoc }, null, 2);
 
-      // Save assets
+      // Save assets (always re-upsert when dehydrate emits — overwrites pending deletes)
       for (const asset of newAssets) {
         await this.persistFile(asset.path, asset.base64, `Asset: ${asset.path}`, true);
         const dataUrl = `data:${getMimeTypeFromExtension(asset.path)};base64,${asset.base64}`;
@@ -249,11 +259,11 @@ export class EntryManager {
       }
 
       // Save Entry JSON (always write to ensure metadata edits like date/title/author trigger entry change tracking)
-      await this.persistFile(mergedEntry.filename, entryJsonStr, `Auto-save: ${info.title}`);
-      this.store.lastSavedContents.set(mergedEntry.filename, entryJsonStr);
+      await this.persistFile(entryWithAssets.filename, entryJsonStr, `Auto-save: ${info.title}`);
+      this.store.lastSavedContents.set(entryWithAssets.filename, entryJsonStr);
 
       // Save LaTeX (only for regular entries, not templates)
-      if (!mergedEntry.isTemplate) {
+      if (!entryWithAssets.isTemplate) {
         const latexPath = `${LATEX_DIR}/${id}.tex`;
         if (this.store.lastSavedContents.get(latexPath) !== latex) {
           await this.persistFile(latexPath, latex, `Generate LaTeX: ${info.title}`);
@@ -261,8 +271,8 @@ export class EntryManager {
         }
       }
 
-      // Cleanup orphaned assets
-      await this.reconcileAssetRefs(existingEntry.assets || [], mergedEntry.assets || []);
+      // Cleanup orphaned assets using post-dehydrate refs
+      await this.reconcileAssetRefs(existingEntry.assets || [], nextAssets);
 
       // Save Metadata
       await this.persistFile(INDEX_PATH, serializeNotebookMetadata(this.store.metadata), "Auto-save metadata");
@@ -988,6 +998,9 @@ export class EntryManager {
     }
 
     for (const path of removed) {
+      // Re-check after metadata normalize — shared copy/paste refs must not be deleted
+      if (this.store.metadata.assetRefs?.[path]?.length) continue;
+
       if (this.store.mode === "local" && this.store.dirHandle) {
         if (await this.shouldStageDelete(path)) {
           await deleteLocalFileAtPath(this.store.dirHandle, path);
@@ -997,7 +1010,7 @@ export class EntryManager {
           await stageChange(this.store.getDBName(), { path, operation: "delete", label: `Cleanup orphan: ${path}`, stagedAt: new Date().toISOString() });
         }
       }
-      // Also remove from global cache to prevent hydration of dead paths
+      // Drop cache for unused assets (including when a pending upsert was cancelled)
       this.store.assetCache.delete(path);
     }
   }

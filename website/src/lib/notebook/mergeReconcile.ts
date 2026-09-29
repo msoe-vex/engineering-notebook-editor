@@ -46,6 +46,11 @@ export function collectEntryFileIds(
 /**
  * 3-way merge plus recovery for a polluted base snapshot (local adds looking like
  * remote deletes) and leftover JSON files no longer referenced by merged metadata.
+ *
+ * `fileIds` is the locally known entry file set (workspace tree + pending upserts).
+ * Remote-only entries are always kept even when they are missing from `fileIds`
+ * (e.g. commit/sync before a refresh). Orphans are only files that neither the
+ * merge result nor remote metadata still claim.
  */
 export function reconcileNotebookMerge(
   base: NotebookMetadata | null,
@@ -59,7 +64,15 @@ export function reconcileNotebookMerge(
   orphanIds: string[];
 } {
   const { fileIds, pendingUpsertIds } = options;
-  const result = mergeNotebookMetadata(base, local, remote, { validEntryIds: fileIds });
+  const validEntryIds = new Set(fileIds);
+  for (const id of Object.keys(remote.entries || {})) validEntryIds.add(id);
+  for (const id of pendingUpsertIds) validEntryIds.add(id);
+  // Keep brand-new local entries even if their JSON is not in the remote tree yet.
+  for (const id of Object.keys(local.entries || {})) {
+    if (!base?.entries?.[id] && !remote.entries?.[id]) validEntryIds.add(id);
+  }
+
+  const result = mergeNotebookMetadata(base, local, remote, { validEntryIds });
   const entries = { ...result.merged.entries };
   let restored = false;
   for (const id of pendingUpsertIds) {
@@ -71,6 +84,9 @@ export function reconcileNotebookMerge(
   const merged = restored
     ? normalizeNotebookMetadata({ ...result.merged, entries })
     : result.merged;
-  const orphanIds = [...fileIds].filter((id) => !merged.entries[id]);
+
+  const orphanIds = [...fileIds].filter(
+    (id) => !merged.entries[id] && !remote.entries?.[id]
+  );
   return { ...result, merged, orphanIds };
 }

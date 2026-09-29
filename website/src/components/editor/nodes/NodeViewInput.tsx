@@ -1,4 +1,4 @@
-import React, { useState, useLayoutEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import type { TiptapEditor } from "@/lib/types";
 import ValidationTooltip from "../ui/ValidationTooltip";
 
@@ -12,11 +12,17 @@ interface NodeViewInputProps {
   missingMessage?: string;
   editor?: TiptapEditor | null;
   multiline?: boolean;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  onBlur?: (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  onFocus?: (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  inputRef?: React.RefObject<HTMLInputElement | HTMLTextAreaElement | null>;
+  spellCheck?: boolean;
 }
 
 /**
- * A controlled input component for Tiptap/ProseMirror NodeViews that maintains
- * exact cursor positioning when typing in the middle of a string across editor transactions.
+ * Input for TipTap NodeViews. Local draft is the source of truth while typing;
+ * TipTap attribute echoes of our own edits are ignored so the caret stays put.
+ * External updates (undo, AI generate) still sync in.
  */
 export function NodeViewInput({
   value,
@@ -28,48 +34,56 @@ export function NodeViewInput({
   missingMessage = "This field is required.",
   editor,
   multiline = false,
+  onKeyDown: onKeyDownProp,
+  onBlur: onBlurProp,
+  onFocus: onFocusProp,
+  inputRef: inputRefProp,
+  spellCheck,
 }: NodeViewInputProps) {
   const [localValue, setLocalValue] = useState(value || "");
-  const [prevValue, setPrevValue] = useState(value);
-  if (value !== prevValue) {
-    setPrevValue(value);
-    setLocalValue(value || "");
-  }
-  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
-  const cursorPositionRef = useRef<number | null>(null);
+  const lastEmittedRef = useRef(value || "");
+  const innerRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+  const inputRef = inputRefProp ?? innerRef;
   const showError = required && !localValue.trim();
 
-  useLayoutEffect(() => {
-    if (
-      cursorPositionRef.current !== null &&
-      inputRef.current &&
-      document.activeElement === inputRef.current
-    ) {
-      inputRef.current.setSelectionRange(
-        cursorPositionRef.current,
-        cursorPositionRef.current
-      );
-      cursorPositionRef.current = null;
+  // Sync only when TipTap/node attrs change from something other than our emit
+  // (e.g. undo, redo, GenerateButton). Echoes of onUpdate are ignored.
+  useEffect(() => {
+    const incoming = value || "";
+    if (incoming !== lastEmittedRef.current) {
+      lastEmittedRef.current = incoming;
+      setLocalValue(incoming);
     }
-  });
+  }, [value]);
 
   useLayoutEffect(() => {
     if (!multiline) return;
     const el = inputRef.current;
     if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
     el.style.height = "0px";
     el.style.height = `${el.scrollHeight}px`;
-  }, [localValue, multiline]);
+    if (document.activeElement === el && start != null && end != null) {
+      try {
+        el.setSelectionRange(start, end);
+      } catch {
+        /* some input types reject setSelectionRange */
+      }
+    }
+  }, [localValue, multiline, inputRef]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const nextValue = e.target.value;
-    cursorPositionRef.current = e.target.selectionStart;
+    lastEmittedRef.current = nextValue;
     setLocalValue(nextValue);
     onUpdate(nextValue);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     if (multiline) e.stopPropagation();
+    onKeyDownProp?.(e);
+    if (e.defaultPrevented) return;
     if (!editor || editor.isDestroyed) return;
     const mod = e.ctrlKey || e.metaKey;
     if (!mod) return;
@@ -104,9 +118,12 @@ export function NodeViewInput({
           value={localValue}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onFocus={onFocusProp}
+          onBlur={onBlurProp}
           placeholder={placeholder}
           className={fieldClassName}
           style={style}
+          spellCheck={spellCheck}
         />
       ) : (
         <input
@@ -115,9 +132,12 @@ export function NodeViewInput({
           value={localValue}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onFocus={onFocusProp}
+          onBlur={onBlurProp}
           placeholder={placeholder}
           className={className}
           style={style}
+          spellCheck={spellCheck}
         />
       )}
       {showError && (

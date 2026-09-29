@@ -197,6 +197,14 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
                 updateAttributes({ src: compressed.dataUrl, originalSrc: dataUrl, filePath: newPath, originalFilePath: originalPath });
                 setResolvedSrc(compressed.dataUrl);
                 setIsLoading(false);
+
+                // Persist immediately so replacing with the same image after a delete
+                // overwrites any pending asset delete (hash path unchanged).
+                store.enqueue(async () => {
+                  await store.persistFile(originalPath, dataUrl.split(",")[1] || "", `Original Asset: ${originalPath}`, true);
+                  await store.persistFile(newPath, compressed.base64, `Compressed Asset: ${newPath}`, true);
+                });
+
                 events.emit(EventNames.SHOW_NOTIFICATION, { message: 'Image replaced', type: 'success' });
               } catch (err) {
                 console.error('Replace image failed', err);

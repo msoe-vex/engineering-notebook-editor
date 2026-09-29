@@ -19,7 +19,9 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
   const [isEditing, setIsEditing] = useState(selected);
   const [isHoveringToolbar, setIsHoveringToolbar] = useState(false);
   const [dragEnabled, setDragEnabled] = useState(false);
+  const [latexDraft, setLatexDraft] = useState(node.attrs.latex || "");
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const lastLatexEmittedRef = useRef(node.attrs.latex || "");
   const renderRef = useRef<HTMLDivElement>(null);
 
   // Automatically enter edit mode if the node is selected AND empty (e.g. just created)
@@ -35,13 +37,22 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
     }
   }, [selected, node.attrs.latex]);
 
+  // Sync latex from the node only for external updates (undo / generate), not our own emits
+  useEffect(() => {
+    const incoming = node.attrs.latex || "";
+    if (incoming !== lastLatexEmittedRef.current) {
+      lastLatexEmittedRef.current = incoming;
+      setLatexDraft(incoming);
+    }
+  }, [node.attrs.latex]);
+
   // Handle focus when entering edit mode
   React.useLayoutEffect(() => {
     if (isEditing && inputRef.current) {
       const frameId = requestAnimationFrame(() => {
         if (inputRef.current && document.activeElement !== inputRef.current) {
           inputRef.current.focus();
-          // Move cursor to end
+          // Move cursor to end only when first focusing the field
           inputRef.current.selectionStart = inputRef.current.value.length;
           inputRef.current.selectionEnd = inputRef.current.value.length;
 
@@ -149,12 +160,20 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
           >
             <textarea
               ref={inputRef}
-              value={node.attrs.latex}
+              value={latexDraft}
               onChange={(e) => {
-                updateAttributes({ latex: e.target.value });
-                // Auto-resize
+                const next = e.target.value;
+                lastLatexEmittedRef.current = next;
+                setLatexDraft(next);
+                updateAttributes({ latex: next });
+                // Auto-resize without clobbering the caret
+                const start = e.target.selectionStart;
+                const end = e.target.selectionEnd;
                 e.target.style.height = 'auto';
                 e.target.style.height = e.target.scrollHeight + 'px';
+                if (start != null && end != null) {
+                  e.target.setSelectionRange(start, end);
+                }
               }}
               onBlur={() => setIsEditing(false)}
               placeholder="Type LaTeX here (e.g. ax^2 + bx + c = 0)..."
@@ -175,7 +194,7 @@ export function MathBlockNodeView({ node, updateAttributes, deleteNode, editor, 
                   setIsEditing(false);
                   editor.commands.focus();
                 }
-                if (e.key === 'Backspace' && node.attrs.latex === "") {
+                if (e.key === 'Backspace' && latexDraft === "") {
                   e.preventDefault();
                   deleteNode();
                   editor.commands.focus();
