@@ -346,4 +346,40 @@ describe("reconcileNotebookMerge", () => {
     expect(Object.keys(merged.entries)).toEqual(["e1"]);
     expect(orphanIds).toEqual(["orphan"]);
   });
+
+  it("keeps a remote-only entry when sync fileIds omit it (stale local tree)", () => {
+    // User A has local edits on e1; User B added remoteNew on another machine.
+    // commitAll historically built fileIds from this.entries (no remoteNew yet).
+    const base = notebook({ e1: { title: "Entry 1" } });
+    const local = notebook({ e1: { title: "Entry 1 edited" } });
+    const remote = notebook({ e1: { title: "Entry 1" }, remoteNew: { title: "From B" } });
+    const { fileIds, pendingUpsertIds } = collectEntryFileIds(
+      ["data/entries/e1.json"],
+      [{ path: "data/entries/e1.json", operation: "upsert" }]
+    );
+
+    expect(fileIds.has("remoteNew")).toBe(false);
+
+    const { merged, orphanIds } = reconcileNotebookMerge(base, local, remote, { fileIds, pendingUpsertIds });
+    expect(Object.keys(merged.entries).sort()).toEqual(["e1", "remoteNew"]);
+    expect(merged.entries.e1.title).toBe("Entry 1 edited");
+    expect(merged.entries.remoteNew.title).toBe("From B");
+    expect(orphanIds).toEqual([]);
+  });
+
+  it("does not orphan a file still claimed by remote metadata", () => {
+    // Local dropped e2 (treated as local delete) while remote still lists it.
+    // Do not stage an orphan delete for e2.json — remote still owns that entry.
+    const base = notebook({ e1: { title: "Entry 1" }, e2: { title: "Still on remote" } });
+    const local = notebook({ e1: { title: "Entry 1" } });
+    const remote = notebook({ e1: { title: "Entry 1" }, e2: { title: "Still on remote" } });
+    const { fileIds, pendingUpsertIds } = collectEntryFileIds(
+      ["data/entries/e1.json", "data/entries/e2.json"],
+      []
+    );
+
+    const { merged, orphanIds } = reconcileNotebookMerge(base, local, remote, { fileIds, pendingUpsertIds });
+    expect(Object.keys(merged.entries)).toEqual(["e1"]);
+    expect(orphanIds).toEqual([]);
+  });
 });

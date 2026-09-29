@@ -7,6 +7,7 @@ import {
   entryMetadataEqualIgnoringUpdatedAt,
   placeCreatedEntry,
   reorderTemplateSequence,
+  serializeNotebookMetadata,
   sortedEntries,
 } from "@/lib/notebook/notebookSchema";
 
@@ -302,7 +303,7 @@ describe("notebookIndexEqualIgnoringUpdatedAt", () => {
     lastCompiled: "2026-09-01T12:00:00.000Z",
   });
 
-  it("treats entry updatedAt-only differences as equal", () => {
+  it("treats entry updatedAt-only differences as different (still pending)", () => {
     const touched = normalizeNotebookMetadata({
       ...base,
       entries: {
@@ -310,6 +311,8 @@ describe("notebookIndexEqualIgnoringUpdatedAt", () => {
       },
     });
     expect(notebookIndexEqualIgnoringUpdatedAt(JSON.stringify(base), JSON.stringify(touched))).toBe(true);
+    // Staging uses full serialize equality — updatedAt-only still counts as a pending change
+    expect(serializeNotebookMetadata(base) === serializeNotebookMetadata(touched)).toBe(false);
     expect(entryMetadataEqualIgnoringUpdatedAt(base.entries.e1, touched.entries.e1)).toBe(true);
   });
 
@@ -329,5 +332,39 @@ describe("notebookIndexEqualIgnoringUpdatedAt", () => {
       },
     });
     expect(notebookIndexEqualIgnoringUpdatedAt(JSON.stringify(base), JSON.stringify(renamed))).toBe(false);
+  });
+
+  it("still treats date changes as different", () => {
+    const redated = normalizeNotebookMetadata({
+      ...base,
+      entries: {
+        e1: { ...base.entries.e1, date: "2026-09-20", updatedAt: "2026-09-14T23:00:00.000Z" },
+      },
+    });
+    expect(notebookIndexEqualIgnoringUpdatedAt(JSON.stringify(base), JSON.stringify(redated))).toBe(false);
+    expect(entryMetadataEqualIgnoringUpdatedAt(base.entries.e1, redated.entries.e1)).toBe(false);
+  });
+
+  it("still treats phase changes as different", () => {
+    const withPhases = normalizeNotebookMetadata({
+      ...base,
+      phases: {
+        define: { name: "Define", description: "", iconName: "Goal", color: "#3b82f6", order: 0 },
+      },
+      entries: {
+        e1: { ...base.entries.e1, phase: "define" },
+      },
+    });
+    const otherPhase = normalizeNotebookMetadata({
+      ...withPhases,
+      phases: {
+        ...withPhases.phases,
+        design: { name: "Design", description: "", iconName: "Goal", color: "#10b981", order: 1 },
+      },
+      entries: {
+        e1: { ...withPhases.entries.e1, phase: "design", updatedAt: "2026-09-14T23:00:00.000Z" },
+      },
+    });
+    expect(notebookIndexEqualIgnoringUpdatedAt(JSON.stringify(withPhases), JSON.stringify(otherPhase))).toBe(false);
   });
 });

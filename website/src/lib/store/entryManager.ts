@@ -5,7 +5,7 @@ import { getAllPending, getPending, stageChange, removeStaged, getBaseMetadata, 
 import { writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, checkLocalFileExists } from "../storage/fs";
 import { fetchFileContent, fetchRawFileContent, checkGitHubFileExists } from "../github/github";
 import { generateUUID, getMimeTypeFromExtension, formatDateMonthYear, getLocalDateString } from "../utils";
-import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, notebookIndexEqualIgnoringUpdatedAt, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, carryForwardResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds, collectNotebookResourceIds, duplicateResourceOwners, canonicalResourceOwner, remapSelectedContentIds, placeCreatedEntry, formatAuthors, authorsEqual, parseAuthors, readLastAuthors, TeamMetadata, ProjectPhase } from "../notebook/metadata";
+import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, carryForwardResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds, collectNotebookResourceIds, duplicateResourceOwners, canonicalResourceOwner, remapSelectedContentIds, placeCreatedEntry, formatAuthors, authorsEqual, parseAuthors, readLastAuthors, resourcesEqual, TeamMetadata, ProjectPhase } from "../notebook/metadata";
 import { cloneNotebookMetadata } from "../notebook/mergeReconcile";
 import { generateAllEntriesLatex, generateTeamLatex, generatePhasesLatex, generateEntryLatex, latexPhaseRef } from "../latex/latex";
 import { IWorkspaceStore } from "./types";
@@ -79,6 +79,30 @@ export class EntryManager {
       }
 
       const hydratedContent = hydrateAssets(content, assetCache);
+
+      // Keep notebook.json resource index in sync with the entry body so missing
+      // captions/titles surface in the sidebar even for older entries.
+      // Only persist when the index actually changed (visible save is fine then).
+      const nextResources = extractResources(content as TipTapNode);
+      if (!resourcesEqual(nextResources, meta.resources)) {
+        this.store.metadata = normalizeNotebookMetadata({
+          ...this.store.metadata,
+          entries: {
+            ...this.store.metadata.entries,
+            [id]: {
+              ...meta,
+              resources: nextResources,
+            },
+          },
+        });
+        void this.store.enqueue(async () => {
+          await this.persistFile(
+            INDEX_PATH,
+            serializeNotebookMetadata(this.store.metadata),
+            "Sync entry resources into notebook metadata"
+          );
+        });
+      }
 
       this.store.openFile = {
         path: meta.filename,
@@ -238,10 +262,27 @@ export class EntryManager {
         } catch { /* use as is */ }
       }
 
-      const { cleanDoc, newAssets } = await dehydrateAssets(contentObj, existingEntry.assets || []);
+      const { cleanDoc, newAssets } = await dehydrateAssets(contentObj);
+      // Assets must come from the dehydrated doc. Pre-dehydrate extraction misses
+      // pasted images that only have data: src (no filePath yet), which then caused
+      // reconcileAssetRefs to delete shared assets still in use.
+      const nextAssets = extractImagePaths(cleanDoc);
+      // Re-apply this save's header fields so a concurrent metadata write cannot
+      // drop date/title/phase/authors before notebook.json is staged.
+      const entryWithAssets: EntryMetadata = {
+        ...this.store.metadata.entries[id],
+        ...info,
+        assets: nextAssets,
+        updatedAt: new Date().toISOString(),
+      };
+      this.store.metadata = normalizeNotebookMetadata({
+        ...this.store.metadata,
+        entries: { ...this.store.metadata.entries, [id]: entryWithAssets }
+      });
+
       const entryJsonStr = JSON.stringify({ version: 3, content: cleanDoc }, null, 2);
 
-      // Save assets
+      // Save assets (always re-upsert when dehydrate emits — overwrites pending deletes)
       for (const asset of newAssets) {
         await this.persistFile(asset.path, asset.base64, `Asset: ${asset.path}`, true);
         const dataUrl = `data:${getMimeTypeFromExtension(asset.path)};base64,${asset.base64}`;
@@ -249,11 +290,11 @@ export class EntryManager {
       }
 
       // Save Entry JSON (always write to ensure metadata edits like date/title/author trigger entry change tracking)
-      await this.persistFile(mergedEntry.filename, entryJsonStr, `Auto-save: ${info.title}`);
-      this.store.lastSavedContents.set(mergedEntry.filename, entryJsonStr);
+      await this.persistFile(entryWithAssets.filename, entryJsonStr, `Auto-save: ${info.title}`);
+      this.store.lastSavedContents.set(entryWithAssets.filename, entryJsonStr);
 
       // Save LaTeX (only for regular entries, not templates)
-      if (!mergedEntry.isTemplate) {
+      if (!entryWithAssets.isTemplate) {
         const latexPath = `${LATEX_DIR}/${id}.tex`;
         if (this.store.lastSavedContents.get(latexPath) !== latex) {
           await this.persistFile(latexPath, latex, `Generate LaTeX: ${info.title}`);
@@ -261,10 +302,10 @@ export class EntryManager {
         }
       }
 
-      // Cleanup orphaned assets
-      await this.reconcileAssetRefs(existingEntry.assets || [], mergedEntry.assets || []);
+      // Cleanup orphaned assets using post-dehydrate refs
+      await this.reconcileAssetRefs(existingEntry.assets || [], nextAssets);
 
-      // Save Metadata
+      // Save Metadata — date/title/phase/authors/validity live here, not in the entry JSON
       await this.persistFile(INDEX_PATH, serializeNotebookMetadata(this.store.metadata), "Auto-save metadata");
       await this.store.updateLatexMetadata();
     });
@@ -383,7 +424,7 @@ export class EntryManager {
       assets: sourceMeta.assets ? [...sourceMeta.assets] : undefined
     };
 
-    const { cleanDoc, newAssets } = await dehydrateAssets(contentJson, newEntry.assets || []);
+    const { cleanDoc, newAssets } = await dehydrateAssets(contentJson);
     const wrapper = { version: 3, content: cleanDoc };
     const jsonStr = JSON.stringify(wrapper, null, 2);
 
@@ -574,6 +615,63 @@ export class EntryManager {
     return this.store.pendingChanges;
   }
 
+  /**
+   * Re-index resources from entry JSON already available locally (memory, pending,
+   * or local disk). Never hits GitHub — remote entries are synced when opened.
+   */
+  async syncAllEntryResourcesFromFiles(): Promise<boolean> {
+    const dbName = this.store.getDBName();
+    const pending =
+      this.store.mode === "github" || this.store.mode === "temporary"
+        ? await getAllPending(dbName)
+        : [];
+
+    let changed = false;
+    const entries: Record<string, EntryMetadata> = { ...this.store.metadata.entries };
+
+    for (const [id, meta] of Object.entries(entries)) {
+      try {
+        let entryJsonStr: string | null = null;
+        if (this.store.lastSavedContents.has(meta.filename)) {
+          entryJsonStr = this.store.lastSavedContents.get(meta.filename)!;
+        } else {
+          const staged = pending.find((p) => p.path === meta.filename && p.operation === "upsert");
+          if (staged?.content) {
+            entryJsonStr = staged.content;
+          } else if (this.store.mode === "local" && this.store.dirHandle) {
+            entryJsonStr = (await getLocalFileContent(this.store.dirHandle, meta.filename)).text || null;
+          }
+          // GitHub: skip remote fetch here — openEntry syncs that entry when opened.
+        }
+        if (!entryJsonStr) continue;
+
+        const raw = JSON.parse(entryJsonStr);
+        const content = (raw?.content && !raw.type ? raw.content : raw) as TipTapNode;
+        const nextResources = extractResources(content);
+        if (!resourcesEqual(nextResources, meta.resources)) {
+          entries[id] = { ...meta, resources: nextResources };
+          changed = true;
+        }
+      } catch (err) {
+        console.warn(`Failed to sync resources for entry ${id}:`, err);
+      }
+    }
+
+    if (!changed) return false;
+
+    this.store.metadata = normalizeNotebookMetadata({
+      ...this.store.metadata,
+      entries,
+    });
+    await this.persistFile(
+      INDEX_PATH,
+      serializeNotebookMetadata(this.store.metadata),
+      "Sync entry resources from entry files"
+    );
+    this.store.notifyStateChange();
+    return true;
+  }
+
   setEntryValidity(id: string, isValid: boolean, validationErrors: string[] = []) {
     const existingEntry = this.store.metadata.entries[id];
     if (!existingEntry) return;
@@ -582,6 +680,7 @@ export class EntryManager {
       return;
     }
 
+    // Keep in-memory for immediate UI; normalize on serialize will re-derive from fields.
     this.store.metadata = {
       ...this.store.metadata,
       entries: {
@@ -939,10 +1038,9 @@ export class EntryManager {
       const changeType = committed === null ? "create" : "update";
 
       if (mode === "github") {
-        const unchanged =
-          committed === content ||
-          (path === INDEX_PATH && notebookIndexEqualIgnoringUpdatedAt(committed, content));
-        if (unchanged) {
+        // Stage notebook.json whenever it differs from committed — including
+        // updatedAt-only edits so Source Control reflects that the entry was touched.
+        if (committed === content) {
           if (staged) {
             await removeStaged(dbName, path);
             await this.refreshPending();
@@ -988,6 +1086,9 @@ export class EntryManager {
     }
 
     for (const path of removed) {
+      // Re-check after metadata normalize — shared copy/paste refs must not be deleted
+      if (this.store.metadata.assetRefs?.[path]?.length) continue;
+
       if (this.store.mode === "local" && this.store.dirHandle) {
         if (await this.shouldStageDelete(path)) {
           await deleteLocalFileAtPath(this.store.dirHandle, path);
@@ -997,7 +1098,7 @@ export class EntryManager {
           await stageChange(this.store.getDBName(), { path, operation: "delete", label: `Cleanup orphan: ${path}`, stagedAt: new Date().toISOString() });
         }
       }
-      // Also remove from global cache to prevent hydration of dead paths
+      // Drop cache for unused assets (including when a pending upsert was cancelled)
       this.store.assetCache.delete(path);
     }
   }

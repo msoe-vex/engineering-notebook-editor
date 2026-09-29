@@ -288,13 +288,27 @@ function canonicalPhase(p: ProjectPhase): ProjectPhase {
   };
 }
 
-function canonicalEntry(e: EntryMetadata): EntryMetadata {
-  const resources = e.resources || {};
-  const canonicalResources: Record<string, { title: string; caption: string; type: string }> = {};
-  for (const id of Object.keys(resources).sort()) {
-    const r = resources[id];
-    canonicalResources[id] = { type: r.type || "", title: r.title || "", caption: r.caption || "" };
+function canonicalResources(
+  resources: EntryMetadata["resources"] | undefined
+): Record<string, { title: string; caption: string; type: string }> {
+  const src = resources || {};
+  const out: Record<string, { title: string; caption: string; type: string }> = {};
+  for (const id of Object.keys(src).sort()) {
+    const r = src[id];
+    out[id] = { type: r.type || "", title: r.title || "", caption: r.caption || "" };
   }
+  return out;
+}
+
+/** True when two resource indexes match ignoring key insertion order. */
+export function resourcesEqual(
+  a: EntryMetadata["resources"] | undefined,
+  b: EntryMetadata["resources"] | undefined
+): boolean {
+  return JSON.stringify(canonicalResources(a)) === JSON.stringify(canonicalResources(b));
+}
+
+function canonicalEntry(e: EntryMetadata): EntryMetadata {
   return {
     title: e.title || "",
     authors: parseAuthors(e.authors),
@@ -305,7 +319,7 @@ function canonicalEntry(e: EntryMetadata): EntryMetadata {
     filename: e.filename || "",
     order: e.order,
     ...(e.isTemplate ? { isTemplate: true } : {}),
-    resources: canonicalResources,
+    resources: canonicalResources(e.resources),
     references: e.references || [],
     assets: e.assets || [],
     ...(e.isValid !== undefined ? { isValid: e.isValid } : {}),

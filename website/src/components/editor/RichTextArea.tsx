@@ -203,6 +203,13 @@ const RichTextArea = ({
         return [
           new Plugin({
             appendTransaction(transactions, oldState, newState) {
+              // Skip decoration-only / metadata-refresh transactions so opening an
+              // entry doesn't look like a user edit (SAVING... flash).
+              const shouldStyle = transactions.some(
+                (t) => t.docChanged || t.getMeta("styleLinks") === true
+              );
+              if (!shouldStyle) return null;
+
               const { tr } = newState;
               let modified = false;
 
@@ -500,7 +507,9 @@ const RichTextArea = ({
     immediatelyRender: false,
     extensions,
     content: parseContent(content),
-    onCreate: () => {
+    onCreate: ({ editor: created }) => {
+      // Style existing links once before we start treating updates as user edits.
+      created.view.dispatch(created.state.tr.setMeta("styleLinks", true));
       requestAnimationFrame(() => {
         allowUpdateRef.current = true;
       });
