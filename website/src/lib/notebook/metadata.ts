@@ -1,6 +1,6 @@
 import { ASSETS_DIR, ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR, TYPE_LABELS, NOTEBOOK_VERSION } from "@/lib/constants";
 import { generateUUID } from "@/lib/utils";
-import { normalizeNotebookMetadata, mergeRecordById, parseAuthors, formatAuthors } from "./notebookSchema";
+import { normalizeNotebookMetadata, mergeRecordById, parseAuthors, formatAuthors, entriesEqualForMerge } from "./notebookSchema";
 
 export { NOTEBOOK_VERSION };
 export {
@@ -10,6 +10,7 @@ export {
   notebookIndexEqualIgnoringUpdatedAt,
   entryMetadataEqualIgnoringUpdatedAt,
   resourcesEqual,
+  entriesEqualForMerge,
   sortedEntries,
   sortedMembers,
   sortedPhases,
@@ -1070,7 +1071,8 @@ export function mergeNotebookMetadata(
     base?.entries,
     local.entries,
     remote.entries,
-    collidingEntryIds
+    collidingEntryIds,
+    entriesEqualForMerge
   );
 
   // Filter out ghost entries if validEntryIds is provided

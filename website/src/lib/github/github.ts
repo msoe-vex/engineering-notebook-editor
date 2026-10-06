@@ -418,7 +418,8 @@ export const commitChanges = async (config: GitHubConfig, changes: GitChange[], 
     repo: config.repo,
     ref: `heads/${config.branch}`,
     sha: newCommit.sha,
-    force: true,
+    // Never force — a concurrent push should fail so we can re-merge rather than wipe it.
+    force: false,
   });
 };
 

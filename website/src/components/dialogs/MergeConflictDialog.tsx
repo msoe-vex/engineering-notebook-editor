@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { AlertTriangle, X, Copy, CheckCircle2, RotateCcw, GitMerge, GitCompare, ChevronDown, ChevronRight, FileText, Code } from "lucide-react";
+import { AlertTriangle, X, Copy, CheckCircle2, RotateCcw, GitMerge, GitCompare, ChevronDown, ChevronRight, FileText, Code, Trash2 } from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import DiffViewer from "@/components/sidebar/DiffViewer";
 import { LATEX_DIR, ENTRIES_DIR } from "@/lib/constants";
 
 export type ConflictAction = "keep_local" | "keep_remote" | "duplicate";
+export type ConflictKind = "both_edited" | "local_edit_remote_delete" | "local_delete_remote_edit";
 
 export interface ConflictingEntryInfo {
   id: string;
@@ -16,6 +17,7 @@ export interface ConflictingEntryInfo {
   remoteDate?: string;
   localUpdatedAt?: string;
   remoteUpdatedAt?: string;
+  kind?: ConflictKind;
 }
 
 interface MergeConflictDialogProps {
@@ -23,6 +25,27 @@ interface MergeConflictDialogProps {
   conflicts: ConflictingEntryInfo[];
   onResolve: (resolutions: Record<string, ConflictAction>) => void;
   onCancel: () => void;
+}
+
+function conflictSubtitle(kind: ConflictKind | undefined): string {
+  switch (kind) {
+    case "local_edit_remote_delete":
+      return "You edited this entry, but a teammate deleted it on GitHub.";
+    case "local_delete_remote_edit":
+      return "You deleted this entry, but a teammate edited it on GitHub.";
+    default:
+      return "Both you and a teammate changed this entry.";
+  }
+}
+
+function localCardLabel(kind: ConflictKind | undefined): string {
+  if (kind === "local_delete_remote_edit") return "Your Version (Deleted)";
+  return "Your Version";
+}
+
+function remoteCardLabel(kind: ConflictKind | undefined): string {
+  if (kind === "local_edit_remote_delete") return "GitHub Version (Deleted)";
+  return "GitHub Version";
 }
 
 export default function MergeConflictDialog({
@@ -33,11 +56,14 @@ export default function MergeConflictDialog({
 }: MergeConflictDialogProps) {
   const { getBaseFileContent, getFileContent } = useWorkspace();
 
-  // Map of entryId -> chosen action. Default to 'duplicate' (safest: keep both).
+  // Map of entryId -> chosen action. Default to 'duplicate' (safest: keep both),
+  // except delete-vs-edit where "keep both" is less natural — still default duplicate
+  // for local_edit_remote_delete (save a copy), and keep_remote for local_delete_remote_edit.
   const [resolutions, setResolutions] = useState<Record<string, ConflictAction>>(() => {
     const initial: Record<string, ConflictAction> = {};
     conflicts.forEach(c => {
-      initial[c.id] = "duplicate";
+      if (c.kind === "local_delete_remote_edit") initial[c.id] = "keep_remote";
+      else initial[c.id] = "duplicate";
     });
     return initial;
   });
@@ -64,6 +90,10 @@ export default function MergeConflictDialog({
     onResolve(resolutions);
   };
 
+  const hasDeleteConflict = conflicts.some(
+    (c) => c.kind === "local_edit_remote_delete" || c.kind === "local_delete_remote_edit"
+  );
+
   return (
     <div className="fixed inset-0 z-500 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200 select-none">
       <div className="bg-nb-surface border border-nb-outline-variant/60 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -78,9 +108,11 @@ export default function MergeConflictDialog({
                 Merge Conflicts Detected
               </h2>
               <p className="text-[11px] text-nb-on-surface-variant/80">
-                {conflicts.length === 1
-                  ? "A teammate updated an entry on GitHub while you were editing it."
-                  : `${conflicts.length} entries were modified on GitHub while you were editing them.`}
+                {hasDeleteConflict
+                  ? "Some entries were deleted on one side and edited on the other."
+                  : conflicts.length === 1
+                    ? "A teammate updated an entry on GitHub while you were editing it."
+                    : `${conflicts.length} entries were modified on GitHub while you were editing them.`}
               </p>
             </div>
           </div>
@@ -96,10 +128,15 @@ export default function MergeConflictDialog({
         {/* Conflict Items List */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
           {conflicts.map(item => {
+            const kind = item.kind || "both_edited";
             const currentAction = resolutions[item.id] || "duplicate";
             const isDiffOpen = expandedDiffs.has(item.id);
             const currentMode = diffMode[item.id] || "latex";
             const targetPath = currentMode === "latex" ? `${LATEX_DIR}/${item.id}.tex` : `${ENTRIES_DIR}/${item.id}.json`;
+            const showDiff = kind !== "local_edit_remote_delete" && kind !== "local_delete_remote_edit"
+              ? true
+              : kind === "local_edit_remote_delete"; // local still has content to compare against base
+            const showKeepBoth = kind !== "local_delete_remote_edit";
 
             return (
               <div
@@ -112,59 +149,76 @@ export default function MergeConflictDialog({
                     <span className="text-[12px] font-bold text-nb-on-surface truncate block">
                       {item.localTitle || item.remoteTitle || "Untitled Entry"}
                     </span>
+                    <span className="text-[10px] text-amber-700 dark:text-amber-300/90 block mt-0.5">
+                      {conflictSubtitle(kind)}
+                    </span>
                     <span className="text-[10px] font-mono text-nb-on-surface-variant/60">
                       ID: {item.id.slice(0, 8)}...
                     </span>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => toggleDiff(item.id)}
-                    className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg transition-colors cursor-pointer ${
-                      isDiffOpen
-                        ? "bg-nb-primary/15 text-nb-primary"
-                        : "text-nb-on-surface-variant hover:text-nb-on-surface hover:bg-nb-surface-high"
-                    }`}
-                  >
-                    <GitCompare size={12} />
-                    <span>{isDiffOpen ? "Hide Diff" : "View Diff"}</span>
-                    {isDiffOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                  </button>
+                  {showDiff && (
+                    <button
+                      type="button"
+                      onClick={() => toggleDiff(item.id)}
+                      className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg transition-colors cursor-pointer ${
+                        isDiffOpen
+                          ? "bg-nb-primary/15 text-nb-primary"
+                          : "text-nb-on-surface-variant hover:text-nb-on-surface hover:bg-nb-surface-high"
+                      }`}
+                    >
+                      <GitCompare size={12} />
+                      <span>{isDiffOpen ? "Hide Diff" : "View Diff"}</span>
+                      {isDiffOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                    </button>
+                  )}
                 </div>
 
                 {/* Local vs Remote Comparison Cards */}
                 <div className="grid grid-cols-2 gap-2 text-[10px]">
-                  {/* Your Version */}
                   <div className={`p-2.5 rounded-lg border transition-all ${
                     currentAction === "keep_local"
                       ? "bg-nb-primary/10 border-nb-primary/40 text-nb-on-surface"
                       : "bg-nb-surface border-nb-outline-variant/30 text-nb-on-surface-variant"
                   }`}>
-                    <div className="font-bold text-[10px] text-nb-primary mb-1 uppercase tracking-wider">
-                      Your Version
+                    <div className="font-bold text-[10px] text-nb-primary mb-1 uppercase tracking-wider flex items-center gap-1">
+                      {kind === "local_delete_remote_edit" && <Trash2 size={10} />}
+                      {localCardLabel(kind)}
                     </div>
-                    <div>Title: <span className="font-medium text-nb-on-surface">{item.localTitle || "—"}</span></div>
-                    <div>Author: <span className="font-medium text-nb-on-surface">{item.localAuthor || "—"}</span></div>
-                    <div>Date: <span className="font-medium text-nb-on-surface">{item.localDate || "—"}</span></div>
+                    {kind === "local_delete_remote_edit" ? (
+                      <div className="italic text-nb-on-surface-variant">Marked for deletion</div>
+                    ) : (
+                      <>
+                        <div>Title: <span className="font-medium text-nb-on-surface">{item.localTitle || "—"}</span></div>
+                        <div>Author: <span className="font-medium text-nb-on-surface">{item.localAuthor || "—"}</span></div>
+                        <div>Date: <span className="font-medium text-nb-on-surface">{item.localDate || "—"}</span></div>
+                      </>
+                    )}
                   </div>
 
-                  {/* Remote Version */}
                   <div className={`p-2.5 rounded-lg border transition-all ${
-                    currentAction === "keep_remote"
+                    currentAction === "keep_remote" || (currentAction === "duplicate" && kind === "local_edit_remote_delete")
                       ? "bg-purple-500/10 border-purple-500/40 text-nb-on-surface"
                       : "bg-nb-surface border-nb-outline-variant/30 text-nb-on-surface-variant"
                   }`}>
-                    <div className="font-bold text-[10px] text-purple-600 dark:text-purple-400 mb-1 uppercase tracking-wider">
-                      GitHub Version
+                    <div className="font-bold text-[10px] text-purple-600 dark:text-purple-400 mb-1 uppercase tracking-wider flex items-center gap-1">
+                      {kind === "local_edit_remote_delete" && <Trash2 size={10} />}
+                      {remoteCardLabel(kind)}
                     </div>
-                    <div>Title: <span className="font-medium text-nb-on-surface">{item.remoteTitle || "—"}</span></div>
-                    <div>Author: <span className="font-medium text-nb-on-surface">{item.remoteAuthor || "—"}</span></div>
-                    <div>Date: <span className="font-medium text-nb-on-surface">{item.remoteDate || "—"}</span></div>
+                    {kind === "local_edit_remote_delete" ? (
+                      <div className="italic text-nb-on-surface-variant">Deleted on GitHub</div>
+                    ) : (
+                      <>
+                        <div>Title: <span className="font-medium text-nb-on-surface">{item.remoteTitle || "—"}</span></div>
+                        <div>Author: <span className="font-medium text-nb-on-surface">{item.remoteAuthor || "—"}</span></div>
+                        <div>Date: <span className="font-medium text-nb-on-surface">{item.remoteDate || "—"}</span></div>
+                      </>
+                    )}
                   </div>
                 </div>
 
                 {/* Inline Diff Preview */}
-                {isDiffOpen && (
+                {isDiffOpen && showDiff && (
                   <div className="space-y-1.5 pt-1">
                     <div className="flex items-center justify-between px-1">
                       <span className="text-[9px] font-black uppercase tracking-wider text-nb-on-surface-variant/60">
@@ -215,22 +269,26 @@ export default function MergeConflictDialog({
                 )}
 
                 {/* Resolution Choice Pills */}
-                <div className="grid grid-cols-3 gap-1.5 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setAction(item.id, "duplicate")}
-                    className={`py-2 px-2 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-1 border ${
-                      currentAction === "duplicate"
-                        ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-700 dark:text-emerald-300 shadow-xs"
-                        : "bg-nb-surface border-nb-outline-variant/30 text-nb-on-surface-variant hover:bg-nb-surface-high"
-                    }`}
-                  >
-                    <div className="flex items-center gap-1">
-                      <Copy size={11} />
-                      <span>Keep Both</span>
-                    </div>
-                    <span className="text-[8px] font-medium opacity-70">Saves copy</span>
-                  </button>
+                <div className={`grid gap-1.5 pt-1 ${showKeepBoth ? "grid-cols-3" : "grid-cols-2"}`}>
+                  {showKeepBoth && (
+                    <button
+                      type="button"
+                      onClick={() => setAction(item.id, "duplicate")}
+                      className={`py-2 px-2 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-1 border ${
+                        currentAction === "duplicate"
+                          ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-700 dark:text-emerald-300 shadow-xs"
+                          : "bg-nb-surface border-nb-outline-variant/30 text-nb-on-surface-variant hover:bg-nb-surface-high"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1">
+                        <Copy size={11} />
+                        <span>{kind === "local_edit_remote_delete" ? "Keep Mine as Copy" : "Keep Both"}</span>
+                      </div>
+                      <span className="text-[8px] font-medium opacity-70">
+                        {kind === "local_edit_remote_delete" ? "Accept delete, save copy" : "Saves copy"}
+                      </span>
+                    </button>
+                  )}
 
                   <button
                     type="button"
@@ -242,10 +300,22 @@ export default function MergeConflictDialog({
                     }`}
                   >
                     <div className="flex items-center gap-1">
-                      <CheckCircle2 size={11} />
-                      <span>Use Mine</span>
+                      {kind === "local_delete_remote_edit" ? <Trash2 size={11} /> : <CheckCircle2 size={11} />}
+                      <span>
+                        {kind === "local_delete_remote_edit"
+                          ? "Delete Anyway"
+                          : kind === "local_edit_remote_delete"
+                            ? "Keep Mine"
+                            : "Use Mine"}
+                      </span>
                     </div>
-                    <span className="text-[8px] font-medium opacity-70">Overwrite remote</span>
+                    <span className="text-[8px] font-medium opacity-70">
+                      {kind === "local_delete_remote_edit"
+                        ? "Discard remote edits"
+                        : kind === "local_edit_remote_delete"
+                          ? "Restore on GitHub"
+                          : "Overwrite remote"}
+                    </span>
                   </button>
 
                   <button
@@ -258,10 +328,22 @@ export default function MergeConflictDialog({
                     }`}
                   >
                     <div className="flex items-center gap-1">
-                      <RotateCcw size={11} />
-                      <span>Use Remote</span>
+                      {kind === "local_edit_remote_delete" ? <Trash2 size={11} /> : <RotateCcw size={11} />}
+                      <span>
+                        {kind === "local_edit_remote_delete"
+                          ? "Accept Delete"
+                          : kind === "local_delete_remote_edit"
+                            ? "Keep Remote"
+                            : "Use Remote"}
+                      </span>
                     </div>
-                    <span className="text-[8px] font-medium opacity-70">Discard mine</span>
+                    <span className="text-[8px] font-medium opacity-70">
+                      {kind === "local_edit_remote_delete"
+                        ? "Discard my edits"
+                        : kind === "local_delete_remote_edit"
+                          ? "Undo my delete"
+                          : "Discard mine"}
+                    </span>
                   </button>
                 </div>
               </div>
