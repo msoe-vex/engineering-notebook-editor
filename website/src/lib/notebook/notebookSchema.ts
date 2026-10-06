@@ -597,13 +597,11 @@ export function entriesEqualForMerge(
   if (a === b) return true;
   if (!a || !b) return false;
   const strip = (e: EntryMetadata) => {
-    const {
-      isValid: _isValid,
-      validationErrors: _validationErrors,
-      order: _order,
-      updatedAt: _updatedAt,
-      ...rest
-    } = e;
+    const rest = { ...e };
+    delete rest.isValid;
+    delete rest.validationErrors;
+    delete (rest as { order?: number }).order;
+    delete rest.updatedAt;
     return {
       ...rest,
       authors: parseAuthors(e.authors),
