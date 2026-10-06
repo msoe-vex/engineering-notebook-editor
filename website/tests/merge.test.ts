@@ -140,12 +140,16 @@ describe("mergeRecordById", () => {
   });
 
   it("keeps a local edit when remote deleted the same id", () => {
-    const merged = mergeRecordById(base, dict([["a", item("Local", 0)]]), {});
+    const collisions: string[] = [];
+    const merged = mergeRecordById(base, dict([["a", item("Local", 0)]]), {}, collisions);
+    expect(collisions).toEqual(["a"]);
     expect(merged.a.title).toBe("Local");
   });
 
   it("keeps a remote edit when local deleted the same id", () => {
-    const merged = mergeRecordById(base, {}, dict([["a", item("Remote", 0)]]));
+    const collisions: string[] = [];
+    const merged = mergeRecordById(base, {}, dict([["a", item("Remote", 0)]]), collisions);
+    expect(collisions).toEqual(["a"]);
     expect(merged.a.title).toBe("Remote");
   });
 });
@@ -367,19 +371,199 @@ describe("reconcileNotebookMerge", () => {
     expect(orphanIds).toEqual([]);
   });
 
-  it("does not orphan a file still claimed by remote metadata", () => {
-    // Local dropped e2 (treated as local delete) while remote still lists it.
-    // Do not stage an orphan delete for e2.json — remote still owns that entry.
+  it("keeps remote sibling entry edits when local only staged another entry", () => {
+    // User A pushed edits to entryA; User B only edited entryB locally then syncs.
+    const base = notebook({
+      entryA: { title: "A", order: 0 },
+      entryB: { title: "B", order: 1 },
+    });
+    const local = notebook({
+      entryA: { title: "A", order: 0, isValid: false, validationErrors: ["x"] },
+      entryB: { title: "B local", order: 1 },
+    });
+    const remote = notebook({
+      entryA: { title: "A remote", order: 0 },
+      entryB: { title: "B", order: 1 },
+    });
+    const { fileIds, pendingUpsertIds, pendingDeleteIds } = collectEntryFileIds(
+      ["data/entries/entryA.json", "data/entries/entryB.json"],
+      [{ path: "data/entries/entryB.json", operation: "upsert" }]
+    );
+
+    const { merged, hasCollisions, collidingEntryIds } = reconcileNotebookMerge(
+      base,
+      local,
+      remote,
+      { fileIds, pendingUpsertIds, pendingDeleteIds }
+    );
+
+    expect(merged.entries.entryA.title).toBe("A remote");
+    expect(merged.entries.entryB.title).toBe("B local");
+    expect(hasCollisions).toBe(false);
+    expect(collidingEntryIds).toEqual([]);
+  });
+
+  it("adopts remote sibling edits when base snapshot is missing", () => {
+    const local = notebook({
+      entryA: { title: "A stale", order: 0 },
+      entryB: { title: "B local", order: 1 },
+    });
+    const remote = notebook({
+      entryA: { title: "A remote", order: 0 },
+      entryB: { title: "B", order: 1 },
+    });
+    const { fileIds, pendingUpsertIds, pendingDeleteIds } = collectEntryFileIds(
+      ["data/entries/entryA.json", "data/entries/entryB.json"],
+      [{ path: "data/entries/entryB.json", operation: "upsert" }]
+    );
+
+    const { merged } = reconcileNotebookMerge(null, local, remote, {
+      fileIds,
+      pendingUpsertIds,
+      pendingDeleteIds,
+    });
+
+    expect(merged.entries.entryA.title).toBe("A remote");
+    expect(merged.entries.entryB.title).toBe("B local");
+  });
+
+  it("flags local edit vs remote delete as a conflict", () => {
+    const base = notebook({ e1: { title: "Entry 1" }, e2: { title: "Entry 2" } });
+    const local = notebook({ e1: { title: "Entry 1 edited" }, e2: { title: "Entry 2" } });
+    const remote = notebook({ e2: { title: "Entry 2" } }); // e1 deleted remotely
+    const { fileIds, pendingUpsertIds, pendingDeleteIds } = collectEntryFileIds(
+      ["data/entries/e1.json", "data/entries/e2.json"],
+      [{ path: "data/entries/e1.json", operation: "upsert" }]
+    );
+
+    const { merged, hasCollisions, collidingEntryIds, conflictKinds } = reconcileNotebookMerge(
+      base,
+      local,
+      remote,
+      { fileIds, pendingUpsertIds, pendingDeleteIds }
+    );
+
+    expect(hasCollisions).toBe(true);
+    expect(collidingEntryIds).toContain("e1");
+    expect(conflictKinds.e1).toBe("local_edit_remote_delete");
+    // Held as local until the user resolves
+    expect(merged.entries.e1.title).toBe("Entry 1 edited");
+  });
+
+  it("flags local delete vs remote edit as a conflict", () => {
+    const base = notebook({ e1: { title: "Entry 1" }, e2: { title: "Entry 2" } });
+    const local = notebook({ e2: { title: "Entry 2" } }); // e1 deleted locally
+    const remote = notebook({ e1: { title: "Entry 1 remote" }, e2: { title: "Entry 2" } });
+    const { fileIds, pendingUpsertIds, pendingDeleteIds } = collectEntryFileIds(
+      ["data/entries/e2.json"],
+      [{ path: "data/entries/e1.json", operation: "delete" }]
+    );
+
+    const { merged, hasCollisions, collidingEntryIds, conflictKinds } = reconcileNotebookMerge(
+      base,
+      local,
+      remote,
+      { fileIds, pendingUpsertIds, pendingDeleteIds }
+    );
+
+    expect(hasCollisions).toBe(true);
+    expect(collidingEntryIds).toContain("e1");
+    expect(conflictKinds.e1).toBe("local_delete_remote_edit");
+    // Held as remote until the user resolves
+    expect(merged.entries.e1.title).toBe("Entry 1 remote");
+  });
+
+  it("does not conflict when local delete and remote also deleted / unchanged", () => {
+    const base = notebook({ e1: { title: "Entry 1" }, e2: { title: "Entry 2" } });
+    const local = notebook({ e2: { title: "Entry 2" } });
+    const remote = notebook({ e1: { title: "Entry 1" }, e2: { title: "Entry 2" } }); // remote unchanged
+    const { fileIds, pendingUpsertIds, pendingDeleteIds } = collectEntryFileIds(
+      ["data/entries/e2.json"],
+      [{ path: "data/entries/e1.json", operation: "delete" }]
+    );
+
+    const { merged, hasCollisions, collidingEntryIds, conflictKinds } = reconcileNotebookMerge(
+      base,
+      local,
+      remote,
+      { fileIds, pendingUpsertIds, pendingDeleteIds }
+    );
+
+    expect(hasCollisions).toBe(false);
+    expect(collidingEntryIds).toEqual([]);
+    expect(conflictKinds.e1).toBeUndefined();
+    expect(merged.entries.e1).toBeUndefined();
+    expect(merged.entries.e2.title).toBe("Entry 2");
+  });
+
+  it("hard-prefers remote for unstaged entries even when local index is polluted", () => {
+    const base = notebook({
+      entryA: { title: "A", order: 0 },
+      entryB: { title: "B", order: 1 },
+    });
+    // Local index "edited" entryA (e.g. resource sync) without staging entryA.json
+    const local = notebook({
+      entryA: { title: "A polluted", order: 0, isValid: false, validationErrors: ["caption"] },
+      entryB: { title: "B local", order: 1 },
+    });
+    const remote = notebook({
+      entryA: { title: "A remote", order: 0 },
+      entryB: { title: "B", order: 1 },
+    });
+    const { fileIds, pendingUpsertIds, pendingDeleteIds } = collectEntryFileIds(
+      ["data/entries/entryA.json", "data/entries/entryB.json"],
+      [{ path: "data/entries/entryB.json", operation: "upsert" }]
+    );
+
+    const { merged, hasCollisions, collidingEntryIds, conflictKinds } = reconcileNotebookMerge(
+      base,
+      local,
+      remote,
+      { fileIds, pendingUpsertIds, pendingDeleteIds }
+    );
+
+    expect(merged.entries.entryA.title).toBe("A remote");
+    expect(merged.entries.entryB.title).toBe("B local");
+    expect(hasCollisions).toBe(false);
+    expect(collidingEntryIds).toEqual([]);
+    expect(conflictKinds.entryA).toBeUndefined();
+  });
+
+  it("does not prompt for both_edited when only index metadata differs without a staged entry file", () => {
+    const base = notebook({ e1: { title: "Entry 1" } });
+    const local = notebook({ e1: { title: "Entry 1", resources: { img: { title: "x", caption: "", type: "image" } } } });
+    const remote = notebook({ e1: { title: "Entry 1 remote" } });
+    const { fileIds, pendingUpsertIds, pendingDeleteIds } = collectEntryFileIds(
+      ["data/entries/e1.json"],
+      [] // no staged entry upsert
+    );
+
+    const { merged, hasCollisions, conflictKinds } = reconcileNotebookMerge(
+      base,
+      local,
+      remote,
+      { fileIds, pendingUpsertIds, pendingDeleteIds }
+    );
+
+    expect(hasCollisions).toBe(false);
+    expect(conflictKinds.e1).toBeUndefined();
+    expect(merged.entries.e1.title).toBe("Entry 1 remote");
+  });
+
+  it("restores a remote-owned entry dropped from a stale local index without a staged delete", () => {
+    // Local index lost e2 (stale/corrupt) while remote still lists it and no pending delete.
+    // Prefer remote — do not treat the missing index row as an intentional delete.
     const base = notebook({ e1: { title: "Entry 1" }, e2: { title: "Still on remote" } });
     const local = notebook({ e1: { title: "Entry 1" } });
     const remote = notebook({ e1: { title: "Entry 1" }, e2: { title: "Still on remote" } });
-    const { fileIds, pendingUpsertIds } = collectEntryFileIds(
+    const { fileIds, pendingUpsertIds, pendingDeleteIds } = collectEntryFileIds(
       ["data/entries/e1.json", "data/entries/e2.json"],
       []
     );
 
-    const { merged, orphanIds } = reconcileNotebookMerge(base, local, remote, { fileIds, pendingUpsertIds });
-    expect(Object.keys(merged.entries)).toEqual(["e1"]);
+    const { merged, orphanIds } = reconcileNotebookMerge(base, local, remote, { fileIds, pendingUpsertIds, pendingDeleteIds });
+    expect(Object.keys(merged.entries).sort()).toEqual(["e1", "e2"]);
+    expect(merged.entries.e2.title).toBe("Still on remote");
     expect(orphanIds).toEqual([]);
   });
 });

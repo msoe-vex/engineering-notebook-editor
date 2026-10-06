@@ -415,30 +415,50 @@ class WorkspaceStore implements IWorkspaceStore {
             ? normalizeNotebookMetadata({ ...EMPTY_METADATA, ...persistedBase })
             : (this.baseMetadata ? cloneNotebookMetadata(this.baseMetadata) : null);
 
-          const { fileIds, pendingUpsertIds } = collectEntryFileIds(this.entries.map(e => e.path), all);
-          const { merged, hasCollisions, collidingEntryIds, orphanIds } = reconcileNotebookMerge(
+          // Prefer staged notebook.json as local — it is what we would push without merging.
+          const pendingIndex = all.find((p) => p.path === INDEX_PATH && p.operation === "upsert");
+          let localMetadata = this.metadata;
+          if (pendingIndex?.content) {
+            try {
+              localMetadata = normalizeNotebookMetadata({
+                ...EMPTY_METADATA,
+                ...JSON.parse(pendingIndex.content),
+              });
+            } catch (err) {
+              console.warn("Failed to parse pending notebook.json for merge; using in-memory metadata:", err);
+            }
+          }
+
+          const { fileIds, pendingUpsertIds, pendingDeleteIds } = collectEntryFileIds(this.entries.map(e => e.path), all);
+          const { merged, hasCollisions, collidingEntryIds, conflictKinds, orphanIds } = reconcileNotebookMerge(
             baseMetadata,
-            this.metadata,
+            localMetadata,
             remoteMetadata,
-            { fileIds, pendingUpsertIds }
+            { fileIds, pendingUpsertIds, pendingDeleteIds }
           );
 
           if (hasCollisions && collidingEntryIds.length > 0) {
             // Level 2: Prompt user for resolution choice on conflicting entries
             const conflictsList = collidingEntryIds.map(id => {
-              const localMeta = this.metadata.entries[id];
+              const localMeta = localMetadata.entries[id] || this.metadata.entries[id];
               const remoteMeta = remoteMetadata.entries?.[id];
+              const kind = conflictKinds[id] || "both_edited";
               return {
                 id,
-                localTitle: localMeta?.title || "Untitled",
-                remoteTitle: remoteMeta?.title || "Untitled",
-                localAuthor: formatAuthors(localMeta?.authors),
+                kind,
+                localTitle: kind === "local_delete_remote_edit"
+                  ? (baseMetadata?.entries?.[id]?.title || remoteMeta?.title || "Untitled")
+                  : (localMeta?.title || "Untitled"),
+                remoteTitle: kind === "local_edit_remote_delete"
+                  ? (baseMetadata?.entries?.[id]?.title || localMeta?.title || "Untitled")
+                  : (remoteMeta?.title || "Untitled"),
+                localAuthor: formatAuthors(localMeta?.authors || baseMetadata?.entries?.[id]?.authors),
                 remoteAuthor: formatAuthors(parseAuthors(
                   remoteMeta && typeof remoteMeta === "object" ? (remoteMeta as { authors?: unknown; author?: unknown }).authors : undefined,
                   remoteMeta && typeof remoteMeta === "object" ? (remoteMeta as { authors?: unknown; author?: unknown }).author : undefined
                 )),
-                localDate: localMeta?.date,
-                remoteDate: remoteMeta?.date,
+                localDate: localMeta?.date || baseMetadata?.entries?.[id]?.date,
+                remoteDate: remoteMeta?.date || baseMetadata?.entries?.[id]?.date,
                 localUpdatedAt: localMeta?.updatedAt,
                 remoteUpdatedAt: remoteMeta?.updatedAt,
               };
@@ -459,26 +479,95 @@ class WorkspaceStore implements IWorkspaceStore {
 
             // Apply resolution actions
             for (const [entryId, action] of Object.entries(resolutions)) {
-              if (action === "keep_remote") {
-                // Discard local edits for this entry
-                merged.entries[entryId] = remoteMetadata.entries[entryId];
-                const entryJsonPath = `${ENTRIES_DIR}/${entryId}.json`;
-                const entryTexPath = `${LATEX_DIR}/${entryId}.tex`;
-                const remoteEntryJson = this.getFullPath(entryJsonPath);
-                const remoteEntryTex = this.getFullPath(entryTexPath);
+              const kind = conflictKinds[entryId] || "both_edited";
+              const entryJsonPath = `${ENTRIES_DIR}/${entryId}.json`;
+              const entryTexPath = `${LATEX_DIR}/${entryId}.tex`;
+              const remoteEntryJson = this.getFullPath(entryJsonPath);
+              const remoteEntryTex = this.getFullPath(entryTexPath);
 
+              const removeFromGitChanges = () => {
                 const jsonIdx = gitChanges.findIndex(c => c.path === remoteEntryJson);
                 if (jsonIdx >= 0) gitChanges.splice(jsonIdx, 1);
                 const texIdx = gitChanges.findIndex(c => c.path === remoteEntryTex);
                 if (texIdx >= 0) gitChanges.splice(texIdx, 1);
+              };
 
+              const stageDeleteInGitChanges = () => {
+                const jsonIdx = gitChanges.findIndex(c => c.path === remoteEntryJson);
+                if (jsonIdx >= 0) gitChanges[jsonIdx].content = null;
+                else gitChanges.push({ path: remoteEntryJson, content: null, isBinary: false });
+                const texIdx = gitChanges.findIndex(c => c.path === remoteEntryTex);
+                if (texIdx >= 0) gitChanges[texIdx].content = null;
+                else gitChanges.push({ path: remoteEntryTex, content: null, isBinary: false });
+              };
+
+              if (kind === "local_edit_remote_delete") {
+                if (action === "keep_remote") {
+                  // Accept remote delete — drop local upserts and remove from index.
+                  delete merged.entries[entryId];
+                  removeFromGitChanges();
+                  stageDeleteInGitChanges();
+                  await removeStaged(dbName, entryJsonPath);
+                  await removeStaged(dbName, entryTexPath);
+                  await stageChange(dbName, { path: entryJsonPath, operation: "delete", label: "Accept remote delete", stagedAt: new Date().toISOString() });
+                  await stageChange(dbName, { path: entryTexPath, operation: "delete", label: "Accept remote delete", stagedAt: new Date().toISOString() });
+                  this.lastSavedContents.delete(entryJsonPath);
+                  this.lastSavedContents.delete(entryTexPath);
+                } else if (action === "duplicate") {
+                  // Save local work as a new entry; accept remote delete of the original.
+                  const localMeta = localMetadata.entries[entryId] || this.metadata.entries[entryId];
+                  const newId = await this.entryManager.duplicateEntry(entryId, {
+                    title: `${localMeta?.title || "Entry"} (Conflicted Copy)`,
+                    authors: localMeta?.authors,
+                    phase: localMeta?.phase ?? null,
+                    date: localMeta?.date,
+                  });
+                  delete merged.entries[entryId];
+                  const duplicatedMeta = this.metadata.entries[newId];
+                  if (duplicatedMeta) {
+                    merged.entries[newId] = duplicatedMeta;
+                    const newJsonPath = this.getFullPath(`${ENTRIES_DIR}/${newId}.json`);
+                    const newTexPath = this.getFullPath(`${LATEX_DIR}/${newId}.tex`);
+                    const newJsonContent = await this.getFileContent(`${ENTRIES_DIR}/${newId}.json`);
+                    const newTexContent = await this.getFileContent(`${LATEX_DIR}/${newId}.tex`);
+                    if (newJsonContent) gitChanges.push({ path: newJsonPath, content: newJsonContent, isBinary: false });
+                    if (newTexContent) gitChanges.push({ path: newTexPath, content: newTexContent, isBinary: false });
+                  }
+                  removeFromGitChanges();
+                  stageDeleteInGitChanges();
+                  await removeStaged(dbName, entryJsonPath);
+                  await removeStaged(dbName, entryTexPath);
+                  await stageChange(dbName, { path: entryJsonPath, operation: "delete", label: "Accept remote delete", stagedAt: new Date().toISOString() });
+                  await stageChange(dbName, { path: entryTexPath, operation: "delete", label: "Accept remote delete", stagedAt: new Date().toISOString() });
+                }
+                // keep_local: leave local entry in merged + push upserts (default)
+              } else if (kind === "local_delete_remote_edit") {
+                if (action === "keep_local") {
+                  // Confirm local delete — drop remote edits.
+                  delete merged.entries[entryId];
+                  stageDeleteInGitChanges();
+                  await stageChange(dbName, { path: entryJsonPath, operation: "delete", label: "Delete entry", stagedAt: new Date().toISOString() });
+                  await stageChange(dbName, { path: entryTexPath, operation: "delete", label: "Delete LaTeX", stagedAt: new Date().toISOString() });
+                } else {
+                  // keep_remote (or duplicate): undo local delete, keep remote content.
+                  merged.entries[entryId] = remoteMetadata.entries[entryId];
+                  removeFromGitChanges();
+                  await removeStaged(dbName, entryJsonPath);
+                  await removeStaged(dbName, entryTexPath);
+                  this.lastSavedContents.delete(entryJsonPath);
+                  this.lastSavedContents.delete(entryTexPath);
+                }
+              } else if (action === "keep_remote") {
+                // Discard local edits for this entry
+                merged.entries[entryId] = remoteMetadata.entries[entryId];
+                removeFromGitChanges();
                 await removeStaged(dbName, entryJsonPath);
                 await removeStaged(dbName, entryTexPath);
                 this.lastSavedContents.delete(entryJsonPath);
                 this.lastSavedContents.delete(entryTexPath);
               } else if (action === "duplicate") {
                 // Keep remote version at entryId, duplicate local version as a new entry with copy title
-                const localMeta = this.metadata.entries[entryId];
+                const localMeta = localMetadata.entries[entryId] || this.metadata.entries[entryId];
                 const newId = await this.entryManager.duplicateEntry(entryId, {
                   title: `${localMeta?.title || "Entry"} (Conflicted Copy)`,
                   authors: localMeta?.authors,
@@ -501,15 +590,9 @@ class WorkspaceStore implements IWorkspaceStore {
                 }
 
                 // Remove original entry from staged since remote has it
-                const origJsonPath = this.getFullPath(`${ENTRIES_DIR}/${entryId}.json`);
-                const origTexPath = this.getFullPath(`${LATEX_DIR}/${entryId}.tex`);
-                const jIdx = gitChanges.findIndex(c => c.path === origJsonPath);
-                if (jIdx >= 0) gitChanges.splice(jIdx, 1);
-                const tIdx = gitChanges.findIndex(c => c.path === origTexPath);
-                if (tIdx >= 0) gitChanges.splice(tIdx, 1);
-
-                await removeStaged(dbName, `${ENTRIES_DIR}/${entryId}.json`);
-                await removeStaged(dbName, `${LATEX_DIR}/${entryId}.tex`);
+                removeFromGitChanges();
+                await removeStaged(dbName, entryJsonPath);
+                await removeStaged(dbName, entryTexPath);
               }
               // "keep_local" keeps merged.entries[entryId] = local version (default in merged)
             }
@@ -650,7 +733,16 @@ class WorkspaceStore implements IWorkspaceStore {
         ? `${customMessage} (Updated ${gitChanges.length} ${gitChanges.length === 1 ? "file" : "files"})`
         : `Update notebook: ${gitChanges.length} ${gitChanges.length === 1 ? "file" : "files"}`;
 
-      await commitChanges(config, gitChanges, finalMsg);
+      try {
+        await commitChanges(config, gitChanges, finalMsg);
+      } catch (pushErr: unknown) {
+        const status = (pushErr as { status?: number })?.status;
+        const msg = status === 422 || status === 409
+          ? "GitHub moved ahead while syncing. Your changes are still staged — sync again to re-merge."
+          : ((pushErr as Error)?.message || "Failed to push changes to GitHub.");
+        events.emit(EventNames.SHOW_NOTIFICATION, { message: msg, type: "error" });
+        throw pushErr;
+      }
       await clearAllPending(dbName);
       await clearBaseMetadata(dbName);
       await this.reloadWorkspace();

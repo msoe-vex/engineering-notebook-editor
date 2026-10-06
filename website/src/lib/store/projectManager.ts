@@ -429,7 +429,7 @@ export class ProjectManager {
       }
     }
 
-    const { fileIds, pendingUpsertIds } = collectEntryFileIds(entryFiles.map(f => f.path), pending);
+    const { fileIds, pendingUpsertIds, pendingDeleteIds } = collectEntryFileIds(entryFiles.map(f => f.path), pending);
 
     if (persistedBase) {
       this.store.baseMetadata = cloneNotebookMetadata(normalizeNotebookMetadata({ ...EMPTY_METADATA, ...persistedBase }));
@@ -445,6 +445,7 @@ export class ProjectManager {
       const { merged, orphanIds } = reconcileNotebookMerge(this.store.baseMetadata, localMeta, remoteMeta, {
         fileIds,
         pendingUpsertIds,
+        pendingDeleteIds,
       });
       for (const id of orphanIds) {
         const { jsonPath, texPath } = entryArtifactPaths(id);
