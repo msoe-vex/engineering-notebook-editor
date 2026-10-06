@@ -596,20 +596,18 @@ export function entriesEqualForMerge(
 ): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
-  const strip = (e: EntryMetadata) => {
-    const rest = { ...e };
-    delete rest.isValid;
-    delete rest.validationErrors;
-    delete (rest as { order?: number }).order;
-    delete rest.updatedAt;
-    return {
-      ...rest,
-      authors: parseAuthors(e.authors),
-      resources: canonicalResources(e.resources),
-      references: [...(e.references || [])].sort(),
-      assets: [...(e.assets || [])].sort(),
-    };
-  };
+  const strip = (e: EntryMetadata) => ({
+    title: e.title || "",
+    authors: parseAuthors(e.authors),
+    phase: e.phase ?? null,
+    createdAt: e.createdAt || "",
+    date: e.date || "",
+    filename: e.filename || "",
+    ...(e.isTemplate ? { isTemplate: true as const } : {}),
+    resources: canonicalResources(e.resources),
+    references: [...(e.references || [])].sort(),
+    assets: [...(e.assets || [])].sort(),
+  });
   return JSON.stringify(strip(a)) === JSON.stringify(strip(b));
 }
 
