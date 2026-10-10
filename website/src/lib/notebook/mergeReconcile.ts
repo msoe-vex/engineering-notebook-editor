@@ -1,7 +1,73 @@
-import { ENTRIES_DIR, LATEX_DIR } from "@/lib/constants";
+import { ASSETS_DIR, ENTRIES_DIR, LATEX_DIR } from "@/lib/constants";
 import type { NotebookMetadata } from "./metadata";
 import { mergeNotebookMetadata } from "./metadata";
 import { entriesEqualForMerge, normalizeNotebookMetadata, serializeNotebookMetadata } from "./notebookSchema";
+
+/** True when path is a notebook asset file (compressed/original images, etc.). */
+export function isAssetPath(path: string): boolean {
+  return path.startsWith(`${ASSETS_DIR}/`) || /(^|\/)assets\//.test(path);
+}
+
+/**
+ * 3-way merge of entry asset path lists.
+ * Keeps adds from either side; drops only when that side removed vs base.
+ * Critical when local index is stale (never saw a remote add) so missing ≠ delete.
+ */
+export function mergeAssetPaths(
+  base: string[] | undefined,
+  local: string[] | undefined,
+  remote: string[] | undefined
+): string[] {
+  const b = new Set(base || []);
+  const l = new Set(local || []);
+  const r = new Set(remote || []);
+  const out: string[] = [];
+  for (const path of new Set([...b, ...l, ...r])) {
+    const inB = b.has(path);
+    const inL = l.has(path);
+    const inR = r.has(path);
+    if (inL && inR) {
+      out.push(path);
+      continue;
+    }
+    if (!inB && (inL || inR)) {
+      out.push(path);
+      continue;
+    }
+    // in base: drop if either side removed it
+    if (inB && inL && !inR) continue;
+    if (inB && !inL && inR) continue;
+    if (inB && !inL && !inR) continue;
+  }
+  return out.sort();
+}
+
+/**
+ * Pending asset deletes that would remove files still referenced after merge
+ * (or still referenced on remote) must not be pushed — classic stale-orphan hazard
+ * when User B cleaned up locally while User A still uses the same hashed asset.
+ */
+export function assetDeletesSafeToPush(
+  deletePaths: string[],
+  merged: NotebookMetadata,
+  remote?: NotebookMetadata | null
+): { keep: string[]; drop: string[] } {
+  const keep: string[] = [];
+  const drop: string[] = [];
+  const protectedPaths = new Set<string>([
+    ...Object.keys(merged.assetRefs || {}),
+    ...Object.keys(remote?.assetRefs || {}),
+  ]);
+  for (const path of deletePaths) {
+    if (!isAssetPath(path)) {
+      keep.push(path);
+      continue;
+    }
+    if (protectedPaths.has(path)) drop.push(path);
+    else keep.push(path);
+  }
+  return { keep, drop };
+}
 
 export type EntryConflictKind =
   | "both_edited"
@@ -131,14 +197,12 @@ export function reconcileNotebookMerge(
 
   const result = mergeNotebookMetadata(base, local, remote, { validEntryIds });
   const entries = { ...result.merged.entries };
-  let restored = false;
   const conflictKinds: Record<string, EntryConflictKind> = {};
   const colliding = new Set(result.collidingEntryIds);
 
   for (const id of pendingUpsertIds) {
     if (!entries[id] && local.entries[id]) {
       entries[id] = local.entries[id];
-      restored = true;
     }
   }
 
@@ -157,11 +221,9 @@ export function reconcileNotebookMerge(
     colliding.add(id);
     if (kind === "local_edit_remote_delete" && local.entries[id]) {
       entries[id] = local.entries[id];
-      restored = true;
     } else if (kind === "local_delete_remote_edit" && remote.entries?.[id]) {
       // Hold remote in merged until the user chooses delete vs keep.
       entries[id] = remote.entries[id];
-      restored = true;
     }
   }
 
@@ -170,7 +232,6 @@ export function reconcileNotebookMerge(
     if (conflictKinds[id] === "local_delete_remote_edit") continue;
     if (entries[id]) {
       delete entries[id];
-      restored = true;
     }
   }
 
@@ -189,15 +250,30 @@ export function reconcileNotebookMerge(
     if (remoteEntry) {
       if (!entries[id] || !entriesEqualForMerge(entries[id], remoteEntry)) {
         entries[id] = remoteEntry;
-        restored = true;
       }
     } else if (entries[id]) {
       // Remote does not have it. Keep only brand-new local adds (not in base/remote).
       const isLocalOnlyAdd = !base?.entries?.[id] && local.entries[id];
       if (!isLocalOnlyAdd) {
         delete entries[id];
-        restored = true;
       }
+    }
+  }
+
+  // Field-merge assets on every surviving entry so a stale local index (or a
+  // same-entry edit) cannot drop remote-only asset paths from metadata.
+  for (const id of Object.keys(entries)) {
+    const localEntry = local.entries?.[id];
+    const remoteEntry = remote.entries?.[id];
+    if (!localEntry && !remoteEntry) continue;
+    const mergedAssets = mergeAssetPaths(
+      base?.entries?.[id]?.assets,
+      localEntry?.assets,
+      remoteEntry?.assets
+    );
+    const current = [...(entries[id].assets || [])].sort();
+    if (JSON.stringify(current) !== JSON.stringify(mergedAssets)) {
+      entries[id] = { ...entries[id], assets: mergedAssets };
     }
   }
 
@@ -214,9 +290,46 @@ export function reconcileNotebookMerge(
     }
   }
 
-  const merged = restored
-    ? normalizeNotebookMetadata({ ...result.merged, entries })
-    : normalizeNotebookMetadata({ ...result.merged, entries });
+  // If local did not touch team vs base, take remote team wholesale (logos/member images).
+  let team = result.merged.team;
+  if (remote.team) {
+    const localTeam = local.team;
+    const baseTeam = base?.team;
+    const localTeamUntouched =
+      !localTeam ||
+      !baseTeam ||
+      JSON.stringify({
+        teamName: localTeam.teamName,
+        teamNumber: localTeam.teamNumber,
+        organization: localTeam.organization,
+        startDate: localTeam.startDate,
+        endDate: localTeam.endDate,
+        autoCalculateDates: localTeam.autoCalculateDates,
+        logo: localTeam.logo,
+        logoOriginal: localTeam.logoOriginal,
+        members: localTeam.members,
+      }) ===
+        JSON.stringify({
+          teamName: baseTeam.teamName,
+          teamNumber: baseTeam.teamNumber,
+          organization: baseTeam.organization,
+          startDate: baseTeam.startDate,
+          endDate: baseTeam.endDate,
+          autoCalculateDates: baseTeam.autoCalculateDates,
+          logo: baseTeam.logo,
+          logoOriginal: baseTeam.logoOriginal,
+          members: baseTeam.members,
+        });
+    if (localTeamUntouched) {
+      team = remote.team;
+    }
+  }
+
+  const merged = normalizeNotebookMetadata({
+    ...result.merged,
+    entries,
+    ...(team ? { team } : {}),
+  });
 
   const collidingEntryIds = [...colliding];
 

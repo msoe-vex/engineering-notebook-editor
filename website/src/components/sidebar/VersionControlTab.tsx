@@ -49,6 +49,7 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
     discardTeamChanges,
     discardPhaseChanges,
     getBaseFileContent,
+    reconcileStagedIndexWithRemote,
     navigateTo,
     openEntry
   } = useWorkspace();
@@ -76,6 +77,22 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
   }, []);
 
   const [baseMetadata, setBaseMetadata] = useState<NotebookMetadata | null>(null);
+
+  // Staged notebook.json is a full snapshot — if remote moved (e.g. teammate added
+  // assets), rewrite it via 3-way merge so diffs don't look like those assets were deleted.
+  const indexPendingSig = useMemo(() => {
+    const p = (pendingChanges || []).find((c) => c.path === INDEX_PATH);
+    return p ? `${p.operation}:${p.stagedAt}:${p.content?.length ?? 0}` : "";
+  }, [pendingChanges]);
+
+  useEffect(() => {
+    if (mode !== "github" || !indexPendingSig) return;
+    let active = true;
+    void reconcileStagedIndexWithRemote().then(() => {
+      if (!active) return;
+    });
+    return () => { active = false; };
+  }, [mode, indexPendingSig, reconcileStagedIndexWithRemote]);
 
   useEffect(() => {
     let active = true;

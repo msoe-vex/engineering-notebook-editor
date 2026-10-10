@@ -1015,7 +1015,20 @@ export function mergeTeamMetadata(
   if (!local) return remote;
   if (!remote) return local;
   if (!base) {
-    return { ...remote, ...local, members: mergeRecordById(undefined, local.members, remote.members) };
+    // No base snapshot: prefer remote for shared fields/assets so a stale local
+    // notebook.json cannot wipe teammate logo/member image updates. Local-only
+    // members still survive (swap keeps remote on content collisions).
+    return {
+      teamName: local.teamName || remote.teamName || "",
+      teamNumber: local.teamNumber || remote.teamNumber || "",
+      organization: local.organization || remote.organization || "",
+      startDate: local.startDate ?? remote.startDate,
+      endDate: local.endDate ?? remote.endDate,
+      autoCalculateDates: local.autoCalculateDates ?? remote.autoCalculateDates ?? true,
+      logo: remote.logo ?? local.logo,
+      logoOriginal: remote.logoOriginal ?? local.logoOriginal,
+      members: mergeRecordById(undefined, remote.members, local.members),
+    };
   }
 
   const teamName = JSON.stringify(local.teamName) !== JSON.stringify(base.teamName) ? local.teamName : remote.teamName;

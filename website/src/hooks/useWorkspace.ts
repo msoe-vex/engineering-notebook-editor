@@ -105,6 +105,7 @@ export function useWorkspace() {
   const createTemporaryProject = useCallback(() => store.createTemporaryProject(), []);
   const commitAll = useCallback((config: GitHubConfig, customMessage?: string) => store.commitAll(config, customMessage), []);
   const refreshPending = useCallback(() => store.refreshPending(), []);
+  const reconcileStagedIndexWithRemote = useCallback(() => store.reconcileStagedIndexWithRemote(), []);
   const setEntryValidity = useCallback((id: string, isValid: boolean, validationErrors?: string[]) => store.setEntryValidity(id, isValid, validationErrors), []);
   const discardPendingChanges = useCallback(() => store.discardPendingChanges(), []);
   const navigateTo = useCallback((params: Record<string, string | null>, path?: string, options?: { replace?: boolean }) => store.navigateTo(params, path, options), []);
@@ -148,6 +149,7 @@ export function useWorkspace() {
     createTemporaryProject,
     commitAll,
     refreshPending,
+    reconcileStagedIndexWithRemote,
     setEntryValidity,
     discardPendingChanges,
     discardPathChange,

@@ -1,5 +1,5 @@
 import { NotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, EntryMetadata, hydrateTeamAssets, TipTapNode, buildResourceTypeIndex, extractResources, moveEntryOnCalendar, reorderTemplateSequence, serializeNotebookMetadata, formatAuthors, parseAuthors, normalizeNotebookMetadata } from "../notebook/metadata";
-import { cloneNotebookMetadata, collectEntryFileIds, entryArtifactPaths, reconcileNotebookMerge } from "../notebook/mergeReconcile";
+import { assetDeletesSafeToPush, cloneNotebookMetadata, collectEntryFileIds, entryArtifactPaths, isAssetPath, reconcileNotebookMerge } from "../notebook/mergeReconcile";
 import { INDEX_PATH, ENTRIES_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from "../constants";
 import { generateEntryLatex, generateTeamLatex, generatePhasesLatex, generateAllEntriesLatex, latexPhaseRef } from "../latex/latex";
 import { ExplorerFile, GitHubConfig, TeamTab } from "../types";
@@ -363,12 +363,91 @@ class WorkspaceStore implements IWorkspaceStore {
   }
 
   // ─── Sync / Git Operations ──────────────────────────────────────────────────
+
+  /**
+   * Rewrite staged notebook.json by 3-way merging with live remote.
+   * Without this, Source Control diffs compare a stale full-index snapshot to
+   * remote and look like User B is deleting User A's newly added assets —
+   * even when B only edited a different entry.
+   */
+  public async reconcileStagedIndexWithRemote(): Promise<boolean> {
+    if (this.mode !== "github") return false;
+    const dbName = this.getDBName();
+    const all = await getAllPending(dbName);
+    const pendingIndex = all.find((p) => p.path === INDEX_PATH && p.operation === "upsert");
+    if (!pendingIndex?.content) return false;
+
+    const remoteIndexContent = await this.transferManager.getBaseFileContent(INDEX_PATH);
+    if (!remoteIndexContent) return false;
+
+    try {
+      const remoteMetadata = normalizeNotebookMetadata({
+        ...EMPTY_METADATA,
+        ...JSON.parse(remoteIndexContent),
+      });
+      const persistedBase = await getBaseMetadata(dbName);
+      const baseMetadata = persistedBase
+        ? normalizeNotebookMetadata({ ...EMPTY_METADATA, ...persistedBase })
+        : this.baseMetadata
+          ? cloneNotebookMetadata(this.baseMetadata)
+          : null;
+
+      let localMetadata: NotebookMetadata;
+      try {
+        localMetadata = normalizeNotebookMetadata({
+          ...EMPTY_METADATA,
+          ...JSON.parse(pendingIndex.content),
+        });
+      } catch {
+        localMetadata = this.metadata;
+      }
+
+      const { fileIds, pendingUpsertIds, pendingDeleteIds } = collectEntryFileIds(
+        this.entries.map((e) => e.path),
+        all
+      );
+      const { merged } = reconcileNotebookMerge(baseMetadata, localMetadata, remoteMetadata, {
+        fileIds,
+        pendingUpsertIds,
+        pendingDeleteIds,
+      });
+
+      const mergedStr = serializeNotebookMetadata(merged);
+      if (mergedStr === pendingIndex.content) {
+        // Still refresh in-memory index if it lagged the staged merge.
+        if (serializeNotebookMetadata(this.metadata) !== mergedStr) {
+          this.metadata = merged;
+          this.notifyStateChange();
+        }
+        return false;
+      }
+
+      this.metadata = merged;
+      await stageChange(dbName, {
+        path: INDEX_PATH,
+        content: mergedStr,
+        operation: "upsert",
+        changeType: pendingIndex.changeType || "update",
+        label: pendingIndex.label || "Merge remote notebook metadata",
+        stagedAt: new Date().toISOString(),
+      });
+      await this.refreshPending();
+      this.notifyStateChange();
+      return true;
+    } catch (err) {
+      console.warn("Failed to reconcile staged notebook.json with remote:", err);
+      return false;
+    }
+  }
+
   async commitAll(config: GitHubConfig, customMessage?: string) {
     this.isCommitting = true;
     this.notifyStateChange();
     const currentOpenId = this.openFile?.id ?? null;
     try {
       await this.queue;
+      // Fold remote-only index changes into staged notebook.json before building the push set.
+      await this.reconcileStagedIndexWithRemote();
       const dbName = this.getDBName();
       const all = await getAllPending(dbName);
       const { commitChanges } = await import("../github/github");
@@ -614,6 +693,22 @@ class WorkspaceStore implements IWorkspaceStore {
           }
 
           this.metadata = merged;
+
+          // Drop stale orphan asset deletes that would remove files still referenced
+          // by the merged (or remote) index — e.g. B cleaned up a shared hash while A still uses it.
+          const pendingAssetDeletes = all
+            .filter((p) => p.operation === "delete" && isAssetPath(p.path))
+            .map((p) => p.path);
+          if (pendingAssetDeletes.length > 0) {
+            const { drop } = assetDeletesSafeToPush(pendingAssetDeletes, merged, remoteMetadata);
+            for (const path of drop) {
+              const full = this.getFullPath(path);
+              const idx = gitChanges.findIndex((c) => c.path === full && c.content === null);
+              if (idx >= 0) gitChanges.splice(idx, 1);
+              await removeStaged(dbName, path);
+            }
+          }
+
           const mergedIndexStr = serializeNotebookMetadata(merged);
           const remoteNormalizedStr = serializeNotebookMetadata(remoteMetadata);
           const isMetadataModified = mergedIndexStr !== remoteNormalizedStr;
