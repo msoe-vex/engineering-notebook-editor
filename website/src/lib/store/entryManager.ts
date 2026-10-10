@@ -80,11 +80,15 @@ export class EntryManager {
 
       const hydratedContent = hydrateAssets(content, assetCache);
 
-      // Keep notebook.json resource index in sync with the entry body so missing
-      // captions/titles surface in the sidebar even for older entries.
+      // Keep notebook.json resource/asset indexes in sync with the entry body so
+      // missing captions and image paths surface even for older entries.
       // Only persist when the index actually changed (visible save is fine then).
       const nextResources = extractResources(content as TipTapNode);
-      if (!resourcesEqual(nextResources, meta.resources)) {
+      const nextAssets = extractImagePaths(content as TipTapNode);
+      const prevAssets = [...(meta.assets || [])].sort();
+      const sortedNextAssets = [...nextAssets].sort();
+      const assetsChanged = JSON.stringify(sortedNextAssets) !== JSON.stringify(prevAssets);
+      if (!resourcesEqual(nextResources, meta.resources) || assetsChanged) {
         this.store.metadata = normalizeNotebookMetadata({
           ...this.store.metadata,
           entries: {
@@ -92,6 +96,7 @@ export class EntryManager {
             [id]: {
               ...meta,
               resources: nextResources,
+              assets: nextAssets,
             },
           },
         });
@@ -1089,13 +1094,21 @@ export class EntryManager {
       // Re-check after metadata normalize — shared copy/paste refs must not be deleted
       if (this.store.metadata.assetRefs?.[path]?.length) continue;
 
+      // Never stage an asset delete while a pending upsert still restores that path
+      // (re-add after delete, or another entry still staging the same hashed file).
+      const dbName = this.store.getDBName();
+      if (this.store.mode === "github" || this.store.mode === "temporary") {
+        const staged = await getPending(dbName, path);
+        if (staged?.operation === "upsert") continue;
+      }
+
       if (this.store.mode === "local" && this.store.dirHandle) {
         if (await this.shouldStageDelete(path)) {
           await deleteLocalFileAtPath(this.store.dirHandle, path);
         }
       } else if (this.store.mode === "github" || this.store.mode === "temporary") {
         if (await this.shouldStageDelete(path)) {
-          await stageChange(this.store.getDBName(), { path, operation: "delete", label: `Cleanup orphan: ${path}`, stagedAt: new Date().toISOString() });
+          await stageChange(dbName, { path, operation: "delete", label: `Cleanup orphan: ${path}`, stagedAt: new Date().toISOString() });
         }
       }
       // Drop cache for unused assets (including when a pending upsert was cancelled)

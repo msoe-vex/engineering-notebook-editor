@@ -110,6 +110,8 @@ export interface IWorkspaceStore {
   repairDuplicateResourceIds(): Promise<boolean>;
   syncAllEntryResourcesFromFiles(): Promise<boolean>;
   refreshPending(): Promise<PendingChange[]>;
+  /** Merge live remote notebook.json into staged index so pending diffs don't wipe teammate assets. */
+  reconcileStagedIndexWithRemote(): Promise<boolean>;
   setEntryValidity(id: string, isValid: boolean, validationErrors?: string[]): void;
   discardPendingChanges(): Promise<void>;
   discardPathChange(path: string): Promise<void>;
