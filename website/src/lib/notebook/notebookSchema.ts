@@ -574,6 +574,38 @@ export function placeCreatedEntry(metadata: NotebookMetadata, id: string): Noteb
   return reorderEntries(metadata, ids);
 }
 
+/** Update an entry's calendar date and global sidebar order. */
+export function redateEntry(
+  metadata: NotebookMetadata,
+  id: string,
+  newDate: string,
+  updatedAt?: string
+): NotebookMetadata {
+  const entry = metadata.entries[id];
+  if (!entry) return metadata;
+  if (entry.isTemplate) {
+    return normalizeNotebookMetadata({
+      ...metadata,
+      entries: {
+        ...metadata.entries,
+        [id]: { ...entry, date: newDate, ...(updatedAt ? { updatedAt } : {}) },
+      },
+    });
+  }
+  const withDate = normalizeNotebookMetadata({
+    ...metadata,
+    entries: {
+      ...metadata.entries,
+      [id]: { ...entry, date: newDate, ...(updatedAt ? { updatedAt } : {}) },
+    },
+  });
+  const without = sortedEntries(withDate.entries).filter((e) => e.id !== id);
+  const at = insertionIndexForDatedEntry(without, newDate);
+  const ids = without.map((e) => e.id);
+  ids.splice(at, 0, id);
+  return reorderEntries(withDate, ids, { [id]: newDate });
+}
+
 /** Replace the template subsequence in global order. `templateIds` is ascending-order (sortedEntries) sequence. */
 export function reorderTemplateSequence(
   metadata: NotebookMetadata,
@@ -587,6 +619,22 @@ export function reorderTemplateSequence(
     return wanted[i++] ?? e.id;
   });
   return reorderEntries(metadata, ids);
+}
+
+/** Title/authors/phase/date — fields stored in notebook.json, not entry JSON. */
+export function entryHeaderMetadataEqual(
+  a: EntryMetadata | undefined,
+  b: EntryMetadata | undefined
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    (a.title || "") === (b.title || "") &&
+    JSON.stringify(parseAuthors(a.authors)) === JSON.stringify(parseAuthors(b.authors)) &&
+    (a.phase ?? null) === (b.phase ?? null) &&
+    (a.date || "") === (b.date || "") &&
+    !!a.isTemplate === !!b.isTemplate
+  );
 }
 
 /** Compare entry metadata for 3-way merge, ignoring UI-only / volatile fields. */

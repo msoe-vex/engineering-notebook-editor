@@ -5,7 +5,7 @@ import { getAllPending, getPending, stageChange, removeStaged, getBaseMetadata, 
 import { writeLocalFile, deleteLocalFileAtPath, getLocalFileContent, checkLocalFileExists } from "../storage/fs";
 import { fetchFileContent, fetchRawFileContent, checkGitHubFileExists } from "../github/github";
 import { generateUUID, getMimeTypeFromExtension, formatDateMonthYear, getLocalDateString } from "../utils";
-import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, carryForwardResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds, collectNotebookResourceIds, duplicateResourceOwners, canonicalResourceOwner, remapSelectedContentIds, placeCreatedEntry, formatAuthors, authorsEqual, parseAuthors, readLastAuthors, resourcesEqual, TeamMetadata, ProjectPhase } from "../notebook/metadata";
+import { EntryMetadata, normalizeNotebookMetadata, serializeNotebookMetadata, dehydrateAssets, hydrateAssets, extractImagePaths, extractResources, extractReferences, removeEntryFromMetadata, TipTapNode, ensureResourceIds, carryForwardResourceIds, buildResourceTypeIndex, remapContentIds, remapEntryMetadataIds, collectNotebookResourceIds, duplicateResourceOwners, canonicalResourceOwner, remapSelectedContentIds, placeCreatedEntry, redateEntry, formatAuthors, authorsEqual, parseAuthors, readLastAuthors, resourcesEqual, TeamMetadata, ProjectPhase } from "../notebook/metadata";
 import { cloneNotebookMetadata } from "../notebook/mergeReconcile";
 import { generateAllEntriesLatex, generateTeamLatex, generatePhasesLatex, generateEntryLatex, latexPhaseRef } from "../latex/latex";
 import { IWorkspaceStore } from "./types";
@@ -164,18 +164,22 @@ export class EntryManager {
     this.store.openFile.updatedAt = new Date().toISOString();
 
     // 2. Synchronously update metadata in-memory for immediate UI feedback (Sidebar, etc.)
-    const existingEntry = this.store.metadata.entries[id];
+    let meta = this.store.metadata;
+    if (dateChanged && info.date !== undefined) {
+      meta = redateEntry(meta, id, info.date, this.store.openFile.updatedAt);
+    }
+    const existingEntry = meta.entries[id];
     if (existingEntry) {
       this.store.metadata = normalizeNotebookMetadata({
-        ...this.store.metadata,
+        ...meta,
         entries: {
-          ...this.store.metadata.entries,
+          ...meta.entries,
           [id]: {
             ...existingEntry,
             ...(info.title !== undefined ? { title: info.title } : {}),
             ...(info.authors !== undefined ? { authors: info.authors } : {}),
             ...(info.phase !== undefined ? { phase: info.phase } : {}),
-            ...(info.date !== undefined ? { date: info.date } : {}),
+            ...(!dateChanged && info.date !== undefined ? { date: info.date } : {}),
             updatedAt: this.store.openFile.updatedAt,
           }
         }
@@ -240,18 +244,24 @@ export class EntryManager {
       };
     }
 
+    const savedAt = new Date().toISOString();
+    let metaBeforeSave = this.store.metadata;
+    if (info.date !== existingEntry.date) {
+      metaBeforeSave = redateEntry(metaBeforeSave, id, info.date, savedAt);
+    }
+
     const mergedEntry: EntryMetadata = {
-      ...existingEntry,
+      ...metaBeforeSave.entries[id],
       ...info,
-      updatedAt: new Date().toISOString(),
+      updatedAt: savedAt,
       resources: mergedResources,
       references: extractReferences(contentJson),
       assets: extractImagePaths(contentJson),
     };
 
     this.store.metadata = normalizeNotebookMetadata({
-      ...this.store.metadata,
-      entries: { ...this.store.metadata.entries, [id]: mergedEntry }
+      ...metaBeforeSave,
+      entries: { ...metaBeforeSave.entries, [id]: mergedEntry }
     });
 
     this.store.notifyStateChange();

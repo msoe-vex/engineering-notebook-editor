@@ -14,7 +14,7 @@ import {
   type TeamMetadata,
 } from "@/lib/notebook/metadata";
 import { mergeOrderKeys, mergeRecordById } from "@/lib/notebook/notebookSchema";
-import { assetDeletesSafeToPush, cloneNotebookMetadata, collectEntryFileIds, mergeAssetPaths, reconcileNotebookMerge } from "@/lib/notebook/mergeReconcile";
+import { assetDeletesSafeToPush, cloneNotebookMetadata, collectEntryFileIds, mergeAssetPaths, mergeInMemoryIndexAheadOfStaged, reconcileNotebookMerge } from "@/lib/notebook/mergeReconcile";
 import { ASSETS_COMPRESSED_DIR } from "@/lib/constants";
 
 type Item = { title: string; order: number };
@@ -568,6 +568,34 @@ describe("reconcileNotebookMerge", () => {
     expect(orphanIds).toEqual([]);
   });
 
+  it("keeps local date-only index edits when entry JSON was not re-staged", () => {
+    const base = notebook({
+      entryA: { title: "A", order: 0, date: "2026-09-01" },
+      entryB: { title: "B", order: 1, date: "2026-09-02" },
+    });
+    const local = notebook({
+      entryA: { title: "A", order: 0, date: "2026-09-05", updatedAt: "2026-09-05T12:00:00.000Z" },
+      entryB: { title: "B", order: 1, date: "2026-09-02" },
+    });
+    const remote = notebook({
+      entryA: { title: "A", order: 0, date: "2026-09-01" },
+      entryB: { title: "B", order: 1, date: "2026-09-02" },
+    });
+    const { fileIds, pendingUpsertIds, pendingDeleteIds } = collectEntryFileIds(
+      ["data/entries/entryA.json", "data/entries/entryB.json"],
+      [{ path: "data/entries/entryB.json", operation: "upsert" }]
+    );
+
+    const { merged } = reconcileNotebookMerge(base, local, remote, {
+      fileIds,
+      pendingUpsertIds,
+      pendingDeleteIds,
+    });
+
+    expect(merged.entries.entryA.date).toBe("2026-09-05");
+    expect(merged.entries.entryB.title).toBe("B");
+  });
+
   it("keeps remote entry assets when local index is stale and only another entry is staged", () => {
     const assetNew = `${ASSETS_COMPRESSED_DIR}/new.jpg`;
     const assetOld = `${ASSETS_COMPRESSED_DIR}/old.jpg`;
@@ -715,6 +743,19 @@ describe("reconcileNotebookMerge", () => {
 
     expect(merged.team?.logo).toBe(logoRemote);
     expect(merged.assetRefs?.[logoRemote]).toContain("team");
+  });
+});
+
+describe("mergeInMemoryIndexAheadOfStaged", () => {
+  it("prefers in-memory entry when updatedAt is newer than staged snapshot", () => {
+    const staged = notebook({
+      e1: { title: "Old", order: 0, date: "2026-09-01", updatedAt: "2026-09-01T00:00:00.000Z" },
+    });
+    const inMemory = notebook({
+      e1: { title: "Old", order: 0, date: "2026-09-08", updatedAt: "2026-09-08T12:00:00.000Z" },
+    });
+    const merged = mergeInMemoryIndexAheadOfStaged(staged, inMemory);
+    expect(merged.entries.e1.date).toBe("2026-09-08");
   });
 });
 

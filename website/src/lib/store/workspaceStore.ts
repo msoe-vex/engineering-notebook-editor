@@ -1,5 +1,5 @@
 import { NotebookMetadata, EMPTY_METADATA, TeamMetadata, ProjectPhase, EntryMetadata, hydrateTeamAssets, TipTapNode, buildResourceTypeIndex, extractResources, moveEntryOnCalendar, reorderTemplateSequence, serializeNotebookMetadata, formatAuthors, parseAuthors, normalizeNotebookMetadata } from "../notebook/metadata";
-import { assetDeletesSafeToPush, cloneNotebookMetadata, collectEntryFileIds, entryArtifactPaths, isAssetPath, reconcileNotebookMerge } from "../notebook/mergeReconcile";
+import { assetDeletesSafeToPush, cloneNotebookMetadata, collectEntryFileIds, entryArtifactPaths, isAssetPath, mergeInMemoryIndexAheadOfStaged, reconcileNotebookMerge } from "../notebook/mergeReconcile";
 import { INDEX_PATH, ENTRIES_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from "../constants";
 import { generateEntryLatex, generateTeamLatex, generatePhasesLatex, generateAllEntriesLatex, latexPhaseRef } from "../latex/latex";
 import { ExplorerFile, GitHubConfig, TeamTab } from "../types";
@@ -398,6 +398,7 @@ class WorkspaceStore implements IWorkspaceStore {
           ...EMPTY_METADATA,
           ...JSON.parse(pendingIndex.content),
         });
+        localMetadata = mergeInMemoryIndexAheadOfStaged(localMetadata, this.metadata);
       } catch {
         localMetadata = this.metadata;
       }
@@ -445,6 +446,7 @@ class WorkspaceStore implements IWorkspaceStore {
     this.notifyStateChange();
     const currentOpenId = this.openFile?.id ?? null;
     try {
+      await this.debouncedPersist.flush();
       await this.queue;
       // Fold remote-only index changes into staged notebook.json before building the push set.
       await this.reconcileStagedIndexWithRemote();
@@ -503,6 +505,7 @@ class WorkspaceStore implements IWorkspaceStore {
                 ...EMPTY_METADATA,
                 ...JSON.parse(pendingIndex.content),
               });
+              localMetadata = mergeInMemoryIndexAheadOfStaged(localMetadata, this.metadata);
             } catch (err) {
               console.warn("Failed to parse pending notebook.json for merge; using in-memory metadata:", err);
             }

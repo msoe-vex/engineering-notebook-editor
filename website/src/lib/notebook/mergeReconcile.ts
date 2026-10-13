@@ -1,7 +1,12 @@
 import { ASSETS_DIR, ENTRIES_DIR, LATEX_DIR } from "@/lib/constants";
 import type { NotebookMetadata } from "./metadata";
 import { mergeNotebookMetadata } from "./metadata";
-import { entriesEqualForMerge, normalizeNotebookMetadata, serializeNotebookMetadata } from "./notebookSchema";
+import {
+  entriesEqualForMerge,
+  entryHeaderMetadataEqual,
+  normalizeNotebookMetadata,
+  serializeNotebookMetadata,
+} from "./notebookSchema";
 
 /** True when path is a notebook asset file (compressed/original images, etc.). */
 export function isAssetPath(path: string): boolean {
@@ -117,21 +122,73 @@ export function collectEntryFileIds(
   return { fileIds, pendingUpsertIds, pendingDeleteIds };
 }
 
+/** Entries with real notebook.json header edits (date/title/etc.) without a staged entry JSON upsert. */
+/** Prefer in-memory entries newer than a staged notebook.json snapshot (e.g. date edit before auto-save). */
+export function mergeInMemoryIndexAheadOfStaged(
+  staged: NotebookMetadata,
+  inMemory: NotebookMetadata
+): NotebookMetadata {
+  const entries = { ...staged.entries };
+  for (const [id, mem] of Object.entries(inMemory.entries || {})) {
+    const snap = entries[id];
+    if (!snap) {
+      entries[id] = mem;
+      continue;
+    }
+    if ((mem.updatedAt || "") > (snap.updatedAt || "")) {
+      entries[id] = mem;
+    }
+  }
+  return normalizeNotebookMetadata({
+    ...staged,
+    entries,
+    ...(inMemory.team ? { team: inMemory.team } : {}),
+    ...(inMemory.phases ? { phases: inMemory.phases } : {}),
+  });
+}
+
+/**
+ * Local notebook.json header edits with no matching remote change (e.g. date-only).
+ * Stale index pollution where remote also moved still hard-prefers remote.
+ */
+export function collectLocalHeaderOnlyEditIds(
+  base: NotebookMetadata | null,
+  local: NotebookMetadata,
+  remote: NotebookMetadata
+): Set<string> {
+  const ids = new Set<string>();
+  if (!base?.entries) return ids;
+  for (const id of Object.keys(local.entries || {})) {
+    const baseEntry = base.entries[id];
+    const localEntry = local.entries[id];
+    const remoteEntry = remote.entries?.[id];
+    if (!baseEntry || !localEntry || !remoteEntry) continue;
+    if (
+      !entryHeaderMetadataEqual(baseEntry, localEntry) &&
+      entryHeaderMetadataEqual(baseEntry, remoteEntry)
+    ) {
+      ids.add(id);
+    }
+  }
+  return ids;
+}
+
 function classifyEntryConflict(
   id: string,
   base: NotebookMetadata | null,
   local: NotebookMetadata,
   remote: NotebookMetadata,
   pendingUpsertIds: Set<string>,
-  pendingDeleteIds: Set<string>
+  pendingDeleteIds: Set<string>,
+  localHeaderOnlyEditIds: Set<string>
 ): EntryConflictKind | null {
   const baseEntry = base?.entries?.[id];
   const localEntry = local.entries[id];
   const remoteEntry = remote.entries?.[id];
 
-  // Only staged entry-file ops count as intentional local edits. Index-only churn
-  // (resource sync, validation) must not block adopting remote sibling changes.
-  const localFileEdited = pendingUpsertIds.has(id);
+  // Staged entry JSON or intentional index header edits (date/title live in notebook.json).
+  // Resource/validation-only index churn is ignored so sibling remote edits still apply.
+  const localFileEdited = pendingUpsertIds.has(id) || localHeaderOnlyEditIds.has(id);
   const localDeleted = pendingDeleteIds.has(id) || (!!baseEntry && !localEntry && !localFileEdited);
   const remoteDeleted = !!baseEntry && !remoteEntry;
   const remoteEdited =
@@ -181,6 +238,7 @@ export function reconcileNotebookMerge(
   orphanIds: string[];
 } {
   const { fileIds, pendingUpsertIds, pendingDeleteIds = new Set<string>() } = options;
+  const localHeaderOnlyEditIds = collectLocalHeaderOnlyEditIds(base, local, remote);
   const validEntryIds = new Set(fileIds);
   for (const id of Object.keys(remote.entries || {})) {
     if (!pendingDeleteIds.has(id)) validEntryIds.add(id);
@@ -215,7 +273,15 @@ export function reconcileNotebookMerge(
     ...pendingDeleteIds,
   ]);
   for (const id of candidateIds) {
-    const kind = classifyEntryConflict(id, base, local, remote, pendingUpsertIds, pendingDeleteIds);
+    const kind = classifyEntryConflict(
+      id,
+      base,
+      local,
+      remote,
+      pendingUpsertIds,
+      pendingDeleteIds,
+      localHeaderOnlyEditIds
+    );
     if (!kind) continue;
     conflictKinds[id] = kind;
     colliding.add(id);
@@ -244,7 +310,14 @@ export function reconcileNotebookMerge(
     ...Object.keys(base?.entries || {}),
   ]);
   for (const id of allIndexIds) {
-    if (pendingUpsertIds.has(id) || pendingDeleteIds.has(id) || conflictKinds[id]) continue;
+    if (
+      pendingUpsertIds.has(id) ||
+      pendingDeleteIds.has(id) ||
+      localHeaderOnlyEditIds.has(id) ||
+      conflictKinds[id]
+    ) {
+      continue;
+    }
 
     const remoteEntry = remote.entries?.[id];
     if (remoteEntry) {
@@ -281,7 +354,7 @@ export function reconcileNotebookMerge(
   // but only when the user actually staged that entry's file.
   for (const id of [...colliding]) {
     if (!conflictKinds[id]) {
-      if (pendingUpsertIds.has(id)) {
+      if (pendingUpsertIds.has(id) || localHeaderOnlyEditIds.has(id)) {
         conflictKinds[id] = "both_edited";
       } else {
         // Index-only / merge-noise collision — do not prompt; remote already applied above.
