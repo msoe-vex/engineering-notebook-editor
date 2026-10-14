@@ -1,20 +1,9 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { useEffect, useState } from "react";
-import App from "@/components/App";
-
-export default function CatchAll() {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    queueMicrotask(() => {
-      setMounted(true);
-    });
-  }, []);
-
-  if (!mounted) {
-    return null; // Prevent SSR hydration mismatches
-  }
-
-  return <App />;
+/**
+ * Legacy local/GitHub/temporary project UI lived here. Product storage is
+ * Firestore + GCS with Hocuspocus realtime only — send everyone to /cloud.
+ */
+export default function CatchAllRedirect() {
+  redirect("/cloud");
 }

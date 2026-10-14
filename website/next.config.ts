@@ -36,6 +36,13 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_APP_VERSION: releaseVersion,
   },
+  async redirects() {
+    // Product storage is GCP-only (Firestore/GCS + Hocuspocus). Legacy Home/workspace → cloud.
+    return [
+      { source: "/", destination: "/cloud", permanent: false },
+      { source: "/workspace/:path*", destination: "/cloud", permanent: false },
+    ];
+  },
   async rewrites() {
     // When Core/GCS asset base is configured, proxy BusyTeX + LaTeX packages there.
     // Otherwise Next serves website/public/busytex and website/public/latex directly

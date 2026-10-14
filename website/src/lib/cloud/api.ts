@@ -47,6 +47,10 @@ export const cloudApi = {
       id: string;
       name: string;
       folders?: Record<string, { name: string; parentId: string | null; order: number }>;
+      team?: NotebookSummaryTeam;
+      phases?: Record<string, unknown>;
+      lastCompiled?: string;
+      updatedAt?: string;
     }>(`/orgs/${orgId}/notebooks/${notebookId}`),
   patchNotebook: (orgId: string, notebookId: string, body: unknown) =>
     coreFetch(`/orgs/${orgId}/notebooks/${notebookId}`, {
@@ -63,13 +67,32 @@ export const cloudApi = {
           order: number;
           date: string;
           phase: string | null;
+          authors?: string[];
+          createdAt?: string;
+          updatedAt?: string;
         }
       >;
     }>(`/orgs/${orgId}/notebooks/${notebookId}/entries`),
-  createEntry: (orgId: string, notebookId: string, title?: string) =>
+  createEntry: (
+    orgId: string,
+    notebookId: string,
+    body?: { id?: string; title?: string; folderId?: string | null; order?: number; date?: string; phase?: string | null; authors?: string[] }
+  ) =>
     coreFetch<{ id: string }>(`/orgs/${orgId}/notebooks/${notebookId}/entries`, {
       method: "POST",
-      body: JSON.stringify({ title }),
+      body: JSON.stringify(body ?? {}),
+    }),
+  getEntryContent: (orgId: string, notebookId: string, entryId: string) =>
+    coreFetch<unknown>(`/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}/content`),
+  putEntryContent: (orgId: string, notebookId: string, entryId: string, content: unknown) =>
+    coreFetch(`/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}/content`, {
+      method: "PUT",
+      body: JSON.stringify(content),
+    }),
+  patchEntry: (orgId: string, notebookId: string, entryId: string, body: unknown) =>
+    coreFetch(`/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
     }),
   listMembers: (orgId: string) =>
     coreFetch<Array<{ uid: string; role: string; email?: string }>>(`/orgs/${orgId}/members`),
@@ -93,6 +116,13 @@ export const cloudApi = {
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
+};
+
+type NotebookSummaryTeam = {
+  teamName: string;
+  teamNumber: string;
+  organization: string;
+  members: Record<string, unknown>;
 };
 
 export function collabWsUrl(): string {

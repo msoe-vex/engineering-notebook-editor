@@ -134,11 +134,6 @@ export function CloudShell({ children, title }: { children: ReactNode; title?: s
             </button>
           </div>
           {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
-          <p className="mt-8 text-sm">
-            <Link className="underline" href="/">
-              Back to local / GitHub editor
-            </Link>
-          </p>
         </div>
       </div>
     );

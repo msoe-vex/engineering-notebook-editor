@@ -38,7 +38,8 @@ export default function CloudHomePage() {
         <>
           <h1 className="text-2xl font-semibold">Organizations</h1>
           <p className="mt-1 text-sm text-neutral-600">
-            Create an organization, then open notebooks for collaborative editing.
+            Cloud notebooks sync live on GCP (Firestore, GCS, Hocuspocus). Create an organization to
+            get started.
           </p>
           <div className="mt-6 flex gap-2">
             <input
