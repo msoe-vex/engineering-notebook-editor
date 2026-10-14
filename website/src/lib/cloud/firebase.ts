@@ -16,11 +16,25 @@ let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let emulatorConnected = false;
 
+/** Host `next dev` should hit the Auth emulator unless explicitly disabled. */
+function useFirebaseEmulator(): boolean {
+  const flag = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR;
+  if (flag === "false") return false;
+  if (flag === "true") return true;
+  return process.env.NODE_ENV === "development";
+}
+
 export function getFirebaseApp(): FirebaseApp {
   if (app) return app;
   const config = {
-    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "demo-api-key",
-    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "demo-engineering-notebook.firebaseapp.com",
+    // Any non-empty key works with the Auth emulator; avoid bare "demo-api-key"
+    // so misconfigured clients fail clearly against production.
+    apiKey:
+      process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
+      "AIzaSyDocOrLocalEmulatorKey00000000000",
+    authDomain:
+      process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ||
+      "demo-engineering-notebook.firebaseapp.com",
     projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "demo-engineering-notebook",
   };
   app = getApps()[0] ?? initializeApp(config);
@@ -30,11 +44,7 @@ export function getFirebaseApp(): FirebaseApp {
 export function getFirebaseAuth(): Auth {
   if (auth) return auth;
   auth = getAuth(getFirebaseApp());
-  if (
-    typeof window !== "undefined" &&
-    process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === "true" &&
-    !emulatorConnected
-  ) {
+  if (typeof window !== "undefined" && useFirebaseEmulator() && !emulatorConnected) {
     const host = process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST || "localhost:9099";
     connectAuthEmulator(auth, `http://${host}`, { disableWarnings: true });
     emulatorConnected = true;

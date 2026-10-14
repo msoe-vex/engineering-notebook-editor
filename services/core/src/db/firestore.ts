@@ -22,6 +22,8 @@ export async function initFirestore(): Promise<Firestore> {
         });
       }
       db = admin.firestore();
+      // Optional fields (email, isTemplate, …) must not be written as undefined.
+      db.settings({ ignoreUndefinedProperties: true });
       return db;
     })();
   }

@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import cors from "@fastify/cors";
 import { FirebaseAuthAdapter } from "./auth/firebaseAuthAdapter.js";
 import { initFirestore } from "./db/firestore.js";
 import { createStorage } from "./storage/gcsStorage.js";
@@ -10,6 +11,15 @@ import { registerUserRoutes } from "./routes/users.js";
 import { registerStaticAssetRoutes } from "./routes/staticAssets.js";
 
 const app = Fastify({ logger: true });
+
+/** Browser client (website :3000) calls this API cross-origin with Authorization. */
+const corsOrigin = process.env.CORS_ORIGIN;
+await app.register(cors, {
+  origin: corsOrigin ? corsOrigin.split(",").map((s) => s.trim()) : true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Authorization", "Content-Type", "X-Internal-Secret"],
+});
+
 const auth = new FirebaseAuthAdapter();
 const requireAuth = createAuthGuard(auth);
 const authAttempts = new Map<string, { count: number; windowStart: number }>();

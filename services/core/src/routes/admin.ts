@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { userPath, type UserGrants, type UserProfile } from "@engineering-notebook/shared";
 import { getFirestore } from "../db/firestore.js";
+import { omitUndefined } from "../db/sanitize.js";
 import { requireServiceAdmin } from "../rbac.js";
 import { getUser } from "../http/authPlugin.js";
 import { getMetrics } from "../metrics/store.js";
@@ -42,7 +43,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const ref = getFirestore().doc(userPath(uid));
     const snap = await ref.get();
     const existing = (snap.data() ?? {}) as Partial<UserProfile>;
-    const updated: UserProfile = {
+    const updated = omitUndefined({
       uid,
       email: existing.email,
       displayName: body.displayName ?? existing.displayName,
@@ -53,7 +54,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       grants: body.grants ?? existing.grants ?? {},
       createdAt: existing.createdAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-    };
+    }) as UserProfile;
     await ref.set(updated, { merge: true });
     return updated;
   });

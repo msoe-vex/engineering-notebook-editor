@@ -9,26 +9,23 @@ Live storage is **GCP only** (Core/Firestore/GCS). ZIP export/import is backup (
 ## Quick start
 
 ```bash
-# Prefer full stack:
-cd ../infra && docker compose up --build
-# open http://localhost:3000
+# Terminal 1 — APIs + emulators (watch)
+cd ../infra && docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build firebase gcs core collab agents
 
-# Or frontend against already-running APIs:
-npm install
-npm run dev
+# Terminal 2 — this package
+npm install && npm run dev
 ```
+
+Open http://localhost:3000 · Firebase Emulator UI http://localhost:4000  
+Full guide: [docs/local-development.md](../docs/local-development.md).
 
 ## Environment
 
 ```bash
-NEXT_PUBLIC_CORE_API_URL=http://localhost:8080
-NEXT_PUBLIC_AGENTS_API_URL=http://localhost:8000
-NEXT_PUBLIC_COLLAB_WS_URL=ws://localhost:1234
-NEXT_PUBLIC_ASSETS_BASE_URL=http://localhost:8080
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=demo-engineering-notebook
-NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true
-NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST=localhost:9099
+cp .env.example .env.local
 ```
+
+See `.env.example` for all `NEXT_PUBLIC_*` keys. Emulator Auth requires `NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true`.
 
 ## Checks
 

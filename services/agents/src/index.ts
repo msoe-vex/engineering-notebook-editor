@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import cors from "@fastify/cors";
 import { randomUUID } from "node:crypto";
 import {
   auditsCollection,
@@ -11,6 +12,14 @@ import { verifyBearer } from "./auth.js";
 import { runByokAudit, runVertexAudit } from "./providers/router.js";
 
 const app = Fastify({ logger: true });
+
+/** Browser client (website :3000) calls this API cross-origin with Authorization. */
+const corsOrigin = process.env.CORS_ORIGIN;
+await app.register(cors, {
+  origin: corsOrigin ? corsOrigin.split(",").map((s) => s.trim()) : true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Authorization", "Content-Type"],
+});
 
 async function getFirestore() {
   const admin = await import("firebase-admin");

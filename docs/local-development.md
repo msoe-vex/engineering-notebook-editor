@@ -1,122 +1,92 @@
-# Local development & testing
+# Local development
 
-**Product path:** GCP-only live storage (Firestore + GCS) and Hocuspocus realtime.  
-`/` redirects to `/cloud`. ZIP export/import is backup only (last-write-wins).
+API services hot-reload in Docker; the website runs on the host with Next HMR.
 
 ## Prerequisites
 
-| Tool | Used for |
-| --- | --- |
-| Node.js 20+ | website / services outside Docker |
-| Docker Desktop | full stack via Compose |
-| (optional) k6 | smoke load test |
+- **Node.js 20+** (nvm recommended) — website
+- **Docker** — Firebase, GCS, Core, Collab, Agents
 
----
+## Start
 
-## Full stack (recommended)
+**Terminal 1 — backends (watch)**
 
 ```bash
 cd infra
-docker compose up --build
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build firebase gcs core collab agents
 ```
 
-First boot can take several minutes (Firebase emulator image installs JDK + tools).
+First boot can take a few minutes (Firebase emulator installs JDK + tools). Leave this running.
 
-### Endpoints
-
-| Service | URL |
-| --- | --- |
-| Website (→ `/cloud`) | http://localhost:3000 |
-| Core API | http://localhost:8080 |
-| Collab WebSocket | ws://localhost:1234 |
-| Agents API | http://localhost:8000 |
-| Firebase Emulator UI | http://localhost:4000 |
-| fake-gcs | http://localhost:4443 |
-
-### Smoke checklist
-
-1. Open http://localhost:3000 → lands on `/cloud`
-2. **Continue with dev token** → `service-admin` (or any uid)
-3. Create organization → notebook → **New entry** → type in the editor
-4. **Export ZIP** / **Import ZIP** (optional)
-5. As `service-admin`, open **Admin** → metrics / grants
-
-### API smoke
-
-```bash
-curl http://localhost:8080/health
-curl http://localhost:8000/health
-curl -H "Authorization: Bearer service-admin" http://localhost:8080/auth/session
-curl -H "Authorization: Bearer service-admin" -H "Content-Type: application/json" \
-  -d "{}" -X POST http://localhost:8080/users/me/bootstrap
-curl -H "Authorization: Bearer service-admin" -H "Content-Type: application/json" \
-  -d "{\"name\":\"Demo Org\"}" -X POST http://localhost:8080/orgs
-```
-
-### Load test
-
-```bash
-k6 run loadtest/k6-smoke.js
-```
-
----
-
-## Website checks only
+**Terminal 2 — website**
 
 ```bash
 cd website
 npm install
-npm run lint
-npm test
-npm run build
+npm run dev
 ```
 
-BusyTeX compile assets (optional): `npm run download:busytex && npm run bundle:template`.
+Open **http://localhost:3000** → redirects to `/cloud`.
 
----
+Sign in with **Continue with dev token** → `service-admin`, or create an email/password user (Auth emulator).
 
-## Services without Docker
+Create an organization → notebook → **New entry**.
 
-You need the Firestore emulator for org/notebook CRUD.
+If port 3000 is busy, stop the Compose website container (`docker compose stop website`) or use the port Next prints (e.g. 3001).
+
+### Website env
+
+Copy once (or rely on code defaults in development):
 
 ```bash
-# infra/: firebase emulators:start --project demo-engineering-notebook --only auth,firestore
-# packages/shared: npm install && npm run build
-# services/core with FIRESTORE_EMULATOR_HOST, AUTH_FALLBACK=true, STORAGE_BACKEND=memory
-# services/collab with COLLAB_AUTH_DISABLED=true, CORE_API_URL=http://127.0.0.1:8080
-# services/agents with AUTH_FALLBACK=true, VERTEX_STUB=true
-# website with NEXT_PUBLIC_* pointing at localhost ports
+cd website
+cp .env.example .env.local
 ```
 
-On Windows PowerShell use `$env:NAME="value"`. Full env table: root [README.md](../README.md).
+`NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true` points Auth at **localhost:9099**. Without it, email sign-in hits production Firebase and fails with `auth/api-key-not-valid`.
 
-Without `FIRESTORE_EMULATOR_HOST`, Core `/health` works but org writes will not.
+## Endpoints
 
----
-
-## Auth modes
-
-| Mode | How |
+| Service | URL |
 | --- | --- |
-| Dev bearer | Compose `AUTH_FALLBACK=true` → `Authorization: Bearer <uid>` or `/cloud` “dev token” |
-| Firebase emulator | Email/password on `/cloud` when emulator env is set |
-| Production | Real Firebase ID tokens; `AUTH_FALLBACK=false` |
+| Website | http://localhost:3000 |
+| Core API | http://localhost:8080 |
+| Collab WebSocket | ws://localhost:1234 |
+| Agents API | http://localhost:8000 |
+| **Firebase Emulator UI** | **http://localhost:4000** |
+| Auth emulator | localhost:9099 |
+| Firestore emulator | localhost:8081 |
+| fake-gcs | http://localhost:4443 |
 
-`service-admin` / `SERVICE_ADMIN_UID` → Service Administrator.
+## Firebase emulator
 
----
+With the stack up, open **http://localhost:4000**.
 
-## Data model
+| Tab | Use |
+| --- | --- |
+| **Authentication** | Users created via `/cloud` email sign-up (or the UI) |
+| **Firestore** | Orgs, members, notebooks, entries, users, invites |
 
+Auth/Firestore talk to the emulators automatically (`FIRESTORE_EMULATOR_HOST` / Auth emulator host in Compose; website uses `NEXT_PUBLIC_USE_FIREBASE_EMULATOR`).
+
+Project id: `demo-engineering-notebook`. Data resets when you recreate the Firebase container.
+
+## Reloading
+
+| Edit | Result |
+| --- | --- |
+| `services/core\|agents\|collab/src/**` | Container restarts (`tsx watch`) |
+| `website/**` | Next HMR |
+| `packages/shared/**` | Rebuild shared, then rebuild API images |
+
+```bash
+cd packages/shared && npm run build
+cd ../infra && docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build core agents collab
 ```
-organizations/{orgId}/members/{uid}
-organizations/{orgId}/notebooks/{notebookId}
-organizations/{orgId}/notebooks/{notebookId}/entries/{entryId}
-organizations/{orgId}/notebooks/{notebookId}/assets/{assetId}
-organizations/{orgId}/notebooks/{notebookId}/audits/{auditId}
-users/{uid}   invites/{inviteId}
-```
 
-Collab: `org:{orgId}:notebook:{notebookId}:entry:{entryId}`
+## Auth notes
 
-See [api-contracts.md](./api-contracts.md).
+- Compose sets `AUTH_FALLBACK=true`: bearer can be a plain uid (`service-admin`) or Firebase ID token.
+- `service-admin` is the local Service Administrator (`SERVICE_ADMIN_UID`).
+
+See [api-contracts.md](./api-contracts.md) for routes.

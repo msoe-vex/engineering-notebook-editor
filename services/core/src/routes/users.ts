@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { userPath, type UserProfile } from "@engineering-notebook/shared";
 import { getFirestore } from "../db/firestore.js";
+import { omitUndefined } from "../db/sanitize.js";
 import { getUser } from "../http/authPlugin.js";
 
 export async function registerUserRoutes(app: FastifyInstance) {
@@ -14,18 +15,17 @@ export async function registerUserRoutes(app: FastifyInstance) {
       return data;
     }
     const serviceAdminUid = process.env.SERVICE_ADMIN_UID;
-    const profile: UserProfile = {
+    const isAdmin =
+      (serviceAdminUid && user.uid === serviceAdminUid) || user.uid === "service-admin";
+    const profile = omitUndefined({
       uid: user.uid,
       email: user.email,
       displayName: user.displayName,
-      platformRole:
-        (serviceAdminUid && user.uid === serviceAdminUid) || user.uid === "service-admin"
-          ? "service_admin"
-          : undefined,
+      platformRole: isAdmin ? ("service_admin" as const) : undefined,
       grants: {},
       createdAt: ts,
       updatedAt: ts,
-    };
+    }) as UserProfile;
     await ref.set(profile);
     return profile;
   });

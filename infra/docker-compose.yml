@@ -122,7 +122,7 @@ services:
         NEXT_PUBLIC_AGENTS_API_URL: http://localhost:8000
         NEXT_PUBLIC_COLLAB_WS_URL: ws://localhost:1234
         NEXT_PUBLIC_ASSETS_BASE_URL: http://localhost:8080
-        NEXT_PUBLIC_FIREBASE_API_KEY: demo-api-key
+        NEXT_PUBLIC_FIREBASE_API_KEY: AIzaSyDocOrLocalEmulatorKey00000000000
         NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: demo-engineering-notebook.firebaseapp.com
         NEXT_PUBLIC_FIREBASE_PROJECT_ID: demo-engineering-notebook
         NEXT_PUBLIC_USE_FIREBASE_EMULATOR: "true"

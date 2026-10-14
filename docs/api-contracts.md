@@ -25,16 +25,16 @@ Auth: `Authorization: Bearer <Firebase ID token | local uid>`
 - `GET /auth/session`
 - `POST /users/me/bootstrap`, `GET /users/me`
 - `GET/POST /orgs`
-- `GET /orgs/:orgId`
+- `GET/PATCH/DELETE /orgs/:orgId`
 - `GET/POST /orgs/:orgId/members`, `PATCH/DELETE /orgs/:orgId/members/:uid`
-- `POST /orgs/:orgId/invites`, `POST /invites/:inviteId/accept`
+- `GET/POST /orgs/:orgId/invites`, `DELETE /orgs/:orgId/invites/:inviteId`, `POST /invites/:inviteId/accept`
 - `GET/POST /orgs/:orgId/notebooks`
-- `GET/PATCH /orgs/:orgId/notebooks/:notebookId`
+- `GET/PATCH/DELETE /orgs/:orgId/notebooks/:notebookId`
 - `GET/POST /orgs/:orgId/notebooks/:notebookId/entries`
-- `GET/PATCH /orgs/:orgId/notebooks/:notebookId/entries/:entryId`
+- `GET/PATCH/DELETE /orgs/:orgId/notebooks/:notebookId/entries/:entryId`
 - `GET/PUT .../entries/:entryId/content` (TipTap JSON via GCS)
 - `GET/POST /orgs/:orgId/notebooks/:notebookId/assets`
-- `GET .../assets/:assetId/url`
+- `GET .../assets/:assetId/url`, `DELETE .../assets/:assetId`
 - `GET /static/busytex/*`, `GET /static/latex/*`
 - Admin (`service_admin`): `GET /api/admin/metrics`, `GET/PATCH /api/admin/users`, `GET /api/admin/orgs`
 - Internal: `POST /internal/collab/flush`, `POST /internal/collab/connections`

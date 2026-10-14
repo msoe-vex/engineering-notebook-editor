@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { saveAs } from "file-saver";
 import {
   NOTEBOOK_SCHEMA_VERSION,
@@ -11,7 +11,7 @@ import {
   type NotebookSummaryV5,
 } from "@engineering-notebook/shared";
 import { CloudShell } from "@/components/cloud/CloudShell";
-import { cloudApi, collabWsUrl } from "@/lib/cloud/api";
+import { cloudApi, collabWsUrl, type AssetSummary } from "@/lib/cloud/api";
 import { getIdToken } from "@/lib/cloud/firebase";
 import { CollaborativeEntryEditor } from "@/components/cloud/CollaborativeEntryEditor";
 import { exportNotebookZipV5, importNotebookZip } from "@/lib/cloud/zipV5";
@@ -23,12 +23,14 @@ type EntryMeta = {
   date: string;
   phase: string | null;
   authors?: string[];
+  isTemplate?: boolean;
   createdAt?: string;
   updatedAt?: string;
 };
 
 export default function NotebookWorkspacePage() {
   const params = useParams();
+  const router = useRouter();
   const orgId = String(params.orgId);
   const notebookId = String(params.notebookId);
   const [notebookName, setNotebookName] = useState("Notebook");
@@ -37,6 +39,7 @@ export default function NotebookWorkspacePage() {
     Record<string, { name: string; parentId: string | null; order: number }>
   >({});
   const [entries, setEntries] = useState<Record<string, EntryMeta>>({});
+  const [assets, setAssets] = useState<AssetSummary[]>([]);
   const [activeEntryId, setActiveEntryId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [auditResult, setAuditResult] = useState<string | null>(null);
@@ -53,14 +56,16 @@ export default function NotebookWorkspacePage() {
     queueMicrotask(() => {
       void (async () => {
         try {
-          const [nb, entryRes] = await Promise.all([
+          const [nb, entryRes, assetList] = await Promise.all([
             cloudApi.getNotebook(orgId, notebookId),
             cloudApi.listEntries(orgId, notebookId),
+            cloudApi.listAssets(orgId, notebookId).catch(() => [] as AssetSummary[]),
           ]);
           if (cancelled) return;
           setNotebookName(nb.name);
           setFolders(nb.folders ?? {});
           setEntries(entryRes.entries);
+          setAssets(assetList);
           setNotebookSummary({
             schemaVersion: NOTEBOOK_SCHEMA_VERSION,
             orgId,
@@ -196,11 +201,36 @@ export default function NotebookWorkspacePage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <button
+            className="rounded border border-neutral-300 px-3 py-2 text-sm"
+            onClick={() => {
+              const next = window.prompt("Rename notebook", notebookName);
+              if (!next?.trim()) return;
+              void cloudApi
+                .patchNotebook(orgId, notebookId, { name: next.trim() })
+                .then(refresh)
+                .catch((err) => setError((err as Error).message));
+            }}
+          >
+            Rename
+          </button>
+          <button
+            className="rounded border border-red-300 px-3 py-2 text-sm text-red-700"
+            onClick={() => {
+              if (!window.confirm("Delete this notebook and all entries?")) return;
+              void cloudApi
+                .deleteNotebook(orgId, notebookId)
+                .then(() => router.push(`/cloud/orgs/${orgId}`))
+                .catch((err) => setError((err as Error).message));
+            }}
+          >
+            Delete notebook
+          </button>
+          <button
             className="rounded border border-neutral-300 px-3 py-2 text-sm disabled:opacity-50"
             disabled={busy}
             onClick={() => {
               void cloudApi
-                .createEntry(orgId, notebookId, { title: "New Entry" })
+                .createEntry(orgId, notebookId, { title: "New Entry", isTemplate: false })
                 .then((e) => {
                   setActiveEntryId(e.id);
                   return refresh();
@@ -261,9 +291,9 @@ export default function NotebookWorkspacePage() {
                   .filter(([, e]) => e.folderId === folderId)
                   .sort((a, b) => a[1].order - b[1].order)
                   .map(([id, e]) => (
-                    <li key={id}>
+                    <li key={id} className="flex items-center gap-1">
                       <button
-                        className={`w-full text-left hover:underline ${activeEntryId === id ? "font-semibold" : ""}`}
+                        className={`flex-1 text-left hover:underline ${activeEntryId === id ? "font-semibold" : ""}`}
                         onClick={() => setActiveEntryId(id)}
                       >
                         {e.title}
@@ -275,12 +305,13 @@ export default function NotebookWorkspacePage() {
           ))}
           <ul>
             {explorer.rootEntries.map(([id, e]) => (
-              <li key={id}>
+              <li key={id} className="flex items-center gap-1">
                 <button
-                  className={`w-full text-left hover:underline ${activeEntryId === id ? "font-semibold" : ""}`}
+                  className={`flex-1 text-left hover:underline ${activeEntryId === id ? "font-semibold" : ""}`}
                   onClick={() => setActiveEntryId(id)}
                 >
                   {e.title}
+                  {e.isTemplate ? " (template)" : ""}
                 </button>
               </li>
             ))}
@@ -288,15 +319,91 @@ export default function NotebookWorkspacePage() {
           {!Object.keys(entries).length && (
             <p className="text-neutral-500">No entries yet.</p>
           )}
+          <div className="mt-4 border-t border-neutral-100 pt-3">
+            <p className="mb-1 font-medium">Assets</p>
+            <ul className="space-y-1 text-xs text-neutral-600">
+              {assets.map((a) => (
+                <li key={a.id} className="flex items-center gap-1">
+                  <span className="flex-1 truncate" title={a.gcsPath}>
+                    {a.id.slice(0, 8)}… ({a.contentType})
+                  </span>
+                  <button
+                    className="text-red-600 underline"
+                    onClick={() => {
+                      if (!window.confirm("Delete asset metadata?")) return;
+                      void cloudApi
+                        .deleteAsset(orgId, notebookId, a.id)
+                        .then(refresh)
+                        .catch((err) => setError((err as Error).message));
+                    }}
+                  >
+                    Del
+                  </button>
+                </li>
+              ))}
+              {!assets.length && <li className="text-neutral-400">None</li>}
+            </ul>
+          </div>
           <p className="mt-4 text-xs text-neutral-400">Collab: {collabWsUrl()}</p>
         </aside>
         <section className="min-h-[420px] rounded border border-neutral-200 bg-white p-4">
           {activeEntryId && docName ? (
-            <CollaborativeEntryEditor
-              documentName={docName}
-              entryTitle={entries[activeEntryId]?.title ?? "Entry"}
-              getToken={getIdToken}
-            />
+            <>
+              <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-neutral-100 pb-3">
+                <span className="text-sm font-medium">
+                  {entries[activeEntryId]?.title ?? "Entry"}
+                </span>
+                <button
+                  className="text-xs text-neutral-500 underline"
+                  onClick={() => {
+                    const current = entries[activeEntryId];
+                    const next = window.prompt("Rename entry", current?.title || "");
+                    if (!next?.trim()) return;
+                    void cloudApi
+                      .patchEntry(orgId, notebookId, activeEntryId, { title: next.trim() })
+                      .then(refresh)
+                      .catch((err) => setError((err as Error).message));
+                  }}
+                >
+                  Rename
+                </button>
+                <button
+                  className="text-xs text-neutral-500 underline"
+                  onClick={() => {
+                    const current = entries[activeEntryId];
+                    void cloudApi
+                      .patchEntry(orgId, notebookId, activeEntryId, {
+                        isTemplate: !current?.isTemplate,
+                      })
+                      .then(refresh)
+                      .catch((err) => setError((err as Error).message));
+                  }}
+                >
+                  {entries[activeEntryId]?.isTemplate ? "Unset template" : "Mark template"}
+                </button>
+                <button
+                  className="text-xs text-red-600 underline"
+                  onClick={() => {
+                    if (!window.confirm("Delete this entry?")) return;
+                    const id = activeEntryId;
+                    void cloudApi
+                      .deleteEntry(orgId, notebookId, id)
+                      .then(() => {
+                        setActiveEntryId(null);
+                        refresh();
+                      })
+                      .catch((err) => setError((err as Error).message));
+                  }}
+                >
+                  Delete entry
+                </button>
+              </div>
+              <CollaborativeEntryEditor
+                documentName={docName}
+                entryTitle={entries[activeEntryId]?.title ?? "Entry"}
+                getToken={getIdToken}
+              />
+            </>
           ) : (
             <p className="text-sm text-neutral-500">Select or create an entry to edit.</p>
           )}
