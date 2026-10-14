@@ -11,26 +11,36 @@ export default function CloudHomePage() {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [authed, setAuthed] = useState(false);
-
-  async function refresh() {
-    try {
-      setOrgs(await cloudApi.listOrgs());
-      setError(null);
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  }
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
-    const check = () => {
+    let cancelled = false;
+    const tick = () => {
       const ok = Boolean(getFirebaseAuth().currentUser || getDevToken());
-      setAuthed(ok);
-      if (ok) void refresh();
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setAuthed(ok);
+        if (!ok) return;
+        void (async () => {
+          try {
+            const list = await cloudApi.listOrgs();
+            if (!cancelled) {
+              setOrgs(list);
+              setError(null);
+            }
+          } catch (err) {
+            if (!cancelled) setError((err as Error).message);
+          }
+        })();
+      });
     };
-    check();
-    const t = setInterval(check, 1000);
-    return () => clearInterval(t);
-  }, []);
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [reloadToken]);
 
   return (
     <CloudShell title="Organizations">
@@ -55,7 +65,7 @@ export default function CloudHomePage() {
                   .createOrg(name.trim() || "My Organization")
                   .then(() => {
                     setName("");
-                    return refresh();
+                    setReloadToken((n) => n + 1);
                   })
                   .catch((err) => setError((err as Error).message));
               }}

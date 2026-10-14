@@ -13,24 +13,34 @@ export default function OrgNotebooksPage() {
   const [members, setMembers] = useState<Array<{ uid: string; role: string; email?: string }>>([]);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
-
-  async function refresh() {
-    try {
-      const [n, m] = await Promise.all([
-        cloudApi.listNotebooks(orgId),
-        cloudApi.listMembers(orgId),
-      ]);
-      setNotebooks(n);
-      setMembers(m);
-      setError(null);
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  }
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
-    void refresh();
-  }, [orgId]);
+    let cancelled = false;
+    queueMicrotask(() => {
+      void (async () => {
+        try {
+          const [n, m] = await Promise.all([
+            cloudApi.listNotebooks(orgId),
+            cloudApi.listMembers(orgId),
+          ]);
+          if (cancelled) return;
+          setNotebooks(n);
+          setMembers(m);
+          setError(null);
+        } catch (err) {
+          if (!cancelled) setError((err as Error).message);
+        }
+      })();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, reloadToken]);
+
+  function refresh() {
+    setReloadToken((n) => n + 1);
+  }
 
   return (
     <CloudShell title="Notebooks">
@@ -56,7 +66,7 @@ export default function OrgNotebooksPage() {
               .createNotebook(orgId, name.trim() || "Competition Notebook")
               .then(() => {
                 setName("");
-                return refresh();
+                refresh();
               })
               .catch((err) => setError((err as Error).message));
           }}

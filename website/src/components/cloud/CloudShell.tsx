@@ -25,21 +25,25 @@ export function CloudShell({ children, title }: { children: ReactNode; title?: s
 
   useEffect(() => {
     const auth = getFirebaseAuth();
-    const unsub = onAuthStateChanged(auth, async (u) => {
-      setUser(u);
-      if (u || getDevToken()) {
-        try {
-          const p = (await cloudApi.bootstrap()) as { platformRole?: string };
-          setProfile(p);
-        } catch {
-          setProfile(null);
-        }
-      } else {
-        setProfile(null);
-      }
-      setReady(true);
+    // setState only in the auth subscription callback (not synchronously in the effect body)
+    const unsub = onAuthStateChanged(auth, (u) => {
+      queueMicrotask(() => {
+        void (async () => {
+          setUser(u);
+          if (u || getDevToken()) {
+            try {
+              const p = (await cloudApi.bootstrap()) as { platformRole?: string };
+              setProfile(p);
+            } catch {
+              setProfile(null);
+            }
+          } else {
+            setProfile(null);
+          }
+          setReady(true);
+        })();
+      });
     });
-    if (getDevToken()) setReady(true);
     return () => unsub();
   }, []);
 

@@ -3,6 +3,7 @@ import { Project, getProjectDBName, getAllPending, getProjectHandle } from "@/li
 import { GITHUB_ISSUES_URL } from "@/lib/constants";
 import { useTheme } from "next-themes";
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Folder, HardDrive, Trash2, Clock, Plus,
   ArrowRight, History, Edit2, Check, X, MoreVertical,
@@ -269,7 +270,7 @@ export default function Home({
                 <Plus size={16} className="text-nb-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity" />
               </button>
 
-              <a
+              <Link
                 href="/cloud"
                 className="group flex items-center gap-4 p-4 rounded-2xl bg-nb-surface border border-nb-outline-variant/30 hover:border-nb-primary/40 hover:bg-nb-primary/5 transition-all text-left shadow-nb-sm cursor-pointer"
               >
@@ -281,7 +282,7 @@ export default function Home({
                   <p className="text-[10px] text-nb-on-surface-variant">Firebase auth, orgs, notebooks, collab</p>
                 </div>
                 <Plus size={16} className="text-nb-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity" />
-              </a>
+              </Link>
             </div>
           </div>
 

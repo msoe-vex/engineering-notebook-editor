@@ -10,21 +10,31 @@ export default function AdminPage() {
   >([]);
   const [metrics, setMetrics] = useState<Record<string, number> | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  async function refresh() {
-    try {
-      const [u, m] = await Promise.all([cloudApi.adminUsers(), cloudApi.adminMetrics()]);
-      setUsers(u);
-      setMetrics(m);
-      setError(null);
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  }
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
-    void refresh();
-  }, []);
+    let cancelled = false;
+    queueMicrotask(() => {
+      void (async () => {
+        try {
+          const [u, m] = await Promise.all([cloudApi.adminUsers(), cloudApi.adminMetrics()]);
+          if (cancelled) return;
+          setUsers(u);
+          setMetrics(m);
+          setError(null);
+        } catch (err) {
+          if (!cancelled) setError((err as Error).message);
+        }
+      })();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadToken]);
+
+  function refresh() {
+    setReloadToken((n) => n + 1);
+  }
 
   return (
     <CloudShell title="Service Administrator">

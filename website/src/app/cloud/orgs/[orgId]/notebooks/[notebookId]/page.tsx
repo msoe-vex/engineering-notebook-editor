@@ -41,32 +41,46 @@ export default function NotebookWorkspacePage() {
   const [error, setError] = useState<string | null>(null);
   const [auditResult, setAuditResult] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
   const importRef = useRef<HTMLInputElement>(null);
 
-  async function refresh() {
-    try {
-      const [nb, entryRes] = await Promise.all([
-        cloudApi.getNotebook(orgId, notebookId),
-        cloudApi.listEntries(orgId, notebookId),
-      ]);
-      setNotebookName(nb.name);
-      setFolders(nb.folders ?? {});
-      setEntries(entryRes.entries);
-      setNotebookSummary({
-        schemaVersion: NOTEBOOK_SCHEMA_VERSION,
-        orgId,
-        name: nb.name,
-        folders: nb.folders ?? {},
-        team: nb.team as NotebookSummaryV5["team"],
-        phases: nb.phases as NotebookSummaryV5["phases"],
-        lastCompiled: nb.lastCompiled,
-        updatedAt: nb.updatedAt ?? new Date().toISOString(),
-      });
-      setError(null);
-    } catch (err) {
-      setError((err as Error).message);
-    }
+  function refresh() {
+    setReloadToken((n) => n + 1);
   }
+
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      void (async () => {
+        try {
+          const [nb, entryRes] = await Promise.all([
+            cloudApi.getNotebook(orgId, notebookId),
+            cloudApi.listEntries(orgId, notebookId),
+          ]);
+          if (cancelled) return;
+          setNotebookName(nb.name);
+          setFolders(nb.folders ?? {});
+          setEntries(entryRes.entries);
+          setNotebookSummary({
+            schemaVersion: NOTEBOOK_SCHEMA_VERSION,
+            orgId,
+            name: nb.name,
+            folders: nb.folders ?? {},
+            team: nb.team as NotebookSummaryV5["team"],
+            phases: nb.phases as NotebookSummaryV5["phases"],
+            lastCompiled: nb.lastCompiled,
+            updatedAt: nb.updatedAt ?? new Date().toISOString(),
+          });
+          setError(null);
+        } catch (err) {
+          if (!cancelled) setError((err as Error).message);
+        }
+      })();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, notebookId, reloadToken]);
 
   async function handleExportZip() {
     setBusy(true);
@@ -154,10 +168,6 @@ export default function NotebookWorkspacePage() {
       setBusy(false);
     }
   }
-
-  useEffect(() => {
-    void refresh();
-  }, [orgId, notebookId]);
 
   const explorer = useMemo(() => {
     const rootEntries = Object.entries(entries)
