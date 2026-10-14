@@ -1,0 +1,24 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "gcr.io/$PROJECT_ID/core-service", "-f", "services/core/Dockerfile", "."]
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "gcr.io/$PROJECT_ID/collab-service", "-f", "services/collab/Dockerfile", "."]
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "gcr.io/$PROJECT_ID/agents-service", "-f", "services/agents/Dockerfile", "."]
+  - name: gcr.io/cloud-builders/docker
+    args:
+      [
+        "build",
+        "-t",
+        "gcr.io/$PROJECT_ID/website-service",
+        "-f",
+        "website/Dockerfile",
+        "--build-arg",
+        "NEXT_PUBLIC_FIREBASE_PROJECT_ID=$PROJECT_ID",
+        ".",
+      ]
+images:
+  - gcr.io/$PROJECT_ID/core-service
+  - gcr.io/$PROJECT_ID/collab-service
+  - gcr.io/$PROJECT_ID/agents-service
+  - gcr.io/$PROJECT_ID/website-service

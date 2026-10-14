@@ -1,29 +1,35 @@
 import Fastify from "fastify";
 import { FirebaseAuthAdapter } from "./auth/firebaseAuthAdapter.js";
-import { getMetrics, observeRequest, setActiveCollaborationConnections } from "./metrics/store.js";
+import { initFirestore } from "./db/firestore.js";
+import { createStorage } from "./storage/gcsStorage.js";
+import { createAuthGuard } from "./http/authPlugin.js";
+import { observeRequest, setActiveCollaborationConnections } from "./metrics/store.js";
+import { registerOrgRoutes } from "./routes/orgs.js";
+import { registerAdminRoutes } from "./routes/admin.js";
+import { registerUserRoutes } from "./routes/users.js";
+import { registerStaticAssetRoutes } from "./routes/staticAssets.js";
 
 const app = Fastify({ logger: true });
 const auth = new FirebaseAuthAdapter();
+const requireAuth = createAuthGuard(auth);
 const authAttempts = new Map<string, { count: number; windowStart: number }>();
 
 function allowAuthRequest(ip: string): boolean {
   const now = Date.now();
   const windowMs = 60_000;
-  const maxRequestsPerWindow = 30;
+  const maxRequestsPerWindow = 60;
   const current = authAttempts.get(ip);
-
   if (!current || now - current.windowStart > windowMs) {
     authAttempts.set(ip, { count: 1, windowStart: now });
     return true;
   }
-
-  if (current.count >= maxRequestsPerWindow) {
-    return false;
-  }
-
+  if (current.count >= maxRequestsPerWindow) return false;
   current.count += 1;
   return true;
 }
+
+await initFirestore();
+const storage = await createStorage();
 
 app.addHook("onRequest", async (request) => {
   (request as { _start?: number })._start = Date.now();
@@ -34,34 +40,36 @@ app.addHook("onResponse", async (request, reply) => {
   observeRequest(reply.statusCode, Date.now() - start);
 });
 
-app.get("/health", async () => ({ status: "ok", service: "core" }));
-
-app.get("/api/admin/metrics", async (request, reply) => {
-  const ip = request.ip || "unknown";
-  if (!allowAuthRequest(`${ip}:admin-metrics`)) {
-    return reply.code(429).send({ error: "too many requests" });
-  }
-
-  const role = request.headers["x-platform-role"];
-  if (role !== "service_admin") {
-    return reply.code(403).send({ error: "forbidden" });
-  }
-
-  const snapshot = getMetrics();
-  const avgLatencyMs = snapshot.totalRequests === 0 ? 0 : snapshot.totalLatencyMs / snapshot.totalRequests;
-
-  return {
-    ...snapshot,
-    averageLatencyMs: Number(avgLatencyMs.toFixed(2)),
-  };
+app.setErrorHandler(async (error, _request, reply) => {
+  const err = error as Error & { statusCode?: number };
+  const status = err.statusCode ?? 500;
+  if (status === 403) return reply.code(403).send({ error: "forbidden" });
+  if (status === 401) return reply.code(401).send({ error: "unauthorized" });
+  app.log.error(error);
+  return reply.code(status).send({ error: err.message || "internal error" });
 });
 
-app.get("/orgs", async () => []);
-app.post("/orgs", async () => ({ id: "org-placeholder", created: true }));
-app.get("/orgs/:orgId/notebooks", async () => []);
-app.post("/orgs/:orgId/notebooks", async () => ({ id: "notebook-placeholder", created: true }));
+app.get("/health", async () => ({ status: "ok", service: "core" }));
 
-app.get("/assets/busytex/*", async () => ({ message: "BusyTeX asset proxy placeholder" }));
+app.get("/auth/session", async (request, reply) => {
+  const ip = request.ip || "unknown";
+  if (!allowAuthRequest(ip)) {
+    return reply.code(429).send({ error: "too many requests" });
+  }
+  const header = request.headers.authorization;
+  const token = typeof header === "string" ? header.replace(/^Bearer\s+/i, "") : "";
+  if (!token) return reply.code(401).send({ error: "missing token" });
+  return auth.verifySession(token);
+});
+
+app.register(async (scoped) => {
+  scoped.addHook("preHandler", requireAuth);
+  await registerUserRoutes(scoped);
+  await registerOrgRoutes(scoped, storage);
+  await registerAdminRoutes(scoped);
+});
+
+await registerStaticAssetRoutes(app, storage);
 
 app.post("/internal/collab/connections", async (request) => {
   const body = request.body as { activeConnections?: number };
@@ -69,16 +77,50 @@ app.post("/internal/collab/connections", async (request) => {
   return { ok: true };
 });
 
-app.get("/auth/session", async (request, reply) => {
-  const ip = request.ip || "unknown";
-  if (!allowAuthRequest(ip)) {
-    return reply.code(429).send({ error: "too many requests" });
+/** Internal flush helper used by collab service (shared secret optional). */
+app.post("/internal/collab/flush", async (request, reply) => {
+  const secret = process.env.INTERNAL_SERVICE_SECRET;
+  if (secret && request.headers["x-internal-secret"] !== secret) {
+    return reply.code(403).send({ error: "forbidden" });
   }
-
-  const header = request.headers.authorization;
-  const token = typeof header === "string" ? header.replace(/^Bearer\s+/i, "") : "";
-  if (!token) return reply.code(401).send({ error: "missing token" });
-  return auth.verifySession(token);
+  const body = request.body as {
+    orgId: string;
+    notebookId: string;
+    entryId: string;
+    tipTapJson?: unknown;
+    yjsBase64?: string;
+    meta?: Record<string, unknown>;
+  };
+  const { entryPath, gcsKeys } = await import("@engineering-notebook/shared");
+  const { getFirestore } = await import("./db/firestore.js");
+  const ref = getFirestore().doc(entryPath(body.orgId, body.notebookId, body.entryId));
+  const snap = await ref.get();
+  if (!snap.exists) return reply.code(404).send({ error: "entry not found" });
+  const existing = snap.data() as { tipTapRev?: number; yjsRev?: number };
+  const tipTapKey = gcsKeys.tipTap(body.orgId, body.notebookId, body.entryId);
+  const yjsKey = gcsKeys.yjs(body.orgId, body.notebookId, body.entryId);
+  const tipTapRev = (existing.tipTapRev ?? 0) + 1;
+  const yjsRev = (existing.yjsRev ?? 0) + 1;
+  if (body.tipTapJson !== undefined) {
+    await storage.putObject(tipTapKey, JSON.stringify(body.tipTapJson), "application/json");
+  }
+  if (body.yjsBase64) {
+    await storage.putObject(yjsKey, Buffer.from(body.yjsBase64, "base64"), "application/octet-stream");
+  }
+  const patch: Record<string, unknown> = {
+    tipTapGcsPath: tipTapKey,
+    yjsGcsPath: yjsKey,
+    tipTapRev,
+    yjsRev,
+    updatedAt: new Date().toISOString(),
+  };
+  if (body.meta) {
+    for (const key of ["title", "authors", "phase", "date"] as const) {
+      if (body.meta[key] !== undefined) patch[key] = body.meta[key];
+    }
+  }
+  await ref.update(patch);
+  return { ok: true, tipTapRev, yjsRev };
 });
 
 const port = Number(process.env.PORT || 8080);

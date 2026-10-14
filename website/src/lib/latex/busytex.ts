@@ -5,9 +5,6 @@ import { DATA_DIR, LATEX_DIR, TEAM_PATH, PHASES_PATH, ENTRIES_INDEX_PATH } from 
 let runner: BusyTexRunner | null = null;
 let xelatex: XeLatex | null = null;
 
-const APP_TAG = process.env.NEXT_PUBLIC_APP_VERSION || 'v0.1.0';
-const GITHUB_RELEASE_URL = `https://github.com/msoe-vex/engineering-notebook-editor/releases/download/${APP_TAG}`;
-
 export async function initBusyTex() {
   if (runner && runner.isInitialized()) return;
 
@@ -32,33 +29,13 @@ export async function initBusyTex() {
 }
 
 async function fetchAsset(path: string): Promise<Uint8Array> {
-  // Try local first, then fallback to remote release
-  try {
-    const response = await fetch(path);
-    if (response.ok) {
-      const buffer = await response.arrayBuffer();
-      return new Uint8Array(buffer);
-    }
-  } catch {
-    // Ignore local failure and try remote release
+  // Served from website/public or rewritten to Core/GCS via NEXT_PUBLIC_ASSETS_BASE_URL.
+  const response = await fetch(path);
+  if (!response.ok) {
+    throw new Error(`Failed to load asset "${path}": HTTP ${response.status} ${response.statusText}`);
   }
-
-  // Fallback to remote release via proxy
-  const filename = path.split('/').pop();
-  const remoteUrl = `${GITHUB_RELEASE_URL}/${filename}`;
-  const proxiedUrl = `${window.location.origin}/api/busytex-proxy?url=${encodeURIComponent(remoteUrl)}`;
-
-  try {
-    const response = await fetch(proxiedUrl);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} ${response.statusText}`);
-    }
-    const buffer = await response.arrayBuffer();
-    return new Uint8Array(buffer);
-  } catch (error) {
-    console.error(`[BusyTex] Failed to fetch asset "${path}" from both local path and remote release (${remoteUrl}):`, error);
-    throw new Error(`Failed to load asset "${path}" from public or release: ${error instanceof Error ? error.message : String(error)}`);
-  }
+  const buffer = await response.arrayBuffer();
+  return new Uint8Array(buffer);
 }
 
 export interface CompileResult {
@@ -87,28 +64,16 @@ export async function compileNotebook(mode: CompileMode = "quality", onStatus?: 
   // 1. Map public dependencies (manifest.json + .sty files)
   onStatus?.("Loading LaTeX dependencies...", 3, TOTAL_STEPS, 35);
   try {
-    // Fetch manifest.json (try local first, then remote)
     let packageFiles: string[] = [];
     try {
       const res = await fetch('/latex/manifest.json');
       if (res.ok) {
         packageFiles = await res.json();
       } else {
-        throw new Error(`HTTP ${res.status}`);
+        console.error(`[BusyTex] Failed to load /latex/manifest.json: HTTP ${res.status}`);
       }
-    } catch {
-      const remoteManifestUrl = `${GITHUB_RELEASE_URL}/manifest.json`;
-      const proxiedUrl = `${window.location.origin}/api/busytex-proxy?url=${encodeURIComponent(remoteManifestUrl)}`;
-      try {
-        const res = await fetch(proxiedUrl);
-        if (res.ok) {
-          packageFiles = await res.json();
-        } else {
-          throw new Error(`HTTP ${res.status}`);
-        }
-      } catch (manifestErr) {
-        console.error(`[BusyTex] Failed to load LaTeX manifest.json from both local (/latex/manifest.json) and remote release (${remoteManifestUrl}):`, manifestErr);
-      }
+    } catch (manifestErr) {
+      console.error(`[BusyTex] Failed to load /latex/manifest.json:`, manifestErr);
     }
 
     for (const pkg of packageFiles) {
@@ -116,7 +81,7 @@ export async function compileNotebook(mode: CompileMode = "quality", onStatus?: 
         const content = await fetchAsset(`/latex/${pkg}`);
         files.push({ path: pkg, content });
       } catch (e) {
-        console.error(`[BusyTex] Failed to load LaTeX dependency "${pkg}" from public or release:`, e);
+        console.error(`[BusyTex] Failed to load LaTeX dependency "${pkg}":`, e);
       }
     }
   } catch (e) {

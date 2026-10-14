@@ -29,7 +29,7 @@ export async function runGenerate(prompt: string, images?: GenAIImagePart[], tem
     throw new Error("Choose a model in Settings before generating titles and captions.");
   }
   // Call loopback / LAN OpenAI-compatible servers from the browser so 127.0.0.1
-  // is the user's machine, not the Next.js host (which would fail on Vercel).
+  // is the user's machine, not the Next.js/Cloud Run host.
   if (providerNeedsBaseUrl(settings.provider)) {
     return runProviderGenerate(
       settings.provider,

@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Emulator / bootstrap: Core Admin SDK bypasses rules.
+    // Client SDK access is denied by default; tighten in production as needed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

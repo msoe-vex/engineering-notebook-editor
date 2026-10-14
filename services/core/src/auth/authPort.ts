@@ -1,8 +1,11 @@
+import type { PlatformRole, UserGrants } from "@engineering-notebook/shared";
+
 export interface SessionUser {
   uid: string;
   email?: string;
-  platformRole?: "service_admin";
-  grants?: Record<string, boolean>;
+  displayName?: string;
+  platformRole?: PlatformRole;
+  grants?: UserGrants;
 }
 
 export interface AuthPort {

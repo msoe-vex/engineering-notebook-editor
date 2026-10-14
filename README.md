@@ -1,209 +1,223 @@
 # Engineering Notebook Editor
 
-This repository contains the engineering notebook platform codebase, organized into Cloud Run-oriented microservices:
+Cloud-native engineering notebook platform: Next.js UI, Core API, real-time collab, and AI rubric agents — deployable to Google Cloud Run, testable locally with Docker Compose.
 
-- `website/`: Next.js frontend container (editor, notebook UI, and client sync)
-  - For more details, see the [README in the `website/` folder](website/README.md)
-- `services/core/`: Fastify core API (auth adapter, org/notebook management, admin metrics, asset routes)
-- `services/collab/`: Hocuspocus / Yjs real-time WebSocket collaboration service
-- `services/agents/`: Fastify AI agent service (rubric-audit workflows, BYOK + grant-gated platform AI routing; standard replacement for legacy `judge/` implementations)
-  - For more details, see [`services/agents/README.md`](services/agents/README.md)
-- `packages/shared/`: shared cross-service types and schemas
-- `infra/`: local compose and deployment scaffolding
-- `loadtest/`: k6 load test scripts
-- `notebook/`: LaTeX source templates and generated notebook output
-  - For more details, see the [README in the `notebook/` folder](notebook/README.md)
+**Primary product path:** Firebase auth → Organizations → Notebooks → collaborative editor (`/cloud`).  
+**Alternative path:** classic Home UI with local folder, temporary workspace, or GitHub OAuth + ZIP (no Core required).
 
 ---
 
-## Local Development & Testing
+## Documentation map
 
-### Frontend (`website/`)
+| Doc | What it’s for |
+| --- | --- |
+| **[docs/local-development.md](docs/local-development.md)** | **How to test locally** (Compose, website-only, services without Docker, smoke checklist) |
+| [docs/microservices-architecture.md](docs/microservices-architecture.md) | Service boundaries, data stores, tenancy |
+| [docs/api-contracts.md](docs/api-contracts.md) | REST / WSS routes and Firestore path layout |
+| [website/README.md](website/README.md) | Frontend env vars, BusyTeX, Cloud Run image notes |
+| [services/core/README.md](services/core/README.md) | Core API |
+| [services/collab/README.md](services/collab/README.md) | Hocuspocus / Yjs collab |
+| [services/agents/README.md](services/agents/README.md) | Rubric audit / BYOK / Vertex |
+| [notebook/README.md](notebook/README.md) | LaTeX template submodule |
+| [infra/cloudrun/deploy.sh](infra/cloudrun/deploy.sh) | Production Cloud Run deploy |
+| [infra/docker-compose.yml](infra/docker-compose.yml) | Local full stack |
 
-To develop or test the frontend website standalone:
+---
 
-```bash
-cd website
-npm install
-npm run dev
+## Repository layout
+
+```
+engineering-notebook-editor/
+  website/                 # Next.js — Home (local/GitHub) + /cloud
+  services/core/           # Auth, orgs, notebooks, entries, assets, admin, BusyTeX routes
+  services/collab/         # Hocuspocus / Yjs WebSocket
+  services/agents/         # Rubric audits (BYOK + grant-gated Vertex)
+  packages/shared/         # v5 types, nested path helpers, ZIP migrate
+  infra/                   # docker-compose, Firebase emulator config, Cloud Run, upload scripts
+  loadtest/                # k6 smoke
+  notebook/                # LaTeX template sources
+  docs/                    # Architecture + local testing + API contracts
 ```
 
-The app runs at [http://localhost:3000](http://localhost:3000) by default.
+---
 
-**Testing & Verification in `website/`**:
-```bash
-npm test        # Runs unit & schema tests (Vitest)
-npm run lint    # ESLint check
-npm run build   # Build check
-```
+## How to test locally (quick start)
 
-### Backend Services (`services/*`)
-
-Each backend microservice can be run individually or together:
-
-- **Core API** (`services/core`): `npm install && npm run dev` (Port 8080)
-- **Collab Service** (`services/collab`): `npm install && npm run dev` (Port 1234)
-- **Agents Service** (`services/agents`): `npm install && npm run dev` (Port 8000)
-
-### Multi-service Orchestration (Docker Compose)
-
-To run the complete stack (`website`, `core`, `collab`, `agents`) locally in Docker:
+### Recommended: full stack with Docker
 
 ```bash
 cd infra
 docker compose up --build
 ```
 
-Endpoints when running via Docker Compose:
-- **Website UI**: http://localhost:3000
-- **Core API**: http://localhost:8080
-- **Collab WebSocket**: ws://localhost:1234
-- **Agents API**: http://localhost:8000
+Then:
 
-To run load tests against local services:
+1. Open **http://localhost:3000/cloud**
+2. Sign in with **Continue with dev token** → `service-admin`
+3. Create an **Organization** → **Notebook** → **New entry** and type in the editor
+4. Optional: open **Admin** (service admin only) for users / grants / metrics
+
+| Port | Service |
+| --- | --- |
+| 3000 | Website (`/` classic editor, `/cloud` orgs) |
+| 8080 | Core API |
+| 1234 | Collab WebSocket |
+| 8000 | Agents |
+| 4000 | Firebase Emulator UI |
+| 4443 | fake-gcs |
+
+**Step-by-step smoke tests, curl examples, and non-Docker setups:** see **[docs/local-development.md](docs/local-development.md)**.
+
+### Website only (no backends)
+
 ```bash
+cd website
+npm install
+npm run download:busytex      # for PDF compile
+npm run bundle:template
+npm run dev
+```
+
+- Classic editor: http://localhost:3000  
+- `/cloud` needs Core (use Compose above)
+
+```bash
+npm run lint && npm test && npm run build
+```
+
+### Load test
+
+```bash
+# with Compose stack running
 k6 run loadtest/k6-smoke.js
 ```
 
-See:
-- [`docs/microservices-architecture.md`](docs/microservices-architecture.md)
-- [`docs/api-contracts.md`](docs/api-contracts.md)
+---
+
+## Modes at a glance
+
+| Mode | Auth | Persistence | Start |
+| --- | --- | --- | --- |
+| **Cloud (primary)** | Firebase or compose **dev token** | Firestore + GCS via Core/Collab | `infra/docker compose up` → `/cloud` |
+| **Local / temporary** | None | Browser FS / memory + ZIP | `website` `npm run dev` |
+| **GitHub (alternative)** | GitHub OAuth | Repo files + ZIP | `website` + `.env.local` OAuth vars |
+
+GitHub OAuth remains supported as a secondary workflow; new multi-user collaboration belongs on `/cloud`.
 
 ---
 
-## Firebase & Firebase Emulator Setup
+## Environment variables
 
-`services/core` uses a pluggable authentication adapter (`AuthPort`) implemented in `services/core/src/auth/firebaseAuthAdapter.ts`.
+### Website (`website/.env.local`)
 
-### Should You Use the Firebase Emulator?
+```bash
+# Cloud (Compose already injects these in Docker)
+NEXT_PUBLIC_CORE_API_URL=http://localhost:8080
+NEXT_PUBLIC_AGENTS_API_URL=http://localhost:8000
+NEXT_PUBLIC_COLLAB_WS_URL=ws://localhost:1234
+NEXT_PUBLIC_ASSETS_BASE_URL=http://localhost:8080
+NEXT_PUBLIC_FIREBASE_API_KEY=demo-api-key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=demo-engineering-notebook.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=demo-engineering-notebook
+NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true
+NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST=localhost:9099
 
-- **Local Development / Offline Testing**:
-  - **Yes, recommended** if you are modifying auth flows, verifying custom tokens, or testing security rules without connecting to live Firebase infrastructure.
-  - Start the Firebase Local Emulator Suite:
-    ```bash
-    firebase emulators:start --only auth
-    ```
-  - Point your local services to the emulator by setting the `FIREBASE_AUTH_EMULATOR_HOST` environment variable:
-    ```bash
-    export FIREBASE_AUTH_EMULATOR_HOST="127.0.0.1:9099"
-    ```
-- **Local Development with Mock Auth**:
-  - If you do not need full Firebase Auth token verification, `firebaseAuthAdapter.ts` operates in fallback mode locally, accepting bearer session tokens directly without requiring a running emulator.
-- **Production / Cloud Run**:
-  - In deployed environments, do not use the emulator. Configure `FIREBASE_PROJECT_ID` and attach a service account key or Google Application Default Credentials (ADC) to `services/core`.
+# Optional — GitHub alternative on Home
+NEXT_PUBLIC_GITHUB_CLIENT_ID=...
+GITHUB_CLIENT_SECRET=...
+```
+
+### Backend (Compose sets these; for bare-metal see [local-development.md](docs/local-development.md))
+
+| Variable | Purpose |
+| --- | --- |
+| `FIREBASE_PROJECT_ID` | Firebase / GCP project |
+| `FIRESTORE_EMULATOR_HOST` | e.g. `firebase:8081` or `127.0.0.1:8081` |
+| `FIREBASE_AUTH_EMULATOR_HOST` | e.g. `firebase:9099` |
+| `AUTH_FALLBACK` | `true` locally → bearer token = uid |
+| `STORAGE_BACKEND` | `memory` in Compose Core; omit for real GCS |
+| `GCS_BUCKET` / `STORAGE_EMULATOR_HOST` | Object storage |
+| `SERVICE_ADMIN_UID` | Bootstrap Service Administrator (`service-admin` in Compose) |
+| `INTERNAL_SERVICE_SECRET` | Core ↔ Collab flush auth |
+| `COLLAB_AUTH_DISABLED` | `true` only for local smoke |
+| `VERTEX_STUB` | `true` locally for Agents without Vertex credentials |
 
 ---
 
-## Cloud Run Deployment
+## Data model (nested)
 
-Primary hosting for the backend and frontend is Google Cloud Run with one container per service (`website`, `services/core`, `services/collab`, `services/agents`).
+```
+users/{uid}
+organizations/{orgId}
+organizations/{orgId}/members/{uid}
+organizations/{orgId}/notebooks/{notebookId}          # folders, team, phases
+organizations/{orgId}/notebooks/{notebookId}/entries/{entryId}   # metadata + GCS pointers
+organizations/{orgId}/notebooks/{notebookId}/assets/{assetId}
+organizations/{orgId}/notebooks/{notebookId}/audits/{auditId}
+invites/{inviteId}
+```
 
-### Deployment Steps
+TipTap bodies and Yjs blobs live in **GCS** (not Firestore). Collab room names include `orgId` — see [api-contracts.md](docs/api-contracts.md).
 
-1. **Build and push container images** using Google Cloud Build or Docker:
-   ```bash
-   # Example using Google Cloud Build
-   gcloud builds submit services/core --tag gcr.io/$PROJECT_ID/core-service
-   gcloud builds submit services/collab --tag gcr.io/$PROJECT_ID/collab-service
-   gcloud builds submit services/agents --tag gcr.io/$PROJECT_ID/agents-service
-   gcloud builds submit website --tag gcr.io/$PROJECT_ID/website-service
-   ```
+---
 
-2. **Deploy each container to Cloud Run**:
-   ```bash
-   # Core service
-   gcloud run deploy core-service \
-     --image gcr.io/$PROJECT_ID/core-service \
-     --region us-central1 \
-     --allow-unauthenticated \
-     --set-env-vars FIREBASE_PROJECT_ID=$PROJECT_ID
+## Auth (local vs production)
 
-   # Agents service
-   gcloud run deploy agents-service \
-     --image gcr.io/$PROJECT_ID/agents-service \
-     --region us-central1 \
-     --allow-unauthenticated
+- **Compose / local:** `AUTH_FALLBACK=true` accepts `Authorization: Bearer <uid>` (and `/cloud` “dev token”). Firebase Auth emulator is also available for email/password.
+- **Production:** real Firebase ID tokens; set `AUTH_FALLBACK=false` and use ADC / service accounts on Cloud Run.
 
-   # Collab service (requires WebSocket / HTTP 1.1 support)
-   gcloud run deploy collab-service \
-     --image gcr.io/$PROJECT_ID/collab-service \
-     --region us-central1 \
-     --allow-unauthenticated \
-     --use-http2
+Adapter: `services/core/src/auth/firebaseAuthAdapter.ts` (`AuthPort`).
 
-   # Website service
-   gcloud run deploy website-service \
-     --image gcr.io/$PROJECT_ID/website-service \
-     --region us-central1 \
-     --allow-unauthenticated \
-     --set-env-vars NEXT_PUBLIC_CORE_API_URL=https://core-service-url,NEXT_PUBLIC_AGENTS_API_URL=https://agents-service-url
-   ```
+---
 
-3. **Configure Service Endpoints & Env Vars**:
-   - Ensure `NEXT_PUBLIC_CORE_API_URL` and `NEXT_PUBLIC_AGENTS_API_URL` are configured on the website container to point to the deployed Cloud Run service URLs.
-   - For WebSocket persistence in `services/collab`, enable HTTP/2 or WebSocket sessions in Cloud Run settings.
+## Cloud Run deployment
 
-### Git Hooks (Recommended)
+```bash
+export PROJECT_ID=your-gcp-project
+export GCS_BUCKET=${PROJECT_ID}-notebook
+bash infra/cloudrun/deploy.sh
+```
 
-To automatically run lint, tests, and build before every `git push` (matching the CI workflow), enable the repository's `.githooks` directory:
+Builds all four images from repo root ([`infra/cloudrun/cloudbuild.yaml`](infra/cloudrun/cloudbuild.yaml)) so `packages/shared` is included, then deploys Core, Collab (HTTP/2 + session affinity), Agents, and Website with env wiring.
+
+Seed the first admin with `SERVICE_ADMIN_UID=<firebase-uid>`.
+
+---
+
+## BusyTeX / LaTeX assets
+
+```bash
+cd website
+npm run download:busytex
+npm run bundle:template
+
+# upload to GCS for production
+GCS_BUCKET=your-bucket ASSETS_APP_VERSION=latest npx tsx infra/scripts/upload-busytex-assets.ts
+```
+
+- **Local website-only:** files under `website/public/busytex` and `public/latex`
+- **Compose / prod:** `NEXT_PUBLIC_ASSETS_BASE_URL` → Core `/static/busytex/*` and `/static/latex/*`
+
+Compile stays **in-browser** (BusyTeX WASM); only hosting of binaries moved off GitHub Releases.
+
+---
+
+## CI & git hooks
+
+- PRs: [`.github/workflows/verify.yml`](.github/workflows/verify.yml) — shared package, website lint/test/build, service typechecks
+- Optional local hooks (lint/test/build before push):
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-## Environment Variables
+---
 
-Create `website/.env.local` with the GitHub OAuth values used by the app:
+## GitHub OAuth app (alternative Home flow only)
 
-```bash
-NEXT_PUBLIC_GITHUB_CLIENT_ID=your_github_oauth_client_id
-GITHUB_CLIENT_SECRET=your_github_oauth_client_secret
-```
+If you use the Home → GitHub Repository path:
 
-- `NEXT_PUBLIC_GITHUB_CLIENT_ID` is exposed to the browser because the sign-in flow needs the client id.
-- `GITHUB_CLIENT_SECRET` must stay server-side and is used by the token exchange route.
+- Homepage / callback URL: your deployed site origin (same URL for both is fine)
+- Env: `NEXT_PUBLIC_GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` on the website service
 
-## GitHub App Setup
-
-Create a GitHub OAuth App or GitHub App for the editor and point it at the deployed app URL.
-
-- Homepage URL: your public app URL, such as `https://your-domain.com`
-- Callback / redirect URL: the public URL that finishes the GitHub sign-in flow for this app. Use the same URL for the redirect URL as the homepage URL.
-- Update the GitHub app settings any time the deployed domain changes
-
-If you are using Vercel previews, make sure the same env vars are configured for Preview and Production deployments.
-
-## Deployment
-
-Primary target hosting is Google Cloud Run with one container per service (`website`, `services/core`, `services/collab`, `services/agents`).
-
-For local parity, use `infra/docker-compose.yml`.
-
-For notebook/PDF work, see `notebook/README.md`.
-
-## Release Workflow (For Web Editor)
-
-To ensure the web editor can compile PDFs efficiently without bloating the Git repository, bundle notebook template files and publish BusyTeX/LaTeX static assets to cloud storage.
-
-### 1. Prepare Assets
-
-Run the following from the `website/` directory:
-
-- `npm run download:busytex`
-  - Downloads the engine WASM and TeX Live `.data` files into `website/public/busytex/`.
-- `npm run bundle:template`
-  - Bundles the complete notebook template (`notebook/main.tex`, `notebook/notebook.sty`, `notebook/fonts/`, and `notebook/data/`) into `website/public/notebook-template/`.
-  - Scans and gathers external LaTeX package dependencies into `website/public/latex/` with `manifest.json`.
-
-### 2. Upload BusyTeX Assets to Cloud Storage
-
-1. Build or download BusyTeX + LaTeX package assets locally.
-2. Upload files to your versioned cloud bucket path (for example `static/busytex/{appVersion}` and `static/latex-template/{appVersion}`).
-3. Configure website/core env vars to serve or redirect static asset requests from those cloud paths.
-
-### 3. How it Works (Development vs. Production)
-
-- **Template Files**: The app serves `main.tex`, `notebook.sty`, typography fonts, and initial template entries directly from `website/public/notebook-template/`.
-- **LaTeX Engine & Packages**:
-  - **Local Development**: In dev mode, the app can serve WASM engine and TeX packages from local `website/public/`.
-  - **Production / Deployment**: In cloud deployments, static assets should be served from cloud object storage through core-owned route space.
+Cloud collaboration does **not** require GitHub.

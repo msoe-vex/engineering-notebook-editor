@@ -1,0 +1,14 @@
+{
+  "name": "engineering-notebook-editor-monorepo",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "services/*"
+  ],
+  "scripts": {
+    "build:shared": "npm run build -w @engineering-notebook/shared",
+    "dev:core": "npm run dev -w engineering-notebook-core-service",
+    "dev:collab": "npm run dev -w engineering-notebook-collab-service",
+    "dev:agents": "npm run dev -w engineering-notebook-agents-service"
+  }
+}

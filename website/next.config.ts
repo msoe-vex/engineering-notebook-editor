@@ -29,22 +29,26 @@ function getAppVersion(): string {
 }
 
 const releaseVersion = getAppVersion();
+const assetsBase = (process.env.NEXT_PUBLIC_ASSETS_BASE_URL || "").replace(/\/$/, "");
 
 const nextConfig: NextConfig = {
-  // Keep your existing dev origins
-  allowedDevOrigins: ["10.10.10.13", "10.10.20.11"],
+  transpilePackages: ["@engineering-notebook/shared"],
   env: {
     NEXT_PUBLIC_APP_VERSION: releaseVersion,
   },
   async rewrites() {
+    // When Core/GCS asset base is configured, proxy BusyTeX + LaTeX packages there.
+    // Otherwise Next serves website/public/busytex and website/public/latex directly
+    // (populate with npm run download:busytex && npm run bundle:template).
+    if (!assetsBase) return [];
     return [
       {
-        source: '/busytex/:path*',
-        destination: `/api/busytex-proxy?url=https://github.com/msoe-vex/engineering-notebook-editor/releases/download/${releaseVersion}/:path*`,
+        source: "/busytex/:path*",
+        destination: `${assetsBase}/static/busytex/:path*`,
       },
       {
-        source: '/latex/:path*',
-        destination: `/api/busytex-proxy?url=https://github.com/msoe-vex/engineering-notebook-editor/releases/download/${releaseVersion}/:path*`,
+        source: "/latex/:path*",
+        destination: `${assetsBase}/static/latex/:path*`,
       },
     ];
   },

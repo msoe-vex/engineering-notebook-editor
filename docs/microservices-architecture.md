@@ -1,25 +1,53 @@
-# Cloud-Native Microservices Architecture
+# Microservices architecture
 
-This repository is scaffolded for Cloud Run microservices using the Cursor plan service boundaries:
+Cloud Run–oriented layout with nested organization tenancy.
 
-- `website/` — Next.js frontend container
-- `services/core/` — Fastify core API (AuthPort, org/notebook APIs, admin metrics, static BusyTeX route space)
-- `services/collab/` — Hocuspocus/Yjs WebSocket collaboration service
-- `services/agents/` — Fastify rubric-audit agent service (BYOK + grant-gated platform AI)
-- `packages/shared/` — shared role/schema contract types
-- `infra/docker-compose.yml` — local multi-container orchestration
-- `loadtest/` — load test scripts
+For **how to run and test locally**, see [local-development.md](./local-development.md).  
+For **HTTP/WSS contracts**, see [api-contracts.md](./api-contracts.md).  
+Root overview: [../README.md](../README.md).
 
-## Local development
+## Services
 
-```bash
-cd infra
-docker compose up --build
+| Service | Role | Default port |
+| --- | --- | --- |
+| [`website/`](../website/README.md) | Next.js — classic Home + `/cloud` | 3000 |
+| [`services/core/`](../services/core/README.md) | Firebase AuthPort, orgs/notebooks/entries/assets, admin, BusyTeX static | 8080 |
+| [`services/collab/`](../services/collab/README.md) | Hocuspocus/Yjs; flush to Core/GCS | 1234 |
+| [`services/agents/`](../services/agents/README.md) | Rubric audit; BYOK + `grants.platformAi` Vertex | 8000 |
+| [`packages/shared/`](../packages/shared) | v5 types, path helpers, ZIP migrate | — |
+| [`infra/docker-compose.yml`](../infra/docker-compose.yml) | Emulators + fake-gcs + all services | — |
+
+```mermaid
+flowchart TB
+  Client["Next.js website"]
+  Client -->|HTTPS REST| Core["Core"]
+  Client -->|WSS| Collab["Collab"]
+  Client -->|HTTPS| Agents["Agents"]
+  Core --> Auth["Firebase Auth"]
+  Core --> FS["Firestore"]
+  Core --> GCS["Cloud Storage"]
+  Collab --> Auth
+  Collab --> Core
+  Agents --> Auth
+  Agents --> FS
 ```
 
-Services:
+## Data stores
 
-- Website: http://localhost:3000
-- Core API: http://localhost:8080
-- Collab WS: ws://localhost:1234
-- Agents API: http://localhost:8000
+| Data | Store |
+| --- | --- |
+| Users, orgs, members, invites, entry metadata | Firestore under `organizations/{orgId}/…` |
+| TipTap JSON, Yjs blobs, notebook binary assets, BusyTeX | GCS |
+| Live editing | Yjs over WSS (Collab → Core flush) |
+
+Entry Firestore docs stay **metadata + GCS pointers only** (TipTap bodies are never embedded).
+
+## Tenancy & roles
+
+- **Service Administrator** — `users/{uid}.platformRole === service_admin` (platform Admin UI)
+- **Org Owner / Admin / Member** — `organizations/{orgId}/members/{uid}.role`
+- Notebook access in v1 = org membership (no separate notebook roles)
+
+## Production
+
+[`infra/cloudrun/deploy.sh`](../infra/cloudrun/deploy.sh) + root README “Cloud Run deployment”.

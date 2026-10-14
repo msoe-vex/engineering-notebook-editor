@@ -43,7 +43,7 @@ You still need a real title and caption before save; generation is a starting po
 
 The editor cannot call Google, OpenAI, or Anthropic directly from the browser. It posts to this site’s `/api/genai` route, which forwards the prompt (and image, if any) to the vendor you chose. **Local** is the exception: the browser calls your URL directly so `127.0.0.1` is your machine, not the website host.
 
-- **Vercel / this website** does not bill you for model tokens.
+- **This website** does not bill you for model tokens.
 - **Your API key’s account** is billed by Google, OpenAI, or Anthropic. A local server uses whatever machine is running it.
 - Do not put a shared team key in Settings on a public computer. Anyone with that browser profile can use it.
 

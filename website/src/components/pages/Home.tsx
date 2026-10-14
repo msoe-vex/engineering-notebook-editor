@@ -268,6 +268,20 @@ export default function Home({
                 </div>
                 <Plus size={16} className="text-nb-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity" />
               </button>
+
+              <a
+                href="/cloud"
+                className="group flex items-center gap-4 p-4 rounded-2xl bg-nb-surface border border-nb-outline-variant/30 hover:border-nb-primary/40 hover:bg-nb-primary/5 transition-all text-left shadow-nb-sm cursor-pointer"
+              >
+                <div className="w-10 h-10 rounded-xl bg-nb-primary/10 text-nb-primary flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <ArrowRight size={20} />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-bold text-nb-on-surface">Cloud Organizations</h3>
+                  <p className="text-[10px] text-nb-on-surface-variant">Firebase auth, orgs, notebooks, collab</p>
+                </div>
+                <Plus size={16} className="text-nb-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity" />
+              </a>
             </div>
           </div>
 

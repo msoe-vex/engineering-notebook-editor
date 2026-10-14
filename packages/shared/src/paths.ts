@@ -1,0 +1,86 @@
+/** Firestore document/collection path helpers (nested under organizations). */
+
+export function userPath(uid: string): string {
+  return `users/${uid}`;
+}
+
+export function orgPath(orgId: string): string {
+  return `organizations/${orgId}`;
+}
+
+export function memberPath(orgId: string, uid: string): string {
+  return `organizations/${orgId}/members/${uid}`;
+}
+
+export function membersCollection(orgId: string): string {
+  return `organizations/${orgId}/members`;
+}
+
+export function notebookPath(orgId: string, notebookId: string): string {
+  return `organizations/${orgId}/notebooks/${notebookId}`;
+}
+
+export function notebooksCollection(orgId: string): string {
+  return `organizations/${orgId}/notebooks`;
+}
+
+export function entryPath(orgId: string, notebookId: string, entryId: string): string {
+  return `organizations/${orgId}/notebooks/${notebookId}/entries/${entryId}`;
+}
+
+export function entriesCollection(orgId: string, notebookId: string): string {
+  return `organizations/${orgId}/notebooks/${notebookId}/entries`;
+}
+
+export function assetPath(orgId: string, notebookId: string, assetId: string): string {
+  return `organizations/${orgId}/notebooks/${notebookId}/assets/${assetId}`;
+}
+
+export function assetsCollection(orgId: string, notebookId: string): string {
+  return `organizations/${orgId}/notebooks/${notebookId}/assets`;
+}
+
+export function auditPath(orgId: string, notebookId: string, auditId: string): string {
+  return `organizations/${orgId}/notebooks/${notebookId}/audits/${auditId}`;
+}
+
+export function auditsCollection(orgId: string, notebookId: string): string {
+  return `organizations/${orgId}/notebooks/${notebookId}/audits`;
+}
+
+export function invitePath(inviteId: string): string {
+  return `invites/${inviteId}`;
+}
+
+/** GCS object key builders (mirror Firestore nesting). */
+export const gcsKeys = {
+  busytex: (appVersion: string, ...rest: string[]) =>
+    ["static", "busytex", appVersion, ...rest].join("/"),
+  latexTemplate: (appVersion: string, ...rest: string[]) =>
+    ["static", "latex-template", appVersion, ...rest].join("/"),
+  asset: (orgId: string, notebookId: string, assetId: string, variant: "compressed" | "original" = "compressed") =>
+    `organizations/${orgId}/notebooks/${notebookId}/assets/${assetId}/${variant}`,
+  yjs: (orgId: string, notebookId: string, entryId: string) =>
+    `organizations/${orgId}/notebooks/${notebookId}/yjs/${entryId}.ydoc`,
+  tipTap: (orgId: string, notebookId: string, entryId: string) =>
+    `organizations/${orgId}/notebooks/${notebookId}/entries/${entryId}.json`,
+  exportPdf: (orgId: string, notebookId: string, exportId: string) =>
+    `organizations/${orgId}/notebooks/${notebookId}/exports/${exportId}.pdf`,
+};
+
+/** Hocuspocus / Yjs document name — always includes orgId. */
+export function collabDocName(orgId: string, notebookId: string, entryId: string): string {
+  return `org:${orgId}:notebook:${notebookId}:entry:${entryId}`;
+}
+
+export type ParsedCollabDocName = {
+  orgId: string;
+  notebookId: string;
+  entryId: string;
+};
+
+export function parseCollabDocName(name: string): ParsedCollabDocName | null {
+  const match = /^org:([^:]+):notebook:([^:]+):entry:(.+)$/.exec(name);
+  if (!match) return null;
+  return { orgId: match[1], notebookId: match[2], entryId: match[3] };
+}

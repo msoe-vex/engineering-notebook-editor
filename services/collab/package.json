@@ -7,8 +7,13 @@
     "start": "tsx src/index.ts"
   },
   "dependencies": {
+    "@engineering-notebook/shared": "file:../../packages/shared",
     "@hocuspocus/server": "^3.4.0",
+    "firebase-admin": "^13.4.0",
     "yjs": "^13.6.19",
     "tsx": "^4.20.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21"
   }
 }

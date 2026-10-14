@@ -1,59 +1,50 @@
 # Website
 
-This folder contains the Next.js editor and notebook sync application.
+Next.js app: classic Home (local folder / temporary / GitHub OAuth + ZIP) and cloud tenancy at **`/cloud`**.
 
-## Local Development
+**Full local stack instructions:** [docs/local-development.md](../docs/local-development.md)  
+**Root overview:** [../README.md](../README.md)
 
-Install dependencies and start the dev server:
+## Quick start
 
 ```bash
 npm install
+npm run download:busytex    # optional — PDF compile
+npm run bundle:template     # optional — template + latex packages
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+- Classic editor: http://localhost:3000  
+- Cloud UI needs Core: `cd ../infra && docker compose up --build`, then http://localhost:3000/cloud
 
-## Required Environment Variables
-
-Create a `.env.local` file in this folder:
+## Environment variables
 
 ```bash
-NEXT_PUBLIC_GITHUB_CLIENT_ID=your_github_oauth_client_id
-GITHUB_CLIENT_SECRET=your_github_oauth_client_secret
+# Cloud (set automatically in docker-compose website service)
+NEXT_PUBLIC_CORE_API_URL=http://localhost:8080
+NEXT_PUBLIC_AGENTS_API_URL=http://localhost:8000
+NEXT_PUBLIC_COLLAB_WS_URL=ws://localhost:1234
+NEXT_PUBLIC_ASSETS_BASE_URL=http://localhost:8080
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=demo-engineering-notebook
+NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true
+NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST=localhost:9099
+
+# Optional — GitHub alternative on Home
+NEXT_PUBLIC_GITHUB_CLIENT_ID=...
+GITHUB_CLIENT_SECRET=...
 ```
 
-- `NEXT_PUBLIC_GITHUB_CLIENT_ID` is read by the browser-side login flow.
-- `GITHUB_CLIENT_SECRET` is used by the server-side OAuth exchange route.
+BusyTeX: `public/busytex` + `public/latex` locally, or Core/GCS when `NEXT_PUBLIC_ASSETS_BASE_URL` is set.
 
-If you deploy to Vercel, set the same variables in the Vercel project settings for both Preview and Production.
-
-## GitHub App Setup
-
-When creating the GitHub OAuth/GitHub App for this project:
-
-- Homepage URL: your public deployed app URL, such as `https://your-domain.com`
-- Callback / redirect URL: the public URL that returns the user to the app after GitHub authorization
-- Keep the GitHub app URLs in sync with your deployed domain and any preview URLs you intentionally test against
-
-If the deployed domain changes, update the GitHub app settings at the same time.
-
-## Before Merging
-
-Run these checks before opening or merging a PR into `main`:
+## Checks before merge
 
 ```bash
 npm run lint
+npm test
 npm run build
 ```
 
-## Vercel Deployment
+## Deployment
 
-Recommended deployment setup:
-
-1. Import the GitHub repository into Vercel.
-2. Set the project root directory to `website`.
-3. Add `NEXT_PUBLIC_GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` in the Vercel environment variables.
-4. Enable automatic deploys from the connected GitHub branch.
-5. Add a custom domain in Vercel and point DNS to the provided Vercel targets.
-
-Preview deployments are useful for testing changes before they land on `main`.
+Primary host is **Google Cloud Run** — [infra/cloudrun/deploy.sh](../infra/cloudrun/deploy.sh).  
+Docker build context is the **repo root** (`website/Dockerfile`) so `@engineering-notebook/shared` is included.
