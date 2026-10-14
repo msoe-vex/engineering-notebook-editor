@@ -57,7 +57,8 @@ export function CollaborativeEntryEditor({ documentName, entryTitle, getToken }:
       ],
       editorProps: {
         attributes: {
-          class: "prose prose-sm max-w-none min-h-[320px] focus:outline-none",
+          class:
+            "prose prose-neutral prose-sm max-w-none min-h-[320px] focus:outline-none text-neutral-900",
         },
       },
       immediatelyRender: false,
@@ -71,12 +72,14 @@ export function CollaborativeEntryEditor({ documentName, entryTitle, getToken }:
   }, [ydoc, entryTitle]);
 
   return (
-    <div>
+    <div className="text-neutral-900">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="text-lg font-medium">{entryTitle}</h2>
+        <h2 className="text-lg font-medium text-neutral-900">{entryTitle}</h2>
         <span className="text-xs uppercase tracking-wide text-neutral-500">{status}</span>
       </div>
-      <EditorContent editor={editor} />
+      <div className="rounded border border-neutral-200 bg-white p-3 text-neutral-900">
+        <EditorContent editor={editor} />
+      </div>
     </div>
   );
 }

@@ -106,7 +106,7 @@ export default function CloudHomePage() {
           <ul className="mt-8 divide-y divide-neutral-200 rounded border border-neutral-200 bg-white">
             {orgs.map((org) => (
               <li key={org.id} className="flex items-center gap-2 px-4 py-3 hover:bg-neutral-50">
-                <Link href={`/cloud/orgs/${org.id}`} className="flex-1 font-medium">
+                <Link href={`/orgs/${org.id}`} className="flex-1 font-medium">
                   {org.name}
                 </Link>
                 <button

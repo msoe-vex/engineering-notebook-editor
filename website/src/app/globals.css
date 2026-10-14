@@ -166,11 +166,20 @@ button:disabled {
   font-size: 16px;
   line-height: 1.8;
   color: var(--color-nb-on-surface);
+  caret-color: var(--color-nb-on-surface);
   overflow-wrap: break-word;
 }
 
 .dark .ProseMirror {
   color: #f1f5f9;
+  caret-color: #f1f5f9;
+}
+
+/* Cloud shell uses light surfaces even if html has .dark from next-themes */
+.cloud-shell .ProseMirror {
+  color: #1c1b1b !important;
+  caret-color: #1c1b1b;
+  min-height: 320px;
 }
 
 .ProseMirror p {

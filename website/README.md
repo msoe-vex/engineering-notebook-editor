@@ -1,6 +1,6 @@
 # Website
 
-Next.js UI for the engineering notebook. **Entry point is `/cloud`** (Firebase → orgs → notebooks → Hocuspocus editor). `/` redirects there.
+Next.js UI for the engineering notebook. **Entry point is `/`** (Firebase → orgs → notebooks → Hocuspocus editor). Old `/cloud/*` URLs redirect to `/`.
 
 Live storage is **GCP only** (Core/Firestore/GCS). ZIP export/import is backup (LWW). Old GitHub/local project UI is unreachable — see [LEGACY.md](./LEGACY.md).
 

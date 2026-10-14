@@ -37,10 +37,11 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_APP_VERSION: releaseVersion,
   },
   async redirects() {
-    // Product storage is GCP-only (Firestore/GCS + Hocuspocus). Legacy Home/workspace → cloud.
+    // Cloud UI lives at `/`. Keep old /cloud and /workspace bookmarks working.
     return [
-      { source: "/", destination: "/cloud", permanent: false },
-      { source: "/workspace/:path*", destination: "/cloud", permanent: false },
+      { source: "/cloud", destination: "/", permanent: false },
+      { source: "/cloud/:path*", destination: "/:path*", permanent: false },
+      { source: "/workspace/:path*", destination: "/", permanent: false },
     ];
   },
   async rewrites() {

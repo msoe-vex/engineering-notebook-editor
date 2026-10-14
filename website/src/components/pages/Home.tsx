@@ -271,7 +271,7 @@ export default function Home({
               </button>
 
               <Link
-                href="/cloud"
+                href="/"
                 className="group flex items-center gap-4 p-4 rounded-2xl bg-nb-surface border border-nb-outline-variant/30 hover:border-nb-primary/40 hover:bg-nb-primary/5 transition-all text-left shadow-nb-sm cursor-pointer"
               >
                 <div className="w-10 h-10 rounded-xl bg-nb-primary/10 text-nb-primary flex items-center justify-center group-hover:scale-110 transition-transform">

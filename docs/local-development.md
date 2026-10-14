@@ -26,7 +26,7 @@ npm install
 npm run dev
 ```
 
-Open **http://localhost:3000** → redirects to `/cloud`.
+Open **http://localhost:3000**.
 
 Sign in with **Continue with dev token** → `service-admin`, or create an email/password user (Auth emulator).
 
@@ -64,7 +64,7 @@ With the stack up, open **http://localhost:4000**.
 
 | Tab | Use |
 | --- | --- |
-| **Authentication** | Users created via `/cloud` email sign-up (or the UI) |
+| **Authentication** | Users created via email sign-up on the site (or the UI) |
 | **Firestore** | Orgs, members, notebooks, entries, users, invites |
 
 Auth/Firestore talk to the emulators automatically (`FIRESTORE_EMULATOR_HOST` / Auth emulator host in Compose; website uses `NEXT_PUBLIC_USE_FIREBASE_EMULATOR`).

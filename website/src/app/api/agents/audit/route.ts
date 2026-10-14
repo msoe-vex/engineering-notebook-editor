@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 /**
  * Thin proxy to the Agents service for rubric audits (keeps browser CORS simple).
- * Prefer calling Agents directly from /cloud when NEXT_PUBLIC_AGENTS_API_URL is set.
+ * Prefer calling Agents directly from the client when NEXT_PUBLIC_AGENTS_API_URL is set.
  */
 export async function POST(request: Request) {
   const agentsBase = (process.env.NEXT_PUBLIC_AGENTS_API_URL || "http://localhost:8000").replace(

@@ -77,7 +77,7 @@ export function CloudShell({ children, title }: { children: ReactNode; title?: s
     } catch {
       /* ignore */
     }
-    window.location.href = "/cloud";
+    window.location.href = "/";
   }
 
   if (!ready) {
@@ -86,9 +86,9 @@ export function CloudShell({ children, title }: { children: ReactNode; title?: s
 
   if (!signedIn) {
     return (
-      <div className="min-h-screen bg-neutral-50 text-neutral-900">
+      <div className="cloud-shell min-h-screen bg-neutral-50 text-neutral-900">
         <div className="mx-auto max-w-md px-6 py-16">
-          <p className="text-sm uppercase tracking-wide text-neutral-500">ENGen Cloud</p>
+          <p className="text-sm uppercase tracking-wide text-neutral-500">ENGen</p>
           <h1 className="mt-2 text-3xl font-semibold">Sign in</h1>
           <p className="mt-2 text-sm text-neutral-600">
             Use Firebase Auth (or a local dev token for docker-compose).
@@ -144,18 +144,18 @@ export function CloudShell({ children, title }: { children: ReactNode; title?: s
   }
 
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-900">
+    <div className="cloud-shell min-h-screen bg-neutral-50 text-neutral-900">
       <header className="border-b border-neutral-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-4">
-            <Link href="/cloud" className="font-semibold tracking-tight">
-              ENGen Cloud
+            <Link href="/" className="font-semibold tracking-tight">
+              ENGen
             </Link>
             {title && <span className="text-sm text-neutral-500">{title}</span>}
           </div>
           <div className="flex items-center gap-3 text-sm">
             {profile?.platformRole === "service_admin" && (
-              <Link href="/cloud/admin" className="underline">
+              <Link href="/admin" className="underline">
                 Admin
               </Link>
             )}

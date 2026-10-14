@@ -28,7 +28,7 @@ There is **one live storage path** (GCP). GitHub / local FS / S3 are **not** syn
 ## Repository layout
 
 ```
-website/           # Next.js — / and /cloud → cloud UI
+website/           # Next.js — cloud UI at /
 services/core/     # Auth, orgs, notebooks, entries, assets, admin, BusyTeX
 services/collab/   # Hocuspocus / Yjs
 services/agents/   # Rubric audits (BYOK + grant-gated Vertex)
@@ -54,7 +54,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build fireba
 cd website && npm install && npm run dev
 ```
 
-1. Open **http://localhost:3000** → `/cloud`
+1. Open **http://localhost:3000**
 2. Dev token `service-admin` (or email via Auth emulator)
 3. Create org → notebook → entry
 4. Firebase Emulator UI: **http://localhost:4000**

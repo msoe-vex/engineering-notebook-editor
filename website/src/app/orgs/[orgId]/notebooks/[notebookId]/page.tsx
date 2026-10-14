@@ -190,7 +190,7 @@ export default function NotebookWorkspacePage() {
     <CloudShell title={notebookName}>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <Link href={`/cloud/orgs/${orgId}`} className="text-sm text-neutral-500 underline">
+          <Link href={`/orgs/${orgId}`} className="text-sm text-neutral-500 underline">
             Notebooks
           </Link>
           <h1 className="mt-1 text-2xl font-semibold">{notebookName}</h1>
@@ -219,7 +219,7 @@ export default function NotebookWorkspacePage() {
               if (!window.confirm("Delete this notebook and all entries?")) return;
               void cloudApi
                 .deleteNotebook(orgId, notebookId)
-                .then(() => router.push(`/cloud/orgs/${orgId}`))
+                .then(() => router.push(`/orgs/${orgId}`))
                 .catch((err) => setError((err as Error).message));
             }}
           >

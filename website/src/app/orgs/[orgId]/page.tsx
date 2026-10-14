@@ -66,7 +66,7 @@ export default function OrgNotebooksPage() {
     <CloudShell title={org?.name || "Notebooks"}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <Link href="/cloud" className="text-sm text-neutral-500 underline">
+          <Link href="/" className="text-sm text-neutral-500 underline">
             Organizations
           </Link>
           <h1 className="mt-1 text-2xl font-semibold">{org?.name || "Notebooks"}</h1>
@@ -91,7 +91,7 @@ export default function OrgNotebooksPage() {
               if (!window.confirm("Delete this organization and all notebooks?")) return;
               void cloudApi
                 .deleteOrg(orgId)
-                .then(() => router.push("/cloud"))
+                .then(() => router.push("/"))
                 .catch((err) => setError((err as Error).message));
             }}
           >
@@ -128,7 +128,7 @@ export default function OrgNotebooksPage() {
         {notebooks.map((nb) => (
           <li key={nb.id} className="flex items-center gap-2 px-4 py-3 hover:bg-neutral-50">
             <Link
-              href={`/cloud/orgs/${orgId}/notebooks/${nb.id}`}
+              href={`/orgs/${orgId}/notebooks/${nb.id}`}
               className="flex-1 font-medium"
             >
               {nb.name}
