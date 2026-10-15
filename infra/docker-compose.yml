@@ -4,6 +4,7 @@ services:
     working_dir: /app
     volumes:
       - ./:/app
+      - firebase_emulator_data:/data/emulator
     command:
       - bash
       - -lc
@@ -11,7 +12,9 @@ services:
         apt-get update
         DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openjdk-17-jre-headless >/dev/null
         npm install -g firebase-tools@13.35.1
-        firebase emulators:start --project demo-engineering-notebook --only auth,firestore
+        mkdir -p /data/emulator
+        firebase emulators:start --project demo-engineering-notebook --only auth,firestore \
+          --import=/data/emulator --export-on-exit=/data/emulator
     ports:
       - "9099:9099"
       - "8081:8081"
@@ -29,7 +32,19 @@ services:
 
   gcs:
     image: fsouza/fake-gcs-server:latest
-    command: ["-scheme", "http", "-port", "4443", "-external-url", "http://localhost:4443"]
+    command:
+      [
+        "-scheme",
+        "http",
+        "-port",
+        "4443",
+        "-external-url",
+        "http://localhost:4443",
+        "-data",
+        "/data",
+      ]
+    volumes:
+      - gcs_data:/data
     ports:
       - "4443:4443"
 
@@ -50,7 +65,7 @@ services:
       GCS_PUBLIC_BASE_URL: http://localhost:4443/storage/v1/b/engineering-notebook/o
       SERVICE_ADMIN_UID: service-admin
       INTERNAL_SERVICE_SECRET: local-dev-secret
-      STORAGE_BACKEND: memory
+      # Persist blobs in fake-gcs (not in-process memory).
     depends_on:
       firebase:
         condition: service_started
@@ -143,3 +158,7 @@ services:
         condition: service_started
       agents:
         condition: service_started
+
+volumes:
+  firebase_emulator_data:
+  gcs_data:

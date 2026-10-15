@@ -178,10 +178,69 @@ export const cloudApi = {
 
   listAssets: (orgId: string, notebookId: string) =>
     coreFetch<AssetSummary[]>(`/orgs/${orgId}/notebooks/${notebookId}/assets`),
+  createAsset: (orgId: string, notebookId: string, body: { contentType?: string; byteSize?: number }) =>
+    coreFetch<{ asset: AssetSummary; uploadPath: string; uploadUrl: string }>(
+      `/orgs/${orgId}/notebooks/${notebookId}/assets`,
+      { method: "POST", body: JSON.stringify(body) }
+    ),
+  getAssetUrl: (orgId: string, notebookId: string, assetId: string) =>
+    coreFetch<{ url: string; asset: AssetSummary }>(
+      `/orgs/${orgId}/notebooks/${notebookId}/assets/${assetId}/url`
+    ),
   deleteAsset: (orgId: string, notebookId: string, assetId: string) =>
     coreFetch<{ ok: boolean }>(`/orgs/${orgId}/notebooks/${notebookId}/assets/${assetId}`, {
       method: "DELETE",
     }),
+  /** Authenticated upload through Core (avoids browser → fake-gcs CORS / wrong host). */
+  async uploadAssetContent(
+    orgId: string,
+    notebookId: string,
+    assetId: string,
+    bytes: Blob | ArrayBuffer | Uint8Array,
+    contentType: string
+  ) {
+    const body: BodyInit =
+      bytes instanceof Blob
+        ? bytes
+        : bytes instanceof ArrayBuffer
+          ? bytes
+          : new Blob([new Uint8Array(bytes)]);
+    const token = await getIdToken();
+    const headers: Record<string, string> = { "content-type": contentType };
+    if (token) headers.authorization = `Bearer ${token}`;
+    const res = await fetch(
+      `${coreBase()}/orgs/${orgId}/notebooks/${notebookId}/assets/${assetId}/content`,
+      { method: "PUT", headers, body }
+    );
+    if (!res.ok) throw new Error(`asset upload ${res.status} ${await res.text()}`);
+  },
+  /** @deprecated Prefer uploadAssetContent — signed fake-gcs URLs fail in the browser. */
+  async uploadAssetBytes(
+    uploadUrl: string,
+    bytes: Blob | ArrayBuffer | Uint8Array,
+    contentType: string
+  ) {
+    if (uploadUrl.startsWith("/") || uploadUrl.startsWith(coreBase())) {
+      const path = uploadUrl.startsWith("/")
+        ? uploadUrl
+        : uploadUrl.slice(coreBase().length);
+      const parts = path.split("/");
+      // /orgs/:orgId/notebooks/:notebookId/assets/:assetId/content
+      return this.uploadAssetContent(parts[2], parts[4], parts[6], bytes, contentType);
+    }
+    const body: BodyInit =
+      bytes instanceof Blob
+        ? bytes
+        : bytes instanceof ArrayBuffer
+          ? bytes
+          : new Blob([new Uint8Array(bytes)]);
+    const res = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "content-type": contentType },
+      body,
+    });
+    if (!res.ok) throw new Error(`asset upload ${res.status}`);
+  },
 
   adminUsers: () =>
     coreFetch<

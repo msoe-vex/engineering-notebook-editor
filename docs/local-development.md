@@ -4,8 +4,25 @@ API services hot-reload in Docker; the website runs on the host with Next HMR.
 
 ## Prerequisites
 
-- **Node.js 20+** (nvm recommended) — website
+- **Node.js 20+** (nvm recommended) — website + IDE IntelliSense
 - **Docker** — Firebase, GCS, Core, Collab, Agents
+
+### IDE / IntelliSense
+
+Install host deps once (services are Docker-only at runtime, but `node_modules` are needed for TypeScript in the editor):
+
+```bash
+# from repo root — workspaces (shared + core/collab/agents) + website
+npm run install:all
+```
+
+Then in Cursor/VS Code: use the workspace TypeScript version if prompted (`js/ts.tsdk.path` → root `node_modules/typescript`).
+
+If `npm install` hits `EACCES` under `services/*/node_modules`, those dirs were created as root by Docker:
+
+```bash
+docker run --rm -v "$PWD":/repo -w /repo alpine chown -R "$(id -u):$(id -g)" services/*/node_modules
+```
 
 ## Start
 
@@ -30,7 +47,15 @@ Open **http://localhost:3000**.
 
 Sign in with **Continue with dev token** → `service-admin`, or create an email/password user (Auth emulator).
 
-Create an organization → notebook → **New entry**.
+Create an organization → notebook → **New entry** (opens `/orgs/…/notebooks/…/entries/…`).
+
+| Route | Screen |
+| --- | --- |
+| `/` | Organizations |
+| `/orgs/[orgId]` | Notebooks + members |
+| `/orgs/[orgId]/notebooks/[notebookId]` | Notebook shell (redirects to first entry) |
+| `/orgs/[orgId]/notebooks/[notebookId]/entries/[entryId]` | Entry editor |
+| `/admin` | Service admin |
 
 If port 3000 is busy, stop the Compose website container (`docker compose stop website`) or use the port Next prints (e.g. 3001).
 
@@ -69,7 +94,9 @@ With the stack up, open **http://localhost:4000**.
 
 Auth/Firestore talk to the emulators automatically (`FIRESTORE_EMULATOR_HOST` / Auth emulator host in Compose; website uses `NEXT_PUBLIC_USE_FIREBASE_EMULATOR`).
 
-Project id: `demo-engineering-notebook`. Data resets when you recreate the Firebase container.
+Project id: `demo-engineering-notebook`.
+
+Compose named volumes persist Auth/Firestore (`firebase_emulator_data`) and object blobs (`gcs_data`). Core writes Yjs/assets to fake-gcs (not in-process memory). `docker compose down -v` wipes that data.
 
 ## Reloading
 

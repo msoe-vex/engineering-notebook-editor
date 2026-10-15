@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CloudShell } from "@/components/cloud/CloudShell";
 import { cloudApi } from "@/lib/cloud/api";
 
 export default function AdminPage() {
@@ -37,7 +36,7 @@ export default function AdminPage() {
   }
 
   return (
-    <CloudShell title="Service Administrator">
+    <>
       <h1 className="text-2xl font-semibold">Admin</h1>
       <p className="mt-1 text-sm text-neutral-600">
         Manage users, grants (platform AI), and usage metrics.
@@ -95,6 +94,6 @@ export default function AdminPage() {
           <li className="px-4 py-6 text-neutral-500">No users bootstrapped yet.</li>
         )}
       </ul>
-    </CloudShell>
+    </>
   );
 }

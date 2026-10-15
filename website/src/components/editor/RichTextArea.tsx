@@ -8,6 +8,8 @@ import {
 import type { TiptapEditor } from "@/lib/types";
 import { NodeSelection, Transaction, EditorState, Plugin } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
+import Collaboration from "@tiptap/extension-collaboration";
+import type { Doc as YDoc } from "yjs";
 import { store } from "@/lib/store";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { events, EventNames } from "@/lib/events";
@@ -75,21 +77,33 @@ const CustomSubscript = Subscript.extend({
    ───────────────────────────────────────────────────────────────── */
 
 interface RichTextAreaProps {
-  content: string | TipTapNode;
-  onChange: (content: string) => void;
+  content?: string | TipTapNode;
+  onChange?: (content: string) => void;
   onImageUpload?: (path: string, base64: string) => void;
   author?: string;
   filename: string;
   onEditorInit?: (editor: TiptapEditor) => void;
   onToggleLink?: (fn: () => void) => void;
   entryId?: string;
+  /** When set, TipTap syncs via Yjs (Hocuspocus) instead of local content/onChange. */
+  collaborationDoc?: YDoc;
+  collaborationField?: string;
 }
 
 const RichTextArea = ({
-  content, onChange, onImageUpload, filename, onEditorInit, onToggleLink, entryId
+  content,
+  onChange,
+  onImageUpload,
+  filename,
+  onEditorInit,
+  onToggleLink,
+  entryId,
+  collaborationDoc,
+  collaborationField = "default",
 }: RichTextAreaProps) => {
   const { currentProjectId, metadata } = useWorkspace();
   const dbName = currentProjectId ? `notebook-project-${currentProjectId}` : "notebook-default";
+  const isCollab = Boolean(collaborationDoc);
 
   const [, setSelectionUpdate] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -111,6 +125,7 @@ const RichTextArea = ({
       bulletList: false,
       orderedList: false,
       heading: false,
+      undoRedo: isCollab ? false : undefined,
       dropcursor: {
         color: '#d9282f',
         width: 3,
@@ -385,9 +400,18 @@ const RichTextArea = ({
       ]
     }),
     IdRemapper,
+    ...(collaborationDoc
+      ? [
+          Collaboration.configure({
+            document: collaborationDoc,
+            field: collaborationField,
+          }),
+        ]
+      : []),
   ];
 
-  const parseContent = (raw: string | TipTapNode) => {
+  const parseContent = (raw: string | TipTapNode | undefined) => {
+    if (raw === undefined || raw === null) return "";
     if (!raw) return "";
     try {
       const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
@@ -458,11 +482,13 @@ const RichTextArea = ({
       store.assetCache.set(originalPath, dataUrl);
       store.assetCache.set(newPath, compressed.dataUrl);
 
-      // Persist both original and compressed assets in background
-      store.enqueue(async () => {
-        await store.persistFile(originalPath, originalBase64, `Original Asset: ${originalPath}`, true);
-        await store.persistFile(newPath, compressed.base64, `Compressed Asset: ${newPath}`, true);
-      });
+      // Local/GitHub projects persist to the workspace; cloud collab keeps preview in cache for now.
+      if (!isCollab) {
+        store.enqueue(async () => {
+          await store.persistFile(originalPath, originalBase64, `Original Asset: ${originalPath}`, true);
+          await store.persistFile(newPath, compressed.base64, `Compressed Asset: ${newPath}`, true);
+        });
+      }
 
       if (editor?.state.selection instanceof NodeSelection) {
         editor.chain().focus().insertContentAt(editor.state.selection.to, {
@@ -499,13 +525,14 @@ const RichTextArea = ({
   const editor = useEditor({
     immediatelyRender: false,
     extensions,
-    content: parseContent(content),
+    ...(isCollab ? {} : { content: parseContent(content) }),
     onCreate: () => {
       requestAnimationFrame(() => {
         allowUpdateRef.current = true;
       });
     },
     onUpdate: ({ editor }) => {
+      if (isCollab || !onChange) return;
       if (!allowUpdateRef.current) return;
       onChange(JSON.stringify(editor.getJSON()));
     },
@@ -516,7 +543,11 @@ const RichTextArea = ({
       setSelectionUpdate(s => s + 1);
     },
     editorProps: {
-      attributes: { class: "focus:outline-none min-h-[800px] h-full max-w-5xl mx-auto p-4 lg:p-6 cursor-text" },
+      attributes: {
+        class: isCollab
+          ? "focus:outline-none min-h-[320px] h-full max-w-none p-2 cursor-text text-neutral-900"
+          : "focus:outline-none min-h-[800px] h-full max-w-5xl mx-auto p-4 lg:p-6 cursor-text",
+      },
       handleDOMEvents: {
         mousedown: (view, event) => {
           if (event.ctrlKey || event.metaKey) {
@@ -624,7 +655,7 @@ const RichTextArea = ({
         return false;
       },
     },
-  });
+  }, isCollab ? [collaborationDoc, collaborationField] : undefined);
 
   useEffect(() => {
     if (editor && onEditorInit) {

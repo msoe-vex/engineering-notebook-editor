@@ -1,6 +1,6 @@
 # Legacy (unreachable) editor stack
 
-The product path is **`/`** (formerly `/cloud`): Firebase Auth, Firestore metadata, GCS blobs, Hocuspocus realtime.
+The product path is **`/`** with App Router folders (`/orgs/…/notebooks/…/entries/…`): Firebase Auth, Firestore metadata, GCS blobs, Hocuspocus realtime.
 
 The following still exist in the tree for reference / gradual deletion but are **not routed**:
 

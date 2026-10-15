@@ -87,12 +87,39 @@ app.post("/internal/collab/connections", async (request) => {
   return { ok: true };
 });
 
-/** Internal flush helper used by collab service (shared secret optional). */
-app.post("/internal/collab/flush", async (request, reply) => {
+function assertInternalSecret(request: { headers: Record<string, unknown> }, reply: {
+  code: (n: number) => { send: (b: unknown) => unknown };
+}) {
   const secret = process.env.INTERNAL_SERVICE_SECRET;
   if (secret && request.headers["x-internal-secret"] !== secret) {
     return reply.code(403).send({ error: "forbidden" });
   }
+  return null;
+}
+
+/** Collab loads persisted Yjs from Core storage (works with memory backend + fake-gcs). */
+app.get("/internal/collab/yjs", async (request, reply) => {
+  const denied = assertInternalSecret(request as { headers: Record<string, unknown> }, reply);
+  if (denied) return denied;
+  const q = request.query as { orgId?: string; notebookId?: string; entryId?: string };
+  if (!q.orgId || !q.notebookId || !q.entryId) {
+    return reply.code(400).send({ error: "orgId, notebookId, entryId required" });
+  }
+  const { entryPath, gcsKeys } = await import("@engineering-notebook/shared");
+  const { getFirestore } = await import("./db/firestore.js");
+  const snap = await getFirestore().doc(entryPath(q.orgId, q.notebookId, q.entryId)).get();
+  if (!snap.exists) return reply.code(404).send({ error: "entry not found" });
+  const meta = snap.data() as { yjsGcsPath?: string };
+  const key = meta.yjsGcsPath || gcsKeys.yjs(q.orgId, q.notebookId, q.entryId);
+  const buf = await storage.getObject(key);
+  if (!buf) return reply.code(404).send({ error: "yjs not found" });
+  return { yjsBase64: buf.toString("base64"), yjsGcsPath: key };
+});
+
+/** Internal flush helper used by collab service (shared secret optional). */
+app.post("/internal/collab/flush", async (request, reply) => {
+  const denied = assertInternalSecret(request as { headers: Record<string, unknown> }, reply);
+  if (denied) return denied;
   const body = request.body as {
     orgId: string;
     notebookId: string;
@@ -111,8 +138,19 @@ app.post("/internal/collab/flush", async (request, reply) => {
   const yjsKey = gcsKeys.yjs(body.orgId, body.notebookId, body.entryId);
   const tipTapRev = (existing.tipTapRev ?? 0) + 1;
   const yjsRev = (existing.yjsRev ?? 0) + 1;
-  if (body.tipTapJson !== undefined) {
-    await storage.putObject(tipTapKey, JSON.stringify(body.tipTapJson), "application/json");
+  // Only persist real TipTap JSON — collab used to flush a stub that wiped content.
+  if (body.tipTapJson !== undefined && body.tipTapJson !== null) {
+    const stubby =
+      typeof body.tipTapJson === "object" &&
+      body.tipTapJson !== null &&
+      Array.isArray((body.tipTapJson as { content?: unknown[] }).content) &&
+      String(
+        ((body.tipTapJson as { content?: Array<{ content?: Array<{ text?: string }> }> }).content?.[0]
+          ?.content?.[0]?.text) || ""
+      ).startsWith("[yjs-fragment");
+    if (!stubby) {
+      await storage.putObject(tipTapKey, JSON.stringify(body.tipTapJson), "application/json");
+    }
   }
   if (body.yjsBase64) {
     await storage.putObject(yjsKey, Buffer.from(body.yjsBase64, "base64"), "application/octet-stream");

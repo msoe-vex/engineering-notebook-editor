@@ -465,6 +465,22 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     return { ok: true, tipTapRev, tipTapGcsPath: key };
   });
 
+  // Browser uploads go through Core (auth + CORS). Direct fake-gcs PUTs fail from the browser.
+  const binaryTypes = [
+    "application/octet-stream",
+    "image/png",
+    "image/jpeg",
+    "image/jpg",
+    "image/gif",
+    "image/webp",
+    "image/svg+xml",
+  ];
+  for (const type of binaryTypes) {
+    app.addContentTypeParser(type, { parseAs: "buffer" }, (_req, body, done) => {
+      done(null, body);
+    });
+  }
+
   app.post("/orgs/:orgId/notebooks/:notebookId/assets", async (request, reply) => {
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
@@ -482,8 +498,34 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       usedBy: [],
     };
     await db().doc(assetPath(orgId, notebookId, id)).set(omitUndefined({ ...asset }));
-    const uploadUrl = await storage.getSignedUrl(gcsPath, "write");
-    return { asset, uploadUrl };
+    // Relative path the website uploads to with Bearer auth (not a GCS signed URL).
+    const uploadPath = `/orgs/${orgId}/notebooks/${notebookId}/assets/${id}/content`;
+    return { asset, uploadPath, uploadUrl: uploadPath };
+  });
+
+  app.put("/orgs/:orgId/notebooks/:notebookId/assets/:assetId/content", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId, assetId } = request.params as {
+      orgId: string;
+      notebookId: string;
+      assetId: string;
+    };
+    await requireOrgMember(user, orgId);
+    const ref = db().doc(assetPath(orgId, notebookId, assetId));
+    const snap = await ref.get();
+    if (!snap.exists) return reply.code(404).send({ error: "not found" });
+    const asset = snap.data() as AssetMetadata;
+    if (!(request.body instanceof Uint8Array)) {
+      return reply.code(400).send({ error: "expected binary body" });
+    }
+    const data = Buffer.from(request.body);
+    const contentType =
+      (typeof request.headers["content-type"] === "string"
+        ? request.headers["content-type"].split(";")[0].trim()
+        : null) || asset.contentType;
+    await storage.putObject(asset.gcsPath, data, contentType);
+    await ref.update({ byteSize: data.byteLength, contentType });
+    return { ok: true, byteSize: data.byteLength };
   });
 
   app.get("/orgs/:orgId/notebooks/:notebookId/assets", async (request) => {

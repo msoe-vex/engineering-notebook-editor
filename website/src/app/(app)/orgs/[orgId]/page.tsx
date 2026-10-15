@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { CloudShell } from "@/components/cloud/CloudShell";
 import {
   cloudApi,
   type InviteSummary,
@@ -63,7 +62,7 @@ export default function OrgNotebooksPage() {
   }
 
   return (
-    <CloudShell title={org?.name || "Notebooks"}>
+    <>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Link href="/" className="text-sm text-neutral-500 underline">
@@ -290,6 +289,6 @@ export default function OrgNotebooksPage() {
           <li className="px-4 py-4 text-neutral-500">No pending invites.</li>
         )}
       </ul>
-    </CloudShell>
+    </>
   );
 }

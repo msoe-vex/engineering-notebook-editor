@@ -354,7 +354,8 @@ const isListActive = (editor: TiptapEditor | null, listType: 'bullet' | 'ordered
   return firstConvertibleType === 'notebookListItem' && (firstConvertibleAttrs as ConvertibleAttrs | null)?.listType === listType;
 };
 
-const EditorToolbar = React.memo(function EditorToolbar({
+/** Formatting strip shared by classic Editor and cloud collab entry view. */
+export const NotebookFormatToolbar = React.memo(function NotebookFormatToolbar({
   editor,
   activeMenu,
   setActiveMenu,
@@ -1357,7 +1358,7 @@ const EditorContent = React.memo(function EditorContent({
 
                 {/* Row 3: Rich Toolbar */}
                 {editor && (
-                  <EditorToolbar
+                  <NotebookFormatToolbar
                     editor={editor}
                     activeMenu={activeMenu}
                     setActiveMenu={handleSetActiveMenu}

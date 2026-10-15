@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   getFirebaseAuth,
@@ -12,9 +13,12 @@ import {
   signOut,
   type User,
 } from "@/lib/cloud/firebase";
+import { Toaster } from "react-hot-toast";
 import { cloudApi } from "@/lib/cloud/api";
 
 export function CloudShell({ children, title }: { children: ReactNode; title?: string }) {
+  const pathname = usePathname();
+  const notebookWorkspace = /\/orgs\/[^/]+\/notebooks\/[^/]+/.test(pathname || "");
   const [user, setUser] = useState<User | null>(null);
   const [devUid, setDevUid] = useState("");
   const [email, setEmail] = useState("");
@@ -144,9 +148,13 @@ export function CloudShell({ children, title }: { children: ReactNode; title?: s
   }
 
   return (
-    <div className="cloud-shell min-h-screen bg-neutral-50 text-neutral-900">
-      <header className="border-b border-neutral-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+    <div className="cloud-shell flex min-h-screen flex-col bg-neutral-50 text-neutral-900">
+      <header className="shrink-0 border-b border-neutral-200 bg-white">
+        <div
+          className={`mx-auto flex w-full items-center justify-between px-6 py-3 ${
+            notebookWorkspace ? "" : "max-w-6xl py-4"
+          }`}
+        >
           <div className="flex items-center gap-4">
             <Link href="/" className="font-semibold tracking-tight">
               ENGen
@@ -165,7 +173,19 @@ export function CloudShell({ children, title }: { children: ReactNode; title?: s
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+      <main
+        className={
+          notebookWorkspace
+            ? "min-h-0 w-full flex-1 overflow-hidden"
+            : "mx-auto w-full max-w-6xl flex-1 px-6 py-8"
+        }
+      >
+        {children}
+      </main>
+      <Toaster
+        position="bottom-right"
+        toastOptions={{ className: "text-sm", duration: 4000 }}
+      />
     </div>
   );
 }
