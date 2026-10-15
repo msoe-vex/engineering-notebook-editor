@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertTriangle, X } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
+import { Button, Dialog } from "@/components/ui";
 
 interface ConfirmationDialogProps {
   isOpen: boolean;
@@ -21,76 +22,45 @@ export default function ConfirmationDialog({
   cancelLabel = "Cancel",
   onConfirm,
   onCancel,
-  variant = "danger"
+  variant = "danger",
 }: ConfirmationDialogProps) {
-  if (!isOpen) return null;
-
-  const variantStyles = {
-    danger: {
-      iconBg: "bg-red-500/10",
-      iconColor: "text-red-500",
-      confirmBg: "bg-red-500 hover:bg-red-600 shadow-red-500/20",
-    },
-    warning: {
-      iconBg: "bg-amber-500/10",
-      iconColor: "text-amber-500",
-      confirmBg: "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20",
-    },
-    info: {
-      iconBg: "bg-nb-primary/10",
-      iconColor: "text-nb-primary",
-      confirmBg: "bg-nb-primary hover:bg-nb-primary-dim shadow-nb-primary/20",
-    }
-  };
-
-  const style = variantStyles[variant];
+  const iconTone =
+    variant === "danger"
+      ? "bg-nb-danger/10 text-nb-danger"
+      : variant === "warning"
+        ? "bg-nb-warning/10 text-nb-warning"
+        : "bg-nb-primary/10 text-nb-primary";
 
   return (
-    <div
-      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-in fade-in duration-300"
-      onClick={onCancel}
-    >
-      <div
-        className="relative w-full max-w-sm bg-nb-surface border border-nb-outline-variant/30 rounded-[24px] shadow-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-300"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="p-6">
-          <div className="flex items-center gap-4 mb-4">
-            <div className={`w-12 h-12 rounded-2xl ${style.iconBg} ${style.iconColor} flex items-center justify-center shrink-0`}>
-              <AlertTriangle size={24} />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-sm font-black text-nb-on-surface uppercase tracking-widest">{title}</h3>
-              <div className="h-0.5 w-8 bg-nb-outline-variant/30 mt-1" />
-            </div>
-            <button
-              onClick={onCancel}
-              className="p-2 rounded-xl hover:bg-nb-surface-low text-nb-on-surface-variant/40 hover:text-nb-on-surface transition-colors cursor-pointer"
-            >
-              <X size={18} />
-            </button>
-          </div>
-
-          <p className="text-xs text-nb-on-surface-variant font-medium leading-relaxed mb-8 whitespace-pre-line">
-            {message}
-          </p>
-
-          <div className="flex gap-3">
-            <button
-              onClick={onCancel}
-              className="flex-1 px-4 py-3 rounded-2xl border border-nb-outline-variant/30 text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:bg-nb-surface-low transition-all active:scale-95 cursor-pointer"
-            >
-              {cancelLabel}
-            </button>
-            <button
-              onClick={onConfirm}
-              className={`flex-1 px-4 py-3 rounded-2xl ${style.confirmBg} text-white text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg cursor-pointer`}
-            >
-              {confirmLabel}
-            </button>
-          </div>
+    <Dialog isOpen={isOpen} onClose={onCancel} title={title}>
+      <div className="mb-6 flex items-start gap-3">
+        <div
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconTone}`}
+        >
+          <AlertTriangle size={20} />
         </div>
+        <p className="text-xs font-medium leading-relaxed whitespace-pre-line text-nb-on-surface-variant">
+          {message}
+        </p>
       </div>
-    </div>
+      <div className="flex gap-3">
+        <Button variant="secondary" className="flex-1" onClick={onCancel}>
+          {cancelLabel}
+        </Button>
+        <Button
+          variant={variant === "info" ? "primary" : "danger"}
+          className={
+            variant === "danger"
+              ? "flex-1 border-0 bg-nb-danger text-white hover:bg-nb-danger-dim"
+              : variant === "warning"
+                ? "flex-1 border-0 bg-nb-warning text-white hover:opacity-90"
+                : "flex-1"
+          }
+          onClick={onConfirm}
+        >
+          {confirmLabel}
+        </Button>
+      </div>
+    </Dialog>
   );
 }

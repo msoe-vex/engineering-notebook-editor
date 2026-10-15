@@ -25,14 +25,20 @@ typography:
   body:
     font-weight: 400
     line-height: 1.6
+  scale:
+    caption: 11px
+    label: 12px
+    body: 14px
+    title: 20px
+    display: 28px
 
 components:
   TopNavBar:
-    style: high-contrast, technical
-    elements: [Product Logo, Nav Links, Export/Share CTAs]
+    style: calm, single header
+    elements: [Product Logo, Context breadcrumbs/switcher, Account menu]
   SideNavBar:
-    style: utility-focused, docked
-    elements: [Project Explorer, Workspace Tabs, User Profile]
+    style: labeled notebook subnav + collapsible entry list
+    elements: [Entries, Schedule, Members, Setup]
   EditorPane:
     style: paper-like, fluid-text
   PreviewPane:
@@ -42,20 +48,32 @@ components:
 # Technical Precision Design System
 
 ## Vision
-A professional, high-precision workspace for engineers. The aesthetic bridges the gap between modern, fluid digital editing and the rigorous, structured world of LaTeX documentation.
+A professional workspace for engineering notebooks. Document-first (Notion/Linear), not IDE-first. Keep brand red/blue and warm paper surfaces; use sentence-case UI labels.
+
+## Domain vocabulary (UI)
+- **People** — org accounts + invites
+- **Teams** — named groups of users (access grouping)
+- **Members** — notebook contributor roster (may lack accounts)
+- **Users** — code/API only; UI says “account” / “people”
 
 ## Color Palette
-- **Primary (#d9282f):** Used for branding, primary actions (Share), and critical UI states.
-- **Tertiary (#0076bc):** Used for technical links, document status (Synced), and interactive sidebar elements.
-- **Surface Palette:** A range of warm greys and off-whites that mimic technical paper and professional hardware interfaces.
+- **Primary (#d9282f):** Branding and primary actions
+- **Tertiary (#0076bc):** Links, synced status
+- **Surfaces:** Warm greys / off-whites (technical paper)
 
 ## Typography
-We use **Work Sans** for its exceptional legibility in technical contexts. 
-- **Headings:** Bold and direct to establish clear hierarchy.
-- **Body Text:** Balanced line height (1.6) for sustained reading of technical logs.
-- **Code:** Monospaced fonts for LaTeX and source code blocks.
+**Work Sans** for UI and prose; **Inconsolata** for code.
+- Buttons and nav: sentence case, weight 600
+- Uppercase only for rare badges
+- Named ramp: `text-nb-caption` | `text-nb-label` | `text-nb-body` | `text-nb-title` | `text-nb-display`
 
-## Layout & UI Principles
-1. **Split-Pane Workflow:** Efficiency is driven by a side-by-side view of content and code.
-2. **High Contrast:** Clear boundaries between workspace, terminal, and preview areas.
-3. **Information Density:** Optimized for desktop use, providing access to file trees and document history without cluttering the writing space.
+## UI kit
+Primitives in `src/components/ui/`. Prefer these over one-off Tailwind.
+Radii: `rounded-nb` / `rounded-nb-lg` / `rounded-nb-xl` / `rounded-nb-2xl`.
+Shadows: `shadow-nb-sm` / `shadow-nb-lg`.
+
+## Layout principles
+1. One global top bar — no double headers on org pages
+2. Hub pages: max-width + airy spacing
+3. Notebook workspace: labeled subnav + collapsible entry list + paper editor
+4. Progressive disclosure for export/import/audit/delete

@@ -89,30 +89,35 @@ function FileRow({
     ? (phaseLabel || "Template")
     : (() => {
       const dateStr = file.date;
-      if (!dateStr) return "No date";
-      const match = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-      if (match) {
-        const y = parseInt(match[1], 10);
-        const m = parseInt(match[2], 10) - 1;
-        const d = parseInt(match[3], 10);
-        const localDate = new Date(y, m, d);
-        if (!isNaN(localDate.getTime())) {
-          return localDate.toLocaleDateString("en-US", {
-            month: "long",
-            day: "numeric",
-            year: "numeric"
-          });
+      let dateLabel = "No date";
+      if (dateStr) {
+        const match = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+        if (match) {
+          const y = parseInt(match[1], 10);
+          const m = parseInt(match[2], 10) - 1;
+          const d = parseInt(match[3], 10);
+          const localDate = new Date(y, m, d);
+          if (!isNaN(localDate.getTime())) {
+            dateLabel = localDate.toLocaleDateString("en-US", {
+              month: "long",
+              day: "numeric",
+              year: "numeric"
+            });
+          }
+        } else {
+          const parsed = new Date(dateStr);
+          if (!isNaN(parsed.getTime())) {
+            dateLabel = parsed.toLocaleDateString("en-US", {
+              month: "long",
+              day: "numeric",
+              year: "numeric"
+            });
+          } else {
+            dateLabel = dateStr;
+          }
         }
       }
-      const parsed = new Date(dateStr);
-      if (!isNaN(parsed.getTime())) {
-        return parsed.toLocaleDateString("en-US", {
-          month: "long",
-          day: "numeric",
-          year: "numeric"
-        });
-      }
-      return dateStr;
+      return file.folderName ? `${file.folderName} · ${dateLabel}` : dateLabel;
     })();
 
   return (

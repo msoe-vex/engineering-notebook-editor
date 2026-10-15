@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { saveAs } from "file-saver";
 import {
@@ -11,16 +11,17 @@ import {
 } from "@engineering-notebook/shared";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import TextPromptDialog from "@/components/dialogs/TextPromptDialog";
+import { Alert, Button, Dialog } from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
 import { exportNotebookZipV5, importNotebookZip } from "@/lib/cloud/zipV5";
 import {
   activateCloudWorkspaceBridge,
   deactivateCloudWorkspaceBridge,
 } from "@/lib/cloud/workspaceBridge";
+import { setWorkspaceHeader } from "@/lib/cloud/workspaceHeaderStore";
 import { store } from "@/lib/store";
 import type { NotebookMetadata } from "@/lib/notebook/metadata";
-import type { ExplorerFile } from "@/lib/types";
-import { CloudNotebookSidebar } from "./CloudNotebookSidebar";
+import { NotebookEntryList } from "./NotebookEntryList";
 import { NotebookWorkspaceProvider } from "./NotebookWorkspaceContext";
 import type { EntryMeta } from "./notebook-types";
 
@@ -38,6 +39,13 @@ type PromptState = {
   onConfirm: (value: string) => void;
 } | null;
 
+const SUBNAV = [
+  { id: "entries", label: "Entries", match: (p: string) => !p.includes("/schedule") && !p.includes("/members") && !p.includes("/setup") && !p.includes("/team") && !p.includes("/calendar") },
+  { id: "schedule", label: "Schedule", match: (p: string) => p.includes("/schedule") || p.includes("/calendar") },
+  { id: "members", label: "Members", match: (p: string) => p.includes("/members") },
+  { id: "setup", label: "Setup", match: (p: string) => p.includes("/setup") || p.includes("/team") },
+] as const;
+
 export function NotebookShell({ children }: { children: ReactNode }) {
   const params = useParams();
   const router = useRouter();
@@ -48,9 +56,10 @@ export function NotebookShell({ children }: { children: ReactNode }) {
   const activeEntryId = pathname.includes("/entries/")
     ? pathname.split("/entries/")[1]?.split("/")[0] ?? null
     : null;
-  const settingsActive = pathname.includes("/settings");
+  const showEntryList = SUBNAV[0].match(pathname || "");
 
   const [notebookName, setNotebookName] = useState("Notebook");
+  const [orgName, setOrgName] = useState("Organization");
   const [notebookSummary, setNotebookSummary] = useState<NotebookSummaryV5 | null>(null);
   const [folders, setFolders] = useState<
     Record<string, { name: string; parentId: string | null; order: number }>
@@ -61,9 +70,9 @@ export function NotebookShell({ children }: { children: ReactNode }) {
   const [auditResult, setAuditResult] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
-  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [prompt, setPrompt] = useState<PromptState>(null);
+  const [listCollapsed, setListCollapsed] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
 
   function refresh() {
@@ -94,13 +103,15 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     queueMicrotask(() => {
       void (async () => {
         try {
-          const [nb, entryRes, assetList] = await Promise.all([
+          const [nb, entryRes, assetList, org] = await Promise.all([
             cloudApi.getNotebook(orgId, notebookId),
             cloudApi.listEntries(orgId, notebookId),
             cloudApi.listAssets(orgId, notebookId).catch(() => [] as typeof assets),
+            cloudApi.getOrg(orgId).catch(() => null),
           ]);
           if (cancelled) return;
-          setNotebookName(nb.name);
+          setNotebookName(nb.title || nb.name);
+          if (org?.name) setOrgName(org.name);
           setFolders(nb.folders ?? {});
           setEntries(entryRes.entries);
           setAssets(assetList);
@@ -108,8 +119,11 @@ export function NotebookShell({ children }: { children: ReactNode }) {
             schemaVersion: NOTEBOOK_SCHEMA_VERSION,
             orgId,
             name: nb.name,
+            title: nb.title,
+            subtitle: nb.subtitle,
+            logoAssetId: nb.logoAssetId,
             folders: nb.folders ?? {},
-            team: nb.team as NotebookSummaryV5["team"],
+            access: nb.access,
             phases: nb.phases as NotebookSummaryV5["phases"],
             lastCompiled: nb.lastCompiled,
             updatedAt: nb.updatedAt ?? new Date().toISOString(),
@@ -145,12 +159,16 @@ export function NotebookShell({ children }: { children: ReactNode }) {
         ])
       ),
       phases: (notebookSummary?.phases as NotebookMetadata["phases"]) || {},
-      team: notebookSummary?.team as NotebookMetadata["team"],
+      team: {
+        teamName: "",
+        teamNumber: "",
+        organization: "",
+        members: {},
+      },
     }),
     [entries, notebookSummary]
   );
 
-  // Bridge metadata into the legacy store so TipTap / Team / Calendar keep working.
   useEffect(() => {
     store.isInitialized = true;
     store.metadata = notebookMetadata;
@@ -193,6 +211,19 @@ export function NotebookShell({ children }: { children: ReactNode }) {
           tipTapByEntryId[id] = { type: "doc", content: [] };
         }
       }
+      const membersList = await cloudApi.listNotebookMembers(orgId, notebookId).catch(() => []);
+      const membersMap = Object.fromEntries(
+        membersList.map((m) => [
+          m.id,
+          {
+            name: m.name,
+            role: m.role,
+            order: m.order,
+            imageAssetId: m.imageAssetId,
+            linkedUid: m.linkedUid,
+          },
+        ])
+      );
       const summary: NotebookSummaryV5 = notebookSummary ?? {
         schemaVersion: NOTEBOOK_SCHEMA_VERSION,
         orgId,
@@ -204,6 +235,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
         summary,
         entries: entryMeta,
         tipTapByEntryId,
+        members: membersMap,
       });
       saveAs(blob, `${notebookName.replace(/\s+/g, "-").toLowerCase() || "notebook"}.v5.zip`);
     } catch (err) {
@@ -218,17 +250,34 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const buf = await file.arrayBuffer();
-      const { summary, entries: imported, tipTapByEntryId } = await importNotebookZip(
-        buf,
-        orgId,
-        notebookName
-      );
+      const {
+        summary,
+        entries: imported,
+        tipTapByEntryId,
+        members: importedMembers,
+      } = await importNotebookZip(buf, orgId, notebookName);
       await cloudApi.patchNotebook(orgId, notebookId, {
         name: summary.name || notebookName,
+        title: summary.title,
+        subtitle: summary.subtitle,
+        logoAssetId: summary.logoAssetId,
         folders: summary.folders,
-        team: summary.team,
+        access: summary.access,
         phases: summary.phases,
       });
+      for (const [, m] of Object.entries(importedMembers)) {
+        try {
+          await cloudApi.createNotebookMember(orgId, notebookId, {
+            name: m.name,
+            role: m.role,
+            order: m.order,
+            imageAssetId: m.imageAssetId,
+            linkedUid: m.linkedUid,
+          });
+        } catch {
+          /* ignore */
+        }
+      }
       for (const [id, meta] of Object.entries(imported)) {
         try {
           await cloudApi.patchEntry(orgId, notebookId, id, meta);
@@ -257,27 +306,75 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     }
   }
 
-  const handleSelectEntry = useCallback(
-    (file: ExplorerFile, multi: boolean, range: boolean, visiblePaths: string[]) => {
-      setSelectedPaths((prev) => {
-        const next = new Set(multi || range ? prev : []);
-        if (range && prev.size > 0) {
-          const anchor = [...prev][0];
-          const a = visiblePaths.indexOf(anchor);
-          const b = visiblePaths.indexOf(file.path);
-          if (a >= 0 && b >= 0) {
-            const [lo, hi] = a < b ? [a, b] : [b, a];
-            for (let i = lo; i <= hi; i++) next.add(visiblePaths[i]);
-            return next;
-          }
-        }
-        if (multi && next.has(file.path)) next.delete(file.path);
-        else next.add(file.path);
-        return next;
-      });
-    },
-    []
-  );
+  const exportZipRef = useRef(handleExportZip);
+  exportZipRef.current = handleExportZip;
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
+
+  useEffect(() => {
+    setWorkspaceHeader({
+      orgId,
+      notebookId,
+      orgName,
+      notebookName,
+      menuItems: [
+        {
+          id: "rename",
+          label: "Rename notebook",
+          onSelect: () =>
+            showPrompt("Rename notebook", notebookName, (next) => {
+              void cloudApi
+                .patchNotebook(orgId, notebookId, { name: next, title: next })
+                .then(refresh)
+                .catch((err) => setError((err as Error).message));
+            }),
+        },
+        {
+          id: "export",
+          label: "Export ZIP",
+          onSelect: () => {
+            if (!busyRef.current) void exportZipRef.current();
+          },
+        },
+        {
+          id: "import",
+          label: "Import ZIP",
+          onSelect: () => {
+            if (!busyRef.current) importRef.current?.click();
+          },
+        },
+        {
+          id: "audit",
+          label: "Audit",
+          onSelect: () => {
+            if (busyRef.current) return;
+            void cloudApi
+              .auditNotebook(orgId, notebookId, { provider: "byok" })
+              .then((r) => setAuditResult(JSON.stringify(r, null, 2)))
+              .catch((err) => setError((err as Error).message));
+          },
+        },
+        {
+          id: "delete",
+          label: "Delete notebook",
+          danger: true,
+          onSelect: () =>
+            showConfirm(
+              "Delete notebook?",
+              "Delete this notebook and all entries? This cannot be undone.",
+              () => {
+                void cloudApi
+                  .deleteNotebook(orgId, notebookId)
+                  .then(() => router.push(`/orgs/${orgId}`))
+                  .catch((err) => setError((err as Error).message));
+              },
+              "danger"
+            ),
+        },
+      ],
+    });
+    return () => setWorkspaceHeader(null);
+  }, [orgId, notebookId, orgName, notebookName, showPrompt, showConfirm, router]);
 
   const ctx = {
     orgId,
@@ -299,121 +396,87 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     showPrompt,
   };
 
+  const activeNav = SUBNAV.find((t) => t.match(pathname || ""))?.id ?? "entries";
+
   return (
     <NotebookWorkspaceProvider value={ctx}>
-      <div className="flex h-[calc(100vh-4.5rem)] min-h-0 flex-col overflow-hidden text-nb-on-surface">
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-nb-outline-variant/30 bg-nb-surface px-4 py-2">
-          <div className="min-w-0">
-            <Link href={`/orgs/${orgId}`} className="text-xs text-nb-on-surface-variant underline">
-              Notebooks
-            </Link>
-            <h1 className="truncate text-lg font-semibold tracking-tight">{notebookName}</h1>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="rounded-lg border border-nb-outline-variant/40 px-3 py-1.5 text-xs font-medium"
-              onClick={() =>
-                showPrompt("Rename notebook", notebookName, (next) => {
-                  void cloudApi
-                    .patchNotebook(orgId, notebookId, { name: next })
-                    .then(refresh)
-                    .catch((err) => setError((err as Error).message));
-                })
-              }
-            >
-              Rename
-            </button>
-            <button
-              type="button"
-              className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700"
-              onClick={() =>
-                showConfirm(
-                  "Delete notebook?",
-                  "Delete this notebook and all entries? This cannot be undone.",
-                  () => {
-                    void cloudApi
-                      .deleteNotebook(orgId, notebookId)
-                      .then(() => router.push(`/orgs/${orgId}`))
-                      .catch((err) => setError((err as Error).message));
-                  },
-                  "danger"
-                )
-              }
-            >
-              Delete
-            </button>
-            <button
-              type="button"
-              className="rounded-lg border border-nb-outline-variant/40 px-3 py-1.5 text-xs font-medium disabled:opacity-50"
-              disabled={busy}
-              onClick={() => void handleExportZip()}
-            >
-              Export ZIP
-            </button>
-            <button
-              type="button"
-              className="rounded-lg border border-nb-outline-variant/40 px-3 py-1.5 text-xs font-medium disabled:opacity-50"
-              disabled={busy}
-              onClick={() => importRef.current?.click()}
-            >
-              Import ZIP
-            </button>
-            <input
-              ref={importRef}
-              type="file"
-              accept=".zip,application/zip"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                e.target.value = "";
-                if (file) void handleImportZip(file);
-              }}
-            />
-            <button
-              type="button"
-              className="rounded-lg border border-nb-outline-variant/40 px-3 py-1.5 text-xs font-medium disabled:opacity-50"
-              disabled={busy}
-              onClick={() => {
-                void cloudApi
-                  .auditNotebook(orgId, notebookId, { provider: "byok" })
-                  .then((r) => setAuditResult(JSON.stringify(r, null, 2)))
-                  .catch((err) => setError((err as Error).message));
-              }}
-            >
-              Audit
-            </button>
-          </div>
+      <div className="flex h-[calc(100vh-3.25rem)] min-h-0 flex-col overflow-hidden text-nb-on-surface">
+        <input
+          ref={importRef}
+          type="file"
+          accept=".zip,application/zip"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) void handleImportZip(file);
+          }}
+        />
+
+        <div className="flex shrink-0 items-center gap-1 border-b border-nb-outline-variant/30 bg-nb-surface px-3 py-1.5">
+          {SUBNAV.map((item) => {
+            const href =
+              item.id === "entries"
+                ? basePath
+                : item.id === "schedule"
+                  ? `${basePath}/schedule`
+                  : item.id === "members"
+                    ? `${basePath}/members`
+                    : `${basePath}/setup`;
+            const active = activeNav === item.id;
+            return (
+              <Link
+                key={item.id}
+                href={href}
+                className={`rounded-nb-lg px-3 py-1.5 text-nb-label font-semibold transition-colors ${
+                  active
+                    ? "bg-nb-primary/10 text-nb-primary"
+                    : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </div>
 
         {error && (
-          <p className="shrink-0 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+          <Alert variant="error" className="shrink-0 rounded-none border-x-0 border-t-0">
             {error}
-          </p>
+          </Alert>
         )}
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <div className="flex w-[320px] shrink-0 flex-col border-r border-nb-outline-variant/30 md:w-[360px]">
-            <CloudNotebookSidebar
+          {showEntryList && (
+            <NotebookEntryList
               activeEntryId={activeEntryId}
-              notebookMetadata={notebookMetadata}
-              selectedPaths={selectedPaths}
-              onSelectEntry={handleSelectEntry}
-              onSelectAll={(paths) => setSelectedPaths(new Set(paths))}
-              showConfirm={showConfirm}
-              settingsActive={settingsActive}
+              collapsed={listCollapsed}
+              onToggleCollapsed={() => setListCollapsed((v) => !v)}
+              basePath={basePath}
             />
-          </div>
-          <section className="min-h-0 min-w-0 flex-1 overflow-auto bg-nb-surface p-4">
-            {children}
-            {auditResult && (
-              <pre className="mt-6 overflow-auto rounded border border-neutral-200 bg-neutral-900 p-4 text-xs text-neutral-100">
-                {auditResult}
-              </pre>
-            )}
+          )}
+          <section className="min-h-0 min-w-0 flex-1 overflow-auto bg-nb-surface">
+            <div className={showEntryList && activeEntryId ? "mx-auto max-w-3xl px-4 py-6" : "p-4 md:p-6"}>
+              {children}
+            </div>
           </section>
         </div>
       </div>
+
+      <Dialog
+        isOpen={Boolean(auditResult)}
+        onClose={() => setAuditResult(null)}
+        title="Audit result"
+      >
+        <pre className="max-h-[60vh] overflow-auto rounded-nb-lg bg-nb-surface-low p-3 text-nb-caption">
+          {auditResult}
+        </pre>
+        <div className="mt-3 flex justify-end">
+          <Button size="sm" variant="secondary" onClick={() => setAuditResult(null)}>
+            Close
+          </Button>
+        </div>
+      </Dialog>
 
       <ConfirmationDialog
         isOpen={Boolean(confirm)}

@@ -152,18 +152,36 @@ export function CollaborativeEntryEditor({
 
   if (!provider) {
     return (
-      <p className="text-sm text-neutral-500">Connecting to collaboration… ({status})</p>
+      <p className="text-sm text-nb-on-surface-variant">
+        Connecting to collaboration… ({status})
+      </p>
     );
   }
 
+  const statusLabel =
+    status === "connected" ? "Live" : status === "connecting" ? "Connecting…" : "Offline";
+
   return (
-    <div className="flex flex-col gap-2 text-neutral-900">
+    <div className="flex flex-col gap-2 text-nb-on-surface">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs uppercase tracking-wide text-neutral-500">{status}</span>
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-nb px-2 py-0.5 text-nb-caption font-semibold ${
+            status === "connected"
+              ? "bg-nb-success/10 text-nb-success"
+              : "bg-nb-warning/10 text-nb-warning"
+          }`}
+        >
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${
+              status === "connected" ? "bg-nb-success" : "bg-nb-warning"
+            }`}
+          />
+          {statusLabel}
+        </span>
         {status !== "connected" && (
           <button
             type="button"
-            className="text-xs text-nb-primary underline"
+            className="text-nb-label font-semibold text-nb-primary hover:underline"
             onClick={reconnect}
           >
             Reconnect
@@ -171,7 +189,7 @@ export function CollaborativeEntryEditor({
         )}
       </div>
       {editor && (
-        <div className="overflow-hidden rounded-lg border border-neutral-200 bg-nb-surface">
+        <div className="sticky top-0 z-10 overflow-hidden rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface shadow-nb-sm">
           <NotebookFormatToolbar
             editor={editor}
             activeMenu={activeMenu}
@@ -191,7 +209,7 @@ export function CollaborativeEntryEditor({
           />
         </div>
       )}
-      <div className="rounded border border-neutral-200 bg-white">
+      <div className="rounded-xl border border-nb-outline-variant/30 bg-nb-surface">
         <RichTextArea
           key={documentName}
           filename={entryId}

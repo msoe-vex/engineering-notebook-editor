@@ -44,31 +44,46 @@ export type Invite = {
   acceptedAt?: string;
 };
 
+/** Named group of Users inside an org (ACL grouping only — no number/logo). */
+export type Team = {
+  id: string;
+  orgId: string;
+  name: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TeamMembership = {
+  uid: string;
+  joinedAt: string;
+};
+
 export type NotebookFolder = {
   name: string;
   parentId: string | null;
   order: number;
 };
 
-export type TeamMemberV5 = {
+/** Who may open a notebook (org owners/admins always can). */
+export type NotebookAccess = {
+  mode: "org" | "restricted";
+  teamIds: string[];
+  userIds: string[];
+};
+
+export function defaultNotebookAccess(): NotebookAccess {
+  return { mode: "org", teamIds: [], userIds: [] };
+}
+
+/** Contributor on a notebook (credits/roster). May exist without an app account. */
+export type NotebookMember = {
+  id: string;
   name: string;
   role: string;
   order: number;
   imageAssetId?: string;
-  imageOriginalAssetId?: string;
-};
-
-export type TeamMetadataV5 = {
-  teamName: string;
-  teamNumber: string;
-  startDate?: string;
-  endDate?: string;
-  autoCalculateDates?: boolean;
-  /** School / team organization string — not the platform Organization. */
-  organization: string;
-  logoAssetId?: string;
-  logoOriginalAssetId?: string;
-  members: Record<string, TeamMemberV5>;
+  linkedUid?: string;
 };
 
 export type ProjectPhase = {
@@ -104,8 +119,11 @@ export type NotebookSummaryV5 = {
   schemaVersion: typeof NOTEBOOK_SCHEMA_VERSION;
   orgId: string;
   name: string;
+  title?: string;
+  subtitle?: string;
+  logoAssetId?: string;
   folders: Record<string, NotebookFolder>;
-  team?: TeamMetadataV5;
+  access?: NotebookAccess;
   phases?: Record<string, ProjectPhase>;
   lastCompiled?: string;
   updatedAt: string;
@@ -141,9 +159,39 @@ export type RubricScorecard = {
 export type NotebookExportV5 = {
   schemaVersion: typeof NOTEBOOK_SCHEMA_VERSION;
   name: string;
+  title?: string;
+  subtitle?: string;
+  logoAssetId?: string;
   folders: Record<string, NotebookFolder>;
-  team?: TeamMetadataV5;
+  access?: NotebookAccess;
   phases?: Record<string, ProjectPhase>;
+  members?: Record<string, Omit<NotebookMember, "id">>;
   lastCompiled?: string;
   entries: Record<string, EntryMetadataV5>;
 };
+
+/** Legacy embedded team blob (ZIP/local import shim only). */
+export type LegacyTeamMemberV5 = {
+  name: string;
+  role: string;
+  order: number;
+  imageAssetId?: string;
+  imageOriginalAssetId?: string;
+};
+
+export type LegacyTeamMetadataV5 = {
+  teamName: string;
+  teamNumber: string;
+  startDate?: string;
+  endDate?: string;
+  autoCalculateDates?: boolean;
+  organization: string;
+  logoAssetId?: string;
+  logoOriginalAssetId?: string;
+  members: Record<string, LegacyTeamMemberV5>;
+};
+
+/** @deprecated Use LegacyTeamMetadataV5 — kept for older import paths. */
+export type TeamMemberV5 = LegacyTeamMemberV5;
+/** @deprecated Use LegacyTeamMetadataV5 */
+export type TeamMetadataV5 = LegacyTeamMetadataV5;

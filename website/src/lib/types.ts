@@ -24,6 +24,8 @@ export interface ExplorerFile {
   isTemplate?: boolean;
   date?: string;
   order?: number;
+  folderId?: string | null;
+  folderName?: string | null;
   validationErrors?: string[];
 }
 

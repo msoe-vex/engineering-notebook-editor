@@ -1,5 +1,8 @@
 import {
   memberPath,
+  teamMemberPath,
+  type NotebookAccess,
+  type NotebookSummaryV5,
   type OrgRole,
   type PlatformRole,
 } from "@engineering-notebook/shared";
@@ -43,6 +46,53 @@ export function requireServiceAdmin(user: SessionUser): void {
     (err as Error & { statusCode: number }).statusCode = 403;
     throw err;
   }
+}
+
+function normalizeAccess(access: NotebookAccess | undefined): NotebookAccess {
+  return {
+    mode: access?.mode === "restricted" ? "restricted" : "org",
+    teamIds: access?.teamIds ?? [],
+    userIds: access?.userIds ?? [],
+  };
+}
+
+/** True if the user may open this notebook (owners/admins always). */
+export async function canAccessNotebook(
+  user: SessionUser,
+  orgId: string,
+  notebook: Pick<NotebookSummaryV5, "access"> | { access?: NotebookAccess },
+  orgRole?: OrgRole | null
+): Promise<boolean> {
+  if (isServiceAdmin(user)) return true;
+  const role = orgRole ?? (await getOrgRole(orgId, user.uid));
+  if (!role) return false;
+  if (role === "owner" || role === "admin") return true;
+
+  const access = normalizeAccess(notebook.access);
+  if (access.mode === "org") return true;
+
+  if (access.userIds.includes(user.uid)) return true;
+
+  for (const teamId of access.teamIds) {
+    const snap = await getFirestore().doc(teamMemberPath(orgId, teamId, user.uid)).get();
+    if (snap.exists) return true;
+  }
+  return false;
+}
+
+export async function requireNotebookAccess(
+  user: SessionUser,
+  orgId: string,
+  notebook: Pick<NotebookSummaryV5, "access"> | { access?: NotebookAccess }
+): Promise<OrgRole> {
+  const role = await requireOrgMember(user, orgId);
+  const ok = await canAccessNotebook(user, orgId, notebook, role);
+  if (!ok) {
+    const err = new Error("forbidden");
+    (err as Error & { statusCode: number }).statusCode = 403;
+    throw err;
+  }
+  return role;
 }
 
 export type { PlatformRole };

@@ -1,17 +1,14 @@
 "use client";
 
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import SettingsPage from "@/components/pages/SettingsPage";
-import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
+import { LoadingBlock } from "@/components/ui";
 
-export default function NotebookSettingsPage() {
+/** Settings moved to user Account — keep route for old links. */
+export default function NotebookSettingsRedirect() {
   const router = useRouter();
-  const { orgId, notebookId } = useNotebookWorkspace();
-
-  return (
-    <SettingsPage
-      isEmbedded
-      onClose={() => router.push(`/orgs/${orgId}/notebooks/${notebookId}`)}
-    />
-  );
+  useEffect(() => {
+    router.replace("/account");
+  }, [router]);
+  return <LoadingBlock label="Opening account…" />;
 }

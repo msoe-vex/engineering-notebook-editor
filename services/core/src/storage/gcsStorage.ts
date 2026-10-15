@@ -2,6 +2,23 @@ import { Storage } from "@google-cloud/storage";
 import type { StoragePort } from "./storagePort.js";
 import { MemoryStorage } from "./storagePort.js";
 
+async function ensureEmulatorBucket(apiEndpoint: string, bucketName: string, projectId: string) {
+  const base = apiEndpoint.replace(/\/$/, "");
+  const listRes = await fetch(`${base}/storage/v1/b/${encodeURIComponent(bucketName)}`);
+  if (listRes.ok) return;
+
+  const createRes = await fetch(`${base}/storage/v1/b?project=${encodeURIComponent(projectId)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: bucketName }),
+  });
+  // 200 / 409 (already exists) are fine
+  if (!createRes.ok && createRes.status !== 409) {
+    const text = await createRes.text();
+    throw new Error(`Failed to create emulator bucket ${bucketName}: ${createRes.status} ${text}`);
+  }
+}
+
 export async function createStorage(): Promise<StoragePort> {
   const bucketName = process.env.GCS_BUCKET;
   if (!bucketName || process.env.STORAGE_BACKEND === "memory") {
@@ -14,23 +31,35 @@ export async function createStorage(): Promise<StoragePort> {
       : `http://${process.env.STORAGE_EMULATOR_HOST}`
     : undefined;
 
+  const projectId =
+    process.env.FIREBASE_PROJECT_ID || process.env.GCP_PROJECT_ID || "demo-engineering-notebook";
+
+  if (apiEndpoint) {
+    // fake-gcs does not auto-create buckets; SDK bucket.create() is unreliable against it.
+    await ensureEmulatorBucket(apiEndpoint, bucketName, projectId);
+  }
+
   const storage = new Storage({
-    projectId: process.env.FIREBASE_PROJECT_ID || process.env.GCP_PROJECT_ID || "demo-engineering-notebook",
+    projectId,
     apiEndpoint,
   });
 
   const bucket = storage.bucket(bucketName);
-  try {
-    const [exists] = await bucket.exists();
-    if (!exists && apiEndpoint) {
-      await bucket.create();
+  if (!apiEndpoint) {
+    try {
+      const [exists] = await bucket.exists();
+      if (!exists) await bucket.create();
+    } catch (err) {
+      console.warn("[storage] bucket ensure failed", err);
     }
-  } catch {
-    // Bucket may already exist or emulator may auto-create on upload
   }
 
   return {
     async putObject(key, data, contentType = "application/octet-stream") {
+      if (apiEndpoint) {
+        // Re-ensure in case fake-gcs was wiped while Core stayed up.
+        await ensureEmulatorBucket(apiEndpoint, bucketName, projectId);
+      }
       const file = bucket.file(key);
       await file.save(typeof data === "string" ? Buffer.from(data) : data, {
         contentType,

@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import ActivityBar, { type SidebarTab } from "@/components/sidebar/ActivityBar";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import ActivityBar, { type SidebarTab, type WorkspaceMode } from "@/components/sidebar/ActivityBar";
 import FileExplorer from "@/components/workspace/FileExplorer";
 import SearchTab from "@/components/sidebar/SearchTab";
 import { showNotification } from "@/components/overlays/Notification";
@@ -32,7 +33,6 @@ type Props = {
     onConfirm: () => void,
     variant?: "danger" | "warning" | "info"
   ) => void;
-  settingsActive?: boolean;
 };
 
 export function CloudNotebookSidebar({
@@ -42,29 +42,47 @@ export function CloudNotebookSidebar({
   onSelectEntry,
   onSelectAll,
   showConfirm,
-  settingsActive,
 }: Props) {
   const router = useRouter();
-  const { orgId, notebookId, entries, refresh, setError, setBusy, busy } =
-    useNotebookWorkspace();
+  const pathname = usePathname();
+  const {
+    orgId,
+    notebookId,
+    entries,
+    folders,
+    refresh,
+    setError,
+    setBusy,
+    busy,
+    showPrompt,
+  } = useNotebookWorkspace();
   const basePath = `/orgs/${orgId}/notebooks/${notebookId}`;
+
+  const workspaceMode: WorkspaceMode = pathname.includes("/team")
+    ? "team"
+    : pathname.includes("/calendar")
+      ? "calendar"
+      : "entries";
 
   const [activeTab, setActiveTab] = useState<SidebarTab>("explorer");
   const [sortBy, setSortBy] = useState<"date" | "title">("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
   const explorerFiles = useMemo(
-    () => cloudEntriesToExplorerFiles(entries),
-    [entries]
+    () => cloudEntriesToExplorerFiles(entries, folders),
+    [entries, folders]
   );
 
   const filteredEntries = useMemo(() => {
     const byPath = (a: ExplorerFile, b: ExplorerFile) =>
       (a.path || a.name).localeCompare(b.path || b.name);
+    const folderKey = (f: ExplorerFile) => f.folderName || "";
     const entriesOnly = explorerFiles.filter((e) => !e.isTemplate);
     const templates = explorerFiles.filter((e) => e.isTemplate);
 
     entriesOnly.sort((a, b) => {
+      const folderCmp = folderKey(a).localeCompare(folderKey(b));
+      if (folderCmp !== 0) return folderCmp;
       if (sortBy === "title") {
         const valA = (a.title || a.name).toLowerCase();
         const valB = (b.title || b.name).toLowerCase();
@@ -112,6 +130,33 @@ export function CloudNotebookSidebar({
       setBusy(false);
     }
   }, [busy, orgId, notebookId, refresh, router, basePath, setBusy, setError]);
+
+  const handleNewFolder = useCallback(() => {
+    showPrompt("New folder", "Design Cycle", (name) => {
+      const id =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `folder-${Date.now()}`;
+      const nextFolders = {
+        ...folders,
+        [id]: {
+          name,
+          parentId: null as string | null,
+          order: Object.keys(folders).length,
+        },
+      };
+      void cloudApi
+        .patchNotebook(orgId, notebookId, { folders: nextFolders })
+        .then(() => {
+          refresh();
+          showNotification("Folder created.", "success");
+        })
+        .catch((err) => {
+          setError((err as Error).message);
+          showNotification("Failed to create folder.", "error");
+        });
+    }, "Folder name");
+  }, [showPrompt, folders, orgId, notebookId, refresh, setError]);
 
   const handleCreateTemplate = useCallback(async () => {
     try {
@@ -260,18 +305,26 @@ export function CloudNotebookSidebar({
     <div className="flex h-full min-h-0 overflow-hidden bg-nb-surface-lowest">
       <ActivityBar
         activeTab={activeTab}
+        hideGit
+        workspaceMode={workspaceMode}
         onSelectTab={(tab) => {
-          if (tab === "git") {
-            showNotification("Source control is local/GitHub-only; cloud uses live sync.", "info");
-            return;
-          }
           setActiveTab(tab);
+          if (workspaceMode !== "entries") {
+            router.push(basePath);
+          }
         }}
         pendingCount={0}
         onOpenTeam={(tab?: TeamTab) => router.push(`${basePath}/team/${tab || "identity"}`)}
         onOpenCalendar={() => router.push(`${basePath}/calendar`)}
-        onOpenSettings={() => router.push(`${basePath}/settings`)}
-        settingsActive={settingsActive}
+        footer={
+          <Link
+            href={`/orgs/${orgId}/members`}
+            title="Organization members"
+            className="mt-2 max-w-10 truncate text-center text-[8px] font-bold leading-tight tracking-wide text-nb-on-surface-variant/70 uppercase hover:text-nb-primary"
+          >
+            Org people
+          </Link>
+        }
       />
 
       <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-nb-surface-low">
@@ -280,6 +333,19 @@ export function CloudNotebookSidebar({
             activeTab === "explorer" ? "" : "hidden"
           }`}
         >
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-nb-outline-variant/20 bg-nb-surface-low px-3 py-1.5">
+            <span className="text-[9px] font-black tracking-wider text-nb-on-surface-variant/60 uppercase">
+              {Object.keys(folders).length} folder
+              {Object.keys(folders).length === 1 ? "" : "s"}
+            </span>
+            <button
+              type="button"
+              onClick={handleNewFolder}
+              className="text-[10px] font-bold text-nb-primary hover:underline"
+            >
+              + Folder
+            </button>
+          </div>
           <FileExplorer
             entries={filteredEntries}
             activePath={activePath}

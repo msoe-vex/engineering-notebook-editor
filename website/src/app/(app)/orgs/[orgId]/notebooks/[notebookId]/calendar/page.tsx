@@ -1,45 +1,31 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import CalendarView from "@/components/pages/CalendarView";
-import { store } from "@/lib/store";
-import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
+import { useEffect } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
-function CalendarPageInner() {
+function RedirectInner() {
+  const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { orgId, notebookId } = useNotebookWorkspace();
+  const orgId = String(params.orgId);
+  const notebookId = String(params.notebookId);
 
   useEffect(() => {
-    const date =
-      searchParams.get("date") ||
-      store.calendarCursor ||
-      new Date().toISOString().slice(0, 10);
-    const view = searchParams.get("view") === "week" ? "week" : "month";
-    store.calendarCursor = date;
-    store.calendarMode = view;
-    store.showCalendar = true;
-    store.notifyStateChange();
+    const qs = searchParams.toString();
+    router.replace(
+      `/orgs/${orgId}/notebooks/${notebookId}/schedule${qs ? `?${qs}` : ""}`
+    );
+  }, [orgId, notebookId, router, searchParams]);
 
-    if (!searchParams.get("date") || !searchParams.get("view")) {
-      router.replace(
-        `/orgs/${orgId}/notebooks/${notebookId}/calendar?date=${encodeURIComponent(date)}&view=${view}`
-      );
-    }
-  }, [searchParams, orgId, notebookId, router]);
-
-  return (
-    <CalendarView
-      onClose={() => router.push(`/orgs/${orgId}/notebooks/${notebookId}`)}
-    />
-  );
+  return null;
 }
 
-export default function CalendarPage() {
+/** Legacy calendar path → schedule. */
+export default function CalendarRedirect() {
   return (
-    <Suspense fallback={<p className="text-sm text-neutral-500">Loading calendar…</p>}>
-      <CalendarPageInner />
+    <Suspense fallback={null}>
+      <RedirectInner />
     </Suspense>
   );
 }

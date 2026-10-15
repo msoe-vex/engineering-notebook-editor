@@ -47,6 +47,39 @@ services:
       - gcs_data:/data
     ports:
       - "4443:4443"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O - http://127.0.0.1:4443/storage/v1/b >/dev/null 2>&1 || exit 1",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Ensure the notebook bucket exists (fake-gcs starts empty even with a volume).
+  gcs-init:
+    image: curlimages/curl:8.5.0
+    depends_on:
+      gcs:
+        condition: service_started
+    restart: "no"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        for i in 1 2 3 4 5 6 7 8 9 10; do
+          if curl -sf "http://gcs:4443/storage/v1/b" >/dev/null; then
+            curl -sf -X POST "http://gcs:4443/storage/v1/b?project=demo-engineering-notebook" \
+              -H "Content-Type: application/json" \
+              -d '{"name":"engineering-notebook"}' >/dev/null || true
+            echo "gcs bucket ready"
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "gcs-init failed" >&2
+        exit 1
 
   core:
     build:
@@ -71,6 +104,8 @@ services:
         condition: service_started
       gcs:
         condition: service_started
+      gcs-init:
+        condition: service_completed_successfully
     healthcheck:
       test:
         [

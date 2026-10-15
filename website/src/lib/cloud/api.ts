@@ -18,10 +18,19 @@ async function authHeaders(hasJsonBody: boolean): Promise<HeadersInit> {
 
 async function coreFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const hasJsonBody = init?.body != null && init.body !== "";
-  const res = await fetch(`${coreBase()}${path}`, {
-    ...init,
-    headers: { ...(await authHeaders(hasJsonBody)), ...(init?.headers || {}) },
-  });
+  const url = `${coreBase()}${path}`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...init,
+      headers: { ...(await authHeaders(hasJsonBody)), ...(init?.headers || {}) },
+    });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Cannot reach Core API at ${coreBase()} (${detail}). Is docker compose core healthy?`
+    );
+  }
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`${res.status} ${body}`);
@@ -32,7 +41,14 @@ async function coreFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return JSON.parse(text) as T;
 }
 
-export type OrgSummary = { id: string; name: string; createdAt?: string; updatedAt?: string };
+export type OrgSummary = {
+  id: string;
+  name: string;
+  createdAt?: string;
+  updatedAt?: string;
+  /** Current user's org role when returned from list/get membership context. */
+  role?: string | null;
+};
 export type MemberSummary = { uid: string; role: string; email?: string; joinedAt?: string };
 export type InviteSummary = {
   id: string;
@@ -50,6 +66,48 @@ export type AssetSummary = {
   gcsPath: string;
   createdBy?: string;
   createdAt?: string;
+};
+
+export type TeamSummary = {
+  id: string;
+  orgId: string;
+  name: string;
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
+};
+
+export type TeamMemberSummary = { uid: string; joinedAt?: string };
+
+export type NotebookAccess = {
+  mode: "org" | "restricted";
+  teamIds: string[];
+  userIds: string[];
+};
+
+export type NotebookSummary = {
+  id: string;
+  name: string;
+  title?: string;
+  subtitle?: string;
+  logoAssetId?: string;
+  folders?: Record<string, { name: string; parentId: string | null; order: number }>;
+  access?: NotebookAccess;
+  phases?: Record<string, unknown>;
+  lastCompiled?: string;
+  updatedAt?: string;
+  createdAt?: string;
+  createdBy?: string;
+  orgId?: string;
+};
+
+export type NotebookMemberSummary = {
+  id: string;
+  name: string;
+  role: string;
+  order: number;
+  imageAssetId?: string;
+  linkedUid?: string;
 };
 
 export const cloudApi = {
@@ -99,30 +157,77 @@ export const cloudApi = {
       body: "{}",
     }),
 
-  listNotebooks: (orgId: string) =>
-    coreFetch<Array<{ id: string; name: string }>>(`/orgs/${orgId}/notebooks`),
-  createNotebook: (orgId: string, name: string) =>
-    coreFetch<{ id: string; name: string }>(`/orgs/${orgId}/notebooks`, {
+  listTeams: (orgId: string) => coreFetch<TeamSummary[]>(`/orgs/${orgId}/teams`),
+  createTeam: (orgId: string, name: string) =>
+    coreFetch<TeamSummary>(`/orgs/${orgId}/teams`, {
       method: "POST",
       body: JSON.stringify({ name }),
     }),
+  getTeam: (orgId: string, teamId: string) =>
+    coreFetch<TeamSummary>(`/orgs/${orgId}/teams/${teamId}`),
+  patchTeam: (orgId: string, teamId: string, body: { name: string }) =>
+    coreFetch<TeamSummary>(`/orgs/${orgId}/teams/${teamId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteTeam: (orgId: string, teamId: string) =>
+    coreFetch<{ ok: boolean }>(`/orgs/${orgId}/teams/${teamId}`, { method: "DELETE" }),
+  listTeamMembers: (orgId: string, teamId: string) =>
+    coreFetch<TeamMemberSummary[]>(`/orgs/${orgId}/teams/${teamId}/members`),
+  addTeamMember: (orgId: string, teamId: string, uid: string) =>
+    coreFetch<TeamMemberSummary>(`/orgs/${orgId}/teams/${teamId}/members/${uid}`, {
+      method: "PUT",
+      body: "{}",
+    }),
+  removeTeamMember: (orgId: string, teamId: string, uid: string) =>
+    coreFetch<{ ok: boolean }>(`/orgs/${orgId}/teams/${teamId}/members/${uid}`, {
+      method: "DELETE",
+    }),
+
+  listNotebooks: (orgId: string) => coreFetch<NotebookSummary[]>(`/orgs/${orgId}/notebooks`),
+  createNotebook: (
+    orgId: string,
+    body: string | { name?: string; title?: string; subtitle?: string; access?: NotebookAccess }
+  ) =>
+    coreFetch<NotebookSummary>(`/orgs/${orgId}/notebooks`, {
+      method: "POST",
+      body: JSON.stringify(typeof body === "string" ? { name: body } : body),
+    }),
   getNotebook: (orgId: string, notebookId: string) =>
-    coreFetch<{
-      id: string;
-      name: string;
-      folders?: Record<string, { name: string; parentId: string | null; order: number }>;
-      team?: NotebookSummaryTeam;
-      phases?: Record<string, unknown>;
-      lastCompiled?: string;
-      updatedAt?: string;
-    }>(`/orgs/${orgId}/notebooks/${notebookId}`),
+    coreFetch<NotebookSummary>(`/orgs/${orgId}/notebooks/${notebookId}`),
   patchNotebook: (orgId: string, notebookId: string, body: unknown) =>
-    coreFetch(`/orgs/${orgId}/notebooks/${notebookId}`, {
+    coreFetch<NotebookSummary>(`/orgs/${orgId}/notebooks/${notebookId}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
   deleteNotebook: (orgId: string, notebookId: string) =>
     coreFetch<{ ok: boolean }>(`/orgs/${orgId}/notebooks/${notebookId}`, { method: "DELETE" }),
+
+  listNotebookMembers: (orgId: string, notebookId: string) =>
+    coreFetch<NotebookMemberSummary[]>(`/orgs/${orgId}/notebooks/${notebookId}/members`),
+  createNotebookMember: (
+    orgId: string,
+    notebookId: string,
+    body: { name: string; role?: string; order?: number; imageAssetId?: string; linkedUid?: string }
+  ) =>
+    coreFetch<NotebookMemberSummary>(`/orgs/${orgId}/notebooks/${notebookId}/members`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  patchNotebookMember: (
+    orgId: string,
+    notebookId: string,
+    memberId: string,
+    body: Partial<NotebookMemberSummary>
+  ) =>
+    coreFetch<NotebookMemberSummary>(
+      `/orgs/${orgId}/notebooks/${notebookId}/members/${memberId}`,
+      { method: "PATCH", body: JSON.stringify(body) }
+    ),
+  deleteNotebookMember: (orgId: string, notebookId: string, memberId: string) =>
+    coreFetch<{ ok: boolean }>(`/orgs/${orgId}/notebooks/${notebookId}/members/${memberId}`, {
+      method: "DELETE",
+    }),
 
   listEntries: (orgId: string, notebookId: string) =>
     coreFetch<{
@@ -262,13 +367,6 @@ export const cloudApi = {
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
-};
-
-type NotebookSummaryTeam = {
-  teamName: string;
-  teamNumber: string;
-  organization: string;
-  members: Record<string, unknown>;
 };
 
 export function collabWsUrl(): string {

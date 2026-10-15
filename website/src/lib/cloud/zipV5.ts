@@ -12,9 +12,10 @@ export async function exportNotebookZipV5(args: {
   entries: Record<string, EntryMetadataV5>;
   tipTapByEntryId: Record<string, unknown>;
   assets?: Record<string, Uint8Array>;
+  members?: Parameters<typeof buildExportV5>[2];
 }): Promise<Blob> {
   const zip = new JSZip();
-  const exportMeta = buildExportV5(args.summary, args.entries);
+  const exportMeta = buildExportV5(args.summary, args.entries, args.members);
   zip.file("notebook.v5.json", JSON.stringify(exportMeta, null, 2));
   zip.file(
     "manifest.json",
@@ -49,13 +50,17 @@ export async function importNotebookZip(
   summary: NotebookSummaryV5;
   entries: Record<string, EntryMetadataV5>;
   tipTapByEntryId: Record<string, unknown>;
+  members: Record<
+    string,
+    { name: string; role: string; order: number; imageAssetId?: string; linkedUid?: string }
+  >;
 }> {
   const zip = await JSZip.loadAsync(file);
   const indexFile =
     zip.file("notebook.v5.json") || zip.file("notebook.json") || zip.file("data/notebook.json");
   if (!indexFile) throw new Error("ZIP missing notebook.v5.json / notebook.json");
   const raw = JSON.parse(await indexFile.async("string")) as Record<string, unknown>;
-  const { summary, entries } = normalizeImportNotebook(raw, orgId, fallbackName);
+  const { summary, entries, members } = normalizeImportNotebook(raw, orgId, fallbackName);
 
   const tipTapByEntryId: Record<string, unknown> = {};
   const entryFiles = Object.keys(zip.files).filter(
@@ -73,5 +78,5 @@ export async function importNotebookZip(
     tipTapByEntryId[id] = parsed.content ?? parsed;
   }
 
-  return { summary, entries, tipTapByEntryId };
+  return { summary, entries, tipTapByEntryId, members };
 }

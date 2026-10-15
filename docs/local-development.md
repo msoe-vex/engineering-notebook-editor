@@ -51,11 +51,16 @@ Create an organization → notebook → **New entry** (opens `/orgs/…/notebook
 
 | Route | Screen |
 | --- | --- |
-| `/` | Organizations |
-| `/orgs/[orgId]` | Notebooks + members |
-| `/orgs/[orgId]/notebooks/[notebookId]` | Notebook shell (redirects to first entry) |
+| `/` | Organizations home |
+| `/orgs/[orgId]` | Organization notebooks |
+| `/orgs/[orgId]/members` | Organization members (ACL) |
+| `/orgs/[orgId]/invites` | Organization invites |
+| `/orgs/[orgId]/notebooks/[notebookId]` | Workspace (redirects to first entry) |
 | `/orgs/[orgId]/notebooks/[notebookId]/entries/[entryId]` | Entry editor |
-| `/admin` | Service admin |
+| `/orgs/[orgId]/notebooks/[notebookId]/team/[tab]` | Notebook team (identity / roster / phases) |
+| `/orgs/[orgId]/notebooks/[notebookId]/calendar` | Calendar |
+| `/account` | User account (theme, GenAI BYOK, default authors) |
+| `/admin` | Service Administrator |
 
 If port 3000 is busy, stop the Compose website container (`docker compose stop website`) or use the port Next prints (e.g. 3001).
 

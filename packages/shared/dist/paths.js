@@ -11,11 +11,29 @@ export function memberPath(orgId, uid) {
 export function membersCollection(orgId) {
     return `organizations/${orgId}/members`;
 }
+export function teamPath(orgId, teamId) {
+    return `organizations/${orgId}/teams/${teamId}`;
+}
+export function teamsCollection(orgId) {
+    return `organizations/${orgId}/teams`;
+}
+export function teamMemberPath(orgId, teamId, uid) {
+    return `organizations/${orgId}/teams/${teamId}/members/${uid}`;
+}
+export function teamMembersCollection(orgId, teamId) {
+    return `organizations/${orgId}/teams/${teamId}/members`;
+}
 export function notebookPath(orgId, notebookId) {
     return `organizations/${orgId}/notebooks/${notebookId}`;
 }
 export function notebooksCollection(orgId) {
     return `organizations/${orgId}/notebooks`;
+}
+export function notebookMemberPath(orgId, notebookId, memberId) {
+    return `organizations/${orgId}/notebooks/${notebookId}/members/${memberId}`;
+}
+export function notebookMembersCollection(orgId, notebookId) {
+    return `organizations/${orgId}/notebooks/${notebookId}/members`;
 }
 export function entryPath(orgId, notebookId, entryId) {
     return `organizations/${orgId}/notebooks/${notebookId}/entries/${entryId}`;

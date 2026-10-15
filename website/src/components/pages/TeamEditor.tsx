@@ -882,7 +882,7 @@ type TeamForm = Omit<TeamMetadata, "members"> & { members: Identified<TeamMember
               className={`flex items-center gap-2 px-4 md:px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer ${activeTab === "members" ? "bg-nb-surface text-nb-primary shadow-sm" : "text-nb-on-surface-variant hover:text-nb-on-surface"}`}
             >
               <Users size={14} />
-              <span className="hidden xs:inline">Team</span>
+              <span className="hidden xs:inline">Roster</span>
             </button>
             <button
               onClick={() => onTabChange?.("phases")}

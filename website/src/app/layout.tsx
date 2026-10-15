@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import { Inter, Inconsolata } from "next/font/google";
+import { Work_Sans, Inconsolata } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
+const workSans = Work_Sans({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-work-sans",
   display: "swap",
 });
 
@@ -94,7 +94,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${inconsolata.variable} h-full antialiased`}
+      className={`${workSans.variable} ${inconsolata.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-nb-surface text-nb-on-surface" suppressHydrationWarning>

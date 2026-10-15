@@ -3,14 +3,11 @@
 import { cloudApi } from "@/lib/cloud/api";
 import { store } from "@/lib/store";
 import {
-  dehydrateTeamAssets,
   normalizeNotebookMetadata,
   type ProjectPhase,
   type TeamMetadata,
 } from "@/lib/notebook/metadata";
 import { moveEntryOnCalendar } from "@/lib/notebook/notebookSchema";
-import type { TeamTab } from "@/lib/types";
-import { getMimeTypeFromExtension } from "@/lib/utils";
 
 export type CloudWorkspaceBridge = {
   orgId: string;
@@ -35,37 +32,19 @@ function todayYmd() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-async function cloudSaveTeam(team: TeamMetadata, phases?: Record<string, ProjectPhase>) {
-  if (!active) return orig.saveTeam(team, phases);
+/** Persist notebook phases only (legacy TeamEditor roster no longer maps to notebook.team). */
+async function cloudSaveTeam(_team: TeamMetadata, phases?: Record<string, ProjectPhase>) {
+  if (!active) return orig.saveTeam(_team, phases);
 
   const { orgId, notebookId, refresh } = active;
-  const { cleanTeam, newAssets } = await dehydrateTeamAssets(team);
-
-  for (const asset of newAssets) {
-    const contentType = getMimeTypeFromExtension(asset.path) || "application/octet-stream";
-    const bin = atob(asset.base64);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    const { asset: created } = await cloudApi.createAsset(orgId, notebookId, {
-      contentType,
-      byteSize: bytes.byteLength,
-    });
-    await cloudApi.uploadAssetContent(orgId, notebookId, created.id, bytes, contentType);
-    const dataUrl = `data:${contentType};base64,${asset.base64}`;
-    store.assetCache.set(asset.path, dataUrl);
-    store.assetCache.set(`cloud:${created.id}`, dataUrl);
-  }
-
   const nextPhases = phases || store.metadata.phases || {};
   store.metadata = normalizeNotebookMetadata({
     ...store.metadata,
-    team: cleanTeam,
     phases: nextPhases,
   });
   store.notifyStateChange();
 
   await cloudApi.patchNotebook(orgId, notebookId, {
-    team: cleanTeam,
     phases: nextPhases,
   });
   refresh();
@@ -105,40 +84,35 @@ function cloudNavigateTo(
   const go = options?.replace ? router.replace.bind(router) : router.push.bind(router);
   const path = pathname || "";
 
-  if (path.includes("/calendar") || path.endsWith("calendar")) {
+  if (path.includes("/calendar") || path.includes("/schedule") || path.endsWith("calendar")) {
     const date = params.date || store.calendarCursor || todayYmd();
-    const view = params.view === "week" ? "week" : params.view === "month" ? "month" : store.calendarMode || "month";
+    const view =
+      params.view === "week" ? "week" : params.view === "month" ? "month" : store.calendarMode || "month";
     store.calendarCursor = date;
     store.calendarMode = view;
     store.showCalendar = true;
     store.notifyStateChange();
-    go(`${basePath}/calendar?date=${encodeURIComponent(date)}&view=${view}`);
+    go(`${basePath}/schedule?date=${encodeURIComponent(date)}&view=${view}`);
     return;
   }
 
-  if (path.includes("/team")) {
-    const tab =
-      (params.tab as string) ||
-      path.split("/").pop() ||
-      store.teamTab ||
-      "identity";
-    const safe = (["identity", "members", "phases"].includes(tab) ? tab : "identity") as TeamTab;
-    store.teamTab = safe;
-    store.showTeamEditor = true;
-    store.notifyStateChange();
-    go(`${basePath}/team/${safe}`);
+  if (path.includes("/team") || path.includes("/setup") || path.includes("/members")) {
+    if (path.includes("/members") || params.tab === "members") {
+      go(`${basePath}/members`);
+      return;
+    }
+    go(`${basePath}/setup`);
     return;
   }
 
-  if (path.includes("/settings")) {
+  if (path.includes("/settings") || path === "/account") {
     store.showSettings = true;
     store.notifyStateChange();
-    go(`${basePath}/settings`);
+    go("/account");
     return;
   }
 
   if (path.includes("/compile")) {
-    // Compiler deferred; stay on notebook root for now.
     go(basePath);
     return;
   }
@@ -153,7 +127,6 @@ function cloudNavigateTo(
     return;
   }
 
-  // Date/view-only updates while already on calendar
   if (params.date || params.view) {
     const date = params.date || store.calendarCursor || todayYmd();
     const view =
@@ -161,7 +134,7 @@ function cloudNavigateTo(
     store.calendarCursor = date;
     store.calendarMode = view;
     store.notifyStateChange();
-    go(`${basePath}/calendar?date=${encodeURIComponent(date)}&view=${view}`);
+    go(`${basePath}/schedule?date=${encodeURIComponent(date)}&view=${view}`);
   }
 }
 
@@ -181,7 +154,6 @@ function ensureInstalled() {
   };
 }
 
-/** Activate cloud persistence for TeamEditor / CalendarView while a notebook shell is mounted. */
 export function activateCloudWorkspaceBridge(ctx: CloudWorkspaceBridge) {
   ensureInstalled();
   active = ctx;

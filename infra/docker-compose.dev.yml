@@ -8,6 +8,8 @@ services:
   core:
     volumes:
       - ../services/core/src:/app/src
+      # Keep shared package in sync with host builds (schema/API exports).
+      - ../packages/shared:/app/node_modules/@engineering-notebook/shared
     command: ["npm", "run", "dev"]
     environment:
       CHOKIDAR_USEPOLLING: "true"

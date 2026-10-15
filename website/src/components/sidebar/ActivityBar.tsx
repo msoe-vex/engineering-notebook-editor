@@ -10,11 +10,13 @@ import {
   Play,
   Settings,
   CalendarDays,
-  LucideIcon
+  LucideIcon,
 } from "lucide-react";
 import { TeamTab } from "@/lib/types";
 
 export type SidebarTab = "explorer" | "search" | "git";
+
+export type WorkspaceMode = "entries" | "team" | "calendar" | "settings" | null;
 
 interface ActivityBarProps {
   activeTab: SidebarTab;
@@ -26,6 +28,11 @@ interface ActivityBarProps {
   onOpenHelp?: () => void;
   onOpenSettings?: () => void;
   settingsActive?: boolean;
+  /** When set, highlight Team / Calendar / Settings from route. */
+  workspaceMode?: WorkspaceMode;
+  /** Cloud product: hide Git (live sync). */
+  hideGit?: boolean;
+  footer?: React.ReactNode;
 }
 
 interface TabButtonProps {
@@ -44,22 +51,29 @@ function TabButton({ icon: Icon, label, isActive, onClick, badge }: TabButtonPro
       aria-label={label}
       className={`relative w-10 h-10 flex items-center justify-center rounded-xl transition-all group cursor-pointer ${
         isActive
-          ? "bg-nb-primary/15 text-nb-primary border border-nb-primary/30 shadow-xs"
+          ? "bg-nb-primary/15 text-nb-primary border border-nb-primary/30 shadow-nb-xs"
           : "text-nb-on-surface-variant hover:text-nb-on-surface hover:bg-nb-surface-high/60"
       }`}
     >
-      <Icon size={18} className={`transition-transform duration-150 ${isActive ? "scale-105" : "group-hover:scale-110"}`} />
-      
-      {/* Pending Badge */}
+      <Icon
+        size={18}
+        className={`transition-transform duration-150 ${isActive ? "scale-105" : "group-hover:scale-110"}`}
+      />
       {typeof badge === "number" && badge > 0 && (
-        <span
-          className="absolute -top-1 -right-1 min-w-4 h-4 px-1 flex items-center justify-center text-[9px] font-black rounded-full shadow-sm bg-nb-tertiary text-white"
-        >
+        <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 flex items-center justify-center text-[9px] font-black rounded-full shadow-nb-sm bg-nb-tertiary text-white">
           {badge > 99 ? "99+" : badge}
         </span>
       )}
     </button>
   );
+}
+
+function modeButtonClass(active: boolean) {
+  return `w-10 h-10 flex items-center justify-center rounded-xl transition-all cursor-pointer group ${
+    active
+      ? "bg-nb-primary/15 text-nb-primary border border-nb-primary/30 shadow-nb-xs"
+      : "text-nb-on-surface-variant hover:text-nb-on-surface hover:bg-nb-surface-high/60"
+  }`;
 }
 
 export default function ActivityBar({
@@ -72,43 +86,53 @@ export default function ActivityBar({
   onOpenHelp,
   onOpenSettings,
   settingsActive = false,
+  workspaceMode = null,
+  hideGit = false,
+  footer,
 }: ActivityBarProps) {
+  const teamActive = workspaceMode === "team";
+  const calendarActive = workspaceMode === "calendar";
+  const settingsIsActive = settingsActive || workspaceMode === "settings";
+  const explorerActive =
+    activeTab === "explorer" && (!workspaceMode || workspaceMode === "entries");
+  const searchActive = activeTab === "search" && (!workspaceMode || workspaceMode === "entries");
+
   return (
     <aside
       aria-label="Activity Bar"
       className="w-13 h-full flex flex-col items-center justify-between py-3 bg-nb-surface-lowest border-r border-nb-outline-variant/30 select-none z-20 shrink-0"
     >
-      {/* Top Primary Navigation Tabs */}
       <div className="flex flex-col items-center gap-2">
         <TabButton
           icon={FolderTree}
           label="Explorer (Entries & Templates)"
-          isActive={activeTab === "explorer"}
+          isActive={explorerActive}
           onClick={() => onSelectTab("explorer")}
         />
         <TabButton
           icon={Search}
           label="Search (Titles, Authors, Metadata)"
-          isActive={activeTab === "search"}
+          isActive={searchActive}
           onClick={() => onSelectTab("search")}
         />
-        <TabButton
-          icon={GitBranch}
-          label="Source Control & Pending Changes"
-          isActive={activeTab === "git"}
-          onClick={() => onSelectTab("git")}
-          badge={pendingCount}
-        />
+        {!hideGit && (
+          <TabButton
+            icon={GitBranch}
+            label="Source Control & Pending Changes"
+            isActive={activeTab === "git"}
+            onClick={() => onSelectTab("git")}
+            badge={pendingCount}
+          />
+        )}
       </div>
 
-      {/* Bottom Actions */}
       <div className="flex flex-col items-center gap-2">
         {onOpenCompile && (
           <button
             onClick={onOpenCompile}
             title="Compile Notebook (PDF)"
             aria-label="Compile Notebook (PDF)"
-            className="w-10 h-10 flex items-center justify-center rounded-xl text-nb-on-surface-variant hover:text-nb-primary hover:bg-nb-primary/10 transition-all cursor-pointer group"
+            className={modeButtonClass(false)}
           >
             <Play size={18} className="group-hover:scale-110 transition-transform" />
           </button>
@@ -116,9 +140,9 @@ export default function ActivityBar({
 
         <button
           onClick={() => onOpenTeam("identity")}
-          title="Team & Project Settings"
-          aria-label="Team & Project Settings"
-          className="w-10 h-10 flex items-center justify-center rounded-xl text-nb-on-surface-variant hover:text-nb-on-surface hover:bg-nb-surface-high/60 transition-all cursor-pointer group"
+          title="Team settings"
+          aria-label="Team settings"
+          className={modeButtonClass(teamActive)}
         >
           <Users size={18} className="group-hover:scale-110 transition-transform" />
         </button>
@@ -128,7 +152,7 @@ export default function ActivityBar({
             onClick={onOpenCalendar}
             title="Calendar"
             aria-label="Calendar"
-            className="w-10 h-10 flex items-center justify-center rounded-xl text-nb-on-surface-variant hover:text-nb-on-surface hover:bg-nb-surface-high/60 transition-all cursor-pointer group"
+            className={modeButtonClass(calendarActive)}
           >
             <CalendarDays size={18} className="group-hover:scale-110 transition-transform" />
           </button>
@@ -139,7 +163,7 @@ export default function ActivityBar({
             onClick={onOpenHelp}
             title="Documentation & Help"
             aria-label="Documentation & Help"
-            className="w-10 h-10 flex items-center justify-center rounded-xl text-nb-on-surface-variant hover:text-nb-on-surface hover:bg-nb-surface-high/60 transition-all cursor-pointer group"
+            className={modeButtonClass(false)}
           >
             <HelpCircle size={18} className="group-hover:scale-110 transition-transform" />
           </button>
@@ -150,15 +174,13 @@ export default function ActivityBar({
             onClick={onOpenSettings}
             title="Settings"
             aria-label="Settings"
-            className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all cursor-pointer group ${
-              settingsActive
-                ? "bg-nb-primary/15 text-nb-primary border border-nb-primary/30 shadow-xs"
-                : "text-nb-on-surface-variant hover:text-nb-on-surface hover:bg-nb-surface-high/60"
-            }`}
+            className={modeButtonClass(settingsIsActive)}
           >
             <Settings size={18} className="group-hover:scale-110 transition-transform" />
           </button>
         )}
+
+        {footer}
       </div>
     </aside>
   );

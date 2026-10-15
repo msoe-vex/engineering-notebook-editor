@@ -16,12 +16,36 @@ export function membersCollection(orgId: string): string {
   return `organizations/${orgId}/members`;
 }
 
+export function teamPath(orgId: string, teamId: string): string {
+  return `organizations/${orgId}/teams/${teamId}`;
+}
+
+export function teamsCollection(orgId: string): string {
+  return `organizations/${orgId}/teams`;
+}
+
+export function teamMemberPath(orgId: string, teamId: string, uid: string): string {
+  return `organizations/${orgId}/teams/${teamId}/members/${uid}`;
+}
+
+export function teamMembersCollection(orgId: string, teamId: string): string {
+  return `organizations/${orgId}/teams/${teamId}/members`;
+}
+
 export function notebookPath(orgId: string, notebookId: string): string {
   return `organizations/${orgId}/notebooks/${notebookId}`;
 }
 
 export function notebooksCollection(orgId: string): string {
   return `organizations/${orgId}/notebooks`;
+}
+
+export function notebookMemberPath(orgId: string, notebookId: string, memberId: string): string {
+  return `organizations/${orgId}/notebooks/${notebookId}/members/${memberId}`;
+}
+
+export function notebookMembersCollection(orgId: string, notebookId: string): string {
+  return `organizations/${orgId}/notebooks/${notebookId}/members`;
 }
 
 export function entryPath(orgId: string, notebookId: string, entryId: string): string {
