@@ -4,12 +4,54 @@ import { randomUUID } from "node:crypto";
 import {
   auditsCollection,
   auditPath,
+  defaultNotebookAccess,
   entriesCollection,
   memberPath,
+  notebookPath,
+  teamMemberPath,
+  type NotebookAccess,
+  type NotebookSummaryV5,
+  type OrgRole,
   type RubricScorecard,
 } from "@engineering-notebook/shared";
 import { verifyBearer } from "./auth.js";
 import { runByokAudit, runVertexAudit } from "./providers/router.js";
+
+async function requireNotebookAccess(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: { doc: (path: string) => { get: () => Promise<{ exists: boolean; data: () => any }> } },
+  user: { uid: string; platformRole?: string },
+  orgId: string,
+  notebookId: string
+) {
+  if (user.platformRole === "service_admin") return;
+  const member = await db.doc(memberPath(orgId, user.uid)).get();
+  if (!member.exists) {
+    const err = new Error("forbidden");
+    (err as Error & { statusCode: number }).statusCode = 403;
+    throw err;
+  }
+  const role = (member.data() as { role?: OrgRole }).role;
+  if (role === "owner" || role === "admin") return;
+
+  const nbSnap = await db.doc(notebookPath(orgId, notebookId)).get();
+  if (!nbSnap.exists) {
+    const err = new Error("not found");
+    (err as Error & { statusCode: number }).statusCode = 404;
+    throw err;
+  }
+  const access: NotebookAccess =
+    (nbSnap.data() as NotebookSummaryV5).access ?? defaultNotebookAccess();
+  if (access.mode === "org") return;
+  if (access.userIds?.includes(user.uid)) return;
+  for (const teamId of access.teamIds || []) {
+    const tm = await db.doc(teamMemberPath(orgId, teamId, user.uid)).get();
+    if (tm.exists) return;
+  }
+  const err = new Error("forbidden");
+  (err as Error & { statusCode: number }).statusCode = 403;
+  throw err;
+}
 
 const app = Fastify({ logger: true });
 
@@ -59,12 +101,10 @@ app.post("/v1/orgs/:orgId/notebooks/:notebookId/audit", async (request, reply) =
 
   try {
     const db = await getFirestore();
-    if (user.platformRole !== "service_admin") {
-      const member = await db.doc(memberPath(orgId, user.uid)).get();
-      if (!member.exists) return reply.code(403).send({ error: "forbidden" });
-    }
-  } catch {
-    /* membership check soft-fail when firestore down in pure stub mode */
+    await requireNotebookAccess(db, user, orgId, notebookId);
+  } catch (err) {
+    const status = (err as { statusCode?: number }).statusCode ?? 403;
+    return reply.code(status).send({ error: (err as Error).message });
   }
 
   let entries = body.entries ?? [];
@@ -130,13 +170,18 @@ app.get("/v1/orgs/:orgId/notebooks/:notebookId/audits", async (request, reply) =
   const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
   try {
     const db = await getFirestore();
-    if (user.platformRole !== "service_admin") {
-      const member = await db.doc(memberPath(orgId, user.uid)).get();
-      if (!member.exists) return reply.code(403).send({ error: "forbidden" });
-    }
+    await requireNotebookAccess(db, user, orgId, notebookId);
     const snap = await db.collection(auditsCollection(orgId, notebookId)).get();
-    return snap.docs.map((d) => d.data());
+    return snap.docs
+      .map((d) => d.data())
+      .sort((a, b) =>
+        String((b as { createdAt?: string }).createdAt || "").localeCompare(
+          String((a as { createdAt?: string }).createdAt || "")
+        )
+      );
   } catch (err) {
+    const status = (err as { statusCode?: number }).statusCode;
+    if (status) return reply.code(status).send({ error: (err as Error).message });
     app.log.error(err);
     return reply.code(500).send({ error: "failed to list audits" });
   }

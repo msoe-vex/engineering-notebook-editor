@@ -12,7 +12,7 @@ import {
   Search
 } from "lucide-react";
 import { extractResources, NotebookMetadata, EntryMetadata } from "@/lib/notebook/metadata";
-import { store } from "@/lib/store";
+import { workspaceState } from "@/lib/cloud/workspaceState";
 import type { TiptapEditor } from "@/lib/types";
 
 interface LinkReferencePopupProps {
@@ -347,7 +347,7 @@ export function LinkReferencePopup({
                           if (!isLinkingToEntry) {
                             navParams.resource = selectedResource.id;
                           }
-                          store.navigateTo(navParams);
+                          workspaceState.navigateTo(navParams);
                           onClose();
                         }
                       }}

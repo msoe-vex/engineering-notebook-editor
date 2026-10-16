@@ -1,0 +1,181 @@
+"use client";
+
+import dynamic from "next/dynamic";
+import { useEffect, useState } from "react";
+import { Download, Loader2, Play, RefreshCcw } from "lucide-react";
+import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
+import { Alert, Button } from "@/components/ui";
+import { cloudApi } from "@/lib/cloud/api";
+import { compileCloudNotebook } from "@/lib/cloud/compileCloudNotebook";
+import type { CompileMode } from "@/lib/latex/busytex";
+
+const LatexPreview = dynamic(() => import("@/components/editor/LatexPreview"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-64 items-center justify-center text-nb-caption text-nb-on-surface-variant">
+      <Loader2 className="mr-2 animate-spin" size={18} /> Loading preview…
+    </div>
+  ),
+});
+
+export function CloudNotebookCompiler() {
+  const { orgId, notebookId, entries, notebookSummary, refresh, setError, setNotebookSummary } =
+    useNotebookWorkspace();
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState("");
+  const [progress, setProgress] = useState(0);
+  const [log, setLog] = useState<string | null>(null);
+  const [mode, setMode] = useState<CompileMode>("quality");
+
+  useEffect(() => {
+    let cancelled = false;
+    void cloudApi
+      .getExportPdfUrl(orgId, notebookId, "latest")
+      .then((r) => {
+        if (!cancelled) setPdfUrl(r.url);
+      })
+      .catch(() => {
+        if (!cancelled) setPdfUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, notebookId, notebookSummary?.lastCompiled]);
+
+  async function runCompile() {
+    if (busy) return;
+    setBusy(true);
+    setLog(null);
+    setStatus("Starting…");
+    setProgress(0);
+    setError(null);
+    try {
+      const result = await compileCloudNotebook({
+        orgId,
+        notebookId,
+        entries,
+        notebookSummary,
+        mode,
+        onStatus: (s, _step, _total, pct) => {
+          setStatus(s);
+          setProgress(pct);
+        },
+      });
+      if (result.success && result.pdfUrl) {
+        setPdfUrl((prev) => {
+          if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+          return result.pdfUrl!;
+        });
+        if (result.lastCompiled && notebookSummary) {
+          setNotebookSummary({ ...notebookSummary, lastCompiled: result.lastCompiled });
+        }
+        refresh();
+      } else {
+        setLog(result.log || "Compilation failed.");
+        setError("Compilation failed. See log below.");
+      }
+    } catch (err) {
+      setError((err as Error).message);
+      setLog(String((err as Error).message));
+    } finally {
+      setBusy(false);
+      setStatus("");
+      setProgress(0);
+    }
+  }
+
+  return (
+    <div className="mx-auto flex max-w-5xl flex-col gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-nb-display font-bold tracking-tight">Compile</h1>
+          <p className="mt-1 text-nb-body text-nb-on-surface-variant">
+            Build a PDF with BusyTeX (XeLaTeX). Entry order follows calendar date, then same-day
+            order.
+          </p>
+          {notebookSummary?.lastCompiled && (
+            <p className="mt-1 text-nb-caption text-nb-on-surface-variant">
+              Last compiled {new Date(notebookSummary.lastCompiled).toLocaleString()}
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            className="rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface px-2 py-2 text-nb-label"
+            value={mode}
+            disabled={busy}
+            onChange={(e) => setMode(e.target.value as CompileMode)}
+          >
+            <option value="quality">Quality images</option>
+            <option value="compressed">Compressed images</option>
+          </select>
+          <Button variant="primary" disabled={busy} onClick={() => void runCompile()}>
+            {busy ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+            {busy ? "Compiling…" : "Compile"}
+          </Button>
+          {pdfUrl && (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const a = document.createElement("a");
+                a.href = pdfUrl;
+                a.download = `${notebookSummary?.name || "notebook"}.pdf`;
+                a.target = "_blank";
+                a.click();
+              }}
+            >
+              <Download size={14} /> PDF
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            disabled={busy}
+            onClick={() => {
+              void cloudApi
+                .getExportPdfUrl(orgId, notebookId, "latest")
+                .then((r) => setPdfUrl(r.url))
+                .catch(() => setPdfUrl(null));
+            }}
+          >
+            <RefreshCcw size={14} />
+          </Button>
+        </div>
+      </div>
+
+      {busy && (
+        <div className="rounded-nb-xl border border-nb-outline-variant/25 bg-nb-surface-low px-4 py-3">
+          <div className="mb-2 flex justify-between text-nb-caption font-semibold text-nb-on-surface-variant">
+            <span>{status}</span>
+            <span>{progress}%</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-nb-surface">
+            <div
+              className="h-full bg-nb-primary transition-all"
+              style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {log && (
+        <Alert variant="error">
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-nb-caption">{log}</pre>
+        </Alert>
+      )}
+
+      <div className="min-h-[70vh] overflow-hidden rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface">
+        {pdfUrl ? (
+          <LatexPreview latexContent="" pdfUrl={pdfUrl} />
+        ) : (
+          <div className="flex h-72 flex-col items-center justify-center gap-2 text-nb-caption text-nb-on-surface-variant">
+            <p>No compiled PDF yet.</p>
+            <Button size="sm" variant="primary" disabled={busy} onClick={() => void runCompile()}>
+              Compile now
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

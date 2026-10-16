@@ -5,12 +5,29 @@ export type NotebookAccessRole = OrgRole;
 export type UserGrants = {
     platformAi?: boolean;
 };
+/** Non-secret user prefs (BYOK API keys stay in browser localStorage only). */
+export type UserPreferences = {
+    theme?: "light" | "dark" | "system";
+    defaultAuthors?: string[];
+    genai?: {
+        enabled?: boolean;
+        provider?: string;
+        models?: Record<string, string>;
+        baseUrls?: Record<string, string>;
+    };
+    lastOrgId?: string;
+    explorerSort?: {
+        by: "date" | "title" | "order";
+        direction: "asc" | "desc";
+    };
+};
 export type UserProfile = {
     uid: string;
     email?: string;
     displayName?: string;
     platformRole?: PlatformRole;
     grants?: UserGrants;
+    preferences?: UserPreferences;
     createdAt: string;
     updatedAt: string;
 };
@@ -50,6 +67,7 @@ export type TeamMembership = {
     uid: string;
     joinedAt: string;
 };
+/** Folder tree node. `order` is sibling position under `parentId` (explorer only). */
 export type NotebookFolder = {
     name: string;
     parentId: string | null;
@@ -78,6 +96,13 @@ export type ProjectPhase = {
     color: string;
     order: number;
 };
+/**
+ * Entry metadata in Firestore.
+ *
+ * Ordering is intentionally split:
+ * - `date` + `order` → compile / calendar sequence (date primary; `order` is same-day tiebreaker, rearranged in calendar)
+ * - `folderId` + `explorerOrder` → file-explorer tree (sibling position within a folder; unrelated to compile)
+ */
 export type EntryMetadataV5 = {
     title: string;
     authors: string[];
@@ -86,7 +111,10 @@ export type EntryMetadataV5 = {
     updatedAt: string;
     date: string;
     folderId: string | null;
+    /** Same-day (and densified) sequence for calendar + compile. Not explorer position. */
     order: number;
+    /** Sibling position within `folderId` in the file explorer. Defaults to `order` when absent. */
+    explorerOrder?: number;
     isTemplate?: boolean;
     resources?: Record<string, {
         title: string;

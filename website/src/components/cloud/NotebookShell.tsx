@@ -13,13 +13,19 @@ import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import TextPromptDialog from "@/components/dialogs/TextPromptDialog";
 import { Alert, Button, Dialog } from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
-import { exportNotebookZipV5, importNotebookZip } from "@/lib/cloud/zipV5";
+import {
+  collectAssetIdsFromTipTap,
+  remapIdList,
+  remapTipTapAssetIds,
+} from "@/lib/cloud/zipAssets";
+import { exportNotebookZipV5, importNotebookZip, type ZipAssetBlob } from "@/lib/cloud/zipV5";
 import {
   activateCloudWorkspaceBridge,
   deactivateCloudWorkspaceBridge,
 } from "@/lib/cloud/workspaceBridge";
 import { setWorkspaceHeader } from "@/lib/cloud/workspaceHeaderStore";
-import { store } from "@/lib/store";
+import { canUseGenAI, getGenAIApiKey, getGenAISettings } from "@/lib/genai";
+import { workspaceState } from "@/lib/cloud/workspaceState";
 import type { NotebookMetadata } from "@/lib/notebook/metadata";
 import { NotebookEntryList } from "./NotebookEntryList";
 import { NotebookWorkspaceProvider } from "./NotebookWorkspaceContext";
@@ -40,9 +46,20 @@ type PromptState = {
 } | null;
 
 const SUBNAV = [
-  { id: "entries", label: "Entries", match: (p: string) => !p.includes("/schedule") && !p.includes("/members") && !p.includes("/setup") && !p.includes("/team") && !p.includes("/calendar") },
+  {
+    id: "entries",
+    label: "Entries",
+    match: (p: string) =>
+      !p.includes("/schedule") &&
+      !p.includes("/members") &&
+      !p.includes("/setup") &&
+      !p.includes("/team") &&
+      !p.includes("/calendar") &&
+      !p.includes("/compile"),
+  },
   { id: "schedule", label: "Schedule", match: (p: string) => p.includes("/schedule") || p.includes("/calendar") },
-  { id: "members", label: "Members", match: (p: string) => p.includes("/members") },
+  { id: "compile", label: "Compile", match: (p: string) => p.includes("/compile") },
+  { id: "members", label: "Roster", match: (p: string) => p.includes("/members") },
   { id: "setup", label: "Setup", match: (p: string) => p.includes("/setup") || p.includes("/team") },
 ] as const;
 
@@ -68,6 +85,9 @@ export function NotebookShell({ children }: { children: ReactNode }) {
   const [assets, setAssets] = useState<Awaited<ReturnType<typeof cloudApi.listAssets>>>([]);
   const [error, setError] = useState<string | null>(null);
   const [auditResult, setAuditResult] = useState<string | null>(null);
+  const [auditHistory, setAuditHistory] = useState<
+    Awaited<ReturnType<typeof cloudApi.listAudits>> | null
+  >(null);
   const [busy, setBusy] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
   const [confirm, setConfirm] = useState<ConfirmState>(null);
@@ -126,6 +146,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
             access: nb.access,
             phases: nb.phases as NotebookSummaryV5["phases"],
             lastCompiled: nb.lastCompiled,
+            createdAt: nb.createdAt,
             updatedAt: nb.updatedAt ?? new Date().toISOString(),
           });
           setError(null);
@@ -170,9 +191,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    store.isInitialized = true;
-    store.metadata = notebookMetadata;
-    store.notifyStateChange();
+    workspaceState.setMetadata(notebookMetadata);
   }, [notebookMetadata]);
 
   useEffect(() => {
@@ -193,6 +212,8 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     try {
       const tipTapByEntryId: Record<string, unknown> = {};
       const entryMeta: Record<string, EntryMetadataV5> = {};
+      const assetIds = new Set<string>();
+
       for (const [id, meta] of Object.entries(entries)) {
         entryMeta[id] = {
           title: meta.title,
@@ -203,14 +224,22 @@ export function NotebookShell({ children }: { children: ReactNode }) {
           date: meta.date,
           folderId: meta.folderId,
           order: meta.order,
+          explorerOrder: meta.explorerOrder,
           isTemplate: meta.isTemplate,
+          assetIds: meta.assetIds,
+          resources: undefined,
+          references: undefined,
         };
+        for (const aid of meta.assetIds || []) assetIds.add(aid);
         try {
-          tipTapByEntryId[id] = await cloudApi.getEntryContent(orgId, notebookId, id);
+          const doc = await cloudApi.getEntryContent(orgId, notebookId, id);
+          tipTapByEntryId[id] = doc;
+          collectAssetIdsFromTipTap(doc, assetIds);
         } catch {
           tipTapByEntryId[id] = { type: "doc", content: [] };
         }
       }
+
       const membersList = await cloudApi.listNotebookMembers(orgId, notebookId).catch(() => []);
       const membersMap = Object.fromEntries(
         membersList.map((m) => [
@@ -224,18 +253,50 @@ export function NotebookShell({ children }: { children: ReactNode }) {
           },
         ])
       );
-      const summary: NotebookSummaryV5 = notebookSummary ?? {
-        schemaVersion: NOTEBOOK_SCHEMA_VERSION,
-        orgId,
-        name: notebookName,
-        folders,
-        updatedAt: new Date().toISOString(),
+      for (const m of membersList) {
+        if (m.imageAssetId) assetIds.add(m.imageAssetId);
+      }
+
+      const summary: NotebookSummaryV5 = {
+        ...(notebookSummary ?? {
+          schemaVersion: NOTEBOOK_SCHEMA_VERSION,
+          orgId,
+          name: notebookName,
+          folders,
+          updatedAt: new Date().toISOString(),
+        }),
+        folders: notebookSummary?.folders ?? folders,
+        logoAssetId: notebookSummary?.logoAssetId,
+        phases: notebookSummary?.phases,
+        access: notebookSummary?.access,
       };
+      if (summary.logoAssetId) assetIds.add(summary.logoAssetId);
+
+      // Prefer listed assets; also pull any referenced ids not in the list.
+      const assetBlobs: Record<string, ZipAssetBlob> = {};
+      const listed = new Map(assets.map((a) => [a.id, a]));
+      for (const assetId of assetIds) {
+        try {
+          const { url, asset } = await cloudApi.getAssetUrl(orgId, notebookId, assetId);
+          const res = await fetch(url);
+          if (!res.ok) continue;
+          const bytes = new Uint8Array(await res.arrayBuffer());
+          assetBlobs[assetId] = {
+            bytes,
+            contentType:
+              asset.contentType || listed.get(assetId)?.contentType || res.headers.get("content-type") || undefined,
+          };
+        } catch (err) {
+          console.warn("ZIP export skipped asset", assetId, err);
+        }
+      }
+
       const blob = await exportNotebookZipV5({
         summary,
         entries: entryMeta,
         tipTapByEntryId,
         members: membersMap,
+        assets: assetBlobs,
       });
       saveAs(blob, `${notebookName.replace(/\s+/g, "-").toLowerCase() || "notebook"}.v5.zip`);
     } catch (err) {
@@ -255,46 +316,93 @@ export function NotebookShell({ children }: { children: ReactNode }) {
         entries: imported,
         tipTapByEntryId,
         members: importedMembers,
+        assets: importedAssets,
       } = await importNotebookZip(buf, orgId, notebookName);
+
+      // Re-upload binaries → new asset ids (always remap so TipTap / logo / roster stay consistent).
+      const assetIdMap = new Map<string, string>();
+      for (const [oldId, blob] of Object.entries(importedAssets)) {
+        try {
+          const contentType = blob.contentType || "application/octet-stream";
+          const { asset } = await cloudApi.createAsset(orgId, notebookId, {
+            contentType,
+            byteSize: blob.bytes.byteLength,
+          });
+          await cloudApi.uploadAssetContent(
+            orgId,
+            notebookId,
+            asset.id,
+            blob.bytes,
+            contentType
+          );
+          assetIdMap.set(oldId, asset.id);
+        } catch (err) {
+          console.warn("ZIP import skipped asset", oldId, err);
+        }
+      }
+
+      const remapAsset = (id?: string | null) =>
+        id ? assetIdMap.get(id) ?? id : undefined;
+
       await cloudApi.patchNotebook(orgId, notebookId, {
         name: summary.name || notebookName,
         title: summary.title,
         subtitle: summary.subtitle,
-        logoAssetId: summary.logoAssetId,
+        logoAssetId: remapAsset(summary.logoAssetId),
         folders: summary.folders,
         access: summary.access,
         phases: summary.phases,
       });
+
       for (const [, m] of Object.entries(importedMembers)) {
         try {
           await cloudApi.createNotebookMember(orgId, notebookId, {
             name: m.name,
             role: m.role,
             order: m.order,
-            imageAssetId: m.imageAssetId,
+            imageAssetId: remapAsset(m.imageAssetId),
             linkedUid: m.linkedUid,
           });
         } catch {
-          /* ignore */
+          /* ignore duplicates / ACL */
         }
       }
+
       for (const [id, meta] of Object.entries(imported)) {
+        const assetIds = remapIdList(meta.assetIds, assetIdMap);
         try {
-          await cloudApi.patchEntry(orgId, notebookId, id, meta);
+          await cloudApi.patchEntry(orgId, notebookId, id, {
+            title: meta.title,
+            authors: meta.authors,
+            phase: meta.phase,
+            date: meta.date,
+            folderId: meta.folderId,
+            order: meta.order,
+            explorerOrder: meta.explorerOrder,
+            isTemplate: meta.isTemplate,
+            assetIds,
+            resources: meta.resources,
+            references: meta.references,
+          });
         } catch {
           await cloudApi.createEntry(orgId, notebookId, {
             id,
             title: meta.title,
             folderId: meta.folderId,
             order: meta.order,
+            explorerOrder: meta.explorerOrder,
             date: meta.date,
             phase: meta.phase,
             authors: meta.authors,
             isTemplate: meta.isTemplate,
           });
+          if (assetIds?.length) {
+            await cloudApi.patchEntry(orgId, notebookId, id, { assetIds }).catch(() => undefined);
+          }
         }
-        const doc = tipTapByEntryId[id];
-        if (doc !== undefined) {
+        const rawDoc = tipTapByEntryId[id];
+        if (rawDoc !== undefined) {
+          const doc = remapTipTapAssetIds(rawDoc, assetIdMap);
           await cloudApi.putEntryContent(orgId, notebookId, id, doc);
         }
       }
@@ -330,6 +438,11 @@ export function NotebookShell({ children }: { children: ReactNode }) {
             }),
         },
         {
+          id: "compile",
+          label: "Compile PDF",
+          onSelect: () => router.push(`${basePath}/compile`),
+        },
+        {
           id: "export",
           label: "Export ZIP",
           onSelect: () => {
@@ -345,12 +458,29 @@ export function NotebookShell({ children }: { children: ReactNode }) {
         },
         {
           id: "audit",
-          label: "Audit",
+          label: "Run audit",
           onSelect: () => {
             if (busyRef.current) return;
+            const settings = getGenAISettings();
+            const byokApiKey = canUseGenAI(settings.provider)
+              ? getGenAIApiKey(settings.provider)
+              : undefined;
             void cloudApi
-              .auditNotebook(orgId, notebookId, { provider: "byok" })
+              .auditNotebook(orgId, notebookId, {
+                provider: "byok",
+                byokApiKey: byokApiKey || undefined,
+              })
               .then((r) => setAuditResult(JSON.stringify(r, null, 2)))
+              .catch((err) => setError((err as Error).message));
+          },
+        },
+        {
+          id: "audit-history",
+          label: "Audit history",
+          onSelect: () => {
+            void cloudApi
+              .listAudits(orgId, notebookId)
+              .then(setAuditHistory)
               .catch((err) => setError((err as Error).message));
           },
         },
@@ -374,7 +504,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
       ],
     });
     return () => setWorkspaceHeader(null);
-  }, [orgId, notebookId, orgName, notebookName, showPrompt, showConfirm, router]);
+  }, [orgId, notebookId, orgName, notebookName, basePath, showPrompt, showConfirm, router]);
 
   const ctx = {
     orgId,
@@ -420,9 +550,11 @@ export function NotebookShell({ children }: { children: ReactNode }) {
                 ? basePath
                 : item.id === "schedule"
                   ? `${basePath}/schedule`
-                  : item.id === "members"
-                    ? `${basePath}/members`
-                    : `${basePath}/setup`;
+                  : item.id === "compile"
+                    ? `${basePath}/compile`
+                    : item.id === "members"
+                      ? `${basePath}/members`
+                      : `${basePath}/setup`;
             const active = activeNav === item.id;
             return (
               <Link
@@ -467,12 +599,51 @@ export function NotebookShell({ children }: { children: ReactNode }) {
         isOpen={Boolean(auditResult)}
         onClose={() => setAuditResult(null)}
         title="Audit result"
+        wide
       >
         <pre className="max-h-[60vh] overflow-auto rounded-nb-lg bg-nb-surface-low p-3 text-nb-caption">
           {auditResult}
         </pre>
         <div className="mt-3 flex justify-end">
           <Button size="sm" variant="secondary" onClick={() => setAuditResult(null)}>
+            Close
+          </Button>
+        </div>
+      </Dialog>
+
+      <Dialog
+        isOpen={auditHistory !== null}
+        onClose={() => setAuditHistory(null)}
+        title="Audit history"
+        wide
+      >
+        <div className="flex max-h-[60vh] flex-col gap-2 overflow-auto">
+          {(auditHistory || []).length === 0 && (
+            <p className="text-nb-caption text-nb-on-surface-variant">No audits yet.</p>
+          )}
+          {(auditHistory || []).map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              className="rounded-nb-xl border border-nb-outline-variant/25 bg-nb-surface-low px-3 py-2 text-left hover:border-nb-primary/40"
+              onClick={() => {
+                setAuditResult(JSON.stringify(a, null, 2));
+                setAuditHistory(null);
+              }}
+            >
+              <div className="text-nb-label font-semibold text-nb-on-surface">
+                {a.rubric || "Rubric audit"}
+              </div>
+              <div className="text-nb-caption text-nb-on-surface-variant">
+                {a.createdAt ? new Date(a.createdAt).toLocaleString() : "Unknown date"}
+                {a.provider ? ` · ${a.provider}` : ""}
+                {a.summary ? ` — ${a.summary.slice(0, 80)}` : ""}
+              </div>
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 flex justify-end">
+          <Button size="sm" variant="secondary" onClick={() => setAuditHistory(null)}>
             Close
           </Button>
         </div>

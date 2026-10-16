@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useTheme } from "next-themes";
-import { ChevronDown, Moon, Sun, UserRound } from "lucide-react";
+import { ChevronDown, CircleHelp, Info, Moon, Sun, UserRound } from "lucide-react";
 import {
   getFirebaseAuth,
   getDevToken,
@@ -41,6 +41,8 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
   const notebookWorkspace = /\/orgs\/[^/]+\/notebooks\/[^/]+/.test(pathname || "");
   const onAdmin = pathname?.startsWith("/admin");
   const onAccount = pathname?.startsWith("/account");
+  const onHelp = pathname?.startsWith("/help");
+  const onAbout = pathname?.startsWith("/about");
   const orgId = typeof params.orgId === "string" ? params.orgId : null;
   const workspaceHeader = useSyncExternalStore(
     subscribeWorkspaceHeader,
@@ -350,6 +352,18 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
                     <span className="text-nb-primary">Account</span>
                   </>
                 )}
+                {onHelp && (
+                  <>
+                    <span className="text-nb-on-surface-variant/40">/</span>
+                    <span className="text-nb-primary">Help</span>
+                  </>
+                )}
+                {onAbout && (
+                  <>
+                    <span className="text-nb-on-surface-variant/40">/</span>
+                    <span className="text-nb-primary">About</span>
+                  </>
+                )}
               </nav>
             )}
             {title && !ws && (
@@ -371,6 +385,30 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
                 {resolvedTheme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
               </button>
             )}
+            <Link
+              href="/help"
+              className={`inline-flex items-center gap-1.5 rounded-nb-lg px-2 py-1.5 text-nb-label font-semibold ${
+                onHelp
+                  ? "bg-nb-primary/10 text-nb-primary"
+                  : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface"
+              }`}
+              title="Help"
+            >
+              <CircleHelp size={16} />
+              <span className="hidden lg:inline">Help</span>
+            </Link>
+            <Link
+              href="/about"
+              className={`inline-flex items-center gap-1.5 rounded-nb-lg px-2 py-1.5 text-nb-label font-semibold ${
+                onAbout
+                  ? "bg-nb-primary/10 text-nb-primary"
+                  : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface"
+              }`}
+              title="About"
+            >
+              <Info size={16} />
+              <span className="hidden lg:inline">About</span>
+            </Link>
             <Link
               href="/account"
               className={`inline-flex items-center gap-1.5 rounded-nb-lg px-2 py-1.5 text-nb-label font-semibold ${

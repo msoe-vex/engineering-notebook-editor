@@ -4,11 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import * as Y from "yjs";
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import type { TiptapEditor } from "@/lib/types";
-import { generateUUID } from "@/lib/utils";
 import { cloudApi, collabWsUrl } from "@/lib/cloud/api";
+import { analyzeEntryContent } from "@/lib/cloud/entryQuality";
 import RichTextArea from "@/components/editor/RichTextArea";
-import { NotebookFormatToolbar, insertBlock } from "@/components/editor/Editor";
-import { store } from "@/lib/store";
+import { NotebookFormatToolbar, insertBlock } from "@/components/editor/NotebookFormatToolbar";
+import type { TipTapNode } from "@/lib/notebook/metadata";
+import type { ProjectPhase } from "@engineering-notebook/shared";
+import { workspaceState } from "@/lib/cloud/workspaceState";
 import { useNotebookWorkspace } from "./NotebookWorkspaceContext";
 
 type Props = {
@@ -28,7 +30,7 @@ export function CollaborativeEntryEditor({
   entryId,
   getToken,
 }: Props) {
-  const { orgId, notebookId } = useNotebookWorkspace();
+  const { orgId, notebookId, entries, notebookSummary, refresh } = useNotebookWorkspace();
   const [status, setStatus] = useState("connecting");
   const [ydoc] = useState(() => new Y.Doc());
   const [provider, setProvider] = useState<HocuspocusProvider | null>(null);
@@ -36,6 +38,8 @@ export function CollaborativeEntryEditor({
   const providerRef = useRef<HocuspocusProvider | null>(null);
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
+  const editorRef = useRef<TiptapEditor | null>(null);
+  editorRef.current = editor;
 
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [textColorPos, setTextColorPos] = useState({ top: 0, left: 0 });
@@ -53,7 +57,6 @@ export function CollaborativeEntryEditor({
       const token = (await getTokenRef.current()) || "";
       if (cancelled) return;
 
-      // Let the provider own the websocket (manageSocket=true → auto attach + reconnect).
       p = new HocuspocusProvider({
         url: collabWsUrl(),
         name: documentName,
@@ -88,6 +91,71 @@ export function CollaborativeEntryEditor({
     if (!meta.get("title")) meta.set("title", entryTitle);
   }, [ydoc, entryTitle]);
 
+  const entriesRef = useRef(entries);
+  entriesRef.current = entries;
+  const phasesRef = useRef(notebookSummary?.phases);
+  phasesRef.current = notebookSummary?.phases;
+  const lastQualityRef = useRef("");
+  const metaFingerprint = [
+    entries[entryId]?.title,
+    entries[entryId]?.date,
+    entries[entryId]?.phase,
+    entries[entryId]?.isTemplate,
+    (entries[entryId]?.authors || []).join("\0"),
+  ].join("|");
+
+  // Debounced quality pass: resources / references / isValid → Firestore entry meta.
+  useEffect(() => {
+    if (!editor) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const run = () => {
+      const meta = entriesRef.current[entryId];
+      if (!meta) return;
+      try {
+        const doc = editor.getJSON() as TipTapNode;
+        const result = analyzeEntryContent(
+          entryId,
+          meta,
+          doc,
+          (phasesRef.current as Record<string, ProjectPhase>) || {},
+          Object.keys(entriesRef.current)
+        );
+        const payload = JSON.stringify({
+          resources: result.resources,
+          references: result.references,
+          isValid: result.isValid,
+          validationErrors: result.validationErrors,
+        });
+        if (payload === lastQualityRef.current) return;
+        lastQualityRef.current = payload;
+        void cloudApi
+          .patchEntry(orgId, notebookId, entryId, {
+            resources: result.resources,
+            references: result.references,
+            isValid: result.isValid,
+            validationErrors: result.validationErrors,
+          })
+          .then(() => refresh())
+          .catch((err) => console.warn("Entry quality patch failed", err));
+      } catch (err) {
+        console.warn("Entry quality analysis failed", err);
+      }
+    };
+
+    const schedule = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(run, 1200);
+    };
+
+    schedule();
+    editor.on("update", schedule);
+    return () => {
+      if (timer) clearTimeout(timer);
+      editor.off("update", schedule);
+    };
+  }, [editor, entryId, metaFingerprint, orgId, notebookId, refresh]);
+
   const reconnect = useCallback(() => {
     const p = providerRef.current;
     if (!p) return;
@@ -98,18 +166,60 @@ export function CollaborativeEntryEditor({
     }
   }, []);
 
+  const linkAssetToEntry = useCallback(
+    async (assetId: string) => {
+      const existing = entries[entryId]?.assetIds ?? [];
+      if (existing.includes(assetId)) return;
+      await cloudApi.patchEntry(orgId, notebookId, entryId, {
+        assetIds: [...existing, assetId],
+      });
+      refresh();
+    },
+    [entries, entryId, orgId, notebookId, refresh]
+  );
+
   const uploadImageBytes = useCallback(
-    async (bytes: Blob | Uint8Array, contentType: string, previewDataUrl: string) => {
+    async (
+      bytes: Blob | Uint8Array,
+      contentType: string,
+      previewDataUrl: string
+    ): Promise<string> => {
       const { asset } = await cloudApi.createAsset(orgId, notebookId, {
         contentType,
         byteSize: bytes instanceof Blob ? bytes.size : bytes.byteLength,
+        usedByEntryId: entryId,
       });
       await cloudApi.uploadAssetContent(orgId, notebookId, asset.id, bytes, contentType);
-      store.assetCache.set(`cloud:${asset.id}`, previewDataUrl);
+      const cacheKey = `cloud:${asset.id}`;
+      workspaceState.assetCache.set(cacheKey, previewDataUrl);
+      await linkAssetToEntry(asset.id);
       return asset.id;
     },
-    [orgId, notebookId]
+    [orgId, notebookId, entryId, linkAssetToEntry]
   );
+
+  const remapatImageNode = useCallback((oldPath: string, assetId: string, previewDataUrl: string) => {
+    const ed = editorRef.current;
+    if (!ed) return;
+    const cacheKey = `cloud:${assetId}`;
+    workspaceState.assetCache.set(cacheKey, previewDataUrl);
+    ed.state.doc.descendants((node, pos) => {
+      if (node.type.name !== "image") return;
+      if (node.attrs.filePath !== oldPath && node.attrs.id !== oldPath) return;
+      ed.chain()
+        .command(({ tr }) => {
+          tr.setNodeMarkup(pos, undefined, {
+            ...node.attrs,
+            id: assetId,
+            filePath: cacheKey,
+            originalFilePath: cacheKey,
+            src: previewDataUrl,
+          });
+          return true;
+        })
+        .run();
+    });
+  }, []);
 
   const insertImage = useCallback(() => {
     if (!editor) return;
@@ -123,25 +233,23 @@ export function CollaborativeEntryEditor({
       reader.onload = () => {
         void (async () => {
           const dataUrl = reader.result as string;
-          const id = generateUUID();
           const contentType = file.type || "application/octet-stream";
-          const cacheKey = `cloud:${id}`;
-          store.assetCache.set(cacheKey, dataUrl);
-          insertBlock(editor, {
-            type: "image",
-            attrs: {
-              id,
-              src: dataUrl,
-              alt: "",
-              title: "",
-              filePath: cacheKey,
-              originalFilePath: cacheKey,
-            },
-          });
           try {
-            await uploadImageBytes(file, contentType, dataUrl);
+            const assetId = await uploadImageBytes(file, contentType, dataUrl);
+            const cacheKey = `cloud:${assetId}`;
+            insertBlock(editor, {
+              type: "image",
+              attrs: {
+                id: assetId,
+                src: dataUrl,
+                alt: "",
+                title: "",
+                filePath: cacheKey,
+                originalFilePath: cacheKey,
+              },
+            });
           } catch (err) {
-            console.warn("Cloud asset upload failed; image kept as inline preview", err);
+            console.warn("Cloud asset upload failed; image not inserted", err);
           }
         })();
       };
@@ -216,10 +324,10 @@ export function CollaborativeEntryEditor({
           entryId={entryId}
           collaborationDoc={ydoc}
           onEditorInit={setEditor}
-          onImageUpload={(path) => {
+          onImageUpload={(path, _base64) => {
             void (async () => {
               try {
-                const dataUrl = store.assetCache.get(path);
+                const dataUrl = workspaceState.assetCache.get(path);
                 if (!dataUrl?.startsWith("data:")) return;
                 const comma = dataUrl.indexOf(",");
                 const header = dataUrl.slice(0, comma);
@@ -228,7 +336,8 @@ export function CollaborativeEntryEditor({
                 const bin = atob(dataUrl.slice(comma + 1));
                 const bytes = new Uint8Array(bin.length);
                 for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-                await uploadImageBytes(bytes, contentType, dataUrl);
+                const assetId = await uploadImageBytes(bytes, contentType, dataUrl);
+                remapatImageNode(path, assetId, dataUrl);
               } catch (err) {
                 console.warn("Cloud asset upload failed for drag/drop image", err);
               }

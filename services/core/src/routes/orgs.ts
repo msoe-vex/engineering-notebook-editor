@@ -15,6 +15,7 @@ import {
   entryPath,
   assetsCollection,
   assetPath,
+  auditsCollection,
   teamPath,
   teamsCollection,
   teamMemberPath,
@@ -31,6 +32,7 @@ import {
   type EntryMetadataV5,
   type AssetMetadata,
   type Invite,
+  type NotebookFolder,
 } from "@engineering-notebook/shared";
 import { getFirestore } from "../db/firestore.js";
 import { omitUndefined } from "../db/sanitize.js";
@@ -56,6 +58,71 @@ async function deleteCollectionDocs(collectionPath: string) {
 
 function dbRoot() {
   return getFirestore();
+}
+
+async function safeDeleteObject(storage: StoragePort, key: string | undefined | null) {
+  if (!key) return;
+  try {
+    await storage.deleteObject(key);
+  } catch (err) {
+    console.warn("[storage] deleteObject failed", key, err);
+  }
+}
+
+/** Delete Firestore children + GCS blobs for one notebook. */
+async function purgeNotebookStorage(
+  storage: StoragePort,
+  orgId: string,
+  notebookId: string
+) {
+  const db = dbRoot();
+  const entries = await db.collection(entriesCollection(orgId, notebookId)).get();
+  for (const doc of entries.docs) {
+    const meta = doc.data() as EntryMetadataV5;
+    await safeDeleteObject(storage, meta.tipTapGcsPath || gcsKeys.tipTap(orgId, notebookId, doc.id));
+    await safeDeleteObject(storage, meta.yjsGcsPath || gcsKeys.yjs(orgId, notebookId, doc.id));
+  }
+  const assets = await db.collection(assetsCollection(orgId, notebookId)).get();
+  for (const doc of assets.docs) {
+    const asset = doc.data() as AssetMetadata;
+    await safeDeleteObject(storage, asset.gcsPath);
+    await safeDeleteObject(storage, asset.gcsPathOriginal);
+  }
+  await deleteCollectionDocs(auditsCollection(orgId, notebookId));
+  await deleteCollectionDocs(entriesCollection(orgId, notebookId));
+  await deleteCollectionDocs(assetsCollection(orgId, notebookId));
+  await deleteCollectionDocs(notebookMembersCollection(orgId, notebookId));
+}
+
+async function syncAssetUsedBy(
+  orgId: string,
+  notebookId: string,
+  entryId: string,
+  oldIds: string[],
+  newIds: string[]
+) {
+  const db = dbRoot();
+  const oldSet = new Set(oldIds);
+  const newSet = new Set(newIds);
+  for (const id of newSet) {
+    if (oldSet.has(id)) continue;
+    const ref = db.doc(assetPath(orgId, notebookId, id));
+    const snap = await ref.get();
+    if (!snap.exists) continue;
+    const usedBy = [...((snap.data() as AssetMetadata).usedBy || [])];
+    if (!usedBy.includes(entryId)) {
+      usedBy.push(entryId);
+      await ref.update({ usedBy });
+    }
+  }
+  for (const id of oldSet) {
+    if (newSet.has(id)) continue;
+    const ref = db.doc(assetPath(orgId, notebookId, id));
+    const snap = await ref.get();
+    if (!snap.exists) continue;
+    const usedBy = ((snap.data() as AssetMetadata).usedBy || []).filter((e) => e !== entryId);
+    await ref.update({ usedBy });
+  }
 }
 
 async function assertNotebookAccess(
@@ -171,9 +238,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
 
     const notebooks = await db().collection(notebooksCollection(orgId)).get();
     for (const nb of notebooks.docs) {
-      await deleteCollectionDocs(entriesCollection(orgId, nb.id));
-      await deleteCollectionDocs(assetsCollection(orgId, nb.id));
-      await deleteCollectionDocs(notebookMembersCollection(orgId, nb.id));
+      await purgeNotebookStorage(storage, orgId, nb.id);
       await nb.ref.delete();
     }
     const teams = await db().collection(teamsCollection(orgId)).get();
@@ -360,9 +425,14 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const user = getUser(request);
     const { orgId } = request.params as { orgId: string };
     await requireOrgMember(user, orgId, "admin");
-    const body = request.body as { email?: string; role?: OrgRole };
+    const body = request.body as { email?: string; role?: OrgRole; expiresInDays?: number };
     if (!body.email) return reply.code(400).send({ error: "email required" });
     const id = randomUUID();
+    const ttlDays = Math.min(
+      90,
+      Math.max(1, Number(body.expiresInDays) || Number(process.env.INVITE_TTL_DAYS) || 14)
+    );
+    const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000).toISOString();
     const invite: Invite = {
       id,
       orgId,
@@ -370,6 +440,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       role: body.role === "admin" ? "admin" : "member",
       createdBy: user.uid,
       createdAt: nowIso(),
+      expiresAt,
     };
     await db().doc(invitePath(id)).set(omitUndefined({ ...invite }));
     // Resend wiring is env-gated; return invite token for local testing
@@ -404,6 +475,14 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
     const invite = snap.data() as Invite;
     if (invite.acceptedAt) return reply.code(400).send({ error: "already accepted" });
+    if (invite.expiresAt && Date.parse(invite.expiresAt) < Date.now()) {
+      return reply.code(400).send({ error: "invite expired" });
+    }
+    const inviteEmail = (invite.email || "").trim().toLowerCase();
+    const userEmail = (user.email || "").trim().toLowerCase();
+    if (inviteEmail && userEmail && inviteEmail !== userEmail) {
+      return reply.code(403).send({ error: "invite email does not match signed-in user" });
+    }
     const member = omitUndefined({
       uid: user.uid,
       role: invite.role,
@@ -506,11 +585,86 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const ref = db().doc(notebookPath(orgId, notebookId));
     const snap = await ref.get();
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
-    await deleteCollectionDocs(entriesCollection(orgId, notebookId));
-    await deleteCollectionDocs(assetsCollection(orgId, notebookId));
-    await deleteCollectionDocs(notebookMembersCollection(orgId, notebookId));
+    await purgeNotebookStorage(storage, orgId, notebookId);
     await ref.delete();
     return { ok: true };
+  });
+
+  // ── Folders (mutate notebook.folders map without full replace) ──────────
+
+  app.post("/orgs/:orgId/notebooks/:notebookId/folders", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
+    const body = request.body as { name?: string; parentId?: string | null; order?: number };
+    const name = body.name?.trim();
+    if (!name) return reply.code(400).send({ error: "name required" });
+    const ref = db().doc(notebookPath(orgId, notebookId));
+    const snap = await ref.get();
+    if (!snap.exists) return reply.code(404).send({ error: "not found" });
+    const nb = snap.data() as NotebookSummaryV5;
+    await requireNotebookAccess(user, orgId, nb);
+    const id = randomUUID();
+    const folder: NotebookFolder = {
+      name,
+      parentId: body.parentId ?? null,
+      order: body.order ?? Object.keys(nb.folders ?? {}).length,
+    };
+    const folders = { ...(nb.folders ?? {}), [id]: folder };
+    await ref.update({ folders, updatedAt: nowIso() });
+    return { id, folder, folders };
+  });
+
+  app.patch("/orgs/:orgId/notebooks/:notebookId/folders/:folderId", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId, folderId } = request.params as {
+      orgId: string;
+      notebookId: string;
+      folderId: string;
+    };
+    const body = request.body as Partial<NotebookFolder>;
+    const ref = db().doc(notebookPath(orgId, notebookId));
+    const snap = await ref.get();
+    if (!snap.exists) return reply.code(404).send({ error: "not found" });
+    const nb = snap.data() as NotebookSummaryV5;
+    await requireNotebookAccess(user, orgId, nb);
+    const existing = nb.folders?.[folderId];
+    if (!existing) return reply.code(404).send({ error: "folder not found" });
+    const folder: NotebookFolder = {
+      name: body.name?.trim() || existing.name,
+      parentId: body.parentId !== undefined ? body.parentId : existing.parentId,
+      order: body.order !== undefined ? body.order : existing.order,
+    };
+    const folders = { ...(nb.folders ?? {}), [folderId]: folder };
+    await ref.update({ folders, updatedAt: nowIso() });
+    return { id: folderId, folder, folders };
+  });
+
+  app.delete("/orgs/:orgId/notebooks/:notebookId/folders/:folderId", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId, folderId } = request.params as {
+      orgId: string;
+      notebookId: string;
+      folderId: string;
+    };
+    const ref = db().doc(notebookPath(orgId, notebookId));
+    const snap = await ref.get();
+    if (!snap.exists) return reply.code(404).send({ error: "not found" });
+    const nb = snap.data() as NotebookSummaryV5;
+    await requireNotebookAccess(user, orgId, nb);
+    if (!nb.folders?.[folderId]) return reply.code(404).send({ error: "folder not found" });
+    const entries = await db().collection(entriesCollection(orgId, notebookId)).get();
+    const batch = db().batch();
+    for (const doc of entries.docs) {
+      const meta = doc.data() as EntryMetadataV5;
+      if (meta.folderId === folderId) {
+        batch.update(doc.ref, { folderId: null, updatedAt: nowIso() });
+      }
+    }
+    const folders = { ...(nb.folders ?? {}) };
+    delete folders[folderId];
+    batch.update(ref, { folders, updatedAt: nowIso() });
+    await batch.commit();
+    return { ok: true, folders };
   });
 
   // ── Notebook Members (contributor roster) ──────────────────────────────
@@ -596,6 +750,56 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     return { entries };
   });
 
+  /**
+   * Reassign sibling indices without touching the other axis:
+   * - explorer: `explorerOrder` (+ optional `folderId`) within a folder
+   * - day: `order` (+ optional `date`) within a calendar day
+   */
+  app.post("/orgs/:orgId/notebooks/:notebookId/entries/reorder", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
+    await assertNotebookAccess(user, orgId, notebookId);
+    const body = request.body as {
+      mode?: "explorer" | "day";
+      orderedIds?: string[];
+      folderId?: string | null;
+      date?: string;
+    };
+    const mode = body.mode;
+    const orderedIds = body.orderedIds ?? [];
+    if (mode !== "explorer" && mode !== "day") {
+      return reply.code(400).send({ error: "mode must be explorer or day" });
+    }
+    if (!orderedIds.length) return reply.code(400).send({ error: "orderedIds required" });
+
+    const db = dbRoot();
+    const ts = nowIso();
+    // Firestore batch limit 500; notebooks stay well under that.
+    const batch = db.batch();
+    for (let i = 0; i < orderedIds.length; i++) {
+      const id = orderedIds[i];
+      const ref = db.doc(entryPath(orgId, notebookId, id));
+      if (mode === "explorer") {
+        const patch: Record<string, unknown> = { explorerOrder: i, updatedAt: ts };
+        if (body.folderId !== undefined) patch.folderId = body.folderId;
+        batch.update(ref, omitUndefined(patch));
+      } else {
+        const patch: Record<string, unknown> = { order: i, updatedAt: ts };
+        if (body.date !== undefined) patch.date = body.date;
+        batch.update(ref, omitUndefined(patch));
+      }
+    }
+    try {
+      await batch.commit();
+    } catch (err) {
+      return reply.code(400).send({
+        error: "reorder failed",
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    }
+    return { ok: true, mode, orderedIds };
+  });
+
   app.post("/orgs/:orgId/notebooks/:notebookId/entries", async (request, reply) => {
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
@@ -614,6 +818,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       date: body.date ?? ts.slice(0, 10),
       folderId: body.folderId ?? null,
       order: body.order ?? 0,
+      explorerOrder: body.explorerOrder ?? body.order ?? 0,
       isTemplate: body.isTemplate === true ? true : body.isTemplate === false ? false : undefined,
       tipTapGcsPath,
       tipTapRev: 0,
@@ -661,6 +866,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       "date",
       "folderId",
       "order",
+      "explorerOrder",
       "isTemplate",
       "resources",
       "references",
@@ -672,11 +878,21 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       "yjsGcsPath",
       "yjsRev",
     ] as const;
+    const existing = snap.data() as EntryMetadataV5;
     const patch: Record<string, unknown> = { updatedAt: nowIso() };
     for (const key of allowed) {
       if (body[key] !== undefined) patch[key] = body[key];
     }
     await ref.update(omitUndefined(patch));
+    if (body.assetIds !== undefined) {
+      await syncAssetUsedBy(
+        orgId,
+        notebookId,
+        entryId,
+        existing.assetIds ?? [],
+        body.assetIds ?? []
+      );
+    }
     return { id: entryId, ...snap.data(), ...patch };
   });
 
@@ -691,6 +907,12 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const ref = db().doc(entryPath(orgId, notebookId, entryId));
     const snap = await ref.get();
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
+    const meta = snap.data() as EntryMetadataV5;
+    await safeDeleteObject(storage, meta.tipTapGcsPath || gcsKeys.tipTap(orgId, notebookId, entryId));
+    await safeDeleteObject(storage, meta.yjsGcsPath || gcsKeys.yjs(orgId, notebookId, entryId));
+    if (meta.assetIds?.length) {
+      await syncAssetUsedBy(orgId, notebookId, entryId, meta.assetIds, []);
+    }
     await ref.delete();
     return { ok: true };
   });
@@ -734,6 +956,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
   // Browser uploads go through Core (auth + CORS). Direct fake-gcs PUTs fail from the browser.
   const binaryTypes = [
     "application/octet-stream",
+    "application/pdf",
     "image/png",
     "image/jpeg",
     "image/jpg",
@@ -751,9 +974,14 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
     await assertNotebookAccess(user, orgId, notebookId);
-    const body = request.body as { contentType?: string; byteSize?: number };
+    const body = request.body as {
+      contentType?: string;
+      byteSize?: number;
+      usedByEntryId?: string;
+    };
     const id = randomUUID();
     const gcsPath = gcsKeys.asset(orgId, notebookId, id, "compressed");
+    const usedBy = body.usedByEntryId ? [body.usedByEntryId] : [];
     const asset: AssetMetadata = {
       id,
       contentType: body.contentType || "application/octet-stream",
@@ -761,7 +989,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       gcsPath,
       createdBy: user.uid,
       createdAt: nowIso(),
-      usedBy: [],
+      usedBy,
     };
     await db().doc(assetPath(orgId, notebookId, id)).set(omitUndefined({ ...asset }));
     // Relative path the website uploads to with Bearer auth (not a GCS signed URL).
@@ -828,7 +1056,49 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const ref = db().doc(assetPath(orgId, notebookId, assetId));
     const snap = await ref.get();
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
+    const asset = snap.data() as AssetMetadata;
+    await safeDeleteObject(storage, asset.gcsPath);
+    await safeDeleteObject(storage, asset.gcsPathOriginal);
     await ref.delete();
     return { ok: true };
+  });
+
+  // ── Compiled PDF exports ─────────────────────────────────────────────────
+
+  app.put("/orgs/:orgId/notebooks/:notebookId/exports/:exportId/content", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId, exportId } = request.params as {
+      orgId: string;
+      notebookId: string;
+      exportId: string;
+    };
+    await assertNotebookAccess(user, orgId, notebookId);
+    if (!(request.body instanceof Uint8Array)) {
+      return reply.code(400).send({ error: "expected binary body" });
+    }
+    const key = gcsKeys.exportPdf(orgId, notebookId, exportId);
+    const data = Buffer.from(request.body);
+    await storage.putObject(key, data, "application/pdf");
+    const ts = nowIso();
+    await db().doc(notebookPath(orgId, notebookId)).update({
+      lastCompiled: ts,
+      updatedAt: ts,
+    });
+    return { ok: true, exportId, gcsPath: key, lastCompiled: ts, byteSize: data.byteLength };
+  });
+
+  app.get("/orgs/:orgId/notebooks/:notebookId/exports/:exportId/url", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId, exportId } = request.params as {
+      orgId: string;
+      notebookId: string;
+      exportId: string;
+    };
+    await assertNotebookAccess(user, orgId, notebookId);
+    const key = gcsKeys.exportPdf(orgId, notebookId, exportId);
+    const exists = await storage.getObject(key);
+    if (!exists) return reply.code(404).send({ error: "export not found" });
+    const url = await storage.getSignedUrl(key, "read");
+    return { url, exportId, gcsPath: key };
   });
 }

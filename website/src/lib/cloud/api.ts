@@ -113,6 +113,24 @@ export type NotebookMemberSummary = {
 export const cloudApi = {
   bootstrap: () => coreFetch("/users/me/bootstrap", { method: "POST", body: "{}" }),
   me: () => coreFetch("/users/me"),
+  patchMe: (body: {
+    displayName?: string;
+    preferences?: {
+      theme?: "light" | "dark" | "system";
+      defaultAuthors?: string[];
+      genai?: {
+        enabled?: boolean;
+        provider?: string;
+        models?: Record<string, string>;
+        baseUrls?: Record<string, string>;
+      };
+      lastOrgId?: string;
+    };
+  }) =>
+    coreFetch("/users/me", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
 
   listOrgs: () => coreFetch<OrgSummary[]>("/orgs"),
   createOrg: (name: string) =>
@@ -203,6 +221,39 @@ export const cloudApi = {
   deleteNotebook: (orgId: string, notebookId: string) =>
     coreFetch<{ ok: boolean }>(`/orgs/${orgId}/notebooks/${notebookId}`, { method: "DELETE" }),
 
+  createFolder: (
+    orgId: string,
+    notebookId: string,
+    body: { name: string; parentId?: string | null; order?: number }
+  ) =>
+    coreFetch<{
+      id: string;
+      folder: { name: string; parentId: string | null; order: number };
+      folders: Record<string, { name: string; parentId: string | null; order: number }>;
+    }>(`/orgs/${orgId}/notebooks/${notebookId}/folders`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  patchFolder: (
+    orgId: string,
+    notebookId: string,
+    folderId: string,
+    body: { name?: string; parentId?: string | null; order?: number }
+  ) =>
+    coreFetch<{
+      id: string;
+      folder: { name: string; parentId: string | null; order: number };
+      folders: Record<string, { name: string; parentId: string | null; order: number }>;
+    }>(`/orgs/${orgId}/notebooks/${notebookId}/folders/${folderId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteFolder: (orgId: string, notebookId: string, folderId: string) =>
+    coreFetch<{
+      ok: boolean;
+      folders: Record<string, { name: string; parentId: string | null; order: number }>;
+    }>(`/orgs/${orgId}/notebooks/${notebookId}/folders/${folderId}`, { method: "DELETE" }),
+
   listNotebookMembers: (orgId: string, notebookId: string) =>
     coreFetch<NotebookMemberSummary[]>(`/orgs/${orgId}/notebooks/${notebookId}/members`),
   createNotebookMember: (
@@ -237,15 +288,31 @@ export const cloudApi = {
           title: string;
           folderId: string | null;
           order: number;
+          explorerOrder?: number;
           date: string;
           phase: string | null;
           authors?: string[];
+          assetIds?: string[];
           isTemplate?: boolean;
+          isValid?: boolean;
+          validationErrors?: string[];
           createdAt?: string;
           updatedAt?: string;
         }
       >;
     }>(`/orgs/${orgId}/notebooks/${notebookId}/entries`),
+  /** Sibling reindex: explorer → explorerOrder; day → order (same-date tiebreaker). */
+  reorderEntries: (
+    orgId: string,
+    notebookId: string,
+    body:
+      | { mode: "explorer"; orderedIds: string[]; folderId?: string | null }
+      | { mode: "day"; orderedIds: string[]; date?: string }
+  ) =>
+    coreFetch<{ ok: boolean; mode: string; orderedIds: string[] }>(
+      `/orgs/${orgId}/notebooks/${notebookId}/entries/reorder`,
+      { method: "POST", body: JSON.stringify(body) }
+    ),
   createEntry: (
     orgId: string,
     notebookId: string,
@@ -254,6 +321,7 @@ export const cloudApi = {
       title?: string;
       folderId?: string | null;
       order?: number;
+      explorerOrder?: number;
       date?: string;
       phase?: string | null;
       authors?: string[];
@@ -283,7 +351,11 @@ export const cloudApi = {
 
   listAssets: (orgId: string, notebookId: string) =>
     coreFetch<AssetSummary[]>(`/orgs/${orgId}/notebooks/${notebookId}/assets`),
-  createAsset: (orgId: string, notebookId: string, body: { contentType?: string; byteSize?: number }) =>
+  createAsset: (
+    orgId: string,
+    notebookId: string,
+    body: { contentType?: string; byteSize?: number; usedByEntryId?: string }
+  ) =>
     coreFetch<{ asset: AssetSummary; uploadPath: string; uploadUrl: string }>(
       `/orgs/${orgId}/notebooks/${notebookId}/assets`,
       { method: "POST", body: JSON.stringify(body) }
@@ -354,6 +426,36 @@ export const cloudApi = {
   adminMetrics: () => coreFetch<Record<string, number>>("/api/admin/metrics"),
   patchAdminUser: (uid: string, body: unknown) =>
     coreFetch(`/api/admin/users/${uid}`, { method: "PATCH", body: JSON.stringify(body) }),
+  async uploadExportPdf(
+    orgId: string,
+    notebookId: string,
+    exportId: string,
+    pdf: Uint8Array
+  ) {
+    const res = await fetch(
+      `${coreBase()}/orgs/${orgId}/notebooks/${notebookId}/exports/${exportId}/content`,
+      {
+        method: "PUT",
+        headers: {
+          ...(await authHeaders(false)),
+          "content-type": "application/pdf",
+        },
+        body: pdf.slice(),
+      }
+    );
+    if (!res.ok) throw new Error(`export upload ${res.status} ${await res.text()}`);
+    return res.json() as Promise<{
+      ok: boolean;
+      exportId: string;
+      lastCompiled: string;
+      byteSize: number;
+    }>;
+  },
+  getExportPdfUrl: (orgId: string, notebookId: string, exportId = "latest") =>
+    coreFetch<{ url: string; exportId: string }>(
+      `/orgs/${orgId}/notebooks/${notebookId}/exports/${exportId}/url`
+    ),
+
   async auditNotebook(
     orgId: string,
     notebookId: string,
@@ -366,6 +468,24 @@ export const cloudApi = {
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
+  },
+  async listAudits(orgId: string, notebookId: string) {
+    const res = await fetch(`${agentsBase()}/v1/orgs/${orgId}/notebooks/${notebookId}/audits`, {
+      headers: await authHeaders(false),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<
+      Array<{
+        id: string;
+        rubric?: string;
+        provider?: string;
+        summary?: string;
+        scores?: Record<string, number>;
+        advice?: string[];
+        createdAt?: string;
+        createdBy?: string;
+      }>
+    >;
   },
 };
 

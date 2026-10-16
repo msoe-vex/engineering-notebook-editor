@@ -1,13 +1,26 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { collabDocName } from "@engineering-notebook/shared";
 import { CollaborativeEntryEditor } from "@/components/cloud/CollaborativeEntryEditor";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
+import AuthorsInput from "@/components/editor/ui/AuthorsInput";
+import GenerateButton from "@/components/editor/ui/GenerateButton";
 import { Alert, Badge, Button, DropdownMenu } from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
+import { generateCloudEntryLatex } from "@/lib/cloud/compileCloudNotebook";
 import { getIdToken } from "@/lib/cloud/firebase";
+import { generateEntryTitle } from "@/lib/genai";
+import { readLastAuthors, writeLastAuthors, type ProjectPhase } from "@/lib/notebook/metadata";
+
+const LatexPreview = dynamic(() => import("@/components/editor/LatexPreview"), {
+  ssr: false,
+  loading: () => (
+    <p className="py-8 text-center text-nb-caption text-nb-on-surface-variant">Loading preview…</p>
+  ),
+});
 
 export default function EntryPage() {
   const params = useParams();
@@ -27,13 +40,26 @@ export default function EntryPage() {
   const docName = collabDocName(orgId, notebookId, entryId);
   const basePath = `/orgs/${orgId}/notebooks/${notebookId}`;
   const [titleDraft, setTitleDraft] = useState(meta?.title ?? "");
-  const [authorsDraft, setAuthorsDraft] = useState((meta?.authors || []).join(", "));
+  const [authorsDraft, setAuthorsDraft] = useState<string[]>(meta?.authors || []);
+  const [authorOptions, setAuthorOptions] = useState<string[]>([]);
   const [savingMeta, setSavingMeta] = useState(false);
+  const [viewMode, setViewMode] = useState<"edit" | "latex">("edit");
+  const [latexPreview, setLatexPreview] = useState("");
+  const [latexBusy, setLatexBusy] = useState(false);
 
   useEffect(() => {
     setTitleDraft(meta?.title ?? "");
-    setAuthorsDraft((meta?.authors || []).join(", "));
+    setAuthorsDraft(meta?.authors || []);
   }, [meta?.title, meta?.authors, entryId]);
+
+  useEffect(() => {
+    const fromEntries = new Set<string>();
+    for (const e of Object.values(entries)) {
+      for (const a of e.authors || []) fromEntries.add(a);
+    }
+    for (const a of readLastAuthors()) fromEntries.add(a);
+    setAuthorOptions([...fromEntries].sort((a, b) => a.localeCompare(b)));
+  }, [entries]);
 
   const phases = useMemo(() => {
     const raw = (notebookSummary?.phases || {}) as Record<
@@ -65,20 +91,89 @@ export default function EntryPage() {
       .finally(() => setSavingMeta(false));
   }
 
+  async function showLatexPreview() {
+    if (!meta) return;
+    setViewMode("latex");
+    setLatexBusy(true);
+    try {
+      const { latex } = await generateCloudEntryLatex(
+        orgId,
+        notebookId,
+        entryId,
+        meta,
+        (notebookSummary?.phases as Record<string, ProjectPhase>) || {},
+        entries
+      );
+      setLatexPreview(latex);
+    } catch (err) {
+      setError((err as Error).message);
+      setViewMode("edit");
+    } finally {
+      setLatexBusy(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start gap-2">
-        <input
-          className="min-w-0 flex-1 border-0 bg-transparent text-nb-display font-bold tracking-tight text-nb-on-surface outline-none placeholder:text-nb-on-surface-variant/40"
-          value={titleDraft}
-          onChange={(e) => setTitleDraft(e.target.value)}
-          onBlur={() => {
-            const next = titleDraft.trim();
-            if (next && next !== title) patchMeta({ title: next });
-          }}
-          placeholder="Untitled entry"
-        />
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <input
+            className="min-w-0 flex-1 border-0 bg-transparent text-nb-display font-bold tracking-tight text-nb-on-surface outline-none placeholder:text-nb-on-surface-variant/40"
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={() => {
+              const next = titleDraft.trim();
+              if (next && next !== title) patchMeta({ title: next });
+            }}
+            placeholder="Untitled entry"
+          />
+          <GenerateButton
+            label="Generate entry title"
+            run={async () => {
+              let body = "";
+              try {
+                const doc = (await cloudApi.getEntryContent(orgId, notebookId, entryId)) as {
+                  content?: Array<{ content?: Array<{ text?: string }> }>;
+                };
+                body = JSON.stringify(doc).slice(0, 4000);
+              } catch {
+                body = "";
+              }
+              const phaseName = phases.find(([id]) => id === meta?.phase)?.[1]?.name;
+              return generateEntryTitle({
+                title: titleDraft,
+                body,
+                date: meta?.date,
+                authors: authorsDraft,
+                phase: phaseName,
+              });
+            }}
+            onResult={(next) => {
+              const t = next.trim();
+              if (!t) return;
+              setTitleDraft(t);
+              patchMeta({ title: t });
+            }}
+          />
+        </div>
         {meta?.isTemplate && <Badge tone="tertiary">Template</Badge>}
+        <div className="flex gap-1">
+          <Button
+            size="sm"
+            variant={viewMode === "edit" ? "primary" : "secondary"}
+            onClick={() => setViewMode("edit")}
+          >
+            Edit
+          </Button>
+          <Button
+            size="sm"
+            variant={viewMode === "latex" ? "primary" : "secondary"}
+            disabled={latexBusy}
+            onClick={() => void showLatexPreview()}
+          >
+            LaTeX
+          </Button>
+        </div>
         <DropdownMenu
           items={[
             {
@@ -119,6 +214,16 @@ export default function EntryPage() {
         />
       </div>
 
+      {meta?.isValid === false && (meta.validationErrors?.length ?? 0) > 0 && (
+        <Alert variant="warning">
+          <ul className="list-disc pl-4 text-nb-label">
+            {meta.validationErrors!.map((err) => (
+              <li key={err}>{err}</li>
+            ))}
+          </ul>
+        </Alert>
+      )}
+
       <div className="flex flex-wrap items-end gap-3 rounded-nb-xl border border-nb-outline-variant/20 bg-nb-surface-low/50 px-3 py-2">
         <label className="flex flex-col gap-1 text-nb-caption font-semibold text-nb-on-surface-variant">
           Date
@@ -146,32 +251,39 @@ export default function EntryPage() {
             ))}
           </select>
         </label>
-        <label className="flex min-w-[12rem] flex-1 flex-col gap-1 text-nb-caption font-semibold text-nb-on-surface-variant">
+        <div className="flex min-w-[12rem] flex-1 flex-col gap-1 text-nb-caption font-semibold text-nb-on-surface-variant">
           Authors
-          <input
-            className="rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface px-2 py-1.5 text-nb-label text-nb-on-surface"
-            value={authorsDraft}
-            disabled={savingMeta}
-            placeholder="Comma-separated"
-            onChange={(e) => setAuthorsDraft(e.target.value)}
-            onBlur={() => {
-              const authors = authorsDraft
-                .split(",")
-                .map((s) => s.trim())
-                .filter(Boolean);
+          <AuthorsInput
+            authors={authorsDraft}
+            options={authorOptions}
+            placeholder="Add authors"
+            className="min-h-10 bg-nb-surface"
+            onChange={(authors) => {
+              setAuthorsDraft(authors);
+              writeLastAuthors(authors);
               patchMeta({ authors });
             }}
           />
-        </label>
+        </div>
       </div>
 
-      <CollaborativeEntryEditor
-        key={entryId}
-        documentName={docName}
-        entryTitle={title}
-        entryId={entryId}
-        getToken={getIdToken}
-      />
+      {viewMode === "edit" ? (
+        <CollaborativeEntryEditor
+          key={entryId}
+          documentName={docName}
+          entryTitle={title}
+          entryId={entryId}
+          getToken={getIdToken}
+        />
+      ) : latexBusy ? (
+        <p className="py-8 text-center text-nb-caption text-nb-on-surface-variant">
+          Generating LaTeX…
+        </p>
+      ) : (
+        <div className="overflow-hidden rounded-nb-xl border border-nb-outline-variant/30">
+          <LatexPreview latexContent={latexPreview} />
+        </div>
+      )}
     </div>
   );
 }

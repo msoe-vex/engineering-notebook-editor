@@ -1,6 +1,7 @@
 export interface StoragePort {
   putObject(key: string, data: Buffer | string, contentType?: string): Promise<void>;
   getObject(key: string): Promise<Buffer | null>;
+  deleteObject(key: string): Promise<void>;
   getSignedUrl(key: string, action: "read" | "write", expiresMs?: number): Promise<string>;
   publicUrl(key: string): string;
 }
@@ -25,6 +26,10 @@ export class MemoryStorage implements StoragePort {
 
   async getObject(key: string) {
     return this.objects.get(key)?.data ?? null;
+  }
+
+  async deleteObject(key: string) {
+    this.objects.delete(key);
   }
 
   async getSignedUrl(key: string, _action: "read" | "write", _expiresMs = 3600_000) {

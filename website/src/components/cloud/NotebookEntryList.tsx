@@ -1,11 +1,218 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { PanelLeftClose, PanelLeft, Plus, Search } from "lucide-react";
-import { Button, IconButton } from "@/components/ui";
+import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  DndContext,
+  closestCenter,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  FolderPlus,
+  AlertTriangle,
+  GripVertical,
+  PanelLeft,
+  PanelLeftClose,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+  X,
+} from "lucide-react";
+import { Button, DropdownMenu, IconButton } from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
+import { useAppDndSensors } from "@/lib/dnd/dndSensors";
+import { readLastAuthors } from "@/lib/notebook/metadata";
 import { useNotebookWorkspace } from "./NotebookWorkspaceContext";
+import type { EntryMeta } from "./notebook-types";
+
+type EntryFilters = {
+  phaseId: string | null;
+  author: string | null;
+  dateFrom: string;
+  dateTo: string;
+};
+
+function entryMatchesFilters(
+  e: EntryMeta,
+  q: string,
+  filters: EntryFilters,
+  phaseNames: Record<string, string>
+): boolean {
+  if (filters.phaseId !== null && (e.phase ?? null) !== filters.phaseId) return false;
+  if (filters.author) {
+    const authors = e.authors || [];
+    if (!authors.includes(filters.author)) return false;
+  }
+  if (filters.dateFrom || filters.dateTo) {
+    if (e.isTemplate) return false;
+    const d = e.date || (e.createdAt ? e.createdAt.slice(0, 10) : "");
+    if (!d) return false;
+    if (filters.dateFrom && d < filters.dateFrom) return false;
+    if (filters.dateTo && d > filters.dateTo) return false;
+  }
+  if (!q) return true;
+  const haystacks = [
+    e.title || "",
+    (e.authors || []).join(" "),
+    e.date || "",
+    e.phase ? phaseNames[e.phase] || e.phase : "",
+  ];
+  return haystacks.some((h) => h.toLowerCase().includes(q));
+}
+
+function explorerRank(e: EntryMeta) {
+  return e.explorerOrder ?? e.order ?? 0;
+}
+
+/** Sort for file-explorer siblings (not compile order). */
+function sortEntries(list: [string, EntryMeta][]) {
+  return list.sort(
+    (a, b) =>
+      explorerRank(a[1]) - explorerRank(b[1]) ||
+      a[1].title.localeCompare(b[1].title) ||
+      a[0].localeCompare(b[0])
+  );
+}
+
+function EntryRowShell({
+  active,
+  basePath,
+  entry,
+  id,
+  menu,
+  dragHandle,
+  rowRef,
+  rowStyle,
+}: {
+  id: string;
+  active: boolean;
+  basePath: string;
+  entry: EntryMeta;
+  menu: ReactNode;
+  dragHandle?: ReactNode;
+  rowRef?: (node: HTMLElement | null) => void;
+  rowStyle?: CSSProperties;
+}) {
+  return (
+    <div
+      ref={rowRef}
+      style={rowStyle}
+      className={`group mb-0.5 flex items-center gap-0.5 rounded-nb-lg ${
+        active ? "bg-nb-primary/10" : "hover:bg-nb-surface"
+      }`}
+    >
+      {dragHandle}
+      <Link
+        href={`${basePath}/entries/${id}`}
+        className={`min-w-0 flex-1 py-2 pr-1 text-nb-body transition-colors ${
+          dragHandle ? "pl-0.5" : "pl-2.5"
+        } ${active ? "font-semibold text-nb-primary" : "text-nb-on-surface"}`}
+      >
+        <div className="flex items-center gap-1.5 truncate">
+          <span className="truncate">{entry.title || "Untitled"}</span>
+          {entry.isValid === false && (
+            <span
+              title={(entry.validationErrors || ["Incomplete entry"]).join("\n")}
+              className="inline-flex shrink-0 text-nb-warning"
+            >
+              <AlertTriangle size={12} />
+            </span>
+          )}
+        </div>
+        <div className="text-nb-caption text-nb-on-surface-variant">{entry.date}</div>
+      </Link>
+      <div className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+        {menu}
+      </div>
+    </div>
+  );
+}
+
+function SortableEntryRow({
+  id,
+  active,
+  basePath,
+  entry,
+  menu,
+}: {
+  id: string;
+  active: boolean;
+  basePath: string;
+  entry: EntryMeta;
+  menu: ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+  });
+
+  return (
+    <EntryRowShell
+      id={id}
+      active={active}
+      basePath={basePath}
+      entry={entry}
+      menu={menu}
+      rowRef={setNodeRef}
+      rowStyle={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.45 : 1,
+        zIndex: isDragging ? 20 : undefined,
+      }}
+      dragHandle={
+        <button
+          type="button"
+          className="shrink-0 cursor-grab touch-none p-1 text-nb-on-surface-variant/40 hover:text-nb-on-surface-variant active:cursor-grabbing"
+          title="Drag to reorder"
+          aria-label="Drag to reorder"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical size={14} />
+        </button>
+      }
+    />
+  );
+}
+
+function SortableGroup({
+  ids,
+  onReorder,
+  children,
+}: {
+  ids: string[];
+  onReorder: (orderedIds: string[]) => void;
+  children: ReactNode;
+}) {
+  const sensors = useAppDndSensors();
+
+  function onDragEnd(event: DragEndEvent) {
+    if (!event.over) return;
+    const from = ids.indexOf(String(event.active.id));
+    const to = ids.indexOf(String(event.over.id));
+    if (from < 0 || to < 0 || from === to) return;
+    onReorder(arrayMove(ids, from, to));
+  }
+
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+        {children}
+      </SortableContext>
+    </DndContext>
+  );
+}
 
 export function NotebookEntryList({
   activeEntryId,
@@ -18,16 +225,330 @@ export function NotebookEntryList({
   onToggleCollapsed: () => void;
   basePath: string;
 }) {
-  const { orgId, notebookId, entries, refresh, setError, showPrompt } = useNotebookWorkspace();
+  const {
+    orgId,
+    notebookId,
+    entries,
+    folders,
+    notebookSummary,
+    refresh,
+    setError,
+    showPrompt,
+    showConfirm,
+  } = useNotebookWorkspace();
   const [query, setQuery] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filters, setFilters] = useState<EntryFilters>({
+    phaseId: null,
+    author: null,
+    dateFrom: "",
+    dateTo: "",
+  });
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
+  const [showTemplates, setShowTemplates] = useState(true);
 
-  const sorted = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return Object.entries(entries)
-      .filter(([, e]) => !e.isTemplate)
-      .filter(([, e]) => !q || e.title.toLowerCase().includes(q))
-      .sort((a, b) => a[1].order - b[1].order || a[1].date.localeCompare(b[1].date));
-  }, [entries, query]);
+  const q = query.trim().toLowerCase();
+  const filtersActive = Boolean(
+    filters.phaseId || filters.author || filters.dateFrom || filters.dateTo
+  );
+  const filtering = Boolean(q) || filtersActive;
+
+  const phaseList = useMemo(() => {
+    const raw = (notebookSummary?.phases || {}) as Record<
+      string,
+      { name?: string; order?: number }
+    >;
+    return Object.entries(raw).sort((a, b) => (a[1].order ?? 0) - (b[1].order ?? 0));
+  }, [notebookSummary]);
+
+  const phaseNames = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const [id, p] of phaseList) map[id] = p.name || id;
+    return map;
+  }, [phaseList]);
+
+  const availableAuthors = useMemo(() => {
+    const names = new Set<string>();
+    for (const e of Object.values(entries)) {
+      for (const a of e.authors || []) names.add(a);
+    }
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [entries]);
+
+  const { folderList, byFolder, unfiled, templates } = useMemo(() => {
+    const folderList = Object.entries(folders).sort(
+      (a, b) => a[1].order - b[1].order || a[1].name.localeCompare(b[1].name)
+    );
+    const byFolder: Record<string, [string, EntryMeta][]> = {};
+    const unfiled: [string, EntryMeta][] = [];
+    const templates: [string, EntryMeta][] = [];
+    for (const [id, e] of Object.entries(entries)) {
+      if (!entryMatchesFilters(e, q, filters, phaseNames)) continue;
+      if (e.isTemplate) {
+        templates.push([id, e]);
+        continue;
+      }
+      const fid = e.folderId;
+      if (fid && folders[fid]) {
+        (byFolder[fid] ??= []).push([id, e]);
+      } else {
+        unfiled.push([id, e]);
+      }
+    }
+    for (const list of Object.values(byFolder)) sortEntries(list);
+    sortEntries(unfiled);
+    sortEntries(templates);
+    return { folderList, byFolder, unfiled, templates };
+  }, [entries, folders, q, filters, phaseNames]);
+
+  const entryCount = Object.values(entries).filter((e) => !e.isTemplate).length;
+
+  function persistExplorerOrder(orderedIds: string[]) {
+    // Same-folder DnD: only rewrite explorerOrder (leave folderId alone).
+    void cloudApi
+      .reorderEntries(orgId, notebookId, { mode: "explorer", orderedIds })
+      .then(() => refresh())
+      .catch((err) => setError((err as Error).message));
+  }
+
+  function createEntry(opts: {
+    title: string;
+    isTemplate?: boolean;
+    folderId?: string | null;
+    fromId?: string;
+  }) {
+    const authors = readLastAuthors();
+    void (async () => {
+      try {
+        let content: unknown = null;
+        let meta: EntryMeta | undefined;
+        if (opts.fromId) {
+          meta = entries[opts.fromId];
+          content = await cloudApi.getEntryContent(orgId, notebookId, opts.fromId).catch(() => null);
+        }
+        const folderId = opts.folderId ?? meta?.folderId ?? null;
+        const siblings = Object.values(entries).filter(
+          (e) => !e.isTemplate && (e.folderId ?? null) === folderId
+        );
+        const nextExplorer = siblings.length
+          ? Math.max(...siblings.map(explorerRank)) + 1
+          : 0;
+        const today = new Date().toISOString().slice(0, 10);
+        const sameDay = Object.values(entries).filter(
+          (e) => !e.isTemplate && (e.date || "") === today
+        );
+        const nextDayOrder = sameDay.length
+          ? Math.max(...sameDay.map((e) => e.order ?? 0)) + 1
+          : 0;
+        const created = await cloudApi.createEntry(orgId, notebookId, {
+          title: opts.title,
+          order: nextDayOrder,
+          explorerOrder: nextExplorer,
+          date: today,
+          folderId,
+          isTemplate: opts.isTemplate ?? false,
+          authors: meta?.authors ?? (authors.length ? authors : undefined),
+          phase: meta?.phase ?? null,
+        });
+        if (content != null) {
+          await cloudApi.putEntryContent(orgId, notebookId, created.id, content);
+        }
+        refresh();
+        window.location.href = `${basePath}/entries/${created.id}`;
+      } catch (err) {
+        setError((err as Error).message);
+      }
+    })();
+  }
+
+  function duplicateEntry(id: string) {
+    const meta = entries[id];
+    createEntry({
+      title: `${meta?.title || "Entry"} (copy)`,
+      isTemplate: Boolean(meta?.isTemplate),
+      fromId: id,
+    });
+  }
+
+  function deleteEntry(id: string) {
+    const meta = entries[id];
+    const label = meta?.isTemplate ? "template" : "entry";
+    showConfirm(
+      `Delete ${label}?`,
+      `Delete "${meta?.title || "Untitled"}"? This cannot be undone.`,
+      () => {
+        void cloudApi
+          .deleteEntry(orgId, notebookId, id)
+          .then(() => {
+            refresh();
+            if (activeEntryId === id) window.location.href = basePath;
+          })
+          .catch((err) => setError((err as Error).message));
+      },
+      "danger"
+    );
+  }
+
+  function moveEntry(id: string, folderId: string | null) {
+    const srcFolder = entries[id]?.folderId ?? null;
+    if (srcFolder === folderId) return;
+
+    const dest = Object.entries(entries).filter(
+      ([eid, e]) => !e.isTemplate && eid !== id && (e.folderId ?? null) === folderId
+    );
+    sortEntries(dest);
+    const destIds = [...dest.map(([eid]) => eid), id];
+
+    const src = Object.entries(entries).filter(
+      ([eid, e]) => !e.isTemplate && eid !== id && (e.folderId ?? null) === srcFolder
+    );
+    sortEntries(src);
+    const srcIds = src.map(([eid]) => eid);
+
+    void (async () => {
+      try {
+        await cloudApi.reorderEntries(orgId, notebookId, {
+          mode: "explorer",
+          folderId,
+          orderedIds: destIds,
+        });
+        if (srcIds.length) {
+          await cloudApi.reorderEntries(orgId, notebookId, {
+            mode: "explorer",
+            folderId: srcFolder,
+            orderedIds: srcIds,
+          });
+        }
+        refresh();
+      } catch (err) {
+        setError((err as Error).message);
+      }
+    })();
+  }
+
+  function renameFolder(folderId: string) {
+    const current = folders[folderId]?.name ?? "";
+    showPrompt("Rename folder", current, (name) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      void cloudApi
+        .patchFolder(orgId, notebookId, folderId, { name: trimmed })
+        .then(() => refresh())
+        .catch((err) => setError((err as Error).message));
+    }, "Folder name");
+  }
+
+  function deleteFolder(folderId: string) {
+    const name = folders[folderId]?.name ?? "Folder";
+    showConfirm(
+      "Delete folder?",
+      `Delete "${name}"? Entries inside will move to Unfiled.`,
+      () => {
+        void cloudApi
+          .deleteFolder(orgId, notebookId, folderId)
+          .then(() => refresh())
+          .catch((err) => setError((err as Error).message));
+      },
+      "danger"
+    );
+  }
+
+  function toggleFolder(id: string) {
+    setCollapsedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function entryMenu(id: string, e: EntryMeta) {
+    const folderItems = e.isTemplate
+      ? []
+      : [
+          {
+            id: "unfiled",
+            label: "Move to Unfiled",
+            onSelect: () => moveEntry(id, null),
+          },
+          ...folderList
+            .filter(([fid]) => fid !== e.folderId)
+            .map(([fid, f]) => ({
+              id: `move-${fid}`,
+              label: `Move to ${f.name}`,
+              onSelect: () => moveEntry(id, fid),
+            })),
+        ];
+
+    return (
+      <DropdownMenu
+        items={[
+          ...(e.isTemplate
+            ? [
+                {
+                  id: "from-tpl",
+                  label: "New entry from template",
+                  onSelect: () =>
+                    createEntry({
+                      title: e.title || "New Entry",
+                      isTemplate: false,
+                      fromId: id,
+                    }),
+                },
+              ]
+            : []),
+          {
+            id: "dup",
+            label: "Duplicate",
+            icon: <Copy size={12} />,
+            onSelect: () => duplicateEntry(id),
+          },
+          ...folderItems,
+          {
+            id: "del",
+            label: "Delete",
+            icon: <Trash2 size={12} />,
+            danger: true,
+            onSelect: () => deleteEntry(id),
+          },
+        ]}
+      />
+    );
+  }
+
+  function renderSortableList(list: [string, EntryMeta][], allowReorder: boolean) {
+    const ids = list.map(([id]) => id);
+    if (!allowReorder || ids.length < 2) {
+      return (
+        <>
+          {list.map(([id, e]) => (
+            <EntryRowShell
+              key={id}
+              id={id}
+              active={activeEntryId === id}
+              basePath={basePath}
+              entry={e}
+              menu={entryMenu(id, e)}
+            />
+          ))}
+        </>
+      );
+    }
+    return (
+      <SortableGroup ids={ids} onReorder={persistExplorerOrder}>
+        {list.map(([id, e]) => (
+          <SortableEntryRow
+            key={id}
+            id={id}
+            active={activeEntryId === id}
+            basePath={basePath}
+            entry={e}
+            menu={entryMenu(id, e)}
+          />
+        ))}
+      </SortableGroup>
+    );
+  }
 
   if (collapsed) {
     return (
@@ -50,60 +571,252 @@ export function NotebookEntryList({
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter entries"
+            placeholder="Search title, authors, date…"
             className="w-full rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface py-1.5 pr-2 pl-8 text-nb-label outline-none focus:border-nb-primary"
           />
         </div>
+        <IconButton
+          aria-label="Toggle filters"
+          title="Filters"
+          aria-pressed={filtersOpen || filtersActive}
+          onClick={() => setFiltersOpen((v) => !v)}
+          className={filtersActive || filtersOpen ? "text-nb-primary" : undefined}
+        >
+          <SlidersHorizontal size={16} />
+        </IconButton>
         <IconButton aria-label="Collapse entry list" onClick={onToggleCollapsed}>
           <PanelLeftClose size={16} />
         </IconButton>
       </div>
-      <div className="flex items-center justify-between gap-2 px-3 py-2">
-        <span className="text-nb-label font-semibold text-nb-on-surface-variant">
-          {sorted.length} entries
+
+      {filtersOpen && (
+        <div className="space-y-2 border-b border-nb-outline-variant/20 px-2 py-2 text-nb-caption">
+          <label className="block">
+            <span className="mb-0.5 block text-nb-on-surface-variant">Phase</span>
+            <select
+              value={filters.phaseId ?? ""}
+              onChange={(e) =>
+                setFilters((f) => ({
+                  ...f,
+                  phaseId: e.target.value || null,
+                }))
+              }
+              className="w-full rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface px-2 py-1.5 text-nb-label outline-none focus:border-nb-primary"
+            >
+              <option value="">Any phase</option>
+              {phaseList.map(([id, p]) => (
+                <option key={id} value={id}>
+                  {p.name || id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-0.5 block text-nb-on-surface-variant">Author</span>
+            <select
+              value={filters.author ?? ""}
+              onChange={(e) =>
+                setFilters((f) => ({
+                  ...f,
+                  author: e.target.value || null,
+                }))
+              }
+              className="w-full rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface px-2 py-1.5 text-nb-label outline-none focus:border-nb-primary"
+            >
+              <option value="">Any author</option>
+              {availableAuthors.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="grid grid-cols-2 gap-1.5">
+            <label className="block">
+              <span className="mb-0.5 block text-nb-on-surface-variant">From</span>
+              <input
+                type="date"
+                value={filters.dateFrom}
+                onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))}
+                className="w-full rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface px-1.5 py-1.5 text-nb-label outline-none focus:border-nb-primary"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-0.5 block text-nb-on-surface-variant">To</span>
+              <input
+                type="date"
+                value={filters.dateTo}
+                onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))}
+                className="w-full rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface px-1.5 py-1.5 text-nb-label outline-none focus:border-nb-primary"
+              />
+            </label>
+          </div>
+          {filtersActive && (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-nb-label text-nb-primary hover:underline"
+              onClick={() =>
+                setFilters({ phaseId: null, author: null, dateFrom: "", dateTo: "" })
+              }
+            >
+              <X size={12} /> Clear filters
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-1 border-b border-nb-outline-variant/15 px-2 py-2">
+        <span className="mr-auto text-nb-label font-semibold text-nb-on-surface-variant">
+          {entryCount} entries
         </span>
         <Button
           size="sm"
           variant="primary"
           onClick={() =>
             showPrompt("New entry", "Untitled entry", (title) => {
-              void cloudApi
-                .createEntry(orgId, notebookId, {
-                  title,
-                  order: Object.keys(entries).length,
-                  date: new Date().toISOString().slice(0, 10),
-                })
-                .then((created) => {
-                  refresh();
-                  window.location.href = `${basePath}/entries/${created.id}`;
-                })
-                .catch((err) => setError((err as Error).message));
+              createEntry({ title });
             })
           }
         >
           <Plus size={14} /> New
         </Button>
+        <IconButton
+          aria-label="New folder"
+          title="New folder"
+          onClick={() =>
+            showPrompt("New folder", "Design Cycle", (name) => {
+              const trimmed = name.trim();
+              if (!trimmed) return;
+              void cloudApi
+                .createFolder(orgId, notebookId, { name: trimmed })
+                .then(() => refresh())
+                .catch((err) => setError((err as Error).message));
+            }, "Folder name")
+          }
+        >
+          <FolderPlus size={16} />
+        </IconButton>
       </div>
+
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-        {sorted.map(([id, e]) => (
-          <Link
-            key={id}
-            href={`${basePath}/entries/${id}`}
-            className={`mb-0.5 block rounded-nb-lg px-2.5 py-2 text-nb-body transition-colors ${
-              activeEntryId === id
-                ? "bg-nb-primary/10 font-semibold text-nb-primary"
-                : "text-nb-on-surface hover:bg-nb-surface"
-            }`}
-          >
-            <div className="truncate">{e.title || "Untitled"}</div>
-            <div className="text-nb-caption text-nb-on-surface-variant">{e.date}</div>
-          </Link>
-        ))}
-        {!sorted.length && (
+        {folderList.map(([fid, folder]) => {
+          const open = !collapsedFolders.has(fid);
+          const kids = byFolder[fid] ?? [];
+          return (
+            <div key={fid} className="mb-1">
+              <div className="group flex items-center gap-0.5 rounded-nb-lg px-1 py-1 hover:bg-nb-surface">
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-center gap-1 text-left text-nb-label font-semibold text-nb-on-surface-variant"
+                  onClick={() => toggleFolder(fid)}
+                >
+                  {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  <span className="truncate">{folder.name}</span>
+                  <span className="text-nb-caption font-normal opacity-70">
+                    {kids.length}
+                  </span>
+                </button>
+                <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                  <DropdownMenu
+                    items={[
+                      {
+                        id: "rename",
+                        label: "Rename",
+                        onSelect: () => renameFolder(fid),
+                      },
+                      {
+                        id: "new-here",
+                        label: "New entry here",
+                        onSelect: () =>
+                          showPrompt("New entry", "Untitled entry", (title) => {
+                            createEntry({ title, folderId: fid });
+                          }),
+                      },
+                      {
+                        id: "del-folder",
+                        label: "Delete folder",
+                        danger: true,
+                        onSelect: () => deleteFolder(fid),
+                      },
+                    ]}
+                  />
+                </div>
+              </div>
+              {open && (
+                <div className="ml-2 border-l border-nb-outline-variant/20 pl-1">
+                  {renderSortableList(kids, !filtering)}
+                  {!kids.length && !q && (
+                    <p className="px-2 py-1 text-nb-caption text-nb-on-surface-variant/70">
+                      Empty
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {(unfiled.length > 0 || folderList.length > 0) && (
+          <div className="mb-1">
+            {folderList.length > 0 && (
+              <div className="px-2.5 py-1.5 text-nb-label font-semibold text-nb-on-surface-variant">
+                Unfiled
+              </div>
+            )}
+            {renderSortableList(unfiled, !filtering)}
+          </div>
+        )}
+
+        {!entryCount && !q && (
           <p className="px-2 py-6 text-center text-nb-caption text-nb-on-surface-variant">
             No entries yet
           </p>
         )}
+        {q &&
+          !unfiled.length &&
+          !templates.length &&
+          folderList.every(([fid]) => !(byFolder[fid]?.length)) && (
+            <p className="px-2 py-6 text-center text-nb-caption text-nb-on-surface-variant">
+              No matches
+            </p>
+          )}
+
+        <div className="mt-3 border-t border-nb-outline-variant/20 pt-2">
+          <div className="flex items-center gap-1 px-1">
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 items-center gap-1 px-1.5 py-1 text-left text-nb-label font-semibold text-nb-on-surface-variant"
+              onClick={() => setShowTemplates((v) => !v)}
+            >
+              {showTemplates ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              Templates
+              <span className="text-nb-caption font-normal opacity-70">
+                {templates.length}
+              </span>
+            </button>
+            <IconButton
+              aria-label="New template"
+              title="New template"
+              onClick={() =>
+                showPrompt("New template", "Untitled template", (title) => {
+                  createEntry({ title, isTemplate: true });
+                })
+              }
+            >
+              <Plus size={14} />
+            </IconButton>
+          </div>
+          {showTemplates && (
+            <div className="mt-0.5">
+              {renderSortableList(templates, !filtering)}
+              {!templates.length && (
+                <p className="px-2.5 py-2 text-nb-caption text-nb-on-surface-variant/70">
+                  No templates
+                </p>
+              )}
+            </div>
+          )}
+        </div>
       </nav>
     </aside>
   );

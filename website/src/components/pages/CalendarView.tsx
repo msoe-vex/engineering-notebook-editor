@@ -12,7 +12,7 @@ import {
   useDroppable,
 } from "@dnd-kit/core";
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Rows3, X } from "lucide-react";
-import { useWorkspace } from "@/hooks/useWorkspace";
+import { useCloudWorkspace } from "@/hooks/useCloudWorkspace";
 import { formatAuthors, sortedEntries } from "@/lib/notebook/metadata";
 import { getPhaseConfig, getPhases } from "@/lib/notebook/phases";
 import { useAppDndSensors } from "@/lib/dnd/dndSensors";
@@ -408,7 +408,7 @@ function formatEntryDate(dateStr?: string): string {
 }
 
 export default function CalendarView({ onClose }: { onClose?: () => void }) {
-  const { metadata, navigateTo, reorderCalendarEntry, calendarMode, calendarCursor } = useWorkspace();
+  const { metadata, navigateTo, reorderCalendarEntry, calendarMode, calendarCursor } = useCloudWorkspace();
   const isMobileLayout = useMobileCalendarLayout();
   const mode = isMobileLayout ? "week" : calendarMode;
   const cursor = useMemo(() => parseYmd(calendarCursor), [calendarCursor]);

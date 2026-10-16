@@ -21,7 +21,11 @@ import {
   type GenAIModelOption,
 } from "@/lib/genai";
 import { fetchGenAIModels } from "@/lib/genai/client";
-import { useWorkspace } from "@/hooks/useWorkspace";
+import {
+  hydratePreferencesFromServer,
+  schedulePreferencesSync,
+} from "@/lib/cloud/userPreferences";
+import { useCloudWorkspace } from "@/hooks/useCloudWorkspace";
 import AuthorsInput from "@/components/editor/ui/AuthorsInput";
 
 interface SettingsPageProps {
@@ -58,7 +62,7 @@ function getGenAISettingsJson() {
 
 export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPageProps) {
   const { theme, setTheme } = useTheme();
-  const { metadata } = useWorkspace();
+  const { metadata } = useCloudWorkspace();
   const storedAuthorsJson = useSyncExternalStore(subscribeLastAuthors, getLastAuthorsJson, getEmptyAuthorsJson);
   const storedGenAIJson = useSyncExternalStore(subscribeGenAISettings, getGenAISettingsJson, getEmptyGenAIJson);
   const [authorsOverride, setAuthorsOverride] = useState<string[] | null>(null);
@@ -163,6 +167,16 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
   const authorOptions = Array.from(names).sort((a, b) => a.localeCompare(b));
 
   const selectedTheme = theme || "system";
+  const [prefsReady, setPrefsReady] = useState(false);
+
+  useEffect(() => {
+    void hydratePreferencesFromServer(setTheme).finally(() => setPrefsReady(true));
+  }, [setTheme]);
+
+  useEffect(() => {
+    if (!prefsReady) return;
+    schedulePreferencesSync(selectedTheme);
+  }, [prefsReady, selectedTheme, storedAuthorsJson, storedGenAIJson]);
 
   return (
     <div className={isEmbedded ? "w-full h-full flex flex-col bg-nb-bg overflow-hidden" : "fixed inset-0 z-[600] bg-nb-bg flex flex-col animate-in fade-in duration-300"}>
@@ -174,7 +188,7 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
           <div>
             <h1 className="text-sm md:text-lg font-black text-nb-on-surface tracking-tight leading-tight">Settings</h1>
             <p className="hidden sm:block text-[10px] font-black tracking-[0.2em] text-nb-on-surface-variant/40 uppercase">
-              This browser only
+              Synced account · keys stay local
             </p>
           </div>
         </div>

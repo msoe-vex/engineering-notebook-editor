@@ -1,19 +1,25 @@
-# Legacy (unreachable) editor stack
+# Legacy editor stack
 
 The product path is **`/`** with App Router folders (`/orgs/…/notebooks/…/entries/…`): Firebase Auth, Firestore metadata, GCS blobs, Hocuspocus realtime.
 
-**Do not use legacy shells as the design source.** Shared UI lives in `src/components/ui/` (Button, PageHeader, Dialog, etc.) and cloud chrome in `AppChrome` / `NotebookShell`.
+**Do not use the legacy shell as the design source.** Shared UI lives in `src/components/ui/` and cloud chrome in `AppChrome` / `NotebookShell`.
 
-The following still exist in the tree for reference / gradual deletion but are **not routed**:
+## Archive
 
-- `src/components/App.tsx`, `pages/Home.tsx`, `WelcomePage.tsx`, `ProjectHeader.tsx`
-- `src/lib/github/`, `src/lib/store/`, `src/lib/storage/` (local FS + GitHub sync)
-- Classic TipTap workspace / GitHub pending commits
+Unreachable local/GitHub UI **and** the old workspace singleton (`lib/store`, `lib/github`, `lib/storage`, `useWorkspace`, classic `Editor.tsx`) live under [`archive/legacy/`](./archive/legacy/) (outside `src/`, excluded from `tsc`). See that README for the file map.
 
-Some legacy components are **reused** inside cloud (ActivityBar, FileExplorer, TeamEditor, CalendarView, SettingsPage, Editor toolbar) but should adopt `components/ui` patterns over time.
+Live cloud state: [`src/lib/cloud/workspaceState.ts`](./src/lib/cloud/workspaceState.ts).
 
-`/cloud/*` and `/workspace/*` redirect to `/`. GitHub OAuth API (`/api/auth/github`) has been removed.
+## Still in `src/` (shared with cloud)
 
-**Do not** reintroduce GitHub/S3/local FS as live sync backends. Future offline bridges should be LWW ZIP push/pull only, after cloud is hardened.
+- `CalendarView`, `SettingsPage`, `HelpPage`, `AboutPage` (wired to App Router)
+- Confirmation / TextPrompt dialogs
+- `RichTextArea`, `NotebookFormatToolbar`, TipTap node views
+- Notebook/latex/genai helpers (used by cloud compile and editor)
 
-ZIP backup on cloud notebooks: Export ZIP / Import ZIP via the workspace overflow menu (`zipV5.ts`).
+## Product rules
+
+- `/cloud/*` and `/workspace/*` redirect to `/`
+- GitHub OAuth API (`/api/auth/github`) has been removed
+- **Do not** reintroduce GitHub / S3 / local FS as live sync backends
+- Future offline bridges: LWW ZIP push/pull only (`zipV5.ts` via workspace overflow)

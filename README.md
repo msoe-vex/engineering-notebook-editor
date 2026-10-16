@@ -14,7 +14,9 @@ There is **one live storage path** (GCP). GitHub / local FS / S3 are **not** syn
 | [docs/microservices-architecture.md](docs/microservices-architecture.md) | Service boundaries and data stores |
 | [docs/api-contracts.md](docs/api-contracts.md) | REST / WSS routes and Firestore paths |
 | [website/README.md](website/README.md) | Frontend env and Cloud Run image notes |
-| [website/LEGACY.md](website/LEGACY.md) | Unreachable old Home/GitHub/local editor code |
+| [website/LEGACY.md](website/LEGACY.md) | Legacy archive pointer (`website/archive/legacy/`) |
+| [docs/requirements/current-product.md](docs/requirements/current-product.md) | Live product capabilities |
+| [docs/requirements/improvement-backlog.md](docs/requirements/improvement-backlog.md) | Forward-looking improvements |
 | [services/core/README.md](services/core/README.md) | Core API |
 | [services/collab/README.md](services/collab/README.md) | Realtime collab |
 | [services/agents/README.md](services/agents/README.md) | Rubric audits |
@@ -28,13 +30,13 @@ There is **one live storage path** (GCP). GitHub / local FS / S3 are **not** syn
 ## Repository layout
 
 ```
-website/           # Next.js — cloud UI at /
+website/           # Next.js — cloud UI at /  (+ archive/legacy/ for old shell)
 services/core/     # Auth, orgs, notebooks, entries, assets, admin, BusyTeX
 services/collab/   # Hocuspocus / Yjs
 services/agents/   # Rubric audits (BYOK + grant-gated Vertex)
 packages/shared/   # v5 types, nested paths, ZIP migrate
 infra/             # compose, emulators, Cloud Run, BusyTeX upload
-docs/              # architecture + local testing + API
+docs/              # architecture + requirements + API
 loadtest/          # k6 smoke
 notebook/          # LaTeX templates
 ```

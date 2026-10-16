@@ -62,6 +62,8 @@ export function migrateEntryV4ToV5(entry: EntryMetadataV4): EntryMetadataV5 {
     date: rest.date,
     folderId: rest.folderId ?? null,
     order: rest.order ?? 0,
+    // Local v4 `order` was compile/calendar sequence; explorer starts aligned with it.
+    explorerOrder: rest.order ?? 0,
     isTemplate: rest.isTemplate,
     resources: rest.resources,
     isValid: rest.isValid,

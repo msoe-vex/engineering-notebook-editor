@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ImagePlus } from "lucide-react";
+import { NotebookPhasesEditor } from "@/components/cloud/NotebookPhasesEditor";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
 import { Button, TextField } from "@/components/ui";
 import {
@@ -9,12 +11,20 @@ import {
   type NotebookAccess,
   type TeamSummary,
 } from "@/lib/cloud/api";
+import {
+  NOTEBOOK_SCHEMA_VERSION,
+  type ProjectPhase,
+} from "@engineering-notebook/shared";
 
 export default function NotebookSetupPage() {
-  const { orgId, notebookId, notebookSummary, refresh, setError } = useNotebookWorkspace();
+  const { orgId, notebookId, notebookSummary, refresh, setError, setNotebookSummary } =
+    useNotebookWorkspace();
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [name, setName] = useState("");
+  const [logoAssetId, setLogoAssetId] = useState<string | undefined>();
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [phases, setPhases] = useState<Record<string, ProjectPhase>>({});
   const [accessMode, setAccessMode] = useState<"org" | "restricted">("org");
   const [teamIds, setTeamIds] = useState<string[]>([]);
   const [userIds, setUserIds] = useState<string[]>([]);
@@ -22,16 +32,38 @@ export default function NotebookSetupPage() {
   const [people, setPeople] = useState<MemberSummary[]>([]);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setTitle(notebookSummary?.title || notebookSummary?.name || "");
     setSubtitle(notebookSummary?.subtitle || "");
     setName(notebookSummary?.name || "");
+    setLogoAssetId(notebookSummary?.logoAssetId);
+    setPhases((notebookSummary?.phases as Record<string, ProjectPhase>) || {});
     const access = notebookSummary?.access;
     setAccessMode(access?.mode === "restricted" ? "restricted" : "org");
     setTeamIds(access?.teamIds ?? []);
     setUserIds(access?.userIds ?? []);
   }, [notebookSummary]);
+
+  useEffect(() => {
+    if (!logoAssetId) {
+      setLogoPreview(null);
+      return;
+    }
+    let cancelled = false;
+    void cloudApi
+      .getAssetUrl(orgId, notebookId, logoAssetId)
+      .then((r) => {
+        if (!cancelled) setLogoPreview(r.url);
+      })
+      .catch(() => {
+        if (!cancelled) setLogoPreview(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, notebookId, logoAssetId]);
 
   useEffect(() => {
     void Promise.all([
@@ -43,6 +75,30 @@ export default function NotebookSetupPage() {
     });
   }, [orgId]);
 
+  async function uploadLogo(file: File) {
+    setBusy(true);
+    setError(null);
+    try {
+      const { asset } = await cloudApi.createAsset(orgId, notebookId, {
+        contentType: file.type || "image/png",
+        byteSize: file.size,
+      });
+      await cloudApi.uploadAssetContent(
+        orgId,
+        notebookId,
+        asset.id,
+        file,
+        file.type || "image/png"
+      );
+      setLogoAssetId(asset.id);
+      setLogoPreview(URL.createObjectURL(file));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function save() {
     setBusy(true);
     setSaved(false);
@@ -53,10 +109,25 @@ export default function NotebookSetupPage() {
       userIds: accessMode === "restricted" ? userIds : [],
     };
     try {
-      await cloudApi.patchNotebook(orgId, notebookId, {
+      const updated = await cloudApi.patchNotebook(orgId, notebookId, {
         name: name.trim() || title.trim() || "Untitled Notebook",
         title: title.trim() || name.trim(),
         subtitle: subtitle.trim() || undefined,
+        logoAssetId: logoAssetId || undefined,
+        phases,
+        access,
+      });
+      setNotebookSummary({
+        ...(notebookSummary || {
+          schemaVersion: NOTEBOOK_SCHEMA_VERSION,
+          orgId,
+          name: updated.name,
+          folders: {},
+          updatedAt: new Date().toISOString(),
+        }),
+        ...updated,
+        phases,
+        logoAssetId,
         access,
       });
       setSaved(true);
@@ -73,12 +144,56 @@ export default function NotebookSetupPage() {
       <div>
         <h1 className="text-nb-display font-bold tracking-tight">Setup</h1>
         <p className="mt-1 text-nb-body text-nb-on-surface-variant">
-          Notebook branding and who can open this notebook.
+          Notebook branding, design phases, and who can open this notebook.
         </p>
       </div>
 
       <section className="flex flex-col gap-4">
         <h2 className="text-nb-title font-semibold">Branding</h2>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface-low">
+            {logoPreview ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logoPreview} alt="Notebook logo" className="h-full w-full object-contain" />
+            ) : (
+              <ImagePlus size={22} className="text-nb-on-surface-variant/50" />
+            )}
+          </div>
+          <div className="flex flex-col gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => logoInputRef.current?.click()}
+            >
+              Upload logo
+            </Button>
+            {logoAssetId && (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                onClick={() => {
+                  setLogoAssetId(undefined);
+                  setLogoPreview(null);
+                }}
+              >
+                Remove logo
+              </Button>
+            )}
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) void uploadLogo(file);
+              }}
+            />
+          </div>
+        </div>
         <TextField label="Display title" value={title} onChange={(e) => setTitle(e.target.value)} />
         <TextField
           label="Subtitle"
@@ -92,10 +207,15 @@ export default function NotebookSetupPage() {
         />
       </section>
 
+      <section>
+        <NotebookPhasesEditor value={phases} onChange={setPhases} />
+      </section>
+
       <section className="flex flex-col gap-4">
         <h2 className="text-nb-title font-semibold">Access</h2>
         <p className="text-nb-body text-nb-on-surface-variant">
-          Organization owners and admins can always open every notebook.
+          Organization owners and admins can always open every notebook. This controls who else
+          can open it — not the contributor roster on the Roster page.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -117,7 +237,7 @@ export default function NotebookSetupPage() {
         {accessMode === "restricted" && (
           <div className="grid gap-4 rounded-nb-xl border border-nb-outline-variant/30 p-4">
             <div>
-              <h3 className="mb-2 text-nb-label font-semibold">Teams</h3>
+              <h3 className="mb-2 text-nb-label font-semibold">Org teams</h3>
               <div className="flex flex-col gap-2">
                 {teams.map((t) => {
                   const on = teamIds.includes(t.id);
@@ -144,7 +264,7 @@ export default function NotebookSetupPage() {
               </div>
             </div>
             <div>
-              <h3 className="mb-2 text-nb-label font-semibold">People</h3>
+              <h3 className="mb-2 text-nb-label font-semibold">Org people</h3>
               <div className="flex flex-col gap-2">
                 {people.map((p) => {
                   const on = userIds.includes(p.uid);

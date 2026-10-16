@@ -10,8 +10,8 @@ import { NodeSelection, Transaction, EditorState, Plugin } from "@tiptap/pm/stat
 import StarterKit from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
 import type { Doc as YDoc } from "yjs";
-import { store } from "@/lib/store";
-import { useWorkspace } from "@/hooks/useWorkspace";
+import { workspaceState } from "@/lib/cloud/workspaceState";
+import { useCloudWorkspace } from "@/hooks/useCloudWorkspace";
 import { events, EventNames } from "@/lib/events";
 import { TableRow } from "@tiptap/extension-table-row";
 import {
@@ -101,8 +101,8 @@ const RichTextArea = ({
   collaborationDoc,
   collaborationField = "default",
 }: RichTextAreaProps) => {
-  const { currentProjectId, metadata } = useWorkspace();
-  const dbName = currentProjectId ? `notebook-project-${currentProjectId}` : "notebook-default";
+  const { metadata } = useCloudWorkspace();
+  const dbName = "notebook-cloud";
   const isCollab = Boolean(collaborationDoc);
 
   const [, setSelectionUpdate] = useState(0);
@@ -478,17 +478,10 @@ const RichTextArea = ({
         originalFilePath: originalPath,
       };
 
-      // Populate in-memory asset cache synchronously (0ms) so ImageNodeView finds it immediately
-      store.assetCache.set(originalPath, dataUrl);
-      store.assetCache.set(newPath, compressed.dataUrl);
-
-      // Local/GitHub projects persist to the workspace; cloud collab keeps preview in cache for now.
-      if (!isCollab) {
-        store.enqueue(async () => {
-          await store.persistFile(originalPath, originalBase64, `Original Asset: ${originalPath}`, true);
-          await store.persistFile(newPath, compressed.base64, `Compressed Asset: ${newPath}`, true);
-        });
-      }
+      // Populate in-memory asset cache synchronously so ImageNodeView finds it immediately.
+      // Cloud collab uploads via onImageUpload; cache is preview-only.
+      workspaceState.assetCache.set(originalPath, dataUrl);
+      workspaceState.assetCache.set(newPath, compressed.dataUrl);
 
       if (editor?.state.selection instanceof NodeSelection) {
         editor.chain().focus().insertContentAt(editor.state.selection.to, {
@@ -593,7 +586,7 @@ const RichTextArea = ({
                   if (!isLinkingToEntry) {
                     navParams.resource = resId;
                   }
-                  store.navigateTo(navParams);
+                  workspaceState.navigateTo(navParams);
                 } else {
                   // Already in the same resource, but user clicked again: re-scroll
                   events.emit(EventNames.SCROLL_TO_RESOURCE, resId);

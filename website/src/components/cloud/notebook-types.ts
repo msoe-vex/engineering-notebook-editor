@@ -4,11 +4,17 @@ import type { AssetSummary } from "@/lib/cloud/api";
 export type EntryMeta = {
   title: string;
   folderId: string | null;
+  /** Calendar / compile same-day sequence. */
   order: number;
+  /** Sibling position in the file explorer within `folderId`. */
+  explorerOrder?: number;
   date: string;
   phase: string | null;
   authors?: string[];
+  assetIds?: string[];
   isTemplate?: boolean;
+  isValid?: boolean;
+  validationErrors?: string[];
   createdAt?: string;
   updatedAt?: string;
 };

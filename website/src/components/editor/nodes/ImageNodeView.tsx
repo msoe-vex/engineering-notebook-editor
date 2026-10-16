@@ -6,7 +6,7 @@ import { GripVertical, Trash2, Image as ImageIcon, Upload, Loader2 } from "lucid
 import { generateResourceCaption, generateResourceTitle, type ResourceForAI } from "@/lib/genai";
 import { events, EventNames } from "@/lib/events";
 
-import { compressImageToJpeg, hashContent, convertSvgToPng, getExtensionFromDataUrl, getMimeTypeFromExtension } from "@/lib/utils";
+import { compressImageToJpeg, hashContent, convertSvgToPng, getExtensionFromDataUrl } from "@/lib/utils";
 import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
 import { NodeViewInput } from "./NodeViewInput";
 import GenerateButton from "../ui/GenerateButton";
@@ -61,24 +61,15 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
       }
 
       try {
-        const { store } = await import("@/lib/store");
+        const { workspaceState } = await import("@/lib/cloud/workspaceState");
 
-        // 1. Check in-memory session cache (0ms)
-        if (store.assetCache.has(targetPath)) {
-          const cached = store.assetCache.get(targetPath)!;
+        // In-memory session cache (populated on upload / cloud hydrate)
+        if (workspaceState.assetCache.has(targetPath)) {
+          const cached = workspaceState.assetCache.get(targetPath)!;
           if (active) {
             setResolvedSrc(cached);
             setIsLoading(false);
           }
-          return;
-        }
-
-        // 2. Fetch on-demand via store (pending / disk / GitHub)
-        const b64 = await store.getAssetBase64(targetPath);
-        if (b64 && active) {
-          const dataUrl = b64.startsWith('data:') ? b64 : `data:${getMimeTypeFromExtension(targetPath)};base64,${b64}`;
-          setResolvedSrc(dataUrl);
-          setIsLoading(false);
           return;
         }
       } catch (err) {
@@ -159,7 +150,7 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
             />
             <GenerateButton
               label="Generate title"
-              disabled={!resolvedSrc?.startsWith("data:")}
+              disabled={!resolvedSrc}
               run={() => generateResourceTitle(resource())}
               onResult={(title) => updateAttributes({ title })}
             />
@@ -190,9 +181,9 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
                   previewOriginal = await convertSvgToPng(dataUrl);
                 }
 
-                const { store } = await import("@/lib/store");
-                store.assetCache.set(newPath, compressed.dataUrl);
-                store.assetCache.set(originalPath, previewOriginal);
+                const { workspaceState } = await import("@/lib/cloud/workspaceState");
+                workspaceState.assetCache.set(newPath, compressed.dataUrl);
+                workspaceState.assetCache.set(originalPath, previewOriginal);
 
                 updateAttributes({ src: compressed.dataUrl, originalSrc: dataUrl, filePath: newPath, originalFilePath: originalPath });
                 setResolvedSrc(compressed.dataUrl);
@@ -258,7 +249,8 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
           />
           <GenerateButton
             label="Generate caption"
-            disabled={!resolvedSrc?.startsWith("data:")}
+            // Vision captions need a data URL; signed cloud URLs skip the image part.
+            disabled={!resolvedSrc}
             run={() => generateResourceCaption(resource())}
             onResult={(caption) => updateAttributes({ caption })}
           />

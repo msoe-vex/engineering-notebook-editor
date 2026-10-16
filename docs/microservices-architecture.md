@@ -3,8 +3,11 @@
 **Live storage:** Firestore + GCS on GCP only. **Realtime:** Hocuspocus/Yjs.  
 **Not used for sync:** GitHub, local FS, S3 (ZIP backup only; LWW adapters later).
 
+- Index: [README.md](./README.md)
 - Local testing: [local-development.md](./local-development.md)
 - API contracts: [api-contracts.md](./api-contracts.md)
+- Schema (current + proposed): [schema.md](./schema.md)
+- Feature gaps / checklist: [requirements/](./requirements/)
 - Root: [../README.md](../README.md)
 
 ## Services

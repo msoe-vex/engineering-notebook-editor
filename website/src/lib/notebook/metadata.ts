@@ -495,7 +495,8 @@ export function validateEntry(
   if (!entry.isTemplate) {
     if (!entry.authors?.some((name) => name.trim())) errors.push("Author name is required.");
     if (!entry.date?.trim()) errors.push("Date is required.");
-    if (!entry.phase || !phaseIds.has(entry.phase)) {
+    // Only require phase when the notebook defines phases.
+    if (phaseIds.size > 0 && (!entry.phase || !phaseIds.has(entry.phase))) {
       errors.push("Entry phase is required.");
     }
   }
@@ -526,7 +527,6 @@ export function isEntryValid(info: EntryMetadata): boolean {
   if (!info.isTemplate) {
     if (!info.authors?.some((name) => name.trim())) return false;
     if (!info.date?.trim()) return false;
-    if (!info.phase) return false;
   }
   if (info.resources) {
     for (const res of Object.values(info.resources)) {

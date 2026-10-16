@@ -3,7 +3,7 @@
 import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import CalendarView from "@/components/pages/CalendarView";
-import { store } from "@/lib/store";
+import { workspaceState } from "@/lib/cloud/workspaceState";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
 
 function SchedulePageInner() {
@@ -15,13 +15,10 @@ function SchedulePageInner() {
   useEffect(() => {
     const date =
       searchParams.get("date") ||
-      store.calendarCursor ||
+      workspaceState.calendarCursor ||
       new Date().toISOString().slice(0, 10);
     const view = searchParams.get("view") === "week" ? "week" : "month";
-    store.calendarCursor = date;
-    store.calendarMode = view;
-    store.showCalendar = true;
-    store.notifyStateChange();
+    workspaceState.setCalendar(date, view);
 
     if (!searchParams.get("date") || !searchParams.get("view")) {
       router.replace(`${base}/schedule?date=${encodeURIComponent(date)}&view=${view}`);

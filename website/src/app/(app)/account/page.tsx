@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/ui";
 
 /**
  * User-scoped profile / preferences (theme, GenAI BYOK, default authors).
- * Notebook Team (identity/roster/phases) stays under the notebook ActivityBar.
+ * Notebook roster / phases live under notebook Setup and Members routes.
  */
 export default function AccountPage() {
   const router = useRouter();

@@ -73,6 +73,16 @@ export async function createStorage(): Promise<StoragePort> {
       const [buf] = await file.download();
       return buf;
     },
+    async deleteObject(key) {
+      const file = bucket.file(key);
+      try {
+        await file.delete({ ignoreNotFound: true });
+      } catch (err) {
+        // fake-gcs may not support ignoreNotFound the same way
+        const [exists] = await file.exists().catch(() => [false] as [boolean]);
+        if (exists) throw err;
+      }
+    },
     async getSignedUrl(key, action, expiresMs = 3600_000) {
       if (apiEndpoint) {
         // fake-gcs-server: unsigned public-style URL

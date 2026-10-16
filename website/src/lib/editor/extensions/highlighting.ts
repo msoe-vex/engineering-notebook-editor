@@ -2,7 +2,7 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { Extension } from "@tiptap/react";
 import Prism from "prismjs";
-import { store } from "@/lib/store";
+import { workspaceState } from "@/lib/cloud/workspaceState";
 
 // Ensure common languages are loaded
 import "prismjs/components/prism-latex";
@@ -96,7 +96,7 @@ export const PrismHighlightExtension = Extension.create({
 
 export function getIntegrityDecorations(doc: import("@tiptap/pm/model").Node) {
   const decorations: Decoration[] = [];
-  const metadata = store.metadata;
+  const metadata = workspaceState.metadata;
   if (!metadata?.entries) return DecorationSet.create(doc, []);
 
   const validIds = new Set<string>();

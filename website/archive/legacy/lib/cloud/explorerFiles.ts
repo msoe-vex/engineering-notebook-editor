@@ -23,7 +23,7 @@ export function cloudEntriesToExplorerFiles(
       timestamp: e.createdAt,
       updatedAt: e.updatedAt,
       date: e.date,
-      order: e.order ?? 0,
+      order: e.explorerOrder ?? e.order ?? 0,
       folderId,
       folderName,
       isTemplate: e.isTemplate || false,
