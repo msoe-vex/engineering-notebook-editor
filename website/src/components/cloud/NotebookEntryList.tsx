@@ -1,24 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import {
   DndContext,
-  closestCenter,
+  pointerWithin,
+  rectIntersection,
+  useDraggable,
+  useDroppable,
+  type CollisionDetection,
   type DragEndEvent,
+  type DragOverEvent,
+  type DraggableAttributes,
+  type DraggableSyntheticListeners,
 } from "@dnd-kit/core";
-import {
-  SortableContext,
-  arrayMove,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
   ChevronDown,
   ChevronRight,
   Copy,
+  FileText,
   Folder,
+  FolderOpen,
   FolderPlus,
   AlertTriangle,
   GripVertical,
@@ -35,6 +38,7 @@ import { cloudApi } from "@/lib/cloud/api";
 import { useAppDndSensors } from "@/lib/dnd/dndSensors";
 import { readLastAuthors } from "@/lib/notebook/metadata";
 import type { ProjectPhase } from "@/lib/notebook/metadata";
+import { getPhaseConfig, getPhases } from "@/lib/notebook/phases";
 import { PhaseChip } from "./PhaseChip";
 import { useNotebookWorkspace } from "./NotebookWorkspaceContext";
 import type { EntryMeta } from "./notebook-types";
@@ -74,84 +78,133 @@ function entryMatchesFilters(
   return haystacks.some((h) => h.toLowerCase().includes(q));
 }
 
-function explorerRank(e: EntryMeta) {
-  return e.explorerOrder ?? e.order ?? 0;
-}
-
-/** Sort for file-explorer siblings (not compile order). */
+/** Sort for file-explorer siblings (folders and entries sorted alphabetically). */
 function sortEntries(list: [string, EntryMeta][]) {
   return list.sort(
     (a, b) =>
-      explorerRank(a[1]) - explorerRank(b[1]) ||
-      a[1].title.localeCompare(b[1].title) ||
+      a[1].title.localeCompare(b[1].title, undefined, { sensitivity: "base", numeric: true }) ||
+      (a[1].date || "").localeCompare(b[1].date || "") ||
       a[0].localeCompare(b[0])
   );
 }
 
+type ContextMenuState = {
+  x: number;
+  y: number;
+  items: { id: string; label: string; icon?: ReactNode; danger?: boolean; onSelect: () => void }[];
+} | null;
+
 function EntryRowShell({
+  id,
   active,
   basePath,
   entry,
-  id,
   menu,
-  dragHandle,
   rowRef,
   rowStyle,
   phases,
   indent = 0,
+  onContextMenu,
+  dragListeners,
+  dragAttributes,
 }: {
   id: string;
   active: boolean;
   basePath: string;
   entry: EntryMeta;
   menu: ReactNode;
-  dragHandle?: ReactNode;
   rowRef?: (node: HTMLElement | null) => void;
   rowStyle?: CSSProperties;
   phases?: Record<string, ProjectPhase> | null;
   indent?: number;
+  onContextMenu?: (e: React.MouseEvent) => void;
+  dragListeners?: DraggableSyntheticListeners;
+  dragAttributes?: DraggableAttributes;
 }) {
+  const phaseList = useMemo(() => (phases ? getPhases(phases) : []), [phases]);
+  const phaseCfg = useMemo(() => (entry.phase ? getPhaseConfig(phaseList)[entry.phase] : null), [phaseList, entry.phase]);
+
   return (
     <div
       ref={rowRef}
-      style={{ ...rowStyle, paddingLeft: indent ? indent * 12 : undefined }}
-      className={`group mb-0.5 flex items-center gap-0.5 rounded-nb-lg ${
-        active ? "bg-nb-primary/10" : "hover:bg-nb-surface"
+      style={{
+        ...rowStyle,
+        paddingLeft: `${Math.max(6, indent * 18 + 8)}px`,
+      }}
+      className={`group relative flex h-[26px] items-center gap-1.5 rounded pr-1.5 text-nb-label transition-colors select-none cursor-pointer ${
+        active
+          ? "bg-nb-primary/15 text-nb-primary font-medium"
+          : "text-nb-on-surface hover:bg-nb-surface/80"
       }`}
+      onContextMenu={onContextMenu}
+      {...dragAttributes}
+      {...dragListeners}
     >
-      {dragHandle}
+      {/* Indentation guide lines */}
+      {indent > 0 &&
+        Array.from({ length: indent }).map((_, i) => (
+          <span
+            key={i}
+            className="pointer-events-none absolute top-0 bottom-0 border-l border-nb-outline-variant/20"
+            style={{ left: `${i * 18 + 14}px` }}
+          />
+        ))}
+
       <Link
         href={`${basePath}/entries/${id}`}
-        className={`min-w-0 flex-1 py-1.5 pr-1 text-nb-body transition-colors ${
-          dragHandle ? "pl-0.5" : "pl-2.5"
-        } ${active ? "font-semibold text-nb-primary" : "text-nb-on-surface"}`}
+        className="flex min-w-0 flex-1 items-center gap-1.5 py-0.5"
+        title={entry.title || "Untitled"}
+        onClick={(e) => {
+          // If dragged, prevent click navigation
+          if ((e.nativeEvent as unknown as { defaultPrevented?: boolean }).defaultPrevented) {
+            e.preventDefault();
+          }
+        }}
       >
-        <div className="flex items-center gap-1.5 truncate">
-          <span className="truncate">{entry.title || "Untitled"}</span>
-          {entry.isValid === false && (
+        <FileText
+          size={14}
+          className={`shrink-0 ${
+            active ? "text-nb-primary" : "text-nb-on-surface-variant/70 group-hover:text-nb-on-surface"
+          }`}
+        />
+
+        <span className="truncate text-xs leading-none">
+          {entry.title || "Untitled"}
+        </span>
+
+        {entry.isValid === false && (
+          <span
+            title={(entry.validationErrors || ["Incomplete entry"]).join("\n")}
+            className="inline-flex shrink-0 text-nb-warning"
+          >
+            <AlertTriangle size={12} />
+          </span>
+        )}
+
+        <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-1">
+          {phaseCfg && (
             <span
-              title={(entry.validationErrors || ["Incomplete entry"]).join("\n")}
-              className="inline-flex shrink-0 text-nb-warning"
-            >
-              <AlertTriangle size={12} />
+              className="inline-block h-2 w-2 shrink-0 rounded-full"
+              style={{ backgroundColor: phaseCfg.color }}
+              title={phases?.[entry.phase!]?.name || entry.phase!}
+            />
+          )}
+          {entry.date && (
+            <span className="hidden font-mono text-[10px] text-nb-on-surface-variant/60 group-hover:inline-block">
+              {entry.date.slice(5)}
             </span>
           )}
         </div>
-        <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-          {entry.date && (
-            <span className="text-nb-caption text-nb-on-surface-variant">{entry.date}</span>
-          )}
-          <PhaseChip phaseId={entry.phase} phases={phases} />
-        </div>
       </Link>
-      <div className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+
+      <div className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100" onClick={(e) => e.stopPropagation()}>
         {menu}
       </div>
     </div>
   );
 }
 
-function SortableEntryRow({
+function DraggableEntryRow({
   id,
   active,
   basePath,
@@ -159,6 +212,7 @@ function SortableEntryRow({
   menu,
   phases,
   indent = 0,
+  onContextMenu,
 }: {
   id: string;
   active: boolean;
@@ -167,8 +221,9 @@ function SortableEntryRow({
   menu: ReactNode;
   phases?: Record<string, ProjectPhase> | null;
   indent?: number;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id,
   });
 
@@ -183,23 +238,13 @@ function SortableEntryRow({
       indent={indent}
       rowRef={setNodeRef}
       rowStyle={{
-        transform: CSS.Transform.toString(transform),
-        transition,
+        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
         opacity: isDragging ? 0.45 : 1,
-        zIndex: isDragging ? 20 : undefined,
+        zIndex: isDragging ? 50 : undefined,
       }}
-      dragHandle={
-        <button
-          type="button"
-          className="shrink-0 cursor-grab touch-none p-1 text-nb-on-surface-variant/40 hover:text-nb-on-surface-variant active:cursor-grabbing"
-          title="Drag to reorder"
-          aria-label="Drag to reorder"
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical size={14} />
-        </button>
-      }
+      dragAttributes={attributes}
+      dragListeners={listeners}
+      onContextMenu={onContextMenu}
     />
   );
 }
@@ -211,9 +256,14 @@ function FolderRowShell({
   depth,
   onToggle,
   menu,
-  dragHandle,
   rowRef,
   rowStyle,
+  onNewEntry,
+  onNewSubfolder,
+  onContextMenu,
+  dragListeners,
+  dragAttributes,
+  isOver,
 }: {
   name: string;
   open: boolean;
@@ -221,33 +271,93 @@ function FolderRowShell({
   depth: number;
   onToggle: () => void;
   menu: ReactNode;
-  dragHandle?: ReactNode;
   rowRef?: (node: HTMLElement | null) => void;
   rowStyle?: CSSProperties;
+  onNewEntry?: () => void;
+  onNewSubfolder?: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
+  dragListeners?: DraggableSyntheticListeners;
+  dragAttributes?: DraggableAttributes;
+  isOver?: boolean;
 }) {
   return (
     <div
       ref={rowRef}
-      style={{ ...rowStyle, paddingLeft: depth * 12 }}
-      className="group mb-0.5 flex items-center gap-0.5 rounded-nb-lg px-1 py-1 hover:bg-nb-surface"
+      style={{
+        ...rowStyle,
+        paddingLeft: `${Math.max(6, depth * 18 + 6)}px`,
+      }}
+      className={`group relative flex h-[26px] items-center gap-1 rounded pr-1 text-nb-label text-nb-on-surface hover:bg-nb-surface/80 select-none cursor-pointer transition-colors ${
+        isOver ? "bg-nb-primary/20 ring-1 ring-nb-primary/60 font-medium" : ""
+      }`}
+      onClick={onToggle}
+      onContextMenu={onContextMenu}
+      {...dragAttributes}
+      {...dragListeners}
     >
-      {dragHandle}
-      <button
-        type="button"
-        className="flex min-w-0 flex-1 items-center gap-1 text-left text-nb-label font-semibold text-nb-on-surface-variant"
-        onClick={onToggle}
+      {/* Indentation guide lines */}
+      {depth > 0 &&
+        Array.from({ length: depth }).map((_, i) => (
+          <span
+            key={i}
+            className="pointer-events-none absolute top-0 bottom-0 border-l border-nb-outline-variant/20"
+            style={{ left: `${i * 18 + 12}px` }}
+          />
+        ))}
+
+      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden py-0.5">
+        <span className="shrink-0 text-nb-on-surface-variant/80 transition-transform">
+          {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        </span>
+
+        {open ? (
+          <FolderOpen size={14} className="shrink-0 text-nb-primary/90" />
+        ) : (
+          <Folder size={14} className="shrink-0 text-nb-on-surface-variant/80" />
+        )}
+
+        <span className="truncate text-xs font-medium text-nb-on-surface">
+          {name}
+        </span>
+
+        <span className="shrink-0 font-mono text-[10px] text-nb-on-surface-variant/50">
+          {count}
+        </span>
+      </div>
+
+      <div
+        className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+        onClick={(e) => e.stopPropagation()}
       >
-        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        <Folder size={14} className="shrink-0 opacity-70" />
-        <span className="truncate">{name}</span>
-        <span className="text-nb-caption font-normal opacity-70">{count}</span>
-      </button>
-      <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100">{menu}</div>
+        {onNewEntry && (
+          <button
+            type="button"
+            className="rounded p-0.5 text-nb-on-surface-variant hover:bg-nb-surface hover:text-nb-on-surface"
+            title="New entry in folder"
+            aria-label="New entry in folder"
+            onClick={onNewEntry}
+          >
+            <Plus size={13} />
+          </button>
+        )}
+        {onNewSubfolder && (
+          <button
+            type="button"
+            className="rounded p-0.5 text-nb-on-surface-variant hover:bg-nb-surface hover:text-nb-on-surface"
+            title="New subfolder"
+            aria-label="New subfolder"
+            onClick={onNewSubfolder}
+          >
+            <FolderPlus size={13} />
+          </button>
+        )}
+        {menu}
+      </div>
     </div>
   );
 }
 
-function SortableFolderRow({
+function DraggableAndDroppableFolderRow({
   id,
   name,
   open,
@@ -255,6 +365,10 @@ function SortableFolderRow({
   depth,
   onToggle,
   menu,
+  onNewEntry,
+  onNewSubfolder,
+  onContextMenu,
+  isOverFolder,
 }: {
   id: string;
   name: string;
@@ -263,10 +377,23 @@ function SortableFolderRow({
   depth: number;
   onToggle: () => void;
   menu: ReactNode;
+  onNewEntry?: () => void;
+  onNewSubfolder?: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
+  isOverFolder?: boolean;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: `folder:${id}`,
+  const fullId = `folder:${id}`;
+  const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
+    id: fullId,
   });
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
+    id: fullId,
+  });
+
+  const setCombinedRef = (node: HTMLElement | null) => {
+    setDragRef(node);
+    setDropRef(node);
+  };
 
   return (
     <FolderRowShell
@@ -276,53 +403,70 @@ function SortableFolderRow({
       depth={depth}
       onToggle={onToggle}
       menu={menu}
-      rowRef={setNodeRef}
+      rowRef={setCombinedRef}
       rowStyle={{
-        transform: CSS.Transform.toString(transform),
-        transition,
+        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
         opacity: isDragging ? 0.45 : 1,
+        zIndex: isDragging ? 50 : undefined,
       }}
-      dragHandle={
-        <button
-          type="button"
-          className="shrink-0 cursor-grab touch-none p-0.5 text-nb-on-surface-variant/40 hover:text-nb-on-surface-variant active:cursor-grabbing"
-          title="Drag to reorder folder"
-          aria-label="Drag to reorder folder"
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical size={12} />
-        </button>
-      }
+      onNewEntry={onNewEntry}
+      onNewSubfolder={onNewSubfolder}
+      dragAttributes={attributes}
+      dragListeners={listeners}
+      onContextMenu={onContextMenu}
+      isOver={(isOverFolder ?? isOver) && !isDragging}
     />
   );
 }
 
-function SortableGroup({
-  ids,
-  onReorder,
-  children,
+function EmptyFolderDropTarget({
+  folderId,
+  depth,
+  isOver,
 }: {
-  ids: string[];
-  onReorder: (orderedIds: string[]) => void;
-  children: ReactNode;
+  folderId: string;
+  depth: number;
+  isOver: boolean;
 }) {
-  const sensors = useAppDndSensors();
-
-  function onDragEnd(event: DragEndEvent) {
-    if (!event.over) return;
-    const from = ids.indexOf(String(event.active.id));
-    const to = ids.indexOf(String(event.over.id));
-    if (from < 0 || to < 0 || from === to) return;
-    onReorder(arrayMove(ids, from, to));
-  }
+  const { setNodeRef } = useDroppable({
+    id: `folder-empty:${folderId}`,
+  });
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-        {children}
-      </SortableContext>
-    </DndContext>
+    <div
+      ref={setNodeRef}
+      className={`relative flex h-[24px] items-center text-[11px] italic transition-colors rounded ${
+        isOver
+          ? "bg-nb-primary/20 text-nb-primary ring-1 ring-nb-primary/60"
+          : "text-nb-on-surface-variant/40"
+      }`}
+      style={{ paddingLeft: `${(depth + 1) * 18 + 20}px` }}
+    >
+      {/* Indentation guide lines */}
+      {Array.from({ length: depth + 1 }).map((_, i) => (
+        <span
+          key={i}
+          className="pointer-events-none absolute top-0 bottom-0 border-l border-nb-outline-variant/20"
+          style={{ left: `${i * 18 + 14}px` }}
+        />
+      ))}
+      (empty)
+    </div>
+  );
+}
+
+function RootDropTarget({ isOver }: { isOver: boolean }) {
+  const { setNodeRef } = useDroppable({
+    id: "root-drop-target",
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`min-h-[48px] w-full rounded transition-colors ${
+        isOver ? "bg-nb-primary/10 ring-1 ring-dashed ring-nb-primary/40" : ""
+      }`}
+    />
   );
 }
 
@@ -391,7 +535,7 @@ export function NotebookEntryList({
 
   const { folderList, byFolder, childrenByParent, unfiled, templates } = useMemo(() => {
     const folderList = Object.entries(folders).sort(
-      (a, b) => a[1].order - b[1].order || a[1].name.localeCompare(b[1].name)
+      (a, b) => a[1].name.localeCompare(b[1].name, undefined, { sensitivity: "base", numeric: true }) || a[0].localeCompare(b[0])
     );
     const childrenByParent: Record<string, string[]> = { __root__: [] };
     for (const [fid, folder] of folderList) {
@@ -599,7 +743,22 @@ export function NotebookEntryList({
     });
   }
 
-  function entryMenu(id: string, e: EntryMeta) {
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleClose = () => setContextMenu(null);
+    window.addEventListener("click", handleClose);
+    window.addEventListener("contextmenu", handleClose);
+    window.addEventListener("scroll", handleClose, true);
+    return () => {
+      window.removeEventListener("click", handleClose);
+      window.removeEventListener("contextmenu", handleClose);
+      window.removeEventListener("scroll", handleClose, true);
+    };
+  }, [contextMenu]);
+
+  function getEntryMenuItems(id: string, e: EntryMeta) {
     const folderItems = e.isTemplate
       ? []
       : [
@@ -617,70 +776,261 @@ export function NotebookEntryList({
             })),
         ];
 
-    return (
-      <DropdownMenu
-        items={[
-          ...(e.isTemplate
-            ? [
-                {
-                  id: "from-tpl",
-                  label: "New entry from template",
-                  onSelect: () =>
-                    createEntry({
-                      title: e.title || "New Entry",
-                      isTemplate: false,
-                      fromId: id,
-                    }),
-                },
-              ]
-            : []),
-          {
-            id: "dup",
-            label: "Duplicate",
-            icon: <Copy size={12} />,
-            onSelect: () => duplicateEntry(id),
-          },
-          ...folderItems,
-          {
-            id: "del",
-            label: "Delete",
-            icon: <Trash2 size={12} />,
-            danger: true,
-            onSelect: () => deleteEntry(id),
-          },
-        ]}
-      />
-    );
+    return [
+      ...(e.isTemplate
+        ? [
+            {
+              id: "from-tpl",
+              label: "New entry from template",
+              onSelect: () =>
+                createEntry({
+                  title: e.title || "New Entry",
+                  isTemplate: false,
+                  fromId: id,
+                }),
+            },
+          ]
+        : []),
+      {
+        id: "dup",
+        label: "Duplicate",
+        icon: <Copy size={12} />,
+        onSelect: () => duplicateEntry(id),
+      },
+      ...folderItems,
+      {
+        id: "del",
+        label: "Delete",
+        icon: <Trash2 size={12} />,
+        danger: true,
+        onSelect: () => deleteEntry(id),
+      },
+    ];
   }
 
-  function renderSortableList(
+  function getFolderMenuItems(fid: string) {
+    return [
+      {
+        id: "new-here",
+        label: "New entry here",
+        icon: <Plus size={12} />,
+        onSelect: () =>
+          showPrompt("New entry", "Untitled entry", (title) => {
+            createEntry({ title, folderId: fid });
+          }),
+      },
+      {
+        id: "new-subfolder",
+        label: "New subfolder",
+        icon: <FolderPlus size={12} />,
+        onSelect: () =>
+          showPrompt("New folder", "Subfolder", (name) => {
+            const trimmed = name.trim();
+            if (!trimmed) return;
+            void cloudApi
+              .createFolder(orgId, notebookId, { name: trimmed, parentId: fid })
+              .then(() => refresh())
+              .catch((err) => setError((err as Error).message));
+          }, "Folder name"),
+      },
+      {
+        id: "rename",
+        label: "Rename folder",
+        onSelect: () => renameFolder(fid),
+      },
+      {
+        id: "del-folder",
+        label: "Delete folder",
+        danger: true,
+        icon: <Trash2 size={12} />,
+        onSelect: () => deleteFolder(fid),
+      },
+    ];
+  }
+
+  function handleFolderContextMenu(e: React.MouseEvent, fid: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: getFolderMenuItems(fid),
+    });
+  }
+
+  function handleEntryContextMenu(e: React.MouseEvent, id: string, entryMeta: EntryMeta) {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: getEntryMenuItems(id, entryMeta),
+    });
+  }
+
+  function handleRootContextMenu(e: React.MouseEvent) {
+    // Only if right clicking on the empty background of the nav
+    if (e.target !== e.currentTarget && !(e.target as HTMLElement).classList.contains("custom-scrollbar")) {
+      return;
+    }
+    e.preventDefault();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        {
+          id: "new-root-entry",
+          label: "New entry",
+          icon: <Plus size={12} />,
+          onSelect: () =>
+            showPrompt("New entry", "Untitled entry", (title) => {
+              createEntry({ title });
+            }),
+        },
+        {
+          id: "new-root-folder",
+          label: "New folder",
+          icon: <FolderPlus size={12} />,
+          onSelect: () =>
+            showPrompt("New folder", "Design Cycle", (name) => {
+              const trimmed = name.trim();
+              if (!trimmed) return;
+              void cloudApi
+                .createFolder(orgId, notebookId, { name: trimmed })
+                .then(() => refresh())
+                .catch((err) => setError((err as Error).message));
+            }, "Folder name"),
+        },
+      ],
+    });
+  }
+
+  function moveFolder(folderId: string, targetParentId: string | null) {
+    if (folderId === targetParentId) return;
+    const currentParentId = folders[folderId]?.parentId ?? null;
+    if (currentParentId === targetParentId) return;
+
+    // Check circular reparenting: targetParentId cannot be a descendant of folderId
+    let curr: string | null = targetParentId;
+    while (curr) {
+      if (curr === folderId) return;
+      curr = folders[curr]?.parentId ?? null;
+    }
+
+    void cloudApi
+      .patchFolder(orgId, notebookId, folderId, {
+        parentId: targetParentId,
+      })
+      .then(() => refresh())
+      .catch((err) => setError((err as Error).message));
+  }
+
+  const customCollisionStrategy: CollisionDetection = (args) => {
+    // 1. First prioritize pointerWithin (exact cursor position over items)
+    const pointerCollisions = pointerWithin(args);
+    if (pointerCollisions.length > 0) {
+      const itemCollision = pointerCollisions.find((c) => c.id !== "root-drop-target");
+      if (itemCollision) return [itemCollision];
+      return pointerCollisions;
+    }
+
+    // 2. Next check rect intersection
+    const rectCollisions = rectIntersection(args);
+    if (rectCollisions.length > 0) {
+      const itemCollision = rectCollisions.find((c) => c.id !== "root-drop-target");
+      if (itemCollision) return [itemCollision];
+      return rectCollisions;
+    }
+
+    return [];
+  };
+
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  function handleDragOver(event: DragOverEvent) {
+    const { active, over } = event;
+    if (!over) {
+      setDragOverId(null);
+      return;
+    }
+
+    const activeId = String(active.id);
+    const overId = String(over.id);
+
+    if (activeId === overId) {
+      setDragOverId(null);
+      return;
+    }
+
+    setDragOverId(overId);
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    setDragOverId(null);
+
+    if (!over) return;
+
+    const activeId = String(active.id);
+    const overId = String(over.id);
+
+    if (activeId === overId) return;
+
+    const isActiveFolder = activeId.startsWith("folder:");
+    const isOverFolder = overId.startsWith("folder:");
+    const isOverEmptyFolder = overId.startsWith("folder-empty:");
+
+    const activeCleanId = isActiveFolder ? activeId.replace(/^folder:/, "") : activeId;
+    const overCleanId = isOverFolder
+      ? overId.replace(/^folder:/, "")
+      : isOverEmptyFolder
+      ? overId.replace(/^folder-empty:/, "")
+      : overId;
+
+    // Dropped onto empty folder row or folder row
+    if (isOverEmptyFolder || isOverFolder) {
+      if (isActiveFolder) {
+        moveFolder(activeCleanId, overCleanId);
+      } else {
+        moveEntry(activeCleanId, overCleanId);
+      }
+      return;
+    }
+
+    // Dropped onto Root Drop Target
+    if (overId === "root-drop-target") {
+      if (isActiveFolder) {
+        moveFolder(activeCleanId, null);
+      } else {
+        moveEntry(activeCleanId, null);
+      }
+      return;
+    }
+
+    // Dropped onto an entry: place in that entry's folder
+    const targetEntry = entries[overId];
+    if (targetEntry) {
+      const targetFolderId = targetEntry.folderId ?? null;
+      if (isActiveFolder) {
+        moveFolder(activeCleanId, targetFolderId);
+      } else {
+        moveEntry(activeCleanId, targetFolderId);
+      }
+    }
+  }
+
+  function entryMenu(id: string, e: EntryMeta) {
+    return <DropdownMenu items={getEntryMenuItems(id, e)} />;
+  }
+
+  function renderEntryList(
     list: [string, EntryMeta][],
-    allowReorder: boolean,
     indent = 0
   ) {
-    const ids = list.map(([id]) => id);
-    if (!allowReorder || ids.length < 2) {
-      return (
-        <>
-          {list.map(([id, e]) => (
-            <EntryRowShell
-              key={id}
-              id={id}
-              active={activeEntryId === id}
-              basePath={basePath}
-              entry={e}
-              menu={entryMenu(id, e)}
-              phases={phases}
-              indent={indent}
-            />
-          ))}
-        </>
-      );
-    }
     return (
-      <SortableGroup ids={ids} onReorder={persistExplorerOrder}>
+      <>
         {list.map(([id, e]) => (
-          <SortableEntryRow
+          <DraggableEntryRow
             key={id}
             id={id}
             active={activeEntryId === id}
@@ -689,57 +1039,20 @@ export function NotebookEntryList({
             menu={entryMenu(id, e)}
             phases={phases}
             indent={indent}
+            onContextMenu={(evt) => handleEntryContextMenu(evt, id, e)}
           />
         ))}
-      </SortableGroup>
+      </>
     );
   }
 
   function folderMenu(fid: string) {
-    return (
-      <DropdownMenu
-        items={[
-          {
-            id: "rename",
-            label: "Rename",
-            onSelect: () => renameFolder(fid),
-          },
-          {
-            id: "new-here",
-            label: "New entry here",
-            onSelect: () =>
-              showPrompt("New entry", "Untitled entry", (title) => {
-                createEntry({ title, folderId: fid });
-              }),
-          },
-          {
-            id: "new-subfolder",
-            label: "New subfolder",
-            onSelect: () =>
-              showPrompt("New folder", "Subfolder", (name) => {
-                const trimmed = name.trim();
-                if (!trimmed) return;
-                void cloudApi
-                  .createFolder(orgId, notebookId, { name: trimmed, parentId: fid })
-                  .then(() => refresh())
-                  .catch((err) => setError((err as Error).message));
-              }, "Folder name"),
-          },
-          {
-            id: "del-folder",
-            label: "Delete folder",
-            danger: true,
-            onSelect: () => deleteFolder(fid),
-          },
-        ]}
-      />
-    );
+    return <DropdownMenu items={getFolderMenuItems(fid)} />;
   }
 
   function renderFolderTree(parentKey: string, depth: number): ReactNode {
     const siblingIds = childrenByParent[parentKey] ?? [];
     if (siblingIds.length === 0) return null;
-    const canReorder = !filtering && siblingIds.length > 1;
 
     const nodes = siblingIds.map((fid) => {
       const folder = folders[fid];
@@ -748,40 +1061,48 @@ export function NotebookEntryList({
       const kids = byFolder[fid] ?? [];
       const childFolders = childrenByParent[fid] ?? [];
       const count = kids.length + childFolders.length;
-      const row = canReorder ? (
-        <SortableFolderRow
-          id={fid}
-          name={folder.name}
-          open={open}
-          count={count}
-          depth={depth}
-          onToggle={() => toggleFolder(fid)}
-          menu={folderMenu(fid)}
-        />
-      ) : (
-        <FolderRowShell
-          name={folder.name}
-          open={open}
-          count={count}
-          depth={depth}
-          onToggle={() => toggleFolder(fid)}
-          menu={folderMenu(fid)}
-        />
-      );
+
+      const fullFid = `folder:${fid}`;
+      const isOver = dragOverId === fullFid;
+
       return (
-        <div key={fid} className="mb-0.5">
-          {row}
+        <div key={fid}>
+          <DraggableAndDroppableFolderRow
+            id={fid}
+            name={folder.name}
+            open={open}
+            count={count}
+            depth={depth}
+            onToggle={() => toggleFolder(fid)}
+            menu={folderMenu(fid)}
+            onContextMenu={(e) => handleFolderContextMenu(e, fid)}
+            isOverFolder={isOver}
+            onNewEntry={() =>
+              showPrompt("New entry", "Untitled entry", (title) => {
+                createEntry({ title, folderId: fid });
+              })
+            }
+            onNewSubfolder={() =>
+              showPrompt("New folder", "Subfolder", (name) => {
+                const trimmed = name.trim();
+                if (!trimmed) return;
+                void cloudApi
+                  .createFolder(orgId, notebookId, { name: trimmed, parentId: fid })
+                  .then(() => refresh())
+                  .catch((err) => setError((err as Error).message));
+              }, "Folder name")
+            }
+          />
           {open && (
-            <div>
+            <div className="relative">
               {renderFolderTree(fid, depth + 1)}
-              {renderSortableList(kids, !filtering, depth + 1)}
+              {renderEntryList(kids, depth + 1)}
               {!filtering && kids.length === 0 && childFolders.length === 0 && (
-                <p
-                  className="px-2 py-1 text-nb-caption text-nb-on-surface-variant/60"
-                  style={{ paddingLeft: (depth + 1) * 12 + 8 }}
-                >
-                  Empty
-                </p>
+                <EmptyFolderDropTarget
+                  folderId={fid}
+                  depth={depth}
+                  isOver={dragOverId === `folder-empty:${fid}`}
+                />
               )}
             </div>
           )}
@@ -789,20 +1110,7 @@ export function NotebookEntryList({
       );
     });
 
-    if (!canReorder) return <>{nodes}</>;
-
-    const sortableIds = siblingIds.map((id) => `folder:${id}`);
-    return (
-      <SortableGroup
-        ids={sortableIds}
-        onReorder={(orderedPrefixed) => {
-          const ordered = orderedPrefixed.map((x) => x.replace(/^folder:/, ""));
-          persistFolderOrder(parentKey, ordered);
-        }}
-      >
-        {nodes}
-      </SortableGroup>
-    );
+    return <>{nodes}</>;
   }
 
   if (collapsed) {
@@ -814,6 +1122,8 @@ export function NotebookEntryList({
       </div>
     );
   }
+
+  const sensors = useAppDndSensors();
 
   return (
     <aside className="flex h-full w-full min-w-0 flex-col border-r border-nb-outline-variant/30 bg-nb-surface-low">
@@ -966,71 +1276,109 @@ export function NotebookEntryList({
         </IconButton>
       </div>
 
-      <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-        {renderFolderTree("__root__", 0)}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={customCollisionStrategy}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+      >
+        <nav
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto px-1 py-1 custom-scrollbar"
+          onContextMenu={handleRootContextMenu}
+        >
+          {renderFolderTree("__root__", 0)}
 
-        {(unfiled.length > 0 || folderList.length > 0) && (
-          <div className="mb-1">
-            {folderList.length > 0 && (
-              <div className="px-2.5 py-1.5 text-nb-label font-semibold text-nb-on-surface-variant">
-                Unfiled
-              </div>
-            )}
-            {renderSortableList(unfiled, !filtering)}
-          </div>
-        )}
-
-        {!entryCount && !q && (
-          <p className="px-2 py-6 text-center text-nb-caption text-nb-on-surface-variant">
-            No entries yet
-          </p>
-        )}
-        {q &&
-          !unfiled.length &&
-          !templates.length &&
-          folderList.every(([fid]) => !(byFolder[fid]?.length)) && (
-            <p className="px-2 py-6 text-center text-nb-caption text-nb-on-surface-variant">
-              No matches
-            </p>
-          )}
-
-        <div className="mt-3 border-t border-nb-outline-variant/20 pt-2">
-          <div className="flex items-center gap-1 px-1">
-            <button
-              type="button"
-              className="flex min-w-0 flex-1 items-center gap-1 px-1.5 py-1 text-left text-nb-label font-semibold text-nb-on-surface-variant"
-              onClick={() => setShowTemplates((v) => !v)}
-            >
-              {showTemplates ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              Templates
-              <span className="text-nb-caption font-normal opacity-70">
-                {templates.length}
-              </span>
-            </button>
-            <IconButton
-              aria-label="New template"
-              title="New template"
-              onClick={() =>
-                showPrompt("New template", "Untitled template", (title) => {
-                  createEntry({ title, isTemplate: true });
-                })
-              }
-            >
-              <Plus size={14} />
-            </IconButton>
-          </div>
-          {showTemplates && (
+          {unfiled.length > 0 && (
             <div className="mt-0.5">
-              {renderSortableList(templates, !filtering)}
-              {!templates.length && (
-                <p className="px-2.5 py-2 text-nb-caption text-nb-on-surface-variant/70">
-                  No templates
-                </p>
-              )}
+              {renderEntryList(unfiled, 0)}
             </div>
           )}
+
+          {!entryCount && !q && (
+            <p className="px-2 py-6 text-center text-nb-caption text-nb-on-surface-variant">
+              No entries yet
+            </p>
+          )}
+          {q &&
+            !unfiled.length &&
+            !templates.length &&
+            folderList.every(([fid]) => !(byFolder[fid]?.length)) && (
+              <p className="px-2 py-6 text-center text-nb-caption text-nb-on-surface-variant">
+                No matches
+              </p>
+            )}
+
+          <div className="mt-2 border-t border-nb-outline-variant/15 pt-1.5">
+            <div className="group flex h-[24px] items-center gap-1 rounded px-1 hover:bg-nb-surface/80">
+              <button
+                type="button"
+                className="flex min-w-0 flex-1 items-center gap-1 text-left text-xs font-medium text-nb-on-surface-variant select-none"
+                onClick={() => setShowTemplates((v) => !v)}
+              >
+                <span className="shrink-0 text-nb-on-surface-variant/80">
+                  {showTemplates ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                </span>
+                <span>Templates</span>
+                <span className="shrink-0 font-mono text-[10px] text-nb-on-surface-variant/50">
+                  {templates.length}
+                </span>
+              </button>
+              <button
+                type="button"
+                className="rounded p-0.5 text-nb-on-surface-variant opacity-0 hover:bg-nb-surface hover:text-nb-on-surface group-hover:opacity-100 focus:opacity-100"
+                title="New template"
+                aria-label="New template"
+                onClick={() =>
+                  showPrompt("New template", "Untitled template", (title) => {
+                    createEntry({ title, isTemplate: true });
+                  })
+                }
+              >
+                <Plus size={13} />
+              </button>
+            </div>
+            {showTemplates && (
+              <div className="mt-0.5">
+                {renderEntryList(templates, 1)}
+                {!templates.length && (
+                  <p className="pl-6 py-1 text-[11px] italic text-nb-on-surface-variant/40">
+                    (no templates)
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Root empty area droppable target */}
+          <RootDropTarget isOver={dragOverId === "root-drop-target"} />
+        </nav>
+      </DndContext>
+
+      {/* Floating Context Menu */}
+      {contextMenu && (
+        <div
+          className="fixed z-50 min-w-44 overflow-hidden rounded-xl border border-nb-outline-variant/30 bg-nb-surface py-1 shadow-nb-lg"
+          style={{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {contextMenu.items.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-medium hover:bg-nb-surface-low ${
+                item.danger ? "text-nb-danger" : "text-nb-on-surface"
+              }`}
+              onClick={() => {
+                setContextMenu(null);
+                item.onSelect();
+              }}
+            >
+              {item.icon}
+              {item.label}
+            </button>
+          ))}
         </div>
-      </nav>
+      )}
     </aside>
   );
 }
