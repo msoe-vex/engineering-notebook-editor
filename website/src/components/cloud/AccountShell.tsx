@@ -16,8 +16,8 @@ export function AccountShell({ children }: { children: ReactNode }) {
   const onPreferences = pathname?.startsWith("/account/preferences");
 
   return (
-    <div className="flex h-full min-h-[calc(100vh-3.25rem)] flex-col font-sans md:flex-row">
-      <aside className="shrink-0 border-b border-nb-outline-variant/30 bg-nb-surface-low px-4 py-4 sm:px-6 md:w-60 md:border-b-0 md:border-r md:p-6">
+    <div className="flex h-full min-h-0 w-full flex-col font-sans md:flex-row overflow-hidden">
+      <aside className="shrink-0 border-b border-nb-outline-variant/30 bg-nb-surface-low px-4 py-4 sm:px-6 md:w-60 md:border-b-0 md:border-r md:p-6 overflow-y-auto custom-scrollbar">
         <div className="mb-4 hidden md:block">
           <h1 className="text-nb-title font-bold tracking-tight text-nb-on-surface">Account</h1>
           <p className="mt-1 text-nb-caption text-nb-on-surface-variant">
@@ -47,7 +47,7 @@ export function AccountShell({ children }: { children: ReactNode }) {
           })}
         </nav>
       </aside>
-      <div className="min-w-0 flex-1 overflow-y-auto bg-nb-surface p-6 sm:p-8 md:p-10 lg:p-12">
+      <div className="min-w-0 flex-1 overflow-y-auto custom-scrollbar bg-nb-surface p-6 sm:p-8 md:p-10 lg:p-12">
         <div className="mx-auto w-full max-w-4xl">{children}</div>
       </div>
     </div>

@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   Book,
+  Compass,
   Settings,
   HardDrive,
   X,
@@ -29,12 +30,12 @@ interface HelpPageProps {
 export default function HelpPage({ path, onClose, navigateTo, isEmbedded = false }: HelpPageProps) {
   const segments = path.split('/');
   const lastSegment = segments[segments.length - 1];
-  const isWorkspaceHelp = path.startsWith('/workspace/help') || isEmbedded;
+  const isWorkspaceHelp = path.startsWith('/workspace/help');
   const baseHelpPath = isWorkspaceHelp ? '/workspace/help' : '/help';
 
-  // Determine active tab from path or default
-  const validTabs = ['modes', 'local', 'github', 'editor', 'compiler', 'data', 'genai', 'phases', 'tips', 'resources'];
-  const activeTab = validTabs.includes(lastSegment) ? lastSegment : (isWorkspaceHelp ? 'editor' : 'modes');
+  // Determine active tab from path or default to overview
+  const validTabs = ['overview', 'modes', 'local', 'github', 'editor', 'compiler', 'data', 'genai', 'phases', 'tips', 'resources'];
+  const activeTab = validTabs.includes(lastSegment) ? lastSegment : 'overview';
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [markdownContent, setMarkdownContent] = useState("");
@@ -135,10 +136,15 @@ export default function HelpPage({ path, onClose, navigateTo, isEmbedded = false
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}>
           <div className="px-3 py-1 flex items-center justify-between">
-            <h3 className="text-nb-caption font-bold uppercase tracking-wider text-nb-on-surface-variant/60">Setup</h3>
+            <h3 className="text-nb-caption font-bold uppercase tracking-wider text-nb-on-surface-variant/60">Overview</h3>
             <button className="md:hidden text-nb-on-surface-variant/60 hover:text-nb-on-surface" onClick={() => setIsSidebarOpen(false)}>
               <X size={16} />
             </button>
+          </div>
+          <NavButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<Compass size={15} />} label="Getting Started" />
+
+          <div className="px-3 py-1 mt-3">
+            <h3 className="text-nb-caption font-bold uppercase tracking-wider text-nb-on-surface-variant/60">Setup</h3>
           </div>
           <NavButton active={activeTab === 'modes'} onClick={() => setActiveTab('modes')} icon={<Settings size={15} />} label="Workspace Modes" />
           <NavButton active={activeTab === 'local'} onClick={() => setActiveTab('local')} icon={<HardDrive size={15} />} label="Local Setup" />
@@ -162,7 +168,7 @@ export default function HelpPage({ path, onClose, navigateTo, isEmbedded = false
 
         {/* Content Area */}
         <div className="flex-1 min-h-0 overflow-y-auto bg-nb-surface custom-scrollbar relative" style={{ scrollbarGutter: 'stable' }}>
-          <div className="w-full max-w-4xl p-6 pb-24 md:px-10 md:py-8 lg:px-12">
+          <div className="mx-auto w-full max-w-4xl p-6 pb-24 md:px-10 md:py-8 lg:px-12">
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-24 gap-4">
                 <Loader2 className="w-8 h-8 text-nb-primary animate-spin" />

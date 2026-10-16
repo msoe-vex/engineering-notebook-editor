@@ -531,7 +531,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
 
   return (
     <NotebookWorkspaceProvider value={ctx}>
-      <div className="flex h-[calc(100vh-3.25rem)] min-h-0 flex-col overflow-hidden text-nb-on-surface">
+      <div className="flex h-full min-h-0 w-full flex-col overflow-hidden text-nb-on-surface">
         <input
           ref={importRef}
           type="file"

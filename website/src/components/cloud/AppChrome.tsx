@@ -10,6 +10,7 @@ import {
   Info,
   LogOut,
   Moon,
+  MoreVertical,
   Settings2,
   Sun,
   UserRound,
@@ -55,10 +56,10 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
   const onAbout = pathname?.startsWith("/about");
   /** Match notebook: header + main span the viewport (no max-w-6xl “page in a page”). */
   const fullBleedChrome = true;
-  /** Help (and notebooks) fill remaining height; About/Account/home scroll inside main. */
-  const fillMain = notebookWorkspace || onHelp;
-  /** About / Account own their own padding (sidebar + full-bleed sections). */
-  const bareMain = onAbout || onAccount;
+  /** Help, Account, and notebooks fill remaining height and manage internal pane scrolling. */
+  const fillMain = notebookWorkspace || onHelp || onAccount;
+  /** About owns full-page scrolling without max-w constraint. */
+  const bareMain = onAbout;
   const orgId = typeof params.orgId === "string" ? params.orgId : null;
   const workspaceHeader = useSyncExternalStore(
     subscribeWorkspaceHeader,
@@ -302,13 +303,13 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
   })();
 
   const iconBtn =
-    "inline-flex items-center gap-1.5 rounded-nb-lg px-2 py-1.5 text-nb-label font-semibold text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface";
+    "inline-flex h-8 items-center gap-1.5 rounded-nb-lg px-2 text-nb-label font-semibold text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface transition-colors";
 
   return (
-    <div className="cloud-shell flex min-h-screen flex-col bg-nb-surface text-nb-on-surface">
-      <header className="shrink-0 border-b border-nb-outline-variant/30 bg-nb-surface">
+    <div className="cloud-shell flex h-screen w-full flex-col overflow-hidden bg-nb-surface text-nb-on-surface">
+      <header className="sticky top-0 z-30 h-[3.25rem] shrink-0 border-b border-nb-outline-variant/30 bg-nb-surface/95 backdrop-blur-md">
         <div
-          className={`flex w-full items-center justify-between gap-3 px-4 py-2 sm:px-6 ${
+          className={`flex h-full w-full items-center justify-between gap-3 px-4 sm:px-6 ${
             fullBleedChrome ? "" : "mx-auto max-w-6xl"
           }`}
         >
@@ -330,11 +331,22 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
           </div>
 
           <div className="flex shrink-0 items-center gap-1 sm:gap-2 text-sm">
-            {ws && <DropdownMenu items={ws.menuItems} />}
+            {ws && (
+              <DropdownMenu
+                ariaLabel="Notebook actions"
+                items={ws.menuItems}
+                trigger={
+                  <span className={iconBtn} title="Notebook actions">
+                    <span className="sr-only">Notebook actions</span>
+                    <MoreVertical size={16} />
+                  </span>
+                }
+              />
+            )}
             {mountedTheme && (
               <button
                 type="button"
-                className="rounded-xl p-2 text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface transition-colors"
                 aria-label="Toggle theme"
                 onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
               >
@@ -401,12 +413,14 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
             ? "min-h-0 w-full flex-1 overflow-hidden"
             : bareMain
               ? "min-h-0 w-full flex-1 overflow-y-auto"
-              : fullBleedChrome
-                ? "min-h-0 w-full flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:py-8"
-                : "mx-auto w-full max-w-6xl flex-1 px-6 py-8 lg:py-12"
+              : "min-h-0 w-full flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:py-8"
         }
       >
-        {children}
+        {bareMain || fillMain ? (
+          children
+        ) : (
+          <div className="mx-auto w-full max-w-6xl">{children}</div>
+        )}
       </main>
       <Toaster
         position="bottom-right"

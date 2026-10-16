@@ -166,17 +166,24 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
   }
   const authorOptions = Array.from(names).sort((a, b) => a.localeCompare(b));
 
-  const selectedTheme = theme || "system";
+  const [mounted, setMounted] = useState(false);
+  const selectedTheme = mounted ? (theme || "system") : "system";
   const [prefsReady, setPrefsReady] = useState(false);
 
   useEffect(() => {
-    void hydratePreferencesFromServer(setTheme).finally(() => setPrefsReady(true));
-  }, [setTheme]);
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
-    if (!prefsReady) return;
+    void hydratePreferencesFromServer((t) => setTheme(t)).finally(() => setPrefsReady(true));
+    // Run once on mount to populate preferences
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!prefsReady || !mounted) return;
     schedulePreferencesSync(selectedTheme);
-  }, [prefsReady, selectedTheme, storedAuthorsJson, storedGenAIJson]);
+  }, [prefsReady, mounted, selectedTheme, storedAuthorsJson, storedGenAIJson]);
 
   return (
     <div
