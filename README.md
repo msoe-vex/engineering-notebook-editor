@@ -8,15 +8,18 @@ There is **one live storage path** (GCP). GitHub / local FS / S3 are **not** syn
 
 ## Documentation map
 
+Full index (by audience): **[docs/README.md](docs/README.md)** · Agent steerage: **[AGENTS.md](AGENTS.md)**
+
 | Doc | Purpose |
 | --- | --- |
-| **[docs/local-development.md](docs/local-development.md)** | Local stack: Docker APIs + host website, Firebase emulator |
-| [docs/microservices-architecture.md](docs/microservices-architecture.md) | Service boundaries and data stores |
-| [docs/api-contracts.md](docs/api-contracts.md) | REST / WSS routes and Firestore paths |
+| **[docs/04-guides/local-development.md](docs/04-guides/local-development.md)** | Local stack: Docker APIs + host website, Firebase emulator |
+| [docs/00-product/vision.md](docs/00-product/vision.md) | Product vision & non-goals |
+| [docs/01-requirements/](docs/01-requirements/) | Features (FR-\*) & quality (NFR-\*) |
+| [docs/02-architecture/overview.md](docs/02-architecture/overview.md) | Service boundaries and data stores |
+| [docs/03-reference/api-contracts.md](docs/03-reference/api-contracts.md) | REST / WSS routes |
+| [docs/03-reference/schema.md](docs/03-reference/schema.md) | Firestore / GCS model |
 | [website/README.md](website/README.md) | Frontend env and Cloud Run image notes |
-| [website/LEGACY.md](website/LEGACY.md) | Legacy archive pointer (`website/archive/legacy/`) |
-| [docs/requirements/current-product.md](docs/requirements/current-product.md) | Live product capabilities |
-| [docs/requirements/improvement-backlog.md](docs/requirements/improvement-backlog.md) | Forward-looking improvements |
+| [website/LEGACY.md](website/LEGACY.md) | Legacy archive pointer |
 | [services/core/README.md](services/core/README.md) | Core API |
 | [services/collab/README.md](services/collab/README.md) | Realtime collab |
 | [services/agents/README.md](services/agents/README.md) | Rubric audits |
@@ -36,7 +39,7 @@ services/collab/   # Hocuspocus / Yjs
 services/agents/   # Rubric audits (BYOK + grant-gated Vertex)
 packages/shared/   # v5 types, nested paths, ZIP migrate
 infra/             # compose, emulators, Cloud Run, BusyTeX upload
-docs/              # architecture + requirements + API
+docs/              # product · FR/NFR · architecture · reference · guides · ops
 loadtest/          # k6 smoke
 notebook/          # LaTeX templates
 ```
@@ -45,7 +48,7 @@ notebook/          # LaTeX templates
 
 ## How to test locally
 
-APIs in Docker (watch) + website on the host. Full steps: **[docs/local-development.md](docs/local-development.md)**.
+APIs in Docker (watch) + website on the host. Full steps: **[docs/04-guides/local-development.md](docs/04-guides/local-development.md)**.
 
 ```bash
 # Terminal 1
@@ -111,7 +114,7 @@ NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST=localhost:9099
 
 Or `cp website/.env.example website/.env.local`.
 
-Backend highlights: `AUTH_FALLBACK=true`, `FIRESTORE_EMULATOR_HOST`, `STORAGE_BACKEND=memory`, `SERVICE_ADMIN_UID=service-admin`, `COLLAB_AUTH_DISABLED=true` (local smoke only). See [local-development.md](docs/local-development.md).
+Backend highlights: `AUTH_FALLBACK=true`, `FIRESTORE_EMULATOR_HOST`, `STORAGE_BACKEND=memory`, `SERVICE_ADMIN_UID=service-admin`, `COLLAB_AUTH_DISABLED=true` (local smoke only). See [local-development.md](docs/04-guides/local-development.md).
 
 ---
 

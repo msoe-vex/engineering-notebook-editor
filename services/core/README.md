@@ -2,9 +2,9 @@
 
 Fastify service: Firebase `AuthPort`, nested org/notebook tenancy, admin metrics, GCS-backed assets, BusyTeX static routes.
 
-- Contracts: [docs/api-contracts.md](../../docs/api-contracts.md)
-- Local testing: [docs/local-development.md](../../docs/local-development.md)
-- Architecture: [docs/microservices-architecture.md](../../docs/microservices-architecture.md)
+- Contracts: [docs/03-reference/api-contracts.md](../../docs/03-reference/api-contracts.md)
+- Local testing: [docs/04-guides/local-development.md](../../docs/04-guides/local-development.md)
+- Architecture: [docs/02-architecture/overview.md](../../docs/02-architecture/overview.md)
 
 ## Run (with emulators)
 

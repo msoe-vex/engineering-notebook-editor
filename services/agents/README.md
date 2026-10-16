@@ -5,8 +5,8 @@ Rubric audit microservice.
 - `POST /v1/orgs/:orgId/notebooks/:notebookId/audit` — BYOK (default) or Vertex when `grants.platformAi`
 - Scorecards: `organizations/{orgId}/notebooks/{notebookId}/audits/{auditId}`
 
-- Contracts: [docs/api-contracts.md](../../docs/api-contracts.md)
-- Local testing: [docs/local-development.md](../../docs/local-development.md)
+- Contracts: [docs/03-reference/api-contracts.md](../../docs/03-reference/api-contracts.md)
+- Local testing: [docs/04-guides/local-development.md](../../docs/04-guides/local-development.md)
 
 ```bash
 npm install && npm run dev

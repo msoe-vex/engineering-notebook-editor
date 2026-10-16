@@ -2,9 +2,9 @@
 
 Next.js UI for the engineering notebook. **Entry point is `/`** (Firebase → orgs → notebooks → entries). Folder routes under `app/(app)/`. Old `/cloud/*` URLs redirect to `/`.
 
-Live storage is **GCP only** (Core/Firestore/GCS). ZIP export/import is backup (LWW). Old GitHub/local project UI is archived under [`archive/legacy/`](./archive/legacy/) — see [LEGACY.md](./LEGACY.md). Product requirements: [docs/requirements/current-product.md](../docs/requirements/current-product.md).
+Live storage is **GCP only** (Core/Firestore/GCS). ZIP export/import is backup (LWW). Old GitHub/local project UI is archived under [`archive/legacy/`](./archive/legacy/) — see [LEGACY.md](./LEGACY.md). Docs: [docs/README.md](../docs/README.md) · requirements [01-requirements](../docs/01-requirements/).
 
-**Local stack:** [docs/local-development.md](../docs/local-development.md) · **Root:** [../README.md](../README.md)
+**Local stack:** [docs/04-guides/local-development.md](../docs/04-guides/local-development.md) · **Root:** [../README.md](../README.md)
 
 ## Quick start
 
@@ -17,7 +17,7 @@ npm install && npm run dev
 ```
 
 Open http://localhost:3000 · Firebase Emulator UI http://localhost:4000  
-Full guide: [docs/local-development.md](../docs/local-development.md).
+Full guide: [docs/04-guides/local-development.md](../docs/04-guides/local-development.md).
 
 ## Environment
 
