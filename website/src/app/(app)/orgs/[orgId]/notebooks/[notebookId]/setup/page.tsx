@@ -142,7 +142,7 @@ export default function NotebookSetupPage() {
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-8">
       <div>
-        <h1 className="text-nb-display font-bold tracking-tight">Setup</h1>
+        <h1 className="text-nb-display font-bold tracking-tight">Settings</h1>
         <p className="mt-1 text-nb-body text-nb-on-surface-variant">
           Notebook branding, design phases, and who can open this notebook.
         </p>
@@ -215,7 +215,7 @@ export default function NotebookSetupPage() {
         <h2 className="text-nb-title font-semibold">Access</h2>
         <p className="text-nb-body text-nb-on-surface-variant">
           Organization owners and admins can always open every notebook. This controls who else
-          can open it — not the contributor roster on the Roster page.
+          can open it — not the credits list on the Contributors page.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -291,7 +291,7 @@ export default function NotebookSetupPage() {
 
       <div className="flex items-center gap-3">
         <Button variant="primary" disabled={busy} onClick={() => void save()}>
-          Save setup
+          Save settings
         </Button>
         {saved && <span className="text-nb-label text-nb-success">Saved</span>}
       </div>

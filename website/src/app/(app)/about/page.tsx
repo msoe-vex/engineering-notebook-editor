@@ -7,12 +7,11 @@ export default function AboutRoutePage() {
   const router = useRouter();
 
   return (
-    <div className="-mx-6 -my-8 lg:-my-12">
-      <AboutPage
-        onClose={() => router.push("/")}
-        onTryIt={() => router.push("/")}
-        onOpenHelp={() => router.push("/help")}
-      />
-    </div>
+    <AboutPage
+      isEmbedded
+      onClose={() => router.push("/")}
+      onTryIt={() => router.push("/")}
+      onOpenHelp={() => router.push("/help")}
+    />
   );
 }

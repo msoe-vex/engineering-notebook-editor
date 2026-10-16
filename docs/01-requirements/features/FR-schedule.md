@@ -1,11 +1,11 @@
-# FR-schedule: Schedule / calendar
+# FR-schedule: Calendar
 
 Status: current  
 Related: [glossary](../../00-product/glossary.md) (`date` + `order`)
 
 ## Summary
 
-Calendar view arranges non-template entries by **date**; same-day sequence uses **order**. Reorder persists via Core `mode: "day"`.
+**Calendar** arranges non-template entries by **date**; same-day sequence uses **order**. Reorder persists via Core `mode: "day"`.
 
 ## Actors and permissions
 
@@ -13,15 +13,15 @@ Notebook accessors.
 
 ## User-facing behavior
 
-- `/…/schedule` ( `/calendar` redirects)
+- Label: **Calendar** (route `/…/schedule`; `/calendar` redirects)
 - Month/week; drag entries between days / within day
-- Deep links `?date=&view=`
+- Phase color border + icon on cards; deep links `?date=&view=`
 
 ## Acceptance criteria
 
 - [ ] Moving an entry updates `date` and same-day `orderedIds` via API
 - [ ] Explorer `explorerOrder` unchanged by calendar DnD
-- [ ] Templates excluded from schedule
+- [ ] Templates excluded from calendar
 
 ## Data and APIs
 

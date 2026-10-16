@@ -24,7 +24,7 @@
 
 .dark {
   /* ... previous dark mode tokens ... */
-  --nb-bg: #111213;
+  --nb-bg: #1a1c1e;
   --nb-surface-lowest: #1a1c1e;
   /* Map dark surface to lowest */
   --nb-surface-low: #1f2124;
@@ -1511,7 +1511,9 @@ pre[class*="language-"],
 }
 
 .nb-cal-card {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
   width: 100%;
   flex-shrink: 0;
   text-align: left;
@@ -1525,7 +1527,6 @@ pre[class*="language-"],
   padding: 0.28rem 0.4rem;
   cursor: pointer;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

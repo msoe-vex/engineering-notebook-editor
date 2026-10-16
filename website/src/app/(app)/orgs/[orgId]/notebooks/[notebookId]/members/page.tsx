@@ -220,10 +220,10 @@ export default function NotebookMembersPage() {
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-nb-display font-bold tracking-tight">Notebook roster</h1>
+          <h1 className="text-nb-display font-bold tracking-tight">Contributors</h1>
           <p className="mt-1 text-nb-body text-nb-on-surface-variant">
             Credits for this notebook (export / LaTeX). Separate from org access — manage who can
-            open the notebook under Setup.
+            open the notebook under Settings.
           </p>
         </div>
         <Button variant="primary" onClick={() => setEditor({ name: "", role: "Member" })}>

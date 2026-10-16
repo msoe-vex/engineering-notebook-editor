@@ -65,44 +65,63 @@ export default function HelpPage({ path, onClose, navigateTo, isEmbedded = false
   }, [activeTab]);
 
   return (
-    <div className={isEmbedded ? "w-full h-full flex flex-col bg-nb-bg overflow-hidden relative" : "fixed inset-0 z-1100 bg-nb-bg flex flex-col animate-in fade-in duration-300"}>
-      {/* Header */}
-      <div className="h-14 border-b border-nb-outline-variant/30 flex items-center justify-between px-6 bg-nb-surface/50 backdrop-blur-xl shrink-0">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="md:hidden p-2 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant transition-colors"
-          >
-            <Book size={18} />
-          </button>
+    <div
+      className={
+        isEmbedded
+          ? "relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-nb-surface"
+          : "fixed inset-0 z-1100 flex animate-in flex-col bg-nb-bg fade-in duration-300"
+      }
+    >
+      {!isEmbedded && (
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-nb-outline-variant/30 bg-nb-surface px-6">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-nb-primary/10 text-nb-primary flex items-center justify-center">
-              <Book size={16} />
-            </div>
-            <div>
-              <h1 className="text-sm font-black tracking-tight text-nb-on-surface leading-tight">Help & Documentation</h1>
-              <div className="flex items-center gap-2 text-[9px] font-black tracking-[0.15em] text-nb-on-surface-variant/50 uppercase">
-                <span>{isWorkspaceHelp ? "Workspace Guide" : "General Setup & Modes"}</span>
+            <button
+              type="button"
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="rounded-lg p-2 text-nb-on-surface-variant transition-colors hover:bg-nb-surface-low md:hidden"
+            >
+              <Book size={18} />
+            </button>
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-nb-primary/10 text-nb-primary">
+                <Book size={16} />
+              </div>
+              <div>
+                <h1 className="text-sm leading-tight font-black tracking-tight text-nb-on-surface">
+                  Help & Documentation
+                </h1>
               </div>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex cursor-pointer items-center gap-1.5 rounded-lg p-1.5 text-xs font-bold text-nb-on-surface-variant transition-colors hover:bg-nb-surface-low hover:text-nb-on-surface"
+            title="Close Help"
+          >
+            <X size={16} />
+          </button>
         </div>
+      )}
 
-        <button
-          onClick={onClose}
-          className="p-1.5 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold"
-          title={isEmbedded ? "Back to Editor" : "Close Help"}
-        >
-          <span className="hidden sm:inline text-[11px] text-nb-on-surface-variant/70">{isEmbedded ? "Back to Editor" : "Close"}</span>
-          <X size={16} />
-        </button>
-      </div>
+      {isEmbedded && (
+        <div className="flex shrink-0 items-center gap-2 border-b border-nb-outline-variant/20 bg-nb-surface px-4 py-2.5 md:hidden">
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="rounded-lg p-1.5 text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface"
+          >
+            <Book size={16} />
+          </button>
+          <span className="text-nb-label font-semibold text-nb-on-surface">Help Topics</span>
+        </div>
+      )}
 
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="relative flex flex-1 min-h-0 overflow-hidden">
         {/* Mobile Sidebar Backdrop */}
         {isSidebarOpen && (
           <div
-            className="fixed inset-0 z-450 bg-nb-bg/60 backdrop-blur-sm md:hidden"
+            className="fixed inset-0 z-450 bg-black/50 backdrop-blur-xs md:hidden"
             onClick={() => setIsSidebarOpen(false)}
           />
         )}
@@ -110,40 +129,40 @@ export default function HelpPage({ path, onClose, navigateTo, isEmbedded = false
         {/* Sidebar Nav */}
         <div className={`
           fixed md:relative inset-y-0 left-0 z-500 md:z-auto
-          w-72 md:w-64 border-r border-nb-outline-variant/30 p-6 flex flex-col gap-2 bg-nb-surface md:bg-nb-surface/20
+          w-72 md:w-60 border-r border-nb-outline-variant/30 p-4 flex flex-col gap-1.5 bg-nb-surface-low
           overflow-y-auto custom-scrollbar
           transition-transform duration-300 ease-in-out
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}>
-          <div className="px-4 py-2 flex items-center justify-between">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant/40">Setup</h3>
-            <button className="md:hidden text-nb-on-surface-variant/40 hover:text-nb-on-surface" onClick={() => setIsSidebarOpen(false)}>
+          <div className="px-3 py-1 flex items-center justify-between">
+            <h3 className="text-nb-caption font-bold uppercase tracking-wider text-nb-on-surface-variant/60">Setup</h3>
+            <button className="md:hidden text-nb-on-surface-variant/60 hover:text-nb-on-surface" onClick={() => setIsSidebarOpen(false)}>
               <X size={16} />
             </button>
           </div>
-          <NavButton active={activeTab === 'modes'} onClick={() => setActiveTab('modes')} icon={<Settings size={16} />} label="Workspace Modes" />
-          <NavButton active={activeTab === 'local'} onClick={() => setActiveTab('local')} icon={<HardDrive size={16} />} label="Local Setup" />
-          <NavButton active={activeTab === 'github'} onClick={() => setActiveTab('github')} icon={<GithubIcon size={16} />} label="GitHub Setup" />
+          <NavButton active={activeTab === 'modes'} onClick={() => setActiveTab('modes')} icon={<Settings size={15} />} label="Workspace Modes" />
+          <NavButton active={activeTab === 'local'} onClick={() => setActiveTab('local')} icon={<HardDrive size={15} />} label="Local Setup" />
+          <NavButton active={activeTab === 'github'} onClick={() => setActiveTab('github')} icon={<GithubIcon size={15} />} label="GitHub Setup" />
 
-          <div className="px-4 py-2 mt-4">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant/40">Using the Editor</h3>
+          <div className="px-3 py-1 mt-3">
+            <h3 className="text-nb-caption font-bold uppercase tracking-wider text-nb-on-surface-variant/60">Using the Editor</h3>
           </div>
-          <NavButton active={activeTab === 'editor'} onClick={() => setActiveTab('editor')} icon={<FileText size={16} />} label="Editor Guide" />
-          <NavButton active={activeTab === 'compiler'} onClick={() => setActiveTab('compiler')} icon={<Play size={16} />} label="PDF Compilation" />
-          <NavButton active={activeTab === 'data'} onClick={() => setActiveTab('data')} icon={<Layers size={16} />} label="Import / Export" />
-          <NavButton active={activeTab === 'genai'} onClick={() => setActiveTab('genai')} icon={<Sparkles size={16} />} label="Generative AI" />
+          <NavButton active={activeTab === 'editor'} onClick={() => setActiveTab('editor')} icon={<FileText size={15} />} label="Editor Guide" />
+          <NavButton active={activeTab === 'compiler'} onClick={() => setActiveTab('compiler')} icon={<Play size={15} />} label="PDF Compilation" />
+          <NavButton active={activeTab === 'data'} onClick={() => setActiveTab('data')} icon={<Layers size={15} />} label="Import / Export" />
+          <NavButton active={activeTab === 'genai'} onClick={() => setActiveTab('genai')} icon={<Sparkles size={15} />} label="Generative AI" />
 
-          <div className="px-4 py-2 mt-4">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant/40">Best Practices</h3>
+          <div className="px-3 py-1 mt-3">
+            <h3 className="text-nb-caption font-bold uppercase tracking-wider text-nb-on-surface-variant/60">Best Practices</h3>
           </div>
-          <NavButton active={activeTab === 'phases'} onClick={() => setActiveTab('phases')} icon={<Target size={16} />} label="Design Process" />
-          <NavButton active={activeTab === 'tips'} onClick={() => setActiveTab('tips')} icon={<Lightbulb size={16} />} label="Notebook Tips" />
-          <NavButton active={activeTab === 'resources'} onClick={() => setActiveTab('resources')} icon={<ExternalLink size={16} />} label="Resources" />
+          <NavButton active={activeTab === 'phases'} onClick={() => setActiveTab('phases')} icon={<Target size={15} />} label="Design Process" />
+          <NavButton active={activeTab === 'tips'} onClick={() => setActiveTab('tips')} icon={<Lightbulb size={15} />} label="Notebook Tips" />
+          <NavButton active={activeTab === 'resources'} onClick={() => setActiveTab('resources')} icon={<ExternalLink size={15} />} label="Resources" />
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto bg-nb-bg/50 custom-scrollbar relative" style={{ scrollbarGutter: 'stable' }}>
-          <div className="max-w-4xl mx-auto p-6 md:p-12 pb-32">
+        <div className="flex-1 min-h-0 overflow-y-auto bg-nb-surface custom-scrollbar relative" style={{ scrollbarGutter: 'stable' }}>
+          <div className="w-full max-w-4xl p-6 pb-24 md:px-10 md:py-8 lg:px-12">
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-24 gap-4">
                 <Loader2 className="w-8 h-8 text-nb-primary animate-spin" />
@@ -220,13 +239,13 @@ function NavButton({ active, onClick, icon, label }: { active: boolean, onClick:
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all cursor-pointer ${active
-        ? "bg-nb-primary text-white shadow-lg shadow-nb-primary/20"
-        : "text-nb-on-surface-variant hover:bg-nb-surface-mid hover:text-nb-on-surface"
+      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-nb-lg text-nb-label font-semibold transition-colors cursor-pointer text-left ${active
+        ? "bg-nb-primary/10 text-nb-primary"
+        : "text-nb-on-surface-variant hover:bg-nb-surface hover:text-nb-on-surface"
         }`}
     >
-      <div className={active ? "text-white" : "text-nb-primary"}>{icon}</div>
-      {label}
+      <div className={active ? "text-nb-primary" : "text-nb-on-surface-variant/80"}>{icon}</div>
+      <span className="truncate">{label}</span>
     </button>
   );
 }

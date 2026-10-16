@@ -179,30 +179,41 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
   }, [prefsReady, selectedTheme, storedAuthorsJson, storedGenAIJson]);
 
   return (
-    <div className={isEmbedded ? "w-full h-full flex flex-col bg-nb-bg overflow-hidden" : "fixed inset-0 z-[600] bg-nb-bg flex flex-col animate-in fade-in duration-300"}>
-      <div className="flex items-center justify-between px-8 h-16 border-b border-nb-outline-variant bg-nb-surface shadow-nb-sm shrink-0">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-nb-primary/10 text-nb-primary flex items-center justify-center">
-            <Settings size={20} />
+    <div
+      className={
+        isEmbedded
+          ? "flex w-full flex-col overflow-hidden"
+          : "fixed inset-0 z-[600] flex animate-in flex-col bg-nb-bg fade-in duration-300"
+      }
+    >
+      {!isEmbedded && (
+        <div className="flex h-16 shrink-0 items-center justify-between border-b border-nb-outline-variant bg-nb-surface px-8 shadow-nb-sm">
+          <div className="flex items-center gap-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-nb-primary/10 text-nb-primary">
+              <Settings size={20} />
+            </div>
+            <div>
+              <h1 className="text-sm font-black tracking-tight text-nb-on-surface md:text-lg">
+                Preferences
+              </h1>
+              <p className="hidden text-[10px] font-black tracking-[0.2em] text-nb-on-surface-variant/40 uppercase sm:block">
+                Synced account · keys stay local
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-sm md:text-lg font-black text-nb-on-surface tracking-tight leading-tight">Settings</h1>
-            <p className="hidden sm:block text-[10px] font-black tracking-[0.2em] text-nb-on-surface-variant/40 uppercase">
-              Synced account · keys stay local
-            </p>
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="cursor-pointer rounded-lg p-2 text-nb-on-surface-variant transition-colors hover:bg-nb-surface-low hover:text-nb-on-surface"
+            title="Close"
+          >
+            <X size={20} />
+          </button>
         </div>
-        <button
-          onClick={onClose}
-          className="p-2 rounded-lg hover:bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer"
-          title="Close Settings"
-        >
-          <X size={20} />
-        </button>
-      </div>
+      )}
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-8">
-        <div className="max-w-xl mx-auto space-y-10 pb-12">
+      <div className={`flex-1 overflow-y-auto custom-scrollbar ${isEmbedded ? "p-0" : "p-8"}`}>
+        <div className={`space-y-10 pb-12 ${isEmbedded ? "w-full max-w-4xl" : "mx-auto max-w-xl"}`}>
           <section className="space-y-3">
             <label className="text-[10px] font-black uppercase tracking-[0.2em] text-nb-on-surface-variant ml-1">
               Default author

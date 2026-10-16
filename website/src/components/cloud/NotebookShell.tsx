@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { saveAs } from "file-saver";
 import {
   NOTEBOOK_SCHEMA_VERSION,
@@ -57,10 +58,10 @@ const SUBNAV = [
       !p.includes("/calendar") &&
       !p.includes("/compile"),
   },
-  { id: "schedule", label: "Schedule", match: (p: string) => p.includes("/schedule") || p.includes("/calendar") },
+  { id: "schedule", label: "Calendar", match: (p: string) => p.includes("/schedule") || p.includes("/calendar") },
   { id: "compile", label: "Compile", match: (p: string) => p.includes("/compile") },
-  { id: "members", label: "Roster", match: (p: string) => p.includes("/members") },
-  { id: "setup", label: "Setup", match: (p: string) => p.includes("/setup") || p.includes("/team") },
+  { id: "members", label: "Contributors", match: (p: string) => p.includes("/members") || p.includes("/contributors") },
+  { id: "setup", label: "Settings", match: (p: string) => p.includes("/setup") || p.includes("/team") || p.includes("/settings") },
 ] as const;
 
 export function NotebookShell({ children }: { children: ReactNode }) {
@@ -579,19 +580,46 @@ export function NotebookShell({ children }: { children: ReactNode }) {
         )}
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          {showEntryList && (
-            <NotebookEntryList
-              activeEntryId={activeEntryId}
-              collapsed={listCollapsed}
-              onToggleCollapsed={() => setListCollapsed((v) => !v)}
-              basePath={basePath}
-            />
+          {showEntryList && listCollapsed ? (
+            <>
+              <NotebookEntryList
+                activeEntryId={activeEntryId}
+                collapsed
+                onToggleCollapsed={() => setListCollapsed(false)}
+                basePath={basePath}
+              />
+              <section className="min-h-0 min-w-0 flex-1 overflow-auto bg-nb-surface">
+                <div className={activeEntryId ? "px-4 py-4 md:px-6" : "p-4 md:p-6"}>{children}</div>
+              </section>
+            </>
+          ) : showEntryList ? (
+            <PanelGroup
+              direction="horizontal"
+              autoSaveId="nb-explorer-width"
+              className="min-h-0 flex-1"
+            >
+              <Panel defaultSize={22} minSize={14} maxSize={42} className="min-h-0">
+                <NotebookEntryList
+                  activeEntryId={activeEntryId}
+                  collapsed={false}
+                  onToggleCollapsed={() => setListCollapsed(true)}
+                  basePath={basePath}
+                />
+              </Panel>
+              <PanelResizeHandle className="w-1.5 shrink-0 bg-nb-outline-variant/20 transition-colors hover:bg-nb-primary/40 data-[resize-handle-active]:bg-nb-primary/50" />
+              <Panel defaultSize={78} minSize={40} className="min-h-0">
+                <section className="h-full min-h-0 overflow-auto bg-nb-surface">
+                  <div className={activeEntryId ? "px-4 py-4 md:px-6" : "p-4 md:p-6"}>
+                    {children}
+                  </div>
+                </section>
+              </Panel>
+            </PanelGroup>
+          ) : (
+            <section className="min-h-0 min-w-0 flex-1 overflow-auto bg-nb-surface">
+              <div className="p-4 md:p-6">{children}</div>
+            </section>
           )}
-          <section className="min-h-0 min-w-0 flex-1 overflow-auto bg-nb-surface">
-            <div className={showEntryList && activeEntryId ? "mx-auto max-w-3xl px-4 py-6" : "p-4 md:p-6"}>
-              {children}
-            </div>
-          </section>
         </div>
       </div>
 

@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
+  Folder,
   FolderPlus,
   AlertTriangle,
   GripVertical,
@@ -33,6 +34,8 @@ import { Button, DropdownMenu, IconButton } from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
 import { useAppDndSensors } from "@/lib/dnd/dndSensors";
 import { readLastAuthors } from "@/lib/notebook/metadata";
+import type { ProjectPhase } from "@/lib/notebook/metadata";
+import { PhaseChip } from "./PhaseChip";
 import { useNotebookWorkspace } from "./NotebookWorkspaceContext";
 import type { EntryMeta } from "./notebook-types";
 
@@ -94,6 +97,8 @@ function EntryRowShell({
   dragHandle,
   rowRef,
   rowStyle,
+  phases,
+  indent = 0,
 }: {
   id: string;
   active: boolean;
@@ -103,11 +108,13 @@ function EntryRowShell({
   dragHandle?: ReactNode;
   rowRef?: (node: HTMLElement | null) => void;
   rowStyle?: CSSProperties;
+  phases?: Record<string, ProjectPhase> | null;
+  indent?: number;
 }) {
   return (
     <div
       ref={rowRef}
-      style={rowStyle}
+      style={{ ...rowStyle, paddingLeft: indent ? indent * 12 : undefined }}
       className={`group mb-0.5 flex items-center gap-0.5 rounded-nb-lg ${
         active ? "bg-nb-primary/10" : "hover:bg-nb-surface"
       }`}
@@ -115,7 +122,7 @@ function EntryRowShell({
       {dragHandle}
       <Link
         href={`${basePath}/entries/${id}`}
-        className={`min-w-0 flex-1 py-2 pr-1 text-nb-body transition-colors ${
+        className={`min-w-0 flex-1 py-1.5 pr-1 text-nb-body transition-colors ${
           dragHandle ? "pl-0.5" : "pl-2.5"
         } ${active ? "font-semibold text-nb-primary" : "text-nb-on-surface"}`}
       >
@@ -130,7 +137,12 @@ function EntryRowShell({
             </span>
           )}
         </div>
-        <div className="text-nb-caption text-nb-on-surface-variant">{entry.date}</div>
+        <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+          {entry.date && (
+            <span className="text-nb-caption text-nb-on-surface-variant">{entry.date}</span>
+          )}
+          <PhaseChip phaseId={entry.phase} phases={phases} />
+        </div>
       </Link>
       <div className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
         {menu}
@@ -145,12 +157,16 @@ function SortableEntryRow({
   basePath,
   entry,
   menu,
+  phases,
+  indent = 0,
 }: {
   id: string;
   active: boolean;
   basePath: string;
   entry: EntryMeta;
   menu: ReactNode;
+  phases?: Record<string, ProjectPhase> | null;
+  indent?: number;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
@@ -163,6 +179,8 @@ function SortableEntryRow({
       basePath={basePath}
       entry={entry}
       menu={menu}
+      phases={phases}
+      indent={indent}
       rowRef={setNodeRef}
       rowStyle={{
         transform: CSS.Transform.toString(transform),
@@ -180,6 +198,100 @@ function SortableEntryRow({
           {...listeners}
         >
           <GripVertical size={14} />
+        </button>
+      }
+    />
+  );
+}
+
+function FolderRowShell({
+  name,
+  open,
+  count,
+  depth,
+  onToggle,
+  menu,
+  dragHandle,
+  rowRef,
+  rowStyle,
+}: {
+  name: string;
+  open: boolean;
+  count: number;
+  depth: number;
+  onToggle: () => void;
+  menu: ReactNode;
+  dragHandle?: ReactNode;
+  rowRef?: (node: HTMLElement | null) => void;
+  rowStyle?: CSSProperties;
+}) {
+  return (
+    <div
+      ref={rowRef}
+      style={{ ...rowStyle, paddingLeft: depth * 12 }}
+      className="group mb-0.5 flex items-center gap-0.5 rounded-nb-lg px-1 py-1 hover:bg-nb-surface"
+    >
+      {dragHandle}
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 items-center gap-1 text-left text-nb-label font-semibold text-nb-on-surface-variant"
+        onClick={onToggle}
+      >
+        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        <Folder size={14} className="shrink-0 opacity-70" />
+        <span className="truncate">{name}</span>
+        <span className="text-nb-caption font-normal opacity-70">{count}</span>
+      </button>
+      <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100">{menu}</div>
+    </div>
+  );
+}
+
+function SortableFolderRow({
+  id,
+  name,
+  open,
+  count,
+  depth,
+  onToggle,
+  menu,
+}: {
+  id: string;
+  name: string;
+  open: boolean;
+  count: number;
+  depth: number;
+  onToggle: () => void;
+  menu: ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: `folder:${id}`,
+  });
+
+  return (
+    <FolderRowShell
+      name={name}
+      open={open}
+      count={count}
+      depth={depth}
+      onToggle={onToggle}
+      menu={menu}
+      rowRef={setNodeRef}
+      rowStyle={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.45 : 1,
+      }}
+      dragHandle={
+        <button
+          type="button"
+          className="shrink-0 cursor-grab touch-none p-0.5 text-nb-on-surface-variant/40 hover:text-nb-on-surface-variant active:cursor-grabbing"
+          title="Drag to reorder folder"
+          aria-label="Drag to reorder folder"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical size={12} />
         </button>
       }
     />
@@ -275,10 +387,17 @@ export function NotebookEntryList({
     return [...names].sort((a, b) => a.localeCompare(b));
   }, [entries]);
 
-  const { folderList, byFolder, unfiled, templates } = useMemo(() => {
+  const phases = (notebookSummary?.phases || null) as Record<string, ProjectPhase> | null;
+
+  const { folderList, byFolder, childrenByParent, unfiled, templates } = useMemo(() => {
     const folderList = Object.entries(folders).sort(
       (a, b) => a[1].order - b[1].order || a[1].name.localeCompare(b[1].name)
     );
+    const childrenByParent: Record<string, string[]> = { __root__: [] };
+    for (const [fid, folder] of folderList) {
+      const parent = folder.parentId && folders[folder.parentId] ? folder.parentId : "__root__";
+      (childrenByParent[parent] ??= []).push(fid);
+    }
     const byFolder: Record<string, [string, EntryMeta][]> = {};
     const unfiled: [string, EntryMeta][] = [];
     const templates: [string, EntryMeta][] = [];
@@ -298,7 +417,7 @@ export function NotebookEntryList({
     for (const list of Object.values(byFolder)) sortEntries(list);
     sortEntries(unfiled);
     sortEntries(templates);
-    return { folderList, byFolder, unfiled, templates };
+    return { folderList, byFolder, childrenByParent, unfiled, templates };
   }, [entries, folders, q, filters, phaseNames]);
 
   const entryCount = Object.values(entries).filter((e) => !e.isTemplate).length;
@@ -309,6 +428,24 @@ export function NotebookEntryList({
       .reorderEntries(orgId, notebookId, { mode: "explorer", orderedIds })
       .then(() => refresh())
       .catch((err) => setError((err as Error).message));
+  }
+
+  function persistFolderOrder(parentKey: string, orderedFolderIds: string[]) {
+    void (async () => {
+      try {
+        await Promise.all(
+          orderedFolderIds.map((fid, index) =>
+            cloudApi.patchFolder(orgId, notebookId, fid, {
+              order: index,
+              parentId: parentKey === "__root__" ? null : parentKey,
+            })
+          )
+        );
+        refresh();
+      } catch (err) {
+        setError((err as Error).message);
+      }
+    })();
   }
 
   function createEntry(opts: {
@@ -516,7 +653,11 @@ export function NotebookEntryList({
     );
   }
 
-  function renderSortableList(list: [string, EntryMeta][], allowReorder: boolean) {
+  function renderSortableList(
+    list: [string, EntryMeta][],
+    allowReorder: boolean,
+    indent = 0
+  ) {
     const ids = list.map(([id]) => id);
     if (!allowReorder || ids.length < 2) {
       return (
@@ -529,6 +670,8 @@ export function NotebookEntryList({
               basePath={basePath}
               entry={e}
               menu={entryMenu(id, e)}
+              phases={phases}
+              indent={indent}
             />
           ))}
         </>
@@ -544,8 +687,120 @@ export function NotebookEntryList({
             basePath={basePath}
             entry={e}
             menu={entryMenu(id, e)}
+            phases={phases}
+            indent={indent}
           />
         ))}
+      </SortableGroup>
+    );
+  }
+
+  function folderMenu(fid: string) {
+    return (
+      <DropdownMenu
+        items={[
+          {
+            id: "rename",
+            label: "Rename",
+            onSelect: () => renameFolder(fid),
+          },
+          {
+            id: "new-here",
+            label: "New entry here",
+            onSelect: () =>
+              showPrompt("New entry", "Untitled entry", (title) => {
+                createEntry({ title, folderId: fid });
+              }),
+          },
+          {
+            id: "new-subfolder",
+            label: "New subfolder",
+            onSelect: () =>
+              showPrompt("New folder", "Subfolder", (name) => {
+                const trimmed = name.trim();
+                if (!trimmed) return;
+                void cloudApi
+                  .createFolder(orgId, notebookId, { name: trimmed, parentId: fid })
+                  .then(() => refresh())
+                  .catch((err) => setError((err as Error).message));
+              }, "Folder name"),
+          },
+          {
+            id: "del-folder",
+            label: "Delete folder",
+            danger: true,
+            onSelect: () => deleteFolder(fid),
+          },
+        ]}
+      />
+    );
+  }
+
+  function renderFolderTree(parentKey: string, depth: number): ReactNode {
+    const siblingIds = childrenByParent[parentKey] ?? [];
+    if (siblingIds.length === 0) return null;
+    const canReorder = !filtering && siblingIds.length > 1;
+
+    const nodes = siblingIds.map((fid) => {
+      const folder = folders[fid];
+      if (!folder) return null;
+      const open = !collapsedFolders.has(fid);
+      const kids = byFolder[fid] ?? [];
+      const childFolders = childrenByParent[fid] ?? [];
+      const count = kids.length + childFolders.length;
+      const row = canReorder ? (
+        <SortableFolderRow
+          id={fid}
+          name={folder.name}
+          open={open}
+          count={count}
+          depth={depth}
+          onToggle={() => toggleFolder(fid)}
+          menu={folderMenu(fid)}
+        />
+      ) : (
+        <FolderRowShell
+          name={folder.name}
+          open={open}
+          count={count}
+          depth={depth}
+          onToggle={() => toggleFolder(fid)}
+          menu={folderMenu(fid)}
+        />
+      );
+      return (
+        <div key={fid} className="mb-0.5">
+          {row}
+          {open && (
+            <div>
+              {renderFolderTree(fid, depth + 1)}
+              {renderSortableList(kids, !filtering, depth + 1)}
+              {!filtering && kids.length === 0 && childFolders.length === 0 && (
+                <p
+                  className="px-2 py-1 text-nb-caption text-nb-on-surface-variant/60"
+                  style={{ paddingLeft: (depth + 1) * 12 + 8 }}
+                >
+                  Empty
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    });
+
+    if (!canReorder) return <>{nodes}</>;
+
+    const sortableIds = siblingIds.map((id) => `folder:${id}`);
+    return (
+      <SortableGroup
+        ids={sortableIds}
+        onReorder={(orderedPrefixed) => {
+          const ordered = orderedPrefixed.map((x) => x.replace(/^folder:/, ""));
+          persistFolderOrder(parentKey, ordered);
+        }}
+      >
+        {nodes}
       </SortableGroup>
     );
   }
@@ -561,7 +816,7 @@ export function NotebookEntryList({
   }
 
   return (
-    <aside className="flex w-[260px] shrink-0 flex-col border-r border-nb-outline-variant/30 bg-nb-surface-low md:w-[280px]">
+    <aside className="flex h-full w-full min-w-0 flex-col border-r border-nb-outline-variant/30 bg-nb-surface-low">
       <div className="flex items-center gap-1 border-b border-nb-outline-variant/20 px-2 py-2">
         <div className="relative min-w-0 flex-1">
           <Search
@@ -591,26 +846,39 @@ export function NotebookEntryList({
 
       {filtersOpen && (
         <div className="space-y-2 border-b border-nb-outline-variant/20 px-2 py-2 text-nb-caption">
-          <label className="block">
-            <span className="mb-0.5 block text-nb-on-surface-variant">Phase</span>
-            <select
-              value={filters.phaseId ?? ""}
-              onChange={(e) =>
-                setFilters((f) => ({
-                  ...f,
-                  phaseId: e.target.value || null,
-                }))
-              }
-              className="w-full rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface px-2 py-1.5 text-nb-label outline-none focus:border-nb-primary"
-            >
-              <option value="">Any phase</option>
-              {phaseList.map(([id, p]) => (
-                <option key={id} value={id}>
-                  {p.name || id}
-                </option>
+          <div>
+            <span className="mb-1 block text-nb-on-surface-variant">Phase</span>
+            <div className="flex flex-wrap gap-1">
+              <button
+                type="button"
+                onClick={() => setFilters((f) => ({ ...f, phaseId: null }))}
+                className={`rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${
+                  filters.phaseId === null
+                    ? "border-nb-primary bg-nb-primary/10 text-nb-primary"
+                    : "border-nb-outline-variant/30 text-nb-on-surface-variant"
+                }`}
+              >
+                Any
+              </button>
+              {phaseList.map(([id]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() =>
+                    setFilters((f) => ({
+                      ...f,
+                      phaseId: f.phaseId === id ? null : id,
+                    }))
+                  }
+                  className={`rounded-md ${
+                    filters.phaseId === id ? "ring-2 ring-nb-primary ring-offset-1" : ""
+                  }`}
+                >
+                  <PhaseChip phaseId={id} phases={phases} />
+                </button>
               ))}
-            </select>
-          </label>
+            </div>
+          </div>
           <label className="block">
             <span className="mb-0.5 block text-nb-on-surface-variant">Author</span>
             <select
@@ -699,62 +967,7 @@ export function NotebookEntryList({
       </div>
 
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-        {folderList.map(([fid, folder]) => {
-          const open = !collapsedFolders.has(fid);
-          const kids = byFolder[fid] ?? [];
-          return (
-            <div key={fid} className="mb-1">
-              <div className="group flex items-center gap-0.5 rounded-nb-lg px-1 py-1 hover:bg-nb-surface">
-                <button
-                  type="button"
-                  className="flex min-w-0 flex-1 items-center gap-1 text-left text-nb-label font-semibold text-nb-on-surface-variant"
-                  onClick={() => toggleFolder(fid)}
-                >
-                  {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                  <span className="truncate">{folder.name}</span>
-                  <span className="text-nb-caption font-normal opacity-70">
-                    {kids.length}
-                  </span>
-                </button>
-                <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                  <DropdownMenu
-                    items={[
-                      {
-                        id: "rename",
-                        label: "Rename",
-                        onSelect: () => renameFolder(fid),
-                      },
-                      {
-                        id: "new-here",
-                        label: "New entry here",
-                        onSelect: () =>
-                          showPrompt("New entry", "Untitled entry", (title) => {
-                            createEntry({ title, folderId: fid });
-                          }),
-                      },
-                      {
-                        id: "del-folder",
-                        label: "Delete folder",
-                        danger: true,
-                        onSelect: () => deleteFolder(fid),
-                      },
-                    ]}
-                  />
-                </div>
-              </div>
-              {open && (
-                <div className="ml-2 border-l border-nb-outline-variant/20 pl-1">
-                  {renderSortableList(kids, !filtering)}
-                  {!kids.length && !q && (
-                    <p className="px-2 py-1 text-nb-caption text-nb-on-surface-variant/70">
-                      Empty
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {renderFolderTree("__root__", 0)}
 
         {(unfiled.length > 0 || folderList.length > 0) && (
           <div className="mb-1">

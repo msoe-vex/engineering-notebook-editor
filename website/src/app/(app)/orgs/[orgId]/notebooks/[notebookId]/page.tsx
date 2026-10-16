@@ -66,19 +66,19 @@ export default function NotebookOverviewPage() {
           href={`${basePath}/schedule`}
           className="inline-flex items-center gap-1.5 rounded-nb-lg border border-nb-outline-variant/30 px-3 py-1.5 text-nb-label font-semibold text-nb-on-surface hover:bg-nb-surface-low"
         >
-          <Calendar size={14} /> Schedule
+          <Calendar size={14} /> Calendar
         </Link>
         <Link
           href={`${basePath}/members`}
           className="inline-flex items-center gap-1.5 rounded-nb-lg border border-nb-outline-variant/30 px-3 py-1.5 text-nb-label font-semibold text-nb-on-surface hover:bg-nb-surface-low"
         >
-          <Users size={14} /> Members
+          <Users size={14} /> Contributors
         </Link>
         <Link
           href={`${basePath}/setup`}
           className="inline-flex items-center gap-1.5 rounded-nb-lg border border-nb-outline-variant/30 px-3 py-1.5 text-nb-label font-semibold text-nb-on-surface hover:bg-nb-surface-low"
         >
-          <BookOpen size={14} /> Setup
+          <BookOpen size={14} /> Settings
         </Link>
       </div>
 

@@ -17,10 +17,15 @@ export function DropdownMenu({
   items,
   align = "right",
   className,
+  trigger,
+  ariaLabel = "More actions",
 }: {
   items: MenuItem[];
   align?: "left" | "right";
   className?: string;
+  /** Custom trigger; defaults to ⋮ icon button. */
+  trigger?: ReactNode;
+  ariaLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -36,17 +41,29 @@ export function DropdownMenu({
 
   return (
     <div ref={rootRef} className={cn("relative shrink-0", className)}>
-      <IconButton
-        aria-label="More actions"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <MoreVertical size={16} />
-      </IconButton>
+      {trigger ? (
+        <button
+          type="button"
+          aria-label={ariaLabel}
+          aria-expanded={open}
+          className="inline-flex items-center"
+          onClick={() => setOpen((v) => !v)}
+        >
+          {trigger}
+        </button>
+      ) : (
+        <IconButton
+          aria-label={ariaLabel}
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <MoreVertical size={16} />
+        </IconButton>
+      )}
       {open && (
         <div
           className={cn(
-            "absolute top-full z-30 mt-1 w-44 overflow-hidden rounded-xl border border-nb-outline-variant/30 bg-nb-surface shadow-nb-lg",
+            "absolute top-full z-30 mt-1 min-w-44 overflow-hidden rounded-xl border border-nb-outline-variant/30 bg-nb-surface shadow-nb-lg",
             align === "right" ? "right-0" : "left-0"
           )}
         >

@@ -14,12 +14,12 @@ Happy paths for the live App Router product. Feature detail: [01-requirements/fe
 1. Open notebook workspace (`NotebookShell` + explorer)
 2. Filter/search or open folder — [FR-explorer](../01-requirements/features/FR-explorer.md)
 3. Edit entry (TipTap + Yjs); images upload to assets
-4. Optional: schedule / reorder by date — [FR-schedule](../01-requirements/features/FR-schedule.md)
+4. Optional: Calendar / reorder by date — [FR-schedule](../01-requirements/features/FR-schedule.md)
 
-## 3. Branding and roster
+## 3. Branding and contributors
 
-1. Setup: title, subtitle, logo, access mode, phases — [FR-notebooks](../01-requirements/features/FR-notebooks.md)
-2. Members: credits roster (not org ACL)
+1. Notebook **Settings**: title, subtitle, logo, access mode, phases — [FR-notebooks](../01-requirements/features/FR-notebooks.md)
+2. **Contributors**: credits list (not org ACL)
 
 ## 4. Compile and backup
 
@@ -28,7 +28,7 @@ Happy paths for the live App Router product. Feature detail: [01-requirements/fe
 
 ## 5. GenAI and audit
 
-1. Account: enable GenAI, set provider (BYOK key local) — [FR-account](../01-requirements/features/FR-account.md)
+1. Account **Profile** / **Preferences**: theme, authors, GenAI (BYOK key local) — [FR-account](../01-requirements/features/FR-account.md)
 2. Generate entry title / image captions; run rubric audit — [FR-genai-audit](../01-requirements/features/FR-genai-audit.md)
 
 ## 6. Org people
@@ -43,11 +43,12 @@ Happy paths for the live App Router product. Feature detail: [01-requirements/fe
 /orgs/:orgId              Notebooks + People / Teams
 /orgs/:orgId/notebooks/:notebookId
   ├── entries/:entryId    Collaborative editor
-  ├── schedule            Calendar
+  ├── schedule            Calendar (alias /calendar)
   ├── compile             BusyTeX PDF
-  ├── setup               Branding, access, phases, logo
-  └── members             Credits roster
-/account                  Theme, GenAI prefs
+  ├── setup               Settings: branding, access, phases, logo (alias /settings)
+  └── members             Contributors credits (alias /contributors)
+/account                  Profile
+/account/preferences      Theme, GenAI prefs
 /help · /about
 /admin                    Platform admin
 ```

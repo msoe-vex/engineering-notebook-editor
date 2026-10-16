@@ -11,7 +11,8 @@ import {
   useDraggable,
   useDroppable,
 } from "@dnd-kit/core";
-import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Rows3, X } from "lucide-react";
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Rows3, X, type LucideIcon } from "lucide-react";
+import { PhaseChip } from "@/components/cloud/PhaseChip";
 import { useCloudWorkspace } from "@/hooks/useCloudWorkspace";
 import { formatAuthors, sortedEntries } from "@/lib/notebook/metadata";
 import { getPhaseConfig, getPhases } from "@/lib/notebook/phases";
@@ -114,11 +115,12 @@ interface CardProps {
   id: string;
   title: string;
   color?: string;
+  PhaseIcon?: LucideIcon;
   onOpen: () => void;
   onHover: (el: HTMLElement | null) => void;
 }
 
-function SortableCard({ id, title, color, onOpen, onHover }: CardProps) {
+function SortableCard({ id, title, color, PhaseIcon, onOpen, onHover }: CardProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id,
     data: { type: "entry" },
@@ -152,7 +154,8 @@ function SortableCard({ id, title, color, onOpen, onHover }: CardProps) {
       className="nb-cal-card touch-none"
       data-cal-entry={id}
     >
-      {title || "Untitled"}
+      {PhaseIcon ? <PhaseIcon size={12} className="nb-cal-card-icon shrink-0" style={{ color }} /> : null}
+      <span className="truncate">{title || "Untitled"}</span>
     </button>
   );
 }
@@ -174,7 +177,7 @@ function DayColumn({
   isToday?: boolean;
   isMuted?: boolean;
   ids: string[];
-  cards: Record<string, { title: string; color?: string }>;
+  cards: Record<string, { title: string; color?: string; PhaseIcon?: LucideIcon; phaseId?: string }>;
   onOpen: (id: string) => void;
   onHover: (id: string | null, el: HTMLElement | null) => void;
 }) {
@@ -196,6 +199,7 @@ function DayColumn({
             id={id}
             title={cards[id]?.title || ""}
             color={cards[id]?.color}
+            PhaseIcon={cards[id]?.PhaseIcon}
             onOpen={() => onOpen(id)}
             onHover={(el) => onHover(id, el)}
           />
@@ -471,13 +475,27 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
   );
 
   const cards = useMemo(() => {
-    const map: Record<string, { title: string; color?: string; author: string; phaseName: string; date: string }> = {};
+    const map: Record<
+      string,
+      {
+        title: string;
+        color?: string;
+        author: string;
+        phaseName: string;
+        phaseId?: string;
+        PhaseIcon?: LucideIcon;
+        date: string;
+      }
+    > = {};
     for (const e of calendarEntries) {
+      const cfg = e.phase ? phaseConfig[e.phase] : undefined;
       map[e.id] = {
         title: e.title,
-        color: e.phase ? phaseConfig[e.phase]?.color : undefined,
+        color: cfg?.color,
         author: formatAuthors(e.authors),
         phaseName: e.phase ? (phases.find((p) => p.id === e.phase)?.name || "") : "",
+        phaseId: e.phase || undefined,
+        PhaseIcon: cfg?.icon,
         date: formatEntryDate(e.date),
       };
     }
@@ -748,10 +766,13 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
       {hoverCard && hover && (
         <div className="nb-cal-tip" style={{ left: hover.x, top: hover.y }} role="tooltip">
           <div className="nb-cal-tip-title">{hoverCard.title || "Untitled"}</div>
-          {hoverCard.phaseName && (
+          {hoverCard.phaseId && (
             <div className="nb-cal-tip-row">
-              <span className="nb-cal-tip-swatch" style={{ background: hoverCard.color }} />
-              {hoverCard.phaseName}
+              <PhaseChip
+                phaseId={hoverCard.phaseId}
+                phases={metadata.phases}
+                size="sm"
+              />
             </div>
           )}
           {hoverCard.author && <div className="nb-cal-tip-row">By {hoverCard.author}</div>}

@@ -4,7 +4,16 @@ import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useTheme } from "next-themes";
-import { ChevronDown, CircleHelp, Info, Moon, Sun, UserRound } from "lucide-react";
+import {
+  ChevronDown,
+  CircleHelp,
+  Info,
+  LogOut,
+  Moon,
+  Settings2,
+  Sun,
+  UserRound,
+} from "lucide-react";
 import {
   getFirebaseAuth,
   getDevToken,
@@ -30,6 +39,7 @@ import {
   DropdownMenu,
   LoadingBlock,
   TextField,
+  type Crumb,
 } from "@/components/ui";
 
 /** Global app chrome (auth + top bar). Formerly CloudShell. */
@@ -43,6 +53,12 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
   const onAccount = pathname?.startsWith("/account");
   const onHelp = pathname?.startsWith("/help");
   const onAbout = pathname?.startsWith("/about");
+  /** Match notebook: header + main span the viewport (no max-w-6xl “page in a page”). */
+  const fullBleedChrome = true;
+  /** Help (and notebooks) fill remaining height; About/Account/home scroll inside main. */
+  const fillMain = notebookWorkspace || onHelp;
+  /** About / Account own their own padding (sidebar + full-bleed sections). */
+  const bareMain = onAbout || onAccount;
   const orgId = typeof params.orgId === "string" ? params.orgId : null;
   const workspaceHeader = useSyncExternalStore(
     subscribeWorkspaceHeader,
@@ -62,7 +78,6 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
   } | null>(null);
   const [orgs, setOrgs] = useState<OrgSummary[]>([]);
   const [orgName, setOrgName] = useState<string | null>(null);
-  const [orgMenuOpen, setOrgMenuOpen] = useState(false);
   const [mountedTheme, setMountedTheme] = useState(false);
 
   useEffect(() => {
@@ -185,7 +200,7 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
 
   if (!ready) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-nb-bg">
+      <div className="flex min-h-screen items-center justify-center bg-nb-surface">
         <LoadingBlock />
       </div>
     );
@@ -193,7 +208,7 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
 
   if (!signedIn) {
     return (
-      <div className="cloud-shell min-h-screen bg-nb-bg text-nb-on-surface">
+      <div className="cloud-shell min-h-screen bg-nb-surface text-nb-on-surface">
         <div className="mx-auto max-w-md px-6 py-16">
           <div className="mb-8 flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-nb-primary shadow-lg shadow-nb-primary/25">
@@ -255,12 +270,46 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
 
   const ws = notebookWorkspace ? workspaceHeader : null;
 
+  const crumbs: Crumb[] = (() => {
+    if (ws) {
+      return [
+        { label: "Home", href: "/" },
+        { label: ws.orgName, href: `/orgs/${ws.orgId}` },
+        { label: ws.notebookName },
+      ];
+    }
+    if (!pathname || pathname === "/") return [{ label: "Home" }];
+    const items: Crumb[] = [{ label: "Home", href: "/" }];
+    if (orgId && orgName) {
+      const onOrgRoot =
+        pathname === `/orgs/${orgId}` || pathname === `/orgs/${orgId}/`;
+      items.push({
+        label: orgName,
+        href: onOrgRoot ? undefined : `/orgs/${orgId}`,
+      });
+    }
+    if (onAdmin) items.push({ label: "Admin" });
+    if (onAccount) {
+      if (pathname.startsWith("/account/preferences")) {
+        items.push({ label: "Account", href: "/account" }, { label: "Preferences" });
+      } else {
+        items.push({ label: "Account" });
+      }
+    }
+    if (onHelp) items.push({ label: "Help" });
+    if (onAbout) items.push({ label: "About" });
+    return items;
+  })();
+
+  const iconBtn =
+    "inline-flex items-center gap-1.5 rounded-nb-lg px-2 py-1.5 text-nb-label font-semibold text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface";
+
   return (
-    <div className="cloud-shell flex min-h-screen flex-col bg-nb-bg text-nb-on-surface">
+    <div className="cloud-shell flex min-h-screen flex-col bg-nb-surface text-nb-on-surface">
       <header className="shrink-0 border-b border-nb-outline-variant/30 bg-nb-surface">
         <div
-          className={`mx-auto flex w-full items-center justify-between gap-3 px-4 sm:px-6 ${
-            notebookWorkspace ? "py-2" : "max-w-6xl py-3.5"
+          className={`flex w-full items-center justify-between gap-3 px-4 py-2 sm:px-6 ${
+            fullBleedChrome ? "" : "mx-auto max-w-6xl"
           }`}
         >
           <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
@@ -270,102 +319,9 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
               </span>
               <span className="hidden sm:inline">ENGen</span>
             </Link>
-
-            {ws ? (
-              <div className="min-w-0 flex-1">
-                <Breadcrumbs
-                  items={[
-                    { label: "Home", href: "/" },
-                    { label: ws.orgName, href: `/orgs/${ws.orgId}` },
-                    { label: ws.notebookName },
-                  ]}
-                />
-              </div>
-            ) : (
-              <nav className="flex min-w-0 items-center gap-2 text-nb-label font-semibold">
-                <Link
-                  href="/"
-                  className={
-                    pathname === "/"
-                      ? "text-nb-primary"
-                      : "text-nb-on-surface-variant hover:text-nb-on-surface"
-                  }
-                >
-                  Home
-                </Link>
-                {orgId && orgName && (
-                  <>
-                    <span className="text-nb-on-surface-variant/40">/</span>
-                    <div className="relative">
-                      <button
-                        type="button"
-                        className="inline-flex max-w-[10rem] items-center gap-1 truncate text-nb-on-surface hover:text-nb-primary sm:max-w-[14rem]"
-                        onClick={() => setOrgMenuOpen((v) => !v)}
-                      >
-                        <span className="truncate normal-case tracking-normal">{orgName}</span>
-                        <ChevronDown size={14} className="shrink-0 opacity-60" />
-                      </button>
-                      {orgMenuOpen && (
-                        <>
-                          <div
-                            className="fixed inset-0 z-20"
-                            onClick={() => setOrgMenuOpen(false)}
-                          />
-                          <div className="absolute top-full left-0 z-30 mt-1 max-h-64 w-56 overflow-auto rounded-xl border border-nb-outline-variant/30 bg-nb-surface shadow-nb-lg">
-                            {orgs.map((o) => (
-                              <button
-                                key={o.id}
-                                type="button"
-                                className={`block w-full truncate px-3 py-2 text-left text-xs font-medium hover:bg-nb-surface-low ${
-                                  o.id === orgId ? "text-nb-primary" : "text-nb-on-surface"
-                                }`}
-                                onClick={() => {
-                                  setOrgMenuOpen(false);
-                                  router.push(`/orgs/${o.id}`);
-                                }}
-                              >
-                                {o.name}
-                              </button>
-                            ))}
-                            <Link
-                              href="/"
-                              className="block border-t border-nb-outline-variant/20 px-3 py-2 text-xs font-medium text-nb-tertiary hover:bg-nb-surface-low"
-                              onClick={() => setOrgMenuOpen(false)}
-                            >
-                              All organizations
-                            </Link>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </>
-                )}
-                {onAdmin && (
-                  <>
-                    <span className="text-nb-on-surface-variant/40">/</span>
-                    <span className="text-nb-primary">Admin</span>
-                  </>
-                )}
-                {onAccount && (
-                  <>
-                    <span className="text-nb-on-surface-variant/40">/</span>
-                    <span className="text-nb-primary">Account</span>
-                  </>
-                )}
-                {onHelp && (
-                  <>
-                    <span className="text-nb-on-surface-variant/40">/</span>
-                    <span className="text-nb-primary">Help</span>
-                  </>
-                )}
-                {onAbout && (
-                  <>
-                    <span className="text-nb-on-surface-variant/40">/</span>
-                    <span className="text-nb-primary">About</span>
-                  </>
-                )}
-              </nav>
-            )}
+            <div className="min-w-0 flex-1">
+              <Breadcrumbs items={crumbs} />
+            </div>
             {title && !ws && (
               <span className="hidden truncate text-sm text-nb-on-surface-variant lg:inline">
                 {title}
@@ -385,68 +341,69 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
                 {resolvedTheme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
               </button>
             )}
-            <Link
-              href="/help"
-              className={`inline-flex items-center gap-1.5 rounded-nb-lg px-2 py-1.5 text-nb-label font-semibold ${
-                onHelp
-                  ? "bg-nb-primary/10 text-nb-primary"
-                  : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface"
-              }`}
-              title="Help"
-            >
+            <Link href="/help" className={iconBtn} title="Help" aria-current={onHelp ? "page" : undefined}>
               <CircleHelp size={16} />
               <span className="hidden lg:inline">Help</span>
             </Link>
-            <Link
-              href="/about"
-              className={`inline-flex items-center gap-1.5 rounded-nb-lg px-2 py-1.5 text-nb-label font-semibold ${
-                onAbout
-                  ? "bg-nb-primary/10 text-nb-primary"
-                  : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface"
-              }`}
-              title="About"
-            >
+            <Link href="/about" className={iconBtn} title="About" aria-current={onAbout ? "page" : undefined}>
               <Info size={16} />
               <span className="hidden lg:inline">About</span>
-            </Link>
-            <Link
-              href="/account"
-              className={`inline-flex items-center gap-1.5 rounded-nb-lg px-2 py-1.5 text-nb-label font-semibold ${
-                onAccount
-                  ? "bg-nb-primary/10 text-nb-primary"
-                  : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface"
-              }`}
-              title={displayEmail || "Account"}
-            >
-              <UserRound size={16} />
-              <span className="hidden md:inline">Account</span>
             </Link>
             {isServiceAdmin && (
               <Link
                 href="/admin"
-                className={`hidden text-nb-label font-semibold sm:inline ${
-                  onAdmin ? "text-nb-primary" : "text-nb-on-surface-variant hover:text-nb-primary"
-                }`}
+                className="hidden text-nb-label font-semibold text-nb-on-surface-variant hover:text-nb-on-surface sm:inline"
                 title={platformRoleLabel("service_admin")}
+                aria-current={onAdmin ? "page" : undefined}
               >
                 Admin
               </Link>
             )}
-            <button
-              type="button"
-              className="text-nb-label font-semibold text-nb-on-surface-variant hover:text-nb-on-surface"
-              onClick={() => void handleSignOut()}
-            >
-              Sign out
-            </button>
+            <DropdownMenu
+              ariaLabel="Account menu"
+              items={[
+                {
+                  id: "profile",
+                  label: "Profile",
+                  icon: <UserRound size={14} />,
+                  onSelect: () => router.push("/account"),
+                },
+                {
+                  id: "preferences",
+                  label: "Preferences",
+                  icon: <Settings2 size={14} />,
+                  onSelect: () => router.push("/account/preferences"),
+                },
+                {
+                  id: "signout",
+                  label: "Sign out",
+                  icon: <LogOut size={14} />,
+                  danger: true,
+                  onSelect: () => void handleSignOut(),
+                },
+              ]}
+              trigger={
+                <span className={iconBtn} title={displayEmail || "Account"}>
+                  <UserRound size={16} />
+                  <span className="hidden md:inline max-w-[8rem] truncate">
+                    {displayEmail?.split("@")[0] || "Account"}
+                  </span>
+                  <ChevronDown size={12} className="opacity-60" />
+                </span>
+              }
+            />
           </div>
         </div>
       </header>
       <main
         className={
-          notebookWorkspace
+          fillMain
             ? "min-h-0 w-full flex-1 overflow-hidden"
-            : "mx-auto w-full max-w-6xl flex-1 px-6 py-8 lg:py-12"
+            : bareMain
+              ? "min-h-0 w-full flex-1 overflow-y-auto"
+              : fullBleedChrome
+                ? "min-h-0 w-full flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:py-8"
+                : "mx-auto w-full max-w-6xl flex-1 px-6 py-8 lg:py-12"
         }
       >
         {children}
