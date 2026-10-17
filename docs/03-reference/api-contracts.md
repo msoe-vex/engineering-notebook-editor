@@ -185,6 +185,6 @@ Prefer existing entry APIs; add thin helpers only if needed:
 3. Final `PATCH` → `completed` + scorecard (or `failed`).  
 4. UI may also keep local step state; poll `GET` if needed.
 
-## Agents (`services/agents`) — retired
+## Agents — removed
 
-Not deployed. Prefer deleting the package. Historical `/v1/.../audit(s)` replaced by Core audits + website judge.
+Former `services/agents` deleted. Audits + Vertex live on Core; judge runs in the website.

@@ -19,6 +19,7 @@ import ViewToggle, { type ViewMode } from "@/components/editor/ui/ViewToggle";
 import { Alert, Badge, Button, DropdownMenu } from "@/components/ui";
 import { showNotification } from "@/components/overlays/Notification";
 import { cloudApi } from "@/lib/cloud/api";
+import { patchEditorChrome } from "@/lib/cloud/editorChromeStore";
 import { getIdToken } from "@/lib/cloud/firebase";
 import { generateEntryTitle } from "@/lib/genai";
 import { generateEntryLatex, latexPhaseRef } from "@/lib/latex/latex";
@@ -77,7 +78,12 @@ export default function EntryPage() {
   useEffect(() => {
     setDocJson(null);
     setSaveState("idle");
+    patchEditorChrome({ saveState: "idle" });
   }, [entryId]);
+
+  useEffect(() => {
+    patchEditorChrome({ saveState });
+  }, [saveState]);
 
   useEffect(() => {
     const fromEntries = new Set<string>();
@@ -92,6 +98,7 @@ export default function EntryPage() {
     return () => {
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       if (titleTimerRef.current) clearTimeout(titleTimerRef.current);
+      patchEditorChrome({ saveState: null });
     };
   }, []);
 
@@ -130,8 +137,8 @@ export default function EntryPage() {
         .patchEntry(orgId, notebookId, entryId, body)
         .then(() => {
           setSaveState("saved");
-          refresh();
-          savedTimerRef.current = setTimeout(() => setSaveState("idle"), 1600);
+          // Rely on optimistic update + notebook SSE; avoid full refresh flicker.
+          savedTimerRef.current = setTimeout(() => setSaveState("idle"), 2000);
         })
         .catch((err) => {
           setSaveState("error");
@@ -277,26 +284,6 @@ export default function EntryPage() {
             />
           </div>
           {meta?.isTemplate && <Badge tone="tertiary">Template</Badge>}
-          <span
-            className={`text-[10px] font-semibold uppercase tracking-wider ${
-              saveState === "saving"
-                ? "text-nb-on-surface-variant"
-                : saveState === "saved"
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : saveState === "error"
-                    ? "text-nb-danger"
-                    : "text-transparent"
-            }`}
-            aria-live="polite"
-          >
-            {saveState === "saving"
-              ? "Saving…"
-              : saveState === "saved"
-                ? "Saved"
-                : saveState === "error"
-                  ? "Save failed"
-                  : "Idle"}
-          </span>
           <ViewToggle viewMode={viewMode} onSetViewMode={setViewMode} />
           <DropdownMenu
             items={[

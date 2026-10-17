@@ -78,7 +78,7 @@ flowchart LR
 ### Phase 4 — Remove Agents · P1
 
 - [x] Removed from compose / Cloud Run / CI / env examples.
-- [ ] Delete `services/agents` directory when convenient.
+- [x] Delete `services/agents` directory.
 
 ---
 

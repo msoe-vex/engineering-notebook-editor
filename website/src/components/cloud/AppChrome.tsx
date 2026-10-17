@@ -30,6 +30,10 @@ import { bindNotificationEvents } from "@/components/overlays/Notification";
 import { cloudApi, type OrgSummary } from "@/lib/cloud/api";
 import { platformRoleLabel } from "@/lib/cloud/roles";
 import {
+  getEditorChrome,
+  subscribeEditorChrome,
+} from "@/lib/cloud/editorChromeStore";
+import {
   getWorkspaceHeader,
   subscribeWorkspaceHeader,
 } from "@/lib/cloud/workspaceHeaderStore";
@@ -66,6 +70,11 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
     subscribeWorkspaceHeader,
     getWorkspaceHeader,
     () => null
+  );
+  const editorChrome = useSyncExternalStore(
+    subscribeEditorChrome,
+    getEditorChrome,
+    () => ({ connection: null, saveState: null, peers: [], onReconnect: null })
   );
 
   const [user, setUser] = useState<User | null>(null);
@@ -337,6 +346,83 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
           </div>
 
           <div className="flex shrink-0 items-center gap-1 sm:gap-2 text-sm">
+            {(editorChrome.connection || editorChrome.saveState) && (
+              <div className="mr-1 flex max-w-[14rem] items-center gap-2 sm:max-w-none">
+                {editorChrome.connection && (
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-nb px-2 py-0.5 text-[11px] font-semibold ${
+                      editorChrome.connection === "connected"
+                        ? "bg-nb-success/10 text-nb-success"
+                        : "bg-nb-warning/10 text-nb-warning"
+                    }`}
+                    title="Collaboration connection"
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                        editorChrome.connection === "connected"
+                          ? "bg-nb-success"
+                          : "bg-nb-warning animate-pulse"
+                      }`}
+                    />
+                    {editorChrome.connection === "connected"
+                      ? "Connected"
+                      : editorChrome.connection === "connecting"
+                        ? "Connecting…"
+                        : "Offline"}
+                  </span>
+                )}
+                {editorChrome.saveState && editorChrome.saveState !== "idle" && (
+                  <span
+                    className={`text-[11px] font-semibold tabular-nums ${
+                      editorChrome.saveState === "saving"
+                        ? "text-nb-on-surface-variant"
+                        : editorChrome.saveState === "saved"
+                          ? "text-nb-success"
+                          : "text-nb-danger"
+                    }`}
+                    aria-live="polite"
+                  >
+                    {editorChrome.saveState === "saving"
+                      ? "Saving…"
+                      : editorChrome.saveState === "saved"
+                        ? "Saved"
+                        : "Save failed"}
+                  </span>
+                )}
+                {editorChrome.peers.length > 0 && (
+                  <div className="hidden items-center -space-x-1.5 sm:flex" aria-label="Editors present">
+                    {editorChrome.peers.slice(0, 4).map((peer) => (
+                      <span
+                        key={peer.clientId}
+                        title={peer.name}
+                        className="inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-nb-surface text-[9px] font-bold text-white shadow-sm"
+                        style={{ backgroundColor: peer.color }}
+                      >
+                        {peer.name
+                          .trim()
+                          .split(/\s+/)
+                          .filter(Boolean)
+                          .slice(0, 2)
+                          .map((p) => p[0])
+                          .join("")
+                          .toUpperCase() || "?"}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {editorChrome.connection &&
+                  editorChrome.connection !== "connected" &&
+                  editorChrome.onReconnect && (
+                    <button
+                      type="button"
+                      className="hidden text-[11px] font-semibold text-nb-primary hover:underline sm:inline"
+                      onClick={() => editorChrome.onReconnect?.()}
+                    >
+                      Reconnect
+                    </button>
+                  )}
+              </div>
+            )}
             {ws && (
               <DropdownMenu
                 ariaLabel="Notebook actions"

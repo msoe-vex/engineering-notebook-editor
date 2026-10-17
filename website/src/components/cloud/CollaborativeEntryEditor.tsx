@@ -14,7 +14,17 @@ import { showNotification } from "@/components/overlays/Notification";
 import { getFirebaseAuth, getDevToken } from "@/lib/cloud/firebase";
 import { compressImageToJpeg, convertSvgToPng } from "@/lib/utils";
 import { workspaceState } from "@/lib/cloud/workspaceState";
+import {
+  patchEditorChrome,
+  type CollabConnectionStatus,
+} from "@/lib/cloud/editorChromeStore";
 import { useNotebookWorkspace } from "./NotebookWorkspaceContext";
+
+function mapCollabStatus(raw: string): CollabConnectionStatus {
+  if (raw === "connected") return "connected";
+  if (raw === "connecting") return "connecting";
+  return "offline";
+}
 
 type PresenceUser = { clientId: number; name: string; color: string };
 
@@ -33,13 +43,6 @@ function colorForId(id: string | number): string {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
   return PRESENCE_COLORS[h % PRESENCE_COLORS.length];
-}
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 type Props = {
@@ -79,7 +82,6 @@ export function CollaborativeEntryEditor({
   const [headingPos, setHeadingPos] = useState({ top: 0, left: 0 });
   const [gridPos, setGridPos] = useState({ top: 0, left: 0 });
   const [showTableGrid, setShowTableGrid] = useState(false);
-  const [peers, setPeers] = useState<PresenceUser[]>([]);
   const toggleLinkFn = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -103,10 +105,14 @@ export function CollaborativeEntryEditor({
         name: documentName,
         document: ydoc,
         token,
-        onStatus: ({ status: s }) => setStatus(s),
+        onStatus: ({ status: s }) => {
+          setStatus(s);
+          patchEditorChrome({ connection: mapCollabStatus(s) });
+        },
         onAuthenticationFailed: ({ reason }) => {
           console.warn("Collab auth failed", reason);
           setStatus("disconnected");
+          patchEditorChrome({ connection: "offline" });
         },
         onAwarenessChange: ({ states }) => {
           const next: PresenceUser[] = [];
@@ -127,7 +133,19 @@ export function CollaborativeEntryEditor({
               color: user.color || colorForId(clientId),
             });
           }
-          setPeers(next);
+          patchEditorChrome({ peers: next });
+        },
+      });
+      patchEditorChrome({
+        connection: "connecting",
+        onReconnect: () => {
+          const cur = providerRef.current;
+          if (!cur) return;
+          try {
+            void cur.configuration.websocketProvider.connect();
+          } catch (err) {
+            console.warn("Collab reconnect failed", err);
+          }
         },
       });
 
@@ -147,7 +165,7 @@ export function CollaborativeEntryEditor({
       p?.destroy();
       setProvider(null);
       setEditor(null);
-      setPeers([]);
+      patchEditorChrome({ connection: null, peers: [], onReconnect: null });
     };
   }, [documentName, ydoc]);
 
@@ -236,16 +254,6 @@ export function CollaborativeEntryEditor({
       editor.off("update", schedule);
     };
   }, [editor, entryId, metaFingerprint, orgId, notebookId, refresh]);
-
-  const reconnect = useCallback(() => {
-    const p = providerRef.current;
-    if (!p) return;
-    try {
-      void p.configuration.websocketProvider.connect();
-    } catch (err) {
-      console.warn("Collab reconnect failed", err);
-    }
-  }, []);
 
   const linkAssetToEntry = useCallback(
     async (assetId: string) => {
@@ -363,57 +371,8 @@ export function CollaborativeEntryEditor({
     );
   }
 
-  const statusLabel =
-    status === "connected" ? "Live" : status === "connecting" ? "Connecting…" : "Offline";
-
   return (
     <div className="flex flex-col gap-2 text-nb-on-surface">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-nb px-2 py-0.5 text-nb-caption font-semibold ${
-              status === "connected"
-                ? "bg-nb-success/10 text-nb-success"
-                : "bg-nb-warning/10 text-nb-warning"
-            }`}
-          >
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                status === "connected" ? "bg-nb-success" : "bg-nb-warning"
-              }`}
-            />
-            {statusLabel}
-          </span>
-          {peers.length > 0 && (
-            <div className="flex items-center -space-x-1.5" aria-label="Editors present">
-              {peers.slice(0, 5).map((peer) => (
-                <span
-                  key={peer.clientId}
-                  title={peer.name}
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-nb-surface text-[9px] font-bold text-white shadow-sm"
-                  style={{ backgroundColor: peer.color }}
-                >
-                  {initials(peer.name)}
-                </span>
-              ))}
-              {peers.length > 5 && (
-                <span className="pl-2 text-[10px] font-semibold text-nb-on-surface-variant">
-                  +{peers.length - 5}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-        {status !== "connected" && (
-          <button
-            type="button"
-            className="text-nb-label font-semibold text-nb-primary hover:underline"
-            onClick={reconnect}
-          >
-            Reconnect
-          </button>
-        )}
-      </div>
       {editor && (
         <div className="sticky top-0 z-30 overflow-hidden rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface shadow-nb-sm">
           <NotebookFormatToolbar

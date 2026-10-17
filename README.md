@@ -22,7 +22,6 @@ Full index (by audience): **[docs/README.md](docs/README.md)** · Agent steerage
 | [website/LEGACY.md](website/LEGACY.md) | Legacy archive pointer |
 | [services/core/README.md](services/core/README.md) | Core API |
 | [services/collab/README.md](services/collab/README.md) | Realtime collab |
-| [services/agents/README.md](services/agents/README.md) | **Legacy** — GenAI/audits moved to Core |
 | [notebook/README.md](notebook/README.md) | LaTeX template submodule |
 | [infra/cloudrun/deploy.sh](infra/cloudrun/deploy.sh) | Production deploy |
 | [infra/docker-compose.yml](infra/docker-compose.yml) | Local full stack |
@@ -36,7 +35,6 @@ Full index (by audience): **[docs/README.md](docs/README.md)** · Agent steerage
 website/           # Next.js — cloud UI at /  (+ archive/legacy/ for old shell)
 services/core/     # Auth, orgs, notebooks, entries, assets, audits, Vertex /ai/complete, BusyTeX
 services/collab/   # Hocuspocus / Yjs
-services/agents/   # Legacy (retired from compose; see ADR-005)
 packages/shared/   # v5 types, nested paths, ZIP migrate
 infra/             # compose, emulators, Cloud Run, BusyTeX upload
 docs/              # product · FR/NFR · architecture · reference · guides · ops
