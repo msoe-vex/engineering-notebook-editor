@@ -207,18 +207,22 @@ Selected resource node chrome uses high z-index (`z-100`); sticky format toolbar
 
 ### G2 — Header density & authors width (P2)
 
-Authors `flex-1 min-w-[14rem]` dominates the meta row; native date/phase fields look inconsistent; lots of vertical padding; no collapse.
+Authors `flex-1 min-w-[14rem]` dominates the meta row; native date/phase fields look inconsistent; lots of vertical padding; no collapse. Notebook chrome also stacked AppChrome + a full section subnav bar + entry header.
 
 **Work**
 
-- [ ] Compact meta row: consistent control heights (`h-9`), shared label/field styling, authors capped (e.g. `max-w` / grid columns like legacy).
+- [x] Compact meta row: consistent control heights (`h-9`), shared label/field styling, authors capped (e.g. `max-w` / grid columns like legacy).
 - [ ] Optional collapse control for meta row (legacy had this).
 - [x] Remove redundant phase chip + select if a single control can show both state and picker (`PhasePicker`).
+- [x] Fold notebook section nav (Entries / Calendar / Compile / Contributors / Settings) into AppChrome; drop the second bar.
+- [x] Move Help / About / Admin into the account menu; keep Connected/Saving + notebook ⋮ lean.
+- [x] Entry editor scroll: inner `overflow-y-auto` wrapper (Panel’s inline `overflow: hidden` blocked class-based scrolling).
 
 ### Acceptance
 
 - [x] Sticky toolbar remains clickable when a resource is selected and scrolled under the header area.
 - [x] Authors no longer stretch to dominate the first viewport of the entry page on typical laptop widths (grid layout).
+- [x] Notebook workspace uses a single top chrome row (plus entry meta when editing); entry body scrolls.
 
 ---
 

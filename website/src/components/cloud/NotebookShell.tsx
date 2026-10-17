@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
@@ -552,112 +551,143 @@ export function NotebookShell({ children }: { children: ReactNode }) {
   const busyRef = useRef(busy);
   busyRef.current = busy;
 
+  const activeNav = SUBNAV.find((t) => t.match(pathname || ""))?.id ?? "entries";
+
+  const navItems = useMemo(
+    () =>
+      SUBNAV.map((item) => ({
+        id: item.id,
+        label: item.label,
+        href:
+          item.id === "entries"
+            ? basePath
+            : item.id === "schedule"
+              ? `${basePath}/schedule`
+              : item.id === "compile"
+                ? `${basePath}/compile`
+                : item.id === "members"
+                  ? `${basePath}/members`
+                  : `${basePath}/setup`,
+      })),
+    [basePath]
+  );
+
   useEffect(() => {
     setWorkspaceHeader({
       orgId,
       notebookId,
       orgName,
       notebookName,
-      menuItems: [
-        {
-          id: "rename",
-          label: "Rename notebook",
-          onSelect: () =>
-            showPrompt("Rename notebook", notebookName, (next) => {
-              void cloudApi
-                .patchNotebook(orgId, notebookId, { name: next, title: next })
-                .then(refresh)
-                .catch((err) => setError((err as Error).message));
-            }),
-        },
-        {
-          id: "compile",
-          label: "Compile PDF",
-          onSelect: () => router.push(`${basePath}/compile`),
-        },
-        {
-          id: "share",
-          label: "Share…",
-          onSelect: () => setShareOpen(true),
-        },
-        {
-          id: "export",
-          label: "Export ZIP",
-          onSelect: () => {
-            if (!busyRef.current) void exportZipRef.current();
-          },
-        },
-        {
-          id: "import",
-          label: "Import ZIP",
-          onSelect: () => {
-            if (!busyRef.current) importRef.current?.click();
-          },
-        },
-        {
-          id: "audit",
-          label: "Run audit",
-          onSelect: () => {
-            if (busyRef.current) return;
-            setBusy(true);
-            setAuditResult("Starting audit…");
-            void runNotebookAudit(orgId, notebookId, {
-              onProgress: (a) => {
-                const last = a.steps?.[a.steps.length - 1]?.message;
-                setAuditResult(
-                  [
-                    `status: ${a.status ?? "running"}`,
-                    last ? `step: ${last}` : null,
-                    a.summary ? `summary: ${a.summary}` : null,
-                    a.error ? `error: ${a.error}` : null,
-                    a.scores && Object.keys(a.scores).length
-                      ? `scores: ${JSON.stringify(a.scores, null, 2)}`
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join("\n\n")
-                );
+      navItems: notebookUnavailable ? [] : navItems,
+      activeNavId: activeNav,
+      menuItems: notebookUnavailable
+        ? []
+        : [
+            {
+              id: "rename",
+              label: "Rename notebook",
+              onSelect: () =>
+                showPrompt("Rename notebook", notebookName, (next) => {
+                  void cloudApi
+                    .patchNotebook(orgId, notebookId, { name: next, title: next })
+                    .then(refresh)
+                    .catch((err) => setError((err as Error).message));
+                }),
+            },
+            {
+              id: "share",
+              label: "Share…",
+              onSelect: () => setShareOpen(true),
+            },
+            {
+              id: "export",
+              label: "Export ZIP",
+              onSelect: () => {
+                if (!busyRef.current) void exportZipRef.current();
               },
-            })
-              .then((r) => setAuditResult(JSON.stringify(r, null, 2)))
-              .catch((err) => {
-                setError((err as Error).message);
-                setAuditResult(null);
-              })
-              .finally(() => setBusy(false));
-          },
-        },
-        {
-          id: "audit-history",
-          label: "Audit history",
-          onSelect: () => {
-            void cloudApi
-              .listAudits(orgId, notebookId)
-              .then(setAuditHistory)
-              .catch((err) => setError((err as Error).message));
-          },
-        },
-        {
-          id: "delete",
-          label: "Delete notebook",
-          danger: true,
-          onSelect: () =>
-            showConfirm(
-              "Delete notebook?",
-              "Delete this notebook and all entries? This cannot be undone.",
-              () => {
+            },
+            {
+              id: "import",
+              label: "Import ZIP",
+              onSelect: () => {
+                if (!busyRef.current) importRef.current?.click();
+              },
+            },
+            {
+              id: "audit",
+              label: "Run audit",
+              onSelect: () => {
+                if (busyRef.current) return;
+                setBusy(true);
+                setAuditResult("Starting audit…");
+                void runNotebookAudit(orgId, notebookId, {
+                  onProgress: (a) => {
+                    const last = a.steps?.[a.steps.length - 1]?.message;
+                    setAuditResult(
+                      [
+                        `status: ${a.status ?? "running"}`,
+                        last ? `step: ${last}` : null,
+                        a.summary ? `summary: ${a.summary}` : null,
+                        a.error ? `error: ${a.error}` : null,
+                        a.scores && Object.keys(a.scores).length
+                          ? `scores: ${JSON.stringify(a.scores, null, 2)}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join("\n\n")
+                    );
+                  },
+                })
+                  .then((r) => setAuditResult(JSON.stringify(r, null, 2)))
+                  .catch((err) => {
+                    setError((err as Error).message);
+                    setAuditResult(null);
+                  })
+                  .finally(() => setBusy(false));
+              },
+            },
+            {
+              id: "audit-history",
+              label: "Audit history",
+              onSelect: () => {
                 void cloudApi
-                  .deleteNotebook(orgId, notebookId)
-                  .then(() => router.push(`/orgs/${orgId}`))
+                  .listAudits(orgId, notebookId)
+                  .then(setAuditHistory)
                   .catch((err) => setError((err as Error).message));
               },
-              "danger"
-            ),
-        },
-      ],
+            },
+            {
+              id: "delete",
+              label: "Delete notebook",
+              danger: true,
+              onSelect: () =>
+                showConfirm(
+                  "Delete notebook?",
+                  "Delete this notebook and all entries? This cannot be undone.",
+                  () => {
+                    void cloudApi
+                      .deleteNotebook(orgId, notebookId)
+                      .then(() => router.push(`/orgs/${orgId}`))
+                      .catch((err) => setError((err as Error).message));
+                  },
+                  "danger"
+                ),
+            },
+          ],
     });
     return () => setWorkspaceHeader(null);
-  }, [orgId, notebookId, orgName, notebookName, basePath, showPrompt, showConfirm, router]);
+  }, [
+    orgId,
+    notebookId,
+    orgName,
+    notebookName,
+    notebookUnavailable,
+    navItems,
+    activeNav,
+    showPrompt,
+    showConfirm,
+    router,
+  ]);
 
   const ctx = {
     orgId,
@@ -683,8 +713,6 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     showPrompt,
   };
 
-  const activeNav = SUBNAV.find((t) => t.match(pathname || ""))?.id ?? "entries";
-
   return (
     <NotebookWorkspaceProvider value={ctx}>
       <div className="flex h-full min-h-0 w-full flex-col overflow-hidden text-nb-on-surface">
@@ -699,37 +727,6 @@ export function NotebookShell({ children }: { children: ReactNode }) {
             if (file) void handleImportZip(file);
           }}
         />
-
-        {initialLoaded && !notebookUnavailable && (
-          <div className="flex shrink-0 items-center gap-1 border-b border-nb-outline-variant/30 bg-nb-surface px-3 py-1.5">
-            {SUBNAV.map((item) => {
-              const href =
-                item.id === "entries"
-                  ? basePath
-                  : item.id === "schedule"
-                    ? `${basePath}/schedule`
-                    : item.id === "compile"
-                      ? `${basePath}/compile`
-                      : item.id === "members"
-                        ? `${basePath}/members`
-                        : `${basePath}/setup`;
-              const active = activeNav === item.id;
-              return (
-                <Link
-                  key={item.id}
-                  href={href}
-                  className={`rounded-nb-lg px-3 py-1.5 text-nb-label font-semibold transition-colors ${
-                    active
-                      ? "bg-nb-primary/10 text-nb-primary"
-                      : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </div>
-        )}
 
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
           {initialLoaded && notebookUnavailable && (
@@ -784,12 +781,16 @@ export function NotebookShell({ children }: { children: ReactNode }) {
                 onToggleCollapsed={() => setListCollapsed(false)}
                 basePath={basePath}
               />
-              <section
-                className={`min-h-0 min-w-0 flex-1 bg-nb-surface ${
-                  activeEntryId ? "overflow-hidden" : "overflow-auto"
-                }`}
-              >
-                <div className={activeEntryId ? "h-full min-h-0" : "p-4 md:p-6"}>{children}</div>
+              <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-nb-surface">
+                <div
+                  className={
+                    activeEntryId
+                      ? "flex h-full min-h-0 flex-col overflow-hidden"
+                      : "min-h-0 flex-1 overflow-y-auto p-4 md:p-6"
+                  }
+                >
+                  {children}
+                </div>
               </section>
             </>
           ) : !notebookUnavailable && showEntryList ? (
@@ -808,12 +809,14 @@ export function NotebookShell({ children }: { children: ReactNode }) {
               </Panel>
               <PanelResizeHandle className="w-1.5 shrink-0 bg-nb-outline-variant/20 transition-colors hover:bg-nb-primary/40 data-[resize-handle-active]:bg-nb-primary/50" />
               <Panel defaultSize={78} minSize={40} className="min-h-0">
-                <section
-                  className={`h-full min-h-0 bg-nb-surface ${
-                    activeEntryId ? "overflow-hidden" : "overflow-auto"
-                  }`}
-                >
-                  <div className={activeEntryId ? "h-full min-h-0" : "p-4 md:p-6"}>
+                <section className="flex h-full min-h-0 flex-col overflow-hidden bg-nb-surface">
+                  <div
+                    className={
+                      activeEntryId
+                        ? "flex h-full min-h-0 flex-col overflow-hidden"
+                        : "h-full min-h-0 overflow-y-auto p-4 md:p-6"
+                    }
+                  >
                     {children}
                   </div>
                 </section>

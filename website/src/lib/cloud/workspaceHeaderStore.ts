@@ -9,11 +9,20 @@ export type WorkspaceHeaderMenuItem = {
   onSelect: () => void;
 };
 
+export type WorkspaceHeaderNavItem = {
+  id: string;
+  label: string;
+  href: string;
+};
+
 export type WorkspaceHeaderState = {
   orgId: string;
   notebookId: string;
   orgName: string;
   notebookName: string;
+  /** Section tabs (Entries / Calendar / …) — rendered in AppChrome, not a second bar. */
+  navItems: WorkspaceHeaderNavItem[];
+  activeNavId: string;
   menuItems: WorkspaceHeaderMenuItem[];
 } | null;
 

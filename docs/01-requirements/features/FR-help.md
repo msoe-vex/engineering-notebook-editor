@@ -14,11 +14,11 @@ Signed-in users (same chrome).
 
 - `/help/[[...tab]]` — markdown help content
 - `/about` — product about page
-- Nav icons in AppChrome
+- Help and About in the AppChrome account menu (not separate header icons)
 
 ## Acceptance criteria
 
-- [ ] Help and About reachable from chrome without leaving auth shell
+- [x] Help and About reachable from chrome without leaving auth shell
 - [ ] Help tabs resolve content under `public/content/help` (or equivalent)
 
 ## Data and APIs

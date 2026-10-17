@@ -28,7 +28,6 @@ import {
 import { Toaster } from "react-hot-toast";
 import { bindNotificationEvents } from "@/components/overlays/Notification";
 import { cloudApi, type OrgSummary } from "@/lib/cloud/api";
-import { platformRoleLabel } from "@/lib/cloud/roles";
 import {
   getEditorChrome,
   getEditorChromeServerSnapshot,
@@ -336,7 +335,7 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
               </span>
               <span className="hidden sm:inline">ENGen</span>
             </Link>
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 shrink">
               <Breadcrumbs items={crumbs} />
             </div>
             {title && !ws && (
@@ -344,19 +343,48 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
                 {title}
               </span>
             )}
+            {ws && ws.navItems.length > 0 && (
+              <nav
+                className="ml-1 hidden min-w-0 items-center gap-0.5 md:flex"
+                aria-label="Notebook sections"
+              >
+                {ws.navItems.map((item) => {
+                  const active = ws.activeNavId === item.id;
+                  return (
+                    <Link
+                      key={item.id}
+                      href={item.href}
+                      className={`rounded-nb-lg px-2.5 py-1 text-nb-label font-semibold transition-colors ${
+                        active
+                          ? "bg-nb-primary/10 text-nb-primary"
+                          : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface"
+                      }`}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+            )}
           </div>
 
-          <div className="flex shrink-0 items-center gap-1 sm:gap-2 text-sm">
+          <div className="flex shrink-0 items-center gap-0.5 sm:gap-1 text-sm">
             {(editorChrome.connection || editorChrome.saveState) && (
-              <div className="mr-1 flex max-w-[14rem] items-center gap-2 sm:max-w-none">
+              <div className="mr-0.5 flex items-center gap-1.5">
                 {editorChrome.connection && (
                   <span
-                    className={`inline-flex items-center gap-1.5 rounded-nb px-2 py-0.5 text-[11px] font-semibold ${
+                    className={`inline-flex items-center gap-1.5 rounded-nb px-1.5 py-0.5 text-[11px] font-semibold ${
                       editorChrome.connection === "connected"
                         ? "bg-nb-success/10 text-nb-success"
                         : "bg-nb-warning/10 text-nb-warning"
                     }`}
-                    title="Collaboration connection"
+                    title={
+                      editorChrome.connection === "connected"
+                        ? "Connected"
+                        : editorChrome.connection === "connecting"
+                          ? "Connecting…"
+                          : "Offline"
+                    }
                   >
                     <span
                       className={`h-1.5 w-1.5 shrink-0 rounded-full ${
@@ -365,11 +393,13 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
                           : "bg-nb-warning animate-pulse"
                       }`}
                     />
-                    {editorChrome.connection === "connected"
-                      ? "Connected"
-                      : editorChrome.connection === "connecting"
-                        ? "Connecting…"
-                        : "Offline"}
+                    <span className="hidden lg:inline">
+                      {editorChrome.connection === "connected"
+                        ? "Connected"
+                        : editorChrome.connection === "connecting"
+                          ? "Connecting…"
+                          : "Offline"}
+                    </span>
                   </span>
                 )}
                 {editorChrome.saveState && editorChrome.saveState !== "idle" && (
@@ -391,8 +421,8 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
                   </span>
                 )}
                 {editorChrome.peers.length > 0 && (
-                  <div className="hidden items-center -space-x-1.5 sm:flex" aria-label="Editors present">
-                    {editorChrome.peers.slice(0, 4).map((peer) => (
+                  <div className="hidden items-center -space-x-1.5 lg:flex" aria-label="Editors present">
+                    {editorChrome.peers.slice(0, 3).map((peer) => (
                       <span
                         key={peer.clientId}
                         title={peer.name}
@@ -425,16 +455,36 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
               </div>
             )}
             {ws && (
-              <DropdownMenu
-                ariaLabel="Notebook actions"
-                items={ws.menuItems}
-                trigger={
-                  <span className={iconBtn} title="Notebook actions">
-                    <span className="sr-only">Notebook actions</span>
-                    <MoreVertical size={16} />
-                  </span>
-                }
-              />
+              <>
+                {/* Section nav for narrow viewports (inline nav is md+) */}
+                <DropdownMenu
+                  className="md:hidden"
+                  ariaLabel="Notebook sections"
+                  items={ws.navItems.map((item) => ({
+                    id: item.id,
+                    label: item.label,
+                    onSelect: () => router.push(item.href),
+                  }))}
+                  trigger={
+                    <span className={iconBtn} title="Sections">
+                      <span className="text-nb-label font-semibold">
+                        {ws.navItems.find((n) => n.id === ws.activeNavId)?.label || "Sections"}
+                      </span>
+                      <ChevronDown size={12} className="opacity-60" />
+                    </span>
+                  }
+                />
+                <DropdownMenu
+                  ariaLabel="Notebook actions"
+                  items={ws.menuItems}
+                  trigger={
+                    <span className={iconBtn} title="Notebook actions">
+                      <span className="sr-only">Notebook actions</span>
+                      <MoreVertical size={16} />
+                    </span>
+                  }
+                />
+              </>
             )}
             {mountedTheme && (
               <button
@@ -445,24 +495,6 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
               >
                 {resolvedTheme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
               </button>
-            )}
-            <Link href="/help" className={iconBtn} title="Help" aria-current={onHelp ? "page" : undefined}>
-              <CircleHelp size={16} />
-              <span className="hidden lg:inline">Help</span>
-            </Link>
-            <Link href="/about" className={iconBtn} title="About" aria-current={onAbout ? "page" : undefined}>
-              <Info size={16} />
-              <span className="hidden lg:inline">About</span>
-            </Link>
-            {isServiceAdmin && (
-              <Link
-                href="/admin"
-                className="hidden text-nb-label font-semibold text-nb-on-surface-variant hover:text-nb-on-surface sm:inline"
-                title={platformRoleLabel("service_admin")}
-                aria-current={onAdmin ? "page" : undefined}
-              >
-                Admin
-              </Link>
             )}
             <DropdownMenu
               ariaLabel="Account menu"
@@ -480,6 +512,27 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
                   onSelect: () => router.push("/account/preferences"),
                 },
                 {
+                  id: "help",
+                  label: "Help",
+                  icon: <CircleHelp size={14} />,
+                  onSelect: () => router.push("/help"),
+                },
+                {
+                  id: "about",
+                  label: "About",
+                  icon: <Info size={14} />,
+                  onSelect: () => router.push("/about"),
+                },
+                ...(isServiceAdmin
+                  ? [
+                      {
+                        id: "admin",
+                        label: "Admin",
+                        onSelect: () => router.push("/admin"),
+                      },
+                    ]
+                  : []),
+                {
                   id: "signout",
                   label: "Sign out",
                   icon: <LogOut size={14} />,
@@ -490,7 +543,7 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
               trigger={
                 <span className={iconBtn} title={displayEmail || "Account"}>
                   <UserRound size={16} />
-                  <span className="hidden md:inline max-w-[8rem] truncate">
+                  <span className="hidden lg:inline max-w-[8rem] truncate">
                     {displayEmail?.split("@")[0] || "Account"}
                   </span>
                   <ChevronDown size={12} className="opacity-60" />

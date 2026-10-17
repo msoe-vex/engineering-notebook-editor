@@ -304,8 +304,8 @@ export default function EntryPage() {
   const savingMeta = saveState === "saving";
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <header className="shrink-0 border-b border-nb-outline-variant/20 bg-nb-surface px-4 py-3 md:px-6">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <header className="shrink-0 border-b border-nb-outline-variant/20 bg-nb-surface px-4 py-2 md:px-6">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <input
@@ -402,7 +402,7 @@ export default function EntryPage() {
         </div>
 
         {meta?.isValid === false && (meta.validationErrors?.length ?? 0) > 0 && (
-          <Alert variant="warning" className="mt-3">
+          <Alert variant="warning" className="mt-2">
             <ul className="list-disc pl-4 text-nb-label">
               {meta.validationErrors!.map((err) => (
                 <li key={err}>{err}</li>
@@ -411,7 +411,7 @@ export default function EntryPage() {
           </Alert>
         )}
 
-        <div className="mt-3 grid grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-[10rem_12rem_minmax(0,1fr)]">
+        <div className="mt-2 grid grid-cols-1 items-end gap-2 sm:grid-cols-2 xl:grid-cols-[10rem_12rem_minmax(0,1fr)]">
           <label className="flex flex-col gap-1 text-nb-caption font-semibold text-nb-on-surface-variant">
             Date
             <input
@@ -451,7 +451,11 @@ export default function EntryPage() {
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 px-4 py-3 md:px-6">
+      {/*
+        Panel sets inline overflow:hidden — scroll must live on an inner wrapper.
+        Use overflow-y-auto so RichTextArea scroll helpers (closest) find this node.
+      */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-2 md:px-6">
         <PanelGroup direction="horizontal" className="h-full min-h-0" id="entry-editor-preview">
           <Panel
             id="entry-editor-panel"
@@ -461,15 +465,17 @@ export default function EntryPage() {
             minSize={viewMode === "preview" ? 0 : 20}
             collapsible
             collapsedSize={0}
-            className="min-h-0 min-w-0 overflow-auto"
+            className="min-h-0 min-w-0"
           >
-            <CollaborativeEntryEditor
-              key={entryId}
-              documentName={docName}
-              entryId={entryId}
-              getToken={getIdToken}
-              onDocChange={setDocJson}
-            />
+            <div className="h-full min-h-0 overflow-y-auto custom-scrollbar">
+              <CollaborativeEntryEditor
+                key={entryId}
+                documentName={docName}
+                entryId={entryId}
+                getToken={getIdToken}
+                onDocChange={setDocJson}
+              />
+            </div>
           </Panel>
           <PanelResizeHandle
             className={`mx-1 w-1.5 shrink-0 rounded-full bg-nb-outline-variant/25 transition-colors hover:bg-nb-primary/40 data-[resize-handle-active]:bg-nb-primary/50 ${
@@ -486,7 +492,7 @@ export default function EntryPage() {
             collapsedSize={0}
             className="min-h-0 min-w-0"
           >
-            <div className="h-full min-h-0 overflow-hidden rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface">
+            <div className="h-full min-h-0 overflow-y-auto custom-scrollbar rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface">
               {liveLatex ? (
                 <LatexPreview latexContent={liveLatex} />
               ) : (
