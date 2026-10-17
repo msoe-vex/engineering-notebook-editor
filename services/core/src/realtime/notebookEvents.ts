@@ -40,6 +40,9 @@ const rooms = new Map<string, Set<Sub>>();
 function writeEvent(res: ServerResponse, event: NotebookRealtimeEvent) {
   if (res.writableEnded) return;
   res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+  // Ensure chunks reach the client promptly (some proxies/buffers hold SSE otherwise).
+  const flushable = res as ServerResponse & { flushHeaders?: () => void; flush?: () => void };
+  if (typeof flushable.flush === "function") flushable.flush();
 }
 
 export function subscribeNotebookEvents(

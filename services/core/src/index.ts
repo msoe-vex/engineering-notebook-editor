@@ -22,7 +22,7 @@ const corsOrigin = process.env.CORS_ORIGIN;
 await app.register(cors, {
   origin: corsOrigin ? corsOrigin.split(",").map((s) => s.trim()) : true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Authorization", "Content-Type", "X-Internal-Secret"],
+  allowedHeaders: ["Authorization", "Content-Type", "Accept", "X-Internal-Secret"],
 });
 
 const auth = new FirebaseAuthAdapter();

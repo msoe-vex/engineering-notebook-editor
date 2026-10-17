@@ -75,9 +75,8 @@ export default function EntryPage() {
   const titleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorPanelRef = useRef<ImperativePanelHandle>(null);
   const previewPanelRef = useRef<ImperativePanelHandle>(null);
-  /** Last title/authors we intentionally synced from server (avoid SSE clobbering in-progress edits). */
-  const syncedTitleRef = useRef(meta?.title ?? "");
-  const syncedAuthorsRef = useRef(JSON.stringify(meta?.authors || []));
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const authorsFieldRef = useRef<HTMLDivElement>(null);
   /** entryId we've hydrated drafts for once meta was available (full reload races empty meta). */
   const hydratedEntryIdRef = useRef<string | null>(null);
 
@@ -85,44 +84,32 @@ export default function EntryPage() {
     hydratedEntryIdRef.current = null;
     setTitleDraft("");
     setAuthorsDraft([]);
-    syncedTitleRef.current = "";
-    syncedAuthorsRef.current = "[]";
     setDocJson(null);
     setSaveState("idle");
     patchEditorChrome({ saveState: "idle" });
   }, [entryId]);
 
-  // Hydrate drafts when meta first arrives; later only accept remote if not dirty.
+  // Keep header drafts in sync with SSE/meta unless the user is actively editing that field.
   useEffect(() => {
     if (!meta || saveState === "saving") return;
     const serverTitle = meta.title ?? "";
     const serverAuthors = meta.authors || [];
-    const serverAuthorsKey = JSON.stringify(serverAuthors);
 
     if (hydratedEntryIdRef.current !== entryId) {
       hydratedEntryIdRef.current = entryId;
       setTitleDraft(serverTitle);
       setAuthorsDraft(serverAuthors);
-      syncedTitleRef.current = serverTitle;
-      syncedAuthorsRef.current = serverAuthorsKey;
       return;
     }
 
-    setTitleDraft((draft) => {
-      if (draft === syncedTitleRef.current || draft === serverTitle) {
-        syncedTitleRef.current = serverTitle;
-        return serverTitle;
-      }
-      return draft;
-    });
-    setAuthorsDraft((draft) => {
-      const key = JSON.stringify(draft);
-      if (key === syncedAuthorsRef.current || key === serverAuthorsKey) {
-        syncedAuthorsRef.current = serverAuthorsKey;
-        return serverAuthors;
-      }
-      return draft;
-    });
+    const titleFocused =
+      !!titleInputRef.current && document.activeElement === titleInputRef.current;
+    const authorsFocused =
+      !!authorsFieldRef.current &&
+      authorsFieldRef.current.contains(document.activeElement);
+
+    if (!titleFocused) setTitleDraft(serverTitle);
+    if (!authorsFocused) setAuthorsDraft(serverAuthors);
   }, [entryId, meta, meta?.title, meta?.authors, saveState]);
 
   useEffect(() => {
@@ -193,10 +180,6 @@ export default function EntryPage() {
             isValid?: boolean;
             validationErrors?: string[];
           };
-          if (typeof saved.title === "string") syncedTitleRef.current = saved.title;
-          if (Array.isArray(saved.authors)) {
-            syncedAuthorsRef.current = JSON.stringify(saved.authors);
-          }
           if (setEntries && (saved.isValid !== undefined || saved.validationErrors)) {
             setEntries((prev) => {
               const cur = prev[entryId];
@@ -326,6 +309,7 @@ export default function EntryPage() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <input
+              ref={titleInputRef}
               className="min-w-0 flex-1 border-0 bg-transparent text-xl font-bold tracking-tight text-nb-on-surface outline-none placeholder:text-nb-on-surface-variant/40 md:text-2xl"
               value={titleDraft}
               onChange={(e) => {
@@ -447,7 +431,10 @@ export default function EntryPage() {
               onChange={(phase) => patchMeta({ phase })}
             />
           </label>
-          <div className="flex min-w-0 flex-col gap-1 text-nb-caption font-semibold text-nb-on-surface-variant sm:col-span-2 xl:col-span-1">
+          <div
+            ref={authorsFieldRef}
+            className="flex min-w-0 flex-col gap-1 text-nb-caption font-semibold text-nb-on-surface-variant sm:col-span-2 xl:col-span-1"
+          >
             Authors
             <AuthorsInput
               authors={authorsDraft}

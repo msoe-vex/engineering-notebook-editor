@@ -610,12 +610,30 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
     await assertNotebookAccess(user, orgId, notebookId);
 
+    // hijack() skips @fastify/cors onSend — set CORS on the raw stream or the browser
+    // cannot read cross-origin SSE from the website (:3000 → :8080).
+    const originHeader = request.headers.origin;
+    const corsOriginEnv = process.env.CORS_ORIGIN;
+    const allowedOrigins = corsOriginEnv
+      ? corsOriginEnv.split(",").map((s) => s.trim()).filter(Boolean)
+      : null;
+    const allowOrigin =
+      !allowedOrigins || allowedOrigins.includes("*")
+        ? originHeader || "*"
+        : originHeader && allowedOrigins.includes(originHeader)
+          ? originHeader
+          : allowedOrigins[0] || "*";
+
     reply.hijack();
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
       "X-Accel-Buffering": "no",
+      "Access-Control-Allow-Origin": allowOrigin,
+      "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      Vary: "Origin",
     });
     const unsub = subscribeNotebookEvents(orgId, notebookId, reply.raw);
     const onClose = () => {
