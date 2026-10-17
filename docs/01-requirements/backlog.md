@@ -2,6 +2,10 @@
 
 Forward-looking work. Requirements index: [README.md](./README.md). Parity epics A–H are done (git history).
 
+## Active plan
+
+**[Cloud UX hardening & legacy parity](./plans/cloud-ux-hardening.md)** — P0 image upload `bodyLimit`, toasts, phase icons, split/live LaTeX, metadata save + sync, validation revalidation, editor chrome, unified templates, calendar day height, skeletons, share dialog. Prefer that plan over ad-hoc polish until it is marked done.
+
 ## Done (architecture hygiene)
 
 - [x] Archive unreachable legacy UI under `website/archive/legacy/`
@@ -10,7 +14,7 @@ Forward-looking work. Requirements index: [README.md](./README.md). Parity epics
 - [x] Extract live `NotebookFormatToolbar` + `insertBlock`
 - [x] Docs restructure (product / FR-NFR / architecture / reference / guides / ops)
 
-## Product polish
+## Product polish (after / outside the active plan)
 
 - [ ] **Server-side entry search** — explorer filters are client-side ([FR-explorer](./features/FR-explorer.md))
 - [ ] **`NotebookMember.linkedUid`** — optional link roster → org member
@@ -18,6 +22,7 @@ Forward-looking work. Requirements index: [README.md](./README.md). Parity epics
 - [ ] **`gcsPathOriginal`** — write originals alongside compressed assets
 - [ ] **Metrics persistence** — Core metrics in-memory today ([FR-admin](./features/FR-admin.md))
 - [ ] **Cloud-native Settings/Help/About/Calendar** (optional) — still under `components/pages/`
+- [ ] **Collab presence avatars** — beyond Live/Offline chip ([plan](./plans/cloud-ux-hardening.md) extras)
 
 ## Non-goals
 

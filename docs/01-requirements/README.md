@@ -13,6 +13,14 @@ Status values: **current** (shipped), **partial**, **planned**.
 Templates: [_templates/FR.md](./_templates/FR.md), [_templates/NFR.md](./_templates/NFR.md).  
 Product context: [00-product/](../00-product/). Contracts: [03-reference/](../03-reference/).
 
+## Active plans
+
+| Plan | Status |
+| --- | --- |
+| [Cloud UX hardening & legacy parity](./plans/cloud-ux-hardening.md) | active |
+
+Also: [backlog.md](./backlog.md).
+
 ## Feature index
 
 | ID | Title | Status |
