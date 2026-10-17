@@ -12,9 +12,10 @@ import {
 } from "@engineering-notebook/shared";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import TextPromptDialog from "@/components/dialogs/TextPromptDialog";
-import { Alert, Button, Dialog, LoadingBlock, Skeleton, SkeletonLines } from "@/components/ui";
+import { Button, Dialog, EmptyState, LoadingBlock, Skeleton, SkeletonLines } from "@/components/ui";
 import { showNotification } from "@/components/overlays/Notification";
 import { cloudApi } from "@/lib/cloud/api";
+import { formatCloudError, isForbiddenError, isNotFoundError } from "@/lib/cloud/errors";
 import { ShareNotebookDialog } from "./ShareNotebookDialog";
 import {
   subscribeNotebookEvents,
@@ -111,7 +112,8 @@ export function NotebookShell({ children }: { children: ReactNode }) {
   >({});
   const [entries, setEntries] = useState<Record<string, EntryMeta>>({});
   const [assets, setAssets] = useState<Awaited<ReturnType<typeof cloudApi.listAssets>>>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setErrorState] = useState<string | null>(null);
+  const [notebookUnavailable, setNotebookUnavailable] = useState(false);
   const [auditResult, setAuditResult] = useState<string | null>(null);
   const [auditHistory, setAuditHistory] = useState<
     Awaited<ReturnType<typeof cloudApi.listAudits>> | null
@@ -119,6 +121,12 @@ export function NotebookShell({ children }: { children: ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [initialLoaded, setInitialLoaded] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
+
+  /** Action/load errors → toast (no sticky banner). Keep `error` in context for rare inline use. */
+  const setError = useCallback((message: string | null) => {
+    setErrorState(message);
+    if (message) showNotification(formatCloudError(message), "error");
+  }, []);
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [prompt, setPrompt] = useState<PromptState>(null);
   const [listCollapsed, setListCollapsed] = useState(false);
@@ -147,6 +155,12 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     },
     []
   );
+
+  // Hard reset chrome only when switching notebooks (not on soft refresh / SSE).
+  useEffect(() => {
+    setInitialLoaded(false);
+    setNotebookUnavailable(false);
+  }, [orgId, notebookId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -179,9 +193,20 @@ export function NotebookShell({ children }: { children: ReactNode }) {
             createdAt: nb.createdAt,
             updatedAt: nb.updatedAt ?? new Date().toISOString(),
           });
-          setError(null);
+          setNotebookUnavailable(false);
+          setErrorState(null);
         } catch (err) {
-          if (!cancelled) setError((err as Error).message);
+          if (cancelled) return;
+          setNotebookSummary(null);
+          setEntries({});
+          setFolders({});
+          setAssets([]);
+          setNotebookUnavailable(true);
+          setErrorState(formatCloudError(err, "Notebook unavailable"));
+          // No toast on missing/forbidden notebook — EmptyState is the UI.
+          if (!isNotFoundError(err) && !isForbiddenError(err)) {
+            showNotification(formatCloudError(err), "error");
+          }
         } finally {
           if (!cancelled) setInitialLoaded(true);
         }
@@ -193,7 +218,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
   }, [orgId, notebookId, reloadToken]);
 
   useEffect(() => {
-    if (!initialLoaded) return;
+    if (!initialLoaded || notebookUnavailable) return;
     const ac = new AbortController();
     const onEvent = (event: NotebookRealtimeEvent) => {
       if (event.type === "ping") return;
@@ -251,12 +276,20 @@ export function NotebookShell({ children }: { children: ReactNode }) {
         return;
       }
       if (event.type === "entries.changed") {
-        setReloadToken((n) => n + 1);
+        // Soft refetch entry list — do not bump reloadToken (that flashed the full shell).
+        void cloudApi
+          .listEntries(orgId, notebookId)
+          .then((res) => {
+            if (!ac.signal.aborted) setEntries(res.entries);
+          })
+          .catch(() => {
+            /* keep current */
+          });
       }
     };
     subscribeNotebookEvents(orgId, notebookId, onEvent, ac.signal);
     return () => ac.abort();
-  }, [orgId, notebookId, initialLoaded]);
+  }, [orgId, notebookId, initialLoaded, notebookUnavailable]);
 
   const notebookMetadata: NotebookMetadata = useMemo(
     () => ({
@@ -399,9 +432,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
       saveAs(blob, `${notebookName.replace(/\s+/g, "-").toLowerCase() || "notebook"}.v5.zip`);
       showNotification("Notebook exported", "success");
     } catch (err) {
-      const message = (err as Error).message;
-      setError(message);
-      showNotification(message, "error");
+      setError((err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -510,9 +541,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
       refresh();
       showNotification("Notebook imported", "success");
     } catch (err) {
-      const message = (err as Error).message;
-      setError(message);
-      showNotification(message, "error");
+      setError((err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -635,6 +664,8 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     notebookId,
     notebookName,
     notebookSummary,
+    initialLoaded,
+    notebookUnavailable,
     folders,
     entries,
     assets,
@@ -669,42 +700,65 @@ export function NotebookShell({ children }: { children: ReactNode }) {
           }}
         />
 
-        <div className="flex shrink-0 items-center gap-1 border-b border-nb-outline-variant/30 bg-nb-surface px-3 py-1.5">
-          {SUBNAV.map((item) => {
-            const href =
-              item.id === "entries"
-                ? basePath
-                : item.id === "schedule"
-                  ? `${basePath}/schedule`
-                  : item.id === "compile"
-                    ? `${basePath}/compile`
-                    : item.id === "members"
-                      ? `${basePath}/members`
-                      : `${basePath}/setup`;
-            const active = activeNav === item.id;
-            return (
-              <Link
-                key={item.id}
-                href={href}
-                className={`rounded-nb-lg px-3 py-1.5 text-nb-label font-semibold transition-colors ${
-                  active
-                    ? "bg-nb-primary/10 text-nb-primary"
-                    : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface"
-                }`}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </div>
-
-        {error && (
-          <Alert variant="error" className="shrink-0 rounded-none border-x-0 border-t-0">
-            {error}
-          </Alert>
+        {initialLoaded && !notebookUnavailable && (
+          <div className="flex shrink-0 items-center gap-1 border-b border-nb-outline-variant/30 bg-nb-surface px-3 py-1.5">
+            {SUBNAV.map((item) => {
+              const href =
+                item.id === "entries"
+                  ? basePath
+                  : item.id === "schedule"
+                    ? `${basePath}/schedule`
+                    : item.id === "compile"
+                      ? `${basePath}/compile`
+                      : item.id === "members"
+                        ? `${basePath}/members`
+                        : `${basePath}/setup`;
+              const active = activeNav === item.id;
+              return (
+                <Link
+                  key={item.id}
+                  href={href}
+                  className={`rounded-nb-lg px-3 py-1.5 text-nb-label font-semibold transition-colors ${
+                    active
+                      ? "bg-nb-primary/10 text-nb-primary"
+                      : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
         )}
 
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
+          {initialLoaded && notebookUnavailable && (
+            <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+              <EmptyState
+                className="max-w-md"
+                title={
+                  error === "You don’t have access"
+                    ? "You don’t have access to this notebook"
+                    : "Notebook not found"
+                }
+                description={
+                  error === "You don’t have access"
+                    ? "Ask an org admin to grant access, or open a notebook from your org list."
+                    : "This notebook may have been deleted, or the link is wrong. Fresh local data won’t match old URLs."
+                }
+                action={
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button size="sm" variant="secondary" onClick={() => router.push(`/orgs/${orgId}`)}>
+                      Back to org
+                    </Button>
+                    <Button size="sm" variant="primary" onClick={() => router.push("/")}>
+                      Home
+                    </Button>
+                  </div>
+                }
+              />
+            </div>
+          )}
           {!initialLoaded && (
             <div className="absolute inset-0 z-40 flex bg-nb-surface">
               <aside className="flex w-[22%] min-w-[10rem] flex-col gap-2 border-r border-nb-outline-variant/20 p-3">
@@ -722,7 +776,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
               </div>
             </div>
           )}
-          {showEntryList && listCollapsed ? (
+          {!notebookUnavailable && showEntryList && listCollapsed ? (
             <>
               <NotebookEntryList
                 activeEntryId={activeEntryId}
@@ -738,7 +792,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
                 <div className={activeEntryId ? "h-full min-h-0" : "p-4 md:p-6"}>{children}</div>
               </section>
             </>
-          ) : showEntryList ? (
+          ) : !notebookUnavailable && showEntryList ? (
             <PanelGroup
               direction="horizontal"
               autoSaveId="nb-explorer-width"
@@ -765,11 +819,11 @@ export function NotebookShell({ children }: { children: ReactNode }) {
                 </section>
               </Panel>
             </PanelGroup>
-          ) : (
+          ) : !notebookUnavailable ? (
             <section className="min-h-0 min-w-0 flex-1 overflow-auto bg-nb-surface">
               <div className="p-4 md:p-6">{children}</div>
             </section>
-          )}
+          ) : null}
         </div>
       </div>
 

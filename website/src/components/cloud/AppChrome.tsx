@@ -31,6 +31,7 @@ import { cloudApi, type OrgSummary } from "@/lib/cloud/api";
 import { platformRoleLabel } from "@/lib/cloud/roles";
 import {
   getEditorChrome,
+  getEditorChromeServerSnapshot,
   subscribeEditorChrome,
 } from "@/lib/cloud/editorChromeStore";
 import {
@@ -74,7 +75,7 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
   const editorChrome = useSyncExternalStore(
     subscribeEditorChrome,
     getEditorChrome,
-    () => ({ connection: null, saveState: null, peers: [], onReconnect: null })
+    getEditorChromeServerSnapshot
   );
 
   const [user, setUser] = useState<User | null>(null);

@@ -9,17 +9,21 @@ import {
   PanelResizeHandle,
   type ImperativePanelHandle,
 } from "react-resizable-panels";
-import { collabDocName } from "@engineering-notebook/shared";
+import {
+  collabDocName,
+  mergeMetadataValidationErrors,
+  validateEntryMetadataFields,
+} from "@engineering-notebook/shared";
 import { CollaborativeEntryEditor } from "@/components/cloud/CollaborativeEntryEditor";
 import { PhasePicker } from "@/components/cloud/PhasePicker";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
 import AuthorsInput from "@/components/editor/ui/AuthorsInput";
 import GenerateButton from "@/components/editor/ui/GenerateButton";
 import ViewToggle, { type ViewMode } from "@/components/editor/ui/ViewToggle";
-import { Alert, Badge, Button, DropdownMenu } from "@/components/ui";
-import { showNotification } from "@/components/overlays/Notification";
+import { Alert, Badge, Button, DropdownMenu, EmptyState, LoadingBlock } from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
 import { patchEditorChrome } from "@/lib/cloud/editorChromeStore";
+import { formatCloudError } from "@/lib/cloud/errors";
 import { getIdToken } from "@/lib/cloud/firebase";
 import { generateEntryTitle } from "@/lib/genai";
 import { generateEntryLatex, latexPhaseRef } from "@/lib/latex/latex";
@@ -50,6 +54,8 @@ export default function EntryPage() {
     notebookId,
     entries,
     notebookSummary,
+    initialLoaded,
+    notebookUnavailable,
     refresh,
     setEntries,
     setError,
@@ -69,17 +75,55 @@ export default function EntryPage() {
   const titleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorPanelRef = useRef<ImperativePanelHandle>(null);
   const previewPanelRef = useRef<ImperativePanelHandle>(null);
+  /** Last title/authors we intentionally synced from server (avoid SSE clobbering in-progress edits). */
+  const syncedTitleRef = useRef(meta?.title ?? "");
+  const syncedAuthorsRef = useRef(JSON.stringify(meta?.authors || []));
+  /** entryId we've hydrated drafts for once meta was available (full reload races empty meta). */
+  const hydratedEntryIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    setTitleDraft(meta?.title ?? "");
-    setAuthorsDraft(meta?.authors || []);
-  }, [meta?.title, meta?.authors, entryId]);
-
-  useEffect(() => {
+    hydratedEntryIdRef.current = null;
+    setTitleDraft("");
+    setAuthorsDraft([]);
+    syncedTitleRef.current = "";
+    syncedAuthorsRef.current = "[]";
     setDocJson(null);
     setSaveState("idle");
     patchEditorChrome({ saveState: "idle" });
   }, [entryId]);
+
+  // Hydrate drafts when meta first arrives; later only accept remote if not dirty.
+  useEffect(() => {
+    if (!meta || saveState === "saving") return;
+    const serverTitle = meta.title ?? "";
+    const serverAuthors = meta.authors || [];
+    const serverAuthorsKey = JSON.stringify(serverAuthors);
+
+    if (hydratedEntryIdRef.current !== entryId) {
+      hydratedEntryIdRef.current = entryId;
+      setTitleDraft(serverTitle);
+      setAuthorsDraft(serverAuthors);
+      syncedTitleRef.current = serverTitle;
+      syncedAuthorsRef.current = serverAuthorsKey;
+      return;
+    }
+
+    setTitleDraft((draft) => {
+      if (draft === syncedTitleRef.current || draft === serverTitle) {
+        syncedTitleRef.current = serverTitle;
+        return serverTitle;
+      }
+      return draft;
+    });
+    setAuthorsDraft((draft) => {
+      const key = JSON.stringify(draft);
+      if (key === syncedAuthorsRef.current || key === serverAuthorsKey) {
+        syncedAuthorsRef.current = serverAuthorsKey;
+        return serverAuthors;
+      }
+      return draft;
+    });
+  }, [entryId, meta, meta?.title, meta?.authors, saveState]);
 
   useEffect(() => {
     patchEditorChrome({ saveState });
@@ -122,10 +166,17 @@ export default function EntryPage() {
         if (body.phase !== undefined) next.phase = (body.phase as string | null) ?? null;
         if (body.authors !== undefined) next.authors = body.authors as string[];
         if (body.isTemplate !== undefined) next.isTemplate = Boolean(body.isTemplate);
+        const metaErrors = validateEntryMetadataFields(next, phasesRecord);
+        const { validationErrors, isValid } = mergeMetadataValidationErrors(
+          next.validationErrors,
+          metaErrors
+        );
+        next.validationErrors = validationErrors;
+        next.isValid = isValid;
         return { ...prev, [entryId]: next };
       });
     },
-    [entryId, setEntries]
+    [entryId, phasesRecord, setEntries]
   );
 
   const patchMeta = useCallback(
@@ -135,20 +186,43 @@ export default function EntryPage() {
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       void cloudApi
         .patchEntry(orgId, notebookId, entryId, body)
-        .then(() => {
+        .then((res) => {
+          const saved = res as {
+            title?: string;
+            authors?: string[];
+            isValid?: boolean;
+            validationErrors?: string[];
+          };
+          if (typeof saved.title === "string") syncedTitleRef.current = saved.title;
+          if (Array.isArray(saved.authors)) {
+            syncedAuthorsRef.current = JSON.stringify(saved.authors);
+          }
+          if (setEntries && (saved.isValid !== undefined || saved.validationErrors)) {
+            setEntries((prev) => {
+              const cur = prev[entryId];
+              if (!cur) return prev;
+              return {
+                ...prev,
+                [entryId]: {
+                  ...cur,
+                  ...(typeof saved.title === "string" ? { title: saved.title } : {}),
+                  ...(Array.isArray(saved.authors) ? { authors: saved.authors } : {}),
+                  isValid: saved.isValid ?? cur.isValid,
+                  validationErrors: saved.validationErrors ?? cur.validationErrors,
+                },
+              };
+            });
+          }
           setSaveState("saved");
-          // Rely on optimistic update + notebook SSE; avoid full refresh flicker.
           savedTimerRef.current = setTimeout(() => setSaveState("idle"), 2000);
         })
         .catch((err) => {
           setSaveState("error");
-          const message = (err as Error).message;
-          setError(message);
-          showNotification(message, "error");
+          setError(formatCloudError(err, "Could not save entry"));
           refresh();
         });
     },
-    [applyOptimistic, entryId, notebookId, orgId, refresh, setError]
+    [applyOptimistic, entryId, notebookId, orgId, refresh, setEntries, setError]
   );
 
   const liveLatex = useMemo(() => {
@@ -214,18 +288,36 @@ export default function EntryPage() {
     }
   }, [viewMode]);
 
-  if (Object.keys(entries).length > 0 && !meta) {
+  if (notebookUnavailable) {
+    return null;
+  }
+
+  if (!initialLoaded) {
     return (
-      <Alert variant="error">
-        Entry not found.{" "}
-        <Button variant="link" onClick={() => router.push(basePath)}>
-          Back to notebook
-        </Button>
-      </Alert>
+      <div className="flex h-full items-center justify-center p-6">
+        <LoadingBlock label="Loading entry…" />
+      </div>
     );
   }
 
-  const title = meta?.title ?? "Entry";
+  if (!meta) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        <EmptyState
+          className="max-w-md"
+          title="Entry not found"
+          description="This entry isn’t in the notebook. It may have been deleted, or the link is from another environment."
+          action={
+            <Button size="sm" variant="primary" onClick={() => router.push(basePath)}>
+              Back to notebook
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
+  const title = meta.title;
   const savingMeta = saveState === "saving";
 
   return (
@@ -387,7 +479,6 @@ export default function EntryPage() {
             <CollaborativeEntryEditor
               key={entryId}
               documentName={docName}
-              entryTitle={title}
               entryId={entryId}
               getToken={getIdToken}
               onDocChange={setDocJson}

@@ -24,6 +24,10 @@ export type NotebookWorkspaceState = {
   notebookId: string;
   notebookName: string;
   notebookSummary: NotebookSummaryV5 | null;
+  /** True after the first notebook load attempt finishes (success or failure). */
+  initialLoaded: boolean;
+  /** Notebook/org failed to load (missing or forbidden) — show empty state, not the editor. */
+  notebookUnavailable: boolean;
   folders: Record<string, { name: string; parentId: string | null; order: number }>;
   entries: Record<string, EntryMeta>;
   assets: AssetSummary[];

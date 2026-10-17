@@ -162,6 +162,7 @@ app.post("/internal/collab/flush", async (request, reply) => {
   if (body.yjsBase64) {
     await storage.putObject(yjsKey, Buffer.from(body.yjsBase64, "base64"), "application/octet-stream");
   }
+  // Do not apply body.meta title/authors/phase/date — those are owned by entry PATCH.
   const patch: Record<string, unknown> = {
     tipTapGcsPath: tipTapKey,
     yjsGcsPath: yjsKey,
@@ -169,11 +170,6 @@ app.post("/internal/collab/flush", async (request, reply) => {
     yjsRev,
     updatedAt: new Date().toISOString(),
   };
-  if (body.meta) {
-    for (const key of ["title", "authors", "phase", "date"] as const) {
-      if (body.meta[key] !== undefined) patch[key] = body.meta[key];
-    }
-  }
   await ref.update(patch);
   return { ok: true, tipTapRev, yjsRev };
 });

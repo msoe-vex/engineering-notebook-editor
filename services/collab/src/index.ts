@@ -54,15 +54,6 @@ async function assertOrgMember(orgId: string, uid: string) {
   if (!snap.exists) throw new Error("Forbidden");
 }
 
-function metaFromDoc(document: Y.Doc): Record<string, unknown> {
-  const map = document.getMap("meta");
-  const out: Record<string, unknown> = {};
-  map.forEach((value, key) => {
-    out[key] = value;
-  });
-  return out;
-}
-
 function internalHeaders(): Record<string, string> {
   const headers: Record<string, string> = { accept: "application/json" };
   if (internalSecret) headers["x-internal-secret"] = internalSecret;
@@ -80,12 +71,13 @@ async function flushDocument(documentName: string, document: Y.Doc) {
   if (fragment.length === 0 && yjsUpdate.byteLength < 64) {
     return;
   }
+  // Yjs body only — entry title/authors/phase/date live on Core REST/Firestore.
+  // Flushing Y.Map("meta") was overwriting header saves with stale collab meta.
   const payload = {
     orgId: parsed.orgId,
     notebookId: parsed.notebookId,
     entryId: parsed.entryId,
     yjsBase64: Buffer.from(yjsUpdate).toString("base64"),
-    meta: metaFromDoc(document),
   };
 
   const res = await fetch(`${coreUrl}/internal/collab/flush`, {

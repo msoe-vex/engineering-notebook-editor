@@ -17,6 +17,8 @@ import {
   type OrgSummary,
   type TeamSummary,
 } from "@/lib/cloud/api";
+import { formatCloudError, isForbiddenError, isNotFoundError } from "@/lib/cloud/errors";
+import { showNotification } from "@/components/overlays/Notification";
 import { isOrgAdminRole } from "@/lib/cloud/roles";
 
 type OrgWorkspaceState = {
@@ -31,6 +33,8 @@ type OrgWorkspaceState = {
   busy: boolean;
   /** False until the first org payload lands. */
   initialLoaded: boolean;
+  /** Org missing or forbidden — show empty state instead of tabs/content. */
+  orgUnavailable: boolean;
   canManage: boolean;
   canDeleteOrg: boolean;
   refresh: () => void;
@@ -52,15 +56,23 @@ export function OrgWorkspaceProvider({
   const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [members, setMembers] = useState<MemberSummary[]>([]);
   const [invites, setInvites] = useState<InviteSummary[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setErrorState] = useState<string | null>(null);
+  const [orgUnavailable, setOrgUnavailable] = useState(false);
   const [busy, setBusy] = useState(false);
   const [initialLoaded, setInitialLoaded] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
 
   const refresh = useCallback(() => setReloadToken((n) => n + 1), []);
 
+  const setError = useCallback((message: string | null) => {
+    setErrorState(message);
+    if (message) showNotification(formatCloudError(message), "error");
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
+    setInitialLoaded(false);
+    setOrgUnavailable(false);
     queueMicrotask(() => {
       void (async () => {
         try {
@@ -82,9 +94,20 @@ export function OrgWorkspaceProvider({
           setTeams(t);
           setMembers(m);
           setInvites(inv);
-          setError(null);
+          setOrgUnavailable(false);
+          setErrorState(null);
         } catch (err) {
-          if (!cancelled) setError((err as Error).message);
+          if (cancelled) return;
+          setOrg(null);
+          setNotebooks([]);
+          setTeams([]);
+          setMembers([]);
+          setInvites([]);
+          setOrgUnavailable(true);
+          setErrorState(formatCloudError(err, "Organization unavailable"));
+          if (!isNotFoundError(err) && !isForbiddenError(err)) {
+            showNotification(formatCloudError(err), "error");
+          }
         } finally {
           if (!cancelled) setInitialLoaded(true);
         }
@@ -107,13 +130,27 @@ export function OrgWorkspaceProvider({
       error,
       busy,
       initialLoaded,
+      orgUnavailable,
       canManage: isOrgAdminRole(org?.role),
       canDeleteOrg: org?.role === "owner",
       refresh,
       setError,
       setBusy,
     }),
-    [orgId, org, notebooks, teams, members, invites, error, busy, initialLoaded, refresh]
+    [
+      orgId,
+      org,
+      notebooks,
+      teams,
+      members,
+      invites,
+      error,
+      busy,
+      initialLoaded,
+      orgUnavailable,
+      refresh,
+      setError,
+    ]
   );
 
   return (

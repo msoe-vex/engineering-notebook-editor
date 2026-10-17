@@ -35,6 +35,11 @@ export function getEditorChrome(): EditorChromeState {
   return state;
 }
 
+/** Stable snapshot for `useSyncExternalStore` SSR / server getServerSnapshot. */
+export function getEditorChromeServerSnapshot(): EditorChromeState {
+  return empty;
+}
+
 function emit() {
   listeners.forEach((l) => l());
 }

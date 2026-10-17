@@ -47,7 +47,6 @@ function colorForId(id: string | number): string {
 
 type Props = {
   documentName: string;
-  entryTitle: string;
   entryId: string;
   getToken: () => Promise<string | null>;
   /** Fired when TipTap JSON changes (for live LaTeX preview). */
@@ -56,16 +55,15 @@ type Props = {
 
 /**
  * Cloud entry body: full notebook TipTap schema + Hocuspocus/Yjs sync + format toolbar.
- * Metadata (title/authors/…) stays on the entry route / Firestore for now.
+ * Metadata (title/authors/…) stays on the entry route / Firestore via Core PATCH.
  */
 export function CollaborativeEntryEditor({
   documentName,
-  entryTitle,
   entryId,
   getToken,
   onDocChange,
 }: Props) {
-  const { orgId, notebookId, entries, notebookSummary, refresh } = useNotebookWorkspace();
+  const { orgId, notebookId, entries, notebookSummary } = useNotebookWorkspace();
   const [status, setStatus] = useState("connecting");
   const [ydoc] = useState(() => new Y.Doc());
   const [provider, setProvider] = useState<HocuspocusProvider | null>(null);
@@ -169,11 +167,6 @@ export function CollaborativeEntryEditor({
     };
   }, [documentName, ydoc]);
 
-  useEffect(() => {
-    const meta = ydoc.getMap("meta");
-    if (!meta.get("title")) meta.set("title", entryTitle);
-  }, [ydoc, entryTitle]);
-
   const entriesRef = useRef(entries);
   entriesRef.current = entries;
   const phasesRef = useRef(notebookSummary?.phases);
@@ -235,7 +228,7 @@ export function CollaborativeEntryEditor({
             isValid: result.isValid,
             validationErrors: result.validationErrors,
           })
-          .then(() => refresh())
+          // SSE entry.upserted updates the shell — do not refresh() (full reload loop).
           .catch((err) => console.warn("Entry quality patch failed", err));
       } catch (err) {
         console.warn("Entry quality analysis failed", err);
@@ -253,7 +246,7 @@ export function CollaborativeEntryEditor({
       if (timer) clearTimeout(timer);
       editor.off("update", schedule);
     };
-  }, [editor, entryId, metaFingerprint, orgId, notebookId, refresh]);
+  }, [editor, entryId, metaFingerprint, orgId, notebookId]);
 
   const linkAssetToEntry = useCallback(
     async (assetId: string) => {
@@ -262,9 +255,9 @@ export function CollaborativeEntryEditor({
       await cloudApi.patchEntry(orgId, notebookId, entryId, {
         assetIds: [...existing, assetId],
       });
-      refresh();
+      // Presence of assetIds arrives via SSE entry.upserted.
     },
-    [entries, entryId, orgId, notebookId, refresh]
+    [entries, entryId, orgId, notebookId]
   );
 
   const uploadImageBytes = useCallback(

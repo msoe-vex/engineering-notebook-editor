@@ -720,7 +720,6 @@ export function NotebookEntryList({
           } catch (err) {
             const message = (err as Error).message;
             setError(message);
-            showNotification(message, "error");
             refresh();
           }
         })();
@@ -756,7 +755,6 @@ export function NotebookEntryList({
       .catch((err) => {
         const message = (err as Error).message;
         setError(message);
-        showNotification(message, "error");
         refresh();
       });
   }
@@ -769,7 +767,6 @@ export function NotebookEntryList({
       .catch((err) => {
         const message = (err as Error).message;
         setError(message);
-        showNotification(message, "error");
         refresh();
       });
   }
@@ -789,7 +786,6 @@ export function NotebookEntryList({
       } catch (err) {
         const message = (err as Error).message;
         setError(message);
-        showNotification(message, "error");
         refresh();
       }
     })();
@@ -913,7 +909,6 @@ export function NotebookEntryList({
       } catch (err) {
         const message = (err as Error).message;
         setError(message);
-        showNotification(message, "error");
         refresh();
       }
     })();

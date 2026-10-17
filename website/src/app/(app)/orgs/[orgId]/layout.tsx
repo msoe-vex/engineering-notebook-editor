@@ -4,7 +4,7 @@ import { useParams, usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import TextPromptDialog from "@/components/dialogs/TextPromptDialog";
-import { Alert, Button, TabNav } from "@/components/ui";
+import { Button, EmptyState, LoadingBlock, TabNav } from "@/components/ui";
 import {
   OrgWorkspaceProvider,
   useOrgWorkspace,
@@ -23,6 +23,8 @@ function OrgChrome({ children }: { children: ReactNode }) {
     members,
     pendingInviteCount,
     error,
+    initialLoaded,
+    orgUnavailable,
     canManage,
     canDeleteOrg,
     refresh,
@@ -39,6 +41,36 @@ function OrgChrome({ children }: { children: ReactNode }) {
         pathname.includes("/invites")
       ? "people"
       : "notebooks";
+
+  if (!initialLoaded) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center font-sans">
+        <LoadingBlock label="Loading organization…" />
+      </div>
+    );
+  }
+
+  if (orgUnavailable) {
+    const forbidden = error === "You don’t have access";
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center font-sans p-6">
+        <EmptyState
+          className="max-w-md"
+          title={forbidden ? "You don’t have access to this organization" : "Organization not found"}
+          description={
+            forbidden
+              ? "Ask an owner to invite you, or open an org from your home list."
+              : "This organization may have been deleted, or the link is from another environment."
+          }
+          action={
+            <Button size="sm" variant="primary" onClick={() => router.push("/")}>
+              Home
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="font-sans">
@@ -90,12 +122,6 @@ function OrgChrome({ children }: { children: ReactNode }) {
           },
         ]}
       />
-
-      {error && (
-        <Alert variant="error" className="mb-4">
-          {error}
-        </Alert>
-      )}
 
       {children}
 

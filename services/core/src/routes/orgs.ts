@@ -995,6 +995,27 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     for (const key of allowed) {
       if (body[key] !== undefined) patch[key] = body[key];
     }
+
+    const metaTouched =
+      body.title !== undefined ||
+      body.authors !== undefined ||
+      body.date !== undefined ||
+      body.phase !== undefined ||
+      body.isTemplate !== undefined;
+    if (metaTouched) {
+      const nbSnap = await db().doc(notebookPath(orgId, notebookId)).get();
+      const phases = (nbSnap.data() as NotebookSummaryV5 | undefined)?.phases;
+      const merged = { ...existing, ...patch } as EntryMetadataV5;
+      const metaErrors = validateEntryMetadataFields(merged, (phases || {}) as Record<string, unknown>);
+      const { validationErrors, isValid } = mergeMetadataValidationErrors(
+        // Prefer incoming content validation if this patch also sets it; else existing.
+        (body.validationErrors as string[] | undefined) ?? existing.validationErrors,
+        metaErrors
+      );
+      patch.validationErrors = validationErrors;
+      patch.isValid = isValid;
+    }
+
     await ref.update(omitUndefined(patch));
     if (body.assetIds !== undefined) {
       await syncAssetUsedBy(
@@ -1005,12 +1026,14 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
         body.assetIds ?? []
       );
     }
-    const result = { id: entryId, ...existing, ...patch };
+    // Re-read so SSE/clients never get a stale snapshot from a concurrent patch race.
+    const fresh = await ref.get();
+    const result = { id: entryId, ...(fresh.data() as EntryMetadataV5) };
     publishNotebookEvent(orgId, notebookId, {
       type: "entry.upserted",
       entryId,
       entry: result as Record<string, unknown>,
-      at: String(patch.updatedAt),
+      at: String(result.updatedAt || patch.updatedAt),
     });
     return result;
   });
