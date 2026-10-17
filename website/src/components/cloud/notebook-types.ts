@@ -31,6 +31,10 @@ export type NotebookWorkspaceState = {
   busy: boolean;
   auditResult: string | null;
   refresh: () => void;
+  setEntries?: React.Dispatch<React.SetStateAction<Record<string, EntryMeta>>>;
+  setFolders?: React.Dispatch<
+    React.SetStateAction<Record<string, { name: string; parentId: string | null; order: number }>>
+  >;
   setError: (message: string | null) => void;
   setBusy: (busy: boolean) => void;
   setAuditResult: (result: string | null) => void;

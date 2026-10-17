@@ -12,7 +12,7 @@ import {
 } from "@engineering-notebook/shared";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import TextPromptDialog from "@/components/dialogs/TextPromptDialog";
-import { Alert, Button, Dialog } from "@/components/ui";
+import { Alert, Button, Dialog, LoadingBlock } from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
 import {
   collectAssetIdsFromTipTap,
@@ -76,8 +76,8 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     : null;
   const showEntryList = SUBNAV[0].match(pathname || "");
 
-  const [notebookName, setNotebookName] = useState("Notebook");
-  const [orgName, setOrgName] = useState("Organization");
+  const [notebookName, setNotebookName] = useState("");
+  const [orgName, setOrgName] = useState("");
   const [notebookSummary, setNotebookSummary] = useState<NotebookSummaryV5 | null>(null);
   const [folders, setFolders] = useState<
     Record<string, { name: string; parentId: string | null; order: number }>
@@ -90,6 +90,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     Awaited<ReturnType<typeof cloudApi.listAudits>> | null
   >(null);
   const [busy, setBusy] = useState(false);
+  const [initialLoaded, setInitialLoaded] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [prompt, setPrompt] = useState<PromptState>(null);
@@ -153,6 +154,8 @@ export function NotebookShell({ children }: { children: ReactNode }) {
           setError(null);
         } catch (err) {
           if (!cancelled) setError((err as Error).message);
+        } finally {
+          if (!cancelled) setInitialLoaded(true);
         }
       })();
     });
@@ -519,6 +522,8 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     busy,
     auditResult,
     refresh,
+    setEntries,
+    setFolders,
     setError,
     setBusy,
     setAuditResult,
@@ -579,7 +584,12 @@ export function NotebookShell({ children }: { children: ReactNode }) {
           </Alert>
         )}
 
-        <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="relative flex min-h-0 flex-1 overflow-hidden">
+          {!initialLoaded && (
+            <div className="absolute inset-0 z-40 flex items-center justify-center bg-nb-surface/80 backdrop-blur-sm">
+              <LoadingBlock label="Loading notebook…" />
+            </div>
+          )}
           {showEntryList && listCollapsed ? (
             <>
               <NotebookEntryList

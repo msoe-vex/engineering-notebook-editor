@@ -273,11 +273,14 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
 
   const crumbs: Crumb[] = (() => {
     if (ws) {
-      return [
-        { label: "Home", href: "/" },
-        { label: ws.orgName, href: `/orgs/${ws.orgId}` },
-        { label: ws.notebookName },
-      ];
+      const items: Crumb[] = [{ label: "Home", href: "/" }];
+      if (ws.orgName) {
+        items.push({ label: ws.orgName, href: `/orgs/${ws.orgId}` });
+      }
+      if (ws.notebookName) {
+        items.push({ label: ws.notebookName });
+      }
+      return items;
     }
     if (!pathname || pathname === "/") return [{ label: "Home" }];
     const items: Crumb[] = [{ label: "Home", href: "/" }];

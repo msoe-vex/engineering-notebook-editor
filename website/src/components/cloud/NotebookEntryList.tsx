@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   DndContext,
+  DragOverlay,
   pointerWithin,
   rectIntersection,
   useDraggable,
@@ -11,6 +13,7 @@ import {
   type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
+  type DragStartEvent,
   type DraggableAttributes,
   type DraggableSyntheticListeners,
 } from "@dnd-kit/core";
@@ -107,6 +110,9 @@ function EntryRowShell({
   onContextMenu,
   dragListeners,
   dragAttributes,
+  isDragging,
+  isOver,
+  wasDraggedRef,
 }: {
   id: string;
   active: boolean;
@@ -120,6 +126,9 @@ function EntryRowShell({
   onContextMenu?: (e: React.MouseEvent) => void;
   dragListeners?: DraggableSyntheticListeners;
   dragAttributes?: DraggableAttributes;
+  isDragging?: boolean;
+  isOver?: boolean;
+  wasDraggedRef?: React.MutableRefObject<boolean>;
 }) {
   const phaseList = useMemo(() => (phases ? getPhases(phases) : []), [phases]);
   const phaseCfg = useMemo(() => (entry.phase ? getPhaseConfig(phaseList)[entry.phase] : null), [phaseList, entry.phase]);
@@ -132,7 +141,9 @@ function EntryRowShell({
         paddingLeft: `${Math.max(6, indent * 18 + 8)}px`,
       }}
       className={`group relative flex h-[26px] items-center gap-1.5 rounded pr-1.5 text-nb-label transition-colors select-none cursor-pointer ${
-        active
+        isOver
+          ? "bg-nb-primary/20 ring-1 ring-nb-primary/60 font-medium"
+          : active
           ? "bg-nb-primary/15 text-nb-primary font-medium"
           : "text-nb-on-surface hover:bg-nb-surface/80"
       }`}
@@ -155,9 +166,14 @@ function EntryRowShell({
         className="flex min-w-0 flex-1 items-center gap-1.5 py-0.5"
         title={entry.title || "Untitled"}
         onClick={(e) => {
-          // If dragged, prevent click navigation
-          if ((e.nativeEvent as unknown as { defaultPrevented?: boolean }).defaultPrevented) {
+          // If dragged or dragging or just finished dragging, prevent click navigation
+          if (
+            isDragging ||
+            wasDraggedRef?.current ||
+            (e.nativeEvent as unknown as { defaultPrevented?: boolean }).defaultPrevented
+          ) {
             e.preventDefault();
+            e.stopPropagation();
           }
         }}
       >
@@ -213,6 +229,8 @@ function DraggableEntryRow({
   phases,
   indent = 0,
   onContextMenu,
+  isOverEntry,
+  wasDraggedRef,
 }: {
   id: string;
   active: boolean;
@@ -222,10 +240,20 @@ function DraggableEntryRow({
   phases?: Record<string, ProjectPhase> | null;
   indent?: number;
   onContextMenu?: (e: React.MouseEvent) => void;
+  isOverEntry?: boolean;
+  wasDraggedRef?: React.MutableRefObject<boolean>;
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
     id,
   });
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
+    id,
+  });
+
+  const setCombinedRef = (node: HTMLElement | null) => {
+    setDragRef(node);
+    setDropRef(node);
+  };
 
   return (
     <EntryRowShell
@@ -236,15 +264,16 @@ function DraggableEntryRow({
       menu={menu}
       phases={phases}
       indent={indent}
-      rowRef={setNodeRef}
+      rowRef={setCombinedRef}
       rowStyle={{
-        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-        opacity: isDragging ? 0.45 : 1,
-        zIndex: isDragging ? 50 : undefined,
+        opacity: isDragging ? 0.35 : 1,
       }}
       dragAttributes={attributes}
       dragListeners={listeners}
+      isDragging={isDragging}
+      isOver={(isOverEntry ?? isOver) && !isDragging}
       onContextMenu={onContextMenu}
+      wasDraggedRef={wasDraggedRef}
     />
   );
 }
@@ -405,9 +434,7 @@ function DraggableAndDroppableFolderRow({
       menu={menu}
       rowRef={setCombinedRef}
       rowStyle={{
-        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-        opacity: isDragging ? 0.45 : 1,
-        zIndex: isDragging ? 50 : undefined,
+        opacity: isDragging ? 0.35 : 1,
       }}
       onNewEntry={onNewEntry}
       onNewSubfolder={onNewSubfolder}
@@ -463,10 +490,16 @@ function RootDropTarget({ isOver }: { isOver: boolean }) {
   return (
     <div
       ref={setNodeRef}
-      className={`min-h-[48px] w-full rounded transition-colors ${
-        isOver ? "bg-nb-primary/10 ring-1 ring-dashed ring-nb-primary/40" : ""
+      className={`flex min-h-[80px] flex-1 items-center justify-center rounded border border-dashed transition-colors my-1 ${
+        isOver
+          ? "border-nb-primary/70 bg-nb-primary/10 text-nb-primary font-medium"
+          : "border-transparent text-transparent hover:border-nb-outline-variant/30 hover:text-nb-on-surface-variant/40"
       }`}
-    />
+    >
+      <span className="text-[11px] select-none pointer-events-none">
+        {isOver ? "Drop to move to root" : ""}
+      </span>
+    </div>
   );
 }
 
@@ -488,10 +521,13 @@ export function NotebookEntryList({
     folders,
     notebookSummary,
     refresh,
+    setEntries,
+    setFolders,
     setError,
     showPrompt,
     showConfirm,
   } = useNotebookWorkspace();
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<EntryFilters>({
@@ -608,12 +644,6 @@ export function NotebookEntryList({
           content = await cloudApi.getEntryContent(orgId, notebookId, opts.fromId).catch(() => null);
         }
         const folderId = opts.folderId ?? meta?.folderId ?? null;
-        const siblings = Object.values(entries).filter(
-          (e) => !e.isTemplate && (e.folderId ?? null) === folderId
-        );
-        const nextExplorer = siblings.length
-          ? Math.max(...siblings.map(explorerRank)) + 1
-          : 0;
         const today = new Date().toISOString().slice(0, 10);
         const sameDay = Object.values(entries).filter(
           (e) => !e.isTemplate && (e.date || "") === today
@@ -624,7 +654,7 @@ export function NotebookEntryList({
         const created = await cloudApi.createEntry(orgId, notebookId, {
           title: opts.title,
           order: nextDayOrder,
-          explorerOrder: nextExplorer,
+          explorerOrder: 0,
           date: today,
           folderId,
           isTemplate: opts.isTemplate ?? false,
@@ -635,7 +665,7 @@ export function NotebookEntryList({
           await cloudApi.putEntryContent(orgId, notebookId, created.id, content);
         }
         refresh();
-        window.location.href = `${basePath}/entries/${created.id}`;
+        router.push(`${basePath}/entries/${created.id}`);
       } catch (err) {
         setError((err as Error).message);
       }
@@ -662,7 +692,7 @@ export function NotebookEntryList({
           .deleteEntry(orgId, notebookId, id)
           .then(() => {
             refresh();
-            if (activeEntryId === id) window.location.href = basePath;
+            if (activeEntryId === id) router.push(basePath);
           })
           .catch((err) => setError((err as Error).message));
       },
@@ -673,6 +703,18 @@ export function NotebookEntryList({
   function moveEntry(id: string, folderId: string | null) {
     const srcFolder = entries[id]?.folderId ?? null;
     if (srcFolder === folderId) return;
+
+    // Optimistic local update
+    if (setEntries) {
+      setEntries((prev) => {
+        const item = prev[id];
+        if (!item) return prev;
+        return {
+          ...prev,
+          [id]: { ...item, folderId },
+        };
+      });
+    }
 
     const dest = Object.entries(entries).filter(
       ([eid, e]) => !e.isTemplate && eid !== id && (e.folderId ?? null) === folderId
@@ -703,6 +745,7 @@ export function NotebookEntryList({
         refresh();
       } catch (err) {
         setError((err as Error).message);
+        refresh();
       }
     })();
   }
@@ -917,12 +960,26 @@ export function NotebookEntryList({
       curr = folders[curr]?.parentId ?? null;
     }
 
+    if (setFolders) {
+      setFolders((prev) => {
+        const item = prev[folderId];
+        if (!item) return prev;
+        return {
+          ...prev,
+          [folderId]: { ...item, parentId: targetParentId },
+        };
+      });
+    }
+
     void cloudApi
       .patchFolder(orgId, notebookId, folderId, {
         parentId: targetParentId,
       })
       .then(() => refresh())
-      .catch((err) => setError((err as Error).message));
+      .catch((err) => {
+        setError((err as Error).message);
+        refresh();
+      });
   }
 
   const customCollisionStrategy: CollisionDetection = (args) => {
@@ -946,6 +1003,22 @@ export function NotebookEntryList({
   };
 
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const wasDraggedRef = useRef(false);
+
+  function handleDragStart(event: DragStartEvent) {
+    wasDraggedRef.current = true;
+    setActiveDragId(String(event.active.id));
+  }
+
+  function handleDragCancel() {
+    setDragOverId(null);
+    setActiveDragId(null);
+    // Keep wasDraggedRef true briefly to suppress immediate click on mouse-up
+    setTimeout(() => {
+      wasDraggedRef.current = false;
+    }, 120);
+  }
 
   function handleDragOver(event: DragOverEvent) {
     const { active, over } = event;
@@ -968,6 +1041,10 @@ export function NotebookEntryList({
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setDragOverId(null);
+    setActiveDragId(null);
+    setTimeout(() => {
+      wasDraggedRef.current = false;
+    }, 120);
 
     if (!over) return;
 
@@ -1040,6 +1117,8 @@ export function NotebookEntryList({
             phases={phases}
             indent={indent}
             onContextMenu={(evt) => handleEntryContextMenu(evt, id, e)}
+            isOverEntry={dragOverId === id}
+            wasDraggedRef={wasDraggedRef}
           />
         ))}
       </>
@@ -1279,20 +1358,25 @@ export function NotebookEntryList({
       <DndContext
         sensors={sensors}
         collisionDetection={customCollisionStrategy}
+        autoScroll={false}
+        onDragStart={handleDragStart}
         onDragOver={handleDragOver}
+        onDragCancel={handleDragCancel}
         onDragEnd={handleDragEnd}
       >
         <nav
-          className="flex min-h-0 flex-1 flex-col overflow-y-auto px-1 py-1 custom-scrollbar"
+          className="flex min-h-0 flex-1 flex-col overflow-auto px-1 py-1 custom-scrollbar"
           onContextMenu={handleRootContextMenu}
         >
-          {renderFolderTree("__root__", 0)}
+          <div className="flex min-w-full flex-col">
+            {renderFolderTree("__root__", 0)}
 
-          {unfiled.length > 0 && (
-            <div className="mt-0.5">
-              {renderEntryList(unfiled, 0)}
-            </div>
-          )}
+            {unfiled.length > 0 && (
+              <div className="mt-0.5">
+                {renderEntryList(unfiled, 0)}
+              </div>
+            )}
+          </div>
 
           {!entryCount && !q && (
             <p className="px-2 py-6 text-center text-nb-caption text-nb-on-surface-variant">
@@ -1308,7 +1392,10 @@ export function NotebookEntryList({
               </p>
             )}
 
-          <div className="mt-2 border-t border-nb-outline-variant/15 pt-1.5">
+          {/* Root empty area droppable target */}
+          <RootDropTarget isOver={dragOverId === "root-drop-target"} />
+
+          <div className="mt-2 shrink-0 border-t border-nb-outline-variant/15 pt-1.5">
             <div className="group flex h-[24px] items-center gap-1 rounded px-1 hover:bg-nb-surface/80">
               <button
                 type="button"
@@ -1348,10 +1435,29 @@ export function NotebookEntryList({
               </div>
             )}
           </div>
-
-          {/* Root empty area droppable target */}
-          <RootDropTarget isOver={dragOverId === "root-drop-target"} />
         </nav>
+
+        <DragOverlay dropAnimation={null}>
+          {activeDragId ? (
+            <div className="flex items-center gap-1.5 rounded bg-nb-surface px-2.5 py-1 text-xs font-medium shadow-nb-lg ring-1 ring-nb-outline-variant/30 select-none pointer-events-none">
+              {activeDragId.startsWith("folder:") ? (
+                <>
+                  <Folder size={14} className="text-nb-primary shrink-0" />
+                  <span className="truncate max-w-[200px] text-nb-on-surface">
+                    {folders[activeDragId.replace(/^folder:/, "")]?.name ?? "Folder"}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <FileText size={14} className="text-nb-primary shrink-0" />
+                  <span className="truncate max-w-[200px] text-nb-on-surface">
+                    {entries[activeDragId]?.title || "Untitled"}
+                  </span>
+                </>
+              )}
+            </div>
+          ) : null}
+        </DragOverlay>
       </DndContext>
 
       {/* Floating Context Menu */}
