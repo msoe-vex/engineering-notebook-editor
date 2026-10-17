@@ -29,6 +29,8 @@ type OrgWorkspaceState = {
   pendingInviteCount: number;
   error: string | null;
   busy: boolean;
+  /** False until the first org payload lands. */
+  initialLoaded: boolean;
   canManage: boolean;
   canDeleteOrg: boolean;
   refresh: () => void;
@@ -52,6 +54,7 @@ export function OrgWorkspaceProvider({
   const [invites, setInvites] = useState<InviteSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [initialLoaded, setInitialLoaded] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
 
   const refresh = useCallback(() => setReloadToken((n) => n + 1), []);
@@ -82,6 +85,8 @@ export function OrgWorkspaceProvider({
           setError(null);
         } catch (err) {
           if (!cancelled) setError((err as Error).message);
+        } finally {
+          if (!cancelled) setInitialLoaded(true);
         }
       })();
     });
@@ -101,13 +106,14 @@ export function OrgWorkspaceProvider({
       pendingInviteCount: invites.filter((i) => !i.acceptedAt).length,
       error,
       busy,
+      initialLoaded,
       canManage: isOrgAdminRole(org?.role),
       canDeleteOrg: org?.role === "owner",
       refresh,
       setError,
       setBusy,
     }),
-    [orgId, org, notebooks, teams, members, invites, error, busy, refresh]
+    [orgId, org, notebooks, teams, members, invites, error, busy, initialLoaded, refresh]
   );
 
   return (

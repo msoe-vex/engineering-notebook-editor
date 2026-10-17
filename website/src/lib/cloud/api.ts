@@ -1,11 +1,16 @@
 "use client";
 
+import { assertUploadSize } from "@engineering-notebook/shared";
 import { getIdToken } from "./firebase";
 
 const coreBase = () =>
   (process.env.NEXT_PUBLIC_CORE_API_URL || "http://localhost:8080").replace(/\/$/, "");
-const agentsBase = () =>
-  (process.env.NEXT_PUBLIC_AGENTS_API_URL || "http://localhost:8000").replace(/\/$/, "");
+
+function byteLengthOf(bytes: Blob | ArrayBuffer | Uint8Array): number {
+  if (bytes instanceof Blob) return bytes.size;
+  if (bytes instanceof ArrayBuffer) return bytes.byteLength;
+  return bytes.byteLength;
+}
 
 async function authHeaders(hasJsonBody: boolean): Promise<HeadersInit> {
   const token = await getIdToken();
@@ -376,6 +381,7 @@ export const cloudApi = {
     bytes: Blob | ArrayBuffer | Uint8Array,
     contentType: string
   ) {
+    assertUploadSize(byteLengthOf(bytes), "File");
     const body: BodyInit =
       bytes instanceof Blob
         ? bytes
@@ -389,7 +395,13 @@ export const cloudApi = {
       `${coreBase()}/orgs/${orgId}/notebooks/${notebookId}/assets/${assetId}/content`,
       { method: "PUT", headers, body }
     );
-    if (!res.ok) throw new Error(`asset upload ${res.status} ${await res.text()}`);
+    if (!res.ok) {
+      const text = await res.text();
+      if (res.status === 413) {
+        throw new Error("File is too large for the server to accept.");
+      }
+      throw new Error(`asset upload ${res.status} ${text}`);
+    }
   },
   /** @deprecated Prefer uploadAssetContent — signed fake-gcs URLs fail in the browser. */
   async uploadAssetBytes(
@@ -405,6 +417,7 @@ export const cloudApi = {
       // /orgs/:orgId/notebooks/:notebookId/assets/:assetId/content
       return this.uploadAssetContent(parts[2], parts[4], parts[6], bytes, contentType);
     }
+    assertUploadSize(byteLengthOf(bytes), "File");
     const body: BodyInit =
       bytes instanceof Blob
         ? bytes
@@ -432,6 +445,7 @@ export const cloudApi = {
     exportId: string,
     pdf: Uint8Array
   ) {
+    assertUploadSize(pdf.byteLength, "Compiled PDF");
     const res = await fetch(
       `${coreBase()}/orgs/${orgId}/notebooks/${notebookId}/exports/${exportId}/content`,
       {
@@ -443,7 +457,13 @@ export const cloudApi = {
         body: pdf.slice(),
       }
     );
-    if (!res.ok) throw new Error(`export upload ${res.status} ${await res.text()}`);
+    if (!res.ok) {
+      const text = await res.text();
+      if (res.status === 413) {
+        throw new Error("Compiled PDF is too large for the server to accept.");
+      }
+      throw new Error(`export upload ${res.status} ${text}`);
+    }
     return res.json() as Promise<{
       ok: boolean;
       exportId: string;
@@ -456,37 +476,60 @@ export const cloudApi = {
       `/orgs/${orgId}/notebooks/${notebookId}/exports/${exportId}/url`
     ),
 
-  async auditNotebook(
+  aiComplete: (body: { prompt: string; temperature?: number; model?: string }) =>
+    coreFetch<{ provider: "vertex"; model: string; text: string }>("/ai/complete", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  startAudit: (
     orgId: string,
     notebookId: string,
-    body: { provider?: "byok" | "vertex"; rubric?: string; byokApiKey?: string }
-  ) {
-    const res = await fetch(`${agentsBase()}/v1/orgs/${orgId}/notebooks/${notebookId}/audit`, {
+    body: { rubric?: string; provider?: "byok" | "vertex" | "local"; status?: "running" }
+  ) =>
+    coreFetch<AuditRecord>(`/orgs/${orgId}/notebooks/${notebookId}/audits`, {
       method: "POST",
-      headers: await authHeaders(true),
       body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(await res.text());
-    return res.json();
-  },
-  async listAudits(orgId: string, notebookId: string) {
-    const res = await fetch(`${agentsBase()}/v1/orgs/${orgId}/notebooks/${notebookId}/audits`, {
-      headers: await authHeaders(false),
-    });
-    if (!res.ok) throw new Error(await res.text());
-    return res.json() as Promise<
-      Array<{
-        id: string;
-        rubric?: string;
-        provider?: string;
-        summary?: string;
-        scores?: Record<string, number>;
-        advice?: string[];
-        createdAt?: string;
-        createdBy?: string;
-      }>
-    >;
-  },
+    }),
+
+  patchAudit: (
+    orgId: string,
+    notebookId: string,
+    auditId: string,
+    body: Partial<{
+      status: "running" | "completed" | "failed";
+      scores: Record<string, number>;
+      advice: Array<{ entryId: string | null; message: string }>;
+      summary: string;
+      steps: Array<{ at: string; message: string; entryId?: string | null }>;
+      error: string | null;
+    }>
+  ) =>
+    coreFetch<AuditRecord>(`/orgs/${orgId}/notebooks/${notebookId}/audits/${auditId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  getAudit: (orgId: string, notebookId: string, auditId: string) =>
+    coreFetch<AuditRecord>(`/orgs/${orgId}/notebooks/${notebookId}/audits/${auditId}`),
+
+  listAudits: (orgId: string, notebookId: string) =>
+    coreFetch<AuditRecord[]>(`/orgs/${orgId}/notebooks/${notebookId}/audits`),
+};
+
+export type AuditRecord = {
+  id: string;
+  rubric?: string;
+  provider?: string;
+  status?: string;
+  summary?: string;
+  scores?: Record<string, number>;
+  advice?: Array<{ entryId: string | null; message: string }>;
+  steps?: Array<{ at: string; message: string; entryId?: string | null }>;
+  error?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
 };
 
 export function collabWsUrl(): string {

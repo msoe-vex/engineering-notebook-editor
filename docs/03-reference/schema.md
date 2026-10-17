@@ -24,7 +24,7 @@ Clients never talk to Firestore directly (`infra/firestore.rules` deny); Core / 
 | `notebooks/{id}/members/{memberId}` | **Credits roster** (may lack app account) | `name`, `role`, `order`, `imageAssetId?`, `linkedUid?` |
 | `notebooks/{id}/entries/{entryId}` | Entry **metadata only** | See below |
 | `notebooks/{id}/assets/{assetId}` | Asset metadata | `contentType`, `byteSize`, `gcsPath`, `createdBy`, `usedBy[]` |
-| `notebooks/{id}/audits/{auditId}` | Rubric scorecards | `provider`, `scores`, `advice[]`, `summary?`, … |
+| `notebooks/{id}/audits/{auditId}` | Rubric audit runs | `status` (`running`\|`completed`\|`failed`), `provider`, `scores`, `advice[]`, `steps?`, `summary?`, `error?`, … |
 
 ### Notebook summary (`NotebookSummaryV5`)
 

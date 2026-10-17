@@ -10,7 +10,7 @@ Live storage is **GCP only** (Core/Firestore/GCS). ZIP export/import is backup (
 
 ```bash
 # Terminal 1 — APIs + emulators (watch)
-cd ../infra && docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build firebase gcs core collab agents
+cd ../infra && docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build firebase gcs core collab
 
 # Terminal 2 — this package
 npm install && npm run dev

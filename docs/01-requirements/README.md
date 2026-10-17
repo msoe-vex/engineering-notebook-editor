@@ -27,11 +27,11 @@ Also: [backlog.md](./backlog.md).
 | --- | --- | --- |
 | [FR-auth](./features/FR-auth.md) | Authentication & session | current |
 | [FR-orgs](./features/FR-orgs.md) | Organizations, people, invites, teams | current |
-| [FR-notebooks](./features/FR-notebooks.md) | Notebooks, setup, roster, access | current |
-| [FR-entries-collab](./features/FR-entries-collab.md) | Entries & collaborative editing | current |
-| [FR-explorer](./features/FR-explorer.md) | Explorer, folders, search | current |
-| [FR-schedule](./features/FR-schedule.md) | Schedule / calendar | current |
-| [FR-compile](./features/FR-compile.md) | LaTeX preview & BusyTeX compile | current |
+| [FR-notebooks](./features/FR-notebooks.md) | Notebooks, setup, roster, access | partial |
+| [FR-entries-collab](./features/FR-entries-collab.md) | Entries & collaborative editing | partial |
+| [FR-explorer](./features/FR-explorer.md) | Explorer, folders, search | partial |
+| [FR-schedule](./features/FR-schedule.md) | Schedule / calendar | partial |
+| [FR-compile](./features/FR-compile.md) | LaTeX preview & BusyTeX compile | partial |
 | [FR-zip](./features/FR-zip.md) | ZIP backup export/import | current |
 | [FR-genai-audit](./features/FR-genai-audit.md) | GenAI & rubric audit | current |
 | [FR-account](./features/FR-account.md) | Account preferences | current |

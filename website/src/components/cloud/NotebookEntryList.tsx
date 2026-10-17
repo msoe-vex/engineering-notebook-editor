@@ -2,7 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+  type MutableRefObject,
+  type ReactNode,
+} from "react";
 import {
   DndContext,
   DragOverlay,
@@ -28,6 +37,7 @@ import {
   FolderPlus,
   AlertTriangle,
   GripVertical,
+  LayoutTemplate,
   PanelLeft,
   PanelLeftClose,
   Plus,
@@ -37,6 +47,7 @@ import {
   X,
 } from "lucide-react";
 import { Button, DropdownMenu, IconButton } from "@/components/ui";
+import { showNotification } from "@/components/overlays/Notification";
 import { cloudApi } from "@/lib/cloud/api";
 import { useAppDndSensors } from "@/lib/dnd/dndSensors";
 import { readLastAuthors } from "@/lib/notebook/metadata";
@@ -100,6 +111,7 @@ type ContextMenuState = {
 function EntryRowShell({
   id,
   active,
+  selected,
   basePath,
   entry,
   menu,
@@ -108,6 +120,7 @@ function EntryRowShell({
   phases,
   indent = 0,
   onContextMenu,
+  onSelectClick,
   dragListeners,
   dragAttributes,
   isDragging,
@@ -116,6 +129,7 @@ function EntryRowShell({
 }: {
   id: string;
   active: boolean;
+  selected?: boolean;
   basePath: string;
   entry: EntryMeta;
   menu: ReactNode;
@@ -123,12 +137,13 @@ function EntryRowShell({
   rowStyle?: CSSProperties;
   phases?: Record<string, ProjectPhase> | null;
   indent?: number;
-  onContextMenu?: (e: React.MouseEvent) => void;
+  onContextMenu?: (e: ReactMouseEvent) => void;
+  onSelectClick?: (e: ReactMouseEvent, id: string) => void;
   dragListeners?: DraggableSyntheticListeners;
   dragAttributes?: DraggableAttributes;
   isDragging?: boolean;
   isOver?: boolean;
-  wasDraggedRef?: React.MutableRefObject<boolean>;
+  wasDraggedRef?: MutableRefObject<boolean>;
 }) {
   const phaseList = useMemo(() => (phases ? getPhases(phases) : []), [phases]);
   const phaseCfg = useMemo(() => (entry.phase ? getPhaseConfig(phaseList)[entry.phase] : null), [phaseList, entry.phase]);
@@ -143,6 +158,8 @@ function EntryRowShell({
       className={`group relative flex h-[26px] items-center gap-1.5 rounded pr-1.5 text-nb-label transition-colors select-none cursor-pointer ${
         isOver
           ? "bg-nb-primary/20 ring-1 ring-nb-primary/60 font-medium"
+          : selected
+          ? "bg-nb-tertiary/15 text-nb-on-surface ring-1 ring-nb-tertiary/40 font-medium"
           : active
           ? "bg-nb-primary/15 text-nb-primary font-medium"
           : "text-nb-on-surface hover:bg-nb-surface/80"
@@ -174,15 +191,52 @@ function EntryRowShell({
           ) {
             e.preventDefault();
             e.stopPropagation();
+            return;
+          }
+          if (onSelectClick && (e.metaKey || e.ctrlKey || e.shiftKey)) {
+            e.preventDefault();
+            e.stopPropagation();
+            onSelectClick(e, id);
           }
         }}
       >
-        <FileText
-          size={14}
-          className={`shrink-0 ${
-            active ? "text-nb-primary" : "text-nb-on-surface-variant/70 group-hover:text-nb-on-surface"
-          }`}
-        />
+        {(() => {
+          const PhaseIcon = phaseCfg?.icon;
+          if (entry.isTemplate) {
+            return (
+              <span title="Template" className="inline-flex shrink-0">
+                <LayoutTemplate
+                  size={14}
+                  className={
+                    active
+                      ? "text-nb-tertiary"
+                      : "text-nb-on-surface-variant/70 group-hover:text-nb-on-surface"
+                  }
+                />
+              </span>
+            );
+          }
+          if (PhaseIcon && entry.phase) {
+            return (
+              <span
+                title={phases?.[entry.phase]?.name || entry.phase}
+                className="inline-flex shrink-0"
+              >
+                <PhaseIcon size={14} style={{ color: phaseCfg.color }} />
+              </span>
+            );
+          }
+          return (
+            <FileText
+              size={14}
+              className={`shrink-0 ${
+                active
+                  ? "text-nb-primary"
+                  : "text-nb-on-surface-variant/70 group-hover:text-nb-on-surface"
+              }`}
+            />
+          );
+        })()}
 
         <span className="truncate text-xs leading-none">
           {entry.title || "Untitled"}
@@ -198,14 +252,7 @@ function EntryRowShell({
         )}
 
         <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-1">
-          {phaseCfg && (
-            <span
-              className="inline-block h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: phaseCfg.color }}
-              title={phases?.[entry.phase!]?.name || entry.phase!}
-            />
-          )}
-          {entry.date && (
+          {entry.date && !entry.isTemplate && (
             <span className="hidden font-mono text-[10px] text-nb-on-surface-variant/60 group-hover:inline-block">
               {entry.date.slice(5)}
             </span>
@@ -223,25 +270,29 @@ function EntryRowShell({
 function DraggableEntryRow({
   id,
   active,
+  selected,
   basePath,
   entry,
   menu,
   phases,
   indent = 0,
   onContextMenu,
+  onSelectClick,
   isOverEntry,
   wasDraggedRef,
 }: {
   id: string;
   active: boolean;
+  selected?: boolean;
   basePath: string;
   entry: EntryMeta;
   menu: ReactNode;
   phases?: Record<string, ProjectPhase> | null;
   indent?: number;
-  onContextMenu?: (e: React.MouseEvent) => void;
+  onContextMenu?: (e: ReactMouseEvent) => void;
+  onSelectClick?: (e: ReactMouseEvent, id: string) => void;
   isOverEntry?: boolean;
-  wasDraggedRef?: React.MutableRefObject<boolean>;
+  wasDraggedRef?: MutableRefObject<boolean>;
 }) {
   const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
     id,
@@ -259,6 +310,7 @@ function DraggableEntryRow({
     <EntryRowShell
       id={id}
       active={active}
+      selected={selected}
       basePath={basePath}
       entry={entry}
       menu={menu}
@@ -273,6 +325,7 @@ function DraggableEntryRow({
       isDragging={isDragging}
       isOver={(isOverEntry ?? isOver) && !isDragging}
       onContextMenu={onContextMenu}
+      onSelectClick={onSelectClick}
       wasDraggedRef={wasDraggedRef}
     />
   );
@@ -304,7 +357,7 @@ function FolderRowShell({
   rowStyle?: CSSProperties;
   onNewEntry?: () => void;
   onNewSubfolder?: () => void;
-  onContextMenu?: (e: React.MouseEvent) => void;
+  onContextMenu?: (e: ReactMouseEvent) => void;
   dragListeners?: DraggableSyntheticListeners;
   dragAttributes?: DraggableAttributes;
   isOver?: boolean;
@@ -408,7 +461,7 @@ function DraggableAndDroppableFolderRow({
   menu: ReactNode;
   onNewEntry?: () => void;
   onNewSubfolder?: () => void;
-  onContextMenu?: (e: React.MouseEvent) => void;
+  onContextMenu?: (e: ReactMouseEvent) => void;
   isOverFolder?: boolean;
 }) {
   const fullId = `folder:${id}`;
@@ -537,7 +590,8 @@ export function NotebookEntryList({
     dateTo: "",
   });
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
-  const [showTemplates, setShowTemplates] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const lastClickedIdRef = useRef<string | null>(null);
 
   const q = query.trim().toLowerCase();
   const filtersActive = Boolean(
@@ -568,6 +622,10 @@ export function NotebookEntryList({
   }, [entries]);
 
   const phases = (notebookSummary?.phases || null) as Record<string, ProjectPhase> | null;
+  const phaseCfgMap = useMemo(
+    () => getPhaseConfig(getPhases(phases || {})),
+    [phases]
+  );
 
   const { folderList, byFolder, childrenByParent, unfiled, templates } = useMemo(() => {
     const folderList = Object.entries(folders).sort(
@@ -582,11 +640,8 @@ export function NotebookEntryList({
     const unfiled: [string, EntryMeta][] = [];
     const templates: [string, EntryMeta][] = [];
     for (const [id, e] of Object.entries(entries)) {
+      if (e.isTemplate) templates.push([id, e]);
       if (!entryMatchesFilters(e, q, filters, phaseNames)) continue;
-      if (e.isTemplate) {
-        templates.push([id, e]);
-        continue;
-      }
       const fid = e.folderId;
       if (fid && folders[fid]) {
         (byFolder[fid] ??= []).push([id, e]);
@@ -600,14 +655,123 @@ export function NotebookEntryList({
     return { folderList, byFolder, childrenByParent, unfiled, templates };
   }, [entries, folders, q, filters, phaseNames]);
 
-  const entryCount = Object.values(entries).filter((e) => !e.isTemplate).length;
+  const entryCount = Object.keys(entries).length;
+
+  const visibleEntryIds = useMemo(() => {
+    const ids: string[] = [];
+    const walk = (parentKey: string) => {
+      for (const fid of childrenByParent[parentKey] ?? []) {
+        if (!collapsedFolders.has(fid)) {
+          for (const [id] of byFolder[fid] ?? []) ids.push(id);
+          walk(fid);
+        }
+      }
+    };
+    walk("__root__");
+    for (const [id] of unfiled) ids.push(id);
+    return ids;
+  }, [byFolder, childrenByParent, collapsedFolders, unfiled]);
+
+  function handleSelectClick(e: ReactMouseEvent, id: string) {
+    if (e.shiftKey && lastClickedIdRef.current) {
+      const a = visibleEntryIds.indexOf(lastClickedIdRef.current);
+      const b = visibleEntryIds.indexOf(id);
+      if (a >= 0 && b >= 0) {
+        const [lo, hi] = a < b ? [a, b] : [b, a];
+        const range = visibleEntryIds.slice(lo, hi + 1);
+        setSelectedIds(new Set(range));
+        return;
+      }
+    }
+    if (e.metaKey || e.ctrlKey) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+      lastClickedIdRef.current = id;
+      return;
+    }
+    setSelectedIds(new Set([id]));
+    lastClickedIdRef.current = id;
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+    lastClickedIdRef.current = null;
+  }
+
+  function bulkDelete() {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    showConfirm(
+      `Delete ${ids.length} items?`,
+      "Selected entries and templates will be permanently deleted.",
+      () => {
+        void (async () => {
+          try {
+            await Promise.all(
+              ids.map((id) => cloudApi.deleteEntry(orgId, notebookId, id))
+            );
+            clearSelection();
+            refresh();
+            showNotification(`Deleted ${ids.length} items`, "success");
+          } catch (err) {
+            const message = (err as Error).message;
+            setError(message);
+            showNotification(message, "error");
+            refresh();
+          }
+        })();
+      },
+      "danger"
+    );
+  }
+
+  function bulkMove(folderId: string | null) {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    const destSiblings = Object.entries(entries)
+      .filter(([eid, e]) => !ids.includes(eid) && (e.folderId ?? null) === folderId)
+      .sort(
+        (a, b) =>
+          a[1].title.localeCompare(b[1].title, undefined, {
+            sensitivity: "base",
+            numeric: true,
+          }) || a[0].localeCompare(b[0])
+      )
+      .map(([eid]) => eid);
+    void cloudApi
+      .reorderEntries(orgId, notebookId, {
+        mode: "explorer",
+        folderId,
+        orderedIds: [...destSiblings, ...ids],
+      })
+      .then(() => {
+        clearSelection();
+        refresh();
+        showNotification(`Moved ${ids.length} items`, "success");
+      })
+      .catch((err) => {
+        const message = (err as Error).message;
+        setError(message);
+        showNotification(message, "error");
+        refresh();
+      });
+  }
 
   function persistExplorerOrder(orderedIds: string[]) {
     // Same-folder DnD: only rewrite explorerOrder (leave folderId alone).
     void cloudApi
       .reorderEntries(orgId, notebookId, { mode: "explorer", orderedIds })
       .then(() => refresh())
-      .catch((err) => setError((err as Error).message));
+      .catch((err) => {
+        const message = (err as Error).message;
+        setError(message);
+        showNotification(message, "error");
+        refresh();
+      });
   }
 
   function persistFolderOrder(parentKey: string, orderedFolderIds: string[]) {
@@ -623,7 +787,10 @@ export function NotebookEntryList({
         );
         refresh();
       } catch (err) {
-        setError((err as Error).message);
+        const message = (err as Error).message;
+        setError(message);
+        showNotification(message, "error");
+        refresh();
       }
     })();
   }
@@ -717,13 +884,13 @@ export function NotebookEntryList({
     }
 
     const dest = Object.entries(entries).filter(
-      ([eid, e]) => !e.isTemplate && eid !== id && (e.folderId ?? null) === folderId
+      ([eid, e]) => eid !== id && (e.folderId ?? null) === folderId
     );
     sortEntries(dest);
     const destIds = [...dest.map(([eid]) => eid), id];
 
     const src = Object.entries(entries).filter(
-      ([eid, e]) => !e.isTemplate && eid !== id && (e.folderId ?? null) === srcFolder
+      ([eid, e]) => eid !== id && (e.folderId ?? null) === srcFolder
     );
     sortEntries(src);
     const srcIds = src.map(([eid]) => eid);
@@ -744,7 +911,9 @@ export function NotebookEntryList({
         }
         refresh();
       } catch (err) {
-        setError((err as Error).message);
+        const message = (err as Error).message;
+        setError(message);
+        showNotification(message, "error");
         refresh();
       }
     })();
@@ -802,22 +971,20 @@ export function NotebookEntryList({
   }, [contextMenu]);
 
   function getEntryMenuItems(id: string, e: EntryMeta) {
-    const folderItems = e.isTemplate
-      ? []
-      : [
-          {
-            id: "unfiled",
-            label: "Move to Unfiled",
-            onSelect: () => moveEntry(id, null),
-          },
-          ...folderList
-            .filter(([fid]) => fid !== e.folderId)
-            .map(([fid, f]) => ({
-              id: `move-${fid}`,
-              label: `Move to ${f.name}`,
-              onSelect: () => moveEntry(id, fid),
-            })),
-        ];
+    const folderItems = [
+      {
+        id: "unfiled",
+        label: "Move to Unfiled",
+        onSelect: () => moveEntry(id, null),
+      },
+      ...folderList
+        .filter(([fid]) => fid !== e.folderId)
+        .map(([fid, f]) => ({
+          id: `move-${fid}`,
+          label: `Move to ${f.name}`,
+          onSelect: () => moveEntry(id, fid),
+        })),
+    ];
 
     return [
       ...(e.isTemplate
@@ -891,7 +1058,7 @@ export function NotebookEntryList({
     ];
   }
 
-  function handleFolderContextMenu(e: React.MouseEvent, fid: string) {
+  function handleFolderContextMenu(e: ReactMouseEvent, fid: string) {
     e.preventDefault();
     e.stopPropagation();
     setContextMenu({
@@ -901,7 +1068,7 @@ export function NotebookEntryList({
     });
   }
 
-  function handleEntryContextMenu(e: React.MouseEvent, id: string, entryMeta: EntryMeta) {
+  function handleEntryContextMenu(e: ReactMouseEvent, id: string, entryMeta: EntryMeta) {
     e.preventDefault();
     e.stopPropagation();
     setContextMenu({
@@ -911,7 +1078,7 @@ export function NotebookEntryList({
     });
   }
 
-  function handleRootContextMenu(e: React.MouseEvent) {
+  function handleRootContextMenu(e: ReactMouseEvent) {
     // Only if right clicking on the empty background of the nav
     if (e.target !== e.currentTarget && !(e.target as HTMLElement).classList.contains("custom-scrollbar")) {
       return;
@@ -1111,12 +1278,14 @@ export function NotebookEntryList({
             key={id}
             id={id}
             active={activeEntryId === id}
+            selected={selectedIds.has(id)}
             basePath={basePath}
             entry={e}
             menu={entryMenu(id, e)}
             phases={phases}
             indent={indent}
             onContextMenu={(evt) => handleEntryContextMenu(evt, id, e)}
+            onSelectClick={handleSelectClick}
             isOverEntry={dragOverId === id}
             wasDraggedRef={wasDraggedRef}
           />
@@ -1322,21 +1491,102 @@ export function NotebookEntryList({
         </div>
       )}
 
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center gap-1 border-b border-nb-tertiary/30 bg-nb-tertiary/5 px-2 py-1.5">
+          <span className="mr-auto text-[11px] font-semibold text-nb-on-surface">
+            {selectedIds.size} selected
+          </span>
+          <DropdownMenu
+            align="right"
+            ariaLabel="Move selected"
+            trigger={
+              <span className="cursor-pointer rounded px-2 py-1 text-[11px] font-semibold text-nb-primary hover:bg-nb-surface">
+                Move…
+              </span>
+            }
+            items={[
+              {
+                id: "unfiled",
+                label: "Unfiled",
+                onSelect: () => bulkMove(null),
+              },
+              ...folderList.map(([fid, f]) => ({
+                id: `folder-${fid}`,
+                label: f.name,
+                onSelect: () => bulkMove(fid),
+              })),
+            ]}
+          />
+          <button
+            type="button"
+            className="rounded px-2 py-1 text-[11px] font-semibold text-nb-danger hover:bg-nb-danger/10"
+            onClick={bulkDelete}
+          >
+            Delete
+          </button>
+          <button
+            type="button"
+            className="rounded px-2 py-1 text-[11px] font-semibold text-nb-on-surface-variant hover:bg-nb-surface"
+            onClick={clearSelection}
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-1 border-b border-nb-outline-variant/15 px-2 py-2">
         <span className="mr-auto text-nb-label font-semibold text-nb-on-surface-variant">
-          {entryCount} entries
+          {entryCount} items
         </span>
-        <Button
-          size="sm"
-          variant="primary"
-          onClick={() =>
-            showPrompt("New entry", "Untitled entry", (title) => {
-              createEntry({ title });
-            })
+        <DropdownMenu
+          align="right"
+          ariaLabel="New entry"
+          trigger={
+            <span className="inline-flex items-center gap-1.5 rounded-nb-lg bg-nb-primary px-3 py-1.5 text-nb-label font-medium text-white shadow-nb-sm hover:bg-nb-primary-dim">
+              <Plus size={14} /> New
+            </span>
           }
-        >
-          <Plus size={14} /> New
-        </Button>
+          items={[
+            {
+              id: "blank",
+              label: "Blank entry",
+              icon: <FileText size={14} />,
+              onSelect: () =>
+                showPrompt("New entry", "Untitled entry", (title) => {
+                  createEntry({ title });
+                }),
+            },
+            {
+              id: "blank-template",
+              label: "Blank template",
+              icon: <LayoutTemplate size={14} />,
+              onSelect: () =>
+                showPrompt("New template", "Untitled template", (title) => {
+                  createEntry({ title, isTemplate: true });
+                }),
+            },
+            ...templates.map(([tid, te]) => {
+              const cfg = te.phase ? phaseCfgMap[te.phase] : null;
+              const Icon = cfg?.icon || LayoutTemplate;
+              return {
+                id: `tpl-${tid}`,
+                label: te.title || "Untitled template",
+                icon: (
+                  <Icon
+                    size={14}
+                    style={cfg?.color ? { color: cfg.color } : undefined}
+                  />
+                ),
+                onSelect: () =>
+                  createEntry({
+                    title: te.title || "New Entry",
+                    isTemplate: false,
+                    fromId: tid,
+                  }),
+              };
+            }),
+          ]}
+        />
         <IconButton
           aria-label="New folder"
           title="New folder"
@@ -1385,7 +1635,6 @@ export function NotebookEntryList({
           )}
           {q &&
             !unfiled.length &&
-            !templates.length &&
             folderList.every(([fid]) => !(byFolder[fid]?.length)) && (
               <p className="px-2 py-6 text-center text-nb-caption text-nb-on-surface-variant">
                 No matches
@@ -1394,47 +1643,6 @@ export function NotebookEntryList({
 
           {/* Root empty area droppable target */}
           <RootDropTarget isOver={dragOverId === "root-drop-target"} />
-
-          <div className="mt-2 shrink-0 border-t border-nb-outline-variant/15 pt-1.5">
-            <div className="group flex h-[24px] items-center gap-1 rounded px-1 hover:bg-nb-surface/80">
-              <button
-                type="button"
-                className="flex min-w-0 flex-1 items-center gap-1 text-left text-xs font-medium text-nb-on-surface-variant select-none"
-                onClick={() => setShowTemplates((v) => !v)}
-              >
-                <span className="shrink-0 text-nb-on-surface-variant/80">
-                  {showTemplates ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                </span>
-                <span>Templates</span>
-                <span className="shrink-0 font-mono text-[10px] text-nb-on-surface-variant/50">
-                  {templates.length}
-                </span>
-              </button>
-              <button
-                type="button"
-                className="rounded p-0.5 text-nb-on-surface-variant opacity-0 hover:bg-nb-surface hover:text-nb-on-surface group-hover:opacity-100 focus:opacity-100"
-                title="New template"
-                aria-label="New template"
-                onClick={() =>
-                  showPrompt("New template", "Untitled template", (title) => {
-                    createEntry({ title, isTemplate: true });
-                  })
-                }
-              >
-                <Plus size={13} />
-              </button>
-            </div>
-            {showTemplates && (
-              <div className="mt-0.5">
-                {renderEntryList(templates, 1)}
-                {!templates.length && (
-                  <p className="pl-6 py-1 text-[11px] italic text-nb-on-surface-variant/40">
-                    (no templates)
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
         </nav>
 
         <DragOverlay dropAnimation={null}>
@@ -1449,7 +1657,21 @@ export function NotebookEntryList({
                 </>
               ) : (
                 <>
-                  <FileText size={14} className="text-nb-primary shrink-0" />
+                  {(() => {
+                    const e = entries[activeDragId];
+                    if (e?.isTemplate) {
+                      return <LayoutTemplate size={14} className="text-nb-tertiary shrink-0" />;
+                    }
+                    const cfg = e?.phase ? phaseCfgMap[e.phase] : null;
+                    const Icon = cfg?.icon || FileText;
+                    return (
+                      <Icon
+                        size={14}
+                        className="shrink-0 text-nb-primary"
+                        style={cfg?.color ? { color: cfg.color } : undefined}
+                      />
+                    );
+                  })()}
                   <span className="truncate max-w-[200px] text-nb-on-surface">
                     {entries[activeDragId]?.title || "Untitled"}
                   </span>

@@ -26,6 +26,7 @@ import {
   type User,
 } from "@/lib/cloud/firebase";
 import { Toaster } from "react-hot-toast";
+import { bindNotificationEvents } from "@/components/overlays/Notification";
 import { cloudApi, type OrgSummary } from "@/lib/cloud/api";
 import { platformRoleLabel } from "@/lib/cloud/roles";
 import {
@@ -84,6 +85,8 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
   useEffect(() => {
     queueMicrotask(() => setMountedTheme(true));
   }, []);
+
+  useEffect(() => bindNotificationEvents(), []);
 
   useEffect(() => {
     const auth = getFirebaseAuth();

@@ -6,11 +6,12 @@ import { ArrowRight, BookOpen, Edit2, Plus, Trash2 } from "lucide-react";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import TextPromptDialog from "@/components/dialogs/TextPromptDialog";
 import { useOrgWorkspace } from "@/components/cloud/OrgWorkspaceContext";
-import { Button, DropdownMenu, EmptyState, ListRow } from "@/components/ui";
+import { Button, DropdownMenu, EmptyState, ListRow, Skeleton } from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
 
 export default function OrgNotebooksPage() {
-  const { orgId, notebooks, busy, setBusy, refresh, setError } = useOrgWorkspace();
+  const { orgId, notebooks, busy, setBusy, refresh, setError, initialLoaded } =
+    useOrgWorkspace();
   const [createOpen, setCreateOpen] = useState(false);
   const [renameNb, setRenameNb] = useState<{ id: string; name: string } | null>(null);
   const [deleteNb, setDeleteNb] = useState<{ id: string; name: string } | null>(null);
@@ -30,7 +31,21 @@ export default function OrgNotebooksPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-3">
-        {notebooks.map((nb) => (
+        {!initialLoaded &&
+          Array.from({ length: 3 }, (_, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-4 rounded-nb-xl border border-nb-outline-variant/20 p-3"
+            >
+              <Skeleton className="h-12 w-12 shrink-0 rounded-xl" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-4 w-2/5" />
+                <Skeleton className="h-3 w-1/3" />
+              </div>
+            </div>
+          ))}
+        {initialLoaded &&
+          notebooks.map((nb) => (
           <ListRow key={nb.id} interactive>
             <Link
               href={`/orgs/${orgId}/notebooks/${nb.id}`}
@@ -71,7 +86,7 @@ export default function OrgNotebooksPage() {
             />
           </ListRow>
         ))}
-        {!notebooks.length && (
+        {initialLoaded && !notebooks.length && (
           <EmptyState
             title="No notebooks yet"
             description="Create a notebook to open the editor workspace."

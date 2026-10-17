@@ -5,6 +5,7 @@ export { TextField } from "./TextField";
 export { Alert } from "./Alert";
 export { Badge, RoleChip } from "./Badge";
 export { Spinner, LoadingBlock } from "./Spinner";
+export { Skeleton, SkeletonLines } from "./Skeleton";
 export { EmptyState } from "./EmptyState";
 export { Card, ListRow } from "./Card";
 export { PageHeader } from "./PageHeader";

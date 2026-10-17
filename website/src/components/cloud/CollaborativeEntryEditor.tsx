@@ -10,14 +10,45 @@ import RichTextArea from "@/components/editor/RichTextArea";
 import { NotebookFormatToolbar, insertBlock } from "@/components/editor/NotebookFormatToolbar";
 import type { TipTapNode } from "@/lib/notebook/metadata";
 import type { ProjectPhase } from "@engineering-notebook/shared";
+import { showNotification } from "@/components/overlays/Notification";
+import { getFirebaseAuth, getDevToken } from "@/lib/cloud/firebase";
+import { compressImageToJpeg, convertSvgToPng } from "@/lib/utils";
 import { workspaceState } from "@/lib/cloud/workspaceState";
 import { useNotebookWorkspace } from "./NotebookWorkspaceContext";
+
+type PresenceUser = { clientId: number; name: string; color: string };
+
+const PRESENCE_COLORS = [
+  "#2563eb",
+  "#059669",
+  "#d97706",
+  "#dc2626",
+  "#7c3aed",
+  "#0891b2",
+  "#db2777",
+];
+
+function colorForId(id: string | number): string {
+  const s = String(id);
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return PRESENCE_COLORS[h % PRESENCE_COLORS.length];
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
 type Props = {
   documentName: string;
   entryTitle: string;
   entryId: string;
   getToken: () => Promise<string | null>;
+  /** Fired when TipTap JSON changes (for live LaTeX preview). */
+  onDocChange?: (doc: TipTapNode) => void;
 };
 
 /**
@@ -29,6 +60,7 @@ export function CollaborativeEntryEditor({
   entryTitle,
   entryId,
   getToken,
+  onDocChange,
 }: Props) {
   const { orgId, notebookId, entries, notebookSummary, refresh } = useNotebookWorkspace();
   const [status, setStatus] = useState("connecting");
@@ -47,6 +79,7 @@ export function CollaborativeEntryEditor({
   const [headingPos, setHeadingPos] = useState({ top: 0, left: 0 });
   const [gridPos, setGridPos] = useState({ top: 0, left: 0 });
   const [showTableGrid, setShowTableGrid] = useState(false);
+  const [peers, setPeers] = useState<PresenceUser[]>([]);
   const toggleLinkFn = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -56,6 +89,14 @@ export function CollaborativeEntryEditor({
     void (async () => {
       const token = (await getTokenRef.current()) || "";
       if (cancelled) return;
+
+      const authUser = getFirebaseAuth().currentUser;
+      const localName =
+        authUser?.displayName ||
+        authUser?.email ||
+        getDevToken() ||
+        "Editor";
+      const localColor = colorForId(authUser?.uid || localName);
 
       p = new HocuspocusProvider({
         url: collabWsUrl(),
@@ -67,7 +108,30 @@ export function CollaborativeEntryEditor({
           console.warn("Collab auth failed", reason);
           setStatus("disconnected");
         },
+        onAwarenessChange: ({ states }) => {
+          const next: PresenceUser[] = [];
+          for (const state of states) {
+            const user = (state as { user?: { name?: string; color?: string }; clientId?: number })
+              .user;
+            const clientId = Number(
+              (state as { clientId?: number }).clientId ?? 0
+            );
+            if (!user?.name) continue;
+            // Skip self when provider marks local client
+            if ((state as { clientId?: number }).clientId === p?.awareness?.clientID) {
+              continue;
+            }
+            next.push({
+              clientId,
+              name: user.name,
+              color: user.color || colorForId(clientId),
+            });
+          }
+          setPeers(next);
+        },
       });
+
+      p.setAwarenessField("user", { name: localName, color: localColor });
 
       if (cancelled) {
         p.destroy();
@@ -83,6 +147,7 @@ export function CollaborativeEntryEditor({
       p?.destroy();
       setProvider(null);
       setEditor(null);
+      setPeers([]);
     };
   }, [documentName, ydoc]);
 
@@ -103,6 +168,22 @@ export function CollaborativeEntryEditor({
     entries[entryId]?.isTemplate,
     (entries[entryId]?.authors || []).join("\0"),
   ].join("|");
+
+  const onDocChangeRef = useRef(onDocChange);
+  onDocChangeRef.current = onDocChange;
+
+  useEffect(() => {
+    if (!editor) return;
+    const emit = () => {
+      const doc = editor.getJSON() as TipTapNode;
+      onDocChangeRef.current?.(doc);
+    };
+    emit();
+    editor.on("update", emit);
+    return () => {
+      editor.off("update", emit);
+    };
+  }, [editor]);
 
   // Debounced quality pass: resources / references / isValid → Firestore entry meta.
   useEffect(() => {
@@ -232,16 +313,29 @@ export function CollaborativeEntryEditor({
       const reader = new FileReader();
       reader.onload = () => {
         void (async () => {
-          const dataUrl = reader.result as string;
-          const contentType = file.type || "application/octet-stream";
+          let dataUrl = reader.result as string;
           try {
-            const assetId = await uploadImageBytes(file, contentType, dataUrl);
+            if (file.type === "image/svg+xml" || file.name.toLowerCase().endsWith(".svg")) {
+              dataUrl = await convertSvgToPng(dataUrl);
+            }
+            const compressed = await compressImageToJpeg(dataUrl, 1920, 0.8).catch(() => ({
+              dataUrl,
+            }));
+            const preview = compressed.dataUrl;
+            const comma = preview.indexOf(",");
+            const header = preview.slice(0, comma);
+            const contentType =
+              /data:([^;]+)/.exec(header)?.[1] || "image/jpeg";
+            const bin = atob(preview.slice(comma + 1));
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            const assetId = await uploadImageBytes(bytes, contentType, preview);
             const cacheKey = `cloud:${assetId}`;
             insertBlock(editor, {
               type: "image",
               attrs: {
                 id: assetId,
-                src: dataUrl,
+                src: preview,
                 alt: "",
                 title: "",
                 filePath: cacheKey,
@@ -249,7 +343,10 @@ export function CollaborativeEntryEditor({
               },
             });
           } catch (err) {
+            const message =
+              err instanceof Error ? err.message : "Image upload failed.";
             console.warn("Cloud asset upload failed; image not inserted", err);
+            showNotification(message, "error");
           }
         })();
       };
@@ -272,20 +369,41 @@ export function CollaborativeEntryEditor({
   return (
     <div className="flex flex-col gap-2 text-nb-on-surface">
       <div className="flex items-center justify-between gap-2">
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-nb px-2 py-0.5 text-nb-caption font-semibold ${
-            status === "connected"
-              ? "bg-nb-success/10 text-nb-success"
-              : "bg-nb-warning/10 text-nb-warning"
-          }`}
-        >
+        <div className="flex min-w-0 items-center gap-2">
           <span
-            className={`h-1.5 w-1.5 rounded-full ${
-              status === "connected" ? "bg-nb-success" : "bg-nb-warning"
+            className={`inline-flex items-center gap-1.5 rounded-nb px-2 py-0.5 text-nb-caption font-semibold ${
+              status === "connected"
+                ? "bg-nb-success/10 text-nb-success"
+                : "bg-nb-warning/10 text-nb-warning"
             }`}
-          />
-          {statusLabel}
-        </span>
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                status === "connected" ? "bg-nb-success" : "bg-nb-warning"
+              }`}
+            />
+            {statusLabel}
+          </span>
+          {peers.length > 0 && (
+            <div className="flex items-center -space-x-1.5" aria-label="Editors present">
+              {peers.slice(0, 5).map((peer) => (
+                <span
+                  key={peer.clientId}
+                  title={peer.name}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-nb-surface text-[9px] font-bold text-white shadow-sm"
+                  style={{ backgroundColor: peer.color }}
+                >
+                  {initials(peer.name)}
+                </span>
+              ))}
+              {peers.length > 5 && (
+                <span className="pl-2 text-[10px] font-semibold text-nb-on-surface-variant">
+                  +{peers.length - 5}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
         {status !== "connected" && (
           <button
             type="button"
@@ -297,7 +415,7 @@ export function CollaborativeEntryEditor({
         )}
       </div>
       {editor && (
-        <div className="sticky top-0 z-10 overflow-hidden rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface shadow-nb-sm">
+        <div className="sticky top-0 z-30 overflow-hidden rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface shadow-nb-sm">
           <NotebookFormatToolbar
             editor={editor}
             activeMenu={activeMenu}
@@ -339,7 +457,10 @@ export function CollaborativeEntryEditor({
                 const assetId = await uploadImageBytes(bytes, contentType, dataUrl);
                 remapatImageNode(path, assetId, dataUrl);
               } catch (err) {
+                const message =
+                  err instanceof Error ? err.message : "Image upload failed.";
                 console.warn("Cloud asset upload failed for drag/drop image", err);
+                showNotification(message, "error");
               }
             })();
           }}

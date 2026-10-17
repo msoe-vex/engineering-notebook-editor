@@ -168,17 +168,32 @@ export type AssetMetadata = {
   usedBy: string[];
 };
 
+export type AuditStatus = "running" | "completed" | "failed";
+
+export type AuditProvider = "byok" | "vertex" | "local";
+
+export type AuditStep = {
+  at: string;
+  message: string;
+  entryId?: string | null;
+};
+
+/** Rubric audit run (browser-orchestrated; Core persists progress). */
 export type RubricScorecard = {
-  id?: string;
+  id: string;
   orgId: string;
   notebookId: string;
   rubric: string;
-  provider: "byok" | "vertex";
+  provider: AuditProvider;
+  status: AuditStatus;
   scores: Record<string, number>;
   advice: Array<{ entryId: string | null; message: string }>;
   summary?: string;
+  steps?: AuditStep[];
+  error?: string;
   createdBy: string;
   createdAt: string;
+  updatedAt?: string;
 };
 
 /** ZIP / export envelope (no TipTap bodies). */

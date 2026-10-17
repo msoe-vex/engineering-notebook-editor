@@ -21,6 +21,8 @@ import {
   teamMemberPath,
   teamMembersCollection,
   gcsKeys,
+  mergeMetadataValidationErrors,
+  validateEntryMetadataFields,
   type Organization,
   type OrgMember,
   type OrgRole,
@@ -44,9 +46,59 @@ import {
 } from "../rbac.js";
 import { getUser } from "../http/authPlugin.js";
 import type { StoragePort } from "../storage/storagePort.js";
+import { publishNotebookEvent, subscribeNotebookEvents } from "../realtime/notebookEvents.js";
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+/** Recompute title/authors/date/phase validity for all entries (keeps resource/ref errors). */
+async function revalidateNotebookEntryMetadata(
+  orgId: string,
+  notebookId: string,
+  phases: NotebookSummaryV5["phases"] | undefined
+) {
+  const snap = await dbRoot().collection(entriesCollection(orgId, notebookId)).get();
+  if (snap.empty) return;
+  const phaseMap = (phases || {}) as Record<string, unknown>;
+  const ts = nowIso();
+  let batch = dbRoot().batch();
+  let ops = 0;
+  const flush = async () => {
+    if (ops === 0) return;
+    await batch.commit();
+    batch = dbRoot().batch();
+    ops = 0;
+  };
+  const changed: Array<{ id: string; entry: EntryMetadataV5 }> = [];
+  for (const doc of snap.docs) {
+    const entry = doc.data() as EntryMetadataV5;
+    const metaErrors = validateEntryMetadataFields(entry, phaseMap);
+    const { validationErrors, isValid } = mergeMetadataValidationErrors(
+      entry.validationErrors,
+      metaErrors
+    );
+    const prev = entry.validationErrors || [];
+    const same =
+      entry.isValid === isValid &&
+      prev.length === validationErrors.length &&
+      prev.every((e, i) => e === validationErrors[i]);
+    if (same) continue;
+    const next = { ...entry, validationErrors, isValid, updatedAt: ts };
+    batch.update(doc.ref, { validationErrors, isValid, updatedAt: ts });
+    changed.push({ id: doc.id, entry: next });
+    ops += 1;
+    if (ops >= 400) await flush();
+  }
+  await flush();
+  for (const row of changed) {
+    publishNotebookEvent(orgId, notebookId, {
+      type: "entry.upserted",
+      entryId: row.id,
+      entry: { id: row.id, ...row.entry } as Record<string, unknown>,
+      at: ts,
+    });
+  }
 }
 
 async function deleteCollectionDocs(collectionPath: string) {
@@ -552,6 +604,28 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     return { id: snap.id, ...data };
   });
 
+  /** SSE: notebook metadata fanout (website uses fetch + Authorization; not EventSource). */
+  app.get("/orgs/:orgId/notebooks/:notebookId/events", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
+    await assertNotebookAccess(user, orgId, notebookId);
+
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    const unsub = subscribeNotebookEvents(orgId, notebookId, reply.raw);
+    const onClose = () => {
+      unsub();
+      if (!reply.raw.writableEnded) reply.raw.end();
+    };
+    request.raw.on("close", onClose);
+    request.raw.on("error", onClose);
+  });
+
   app.patch("/orgs/:orgId/notebooks/:notebookId", async (request, reply) => {
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
@@ -575,7 +649,18 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       if (body[key] !== undefined) patch[key] = body[key];
     }
     await ref.update(omitUndefined(patch));
-    return { id: notebookId, ...existing, ...patch };
+    const merged = { id: notebookId, ...existing, ...patch };
+    publishNotebookEvent(orgId, notebookId, {
+      type: "notebook.updated",
+      notebook: merged as Record<string, unknown>,
+      at: String(patch.updatedAt),
+    });
+    if (body.phases !== undefined) {
+      void revalidateNotebookEntryMetadata(orgId, notebookId, body.phases).catch((err) => {
+        console.warn("[revalidate] notebook phases", orgId, notebookId, err);
+      });
+    }
+    return merged;
   });
 
   app.delete("/orgs/:orgId/notebooks/:notebookId", async (request, reply) => {
@@ -610,7 +695,13 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       order: body.order ?? Object.keys(nb.folders ?? {}).length,
     };
     const folders = { ...(nb.folders ?? {}), [id]: folder };
-    await ref.update({ folders, updatedAt: nowIso() });
+    const ts = nowIso();
+    await ref.update({ folders, updatedAt: ts });
+    publishNotebookEvent(orgId, notebookId, {
+      type: "notebook.updated",
+      notebook: { id: notebookId, folders, updatedAt: ts },
+      at: ts,
+    });
     return { id, folder, folders };
   });
 
@@ -635,7 +726,13 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       order: body.order !== undefined ? body.order : existing.order,
     };
     const folders = { ...(nb.folders ?? {}), [folderId]: folder };
-    await ref.update({ folders, updatedAt: nowIso() });
+    const ts = nowIso();
+    await ref.update({ folders, updatedAt: ts });
+    publishNotebookEvent(orgId, notebookId, {
+      type: "notebook.updated",
+      notebook: { id: notebookId, folders, updatedAt: ts },
+      at: ts,
+    });
     return { id: folderId, folder, folders };
   });
 
@@ -654,16 +751,23 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     if (!nb.folders?.[folderId]) return reply.code(404).send({ error: "folder not found" });
     const entries = await db().collection(entriesCollection(orgId, notebookId)).get();
     const batch = db().batch();
+    const ts = nowIso();
     for (const doc of entries.docs) {
       const meta = doc.data() as EntryMetadataV5;
       if (meta.folderId === folderId) {
-        batch.update(doc.ref, { folderId: null, updatedAt: nowIso() });
+        batch.update(doc.ref, { folderId: null, updatedAt: ts });
       }
     }
     const folders = { ...(nb.folders ?? {}) };
     delete folders[folderId];
-    batch.update(ref, { folders, updatedAt: nowIso() });
+    batch.update(ref, { folders, updatedAt: ts });
     await batch.commit();
+    publishNotebookEvent(orgId, notebookId, {
+      type: "notebook.updated",
+      notebook: { id: notebookId, folders, updatedAt: ts },
+      at: ts,
+    });
+    publishNotebookEvent(orgId, notebookId, { type: "entries.changed", at: ts });
     return { ok: true, folders };
   });
 
@@ -797,6 +901,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
         detail: err instanceof Error ? err.message : String(err),
       });
     }
+    publishNotebookEvent(orgId, notebookId, { type: "entries.changed", at: ts });
     return { ok: true, mode, orderedIds };
   });
 
@@ -831,7 +936,14 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       JSON.stringify({ type: "doc", content: [{ type: "paragraph" }] }),
       "application/json"
     );
-    return { id, ...entry };
+    const result = { id, ...entry };
+    publishNotebookEvent(orgId, notebookId, {
+      type: "entry.upserted",
+      entryId: id,
+      entry: result as Record<string, unknown>,
+      at: ts,
+    });
+    return result;
   });
 
   app.get("/orgs/:orgId/notebooks/:notebookId/entries/:entryId", async (request, reply) => {
@@ -893,7 +1005,14 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
         body.assetIds ?? []
       );
     }
-    return { id: entryId, ...snap.data(), ...patch };
+    const result = { id: entryId, ...existing, ...patch };
+    publishNotebookEvent(orgId, notebookId, {
+      type: "entry.upserted",
+      entryId,
+      entry: result as Record<string, unknown>,
+      at: String(patch.updatedAt),
+    });
+    return result;
   });
 
   app.delete("/orgs/:orgId/notebooks/:notebookId/entries/:entryId", async (request, reply) => {
@@ -914,6 +1033,12 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       await syncAssetUsedBy(orgId, notebookId, entryId, meta.assetIds, []);
     }
     await ref.delete();
+    const ts = nowIso();
+    publishNotebookEvent(orgId, notebookId, {
+      type: "entry.deleted",
+      entryId,
+      at: ts,
+    });
     return { ok: true };
   });
 
@@ -953,7 +1078,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     return { ok: true, tipTapRev, tipTapGcsPath: key };
   });
 
-  // Browser uploads go through Core (auth + CORS). Direct fake-gcs PUTs fail from the browser.
+  // Browser uploads go through Core (auth + CORS). Pass the raw stream — do not buffer.
   const binaryTypes = [
     "application/octet-stream",
     "application/pdf",
@@ -965,8 +1090,8 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     "image/svg+xml",
   ];
   for (const type of binaryTypes) {
-    app.addContentTypeParser(type, { parseAs: "buffer" }, (_req, body, done) => {
-      done(null, body);
+    app.addContentTypeParser(type, (_req, payload, done) => {
+      done(null, payload);
     });
   }
 
@@ -1009,17 +1134,28 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const snap = await ref.get();
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
     const asset = snap.data() as AssetMetadata;
-    if (!(request.body instanceof Uint8Array)) {
-      return reply.code(400).send({ error: "expected binary body" });
-    }
-    const data = Buffer.from(request.body);
     const contentType =
       (typeof request.headers["content-type"] === "string"
         ? request.headers["content-type"].split(";")[0].trim()
         : null) || asset.contentType;
-    await storage.putObject(asset.gcsPath, data, contentType);
-    await ref.update({ byteSize: data.byteLength, contentType });
-    return { ok: true, byteSize: data.byteLength };
+    const body = request.body as NodeJS.ReadableStream | Uint8Array | Buffer | undefined;
+    let byteSize: number;
+    if (body && typeof (body as NodeJS.ReadableStream).pipe === "function") {
+      const result = await storage.putObjectStream(
+        asset.gcsPath,
+        body as import("node:stream").Readable,
+        contentType
+      );
+      byteSize = result.byteSize;
+    } else if (body instanceof Uint8Array || Buffer.isBuffer(body)) {
+      const data = Buffer.from(body);
+      await storage.putObject(asset.gcsPath, data, contentType);
+      byteSize = data.byteLength;
+    } else {
+      return reply.code(400).send({ error: "expected binary body stream" });
+    }
+    await ref.update({ byteSize, contentType });
+    return { ok: true, byteSize };
   });
 
   app.get("/orgs/:orgId/notebooks/:notebookId/assets", async (request) => {
@@ -1073,18 +1209,29 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       exportId: string;
     };
     await assertNotebookAccess(user, orgId, notebookId);
-    if (!(request.body instanceof Uint8Array)) {
-      return reply.code(400).send({ error: "expected binary body" });
-    }
     const key = gcsKeys.exportPdf(orgId, notebookId, exportId);
-    const data = Buffer.from(request.body);
-    await storage.putObject(key, data, "application/pdf");
+    const body = request.body as NodeJS.ReadableStream | Uint8Array | Buffer | undefined;
+    let byteSize: number;
+    if (body && typeof (body as NodeJS.ReadableStream).pipe === "function") {
+      const result = await storage.putObjectStream(
+        key,
+        body as import("node:stream").Readable,
+        "application/pdf"
+      );
+      byteSize = result.byteSize;
+    } else if (body instanceof Uint8Array || Buffer.isBuffer(body)) {
+      const data = Buffer.from(body);
+      await storage.putObject(key, data, "application/pdf");
+      byteSize = data.byteLength;
+    } else {
+      return reply.code(400).send({ error: "expected binary body stream" });
+    }
     const ts = nowIso();
     await db().doc(notebookPath(orgId, notebookId)).update({
       lastCompiled: ts,
       updatedAt: ts,
     });
-    return { ok: true, exportId, gcsPath: key, lastCompiled: ts, byteSize: data.byteLength };
+    return { ok: true, exportId, gcsPath: key, lastCompiled: ts, byteSize };
   });
 
   app.get("/orgs/:orgId/notebooks/:notebookId/exports/:exportId/url", async (request, reply) => {

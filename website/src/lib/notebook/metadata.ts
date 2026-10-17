@@ -1,3 +1,4 @@
+import { validateEntryMetadataFields } from "@engineering-notebook/shared";
 import { ASSETS_DIR, ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR, TYPE_LABELS, NOTEBOOK_VERSION } from "@/lib/constants";
 import { generateUUID } from "@/lib/utils";
 import { normalizeNotebookMetadata, mergeRecordById, parseAuthors, formatAuthors } from "./notebookSchema";
@@ -484,22 +485,10 @@ export function validateEntry(
   phases: Identified<ProjectPhase>[] | Record<string, ProjectPhase>,
   existingIds: Set<string>
 ): string[] {
-  const errors: string[] = [];
-  const phaseIds = new Set(
-    Array.isArray(phases) ? phases.map(p => p.id) : Object.keys(phases || {})
-  );
-
-  if (!entry.title?.trim()) errors.push("Entry title is required.");
-
-  // Templates are exempt from author, date, and phase requirements
-  if (!entry.isTemplate) {
-    if (!entry.authors?.some((name) => name.trim())) errors.push("Author name is required.");
-    if (!entry.date?.trim()) errors.push("Date is required.");
-    // Only require phase when the notebook defines phases.
-    if (phaseIds.size > 0 && (!entry.phase || !phaseIds.has(entry.phase))) {
-      errors.push("Entry phase is required.");
-    }
-  }
+  const phaseMap = Array.isArray(phases)
+    ? Object.fromEntries(phases.map((p) => [p.id, p]))
+    : phases || {};
+  const errors = validateEntryMetadataFields(entry, phaseMap);
 
   // Check local resources (applies to both entries and templates)
   if (entry.resources) {

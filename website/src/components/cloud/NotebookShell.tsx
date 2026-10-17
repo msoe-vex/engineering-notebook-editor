@@ -12,8 +12,14 @@ import {
 } from "@engineering-notebook/shared";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import TextPromptDialog from "@/components/dialogs/TextPromptDialog";
-import { Alert, Button, Dialog, LoadingBlock } from "@/components/ui";
+import { Alert, Button, Dialog, LoadingBlock, Skeleton, SkeletonLines } from "@/components/ui";
+import { showNotification } from "@/components/overlays/Notification";
 import { cloudApi } from "@/lib/cloud/api";
+import { ShareNotebookDialog } from "./ShareNotebookDialog";
+import {
+  subscribeNotebookEvents,
+  type NotebookRealtimeEvent,
+} from "@/lib/cloud/notebookEvents";
 import {
   collectAssetIdsFromTipTap,
   remapIdList,
@@ -25,12 +31,33 @@ import {
   deactivateCloudWorkspaceBridge,
 } from "@/lib/cloud/workspaceBridge";
 import { setWorkspaceHeader } from "@/lib/cloud/workspaceHeaderStore";
-import { canUseGenAI, getGenAIApiKey, getGenAISettings } from "@/lib/genai";
+import { runNotebookAudit } from "@/lib/genai/auditJudge";
 import { workspaceState } from "@/lib/cloud/workspaceState";
 import type { NotebookMetadata } from "@/lib/notebook/metadata";
 import { NotebookEntryList } from "./NotebookEntryList";
 import { NotebookWorkspaceProvider } from "./NotebookWorkspaceContext";
 import type { EntryMeta } from "./notebook-types";
+
+function entryFromRealtime(raw: Record<string, unknown>): EntryMeta {
+  return {
+    title: String(raw.title ?? ""),
+    folderId: (raw.folderId as string | null | undefined) ?? null,
+    order: Number(raw.order ?? 0),
+    explorerOrder:
+      raw.explorerOrder !== undefined ? Number(raw.explorerOrder) : undefined,
+    date: String(raw.date ?? ""),
+    phase: (raw.phase as string | null | undefined) ?? null,
+    authors: Array.isArray(raw.authors) ? (raw.authors as string[]) : [],
+    assetIds: Array.isArray(raw.assetIds) ? (raw.assetIds as string[]) : undefined,
+    isTemplate: Boolean(raw.isTemplate),
+    isValid: raw.isValid as boolean | undefined,
+    validationErrors: Array.isArray(raw.validationErrors)
+      ? (raw.validationErrors as string[])
+      : undefined,
+    createdAt: raw.createdAt ? String(raw.createdAt) : undefined,
+    updatedAt: raw.updatedAt ? String(raw.updatedAt) : undefined,
+  };
+}
 
 type ConfirmState = {
   title: string;
@@ -95,6 +122,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [prompt, setPrompt] = useState<PromptState>(null);
   const [listCollapsed, setListCollapsed] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
 
   function refresh() {
@@ -163,6 +191,72 @@ export function NotebookShell({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [orgId, notebookId, reloadToken]);
+
+  useEffect(() => {
+    if (!initialLoaded) return;
+    const ac = new AbortController();
+    const onEvent = (event: NotebookRealtimeEvent) => {
+      if (event.type === "ping") return;
+      if (event.type === "entry.upserted") {
+        const next = entryFromRealtime(event.entry);
+        setEntries((prev) => ({ ...prev, [event.entryId]: next }));
+        return;
+      }
+      if (event.type === "entry.deleted") {
+        setEntries((prev) => {
+          if (!(event.entryId in prev)) return prev;
+          const copy = { ...prev };
+          delete copy[event.entryId];
+          return copy;
+        });
+        return;
+      }
+      if (event.type === "notebook.updated") {
+        const nb = event.notebook;
+        setNotebookSummary((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev };
+          if (nb.name !== undefined) next.name = String(nb.name);
+          if (nb.title !== undefined) next.title = String(nb.title);
+          if (nb.subtitle !== undefined) next.subtitle = nb.subtitle as string | undefined;
+          if (nb.logoAssetId !== undefined) {
+            next.logoAssetId = nb.logoAssetId as string | undefined;
+          }
+          if (nb.folders !== undefined) {
+            next.folders = nb.folders as NotebookSummaryV5["folders"];
+          }
+          if (nb.access !== undefined) {
+            next.access = nb.access as NotebookSummaryV5["access"];
+          }
+          if (nb.phases !== undefined) {
+            next.phases = nb.phases as NotebookSummaryV5["phases"];
+          }
+          if (nb.lastCompiled !== undefined) {
+            next.lastCompiled = nb.lastCompiled as string | undefined;
+          }
+          next.updatedAt = String(nb.updatedAt ?? prev.updatedAt);
+          return next;
+        });
+        if (nb.name !== undefined || nb.title !== undefined) {
+          setNotebookName(String(nb.title || nb.name || ""));
+        }
+        if (nb.folders !== undefined) {
+          setFolders(
+            nb.folders as Record<
+              string,
+              { name: string; parentId: string | null; order: number }
+            >
+          );
+        }
+        return;
+      }
+      if (event.type === "entries.changed") {
+        setReloadToken((n) => n + 1);
+      }
+    };
+    subscribeNotebookEvents(orgId, notebookId, onEvent, ac.signal);
+    return () => ac.abort();
+  }, [orgId, notebookId, initialLoaded]);
 
   const notebookMetadata: NotebookMetadata = useMemo(
     () => ({
@@ -303,8 +397,11 @@ export function NotebookShell({ children }: { children: ReactNode }) {
         assets: assetBlobs,
       });
       saveAs(blob, `${notebookName.replace(/\s+/g, "-").toLowerCase() || "notebook"}.v5.zip`);
+      showNotification("Notebook exported", "success");
     } catch (err) {
-      setError((err as Error).message);
+      const message = (err as Error).message;
+      setError(message);
+      showNotification(message, "error");
     } finally {
       setBusy(false);
     }
@@ -411,8 +508,11 @@ export function NotebookShell({ children }: { children: ReactNode }) {
         }
       }
       refresh();
+      showNotification("Notebook imported", "success");
     } catch (err) {
-      setError((err as Error).message);
+      const message = (err as Error).message;
+      setError(message);
+      showNotification(message, "error");
     } finally {
       setBusy(false);
     }
@@ -447,6 +547,11 @@ export function NotebookShell({ children }: { children: ReactNode }) {
           onSelect: () => router.push(`${basePath}/compile`),
         },
         {
+          id: "share",
+          label: "Share…",
+          onSelect: () => setShareOpen(true),
+        },
+        {
           id: "export",
           label: "Export ZIP",
           onSelect: () => {
@@ -465,17 +570,32 @@ export function NotebookShell({ children }: { children: ReactNode }) {
           label: "Run audit",
           onSelect: () => {
             if (busyRef.current) return;
-            const settings = getGenAISettings();
-            const byokApiKey = canUseGenAI(settings.provider)
-              ? getGenAIApiKey(settings.provider)
-              : undefined;
-            void cloudApi
-              .auditNotebook(orgId, notebookId, {
-                provider: "byok",
-                byokApiKey: byokApiKey || undefined,
-              })
+            setBusy(true);
+            setAuditResult("Starting audit…");
+            void runNotebookAudit(orgId, notebookId, {
+              onProgress: (a) => {
+                const last = a.steps?.[a.steps.length - 1]?.message;
+                setAuditResult(
+                  [
+                    `status: ${a.status ?? "running"}`,
+                    last ? `step: ${last}` : null,
+                    a.summary ? `summary: ${a.summary}` : null,
+                    a.error ? `error: ${a.error}` : null,
+                    a.scores && Object.keys(a.scores).length
+                      ? `scores: ${JSON.stringify(a.scores, null, 2)}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join("\n\n")
+                );
+              },
+            })
               .then((r) => setAuditResult(JSON.stringify(r, null, 2)))
-              .catch((err) => setError((err as Error).message));
+              .catch((err) => {
+                setError((err as Error).message);
+                setAuditResult(null);
+              })
+              .finally(() => setBusy(false));
           },
         },
         {
@@ -586,8 +706,20 @@ export function NotebookShell({ children }: { children: ReactNode }) {
 
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
           {!initialLoaded && (
-            <div className="absolute inset-0 z-40 flex items-center justify-center bg-nb-surface/80 backdrop-blur-sm">
-              <LoadingBlock label="Loading notebook…" />
+            <div className="absolute inset-0 z-40 flex bg-nb-surface">
+              <aside className="flex w-[22%] min-w-[10rem] flex-col gap-2 border-r border-nb-outline-variant/20 p-3">
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-7 w-24" />
+                <SkeletonLines lines={8} className="mt-2" />
+              </aside>
+              <div className="flex min-w-0 flex-1 flex-col gap-3 p-6">
+                <Skeleton className="h-8 w-1/2 max-w-md" />
+                <Skeleton className="h-4 w-1/3 max-w-xs" />
+                <SkeletonLines lines={6} className="mt-4 max-w-xl" />
+                <div className="mt-auto">
+                  <LoadingBlock label="Loading notebook…" />
+                </div>
+              </div>
             </div>
           )}
           {showEntryList && listCollapsed ? (
@@ -598,8 +730,12 @@ export function NotebookShell({ children }: { children: ReactNode }) {
                 onToggleCollapsed={() => setListCollapsed(false)}
                 basePath={basePath}
               />
-              <section className="min-h-0 min-w-0 flex-1 overflow-auto bg-nb-surface">
-                <div className={activeEntryId ? "px-4 py-4 md:px-6" : "p-4 md:p-6"}>{children}</div>
+              <section
+                className={`min-h-0 min-w-0 flex-1 bg-nb-surface ${
+                  activeEntryId ? "overflow-hidden" : "overflow-auto"
+                }`}
+              >
+                <div className={activeEntryId ? "h-full min-h-0" : "p-4 md:p-6"}>{children}</div>
               </section>
             </>
           ) : showEntryList ? (
@@ -618,8 +754,12 @@ export function NotebookShell({ children }: { children: ReactNode }) {
               </Panel>
               <PanelResizeHandle className="w-1.5 shrink-0 bg-nb-outline-variant/20 transition-colors hover:bg-nb-primary/40 data-[resize-handle-active]:bg-nb-primary/50" />
               <Panel defaultSize={78} minSize={40} className="min-h-0">
-                <section className="h-full min-h-0 overflow-auto bg-nb-surface">
-                  <div className={activeEntryId ? "px-4 py-4 md:px-6" : "p-4 md:p-6"}>
+                <section
+                  className={`h-full min-h-0 bg-nb-surface ${
+                    activeEntryId ? "overflow-hidden" : "overflow-auto"
+                  }`}
+                >
+                  <div className={activeEntryId ? "h-full min-h-0" : "p-4 md:p-6"}>
                     {children}
                   </div>
                 </section>
@@ -686,6 +826,8 @@ export function NotebookShell({ children }: { children: ReactNode }) {
           </Button>
         </div>
       </Dialog>
+
+      <ShareNotebookDialog open={shareOpen} onClose={() => setShareOpen(false)} />
 
       <ConfirmationDialog
         isOpen={Boolean(confirm)}

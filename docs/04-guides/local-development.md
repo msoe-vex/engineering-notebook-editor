@@ -12,7 +12,7 @@ API services hot-reload in Docker; the website runs on the host with Next HMR.
 Install host deps once (services are Docker-only at runtime, but `node_modules` are needed for TypeScript in the editor):
 
 ```bash
-# from repo root — workspaces (shared + core/collab/agents) + website
+# from repo root — workspaces (shared + core/collab) + website
 npm run install:all
 ```
 
@@ -30,7 +30,7 @@ docker run --rm -v "$PWD":/repo -w /repo alpine chown -R "$(id -u):$(id -g)" ser
 
 ```bash
 cd infra
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build firebase gcs core collab agents
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build firebase gcs core collab
 ```
 
 First boot can take a few minutes (Firebase emulator installs JDK + tools). Leave this running.
@@ -82,8 +82,7 @@ cp .env.example .env.local
 | Website | http://localhost:3000 |
 | Core API | http://localhost:8080 |
 | Collab WebSocket | ws://localhost:1234 |
-| Agents API | http://localhost:8000 |
-| **Firebase Emulator UI** | **http://localhost:4000** |
+| Firebase Emulator UI | http://localhost:4000 |
 | Auth emulator | localhost:9099 |
 | Firestore emulator | localhost:8081 |
 | fake-gcs | http://localhost:4443 |
@@ -107,13 +106,13 @@ Compose named volumes persist Auth/Firestore (`firebase_emulator_data`) and obje
 
 | Edit | Result |
 | --- | --- |
-| `services/core\|agents\|collab/src/**` | Container restarts (`tsx watch`) |
+| `services/core\|collab/src/**` | Container restarts (`tsx watch`) |
 | `website/**` | Next HMR |
 | `packages/shared/**` | Rebuild shared, then rebuild API images |
 
 ```bash
 cd packages/shared && npm run build
-cd ../infra && docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build core agents collab
+cd ../infra && docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build core collab
 ```
 
 ## Auth notes

@@ -42,6 +42,9 @@ export {
   subscribeGenAISettings,
 } from "./settings";
 export { generateEntryTitle, generateResourceCaption, generateResourceTitle } from "./tasks";
+export { runGenerate, fetchGenAIModels } from "./client";
+export { runNotebookAudit } from "./auditJudge";
+export type { AuditInference, RunNotebookAuditOptions } from "./auditJudge";
 
 import type { GenAI } from "./types";
 import {

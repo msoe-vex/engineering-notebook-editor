@@ -1,6 +1,31 @@
 # Service contracts
 
-Local testing: [local-development](../04-guides/local-development.md). Architecture: [overview](../02-architecture/overview.md). Schema: [schema.md](./schema.md). Requirements: [01-requirements](../01-requirements/).
+Local testing: [local-development](../04-guides/local-development.md). Architecture: [overview](../02-architecture/overview.md). Schema: [schema.md](./schema.md). Requirements: [01-requirements](../01-requirements/). GenAI: [ADR-004](../02-architecture/decisions/ADR-004-agents-genai-gateway.md), [ADR-005](../02-architecture/decisions/ADR-005-genai-in-core.md).
+
+## Client topology (who calls what)
+
+```
+Browser (website)
+  ├─ Firebase Auth
+  ├─ Core REST ……………………… domain API (orgs, entries, assets, AI, audits)
+  ├─ Collab WSS ………………… realtime Yjs
+  ├─ local GenAI URL ……… Ollama / LM Studio (loopback only)
+  └─ Next.js /api/* ………… optional same-origin BFF only (see below) — not a second domain API
+```
+
+**BFF (Backend for Frontend):** a small HTTP route that runs **in the Next.js website process** so the browser can call same-origin `/api/...` instead of a cross-origin service. It forwards the request (often with the user’s `Authorization` header) to Core or an external provider. BFFs are **not** where business logic or ACL should live long-term; prefer the browser → Core directly when CORS and cookies allow.
+
+Core path style: **no `/v1/` prefix** (`/orgs/...`, `/ai/...`, `/health`, `/internal/...`). Agents’ `/v1/...` is legacy.
+
+## Website Next.js routes (`website/src/app/api`)
+
+| Route today | Role | Disposition |
+| --- | --- | --- |
+| `POST /api/genai` | BYOK text generate (key in body) | **Keep as BYOK CORS BFF** (browser → Next → provider). Not Vertex; not Core. |
+| `POST /api/genai/models` | BYOK list models | **Keep** alongside `/api/genai` for the same reason. |
+| `POST /api/agents/audit` | Proxy to Agents `/v1/.../audit` | **Delete**. Browser judge + Core audits. |
+
+Nothing else under `website/src/app/api` today. Page routes and Server Components are UI, not this table.
 
 ## Nested tenancy paths
 
@@ -75,19 +100,22 @@ Auth: `Authorization: Bearer <Firebase ID token | local uid>`
   - `day` → `order` (calendar/compile same-day tiebreaker)
 - `GET/PATCH/DELETE /orgs/:orgId/notebooks/:notebookId/entries/:entryId`
 - `GET/PUT .../entries/:entryId/content` (TipTap JSON via GCS)
+- `GET /orgs/:orgId/notebooks/:notebookId/events` — **SSE** metadata fanout (`text/event-stream`). Auth: `Authorization: Bearer …` (use `fetch`, not `EventSource`). Events: `entry.upserted`, `entry.deleted`, `notebook.updated`, `entries.changed`, `ping`. Website must not open Firestore listeners.
 
 Entry ordering axes: `date` + `order` (compile/calendar); `folderId` + `explorerOrder` (explorer).
 
 ### Assets
 
 - `GET/POST /orgs/:orgId/notebooks/:notebookId/assets` — create may set `usedByEntryId`
-- `PUT .../assets/:assetId/content` — authenticated binary upload
+- `PUT .../assets/:assetId/content` — authenticated binary upload streamed through Core to GCS (max **64 MiB**; see `MAX_UPLOAD_BYTES` / `BODY_LIMIT_BYTES`). Website does not talk to GCS directly.
 - `GET .../assets/:assetId/url` — signed read URL
 - `DELETE .../assets/:assetId` — deletes GCS objects
 
+Over-limit bodies return **413**. Clients should preflight with `assertUploadSize` from `@engineering-notebook/shared`.
+
 ### Exports (compiled PDF)
 
-- `PUT /orgs/:orgId/notebooks/:notebookId/exports/:exportId/content` — PDF bytes; sets `lastCompiled` (use `latest`)
+- `PUT /orgs/:orgId/notebooks/:notebookId/exports/:exportId/content` — PDF bytes; sets `lastCompiled` (use `latest`); same **64 MiB** body limit as assets
 - `GET /orgs/:orgId/notebooks/:notebookId/exports/:exportId/url`
 
 ### Static assets
@@ -112,10 +140,51 @@ Entry ordering axes: `date` + `order` (compile/calendar); `folderId` + `explorer
   - Org / notebook access checked from document name
   - Debounced flush → Core `/internal/collab/flush` (Yjs; TipTap only when real JSON supplied)
 
-## Agents (`services/agents`)
+## GenAI on Core ([ADR-005](../02-architecture/decisions/ADR-005-genai-in-core.md)) — shipped
 
-- `GET /health`
-- `POST /v1/orgs/:orgId/notebooks/:notebookId/audit`  
-  Body: `{ provider?: "byok"|"vertex", rubric?, byokApiKey?, entries? }`  
-  Requires **notebook access** (restricted mode respected). Vertex needs `grants.platformAi` or service_admin.
-- `GET /v1/orgs/:orgId/notebooks/:notebookId/audits` — same ACL; newest first
+Website **orchestrates** titles and the rubric judge loop. Core **Vertex-infers**, **serves notebook reads for tools**, and **stores audit runs** (including progress).
+
+### Inference
+
+| Provider | Hop |
+| --- | --- |
+| `local` | Browser → user base URL |
+| BYOK (`openai` / `gemini` / `anthropic` / …) | Browser → provider, or browser → `POST /api/genai` (CORS BFF) → provider. Keys ephemeral ([ADR-003](../02-architecture/decisions/ADR-003-byok-keys-local.md)). **Not Core.** |
+| `vertex` | Browser → Core `POST /ai/complete` (Bearer + `grants.platformAi` or service_admin) |
+
+- `POST /ai/complete` — **Vertex only**; one model turn per request (chat/completions-shaped body; schema TBD). Reject BYOK/local here.
+- BYOK model list stays on `POST /api/genai/models` (or browser-direct if the provider allows).
+
+### Audits (notebook-scoped) — multi-request progress
+
+Core does **not** run the judge. The website drives many short requests; Core holds run state so the UI (or another tab) can poll.
+
+- `POST /orgs/:orgId/notebooks/:notebookId/audits` — start run `{ status: "running", rubric?, provider? }` → `{ id, ... }`
+- `PATCH /orgs/:orgId/notebooks/:notebookId/audits/:auditId` — progress updates, e.g. `{ status?, steps?, summary?, scores?, advice?, error? }`  
+  Typical: append tool-trace / partial summary while running; final body sets `status: "completed"` or `"failed"`
+- `GET /orgs/:orgId/notebooks/:notebookId/audits/:auditId` — poll one run
+- `GET /orgs/:orgId/notebooks/:notebookId/audits` — list (newest first)
+
+All require notebook ACL.
+
+### Judge tools (reads)
+
+Prefer existing entry APIs; add thin helpers only if needed:
+
+| Tool intent | Prefer |
+| --- | --- |
+| List entries | `GET .../entries` |
+| Entry metadata | `GET .../entries/:entryId` |
+| Entry body | `GET .../entries/:entryId/content` (truncate client-side if huge) |
+| Keyword search | `GET .../entries?q=` or `GET .../ai/search?q=` |
+
+### Website client flow (target)
+
+1. `POST …/audits` → `running`.  
+2. Loop: inference (local / `/api/genai` / `/ai/complete`) → tool GETs on Core → optional `PATCH …/audits/:id` with progress.  
+3. Final `PATCH` → `completed` + scorecard (or `failed`).  
+4. UI may also keep local step state; poll `GET` if needed.
+
+## Agents (`services/agents`) — retired
+
+Not deployed. Prefer deleting the package. Historical `/v1/.../audit(s)` replaced by Core audits + website judge.

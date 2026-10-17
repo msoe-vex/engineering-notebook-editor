@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ImagePlus } from "lucide-react";
 import { NotebookPhasesEditor } from "@/components/cloud/NotebookPhasesEditor";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
+import { showNotification } from "@/components/overlays/Notification";
 import { Button, TextField } from "@/components/ui";
 import {
   cloudApi,
@@ -92,8 +93,11 @@ export default function NotebookSetupPage() {
       );
       setLogoAssetId(asset.id);
       setLogoPreview(URL.createObjectURL(file));
+      showNotification("Logo uploaded", "success");
     } catch (err) {
-      setError((err as Error).message);
+      const message = (err as Error).message;
+      setError(message);
+      showNotification(message, "error");
     } finally {
       setBusy(false);
     }
@@ -132,8 +136,11 @@ export default function NotebookSetupPage() {
       });
       setSaved(true);
       refresh();
+      showNotification("Settings saved", "success");
     } catch (err) {
-      setError((err as Error).message);
+      const message = (err as Error).message;
+      setError(message);
+      showNotification(message, "error");
     } finally {
       setBusy(false);
     }

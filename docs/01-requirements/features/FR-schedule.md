@@ -1,7 +1,7 @@
 # FR-schedule: Calendar
 
-Status: current  
-Related: [glossary](../../00-product/glossary.md) (`date` + `order`)
+Status: partial  
+Related: [glossary](../../00-product/glossary.md) (`date` + `order`), [cloud UX plan](../plans/cloud-ux-hardening.md)
 
 ## Summary
 
@@ -16,12 +16,14 @@ Notebook accessors.
 - Label: **Calendar** (route `/…/schedule`; `/calendar` redirects)
 - Month/week; drag entries between days / within day
 - Phase color border + icon on cards; deep links `?date=&view=`
+- Equal-height day cells in month (and fixed week day height on mobile); overflow scrolls inside the day list
 
 ## Acceptance criteria
 
 - [ ] Moving an entry updates `date` and same-day `orderedIds` via API
 - [ ] Explorer `explorerOrder` unchanged by calendar DnD
 - [ ] Templates excluded from calendar
+- [ ] Month day cells share equal height regardless of event count
 
 ## Data and APIs
 

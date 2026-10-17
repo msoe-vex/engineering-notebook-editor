@@ -1,3 +1,5 @@
+"use client";
+
 export type ViewMode = "editor" | "split" | "preview";
 
 interface ViewToggleProps {

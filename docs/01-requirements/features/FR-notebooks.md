@@ -1,11 +1,11 @@
 # FR-notebooks: Notebooks, Settings, Contributors, access
 
-Status: current  
-Related: [FR-orgs](./FR-orgs.md), [tenancy-acl](../../02-architecture/tenancy-acl.md)
+Status: partial  
+Related: [FR-orgs](./FR-orgs.md), [tenancy-acl](../../02-architecture/tenancy-acl.md), [cloud UX plan](../plans/cloud-ux-hardening.md)
 
 ## Summary
 
-Notebooks live under an org. **Settings** controls branding, phases, logo, and access mode. **Contributors** is a credits list (distinct from org ACL People).
+Notebooks live under an org. **Settings** controls branding, phases, logo, and access mode. A **Share** dialog presents the same ACL (org-open vs restricted people/teams) in a share-sheet shape. **Contributors** is a credits list (distinct from org ACL People).
 
 ## Actors and permissions
 
@@ -16,6 +16,7 @@ Notebooks live under an org. **Settings** controls branding, phases, logo, and a
 
 - `/orgs/:orgId` — notebook list/create/delete
 - `/…/setup` — **Settings**: name, title, subtitle, logo upload → `logoAssetId`, phases CRUD, access (alias `/settings`)
+- Notebook chrome **Share** dialog: entire org vs restricted; search/add org people and teams
 - `/…/members` — **Contributors**: name/role/photo/`order` credits (alias `/contributors`)
 
 ## Acceptance criteria
@@ -24,6 +25,7 @@ Notebooks live under an org. **Settings** controls branding, phases, logo, and a
 - [ ] Restricted access hides notebook from unauthorized org members
 - [ ] Logo and phases persist and round-trip in ZIP where supported
 - [ ] UI copy distinguishes Org people vs Notebook contributors
+- [ ] Share dialog can grant a user and a team without using Settings checkboxes
 
 ## Data and APIs
 

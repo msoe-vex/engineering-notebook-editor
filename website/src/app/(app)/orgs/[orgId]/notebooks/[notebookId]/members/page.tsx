@@ -16,6 +16,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Camera, GripVertical, Plus, UserRound } from "lucide-react";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
+import { showNotification } from "@/components/overlays/Notification";
 import { Button, EmptyState, TextField } from "@/components/ui";
 import { Dialog } from "@/components/ui/Dialog";
 import { cloudApi, type MemberSummary, type NotebookMemberSummary } from "@/lib/cloud/api";
@@ -209,8 +210,11 @@ export default function NotebookMembersPage() {
         imageAssetId: asset.id,
       });
       load();
+      showNotification("Photo uploaded", "success");
     } catch (err) {
-      setError((err as Error).message);
+      const message = (err as Error).message;
+      setError(message);
+      showNotification(message, "error");
     } finally {
       setBusy(false);
     }

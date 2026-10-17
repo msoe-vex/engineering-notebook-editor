@@ -1,20 +1,35 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import {
+  Panel,
+  PanelGroup,
+  PanelResizeHandle,
+  type ImperativePanelHandle,
+} from "react-resizable-panels";
 import { collabDocName } from "@engineering-notebook/shared";
 import { CollaborativeEntryEditor } from "@/components/cloud/CollaborativeEntryEditor";
+import { PhasePicker } from "@/components/cloud/PhasePicker";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
-import { PhaseChip } from "@/components/cloud/PhaseChip";
 import AuthorsInput from "@/components/editor/ui/AuthorsInput";
 import GenerateButton from "@/components/editor/ui/GenerateButton";
+import ViewToggle, { type ViewMode } from "@/components/editor/ui/ViewToggle";
 import { Alert, Badge, Button, DropdownMenu } from "@/components/ui";
+import { showNotification } from "@/components/overlays/Notification";
 import { cloudApi } from "@/lib/cloud/api";
-import { generateCloudEntryLatex } from "@/lib/cloud/compileCloudNotebook";
 import { getIdToken } from "@/lib/cloud/firebase";
 import { generateEntryTitle } from "@/lib/genai";
-import { readLastAuthors, writeLastAuthors, type ProjectPhase } from "@/lib/notebook/metadata";
+import { generateEntryLatex, latexPhaseRef } from "@/lib/latex/latex";
+import {
+  buildResourceTypeIndex,
+  extractResources,
+  readLastAuthors,
+  writeLastAuthors,
+  type ProjectPhase,
+  type TipTapNode,
+} from "@/lib/notebook/metadata";
 
 const LatexPreview = dynamic(() => import("@/components/editor/LatexPreview"), {
   ssr: false,
@@ -22,6 +37,8 @@ const LatexPreview = dynamic(() => import("@/components/editor/LatexPreview"), {
     <p className="py-8 text-center text-nb-caption text-nb-on-surface-variant">Loading preview…</p>
   ),
 });
+
+type SaveState = "idle" | "saving" | "saved" | "error";
 
 export default function EntryPage() {
   const params = useParams();
@@ -33,6 +50,7 @@ export default function EntryPage() {
     entries,
     notebookSummary,
     refresh,
+    setEntries,
     setError,
     showConfirm,
     showPrompt,
@@ -43,15 +61,23 @@ export default function EntryPage() {
   const [titleDraft, setTitleDraft] = useState(meta?.title ?? "");
   const [authorsDraft, setAuthorsDraft] = useState<string[]>(meta?.authors || []);
   const [authorOptions, setAuthorOptions] = useState<string[]>([]);
-  const [savingMeta, setSavingMeta] = useState(false);
-  const [viewMode, setViewMode] = useState<"edit" | "latex">("edit");
-  const [latexPreview, setLatexPreview] = useState("");
-  const [latexBusy, setLatexBusy] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [viewMode, setViewMode] = useState<ViewMode>("editor");
+  const [docJson, setDocJson] = useState<TipTapNode | null>(null);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const titleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editorPanelRef = useRef<ImperativePanelHandle>(null);
+  const previewPanelRef = useRef<ImperativePanelHandle>(null);
 
   useEffect(() => {
     setTitleDraft(meta?.title ?? "");
     setAuthorsDraft(meta?.authors || []);
   }, [meta?.title, meta?.authors, entryId]);
+
+  useEffect(() => {
+    setDocJson(null);
+    setSaveState("idle");
+  }, [entryId]);
 
   useEffect(() => {
     const fromEntries = new Set<string>();
@@ -62,13 +88,124 @@ export default function EntryPage() {
     setAuthorOptions([...fromEntries].sort((a, b) => a.localeCompare(b)));
   }, [entries]);
 
+  useEffect(() => {
+    return () => {
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      if (titleTimerRef.current) clearTimeout(titleTimerRef.current);
+    };
+  }, []);
+
+  const phasesRecord = (notebookSummary?.phases || {}) as Record<string, ProjectPhase>;
+
   const phases = useMemo(() => {
-    const raw = (notebookSummary?.phases || {}) as Record<
-      string,
-      { name?: string; order?: number }
-    >;
-    return Object.entries(raw).sort((a, b) => (a[1].order ?? 0) - (b[1].order ?? 0));
-  }, [notebookSummary]);
+    return Object.entries(phasesRecord).sort(
+      (a, b) => (a[1].order ?? 0) - (b[1].order ?? 0)
+    );
+  }, [phasesRecord]);
+
+  const applyOptimistic = useCallback(
+    (body: Record<string, unknown>) => {
+      if (!setEntries) return;
+      setEntries((prev) => {
+        const cur = prev[entryId];
+        if (!cur) return prev;
+        const next = { ...cur };
+        if (body.title !== undefined) next.title = String(body.title);
+        if (body.date !== undefined) next.date = String(body.date ?? "");
+        if (body.phase !== undefined) next.phase = (body.phase as string | null) ?? null;
+        if (body.authors !== undefined) next.authors = body.authors as string[];
+        if (body.isTemplate !== undefined) next.isTemplate = Boolean(body.isTemplate);
+        return { ...prev, [entryId]: next };
+      });
+    },
+    [entryId, setEntries]
+  );
+
+  const patchMeta = useCallback(
+    (body: Record<string, unknown>) => {
+      applyOptimistic(body);
+      setSaveState("saving");
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      void cloudApi
+        .patchEntry(orgId, notebookId, entryId, body)
+        .then(() => {
+          setSaveState("saved");
+          refresh();
+          savedTimerRef.current = setTimeout(() => setSaveState("idle"), 1600);
+        })
+        .catch((err) => {
+          setSaveState("error");
+          const message = (err as Error).message;
+          setError(message);
+          showNotification(message, "error");
+          refresh();
+        });
+    },
+    [applyOptimistic, entryId, notebookId, orgId, refresh, setError]
+  );
+
+  const liveLatex = useMemo(() => {
+    if (!meta || !docJson) return "";
+    try {
+      const entryMap = Object.fromEntries(
+        Object.entries(entries).map(([id, e]) => [
+          id,
+          {
+            title: e.title || "",
+            authors: e.authors || [],
+            phase: e.phase,
+            createdAt: e.createdAt || "",
+            updatedAt: e.updatedAt || "",
+            date: e.date || "",
+            filename: id,
+            order: e.order ?? 0,
+            isTemplate: e.isTemplate,
+            assets: [],
+          },
+        ])
+      );
+      const resources = extractResources(docJson);
+      const resourceTypes = buildResourceTypeIndex(entryMap, resources, entryId);
+      return generateEntryLatex(
+        docJson,
+        titleDraft || meta.title || "Untitled",
+        authorsDraft,
+        latexPhaseRef(meta.phase, phasesRecord),
+        meta.createdAt,
+        entryId,
+        resourceTypes,
+        meta.date
+      );
+    } catch {
+      return "";
+    }
+  }, [
+    authorsDraft,
+    docJson,
+    entries,
+    entryId,
+    meta,
+    phasesRecord,
+    titleDraft,
+  ]);
+
+  useEffect(() => {
+    const editorPanel = editorPanelRef.current;
+    const previewPanel = previewPanelRef.current;
+    if (!editorPanel || !previewPanel) return;
+    if (viewMode === "editor") {
+      editorPanel.expand();
+      previewPanel.collapse();
+    } else if (viewMode === "preview") {
+      previewPanel.expand();
+      editorPanel.collapse();
+    } else {
+      editorPanel.expand();
+      previewPanel.expand();
+      editorPanel.resize(50);
+      previewPanel.resize(50);
+    }
+  }, [viewMode]);
 
   if (Object.keys(entries).length > 0 && !meta) {
     return (
@@ -82,48 +219,29 @@ export default function EntryPage() {
   }
 
   const title = meta?.title ?? "Entry";
-
-  function patchMeta(body: Record<string, unknown>) {
-    setSavingMeta(true);
-    void cloudApi
-      .patchEntry(orgId, notebookId, entryId, body)
-      .then(refresh)
-      .catch((err) => setError((err as Error).message))
-      .finally(() => setSavingMeta(false));
-  }
-
-  async function showLatexPreview() {
-    if (!meta) return;
-    setViewMode("latex");
-    setLatexBusy(true);
-    try {
-      const { latex } = await generateCloudEntryLatex(
-        orgId,
-        notebookId,
-        entryId,
-        meta,
-        (notebookSummary?.phases as Record<string, ProjectPhase>) || {},
-        entries
-      );
-      setLatexPreview(latex);
-    } catch (err) {
-      setError((err as Error).message);
-      setViewMode("edit");
-    } finally {
-      setLatexBusy(false);
-    }
-  }
+  const savingMeta = saveState === "saving";
 
   return (
-    <div className="-mx-4 flex flex-col gap-0 md:-mx-6">
-      <header className="border-b border-nb-outline-variant/20 bg-nb-surface px-4 py-4 md:px-6">
-        <div className="flex flex-wrap items-start gap-3">
+    <div className="flex h-full min-h-0 flex-col">
+      <header className="shrink-0 border-b border-nb-outline-variant/20 bg-nb-surface px-4 py-3 md:px-6">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <input
-              className="min-w-0 flex-1 border-0 bg-transparent text-nb-display font-bold tracking-tight text-nb-on-surface outline-none placeholder:text-nb-on-surface-variant/40"
+              className="min-w-0 flex-1 border-0 bg-transparent text-xl font-bold tracking-tight text-nb-on-surface outline-none placeholder:text-nb-on-surface-variant/40 md:text-2xl"
               value={titleDraft}
-              onChange={(e) => setTitleDraft(e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                setTitleDraft(next);
+                if (titleTimerRef.current) clearTimeout(titleTimerRef.current);
+                titleTimerRef.current = setTimeout(() => {
+                  const trimmed = next.trim();
+                  if (trimmed && trimmed !== (meta?.title ?? "")) {
+                    patchMeta({ title: trimmed });
+                  }
+                }, 550);
+              }}
               onBlur={() => {
+                if (titleTimerRef.current) clearTimeout(titleTimerRef.current);
                 const next = titleDraft.trim();
                 if (next && next !== title) patchMeta({ title: next });
               }}
@@ -159,23 +277,27 @@ export default function EntryPage() {
             />
           </div>
           {meta?.isTemplate && <Badge tone="tertiary">Template</Badge>}
-          <div className="flex gap-1">
-            <Button
-              size="sm"
-              variant={viewMode === "edit" ? "primary" : "secondary"}
-              onClick={() => setViewMode("edit")}
-            >
-              Edit
-            </Button>
-            <Button
-              size="sm"
-              variant={viewMode === "latex" ? "primary" : "secondary"}
-              disabled={latexBusy}
-              onClick={() => void showLatexPreview()}
-            >
-              LaTeX
-            </Button>
-          </div>
+          <span
+            className={`text-[10px] font-semibold uppercase tracking-wider ${
+              saveState === "saving"
+                ? "text-nb-on-surface-variant"
+                : saveState === "saved"
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : saveState === "error"
+                    ? "text-nb-danger"
+                    : "text-transparent"
+            }`}
+            aria-live="polite"
+          >
+            {saveState === "saving"
+              ? "Saving…"
+              : saveState === "saved"
+                ? "Saved"
+                : saveState === "error"
+                  ? "Save failed"
+                  : "Idle"}
+          </span>
+          <ViewToggle viewMode={viewMode} onSetViewMode={setViewMode} />
           <DropdownMenu
             items={[
               {
@@ -226,47 +348,33 @@ export default function EntryPage() {
           </Alert>
         )}
 
-        <div className="mt-4 flex flex-wrap items-end gap-4">
+        <div className="mt-3 grid grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-[10rem_12rem_minmax(0,1fr)]">
           <label className="flex flex-col gap-1 text-nb-caption font-semibold text-nb-on-surface-variant">
             Date
             <input
               type="date"
-              className="rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface px-2 py-1.5 text-nb-label text-nb-on-surface"
+              className="h-9 rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface px-2 text-nb-label text-nb-on-surface"
               value={meta?.date || ""}
               disabled={savingMeta}
               onChange={(e) => patchMeta({ date: e.target.value })}
             />
           </label>
-          <label className="flex min-w-[10rem] flex-col gap-1 text-nb-caption font-semibold text-nb-on-surface-variant">
+          <label className="flex flex-col gap-1 text-nb-caption font-semibold text-nb-on-surface-variant">
             Phase
-            <div className="flex items-center gap-2">
-              <PhaseChip
-                phaseId={meta?.phase}
-                phases={(notebookSummary?.phases || null) as Record<string, ProjectPhase> | null}
-                size="md"
-              />
-              <select
-                className="min-w-0 flex-1 rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface px-2 py-1.5 text-nb-label text-nb-on-surface"
-                value={meta?.phase || ""}
-                disabled={savingMeta}
-                onChange={(e) => patchMeta({ phase: e.target.value || null })}
-              >
-                <option value="">None</option>
-                {phases.map(([id, p]) => (
-                  <option key={id} value={id}>
-                    {p.name || id}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <PhasePicker
+              phaseId={meta?.phase}
+              phases={phasesRecord}
+              disabled={savingMeta}
+              onChange={(phase) => patchMeta({ phase })}
+            />
           </label>
-          <div className="flex min-w-[14rem] flex-1 flex-col gap-1 text-nb-caption font-semibold text-nb-on-surface-variant">
+          <div className="flex min-w-0 flex-col gap-1 text-nb-caption font-semibold text-nb-on-surface-variant sm:col-span-2 xl:col-span-1">
             Authors
             <AuthorsInput
               authors={authorsDraft}
               options={authorOptions}
               placeholder="Add authors"
-              className="min-h-10 bg-nb-surface"
+              className="min-h-9 bg-nb-surface"
               onChange={(authors) => {
                 setAuthorsDraft(authors);
                 writeLastAuthors(authors);
@@ -277,24 +385,53 @@ export default function EntryPage() {
         </div>
       </header>
 
-      <div className="px-4 py-4 md:px-6">
-        {viewMode === "edit" ? (
-          <CollaborativeEntryEditor
-            key={entryId}
-            documentName={docName}
-            entryTitle={title}
-            entryId={entryId}
-            getToken={getIdToken}
+      <div className="min-h-0 flex-1 px-4 py-3 md:px-6">
+        <PanelGroup direction="horizontal" className="h-full min-h-0" id="entry-editor-preview">
+          <Panel
+            id="entry-editor-panel"
+            ref={editorPanelRef}
+            order={1}
+            defaultSize={viewMode === "preview" ? 0 : viewMode === "split" ? 50 : 100}
+            minSize={viewMode === "preview" ? 0 : 20}
+            collapsible
+            collapsedSize={0}
+            className="min-h-0 min-w-0 overflow-auto"
+          >
+            <CollaborativeEntryEditor
+              key={entryId}
+              documentName={docName}
+              entryTitle={title}
+              entryId={entryId}
+              getToken={getIdToken}
+              onDocChange={setDocJson}
+            />
+          </Panel>
+          <PanelResizeHandle
+            className={`mx-1 w-1.5 shrink-0 rounded-full bg-nb-outline-variant/25 transition-colors hover:bg-nb-primary/40 data-[resize-handle-active]:bg-nb-primary/50 ${
+              viewMode !== "split" ? "hidden" : ""
+            }`}
           />
-        ) : latexBusy ? (
-          <p className="py-8 text-center text-nb-caption text-nb-on-surface-variant">
-            Generating LaTeX…
-          </p>
-        ) : (
-          <div className="overflow-hidden rounded-nb-xl border border-nb-outline-variant/30">
-            <LatexPreview latexContent={latexPreview} />
-          </div>
-        )}
+          <Panel
+            id="entry-preview-panel"
+            ref={previewPanelRef}
+            order={2}
+            defaultSize={viewMode === "editor" ? 0 : viewMode === "split" ? 50 : 100}
+            minSize={viewMode === "editor" ? 0 : 20}
+            collapsible
+            collapsedSize={0}
+            className="min-h-0 min-w-0"
+          >
+            <div className="h-full min-h-0 overflow-hidden rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface">
+              {liveLatex ? (
+                <LatexPreview latexContent={liveLatex} />
+              ) : (
+                <p className="py-8 text-center text-nb-caption text-nb-on-surface-variant">
+                  {docJson ? "Generating LaTeX…" : "Connecting to editor…"}
+                </p>
+              )}
+            </div>
+          </Panel>
+        </PanelGroup>
       </div>
     </div>
   );

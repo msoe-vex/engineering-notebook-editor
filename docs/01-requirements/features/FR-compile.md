@@ -1,7 +1,7 @@
 # FR-compile: LaTeX preview & BusyTeX compile
 
-Status: current  
-Related: [api-contracts exports](../../03-reference/api-contracts.md)
+Status: partial  
+Related: [api-contracts exports](../../03-reference/api-contracts.md), [FR-entries-collab](./FR-entries-collab.md)
 
 ## Summary
 
@@ -13,7 +13,7 @@ Notebook accessors.
 
 ## User-facing behavior
 
-- Entry page: view toggle / LaTeX preview
+- Entry page: ViewToggle (editor / split / LaTeX) with live LaTeX source from the open doc
 - `/…/compile` — `CloudNotebookCompiler`
 - Static BusyTeX / latex assets via Core `/static/busytex/*`, `/static/latex/*`
 
@@ -22,6 +22,7 @@ Notebook accessors.
 - [ ] Compile produces downloadable PDF
 - [ ] `lastCompiled` and export URL available after success
 - [ ] Quality vs compressed image mode selectable if exposed in UI
+- [ ] Split / LaTeX modes update live from editor content + metadata
 
 ## Data and APIs
 

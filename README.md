@@ -22,7 +22,7 @@ Full index (by audience): **[docs/README.md](docs/README.md)** · Agent steerage
 | [website/LEGACY.md](website/LEGACY.md) | Legacy archive pointer |
 | [services/core/README.md](services/core/README.md) | Core API |
 | [services/collab/README.md](services/collab/README.md) | Realtime collab |
-| [services/agents/README.md](services/agents/README.md) | Rubric audits |
+| [services/agents/README.md](services/agents/README.md) | **Legacy** — GenAI/audits moved to Core |
 | [notebook/README.md](notebook/README.md) | LaTeX template submodule |
 | [infra/cloudrun/deploy.sh](infra/cloudrun/deploy.sh) | Production deploy |
 | [infra/docker-compose.yml](infra/docker-compose.yml) | Local full stack |
@@ -34,9 +34,9 @@ Full index (by audience): **[docs/README.md](docs/README.md)** · Agent steerage
 
 ```
 website/           # Next.js — cloud UI at /  (+ archive/legacy/ for old shell)
-services/core/     # Auth, orgs, notebooks, entries, assets, admin, BusyTeX
+services/core/     # Auth, orgs, notebooks, entries, assets, audits, Vertex /ai/complete, BusyTeX
 services/collab/   # Hocuspocus / Yjs
-services/agents/   # Rubric audits (BYOK + grant-gated Vertex)
+services/agents/   # Legacy (retired from compose; see ADR-005)
 packages/shared/   # v5 types, nested paths, ZIP migrate
 infra/             # compose, emulators, Cloud Run, BusyTeX upload
 docs/              # product · FR/NFR · architecture · reference · guides · ops
@@ -53,7 +53,7 @@ APIs in Docker (watch) + website on the host. Full steps: **[docs/04-guides/loca
 ```bash
 # Terminal 1
 cd infra
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build firebase gcs core collab agents
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build firebase gcs core collab
 
 # Terminal 2
 cd website && npm install && npm run dev
@@ -69,7 +69,6 @@ cd website && npm install && npm run dev
 | 3000 | Website (host) |
 | 8080 | Core |
 | 1234 | Collab WSS |
-| 8000 | Agents |
 | 4000 | Firebase Emulator UI |
 | 4443 | fake-gcs |
 
@@ -102,7 +101,6 @@ Compose sets these for containers. For a local `website` against Compose APIs, u
 
 ```bash
 NEXT_PUBLIC_CORE_API_URL=http://localhost:8080
-NEXT_PUBLIC_AGENTS_API_URL=http://localhost:8000
 NEXT_PUBLIC_COLLAB_WS_URL=ws://localhost:1234
 NEXT_PUBLIC_ASSETS_BASE_URL=http://localhost:8080
 NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyDocOrLocalEmulatorKey00000000000

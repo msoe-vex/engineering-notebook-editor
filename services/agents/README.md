@@ -1,20 +1,5 @@
-# Agents service
+# Agents service (retired)
 
-Rubric audit microservice.
+**Not deployed.** GenAI/audits live on **Core** + browser judge — [ADR-005](../../docs/02-architecture/decisions/ADR-005-genai-in-core.md).
 
-- `POST /v1/orgs/:orgId/notebooks/:notebookId/audit` — BYOK (default) or Vertex when `grants.platformAi`
-- Scorecards: `organizations/{orgId}/notebooks/{notebookId}/audits/{auditId}`
-
-- Contracts: [docs/03-reference/api-contracts.md](../../docs/03-reference/api-contracts.md)
-- Local testing: [docs/04-guides/local-development.md](../../docs/04-guides/local-development.md)
-
-```bash
-npm install && npm run dev
-```
-
-```bash
-curl -X POST http://localhost:8000/v1/orgs/demo/notebooks/test-123/audit \
-  -H "Authorization: Bearer local-user" \
-  -H "Content-Type: application/json" \
-  -d '{"provider":"byok","rubric":"REC Foundation Design Award"}'
-```
+This directory is kept only until it is deleted from the repo. Do not add features here.

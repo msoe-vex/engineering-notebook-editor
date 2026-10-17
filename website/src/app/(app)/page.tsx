@@ -14,6 +14,7 @@ import {
   DropdownMenu,
   EmptyState,
   ListRow,
+  Skeleton,
 } from "@/components/ui";
 import { cloudApi, type NotebookSummary, type OrgSummary } from "@/lib/cloud/api";
 import { isOrgAdminRole, orgRoleLabel } from "@/lib/cloud/roles";
@@ -28,6 +29,7 @@ function HomeInner() {
   const [error, setError] = useState<string | null>(null);
   const [authed, setAuthed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [listReady, setListReady] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -74,9 +76,13 @@ function HomeInner() {
             if (!cancelled) {
               setRecent(flat);
               setError(null);
+              setListReady(true);
             }
           } catch (err) {
-            if (!cancelled) setError((err as Error).message);
+            if (!cancelled) {
+              setError((err as Error).message);
+              setListReady(true);
+            }
           }
         })();
       });
@@ -127,7 +133,19 @@ function HomeInner() {
             </Button>
           </div>
         </div>
-        {recent.length > 0 ? (
+        {!listReady ? (
+          <div className="grid gap-2">
+            {Array.from({ length: 3 }, (_, i) => (
+              <div key={i} className="flex items-center gap-4 rounded-nb-xl border border-nb-outline-variant/20 p-3">
+                <Skeleton className="h-10 w-10 shrink-0 rounded-nb-lg" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Skeleton className="h-4 w-2/5" />
+                  <Skeleton className="h-3 w-1/4" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : recent.length > 0 ? (
           <div className="grid gap-2">
             {recent.map((nb) => (
               <ListRow key={`${nb.orgId}-${nb.id}`} interactive>

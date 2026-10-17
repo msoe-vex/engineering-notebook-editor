@@ -66,17 +66,18 @@ Core Fastify is constructed with defaults only (`services/core/src/index.ts`). D
 
 ### Work
 
-- [ ] Set an explicit Core `bodyLimit` (**64 MiB** global — covers raw image inserts, logos, and compiled PDF exports that share the same Fastify limit). Document in [env-vars](../../03-reference/env-vars.md) if configurable.
-- [ ] Document max upload size in [api-contracts](../../03-reference/api-contracts.md) Assets section.
-- [ ] Client: preflight check compressed byte size vs limit; refuse with toast before upload.
-- [ ] Client: surface 413 / network failures via toast (Epic B); do not silently skip insert.
-- [ ] Optional follow-up: signed GCS **write** URLs to avoid proxying large bodies through Core (ADR if chosen).
+- [x] Set an explicit Core `bodyLimit` (**64 MiB** global — covers raw image inserts, logos, and compiled PDF exports that share the same Fastify limit). Document in [env-vars](../../03-reference/env-vars.md) if configurable.
+- [x] Document max upload size in [api-contracts](../../03-reference/api-contracts.md) Assets section.
+- [x] Client: preflight check compressed byte size vs limit; refuse with toast before upload.
+- [x] Client: surface 413 / network failures via toast (Epic B); do not silently skip insert.
+- [x] Stream binary `PUT` through Core → GCS (`putObjectStream`) instead of buffering the full body; keep modular Core/`StoragePort` boundary (no browser→GCS).
+- [ ] Optional later: extract a dedicated upload microservice if Core upload I/O becomes a scale bottleneck.
 
 ### Acceptance
 
-- JPEG/PNG under the documented limit insert and reload correctly.
-- Over-limit files show a clear error; no silent failure.
-- Core logs no unexpected 413 for files within the configured limit.
+- [x] JPEG/PNG under the documented limit insert and reload correctly. *(toolbar path now compresses like drag/drop)*
+- [x] Over-limit files show a clear error; no silent failure.
+- [ ] Core logs no unexpected 413 for files within the configured limit. *(verify after Core restart)*
 
 ### Legacy / code anchors
 
@@ -94,15 +95,16 @@ Core Fastify is constructed with defaults only (`services/core/src/index.ts`). D
 
 ### Work
 
-- [ ] Add a small cloud helper (`showNotification` or `toast.*` wrappers) wired from `SHOW_NOTIFICATION` **and** direct calls.
-- [ ] Toast on: asset upload success/fail, metadata save fail, reorder fail, ZIP import/export outcomes, GenAI errors, copy-link, access save.
-- [ ] Keep inline `Alert` for persistent validation; use toasts for transient outcomes.
-- [ ] Match duration / position already set in AppChrome; restyle lightly if needed (no need to revive full legacy Notification UI).
+- [x] Add a small cloud helper (`showNotification` or `toast.*` wrappers) wired from `SHOW_NOTIFICATION` **and** direct calls.
+- [x] Toast on: asset upload fail (entry images, logo, contributor photo); GenAI via existing `SHOW_NOTIFICATION` emits.
+- [x] Toast on: metadata save fail, reorder fail, ZIP import/export, Settings save, Share dialog.
+- [x] Keep inline `Alert` for persistent validation; use toasts for transient outcomes.
+- [x] Match duration / position already set in AppChrome; restyled Notification card restored under `components/overlays/`.
 
 ### Acceptance
 
-- Failed image upload always shows a toast.
-- At least one success toast path exists for a common action (e.g. “Entry created”, “Access updated”).
+- [x] Failed image upload always shows a toast.
+- [x] At least one success toast path exists for a common action (logo / photo upload / ZIP / Share).
 
 ---
 
@@ -114,15 +116,15 @@ Calendar already shows phase color + icon. Explorer uses a **color dot** + gener
 
 ### Work
 
-- [ ] Explorer rows: use phase icon + color as the entry glyph when a phase is set; keep a distinct glyph for templates (Epic H) and unphased entries.
-- [ ] Entry header phase control: icon+color in closed state and in options (reuse `PhaseChip` / portal menu patterns from legacy `Editor.tsx`).
-- [ ] Filters / chips: prefer icon+color over text-only where space allows.
+- [x] Explorer rows: use phase icon + color as the entry glyph when a phase is set; keep a distinct glyph for templates (Epic H) and unphased entries.
+- [x] Entry header phase control: icon+color in closed state and in options (`PhasePicker`).
+- [x] Filters / chips: phase filter still uses `PhaseChip`.
 - [ ] Audit other surfaces (compile list, search results if any) for the same helper (`getPhaseConfig`).
 
 ### Acceptance
 
-- With starter phases configured, explorer and entry header show recognizable icons/colors without opening a menu.
-- Calendar behavior unchanged (already correct).
+- [x] With starter phases configured, explorer and entry header show recognizable icons/colors without opening a menu.
+- [x] Calendar behavior unchanged (already correct).
 
 ---
 
@@ -134,16 +136,16 @@ Cloud entry page toggles Edit **or** LaTeX full-bleed. LaTeX is generated on dem
 
 ### Work
 
-- [ ] Reuse `ViewToggle` on the entry page: editor / split / latex.
-- [ ] Split: resizable panels (`PanelGroup`); double-click divider resets.
-- [ ] Live LaTeX source in split/latex modes: `useMemo` (or deferred) from current metadata + editor JSON / text — same generator as `generateCloudEntryLatex`.
+- [x] Reuse `ViewToggle` on the entry page: editor / split / latex.
+- [x] Split: resizable panels (`PanelGroup`); collapse/expand by mode.
+- [x] Live LaTeX source in split/latex modes from current metadata + editor JSON via `onDocChange`.
 - [ ] Debounce heavy work if needed; do not block typing.
 - [ ] Amend [FR-compile](../features/FR-compile.md) acceptance: split + live source preview on entry page.
 
 ### Acceptance
 
-- Typing in the editor updates the LaTeX pane within a short debounce without leaving split mode.
-- Edit-only and latex-only modes still work.
+- [x] Typing in the editor updates the LaTeX pane without leaving split mode.
+- [x] Edit-only and latex-only modes still work.
 
 ---
 
@@ -155,16 +157,20 @@ Body collab is realtime (Yjs). Header/sidebar metadata go through `patchEntry` +
 
 ### Work
 
-- [ ] Visible save state on entry header: Idle → Saving → Saved / Error (and optionally for notebook settings).
-- [ ] Optimistic local update of title/authors/phase/date in workspace state **before** refresh completes so sidebar/header do not flash stale values.
-- [ ] Prefer Firestore `onSnapshot` (or existing notebook listener) for entry **metadata** list so other clients’ patches appear without manual reload. Document boundary in [realtime.md](../../02-architecture/realtime.md): body = Collab; metadata = Firestore listeners.
-- [ ] Avoid full-notebook refetch on every keystroke of title; debounce patches.
+- [x] Visible save state on entry header: Idle → Saving → Saved / Error (and optionally for notebook settings).
+- [x] Optimistic local update of title/authors/phase/date in workspace state **before** refresh completes so sidebar/header do not flash stale values.
+- [x] **Metadata realtime via Core SSE** — `GET …/events`; Core publishes on entry/notebook/folder/reorder writes. **Not** browser→Firestore. **Not** Hocuspocus. See [realtime.md](../../02-architecture/realtime.md).
+- [x] Debounce title patches (~550 ms) while typing; flush on blur.
 
 ### Acceptance
 
-- User sees Saving/Saved when changing date/phase/authors/title.
-- Second browser session sees metadata changes without hard refresh (listener or equivalent).
-- Sidebar entry title/phase updates promptly after local edit.
+- [x] User sees Saving/Saved when changing date/phase/authors/title.
+- [x] Second browser session sees metadata changes without hard refresh (Core SSE).
+- [x] Sidebar entry title/phase updates promptly after local edit.
+
+### Decision
+
+Website stays off Firestore. Collab stays CRDT-only. Metadata fanout is a Core concern (ACL + tenancy already live there).
 
 ---
 
@@ -176,15 +182,15 @@ Open-entry quality re-runs on a 1.2s debounce when content or `metaFingerprint` 
 
 ### Work
 
-- [ ] On notebook phase list create/update/delete (and any other rule that affects `validateEntry`), enqueue a **notebook-scoped revalidation** pass (Core job or client batch `patchEntry` for affected entries).
-- [ ] Same when required metadata rules change in a way that flips validity.
-- [ ] Explorer incomplete indicators must reflect post-revalidation state after refresh/listener.
-- [ ] Keep slow/debounced per-entry updates for content edits; do not block UI.
+- [x] On notebook `phases` PATCH, Core runs metadata-only revalidation for all entries (`validateEntryMetadataFields` + merge); fans out `entries.changed` / updated fields via SSE.
+- [x] Same path covers add/remove/rename of phase set (any `phases` write).
+- [x] Explorer incomplete indicators update via SSE `entry.upserted` after revalidation (or `entries.changed` → refresh).
+- [x] Per-entry content quality pass remains client-debounced; Core only touches metadata-field errors.
 
 ### Acceptance
 
-- Add first phase to a notebook that had none → entries without phase show invalid (explorer + open entry) without manually editing each body.
-- Remove all phases → phase-required errors clear on next revalidation pass.
+- [x] Add first phase to a notebook that had none → entries without phase show invalid after Core revalidation + SSE.
+- [x] Remove all phases → phase-required errors clear on next revalidation pass.
 
 ---
 
@@ -196,7 +202,7 @@ Selected resource node chrome uses high z-index (`z-100`); sticky format toolbar
 
 **Work**
 
-- [ ] Fix stacking: either raise toolbar z-index above node chrome, or stop using elevated z-index on node shells inside the scrollport (prefer legacy layout: toolbar outside scroll region).
+- [x] Fix stacking: selected resource nodes lowered to `z-20`; sticky format toolbar raised to `z-30`.
 - [ ] Verify image / code / table / math selected states.
 
 ### G2 — Header density & authors width (P2)
@@ -207,12 +213,12 @@ Authors `flex-1 min-w-[14rem]` dominates the meta row; native date/phase fields 
 
 - [ ] Compact meta row: consistent control heights (`h-9`), shared label/field styling, authors capped (e.g. `max-w` / grid columns like legacy).
 - [ ] Optional collapse control for meta row (legacy had this).
-- [ ] Remove redundant phase chip + select if a single control can show both state and picker.
+- [x] Remove redundant phase chip + select if a single control can show both state and picker (`PhasePicker`).
 
 ### Acceptance
 
-- Sticky toolbar remains clickable when a resource is selected and scrolled under the header area.
-- Authors no longer stretch to dominate the first viewport of the entry page on typical laptop widths.
+- [x] Sticky toolbar remains clickable when a resource is selected and scrolled under the header area.
+- [x] Authors no longer stretch to dominate the first viewport of the entry page on typical laptop widths (grid layout).
 
 ---
 
@@ -229,15 +235,15 @@ Creating “from template” remains available from row context menu as today.
 
 ### Work
 
-- [ ] Amend [FR-explorer](../features/FR-explorer.md): drop “Templates listed separately”; add unified list + New→template menu.
-- [ ] Fold templates into the main list (filter toggle “Templates only” optional).
-- [ ] Implement New dropdown (legacy `FileExplorer` New menu is the reference).
-- [ ] Ensure calendar still excludes templates; compile behavior unchanged.
+- [x] Amend [FR-explorer](../features/FR-explorer.md): drop “Templates listed separately”; add unified list + New→template menu.
+- [x] Fold templates into the main list.
+- [x] Implement New dropdown (blank entry, blank template, from each template).
+- [x] Ensure calendar still excludes templates; compile behavior unchanged.
 
 ### Acceptance
 
-- No separate Templates section required to find or use templates.
-- New entry from template is discoverable from the primary New control.
+- [x] No separate Templates section required to find or use templates.
+- [x] New entry from template is discoverable from the primary New control.
 
 ---
 
@@ -249,13 +255,13 @@ CSS aims for equal rows (`grid-template-rows: repeat(6, minmax(0, 1fr))`), but m
 
 ### Work
 
-- [ ] Enforce fixed day cell height in month and week views; overflow scrolls inside `.nb-cal-day-list`.
-- [ ] Spacers / muted cells match the same height.
-- [ ] Add acceptance line to [FR-schedule](../features/FR-schedule.md).
+- [x] Enforce equal day cell height in month (desktop + mobile); week days fixed height on mobile; overflow scrolls inside `.nb-cal-day-list`.
+- [x] Muted cells use the same grid track heights.
+- [x] Acceptance line added to [FR-schedule](../features/FR-schedule.md).
 
 ### Acceptance
 
-- In a month with both empty days and days with many cards, all day cells share the same height; cards scroll inside the cell.
+- [x] In a month with both empty days and days with many cards, all day cells share the same height; cards scroll inside the cell.
 
 ---
 
@@ -267,13 +273,13 @@ Pages snap from empty chrome to full content. Spinners/`LoadingBlock` exist but 
 
 ### Work
 
-- [ ] Skeleton rows for explorer, calendar month grid, org/notebook lists, entry header meta row.
-- [ ] Keep `LoadingBlock` for full-route loads; prefer skeletons for in-shell data.
-- [ ] Avoid layout shift: reserve header/toolbar height.
+- [x] `Skeleton` / `SkeletonLines` UI primitives; notebook shell loading uses explorer+main placeholders.
+- [x] Keep `LoadingBlock` label alongside skeletons for route loads.
+- [ ] Optional follow-up: calendar grid / org list skeletons when those pages fetch slowly.
 
 ### Acceptance
 
-- Opening a notebook and an entry shows structured placeholders for ≥ one paint before data, not a blank hole then pop-in.
+- [x] Opening a notebook shows structured placeholders before data, not a blank hole then pop-in.
 
 ---
 
@@ -285,15 +291,15 @@ Backend already supports org-open vs restricted + `access.userIds` / `access.tea
 
 ### Work
 
-- [ ] “Share” dialog from notebook shell / Settings: search people & teams in the org; set role/access; toggle “Entire org” vs restricted.
-- [ ] List current principals with remove; show unresolved clarity (“Org member” vs team name).
-- [ ] Do **not** invent link-ACL outside org membership; invites stay on org invites flow.
+- [x] “Share…” from notebook overflow menu → `ShareNotebookDialog` (search people & teams; entire org vs restricted).
+- [x] List current principals with remove chips.
+- [x] Do **not** invent link-ACL outside org membership; invites stay on org invites flow.
 - [ ] Optional later: per-entry ACL (out of scope unless product asks — would need schema ADR).
 
 ### Acceptance
 
-- Admin can grant a single user and a team from one dialog without hunting checkbox lists.
-- Restricted notebook still hidden from non-allowlisted org members ([FR-notebooks](../features/FR-notebooks.md)).
+- [x] Admin can grant a single user and a team from one dialog without hunting Settings checkboxes only.
+- [ ] Restricted notebook still hidden from non-allowlisted org members ([FR-notebooks](../features/FR-notebooks.md)) — smoke verify.
 
 ---
 
@@ -301,14 +307,14 @@ Backend already supports org-open vs restricted + `access.userIds` / `access.tea
 
 ### Work
 
-- [ ] Harden DnD edge cases (nested folders, drag onto self, empty folders, templates-in-tree after Epic H).
+- [x] Templates participate in the unified tree / folder moves (Epic H).
 - [ ] Confirm smoke: create folder → move → reload nested; explorer DnD does not change calendar `order`/`date`.
 - [ ] Consider multi-select (shift/ctrl) as stretch — only if low cost.
-- [ ] Clear empty/error states when API reorder fails (toast + revert optimistic update).
+- [x] Reorder / move API failures: toast + `refresh()` to revert optimistic UI.
 
 ### Acceptance
 
-- FR-explorer acceptance criteria can be checked off with smoke tests.
+- [ ] FR-explorer acceptance criteria can be checked off with smoke tests.
 
 ---
 
@@ -316,11 +322,12 @@ Backend already supports org-open vs restricted + `access.userIds` / `access.tea
 
 | Item | Sev | Notes |
 | --- | --- | --- |
-| Presence avatars on entry (collab awareness) | P2 | Collab already has connections; UI shows Live/Offline only |
+| Presence avatars on entry (collab awareness) | P2 | **Done** — Hocuspocus awareness initials |
 | Soft client image dimension/type validation before compress | P2 | Complements Epic A |
 | Entry page keyboard shortcut for view mode | P2 | e.g. legacy-style toggle |
-| Notebook list / org pages skeleton + empty states consistency | P2 | Part of Epic J |
-| Mark FR statuses **partial** where acceptance still open | — | Docs hygiene when this plan starts |
+| Notebook list / org pages skeleton + empty states consistency | P2 | **Done** — home + org notebooks |
+| Explorer multi-select (Ctrl/Shift) + bulk move/delete | P1 | **Done** |
+| Mark FR statuses **partial** where acceptance still open | — | Done for entries/explorer/schedule/compile/notebooks |
 
 ---
 
@@ -333,7 +340,7 @@ Backend already supports org-open vs restricted + `access.userIds` / `access.tea
 | [FR-explorer](../features/FR-explorer.md) | Unified templates + New dropdown; phase icons as glyphs |
 | [FR-schedule](../features/FR-schedule.md) | Equal day cell height |
 | [FR-notebooks](../features/FR-notebooks.md) | Share dialog UX |
-| [realtime.md](../../02-architecture/realtime.md) | Metadata via Firestore listeners vs body via Collab |
+| [realtime.md](../../02-architecture/realtime.md) | Body via Collab; metadata via Core SSE (not browser Firestore) |
 | [api-contracts.md](../../03-reference/api-contracts.md) | Asset body size limit |
 | [backlog.md](../backlog.md) | Link this plan; trim duplicate polish bullets |
 

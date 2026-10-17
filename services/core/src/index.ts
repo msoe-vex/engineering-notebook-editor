@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import { MAX_UPLOAD_BYTES } from "@engineering-notebook/shared";
 import { FirebaseAuthAdapter } from "./auth/firebaseAuthAdapter.js";
 import { initFirestore } from "./db/firestore.js";
 import { createStorage } from "./storage/gcsStorage.js";
@@ -9,8 +10,12 @@ import { registerOrgRoutes } from "./routes/orgs.js";
 import { registerAdminRoutes } from "./routes/admin.js";
 import { registerUserRoutes } from "./routes/users.js";
 import { registerStaticAssetRoutes } from "./routes/staticAssets.js";
+import { registerAuditRoutes } from "./routes/audits.js";
+import { registerAiRoutes } from "./routes/ai.js";
 
-const app = Fastify({ logger: true });
+/** Default 64 MiB — assets, logos, and compiled PDF exports share this Fastify limit. */
+const bodyLimit = Number(process.env.BODY_LIMIT_BYTES || MAX_UPLOAD_BYTES);
+const app = Fastify({ logger: true, bodyLimit });
 
 /** Browser client (website :3000) calls this API cross-origin with Authorization. */
 const corsOrigin = process.env.CORS_ORIGIN;
@@ -76,6 +81,8 @@ app.register(async (scoped) => {
   scoped.addHook("preHandler", requireAuth);
   await registerUserRoutes(scoped);
   await registerOrgRoutes(scoped, storage);
+  await registerAuditRoutes(scoped);
+  await registerAiRoutes(scoped);
   await registerAdminRoutes(scoped);
 });
 

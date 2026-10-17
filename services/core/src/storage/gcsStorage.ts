@@ -1,3 +1,5 @@
+import { pipeline } from "node:stream/promises";
+import type { Readable } from "node:stream";
 import { Storage } from "@google-cloud/storage";
 import type { StoragePort } from "./storagePort.js";
 import { MemoryStorage } from "./storagePort.js";
@@ -65,6 +67,23 @@ export async function createStorage(): Promise<StoragePort> {
         contentType,
         resumable: false,
       });
+    },
+    async putObjectStream(key, stream: Readable, contentType = "application/octet-stream") {
+      if (apiEndpoint) {
+        await ensureEmulatorBucket(apiEndpoint, bucketName, projectId);
+      }
+      const file = bucket.file(key);
+      const write = file.createWriteStream({
+        contentType,
+        resumable: false,
+        metadata: { contentType },
+      });
+      let byteSize = 0;
+      stream.on("data", (chunk: Buffer | string) => {
+        byteSize += Buffer.isBuffer(chunk) ? chunk.byteLength : Buffer.byteLength(chunk);
+      });
+      await pipeline(stream, write);
+      return { byteSize };
     },
     async getObject(key) {
       const file = bucket.file(key);

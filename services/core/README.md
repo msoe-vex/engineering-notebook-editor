@@ -1,6 +1,6 @@
 # Core API
 
-Fastify service: Firebase `AuthPort`, nested org/notebook tenancy, admin metrics, GCS-backed assets, BusyTeX static routes.
+Fastify service: Firebase `AuthPort`, nested org/notebook tenancy, admin metrics, GCS-backed assets, BusyTeX, rubric **audits**, Vertex-only `POST /ai/complete`.
 
 - Contracts: [docs/03-reference/api-contracts.md](../../docs/03-reference/api-contracts.md)
 - Local testing: [docs/04-guides/local-development.md](../../docs/04-guides/local-development.md)

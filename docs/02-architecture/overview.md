@@ -15,23 +15,24 @@
 | Service | Role | Port |
 | --- | --- | --- |
 | [`website/`](../../website/README.md) | App UI at `/` (+ ZIP backup) | 3000 |
-| [`services/core/`](../../services/core/README.md) | Auth, tenancy, metadata, assets, BusyTeX | 8080 |
+| [`services/core/`](../../services/core/README.md) | Auth, tenancy, metadata, assets, BusyTeX, GenAI tools / audits / Vertex infer — [ADR-005](./decisions/ADR-005-genai-in-core.md) | 8080 |
 | [`services/collab/`](../../services/collab/README.md) | Yjs rooms → flush to Core/GCS | 1234 |
-| [`services/agents/`](../../services/agents/README.md) | Rubric audit BYOK / Vertex grant | 8000 |
+| [`services/agents/`](../../services/agents/README.md) | **Retired from runtime** — code may remain until deleted ([ADR-005](./decisions/ADR-005-genai-in-core.md)) | — |
 
 ```mermaid
 flowchart TB
   Client["website /"]
   Client -->|REST| Core
   Client -->|WSS| Collab
-  Client -->|REST| Agents
   Client -->|ZIP file| Zip["Export / import v5"]
   Core --> Auth["Firebase Auth"]
   Core --> FS["Firestore"]
   Core --> GCS["GCS"]
+  Core --> Vertex["Vertex AI infer"]
   Collab --> Core
-  Agents --> FS
 ```
+
+Website runs GenAI/judge loops; BYOK/local infer in browser (or `/api/genai` BFF); Core is Vertex `/ai/complete` + audit progress + entry tools — [ADR-004](./decisions/ADR-004-agents-genai-gateway.md), [api-contracts](../03-reference/api-contracts.md).
 
 ## Data
 
