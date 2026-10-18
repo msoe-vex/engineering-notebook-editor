@@ -25,20 +25,48 @@ import {
 } from "@/lib/notebook/metadata";
 import type { NotebookSummaryV5 } from "@engineering-notebook/shared";
 
-function walkRemapAssets(node: TipTapNode, assetIds: Set<string>): TipTapNode {
+/** graphicx needs a real extension; cloud asset ids are bare UUIDs. */
+function extFromContentType(ct?: string | null): string {
+  const c = (ct || "").toLowerCase();
+  if (c.includes("png")) return ".png";
+  if (c.includes("webp")) return ".webp";
+  if (c.includes("gif")) return ".gif";
+  if (c.includes("pdf")) return ".pdf";
+  return ".jpg";
+}
+
+function cloudAssetVfsPath(assetId: string, contentType?: string | null): string {
+  if (/\.(jpe?g|png|gif|webp|pdf)$/i.test(assetId)) {
+    return `${ASSETS_DIR}/${assetId}`;
+  }
+  return `${ASSETS_DIR}/${assetId}${extFromContentType(contentType)}`;
+}
+
+function bareAssetId(ref: string): string | null {
+  if (!ref) return null;
+  if (ref.startsWith("cloud:")) return ref.slice("cloud:".length) || null;
+  if (ref.startsWith(`${ASSETS_DIR}/`)) {
+    const rest = ref.slice(`${ASSETS_DIR}/`.length).replace(/^(compressed|original)\//, "");
+    return rest.replace(/\.(jpe?g|png|gif|webp|pdf)$/i, "") || null;
+  }
+  // bare uuid
+  if (/^[0-9a-f-]{36}$/i.test(ref)) return ref;
+  return null;
+}
+
+function walkRemapAssets(
+  node: TipTapNode,
+  assetIds: Set<string>,
+  pathForId?: (assetId: string) => string
+): TipTapNode {
   if (node.type === "image") {
     const attrs = { ...(node.attrs || {}) };
     const fp = String(attrs.filePath || "");
     const id = String(attrs.id || "");
-    let assetId = id;
-    if (fp.startsWith("cloud:")) assetId = fp.slice("cloud:".length);
-    else if (fp.startsWith(`${ASSETS_DIR}/`)) {
-      // already a local-style path
-      return { ...node, attrs };
-    }
+    const assetId = bareAssetId(fp) || bareAssetId(id) || id || null;
     if (assetId) {
       assetIds.add(assetId);
-      const path = `${ASSETS_DIR}/${assetId}`;
+      const path = pathForId?.(assetId) ?? cloudAssetVfsPath(assetId);
       attrs.filePath = path;
       attrs.originalFilePath = path;
       attrs.id = assetId;
@@ -47,11 +75,15 @@ function walkRemapAssets(node: TipTapNode, assetIds: Set<string>): TipTapNode {
   }
   return {
     ...node,
-    content: node.content?.map((child) => walkRemapAssets(child, assetIds)),
+    content: node.content?.map((child) => walkRemapAssets(child, assetIds, pathForId)),
   };
 }
 
-function toEntryMetadata(id: string, e: EntryMeta): EntryMetadata {
+function toEntryMetadata(
+  id: string,
+  e: EntryMeta,
+  pathForId?: (assetId: string) => string
+): EntryMetadata {
   return {
     title: e.title || "",
     authors: e.authors || [],
@@ -62,7 +94,7 @@ function toEntryMetadata(id: string, e: EntryMeta): EntryMetadata {
     filename: id,
     order: e.order ?? 0,
     isTemplate: e.isTemplate,
-    assets: (e.assetIds || []).map((aid) => `${ASSETS_DIR}/${aid}`),
+    assets: (e.assetIds || []).map((aid) => pathForId?.(aid) ?? cloudAssetVfsPath(aid)),
   };
 }
 
@@ -73,14 +105,15 @@ export async function generateCloudEntryLatex(
   meta: EntryMeta,
   phases: Record<string, ProjectPhase> | undefined,
   allEntries: Record<string, EntryMeta>,
-  tipTap?: unknown
-): Promise<{ latex: string; doc: TipTapNode }> {
+  tipTap?: unknown,
+  pathForId?: (assetId: string) => string
+): Promise<{ latex: string; doc: TipTapNode; assetIds: Set<string> }> {
   const raw =
     tipTap ?? (await cloudApi.getEntryContent(orgId, notebookId, entryId).catch(() => ({ type: "doc", content: [] })));
   const assetIds = new Set<string>();
-  const doc = walkRemapAssets(raw as TipTapNode, assetIds);
+  const doc = walkRemapAssets(raw as TipTapNode, assetIds, pathForId);
   const entryMap = Object.fromEntries(
-    Object.entries(allEntries).map(([id, e]) => [id, toEntryMetadata(id, e)])
+    Object.entries(allEntries).map(([id, e]) => [id, toEntryMetadata(id, e, pathForId)])
   );
   const resources = extractResources(doc);
   const resourceTypes = buildResourceTypeIndex(entryMap, resources, entryId);
@@ -94,7 +127,7 @@ export async function generateCloudEntryLatex(
     resourceTypes,
     meta.date
   );
-  return { latex, doc };
+  return { latex, doc, assetIds };
 }
 
 export async function compileCloudNotebook(opts: {
@@ -109,13 +142,54 @@ export async function compileCloudNotebook(opts: {
 
   onStatus?.("Loading notebook content...", 1, TOTAL, 8);
 
-  const entryMeta: Record<string, EntryMetadata> = {};
-  for (const [id, e] of Object.entries(entries)) {
-    entryMeta[id] = toEntryMetadata(id, e);
-  }
-
   const phases = (notebookSummary?.phases as Record<string, ProjectPhase>) || {};
   const membersList = await cloudApi.listNotebookMembers(orgId, notebookId).catch(() => []);
+
+  const files: FileInput[] = await loadBusyTexStaticFiles((s, step, _t, pct) =>
+    onStatus?.(s, step, TOTAL, Math.min(pct, 40))
+  );
+
+  // Collect TipTap docs + asset ids before generating LaTeX so VFS paths can include extensions.
+  onStatus?.("Collecting images...", 5, TOTAL, 50);
+  const neededAssets = new Set<string>();
+  if (notebookSummary?.logoAssetId) neededAssets.add(notebookSummary.logoAssetId);
+  for (const m of membersList) {
+    if (m.imageAssetId) neededAssets.add(m.imageAssetId);
+  }
+
+  const tipTapByEntry = new Map<string, TipTapNode>();
+  for (const [id, e] of Object.entries(entries)) {
+    if (e.isTemplate) continue;
+    for (const aid of e.assetIds || []) neededAssets.add(aid);
+    const raw = await cloudApi
+      .getEntryContent(orgId, notebookId, id)
+      .catch(() => ({ type: "doc", content: [] }));
+    const collect = new Set<string>();
+    const doc = walkRemapAssets(raw as TipTapNode, collect);
+    tipTapByEntry.set(id, doc);
+    for (const aid of collect) neededAssets.add(aid);
+  }
+
+  onStatus?.("Downloading images...", 6, TOTAL, 70);
+  const pathByAssetId = new Map<string, string>();
+  for (const assetId of neededAssets) {
+    try {
+      const { url, asset } = await cloudApi.getAssetUrl(orgId, notebookId, assetId);
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const ct = asset.contentType || res.headers.get("content-type");
+      const vfsPath = cloudAssetVfsPath(assetId, ct);
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      files.push({ path: vfsPath, content: bytes });
+      pathByAssetId.set(assetId, vfsPath);
+    } catch (err) {
+      console.warn("Failed to load cloud asset for compile", assetId, err);
+    }
+  }
+
+  const pathForId = (assetId: string) =>
+    pathByAssetId.get(assetId) ?? cloudAssetVfsPath(assetId);
+
   const team: TeamMetadata = {
     teamName: notebookSummary?.title || notebookSummary?.name || "",
     teamNumber: notebookSummary?.subtitle || "",
@@ -127,20 +201,23 @@ export async function compileCloudNotebook(opts: {
           name: m.name,
           role: m.role || "Member",
           order: m.order,
-          ...(m.imageAssetId ? { image: `${ASSETS_DIR}/${m.imageAssetId}` } : {}),
+          ...(m.imageAssetId && pathByAssetId.has(m.imageAssetId)
+            ? { image: pathForId(m.imageAssetId) }
+            : {}),
         },
       ])
     ),
-    ...(notebookSummary?.logoAssetId
-      ? { logo: `${ASSETS_DIR}/${notebookSummary.logoAssetId}` }
+    ...(notebookSummary?.logoAssetId && pathByAssetId.has(notebookSummary.logoAssetId)
+      ? { logo: pathForId(notebookSummary.logoAssetId) }
       : {}),
   };
 
-  const files: FileInput[] = await loadBusyTexStaticFiles((s, step, _t, pct) =>
-    onStatus?.(s, step, TOTAL, Math.min(pct, 45))
-  );
+  onStatus?.("Generating LaTeX...", 5, TOTAL, 80);
+  const entryMeta: Record<string, EntryMetadata> = {};
+  for (const [id, e] of Object.entries(entries)) {
+    entryMeta[id] = toEntryMetadata(id, e, pathForId);
+  }
 
-  onStatus?.("Generating LaTeX...", 5, TOTAL, 55);
   files.push({ path: TEAM_PATH, content: generateTeamLatex(team) });
   files.push({ path: PHASES_PATH, content: generatePhasesLatex(phases) });
   files.push({
@@ -148,39 +225,20 @@ export async function compileCloudNotebook(opts: {
     content: generateAllEntriesLatex({ entries: entryMeta }),
   });
 
-  const neededAssets = new Set<string>();
-  if (notebookSummary?.logoAssetId) neededAssets.add(notebookSummary.logoAssetId);
-  for (const m of membersList) {
-    if (m.imageAssetId) neededAssets.add(m.imageAssetId);
-  }
-
   for (const [id, e] of Object.entries(entries)) {
     if (e.isTemplate) continue;
-    onStatus?.(`Preparing entry ${e.title || id}...`, 5, TOTAL, 60);
-    const { latex, doc } = await generateCloudEntryLatex(
+    onStatus?.(`Preparing entry ${e.title || id}...`, 5, TOTAL, 82);
+    const { latex } = await generateCloudEntryLatex(
       orgId,
       notebookId,
       id,
       e,
       phases,
-      entries
+      entries,
+      tipTapByEntry.get(id),
+      pathForId
     );
     files.push({ path: `${LATEX_DIR}/${id}.tex`, content: latex });
-    walkRemapAssets(doc, neededAssets);
-    for (const aid of e.assetIds || []) neededAssets.add(aid);
-  }
-
-  onStatus?.("Downloading images...", 6, TOTAL, 75);
-  for (const assetId of neededAssets) {
-    try {
-      const { url } = await cloudApi.getAssetUrl(orgId, notebookId, assetId);
-      const res = await fetch(url);
-      if (!res.ok) continue;
-      const bytes = new Uint8Array(await res.arrayBuffer());
-      files.push({ path: `${ASSETS_DIR}/${assetId}`, content: bytes });
-    } catch (err) {
-      console.warn("Failed to load cloud asset for compile", assetId, err);
-    }
   }
 
   const result = await runXeLatex(files, (s, step, _t, pct) =>

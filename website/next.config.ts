@@ -46,8 +46,8 @@ const nextConfig: NextConfig = {
   },
   async rewrites() {
     // When Core/GCS asset base is configured, proxy BusyTeX + LaTeX packages there.
-    // Otherwise Next serves website/public/busytex and website/public/latex directly
-    // (populate with npm run download:busytex && npm run bundle:template).
+    // Otherwise Next serves website/public/busytex (+ notebook-template) directly
+    // (npm run download:busytex && npm run bundle:template — no host XeLaTeX required).
     if (!assetsBase) return [];
     return [
       {

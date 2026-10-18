@@ -14,7 +14,7 @@ Notebook accessors.
 ## User-facing behavior
 
 - Entry page: ViewToggle (editor / split / LaTeX) with live LaTeX source from the open doc
-- `/…/compile` — `CloudNotebookCompiler`
+- `/…/compile` — full-height `CloudNotebookCompiler` (compact chrome + edge-to-edge PDF preview)
 - Static BusyTeX / latex assets via Core `/static/busytex/*`, `/static/latex/*`
 
 ## Acceptance criteria

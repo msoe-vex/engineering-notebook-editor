@@ -11,7 +11,7 @@ import { compileCloudNotebook } from "@/lib/cloud/compileCloudNotebook";
 
 const LatexPreview = dynamic(() => import("@/components/editor/LatexPreview"), {
   ssr: false,
-  loading: () => <Skeleton className="h-full min-h-[50vh] w-full rounded-nb-xl md:min-h-[70vh]" />,
+  loading: () => <Skeleton className="h-full min-h-0 w-full" />,
 });
 
 export function CloudNotebookCompiler() {
@@ -89,24 +89,26 @@ export function CloudNotebookCompiler() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 pb-2">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+    <div className="flex h-full min-h-0 flex-col bg-nb-surface">
+      <header className="flex shrink-0 flex-col gap-2 border-b border-nb-outline-variant/25 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3 md:px-4">
         <div className="min-w-0">
-          <h1 className="text-nb-display font-bold tracking-tight">Compile</h1>
-          <p className="mt-1 text-nb-body text-nb-on-surface-variant">
-            Build a PDF with BusyTeX (XeLaTeX). Entry order follows calendar date, then same-day
-            order.
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <h1 className="text-nb-title font-bold tracking-tight text-nb-on-surface">Compile</h1>
+            {notebookSummary?.lastCompiled && (
+              <p className="text-nb-caption text-nb-on-surface-variant">
+                Last {new Date(notebookSummary.lastCompiled).toLocaleString()}
+              </p>
+            )}
+          </div>
+          <p className="mt-0.5 hidden text-nb-caption text-nb-on-surface-variant sm:block">
+            BusyTeX · entry order follows calendar date, then same-day order
           </p>
-          {notebookSummary?.lastCompiled && (
-            <p className="mt-1 text-nb-caption text-nb-on-surface-variant">
-              Last compiled {new Date(notebookSummary.lastCompiled).toLocaleString()}
-            </p>
-          )}
         </div>
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="primary"
-            className="min-h-10 flex-1 sm:flex-none"
+            size="sm"
+            className="min-h-9 flex-1 sm:flex-none"
             disabled={busy}
             onClick={() => void runCompile()}
           >
@@ -116,7 +118,8 @@ export function CloudNotebookCompiler() {
           {pdfUrl && (
             <Button
               variant="secondary"
-              className="min-h-10"
+              size="sm"
+              className="min-h-9"
               onClick={() => {
                 const a = document.createElement("a");
                 a.href = pdfUrl;
@@ -130,7 +133,8 @@ export function CloudNotebookCompiler() {
           )}
           <Button
             variant="ghost"
-            className="min-h-10 min-w-10"
+            size="sm"
+            className="min-h-9 min-w-9"
             disabled={busy}
             aria-label="Refresh PDF"
             onClick={() => {
@@ -143,15 +147,15 @@ export function CloudNotebookCompiler() {
             <RefreshCcw size={14} />
           </Button>
         </div>
-      </div>
+      </header>
 
       {busy && (
-        <div className="rounded-nb-xl border border-nb-outline-variant/25 bg-nb-surface-low px-4 py-3">
-          <div className="mb-2 flex justify-between text-nb-caption font-semibold text-nb-on-surface-variant">
-            <span>{status}</span>
-            <span>{progress}%</span>
+        <div className="shrink-0 border-b border-nb-outline-variant/20 bg-nb-surface-low px-4 py-2">
+          <div className="mb-1.5 flex justify-between text-nb-caption font-semibold text-nb-on-surface-variant">
+            <span className="truncate pr-3">{status}</span>
+            <span className="shrink-0">{progress}%</span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-nb-surface">
+          <div className="h-1.5 overflow-hidden rounded-full bg-nb-surface">
             <div
               className="h-full bg-nb-primary transition-all"
               style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
@@ -161,16 +165,18 @@ export function CloudNotebookCompiler() {
       )}
 
       {log && (
-        <Alert variant="error">
-          <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-nb-caption">{log}</pre>
-        </Alert>
+        <div className="shrink-0 border-b border-nb-outline-variant/20 px-3 py-2 md:px-4">
+          <Alert variant="error">
+            <pre className="max-h-32 overflow-auto whitespace-pre-wrap text-nb-caption">{log}</pre>
+          </Alert>
+        </div>
       )}
 
-      <div className="min-h-[50vh] overflow-hidden rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface md:min-h-[70vh]">
+      <div className="relative min-h-0 flex-1 overflow-hidden">
         {pdfUrl ? (
           <LatexPreview latexContent="" pdfUrl={pdfUrl} />
         ) : (
-          <div className="flex h-56 flex-col items-center justify-center gap-2 px-4 text-center text-nb-caption text-nb-on-surface-variant md:h-72">
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center text-nb-caption text-nb-on-surface-variant">
             <p>No compiled PDF yet.</p>
             <Button size="sm" variant="primary" disabled={busy} onClick={() => void runCompile()}>
               Compile now

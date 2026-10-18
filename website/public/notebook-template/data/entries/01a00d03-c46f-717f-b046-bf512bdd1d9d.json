@@ -7,12 +7,12 @@
         "type": "heading",
         "attrs": {
           "level": 1,
-          "id": "019e2f13-d57c-7544-bf91-b0e51edd2bda"
+          "id": "01a08278-c7ab-7db2-9e03-25cada8e2fd9"
         },
         "content": [
           {
             "type": "text",
-            "text": "Build & Test"
+            "text": "Build Solution"
           }
         ]
       },

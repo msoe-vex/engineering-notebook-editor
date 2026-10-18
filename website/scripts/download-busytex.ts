@@ -24,6 +24,7 @@ function run() {
 
     console.log(`\nSuccessfully downloaded BusyTeX assets to ${path.join(DEST_DIR, 'busytex')}`);
     console.log(`Reminder: The 'busytex' directory is gitignored to avoid LFS limits.`);
+    console.log(`Next: npm run bundle:template  (copies notebook.sty / fonts — no host XeLaTeX required)`);
   } catch (error) {
     console.error('Error downloading BusyTeX assets:', error);
     process.exit(1);

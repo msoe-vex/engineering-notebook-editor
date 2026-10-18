@@ -5,42 +5,42 @@
       "title": "Define Problem Template",
       "authors": [],
       "phase": "define-problem",
-      "createdAt": "2026-08-16T23:48:10.254Z",
-      "updatedAt": "2026-08-17T22:11:25.777Z",
+      "createdAt": "2026-09-08T19:16:39.624Z",
+      "updatedAt": "2026-09-08T19:16:39.624Z",
       "date": "",
       "filename": "data/entries/01a00cf9-c38e-76d6-ba61-1ee2c71f954d.json",
       "order": 0,
       "isTemplate": true,
       "resources": {
-        "019e2e73-7250-7210-8764-40265896b149": {
+        "01a07915-acf7-7731-aa0a-ea30e948ece2": {
           "type": "heading",
           "title": "Design Statement",
           "caption": "Design Statement"
         },
-        "019e2e73-7250-77f9-844f-2c2b05d7c484": {
+        "01a07915-acf7-7a6d-8b65-b4734fe6ba80": {
           "type": "heading",
           "title": "Problem Statement",
           "caption": "Problem Statement"
         },
-        "019e2e73-7250-79d6-9940-4861c779eb31": {
+        "01a07915-acf8-712e-99f1-a0ae67cf98de": {
           "type": "heading",
-          "title": "Define Problem",
-          "caption": "Define Problem"
+          "title": "Deadlines",
+          "caption": "Deadlines"
         },
-        "019e2e76-6e7b-72bf-acf7-f557fcb22555": {
-          "type": "heading",
-          "title": "Goals",
-          "caption": "Goals"
-        },
-        "019e2edb-af09-7c58-a594-93a125f60741": {
+        "01a07915-acf8-73a4-8562-6883f66410dc": {
           "type": "heading",
           "title": "Constraints",
           "caption": "Constraints"
         },
-        "019e2edd-da8d-7153-9a9a-2f77b51b5a10": {
+        "01a07915-acf8-7670-8890-036cb7dfb9b9": {
           "type": "heading",
-          "title": "Deadlines",
-          "caption": "Deadlines"
+          "title": "Define Problem",
+          "caption": "Define Problem"
+        },
+        "01a07915-acf8-7cad-91a1-b903582d86d4": {
+          "type": "heading",
+          "title": "Goals",
+          "caption": "Goals"
         }
       },
       "references": [],
@@ -52,32 +52,32 @@
       "title": "Generate Concepts Template",
       "authors": [],
       "phase": "generate-concepts",
-      "createdAt": "2026-08-16T23:49:55.414Z",
-      "updatedAt": "2026-09-06T22:44:14.000Z",
+      "createdAt": "2026-09-08T19:16:39.624Z",
+      "updatedAt": "2026-09-08T19:16:39.624Z",
       "date": "",
       "filename": "data/entries/01a00cfb-5e56-79b5-a33f-3e6a94950b64.json",
       "order": 1,
       "isTemplate": true,
       "resources": {
-        "019e2ee1-e249-7193-b019-ff994f7740bd": {
-          "type": "heading",
-          "title": "Generate Concepts",
-          "caption": "Generate Concepts"
-        },
-        "019e2ee2-9922-744c-8327-9ed8e76ef988": {
+        "01a08278-c5d6-7444-a56f-20573b886947": {
           "type": "heading",
           "title": "Ideas",
           "caption": "Ideas"
         },
-        "019e2efa-a918-7cc4-900f-394b7104e7a2": {
+        "01a08278-c5d6-7698-bd95-9c6163fc082f": {
           "type": "heading",
           "title": "Decision Matrix",
           "caption": "Decision Matrix"
         },
-        "019e481d-f9a7-73b6-9333-d759fcc0d061": {
+        "01a08278-c5d6-7ab6-ad60-3ab450057e07": {
           "type": "table",
           "title": "Decision Matrix",
           "caption": "Tip: Copy/Paste from Excel or Google sheets"
+        },
+        "01a08278-c5d6-7c08-a2f0-a3aa55130826": {
+          "type": "heading",
+          "title": "Generate Concepts",
+          "caption": "Generate Concepts"
         }
       },
       "references": [],
@@ -89,14 +89,14 @@
       "title": "Develop Solution Template",
       "authors": [],
       "phase": "develop-solution",
-      "createdAt": "2026-08-16T23:54:16.926Z",
-      "updatedAt": "2026-08-17T22:11:36.602Z",
+      "createdAt": "2026-09-08T19:16:39.624Z",
+      "updatedAt": "2026-09-08T19:16:39.624Z",
       "date": "",
       "filename": "data/entries/01a00cff-5bde-7274-afb0-93c09579c080.json",
       "order": 2,
       "isTemplate": true,
       "resources": {
-        "019e2f01-4cf8-7e23-804c-1e8968f3de13": {
+        "01a07915-ab3a-776f-b8d0-d3bc7bbb2110": {
           "type": "heading",
           "title": "Develop Solution",
           "caption": "Develop Solution"
@@ -108,20 +108,42 @@
       "validationErrors": []
     },
     "01a00d03-c46f-717f-b046-bf512bdd1d9d": {
-      "title": "Build and Test Template",
+      "title": "Build Solution Template",
       "authors": [],
       "phase": "construct-test",
-      "createdAt": "2026-08-16T23:59:05.839Z",
-      "updatedAt": "2026-09-08T18:50:05.383Z",
+      "createdAt": "2026-09-08T19:16:39.624Z",
+      "updatedAt": "2026-09-14T23:43:48.576Z",
       "date": "",
       "filename": "data/entries/01a00d03-c46f-717f-b046-bf512bdd1d9d.json",
       "order": 3,
       "isTemplate": true,
       "resources": {
-        "019e2f13-d57c-7544-bf91-b0e51edd2bda": {
+        "01a08278-c7ab-7db2-9e03-25cada8e2fd9": {
           "type": "heading",
-          "title": "Build & Test",
-          "caption": "Build & Test"
+          "title": "Build Solution",
+          "caption": "Build Solution"
+        }
+      },
+      "references": [],
+      "assets": [],
+      "isValid": true,
+      "validationErrors": []
+    },
+    "01a0a24d-df81-7fb4-bdc5-cfef6664bda9": {
+      "title": "Test Solution Template",
+      "authors": [],
+      "phase": "01a0a24b-8101-7f65-9332-7d8490e1c394",
+      "createdAt": "2026-09-14T23:43:27.618Z",
+      "updatedAt": "2026-09-14T23:44:04.265Z",
+      "date": "",
+      "filename": "data/entries/01a0a24d-df81-7fb4-bdc5-cfef6664bda9.json",
+      "order": 4,
+      "isTemplate": true,
+      "resources": {
+        "01a0a24e-3431-79b4-b286-26ef814e8d3b": {
+          "type": "heading",
+          "title": "Test Solution",
+          "caption": "Test Solution"
         }
       },
       "references": [],
@@ -133,14 +155,14 @@
       "title": "Evaluate Solution Template",
       "authors": [],
       "phase": "evaluate-solution",
-      "createdAt": "2026-08-17T00:00:32.758Z",
-      "updatedAt": "2026-08-17T22:14:41.661Z",
+      "createdAt": "2026-09-08T19:16:39.624Z",
+      "updatedAt": "2026-09-08T19:16:39.624Z",
       "date": "",
       "filename": "data/entries/01a00d05-17f6-7cf0-b2a6-c12c385d8cd2.json",
-      "order": 4,
+      "order": 5,
       "isTemplate": true,
       "resources": {
-        "019e2f2d-1dd1-786d-9393-77da24edef94": {
+        "01a07915-a958-7042-a4c7-4cf3e84f37c6": {
           "type": "heading",
           "title": "Evaluate Solution",
           "caption": "Evaluate Solution"
@@ -166,36 +188,43 @@
       "name": "Define Problem",
       "description": "Identifying the core issue, setting SMART goals, outlining constraints and deliverables.",
       "iconName": "Goal",
-      "color": "#3b82f6",
+      "color": "#ef4444",
       "order": 0
     },
     "generate-concepts": {
       "name": "Generate Concepts",
       "description": "Brainstorming, research, prototyping, and decision matrices to evaluate potential solutions.",
       "iconName": "Brain",
-      "color": "#a855f7",
+      "color": "#f97316",
       "order": 1
     },
     "develop-solution": {
       "name": "Develop Solution",
       "description": "Creating CAD, detailed sketches, math calculations, graphical models, and pseudocode.",
       "iconName": "PencilRuler",
-      "color": "#6366f1",
+      "color": "#eab308",
       "order": 2
     },
     "construct-test": {
-      "name": "Build and Test",
-      "description": "Building the robot, writing the code, executing test plans, and gathering qualitative/quantitative data.",
+      "name": "Build Solution",
+      "description": "Building the robot, writing the code, etc.",
       "iconName": "Hammer",
-      "color": "#f97316",
+      "color": "#10b981",
       "order": 3
+    },
+    "01a0a24b-8101-7f65-9332-7d8490e1c394": {
+      "name": "Test Solution",
+      "description": "Executing test plans, and gathering qualitative/quantitative data.",
+      "iconName": "FlaskConical",
+      "color": "#3b82f6",
+      "order": 4
     },
     "evaluate-solution": {
       "name": "Evaluate Solution",
       "description": "Reflecting on constraints, event outcomes, and planning future improvements.",
       "iconName": "SearchCheck",
-      "color": "#10b981",
-      "order": 4
+      "color": "#8b5cf6",
+      "order": 5
     }
   },
   "assetRefs": {},

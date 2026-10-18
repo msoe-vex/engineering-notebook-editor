@@ -8,7 +8,7 @@
  *   GCS_BUCKET (required)
  *   ASSETS_APP_VERSION (default: latest)
  *   BUSYTEX_DIR (default: website/public/busytex)
- *   LATEX_DIR (default: website/public/latex)
+ *   LATEX_DIR (default: website/public/latex — optional host harvest; may be empty)
  *   GCS_EMULATOR_ENDPOINT (optional, for fake-gcs-server; prefer over STORAGE_EMULATOR_HOST)
  */
 import { Storage } from "@google-cloud/storage";

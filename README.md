@@ -128,12 +128,18 @@ Set `AUTH_FALLBACK=false` and `SERVICE_ADMIN_UID=<firebase-uid>` in production.
 
 ## BusyTeX assets
 
+No host TeX install required for in-browser compile.
+
 ```bash
 cd website && npm run download:busytex && npm run bundle:template
+# optional: harvest host .sty files into public/latex (needs XeLaTeX on PATH)
+# BUNDLE_HOST_LATEX=1 npm run bundle:template
 GCS_BUCKET=your-bucket ASSETS_APP_VERSION=latest npx tsx infra/scripts/upload-busytex-assets.ts
 ```
 
-Local: `website/public/…`. Compose/prod: `NEXT_PUBLIC_ASSETS_BASE_URL` → Core `/static/busytex/*`.
+- `download:busytex` → WASM engine + TeX Live packages (`public/busytex`, gitignored)
+- `bundle:template` → `notebook.sty`, fonts, template into `public/notebook-template`
+- Local: `website/public/…`. Compose/prod: `NEXT_PUBLIC_ASSETS_BASE_URL` → Core `/static/busytex/*`.
 
 ---
 

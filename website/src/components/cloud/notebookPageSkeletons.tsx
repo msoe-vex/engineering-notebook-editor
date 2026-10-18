@@ -34,22 +34,25 @@ export function ContributorsPageSkeleton() {
   );
 }
 
-/** Compile page header + PDF pane placeholder. */
+/** Compile page: compact chrome + full-bleed PDF pane. */
 export function CompilePageSkeleton() {
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 pb-2" aria-busy="true" aria-label="Loading compile">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 space-y-2">
-          <Skeleton className="h-8 w-36" />
-          <Skeleton className="h-4 w-80 max-w-full" />
-          <Skeleton className="h-3 w-40" />
+    <div
+      className="flex h-full min-h-0 flex-col bg-nb-surface"
+      aria-busy="true"
+      aria-label="Loading compile"
+    >
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-nb-outline-variant/25 px-3 py-2.5 md:px-4">
+        <div className="min-w-0 space-y-1.5">
+          <Skeleton className="h-6 w-28" />
+          <Skeleton className="hidden h-3 w-64 max-w-full sm:block" />
         </div>
         <div className="flex gap-2">
-          <Skeleton className="h-10 w-28" />
-          <Skeleton className="h-10 w-10" />
+          <Skeleton className="h-9 w-24" />
+          <Skeleton className="h-9 w-9" />
         </div>
       </div>
-      <Skeleton className="min-h-[50vh] w-full rounded-nb-xl md:min-h-[70vh]" />
+      <Skeleton className="min-h-0 w-full flex-1 rounded-none" />
     </div>
   );
 }

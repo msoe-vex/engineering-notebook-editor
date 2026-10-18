@@ -103,8 +103,13 @@ function getAugmentedEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
+/**
+ * Optional: harvest host TeX packages into public/latex via xelatex -recorder.
+ * Not required for in-browser BusyTeX compile (texlive-recommended + texlive-extra cover notebook.sty).
+ * Opt in: BUNDLE_HOST_LATEX=1 npm run bundle:template
+ */
 function bundleLatexDependencies() {
-  console.log('=== Bundling LaTeX Dependencies into public/latex ===');
+  console.log('=== Bundling host LaTeX packages into public/latex (optional) ===');
   try {
     const env = getAugmentedEnv();
 
@@ -122,7 +127,9 @@ function bundleLatexDependencies() {
     }
 
     if (!fs.existsSync(flsFile)) {
-      console.warn('main.fls not found. Skipping external LaTeX package bundle step (existing files preserved).');
+      console.warn(
+        'main.fls not found — host package harvest skipped. BusyTeX WASM TeX Live is enough for compile.'
+      );
       return;
     }
 
@@ -272,4 +279,17 @@ function bundleLatexDependencies() {
 }
 
 bundleNotebookTemplate();
-bundleLatexDependencies();
+
+const wantHostLatex =
+  process.env.BUNDLE_HOST_LATEX === "1" ||
+  process.argv.includes("--host-latex");
+
+if (wantHostLatex) {
+  bundleLatexDependencies();
+} else {
+  console.log(
+    "Skipping host LaTeX package harvest (no local XeLaTeX needed).\n" +
+      "  BusyTeX loads texlive-recommended + texlive-extra from public/busytex.\n" +
+      "  Opt in later with: BUNDLE_HOST_LATEX=1 npm run bundle:template\n"
+  );
+}

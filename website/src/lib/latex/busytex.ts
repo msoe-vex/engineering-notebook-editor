@@ -10,15 +10,18 @@ export async function initBusyTex() {
     ? window.location.origin + '/busytex'
     : '/busytex';
 
-  // Load the package via the base path. Next.js handles proxying in production.
-  const proxiedPackageUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/busytex/texlive-recommended.js`
-    : '/busytex/texlive-recommended.js';
+  // Recommended alone misses several notebook.sty deps (tcolorbox, titlesec, …).
+  // Extra fills those without needing a host TeX `public/latex` harvest.
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const preloadDataPackages = [
+    `${origin}/busytex/texlive-recommended.js`,
+    `${origin}/busytex/texlive-extra.js`,
+  ];
 
   runner = new BusyTexRunner({
     busytexBasePath: basePath,
-    engineMode: 'combined',
-    preloadDataPackages: [proxiedPackageUrl],
+    engineMode: "combined",
+    preloadDataPackages,
     verbose: true,
   });
 

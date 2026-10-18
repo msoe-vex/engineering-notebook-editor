@@ -144,9 +144,11 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     if (!pathname.includes("/entries/")) setOptimisticEntryId(null);
   }, [activeEntryId, optimisticEntryId, pathname]);
   const showEntryList = SUBNAV[0].match(pathname || "");
-  /** Calendar needs a definite height so day cells can stretch (not content-sized scroll). */
+  /** Calendar + compile need a definite height so the main pane fills (not content-sized scroll). */
   const fillHeightMain =
-    pathname.includes("/schedule") || pathname.includes("/calendar");
+    pathname.includes("/schedule") ||
+    pathname.includes("/calendar") ||
+    pathname.includes("/compile");
 
   const [notebookName, setNotebookName] = useState("");
   const [orgName, setOrgName] = useState("");
