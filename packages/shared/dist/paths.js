@@ -53,6 +53,18 @@ export function auditPath(orgId, notebookId, auditId) {
 export function auditsCollection(orgId, notebookId) {
     return `organizations/${orgId}/notebooks/${notebookId}/audits`;
 }
+export function rubricPath(orgId, notebookId, rubricId) {
+    return `organizations/${orgId}/notebooks/${notebookId}/rubrics/${rubricId}`;
+}
+export function rubricsCollection(orgId, notebookId) {
+    return `organizations/${orgId}/notebooks/${notebookId}/rubrics`;
+}
+export function judgmentPath(orgId, notebookId, judgmentId) {
+    return `organizations/${orgId}/notebooks/${notebookId}/judgments/${judgmentId}`;
+}
+export function judgmentsCollection(orgId, notebookId) {
+    return `organizations/${orgId}/notebooks/${notebookId}/judgments`;
+}
 export function jobPath(orgId, notebookId, jobId) {
     return `organizations/${orgId}/notebooks/${notebookId}/jobs/${jobId}`;
 }
@@ -75,6 +87,7 @@ export const gcsKeys = {
     yjs: (orgId, notebookId, entryId) => `organizations/${orgId}/notebooks/${notebookId}/yjs/${entryId}.ydoc`,
     tipTap: (orgId, notebookId, entryId) => `organizations/${orgId}/notebooks/${notebookId}/entries/${entryId}.json`,
     exportPdf: (orgId, notebookId, exportId) => `organizations/${orgId}/notebooks/${notebookId}/exports/${exportId}.pdf`,
+    rubricSource: (orgId, notebookId, rubricId, ext) => `organizations/${orgId}/notebooks/${notebookId}/rubrics/${rubricId}/source${ext.startsWith(".") ? ext : `.${ext}`}`,
 };
 /** Hocuspocus / Yjs document name — always includes orgId. */
 export function collabDocName(orgId, notebookId, entryId) {

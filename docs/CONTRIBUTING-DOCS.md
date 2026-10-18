@@ -7,6 +7,7 @@
 | User-visible behavior | Matching `01-requirements/features/FR-*.md` (acceptance criteria) |
 | Security / privacy / reliability bar | Matching `01-requirements/quality/NFR-*.md` |
 | Irreversible technical choice | New ADR under `02-architecture/decisions/` |
+| Service topology / how systems talk | `02-architecture/diagrams.md` (+ short pointer in `overview.md`) |
 | HTTP / WSS / Firestore shape | `03-reference/api-contracts.md` or `schema.md` |
 | How to run / deploy | `04-guides/` |
 | Incidents | `05-ops/runbooks/` |

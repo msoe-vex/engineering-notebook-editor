@@ -17,6 +17,10 @@ export declare function assetPath(orgId: string, notebookId: string, assetId: st
 export declare function assetsCollection(orgId: string, notebookId: string): string;
 export declare function auditPath(orgId: string, notebookId: string, auditId: string): string;
 export declare function auditsCollection(orgId: string, notebookId: string): string;
+export declare function rubricPath(orgId: string, notebookId: string, rubricId: string): string;
+export declare function rubricsCollection(orgId: string, notebookId: string): string;
+export declare function judgmentPath(orgId: string, notebookId: string, judgmentId: string): string;
+export declare function judgmentsCollection(orgId: string, notebookId: string): string;
 export declare function jobPath(orgId: string, notebookId: string, jobId: string): string;
 export declare function jobsCollection(orgId: string, notebookId: string): string;
 /** Single-flight lock per (type, resourceKey) under a notebook. */
@@ -30,6 +34,7 @@ export declare const gcsKeys: {
     yjs: (orgId: string, notebookId: string, entryId: string) => string;
     tipTap: (orgId: string, notebookId: string, entryId: string) => string;
     exportPdf: (orgId: string, notebookId: string, exportId: string) => string;
+    rubricSource: (orgId: string, notebookId: string, rubricId: string, ext: string) => string;
 };
 /** Hocuspocus / Yjs document name — always includes orgId. */
 export declare function collabDocName(orgId: string, notebookId: string, entryId: string): string;

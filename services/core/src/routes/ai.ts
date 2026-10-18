@@ -1,16 +1,42 @@
 import type { FastifyInstance } from "fastify";
 import { isServiceAdmin } from "../rbac.js";
 import { getUser } from "../http/authPlugin.js";
+import { byokComplete, type ByokProvider } from "../ai/byokComplete.js";
+import { vertexComplete } from "../ai/vertexComplete.js";
 
 type CompleteBody = {
   prompt?: string;
   messages?: Array<{ role?: string; content?: string }>;
   model?: string;
   temperature?: number;
+  system?: string;
 };
 
+function promptFromBody(body: CompleteBody): string {
+  const promptFromMessages = (body.messages || [])
+    .map((m) => (typeof m.content === "string" ? m.content : ""))
+    .filter(Boolean)
+    .join("\n\n");
+  const user =
+    (typeof body.prompt === "string" && body.prompt.trim()) || promptFromMessages;
+  const system = typeof body.system === "string" && body.system.trim() ? body.system.trim() : "";
+  return system ? `System:\n${system}\n\nUser:\n${user}` : user;
+}
+
+function assertInternalSecret(
+  request: { headers: Record<string, unknown> },
+  reply: { code: (n: number) => { send: (b: unknown) => unknown } }
+) {
+  const secret = process.env.INTERNAL_SERVICE_SECRET;
+  if (secret && request.headers["x-internal-secret"] !== secret) {
+    return reply.code(403).send({ error: "forbidden" });
+  }
+  return null;
+}
+
 /**
- * Vertex-only model turn. BYOK/local inference stays in the browser (or /api/genai BFF).
+ * Vertex-only model turn for the website. BYOK stays in browser (/api/genai) or
+ * worker via /internal/ai/byok (ephemeral key, not stored).
  */
 export async function registerAiRoutes(app: FastifyInstance) {
   app.post("/ai/complete", async (request, reply) => {
@@ -19,106 +45,94 @@ export async function registerAiRoutes(app: FastifyInstance) {
       return reply.code(403).send({ error: "platformAi grant required" });
     }
 
-    if (process.env.VERTEX_STUB === "true") {
-      return reply.code(503).send({
-        error: "Vertex is stubbed (VERTEX_STUB=true). Disable stub and configure Vertex to use /ai/complete.",
-      });
-    }
-
-    const project = process.env.GCP_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
-    const location = process.env.VERTEX_LOCATION || "us-central1";
-    const model = process.env.VERTEX_MODEL || "gemini-2.0-flash-001";
-    if (!project) {
-      return reply.code(503).send({ error: "GCP_PROJECT_ID (or FIREBASE_PROJECT_ID) required for Vertex" });
-    }
-
     const body = (request.body || {}) as CompleteBody;
-    const promptFromMessages = (body.messages || [])
-      .map((m) => (typeof m.content === "string" ? m.content : ""))
-      .filter(Boolean)
-      .join("\n\n");
-    const prompt =
-      (typeof body.prompt === "string" && body.prompt.trim()) || promptFromMessages;
-    if (!prompt) {
+    const prompt = promptFromBody(body);
+    if (!prompt.trim()) {
       return reply.code(400).send({ error: "prompt or messages required" });
     }
-    const clipped = prompt.slice(0, 100_000);
 
-    let token = process.env.VERTEX_ACCESS_TOKEN?.trim();
-    if (!token) {
-      try {
-        const { GoogleAuth } = await import("google-auth-library");
-        const auth = new GoogleAuth({
-          scopes: ["https://www.googleapis.com/auth/cloud-platform"],
-        });
-        const client = await auth.getClient();
-        const got = await client.getAccessToken();
-        token = typeof got === "string" ? got : got?.token || undefined;
-      } catch (err) {
-        request.log.warn({ err }, "Vertex ADC token fetch failed");
-      }
-    }
-    if (!token) {
-      return reply.code(503).send({
-        error: "Vertex access token unavailable (set VERTEX_ACCESS_TOKEN or ADC)",
+    const result = await vertexComplete(
+      {
+        prompt,
+        temperature: body.temperature,
+        model: body.model,
+      },
+      request.log
+    );
+    if (!result.ok) {
+      return reply.code(result.status).send({
+        error: result.error,
+        detail: "detail" in result ? result.detail : undefined,
       });
     }
+    return { provider: "vertex", model: result.model, text: result.text };
+  });
+}
 
-    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`;
-    const temperature =
-      typeof body.temperature === "number" && Number.isFinite(body.temperature)
-        ? Math.min(2, Math.max(0, body.temperature))
-        : 0.2;
+/** Worker LLM: Vertex (platform) + BYOK (ephemeral keys from job dispatch). */
+export async function registerInternalAiRoutes(app: FastifyInstance) {
+  app.post("/internal/ai/complete", async (request, reply) => {
+    const denied = assertInternalSecret(
+      request as { headers: Record<string, unknown> },
+      reply
+    );
+    if (denied) return denied;
 
-    let res: Response;
-    try {
-      res = await fetch(url, {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${token}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: clipped }] }],
-          generationConfig: { temperature },
-        }),
-      });
-    } catch (err) {
-      request.log.error({ err }, "Vertex request failed");
-      return reply.code(502).send({ error: "Vertex request failed" });
+    const body = (request.body || {}) as CompleteBody;
+    const prompt = promptFromBody(body);
+    if (!prompt.trim()) {
+      return reply.code(400).send({ error: "prompt or messages required" });
     }
 
-    const rawText = await res.text();
-    if (!res.ok) {
-      request.log.warn({ status: res.status, body: rawText.slice(0, 500) }, "Vertex error");
-      return reply.code(502).send({
-        error: `Vertex HTTP ${res.status}`,
-        detail: rawText.slice(0, 1000),
+    const result = await vertexComplete(
+      {
+        prompt,
+        temperature: body.temperature,
+        model: body.model,
+      },
+      request.log
+    );
+    if (!result.ok) {
+      return reply.code(result.status).send({
+        error: result.error,
+        detail: "detail" in result ? result.detail : undefined,
       });
     }
+    return { provider: "vertex", model: result.model, text: result.text };
+  });
 
-    let parsed: {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  app.post("/internal/ai/byok", async (request, reply) => {
+    const denied = assertInternalSecret(
+      request as { headers: Record<string, unknown> },
+      reply
+    );
+    if (denied) return denied;
+
+    const body = (request.body || {}) as CompleteBody & {
+      provider?: string;
+      apiKey?: string;
     };
-    try {
-      parsed = JSON.parse(rawText) as typeof parsed;
-    } catch {
-      return reply.code(502).send({ error: "Vertex returned non-JSON" });
+    const provider = body.provider as ByokProvider;
+    if (provider !== "openai" && provider !== "anthropic" && provider !== "gemini") {
+      return reply.code(400).send({
+        error: "provider must be openai|anthropic|gemini (local models not supported for judge)",
+      });
     }
-
-    const text =
-      parsed.candidates?.[0]?.content?.parts
-        ?.map((p) => p.text || "")
-        .join("")
-        .trim() || "";
-    if (!text) {
-      return reply.code(502).send({ error: "Vertex returned empty text" });
+    const prompt = promptFromBody(body);
+    const result = await byokComplete({
+      provider,
+      apiKey: String(body.apiKey || ""),
+      model: String(body.model || ""),
+      prompt,
+      temperature: body.temperature,
+    });
+    if (!result.ok) {
+      return reply.code(result.status).send({ error: result.error });
     }
-
     return {
-      provider: "vertex",
-      model: typeof body.model === "string" && body.model.trim() ? body.model : model,
-      text,
+      provider: result.provider,
+      model: result.model,
+      text: result.text,
     };
   });
 }

@@ -113,10 +113,12 @@ const SUBNAV = [
       !p.includes("/team") &&
       !p.includes("/calendar") &&
       !p.includes("/compile") &&
+      !p.includes("/judge") &&
       !p.includes("/trash"),
   },
   { id: "schedule", label: "Calendar", match: (p: string) => p.includes("/schedule") || p.includes("/calendar") },
   { id: "compile", label: "Compile", match: (p: string) => p.includes("/compile") },
+  { id: "judge", label: "Judge", match: (p: string) => p.includes("/judge") },
   { id: "members", label: "Contributors", match: (p: string) => p.includes("/members") || p.includes("/contributors") },
   { id: "trash", label: "Trash", match: (p: string) => p.includes("/trash") },
   { id: "setup", label: "Settings", match: (p: string) => p.includes("/setup") || p.includes("/team") || p.includes("/settings") },
@@ -148,7 +150,8 @@ export function NotebookShell({ children }: { children: ReactNode }) {
   const fillHeightMain =
     pathname.includes("/schedule") ||
     pathname.includes("/calendar") ||
-    pathname.includes("/compile");
+    pathname.includes("/compile") ||
+    pathname.includes("/judge");
 
   const [notebookName, setNotebookName] = useState("");
   const [orgName, setOrgName] = useState("");
@@ -622,11 +625,13 @@ export function NotebookShell({ children }: { children: ReactNode }) {
               ? `${basePath}/schedule`
               : item.id === "compile"
                 ? `${basePath}/compile`
-                : item.id === "members"
-                  ? `${basePath}/members`
-                  : item.id === "trash"
-                    ? `${basePath}/trash`
-                    : `${basePath}/setup`,
+                : item.id === "judge"
+                  ? `${basePath}/judge`
+                  : item.id === "members"
+                    ? `${basePath}/members`
+                    : item.id === "trash"
+                      ? `${basePath}/trash`
+                      : `${basePath}/setup`,
       })),
     [basePath]
   );

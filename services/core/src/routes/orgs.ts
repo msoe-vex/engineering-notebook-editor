@@ -16,6 +16,8 @@ import {
   assetsCollection,
   assetPath,
   auditsCollection,
+  judgmentsCollection,
+  rubricsCollection,
   teamPath,
   teamsCollection,
   teamMemberPath,
@@ -146,6 +148,8 @@ async function purgeNotebookStorage(
     await safeDeleteObject(storage, asset.gcsPathOriginal);
   }
   await deleteCollectionDocs(auditsCollection(orgId, notebookId));
+  await deleteCollectionDocs(judgmentsCollection(orgId, notebookId));
+  await deleteCollectionDocs(rubricsCollection(orgId, notebookId));
   await deleteCollectionDocs(entriesCollection(orgId, notebookId));
   await deleteCollectionDocs(assetsCollection(orgId, notebookId));
   await deleteCollectionDocs(notebookMembersCollection(orgId, notebookId));

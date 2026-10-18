@@ -72,6 +72,22 @@ export function auditsCollection(orgId: string, notebookId: string): string {
   return `organizations/${orgId}/notebooks/${notebookId}/audits`;
 }
 
+export function rubricPath(orgId: string, notebookId: string, rubricId: string): string {
+  return `organizations/${orgId}/notebooks/${notebookId}/rubrics/${rubricId}`;
+}
+
+export function rubricsCollection(orgId: string, notebookId: string): string {
+  return `organizations/${orgId}/notebooks/${notebookId}/rubrics`;
+}
+
+export function judgmentPath(orgId: string, notebookId: string, judgmentId: string): string {
+  return `organizations/${orgId}/notebooks/${notebookId}/judgments/${judgmentId}`;
+}
+
+export function judgmentsCollection(orgId: string, notebookId: string): string {
+  return `organizations/${orgId}/notebooks/${notebookId}/judgments`;
+}
+
 export function jobPath(orgId: string, notebookId: string, jobId: string): string {
   return `organizations/${orgId}/notebooks/${notebookId}/jobs/${jobId}`;
 }
@@ -109,6 +125,8 @@ export const gcsKeys = {
     `organizations/${orgId}/notebooks/${notebookId}/entries/${entryId}.json`,
   exportPdf: (orgId: string, notebookId: string, exportId: string) =>
     `organizations/${orgId}/notebooks/${notebookId}/exports/${exportId}.pdf`,
+  rubricSource: (orgId: string, notebookId: string, rubricId: string, ext: string) =>
+    `organizations/${orgId}/notebooks/${notebookId}/rubrics/${rubricId}/source${ext.startsWith(".") ? ext : `.${ext}`}`,
 };
 
 /** Hocuspocus / Yjs document name — always includes orgId. */

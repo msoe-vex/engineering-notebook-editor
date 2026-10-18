@@ -589,6 +589,263 @@ export const cloudApi = {
 
   listAudits: (orgId: string, notebookId: string) =>
     coreFetch<AuditRecord[]>(`/orgs/${orgId}/notebooks/${notebookId}/audits`),
+
+  listRubrics: (orgId: string, notebookId: string, opts?: { trashed?: boolean }) =>
+    coreFetch<RubricRecord[]>(
+      `/orgs/${orgId}/notebooks/${notebookId}/rubrics${opts?.trashed ? "?trashed=1" : ""}`
+    ),
+
+  getRubric: (orgId: string, notebookId: string, rubricId: string) =>
+    coreFetch<RubricRecord>(`/orgs/${orgId}/notebooks/${notebookId}/rubrics/${rubricId}`),
+
+  trashRubric: (orgId: string, notebookId: string, rubricId: string) =>
+    coreFetch<{ ok: boolean; deletedAt?: string }>(
+      `/orgs/${orgId}/notebooks/${notebookId}/rubrics/${rubricId}`,
+      { method: "DELETE" }
+    ),
+
+  restoreRubric: (orgId: string, notebookId: string, rubricId: string) =>
+    coreFetch<RubricRecord>(
+      `/orgs/${orgId}/notebooks/${notebookId}/rubrics/${rubricId}/restore`,
+      { method: "POST" }
+    ),
+
+  purgeRubric: (orgId: string, notebookId: string, rubricId: string) =>
+    coreFetch<{ ok: boolean }>(
+      `/orgs/${orgId}/notebooks/${notebookId}/rubrics/${rubricId}/permanent`,
+      { method: "DELETE" }
+    ),
+
+  createCustomRubric: (
+    orgId: string,
+    notebookId: string,
+    body?: { name?: string; matrix?: RubricMatrixPayload }
+  ) =>
+    coreFetch<RubricRecord>(`/orgs/${orgId}/notebooks/${notebookId}/rubrics/custom`, {
+      method: "POST",
+      body: JSON.stringify(body || {}),
+    }),
+
+  updateRubric: (
+    orgId: string,
+    notebookId: string,
+    rubricId: string,
+    body: { name?: string; matrix?: RubricMatrixPayload }
+  ) =>
+    coreFetch<RubricRecord>(`/orgs/${orgId}/notebooks/${notebookId}/rubrics/${rubricId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  async uploadRubric(
+    orgId: string,
+    notebookId: string,
+    file: File | Blob,
+    name?: string
+  ): Promise<RubricRecord> {
+    const headers = (await authHeaders(false)) as Record<string, string>;
+    // Prefer a known type so Core's raw body parser matches (empty File.type breaks some browsers).
+    const contentType =
+      (file instanceof File && file.type) ||
+      (typeof (file as Blob).type === "string" && (file as Blob).type) ||
+      "application/octet-stream";
+    headers["content-type"] = contentType;
+    if (name) headers["x-rubric-name"] = name;
+    const q = name ? `?name=${encodeURIComponent(name)}` : "";
+    let res: Response;
+    try {
+      res = await fetch(
+        `${coreBase()}/orgs/${orgId}/notebooks/${notebookId}/rubrics${q}`,
+        { method: "POST", headers, body: file }
+      );
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `Cannot reach Core to upload rubric (${detail}). Is Core running at ${coreBase()}?`
+      );
+    }
+    if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+    return (await res.json()) as RubricRecord;
+  },
+
+  async normalizeRubric(
+    orgId: string,
+    notebookId: string,
+    rubricId: string,
+    body: {
+      inference?: "vertex" | "byok";
+      byok?: { provider: "openai" | "anthropic" | "gemini"; apiKey: string; model: string };
+    }
+  ): Promise<{ jobId: string; rubricId: string; inFlight?: boolean }> {
+    const url = `${coreBase()}/orgs/${orgId}/notebooks/${notebookId}/rubrics/${rubricId}/normalize`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: await authHeaders(true),
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    let data: { jobId?: string; rubricId?: string; error?: string; message?: string } = {};
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      /* ignore */
+    }
+    if (res.status === 409 && data.jobId) {
+      return { jobId: data.jobId, rubricId, inFlight: true };
+    }
+    if (!res.ok) {
+      throw new Error(data.message || data.error || `${res.status} ${text}`);
+    }
+    if (!data.jobId) throw new Error("normalize response incomplete");
+    return { jobId: data.jobId, rubricId: data.rubricId || rubricId };
+  },
+
+  /**
+   * Start document extract. Draft is hidden until ready; source file is discarded after success.
+   * On failure the draft is deleted.
+   */
+  async extractRubricFromDocument(
+    orgId: string,
+    notebookId: string,
+    file: File | Blob,
+    body: {
+      name?: string;
+      inference?: "vertex" | "byok";
+      byok?: { provider: "openai" | "anthropic" | "gemini"; apiKey: string; model: string };
+    }
+  ): Promise<{ jobId: string; rubricId: string }> {
+    const name =
+      body.name ||
+      (file instanceof File ? file.name.replace(/\.[^.]+$/, "") || file.name : undefined);
+    const doc = await cloudApi.uploadRubric(orgId, notebookId, file, name);
+    try {
+      const result = await cloudApi.normalizeRubric(orgId, notebookId, doc.id, {
+        inference: body.inference,
+        byok: body.byok,
+      });
+      return { jobId: result.jobId, rubricId: doc.id };
+    } catch (err) {
+      // Best-effort cleanup if enqueue failed before the job ran.
+      try {
+        await cloudApi.purgeRubric(orgId, notebookId, doc.id);
+      } catch {
+        /* ignore */
+      }
+      throw err;
+    }
+  },
+
+  listJudgments: (orgId: string, notebookId: string) =>
+    coreFetch<JudgmentRecord[]>(`/orgs/${orgId}/notebooks/${notebookId}/judgments`),
+
+  getJudgment: (orgId: string, notebookId: string, judgmentId: string) =>
+    coreFetch<JudgmentRecord>(
+      `/orgs/${orgId}/notebooks/${notebookId}/judgments/${judgmentId}`
+    ),
+
+  deleteJudgment: (orgId: string, notebookId: string, judgmentId: string) =>
+    coreFetch<{ ok: boolean }>(
+      `/orgs/${orgId}/notebooks/${notebookId}/judgments/${judgmentId}`,
+      { method: "DELETE" }
+    ),
+
+  clearJudgments: (orgId: string, notebookId: string) =>
+    coreFetch<{ ok: boolean; deleted: number }>(
+      `/orgs/${orgId}/notebooks/${notebookId}/judgments`,
+      { method: "DELETE" }
+    ),
+
+  async startJudge(
+    orgId: string,
+    notebookId: string,
+    body: {
+      rubricId: string;
+      inference?: "vertex" | "byok";
+      byok?: { provider: "openai" | "anthropic" | "gemini"; apiKey: string; model: string };
+    }
+  ): Promise<{ jobId: string; judgmentId: string; inFlight?: boolean }> {
+    const url = `${coreBase()}/orgs/${orgId}/notebooks/${notebookId}/judge`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: await authHeaders(true),
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    let data: { jobId?: string; judgmentId?: string; error?: string; message?: string } = {};
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      /* ignore */
+    }
+    if (res.status === 409 && data.jobId) {
+      return { jobId: data.jobId, judgmentId: data.judgmentId || "", inFlight: true };
+    }
+    if (!res.ok) {
+      throw new Error(data.message || data.error || `${res.status} ${text}`);
+    }
+    if (!data.jobId || !data.judgmentId) throw new Error("judge response incomplete");
+    return { jobId: data.jobId, judgmentId: data.judgmentId };
+  },
+};
+
+export type RubricLevelPayload = {
+  id: string;
+  label: string;
+  description: string;
+  points: number;
+};
+
+export type RubricCategoryPayload = {
+  id: string;
+  name: string;
+  section?: string;
+  description?: string;
+  maxPoints: number;
+  levels: RubricLevelPayload[];
+};
+
+export type RubricMatrixPayload = {
+  title: string;
+  sourceName?: string;
+  totalMaxPoints: number;
+  categories: RubricCategoryPayload[];
+};
+
+export type RubricRecord = {
+  id: string;
+  name?: string;
+  sourceContentType?: string;
+  sourceGcsPath?: string;
+  status?: string;
+  matrix?: RubricMatrixPayload;
+  error?: string;
+  deletedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type JudgmentRecord = {
+  id: string;
+  rubricId?: string;
+  rubricName?: string;
+  jobId?: string;
+  status?: string;
+  summary?: string;
+  totalPoints?: number;
+  totalMaxPoints?: number;
+  matrix?: RubricMatrixPayload;
+  categories?: Array<{
+    categoryId: string;
+    categoryName: string;
+    awardedPoints: number;
+    maxPoints: number;
+    levelId?: string;
+    levelLabel?: string;
+    rationale: string;
+    entryIds: string[];
+  }>;
+  error?: string;
+  createdAt?: string;
 };
 
 export type AuditRecord = {

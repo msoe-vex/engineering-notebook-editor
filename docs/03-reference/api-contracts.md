@@ -162,7 +162,27 @@ Internal compile helpers:
 
 SSE: `job.progress` | `job.done` | `job.failed` (fields include `jobType`)
 
-Dispatch: `JOB_DISPATCH=http|tasks|none`; compile worker URL via `COMPILE_SERVICE_URL` (or `JOB_WORKER_URLS` JSON map).
+Dispatch: `JOB_DISPATCH=http|tasks|none`; worker URLs via `COMPILE_SERVICE_URL`, `JUDGE_SERVICE_URL` (or `JOB_WORKER_URLS` JSON map).
+
+### Judge / rubrics
+
+Extract and score are **separate** jobs (Python LangGraph worker — [ADR-007](../02-architecture/decisions/ADR-007-python-langgraph-judge.md); `payload.phase`: `normalize` | `score`).
+
+- `POST …/rubrics` — raw body + `Content-Type` (+ optional `X-Rubric-Name`) → `201` rubric (`status: uploaded`)
+- `POST …/rubrics/custom` `{ name?, matrix? }` → `201` blank/custom rubric (`status: ready`)
+- `GET …/rubrics` | `GET …/rubrics?trashed=1` | `GET …/rubrics/:rubricId`
+- `PATCH …/rubrics/:rubricId` `{ name?, matrix? }` → edit matrix (sets `ready`)
+- `DELETE …/rubrics/:rubricId` — soft-delete (Trash); `POST …/restore`; `DELETE …/permanent`
+- `POST …/rubrics/:rubricId/normalize` `{ inference?, byok? }` → `202 { jobId }` extract PDF/text → matrix only
+- `POST …/judge` `{ rubricId, inference?, byok? }` → `202 { jobId, judgmentId }` | `409` in flight  
+  - Requires rubric `status: ready` with categories (not trashed)  
+  - BYOK keys are **dispatch-only**; `vertex` needs `platformAi` / service admin
+- `GET …/judgments` | `GET …/judgments/:judgmentId`
+- `DELETE …/judgments/:judgmentId` | `DELETE …/judgments` — delete one grade / clear all past grades
+
+Internal: `GET/PATCH /internal/judge/rubric`, `POST /internal/judge/normalize-complete`, `POST /internal/judge/progress|complete|failed`, `POST /internal/ai/complete` (Vertex), `POST /internal/ai/byok`
+
+Normalized shape: `RubricMatrix` — criteria rows × level columns (label, points, description) + `totalMaxPoints`. Judgment includes awarded level per criterion, `entryIds`, and denormalized `rubricName`.
 
 ## Collaboration (`services/collab`)
 

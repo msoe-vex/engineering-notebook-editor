@@ -8,5 +8,6 @@
 | [ADR-004](./ADR-004-agents-genai-gateway.md) | GenAI orchestration (website) |
 | [ADR-005](./ADR-005-genai-in-core.md) | GenAI tools / Vertex in Core |
 | [ADR-006](./ADR-006-compile-job.md) | Async notebook jobs (compile first) |
+| [ADR-007](./ADR-007-python-langgraph-judge.md) | Python LangGraph judge worker |
 
 Add new ADRs by copying an existing file; do not renumber accepted ADRs.

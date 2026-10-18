@@ -11,9 +11,10 @@ import { registerAdminRoutes } from "./routes/admin.js";
 import { registerUserRoutes } from "./routes/users.js";
 import { registerStaticAssetRoutes } from "./routes/staticAssets.js";
 import { registerAuditRoutes } from "./routes/audits.js";
-import { registerAiRoutes } from "./routes/ai.js";
+import { registerAiRoutes, registerInternalAiRoutes } from "./routes/ai.js";
 import { registerInternalCompileRoutes } from "./routes/internalCompile.js";
 import { registerInternalJobRoutes } from "./routes/internalJobs.js";
+import { registerJudgeInternalRoutes, registerJudgeUserRoutes } from "./routes/judge.js";
 
 /** Default 64 MiB — assets, logos, and compiled PDF exports share this Fastify limit. */
 const bodyLimit = Number(process.env.BODY_LIMIT_BYTES || MAX_UPLOAD_BYTES);
@@ -24,7 +25,13 @@ const corsOrigin = process.env.CORS_ORIGIN;
 await app.register(cors, {
   origin: corsOrigin ? corsOrigin.split(",").map((s) => s.trim()) : true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Authorization", "Content-Type", "Accept", "X-Internal-Secret"],
+  allowedHeaders: [
+    "Authorization",
+    "Content-Type",
+    "Accept",
+    "X-Internal-Secret",
+    "X-Rubric-Name",
+  ],
 });
 
 const auth = new FirebaseAuthAdapter();
@@ -83,6 +90,11 @@ app.get("/auth/session", async (request, reply) => {
 for (const type of [
   "application/octet-stream",
   "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/plain",
+  "text/markdown",
+  "text/csv",
   "image/png",
   "image/jpeg",
   "image/jpg",
@@ -100,6 +112,7 @@ app.register(async (scoped) => {
   await registerUserRoutes(scoped);
   await registerOrgRoutes(scoped, storage);
   await registerAuditRoutes(scoped);
+  await registerJudgeUserRoutes(scoped, storage);
   await registerAiRoutes(scoped);
   await registerAdminRoutes(scoped);
 });
@@ -107,6 +120,8 @@ app.register(async (scoped) => {
 await registerStaticAssetRoutes(app, storage);
 await registerInternalJobRoutes(app);
 await registerInternalCompileRoutes(app, storage);
+await registerJudgeInternalRoutes(app, storage);
+await registerInternalAiRoutes(app);
 
 app.post("/internal/collab/connections", async (request) => {
   const body = request.body as { activeConnections?: number };

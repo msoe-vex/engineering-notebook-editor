@@ -30,10 +30,10 @@ docker run --rm -v "$PWD":/repo -w /repo alpine chown -R "$(id -u):$(id -g)" ser
 
 ```bash
 cd infra
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build firebase gcs core collab compile
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build firebase gcs core collab compile judge
 ```
 
-First boot can take a few minutes (Firebase emulator installs JDK + tools; **compile** pulls TeX Live once). Leave this running.
+First boot can take a few minutes (Firebase image build installs JDK + firebase-tools once; **compile** pulls TeX Live once). Leave this running. If the firebase container exits with `ENOTEMPTY` / `Permission denied` on `/usr/local/bin/firebase`, rebuild that service: `docker compose build --no-cache firebase && docker compose up -d firebase`.
 
 **Terminal 2 — website**
 
@@ -56,6 +56,12 @@ Include `compile` in the backend `up` (above) — required for Compile page pari
 One-shot still works: `COMPILE_MODE=job docker compose run --rm -e ORG_ID=… -e NOTEBOOK_ID=… compile`.
 
 Optional emergency only (not for large notebooks): set `NEXT_PUBLIC_ALLOW_BUSYTEX_COMPILE=1` in `website/.env.local`.
+
+### Judge (Compose `judge`)
+
+Include `judge` in the backend `up` (Python LangGraph image — [ADR-007](../02-architecture/decisions/ADR-007-python-langgraph-judge.md)). Open **Judge** in the notebook nav; use **BYOK** (Settings keys) or **Vertex** (platform grant). No local/Ollama path.
+
+See [`services/judge/README.md`](../../services/judge/README.md).
 
 See [`services/compile/README.md`](../../services/compile/README.md) and [ADR-006](../02-architecture/decisions/ADR-006-compile-job.md).
 

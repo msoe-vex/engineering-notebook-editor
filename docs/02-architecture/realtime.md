@@ -1,6 +1,6 @@
 # Realtime collaboration
 
-Related: [FR-entries-collab](../01-requirements/features/FR-entries-collab.md), [api-contracts](../03-reference/api-contracts.md), [cloud UX plan Epic E](../01-requirements/plans/cloud-ux-hardening.md).
+Related: [FR-entries-collab](../01-requirements/features/FR-entries-collab.md), [api-contracts](../03-reference/api-contracts.md), [diagrams](./diagrams.md) (system + collab sequence), [cloud UX plan Epic E](../01-requirements/plans/cloud-ux-hardening.md).
 
 ## Two channels
 

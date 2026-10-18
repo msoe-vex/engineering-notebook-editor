@@ -1,6 +1,7 @@
 services:
   firebase:
-    image: node:20-bookworm
+    build:
+      context: ./firebase
     working_dir: /app
     volumes:
       - ./:/app
@@ -9,9 +10,6 @@ services:
       - bash
       - -lc
       - |
-        apt-get update
-        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openjdk-17-jre-headless >/dev/null
-        npm install -g firebase-tools@13.35.1
         mkdir -p /data/emulator
         firebase emulators:start --project demo-engineering-notebook --only auth,firestore \
           --import=/data/emulator --export-on-exit=/data/emulator
@@ -107,9 +105,10 @@ services:
       GCS_PUBLIC_BASE_URL: http://localhost:4443/storage/v1/b/engineering-notebook/o
       SERVICE_ADMIN_UID: service-admin
       INTERNAL_SERVICE_SECRET: local-dev-secret
-      # Local XeLaTeX worker (Compose service `compile`) — JobDispatchPort=http.
+      # Local workers (JobDispatchPort=http).
       JOB_DISPATCH: http
       COMPILE_SERVICE_URL: http://compile:8090
+      JUDGE_SERVICE_URL: http://judge:8091
       # Local: Vertex /ai/complete stays fail-closed until ADC/token configured.
       VERTEX_STUB: "true"
       # Persist blobs in fake-gcs (not in-process memory).
@@ -199,6 +198,31 @@ services:
         [
           "CMD-SHELL",
           "node -e \"fetch('http://127.0.0.1:8090/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  # Rubric normalize + LangGraph judge (Python; BYOK or Core Vertex) — ADR-007.
+  judge:
+    build:
+      context: ..
+      dockerfile: services/judge/Dockerfile
+    ports:
+      - "8091:8091"
+    environment:
+      PORT: "8091"
+      CORE_API_URL: http://core:8080
+      INTERNAL_SERVICE_SECRET: local-dev-secret
+    depends_on:
+      core:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:8091/health >/dev/null || exit 1",
         ]
       interval: 10s
       timeout: 5s

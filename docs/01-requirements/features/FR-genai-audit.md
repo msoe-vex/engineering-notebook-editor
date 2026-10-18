@@ -6,30 +6,31 @@ Related: [ADR-003](../../02-architecture/decisions/ADR-003-byok-keys-local.md), 
 
 ## Summary
 
-Optional GenAI for titles/captions and **rubric judging** is orchestrated by the **website** (local, BYOK, or Vertex). **Core** supplies ACL’d notebook tools, stores scorecards, and proxies Vertex inference (`grants.platformAi` or service_admin). See [ADR-004](../../02-architecture/decisions/ADR-004-agents-genai-gateway.md), [ADR-005](../../02-architecture/decisions/ADR-005-genai-in-core.md).
+Optional GenAI for titles/captions remains website-orchestrated (BYOK / Vertex). **Notebook Judge** (competition rubrics) is a **Python LangGraph server job** (`type: judge` → `services/judge`, [ADR-007](../../02-architecture/decisions/ADR-007-python-langgraph-judge.md)) with two phases: **normalize** (upload/extract or edit a criteria × levels matrix) and **score** (tool-backed evidence gather + judgment with highlighted matrix; entry UUIDs in feedback become UI links). Many rubrics and past grades per notebook. Judge LLM: **BYOK** (Settings) or **Vertex** (platform grant). Local/Ollama is not supported for Judge. Legacy overflow “Run audit” may remain until fully replaced by the Judge tab.
 
 ## Actors and permissions
 
-- GenAI: any user with keys/settings locally
-- Audit: notebook access required; Vertex additionally grant-gated
+- GenAI titles/captions: any user with keys/settings locally
+- Judge tab: notebook access; LLM configured on the judge worker
+- Legacy Vertex `/ai/complete`: grant-gated
 
 ## User-facing behavior
 
 - Entry title GenerateButton; ImageNodeView GenAI when src resolved
-- Overflow Audit + history of scorecards
+- **Judge** notebook tab: rubric library (upload/extract PDF or custom matrix in a dialog) separate from Run judge; past runs list with score matrix highlighting + feedback
+- Overflow Audit history (legacy scorecards) may still list older runs
 
 ## Acceptance criteria
 
-- [x] Website routes `local` | `byok` | `vertex` for titles and judge; one browser orchestration path
-- [x] BYOK inference does not use Core; Vertex uses Core `/ai/complete` only (grant-gated)
-- [x] Vertex only when grant allows (Core enforces); BYOK/local reuse GenAI settings
-- [x] Audit is multi-request: start run, progress PATCH, final scorecard
-- [x] Rubric audit is multi-step: website judge + Core entry tools
-- [x] Tool calls and audit writes respect notebook ACL; Core does not run the product judge loop
-- [x] No separate Agents service required (retired from compose/deploy)
-- [x] BYOK key passed only in request body / localStorage—not Firestore preferences
-- [x] Audit without notebook access → denied
-- [x] Past audits listable via `GET …/audits`
+- [x] Website routes `local` | `byok` | `vertex` for titles (not required for Judge tab)
+- [x] Judge: normalize (`phase=normalize`) and score (`phase=score`) are separate; many rubrics per notebook; editable `RubricMatrix`
+- [x] Standard matrix display: Criteria × Level columns (points) × Total; results highlight awarded cells
+- [x] Judge uses Python LangGraph worker + SSE `job.*` (BusyTeX/local-model judge not used)
+- [x] Score phase tools: `list_entries`, `search_entries`, `read_entry` via Core snapshot/storage
+- [x] Judge LLM is BYOK or Vertex only (no local/Ollama)
+- [x] Tool/ACL: worker pulls notebook via Core internal APIs
+- [x] Past grades listable via `GET …/judgments` with UI history list
+- [x] Past audits listable via `GET …/audits` (legacy)
 
 ## Data and APIs
 

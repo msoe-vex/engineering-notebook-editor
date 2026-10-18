@@ -21,7 +21,10 @@ export async function enqueueNotebookJob(opts: {
   notebookId: string;
   type: string;
   resourceKey: string;
+  /** Persisted on the job doc (never put secrets here). */
   payload?: Record<string, unknown>;
+  /** Merged into worker dispatch only — e.g. ephemeral BYOK keys. */
+  dispatchPayload?: Record<string, unknown>;
   createdBy: string;
   dispatch: JobDispatchPort;
 }): Promise<EnqueueNotebookJobResult> {
@@ -34,6 +37,7 @@ export async function enqueueNotebookJob(opts: {
     dispatch,
   } = opts;
   const payload = opts.payload || {};
+  const workerPayload = { ...payload, ...(opts.dispatchPayload || {}) };
 
   const active = await findActiveJob(orgId, notebookId, type, resourceKey);
   if (active) {
@@ -66,7 +70,7 @@ export async function enqueueNotebookJob(opts: {
       type,
       orgId,
       notebookId,
-      payload,
+      payload: workerPayload,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

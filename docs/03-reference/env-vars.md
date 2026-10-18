@@ -33,7 +33,8 @@ See [`website/.env.example`](../../website/.env.example).
 | `GCP_PROJECT_ID` | prod project | Vertex project (falls back to `FIREBASE_PROJECT_ID`) |
 | `JOB_DISPATCH` | `http` | `http` \| `tasks` \| `none` — Core job delivery ([ADR-006](../02-architecture/decisions/ADR-006-compile-job.md)) |
 | `COMPILE_SERVICE_URL` | `http://compile:8090` | Worker base for `type=compile` (Compose / Run) |
-| `JOB_WORKER_URLS` | optional JSON | e.g. `{"compile":"http://compile:8090"}` — type → URL map |
+| `JUDGE_SERVICE_URL` | `http://judge:8091` | Worker base for `type=judge` |
+| `JOB_WORKER_URLS` | optional JSON | e.g. `{"compile":"http://compile:8090","judge":"http://judge:8091"}` |
 | `INTERNAL_SERVICE_SECRET` | compose secret | Core ↔ worker / collab |
 
 Deploy wiring: [deploy-cloudrun.md](../04-guides/deploy-cloudrun.md).

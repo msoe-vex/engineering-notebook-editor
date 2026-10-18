@@ -15,6 +15,10 @@ function workerUrlForType(type: string): string | null {
     const u = (process.env.COMPILE_SERVICE_URL || "").replace(/\/$/, "");
     return u || null;
   }
+  if (type === "judge") {
+    const u = (process.env.JUDGE_SERVICE_URL || "").replace(/\/$/, "");
+    return u || null;
+  }
   return null;
 }
 

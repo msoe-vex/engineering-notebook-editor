@@ -224,8 +224,92 @@ export type LegacyTeamMetadataV5 = {
 export type TeamMemberV5 = LegacyTeamMemberV5;
 /** @deprecated Use LegacyTeamMetadataV5 */
 export type TeamMetadataV5 = LegacyTeamMetadataV5;
-/** Async notebook job types (compile first; asset/audit reserved). */
-export type NotebookJobType = "compile" | "asset.process" | "audit.run";
+/** One performance level inside a rubric category (standardized matrix). */
+export type RubricLevel = {
+    id: string;
+    label: string;
+    description: string;
+    /** Points awarded when this level is selected (usually 0…max for the category). */
+    points: number;
+};
+/** Rubric category / criterion with leveled descriptions. */
+export type RubricCategory = {
+    id: string;
+    name: string;
+    /** Optional section/group header from the source rubric (e.g. "Notebook Organization"). */
+    section?: string;
+    description?: string;
+    maxPoints: number;
+    levels: RubricLevel[];
+};
+/**
+ * Competition-agnostic rubric after normalization.
+ * Any uploaded PDF/text rubric is converted into this shape before judging.
+ */
+export type RubricMatrix = {
+    title: string;
+    sourceName?: string;
+    categories: RubricCategory[];
+    totalMaxPoints: number;
+};
+/** Rubric document (Firestore). Source files are temporary during extract only. */
+export type NotebookRubric = {
+    id: string;
+    orgId: string;
+    notebookId: string;
+    name: string;
+    /** Set while extracting from a document; cleared once the matrix is ready. */
+    sourceContentType?: string;
+    /** Temp GCS key during extract; cleared (and object deleted) when ready. */
+    sourceGcsPath?: string;
+    matrix?: RubricMatrix;
+    status: "uploaded" | "normalizing" | "ready" | "failed";
+    error?: string;
+    /** Soft-delete timestamp (ISO). When set, rubric is in Trash. */
+    deletedAt?: string | null;
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+};
+export type JudgeCategoryResult = {
+    categoryId: string;
+    categoryName: string;
+    awardedPoints: number;
+    maxPoints: number;
+    levelId?: string;
+    levelLabel?: string;
+    rationale: string;
+    /**
+     * Entry ids extracted from UUIDs cited in `rationale` (not a separate model field).
+     * UI prefers inline links in the text; this list is for convenience / older clients.
+     */
+    entryIds: string[];
+};
+/** Server judge run result (job type `judge`). */
+export type JudgeResult = {
+    id: string;
+    orgId: string;
+    notebookId: string;
+    rubricId: string;
+    /** Denormalized for history lists. */
+    rubricName?: string;
+    jobId?: string;
+    matrix: RubricMatrix;
+    categories: JudgeCategoryResult[];
+    totalPoints: number;
+    totalMaxPoints: number;
+    summary: string;
+    status: AuditStatus;
+    error?: string;
+    createdBy: string;
+    createdAt: string;
+    updatedAt?: string;
+};
+/**
+ * Async notebook job types.
+ * `judge` payload.phase: `"normalize"` (rubric extract only) | `"score"` (notebook judgment).
+ */
+export type NotebookJobType = "compile" | "judge" | "asset.process" | "audit.run";
 export type NotebookJobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 /** Firestore `…/jobs/{jobId}` document. */
 export type NotebookJob = {

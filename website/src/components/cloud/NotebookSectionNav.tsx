@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   CalendarDays,
   FileText,
+  Gavel,
   Printer,
   Settings,
   Trash2,
@@ -15,6 +16,7 @@ const ICONS: Record<string, typeof FileText> = {
   entries: FileText,
   schedule: CalendarDays,
   compile: Printer,
+  judge: Gavel,
   members: Users,
   trash: Trash2,
   setup: Settings,
