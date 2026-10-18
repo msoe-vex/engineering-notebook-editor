@@ -1,6 +1,7 @@
-export type CompileSnapshot = {
+export type CompileSnapshotMeta = {
   orgId: string;
   notebookId: string;
+  schema?: string;
   notebook: {
     id: string;
     name?: string;
@@ -33,10 +34,24 @@ export type CompileSnapshot = {
       isTemplate?: boolean;
       assetIds?: string[];
       deletedAt?: string | null;
-      tipTap: unknown;
+      tipTapGcsPath: string;
     }
   >;
-  assets: Record<string, { contentType: string; base64: string }>;
+  /** Path refs only — worker downloads bytes. */
+  assets: Record<string, { contentType: string; gcsPath: string }>;
+};
+
+/** Hydrated for LaTeX workspace build. */
+export type CompileSnapshot = {
+  orgId: string;
+  notebookId: string;
+  notebook: CompileSnapshotMeta["notebook"];
+  members: CompileSnapshotMeta["members"];
+  entries: Record<
+    string,
+    Omit<CompileSnapshotMeta["entries"][string], "tipTapGcsPath"> & { tipTap: unknown }
+  >;
+  assets: Record<string, { contentType: string; bytes: Buffer }>;
 };
 
 function coreBase(): string {
@@ -50,17 +65,56 @@ function internalHeaders(extra?: Record<string, string>): Record<string, string>
   return headers;
 }
 
-export async function fetchCompileSnapshot(
+export async function fetchCompileSnapshotMeta(
   orgId: string,
   notebookId: string
-): Promise<CompileSnapshot> {
+): Promise<CompileSnapshotMeta> {
   const url = `${coreBase()}/internal/compile/snapshot?orgId=${encodeURIComponent(orgId)}&notebookId=${encodeURIComponent(notebookId)}`;
   const res = await fetch(url, { headers: internalHeaders({ Accept: "application/json" }) });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`snapshot ${res.status}: ${text}`);
   }
-  return (await res.json()) as CompileSnapshot;
+  return (await res.json()) as CompileSnapshotMeta;
+}
+
+/** @deprecated alias — prefer fetchCompileSnapshotMeta + hydrateCompileSnapshot */
+export async function fetchCompileSnapshot(
+  orgId: string,
+  notebookId: string
+): Promise<CompileSnapshotMeta> {
+  return fetchCompileSnapshotMeta(orgId, notebookId);
+}
+
+export async function fetchStorageObject(
+  orgId: string,
+  notebookId: string,
+  key: string
+): Promise<Buffer | null> {
+  const q = new URLSearchParams({ orgId, notebookId, key });
+  const url = `${coreBase()}/internal/storage/object?${q.toString()}`;
+  const res = await fetch(url, { headers: internalHeaders() });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`storage object ${res.status}: ${text.slice(0, 200)}`);
+  }
+  return Buffer.from(await res.arrayBuffer());
+}
+
+export async function fetchAssetRef(
+  orgId: string,
+  notebookId: string,
+  assetId: string
+): Promise<{ contentType: string; gcsPath: string }> {
+  const q = new URLSearchParams({ orgId, notebookId, assetId });
+  const url = `${coreBase()}/internal/compile/asset-ref?${q.toString()}`;
+  const res = await fetch(url, { headers: internalHeaders({ Accept: "application/json" }) });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`asset-ref ${res.status}: ${text.slice(0, 200)}`);
+  }
+  return (await res.json()) as { contentType: string; gcsPath: string };
 }
 
 export async function uploadCompileExport(

@@ -5,11 +5,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildWorkspace } from "./buildWorkspace.js";
 import {
-  fetchCompileSnapshot,
+  fetchCompileSnapshotMeta,
   reportCompileFailed,
   reportCompileProgress,
   uploadCompileExport,
 } from "./coreClient.js";
+import { hydrateCompileSnapshot } from "./hydrateSnapshot.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -70,13 +71,22 @@ export async function runCompileJob(opts: {
   const { orgId, notebookId, jobId } = opts;
   const templateDir = resolveTemplateDir();
 
-  await reportCompileProgress(orgId, notebookId, jobId, "Fetching notebook…", 15);
-  const snapshot = await fetchCompileSnapshot(orgId, notebookId);
+  await reportCompileProgress(orgId, notebookId, jobId, "Fetching notebook metadata…", 12);
+  const meta = await fetchCompileSnapshotMeta(orgId, notebookId);
   console.log(
-    `[compile] snapshot: ${Object.keys(snapshot.entries).length} entries, ${Object.keys(snapshot.assets).length} assets`
+    `[compile] meta: ${Object.keys(meta.entries).length} entries, ${Object.keys(meta.assets).length} asset refs`
   );
 
-  await reportCompileProgress(orgId, notebookId, jobId, "Building LaTeX workspace…", 35);
+  const snapshot = await hydrateCompileSnapshot(meta, {
+    onProgress: (message, progress) => {
+      void reportCompileProgress(orgId, notebookId, jobId, message, progress);
+    },
+  });
+  console.log(
+    `[compile] hydrated: ${Object.keys(snapshot.entries).length} entries, ${Object.keys(snapshot.assets).length} assets downloaded`
+  );
+
+  await reportCompileProgress(orgId, notebookId, jobId, "Building LaTeX workspace…", 40);
   const workDir = process.env.WORK_DIR || path.join(os.tmpdir(), `nb-compile-${jobId}`);
   buildWorkspace({ workDir, templateDir, snapshot });
   console.log(`[compile] workspace=${workDir}`);

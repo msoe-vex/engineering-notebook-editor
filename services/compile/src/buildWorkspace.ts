@@ -105,7 +105,7 @@ export function buildWorkspace(opts: {
     const vfsPath = cloudAssetPath(assetId, blob.contentType);
     const abs = path.join(workDir, vfsPath);
     fs.mkdirSync(path.dirname(abs), { recursive: true });
-    fs.writeFileSync(abs, Buffer.from(blob.base64, "base64"));
+    fs.writeFileSync(abs, blob.bytes);
     pathByAsset.set(assetId, vfsPath);
   }
   const pathForId = (id: string) => pathByAsset.get(id);

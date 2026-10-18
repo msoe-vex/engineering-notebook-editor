@@ -27,21 +27,24 @@ export type NotebookRealtimeEvent =
       at: string;
     }
   | {
-      type: "compile.progress";
+      type: "job.progress";
       jobId: string;
+      jobType: string;
       status: string;
       progress: number;
       at: string;
     }
   | {
-      type: "compile.done";
+      type: "job.done";
       jobId: string;
-      lastCompiled: string;
+      jobType: string;
+      result: Record<string, unknown>;
       at: string;
     }
   | {
-      type: "compile.failed";
+      type: "job.failed";
       jobId: string;
+      jobType: string;
       error: string;
       at: string;
     }

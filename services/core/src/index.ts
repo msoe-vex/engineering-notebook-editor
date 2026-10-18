@@ -13,6 +13,7 @@ import { registerStaticAssetRoutes } from "./routes/staticAssets.js";
 import { registerAuditRoutes } from "./routes/audits.js";
 import { registerAiRoutes } from "./routes/ai.js";
 import { registerInternalCompileRoutes } from "./routes/internalCompile.js";
+import { registerInternalJobRoutes } from "./routes/internalJobs.js";
 
 /** Default 64 MiB — assets, logos, and compiled PDF exports share this Fastify limit. */
 const bodyLimit = Number(process.env.BODY_LIMIT_BYTES || MAX_UPLOAD_BYTES);
@@ -104,6 +105,7 @@ app.register(async (scoped) => {
 });
 
 await registerStaticAssetRoutes(app, storage);
+await registerInternalJobRoutes(app);
 await registerInternalCompileRoutes(app, storage);
 
 app.post("/internal/collab/connections", async (request) => {

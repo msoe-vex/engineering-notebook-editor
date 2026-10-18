@@ -224,3 +224,24 @@ export type LegacyTeamMetadataV5 = {
 export type TeamMemberV5 = LegacyTeamMemberV5;
 /** @deprecated Use LegacyTeamMetadataV5 */
 export type TeamMetadataV5 = LegacyTeamMetadataV5;
+/** Async notebook job types (compile first; asset/audit reserved). */
+export type NotebookJobType = "compile" | "asset.process" | "audit.run";
+export type NotebookJobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+/** Firestore `…/jobs/{jobId}` document. */
+export type NotebookJob = {
+    jobId: string;
+    type: NotebookJobType | string;
+    status: NotebookJobStatus;
+    /** Single-flight key within (notebook, type), e.g. `"notebook"` or `asset:${id}`. */
+    resourceKey: string;
+    payload: Record<string, unknown>;
+    result?: Record<string, unknown>;
+    error?: string;
+    progress?: number;
+    statusMessage?: string;
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+    orgId: string;
+    notebookId: string;
+};

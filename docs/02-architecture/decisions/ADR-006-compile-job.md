@@ -1,27 +1,34 @@
-# ADR-006: Compile as on-demand job (not always-on service)
+# ADR-006: Async notebook jobs (compile first)
 
-Status: accepted (local prototype)  
-Date: 2026-10
+Status: accepted  
+Date: 2026-10 (revised)
 
 ## Context
 
-In-browser BusyTeX works but is heavy on weak devices and requires the tab to stay open. A long-lived “compile microservice” next to Core/Collab would idle-cost Cloud Run and still need queueing for TeX CPU. Core already fans out notebook SSE.
+Full-notebook PDF compile is too heavy for Core request timeouts and for in-browser BusyTeX at scale (hundreds of pages/assets). Other work (asset post-process, server-side audits) will need the same durable enqueue → worker → progress pattern. Core already fans out notebook SSE.
 
 ## Decision
 
-1. **UI → Core `POST …/compile` → worker** (never browser → worker). SSE `compile.progress` | `done` | `failed`.
-2. **Local worker** is an HTTP service (`COMPILE_MODE=server`, Compose `compile`) for easy triggering; **prod** can use the same image as Cloud Run Job or min-instances=0 service.
-3. **Core owns ACL + storage + SSE** + internal snapshot/export/progress/failed (`x-internal-secret`).
-4. **BusyTeX fallback** when `COMPILE_SERVICE_URL` is unset or the worker is unreachable.
-5. **Worker uses XeLaTeX** (TeX Live), same `notebook.sty` template.
+1. **Generic notebook jobs** under `organizations/{orgId}/notebooks/{notebookId}/jobs/{jobId}` with `type`, `resourceKey`, `payload`, `result`, and status machine (`queued|running|succeeded|failed|cancelled`).
+2. **Single-flight** per `(notebookId, type, resourceKey)` via `jobLocks/…` — duplicate enqueue returns `409` with the in-flight `jobId`.
+3. **UI → Core only** — `POST …/jobs` or shortcut `POST …/compile` (`type: "compile"`). Never browser → worker.
+4. **SSE** `job.progress` | `job.done` | `job.failed` (include `jobType`).
+5. **`JobDispatchPort`** — local `HttpJobDispatch` (`COMPILE_SERVICE_URL` / `JOB_WORKER_URLS`); prod later Cloud Tasks (`JOB_DISPATCH=tasks`). Core routes never hardcode Tasks vs HTTP.
+6. **Compile worker** (`services/compile`) runs XeLaTeX; reports via `/internal/compile/*` which update job docs + SSE.
+7. **Snapshot is metadata-only** — TipTap GCS keys + asset paths; worker pulls bytes via `/internal/storage/object` (avoids multi‑MiB JSON / Core body limits as asset counts grow).
+8. **BusyTeX** is **not** a production fallback. Optional local escape only when `NEXT_PUBLIC_ALLOW_BUSYTEX_COMPILE=1`. Default local = Compose `compile` for parity with prod.
+
+Reserved job types (schema only until workers exist): `asset.process`, `audit.run`.
 
 ## Consequences
 
-- Local: include `compile` in Compose `up`; Compile button uses the server path.
-- Prod: point `COMPILE_SERVICE_URL` at Job trigger / scale-to-zero service; same UI.
+- Local: include `compile` in Compose `up`; Compile button uses the server job path.
+- Prod: point `COMPILE_SERVICE_URL` (or Tasks) at scale-to-zero service / Job; same UI and job docs.
+- Future workers plug in via type → URL map without new Core public APIs.
 
 ## Alternatives considered
 
-- **Always-on Compile HTTP service** — rejected; idle cost + no distinct trust boundary vs a job.
-- **Only browser BusyTeX forever** — fine for desktop; weak for phones / leave-and-return.
-- **TeX inside Core request** — rejected; Cloud Run timeouts/memory for full notebooks.
+- **Always-on compile microservice with no job docs** — rejected; no single-flight, harder to resume UI, poor base for other job types.
+- **BusyTeX as peer engine** — rejected for full-notebook PDF; too slow/fragile at scale.
+- **TeX inside Core request** — rejected; Cloud Run timeouts/memory.
+- **Pub/Sub required for modularity** — rejected for now; Cloud Tasks (or HTTP) is enough; shared **job protocol** is the modularity.

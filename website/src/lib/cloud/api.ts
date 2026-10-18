@@ -490,13 +490,15 @@ export const cloudApi = {
     ),
 
   /**
-   * Enqueue server XeLaTeX compile. Returns `{ unavailable: true }` when Core has no
-   * COMPILE_SERVICE_URL (UI should fall back to BusyTeX).
+   * Enqueue server XeLaTeX compile job.
+   * - 202 → new jobId
+   * - 409 → job already in flight (same jobId; attach to SSE)
+   * - 503 → worker not configured
    */
   async startCompile(
     orgId: string,
     notebookId: string
-  ): Promise<{ unavailable: true } | { unavailable?: false; jobId: string }> {
+  ): Promise<{ jobId: string; inFlight?: boolean }> {
     const url = `${coreBase()}/orgs/${orgId}/notebooks/${notebookId}/compile`;
     let res: Response;
     try {
@@ -509,14 +511,44 @@ export const cloudApi = {
       const detail = err instanceof Error ? err.message : String(err);
       throw new Error(`Cannot reach Core API at ${coreBase()} (${detail}).`);
     }
-    if (res.status === 503) return { unavailable: true };
-    if (!res.ok) {
-      const body = await res.text();
-      throw new Error(`${res.status} ${body}`);
+    const bodyText = await res.text();
+    let data: { jobId?: string; error?: string; message?: string } = {};
+    try {
+      data = bodyText ? (JSON.parse(bodyText) as typeof data) : {};
+    } catch {
+      /* non-JSON */
     }
-    const data = (await res.json()) as { jobId: string };
+    if (res.status === 409 && data.jobId) {
+      return { jobId: data.jobId, inFlight: true };
+    }
+    if (res.status === 503) {
+      throw new Error(
+        data.message ||
+          data.error ||
+          "Server compile is not configured. Start the Compose compile service."
+      );
+    }
+    if (!res.ok) {
+      throw new Error(`${res.status} ${bodyText || data.error || "compile failed"}`);
+    }
+    if (!data.jobId) throw new Error("compile response missing jobId");
     return { jobId: data.jobId };
   },
+
+  getJob: (orgId: string, notebookId: string, jobId: string) =>
+    coreFetch<{ job: Record<string, unknown> }>(
+      `/orgs/${orgId}/notebooks/${notebookId}/jobs/${jobId}`
+    ),
+
+  startJob: (
+    orgId: string,
+    notebookId: string,
+    body: { type: string; resourceKey?: string; payload?: Record<string, unknown> }
+  ) =>
+    coreFetch<{ ok: boolean; jobId: string; job?: Record<string, unknown> }>(
+      `/orgs/${orgId}/notebooks/${notebookId}/jobs`,
+      { method: "POST", body: JSON.stringify(body) }
+    ),
 
   aiComplete: (body: { prompt: string; temperature?: number; model?: string }) =>
     coreFetch<{ provider: "vertex"; model: string; text: string }>("/ai/complete", {

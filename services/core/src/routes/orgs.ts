@@ -47,6 +47,11 @@ import {
 import { getUser } from "../http/authPlugin.js";
 import type { StoragePort } from "../storage/storagePort.js";
 import { publishNotebookEvent, subscribeNotebookEvents } from "../realtime/notebookEvents.js";
+import { createJobDispatch } from "../jobs/createJobDispatch.js";
+import { enqueueNotebookJob } from "../jobs/enqueueJob.js";
+import { getJob } from "../jobs/jobStore.js";
+
+const jobDispatch = createJobDispatch();
 
 function nowIso() {
   return new Date().toISOString();
@@ -1369,64 +1374,112 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
   });
 
   /**
-   * Enqueue server-side XeLaTeX compile (local Compose worker / later Cloud Run Job).
-   * Returns 202 + jobId; progress/done/failed arrive on notebook SSE.
-   * 503 when COMPILE_SERVICE_URL is unset (UI may fall back to BusyTeX).
+   * Generic notebook job enqueue. Compile shortcut below uses type "compile".
+   * Progress/done/failed arrive on notebook SSE as job.*.
+   */
+  app.post("/orgs/:orgId/notebooks/:notebookId/jobs", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
+    await assertNotebookAccess(user, orgId, notebookId);
+
+    const body = (request.body || {}) as {
+      type?: string;
+      resourceKey?: string;
+      payload?: Record<string, unknown>;
+    };
+    const type = body.type?.trim();
+    if (!type) return reply.code(400).send({ error: "type required" });
+
+    const resourceKey =
+      body.resourceKey?.trim() ||
+      (type === "compile" ? "notebook" : type);
+
+    const result = await enqueueNotebookJob({
+      orgId,
+      notebookId,
+      type,
+      resourceKey,
+      payload: body.payload || {},
+      createdBy: user.uid,
+      dispatch: jobDispatch,
+    });
+
+    if (result.ok) {
+      return reply.code(202).send({ ok: true, jobId: result.job.jobId, job: result.job });
+    }
+    if (result.status === 409) {
+      return reply.code(409).send({
+        error: "job_in_flight",
+        jobId: result.job.jobId,
+        job: result.job,
+      });
+    }
+    if (result.status === 503) {
+      return reply.code(503).send({
+        error: result.code,
+        message: result.error,
+      });
+    }
+    return reply.code(502).send({
+      error: result.code,
+      jobId: result.jobId,
+      message: result.error,
+      detail: result.detail,
+    });
+  });
+
+  app.get("/orgs/:orgId/notebooks/:notebookId/jobs/:jobId", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId, jobId } = request.params as {
+      orgId: string;
+      notebookId: string;
+      jobId: string;
+    };
+    await assertNotebookAccess(user, orgId, notebookId);
+    const job = await getJob(orgId, notebookId, jobId);
+    if (!job) return reply.code(404).send({ error: "job not found" });
+    return { job };
+  });
+
+  /**
+   * Shortcut: enqueue type=compile (XeLaTeX worker).
+   * Returns 202 + jobId; 409 if compile already in flight; 503 if no worker.
    */
   app.post("/orgs/:orgId/notebooks/:notebookId/compile", async (request, reply) => {
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
     await assertNotebookAccess(user, orgId, notebookId);
 
-    const compileUrl = (process.env.COMPILE_SERVICE_URL || "").replace(/\/$/, "");
-    if (!compileUrl) {
-      return reply.code(503).send({
-        error: "compile_service_unavailable",
-        message: "Server compile is not configured (set COMPILE_SERVICE_URL).",
-      });
-    }
-
-    const jobId = randomUUID();
-    const at = nowIso();
-    publishNotebookEvent(orgId, notebookId, {
-      type: "compile.progress",
-      jobId,
-      status: "Queued…",
-      progress: 5,
-      at,
+    const result = await enqueueNotebookJob({
+      orgId,
+      notebookId,
+      type: "compile",
+      resourceKey: "notebook",
+      payload: {},
+      createdBy: user.uid,
+      dispatch: jobDispatch,
     });
 
-    const secret = process.env.INTERNAL_SERVICE_SECRET;
-    const headers: Record<string, string> = { "content-type": "application/json" };
-    if (secret) headers["x-internal-secret"] = secret;
-
-    try {
-      const res = await fetch(`${compileUrl}/jobs`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ orgId, notebookId, jobId }),
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        publishNotebookEvent(orgId, notebookId, {
-          type: "compile.failed",
-          jobId,
-          error: `compile worker ${res.status}: ${text.slice(0, 200)}`,
-          at: nowIso(),
-        });
-        return reply.code(502).send({ error: "compile_worker_error", jobId, detail: text.slice(0, 500) });
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      publishNotebookEvent(orgId, notebookId, {
-        type: "compile.failed",
-        jobId,
-        error: message,
-        at: nowIso(),
-      });
-      return reply.code(502).send({ error: "compile_worker_unreachable", jobId, message });
+    if (result.ok) {
+      return reply.code(202).send({ ok: true, jobId: result.job.jobId });
     }
-
-    return reply.code(202).send({ ok: true, jobId });
+    if (result.status === 409) {
+      return reply.code(409).send({
+        error: "job_in_flight",
+        jobId: result.job.jobId,
+      });
+    }
+    if (result.status === 503) {
+      return reply.code(503).send({
+        error: "compile_service_unavailable",
+        message: result.error,
+      });
+    }
+    return reply.code(502).send({
+      error: "compile_worker_error",
+      jobId: result.jobId,
+      message: result.error,
+      detail: result.detail,
+    });
   });
 }

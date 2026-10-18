@@ -51,9 +51,11 @@ Create an organization → notebook → **New entry** (opens `/orgs/…/notebook
 
 ### Server compile (Compose `compile`)
 
-Include `compile` in the backend `up` (above). The Compile page POSTs to Core → worker (`:8090`) → SSE progress; BusyTeX is used only if the worker is down / unset.
+Include `compile` in the backend `up` (above) — required for Compile page parity with prod. Flow: `POST …/compile` → durable job + `JobDispatchPort` → worker (`:8090`) → SSE `job.*`.
 
 One-shot still works: `COMPILE_MODE=job docker compose run --rm -e ORG_ID=… -e NOTEBOOK_ID=… compile`.
+
+Optional emergency only (not for large notebooks): set `NEXT_PUBLIC_ALLOW_BUSYTEX_COMPILE=1` in `website/.env.local`.
 
 See [`services/compile/README.md`](../../services/compile/README.md) and [ADR-006](../02-architecture/decisions/ADR-006-compile-job.md).
 

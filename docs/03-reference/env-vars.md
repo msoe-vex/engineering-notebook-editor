@@ -8,7 +8,8 @@ See [`website/.env.example`](../../website/.env.example).
 | --- | --- |
 | `NEXT_PUBLIC_CORE_API_URL` | Core REST base (orgs, entries, `/ai/complete`, audits) |
 | `NEXT_PUBLIC_COLLAB_WS_URL` | Hocuspocus WebSocket |
-| `NEXT_PUBLIC_ASSETS_BASE_URL` | BusyTeX/static proxy base (often Core) |
+| `NEXT_PUBLIC_ASSETS_BASE_URL` | Static / legacy BusyTeX proxy base (often Core) |
+| `NEXT_PUBLIC_ALLOW_BUSYTEX_COMPILE` | `1` / `true` → optional browser compile escape hatch (default off) |
 | `NEXT_PUBLIC_FIREBASE_*` | Firebase web config |
 | `NEXT_PUBLIC_USE_FIREBASE_EMULATOR` | `true` → Auth emulator |
 | `NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST` | e.g. `localhost:9099` |
@@ -30,5 +31,9 @@ See [`website/.env.example`](../../website/.env.example).
 | `VERTEX_ACCESS_TOKEN` | optional | Vertex bearer; else ADC via `google-auth-library` |
 | `VERTEX_LOCATION` / `VERTEX_MODEL` | `us-central1` / `gemini-2.0-flash-001` | Vertex target |
 | `GCP_PROJECT_ID` | prod project | Vertex project (falls back to `FIREBASE_PROJECT_ID`) |
+| `JOB_DISPATCH` | `http` | `http` \| `tasks` \| `none` — Core job delivery ([ADR-006](../02-architecture/decisions/ADR-006-compile-job.md)) |
+| `COMPILE_SERVICE_URL` | `http://compile:8090` | Worker base for `type=compile` (Compose / Run) |
+| `JOB_WORKER_URLS` | optional JSON | e.g. `{"compile":"http://compile:8090"}` — type → URL map |
+| `INTERNAL_SERVICE_SECRET` | compose secret | Core ↔ worker / collab |
 
 Deploy wiring: [deploy-cloudrun.md](../04-guides/deploy-cloudrun.md).

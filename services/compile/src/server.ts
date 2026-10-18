@@ -8,7 +8,13 @@ import { runCompileJobSafe } from "./runJob.js";
 const port = Number(process.env.PORT || 8090);
 const secret = process.env.INTERNAL_SERVICE_SECRET || "";
 
-type JobBody = { orgId?: string; notebookId?: string; jobId?: string };
+type JobBody = {
+  orgId?: string;
+  notebookId?: string;
+  jobId?: string;
+  type?: string;
+  payload?: unknown;
+};
 
 let busy = false;
 const queue: Array<{ orgId: string; notebookId: string; jobId: string }> = [];
@@ -68,9 +74,15 @@ const server = http.createServer(async (req, res) => {
       const orgId = body.orgId?.trim();
       const notebookId = body.notebookId?.trim();
       const jobId = body.jobId?.trim() || `job-${Date.now()}`;
+      const jobType = (body.type || "compile").trim();
       if (!orgId || !notebookId) {
         res.writeHead(400, { "content-type": "application/json" });
         res.end(JSON.stringify({ error: "orgId and notebookId required" }));
+        return;
+      }
+      if (jobType !== "compile") {
+        res.writeHead(400, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: `unsupported job type: ${jobType}` }));
         return;
       }
       queue.push({ orgId, notebookId, jobId });

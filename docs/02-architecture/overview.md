@@ -14,10 +14,10 @@
 
 | Service | Role | Port |
 | --- | --- | --- |
-| [`website/`](../../website/README.md) | App UI at `/` (+ ZIP backup); in-browser BusyTeX | 3000 |
+| [`website/`](../../website/README.md) | App UI at `/` (+ ZIP backup); server compile jobs | 3000 |
 | [`services/core/`](../../services/core/README.md) | Auth, tenancy, metadata, assets, GenAI tools / audits / Vertex infer — [ADR-005](./decisions/ADR-005-genai-in-core.md) | 8080 |
 | [`services/collab/`](../../services/collab/README.md) | Yjs rooms → flush to Core/GCS | 1234 |
-| [`services/compile/`](../../services/compile/README.md) | One-shot XeLaTeX job (not always-on) — [ADR-006](./decisions/ADR-006-compile-job.md) | — |
+| [`services/compile/`](../../services/compile/README.md) | XeLaTeX worker for `type=compile` jobs — [ADR-006](./decisions/ADR-006-compile-job.md) | 8090 |
 
 ```mermaid
 flowchart TB

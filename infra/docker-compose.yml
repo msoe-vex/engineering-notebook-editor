@@ -107,7 +107,8 @@ services:
       GCS_PUBLIC_BASE_URL: http://localhost:4443/storage/v1/b/engineering-notebook/o
       SERVICE_ADMIN_UID: service-admin
       INTERNAL_SERVICE_SECRET: local-dev-secret
-      # Local XeLaTeX worker (Compose service `compile`).
+      # Local XeLaTeX worker (Compose service `compile`) — JobDispatchPort=http.
+      JOB_DISPATCH: http
       COMPILE_SERVICE_URL: http://compile:8090
       # Local: Vertex /ai/complete stays fail-closed until ADC/token configured.
       VERTEX_STUB: "true"

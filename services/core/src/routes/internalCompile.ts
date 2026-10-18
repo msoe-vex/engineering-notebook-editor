@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import {
   assetPath,
+  assetsCollection,
   entriesCollection,
   gcsKeys,
   notebookMembersCollection,
@@ -9,6 +10,7 @@ import {
   type NotebookSummaryV5,
 } from "@engineering-notebook/shared";
 import { getFirestore } from "../db/firestore.js";
+import { completeJob, failJob, updateJobProgress } from "../jobs/jobStore.js";
 import { publishNotebookEvent } from "../realtime/notebookEvents.js";
 import type { StoragePort } from "../storage/storagePort.js";
 
@@ -27,8 +29,13 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function notebookKeyPrefix(orgId: string, notebookId: string) {
+  return `organizations/${orgId}/notebooks/${notebookId}/`;
+}
+
 /**
- * Internal compile-job APIs (x-internal-secret). Used by the one-shot compile container.
+ * Internal compile-job APIs (x-internal-secret). Used by the compile worker.
+ * Snapshot is metadata-only; worker pulls TipTap/assets via /internal/storage/object.
  */
 export async function registerInternalCompileRoutes(
   app: FastifyInstance,
@@ -36,6 +43,10 @@ export async function registerInternalCompileRoutes(
 ) {
   const db = () => getFirestore();
 
+  /**
+   * Metadata snapshot — no TipTap bodies or asset bytes (scales to many assets).
+   * Entries include tipTapGcsPath; assets map is contentType + gcsPath only.
+   */
   app.get("/internal/compile/snapshot", async (request, reply) => {
     const denied = assertInternalSecret(
       request as { headers: Record<string, unknown> },
@@ -61,19 +72,11 @@ export async function registerInternalCompileRoutes(
 
     for (const doc of entrySnap.docs) {
       const meta = doc.data() as EntryMetadataV5;
-      const tipTapKey = meta.tipTapGcsPath || gcsKeys.tipTap(orgId, notebookId, doc.id);
-      let tipTap: unknown = { type: "doc", content: [] };
-      try {
-        const buf = await storage.getObject(tipTapKey);
-        if (buf) tipTap = JSON.parse(buf.toString("utf8"));
-      } catch {
-        /* empty doc */
-      }
-      collectAssetIds(tipTap, neededAssets);
+      const tipTapGcsPath = meta.tipTapGcsPath || gcsKeys.tipTap(orgId, notebookId, doc.id);
       for (const aid of meta.assetIds || []) neededAssets.add(aid);
       entries[doc.id] = {
         ...meta,
-        tipTap,
+        tipTapGcsPath,
       };
     }
 
@@ -91,27 +94,115 @@ export async function registerInternalCompileRoutes(
       return { id: d.id, ...data };
     });
 
-    const assets: Record<string, { contentType: string; base64: string }> = {};
+    // Prefer listing notebook assets (metadata only) so TipTap-discovered ids resolve.
+    try {
+      const assetSnap = await db().collection(assetsCollection(orgId, notebookId)).get();
+      for (const doc of assetSnap.docs) neededAssets.add(doc.id);
+    } catch (err) {
+      request.log.warn({ err }, "compile snapshot assets collection list failed");
+    }
+
+    const assets: Record<string, { contentType: string; gcsPath: string }> = {};
     for (const assetId of neededAssets) {
       try {
         const assetRef = await db().doc(assetPath(orgId, notebookId, assetId)).get();
         const assetMeta = assetRef.exists
           ? (assetRef.data() as { gcsPath?: string; contentType?: string })
           : null;
-        const key =
-          assetMeta?.gcsPath || gcsKeys.asset(orgId, notebookId, assetId, "compressed");
-        const buf = await storage.getObject(key);
-        if (!buf) continue;
         assets[assetId] = {
           contentType: assetMeta?.contentType || "image/jpeg",
-          base64: buf.toString("base64"),
+          gcsPath:
+            assetMeta?.gcsPath || gcsKeys.asset(orgId, notebookId, assetId, "compressed"),
         };
       } catch (err) {
-        request.log.warn({ err, assetId }, "compile snapshot skipped asset");
+        request.log.warn({ err, assetId }, "compile snapshot skipped asset meta");
       }
     }
 
-    return { orgId, notebookId, notebook, members, entries, assets };
+    return {
+      orgId,
+      notebookId,
+      notebook,
+      members,
+      entries,
+      assets,
+      schema: "paths-v1",
+    };
+  });
+
+  /**
+   * Stream a notebook-scoped GCS object to the worker (TipTap JSON, assets, …).
+   * Key must be under organizations/{orgId}/notebooks/{notebookId}/.
+   */
+  app.get("/internal/storage/object", async (request, reply) => {
+    const denied = assertInternalSecret(
+      request as { headers: Record<string, unknown> },
+      reply
+    );
+    if (denied) return denied;
+
+    const q = request.query as {
+      orgId?: string;
+      notebookId?: string;
+      key?: string;
+    };
+    const orgId = q.orgId?.trim();
+    const notebookId = q.notebookId?.trim();
+    const key = q.key?.trim();
+    if (!orgId || !notebookId || !key) {
+      return reply.code(400).send({ error: "orgId, notebookId, and key required" });
+    }
+    const prefix = notebookKeyPrefix(orgId, notebookId);
+    if (!key.startsWith(prefix)) {
+      return reply.code(403).send({ error: "key outside notebook scope" });
+    }
+
+    const buf = await storage.getObject(key);
+    if (!buf) return reply.code(404).send({ error: "object not found" });
+
+    const lower = key.toLowerCase();
+    let contentType = "application/octet-stream";
+    if (lower.endsWith(".json")) contentType = "application/json";
+    else if (lower.endsWith(".pdf")) contentType = "application/pdf";
+    else if (lower.endsWith(".png")) contentType = "image/png";
+    else if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) contentType = "image/jpeg";
+    else if (lower.endsWith(".webp")) contentType = "image/webp";
+    else if (lower.endsWith(".gif")) contentType = "image/gif";
+
+    return reply.type(contentType).send(buf);
+  });
+
+  /**
+   * Resolve one asset to gcsPath + contentType (for TipTap refs not in the snapshot map).
+   */
+  app.get("/internal/compile/asset-ref", async (request, reply) => {
+    const denied = assertInternalSecret(
+      request as { headers: Record<string, unknown> },
+      reply
+    );
+    if (denied) return denied;
+
+    const q = request.query as {
+      orgId?: string;
+      notebookId?: string;
+      assetId?: string;
+    };
+    const orgId = q.orgId?.trim();
+    const notebookId = q.notebookId?.trim();
+    const assetId = q.assetId?.trim();
+    if (!orgId || !notebookId || !assetId) {
+      return reply.code(400).send({ error: "orgId, notebookId, and assetId required" });
+    }
+
+    const assetRef = await db().doc(assetPath(orgId, notebookId, assetId)).get();
+    const assetMeta = assetRef.exists
+      ? (assetRef.data() as { gcsPath?: string; contentType?: string })
+      : null;
+    return {
+      assetId,
+      contentType: assetMeta?.contentType || "image/jpeg",
+      gcsPath: assetMeta?.gcsPath || gcsKeys.asset(orgId, notebookId, assetId, "compressed"),
+    };
   });
 
   app.put("/internal/compile/export", async (request, reply) => {
@@ -165,12 +256,22 @@ export async function registerInternalCompileRoutes(
       notebook: { id: notebookId, lastCompiled: ts, updatedAt: ts },
       at: ts,
     });
-    publishNotebookEvent(orgId, notebookId, {
-      type: "compile.done",
+
+    const completed = await completeJob({
+      orgId,
+      notebookId,
       jobId,
-      lastCompiled: ts,
-      at: ts,
+      result: { lastCompiled: ts, exportId, gcsPath: key, byteSize },
     });
+    if (!completed) {
+      publishNotebookEvent(orgId, notebookId, {
+        type: "job.done",
+        jobId,
+        jobType: "compile",
+        result: { lastCompiled: ts, exportId, gcsPath: key, byteSize },
+        at: ts,
+      });
+    }
 
     return { ok: true, exportId, gcsPath: key, lastCompiled: ts, byteSize, jobId };
   });
@@ -190,11 +291,11 @@ export async function registerInternalCompileRoutes(
     if (!body.orgId || !body.notebookId) {
       return reply.code(400).send({ error: "orgId and notebookId required" });
     }
-    publishNotebookEvent(body.orgId, body.notebookId, {
-      type: "compile.failed",
+    await failJob({
+      orgId: body.orgId,
+      notebookId: body.notebookId,
       jobId: body.jobId || "unknown",
       error: body.error || "compile failed",
-      at: nowIso(),
     });
     return { ok: true };
   });
@@ -215,33 +316,13 @@ export async function registerInternalCompileRoutes(
     if (!body.orgId || !body.notebookId) {
       return reply.code(400).send({ error: "orgId and notebookId required" });
     }
-    publishNotebookEvent(body.orgId, body.notebookId, {
-      type: "compile.progress",
+    await updateJobProgress({
+      orgId: body.orgId,
+      notebookId: body.notebookId,
       jobId: body.jobId || "unknown",
-      status: body.status || "Working…",
+      statusMessage: body.status || "Working…",
       progress: Math.min(100, Math.max(0, Number(body.progress) || 0)),
-      at: nowIso(),
     });
     return { ok: true };
   });
-}
-
-function collectAssetIds(node: unknown, out: Set<string>) {
-  if (!node || typeof node !== "object") return;
-  const n = node as {
-    type?: string;
-    attrs?: { filePath?: string; id?: string };
-    content?: unknown[];
-  };
-  if (n.type === "image") {
-    const fp = String(n.attrs?.filePath || "");
-    const id = String(n.attrs?.id || "");
-    if (fp.startsWith("cloud:")) out.add(fp.slice("cloud:".length));
-    else if (/^[0-9a-f-]{36}$/i.test(id)) out.add(id);
-    else if (fp.includes("/assets/")) {
-      const bare = fp.split("/assets/").pop()?.replace(/\.(jpe?g|png|gif|webp|pdf)$/i, "");
-      if (bare) out.add(bare);
-    }
-  }
-  for (const child of n.content || []) collectAssetIds(child, out);
 }

@@ -72,6 +72,25 @@ export function auditsCollection(orgId: string, notebookId: string): string {
   return `organizations/${orgId}/notebooks/${notebookId}/audits`;
 }
 
+export function jobPath(orgId: string, notebookId: string, jobId: string): string {
+  return `organizations/${orgId}/notebooks/${notebookId}/jobs/${jobId}`;
+}
+
+export function jobsCollection(orgId: string, notebookId: string): string {
+  return `organizations/${orgId}/notebooks/${notebookId}/jobs`;
+}
+
+/** Single-flight lock per (type, resourceKey) under a notebook. */
+export function jobLockPath(
+  orgId: string,
+  notebookId: string,
+  type: string,
+  resourceKey: string
+): string {
+  const safe = `${type}__${resourceKey}`.replace(/[^a-zA-Z0-9._-]/g, "_");
+  return `organizations/${orgId}/notebooks/${notebookId}/jobLocks/${safe}`;
+}
+
 export function invitePath(inviteId: string): string {
   return `invites/${inviteId}`;
 }

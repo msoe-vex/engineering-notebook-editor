@@ -15,6 +15,10 @@ const LatexPreview = dynamic(() => import("@/components/editor/LatexPreview"), {
   loading: () => <Skeleton className="h-full min-h-0 w-full" />,
 });
 
+const allowBusyTex =
+  process.env.NEXT_PUBLIC_ALLOW_BUSYTEX_COMPILE === "1" ||
+  process.env.NEXT_PUBLIC_ALLOW_BUSYTEX_COMPILE === "true";
+
 export function CloudNotebookCompiler() {
   const { orgId, notebookId, entries, notebookSummary, refresh, setError, setNotebookSummary } =
     useNotebookWorkspace();
@@ -50,9 +54,14 @@ export function CloudNotebookCompiler() {
     return <CompilePageSkeleton />;
   }
 
-  async function runBusyTexFallback() {
+  async function runBusyTexEscape() {
+    if (!allowBusyTex) {
+      throw new Error(
+        "Server compile unavailable. Start Compose `compile`, or set NEXT_PUBLIC_ALLOW_BUSYTEX_COMPILE=1 for a local escape hatch."
+      );
+    }
     setEngine("busytex");
-    setStatus("Compiling in browser (BusyTeX)…");
+    setStatus("Compiling in browser (BusyTeX escape hatch)…");
     const result = await compileCloudNotebook({
       orgId,
       notebookId,
@@ -98,27 +107,33 @@ export function CloudNotebookCompiler() {
         orgId,
         notebookId,
         (event) => {
-          if (event.type === "compile.progress") {
+          if (event.type === "job.progress") {
+            if (event.jobType && event.jobType !== "compile") return;
             if (jobIdRef.current && event.jobId !== jobIdRef.current) return;
             setStatus(event.status || "Working…");
             setProgress(event.progress ?? 0);
             return;
           }
-          if (event.type === "compile.done") {
+          if (event.type === "job.done") {
+            if (event.jobType && event.jobType !== "compile") return;
             if (jobIdRef.current && event.jobId !== jobIdRef.current) return;
             clearTimeout(timeout);
             ac.abort();
+            const lastCompiled = String(
+              event.result?.lastCompiled || notebookSummary?.lastCompiled || new Date().toISOString()
+            );
             if (notebookSummary) {
               setNotebookSummary({
                 ...notebookSummary,
-                lastCompiled: event.lastCompiled,
+                lastCompiled,
               });
             }
             refresh();
             resolve();
             return;
           }
-          if (event.type === "compile.failed") {
+          if (event.type === "job.failed") {
+            if (event.jobType && event.jobType !== "compile") return;
             if (jobIdRef.current && event.jobId !== jobIdRef.current) return;
             clearTimeout(timeout);
             ac.abort();
@@ -141,17 +156,12 @@ export function CloudNotebookCompiler() {
     jobIdRef.current = null;
     try {
       const enqueued = await cloudApi.startCompile(orgId, notebookId);
-      if (enqueued.unavailable) {
-        await runBusyTexFallback();
-      } else {
-        await runServerCompile(enqueued.jobId);
-      }
+      await runServerCompile(enqueued.jobId);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      // Worker down → fall back to BusyTeX once.
-      if (/compile_worker|502|503|unreachable/i.test(message) && engine !== "busytex") {
+      if (allowBusyTex && /compile_service_unavailable|503|not configured/i.test(message)) {
         try {
-          await runBusyTexFallback();
+          await runBusyTexEscape();
           return;
         } catch (fallbackErr) {
           setError((fallbackErr as Error).message);
@@ -182,7 +192,8 @@ export function CloudNotebookCompiler() {
             )}
           </div>
           <p className="mt-0.5 hidden text-nb-caption text-nb-on-surface-variant sm:block">
-            Server XeLaTeX when available · BusyTeX fallback · calendar entry order
+            Server XeLaTeX job · calendar entry order
+            {allowBusyTex ? " · BusyTeX escape hatch enabled" : ""}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

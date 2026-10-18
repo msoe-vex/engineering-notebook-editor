@@ -2,18 +2,19 @@
 
 ## Symptoms
 
-BusyTeX stuck or fails; missing fonts/packages; export upload 403; blank PDF.
+Server compile job stuck or fails; missing TeX packages; export upload 403; blank PDF; `503` compile_service_unavailable.
 
 ## Checks
 
-1. Browser console / compile status steps
-2. Static assets: Core `/static/busytex/*`, `/static/latex/*`, website rewrites
-3. Manifest `/latex/manifest.json` and template `/notebook-template/*`
-4. Core export `PUT …/exports/latest/content` auth
-5. Entry TipTap fetch failures (GCS signed URLs)
+1. Compose/Cloud Run **compile** worker healthy (`:8090/health`); Core `COMPILE_SERVICE_URL` / `JOB_DISPATCH`
+2. Notebook SSE `job.progress` | `job.done` | `job.failed`; Firestore `…/jobs/{jobId}` status
+3. Worker logs / `main.log` tail on XeLaTeX errors (e.g. missing `ulem.sty` → `texlive-plain-generic`)
+4. Core export `PUT /internal/compile/export` and GCS `exports/latest.pdf`
+5. Worker object pulls (`/internal/storage/object`) failing — empty TipTap/assets → empty/broken PDF
 
 ## Mitigations
 
-- Re-run BusyTeX asset download/upload scripts if statics empty
+- Restart `compile` + Core; confirm `INTERNAL_SERVICE_SECRET` matches
 - Retry compile; check `lastCompiled` / export URL
-- Related: [FR-compile](../../01-requirements/features/FR-compile.md)
+- Do **not** rely on BusyTeX for large notebooks; optional escape only with `NEXT_PUBLIC_ALLOW_BUSYTEX_COMPILE=1`
+- Related: [FR-compile](../../01-requirements/features/FR-compile.md), [ADR-006](../../02-architecture/decisions/ADR-006-compile-job.md)

@@ -17,6 +17,10 @@ export declare function assetPath(orgId: string, notebookId: string, assetId: st
 export declare function assetsCollection(orgId: string, notebookId: string): string;
 export declare function auditPath(orgId: string, notebookId: string, auditId: string): string;
 export declare function auditsCollection(orgId: string, notebookId: string): string;
+export declare function jobPath(orgId: string, notebookId: string, jobId: string): string;
+export declare function jobsCollection(orgId: string, notebookId: string): string;
+/** Single-flight lock per (type, resourceKey) under a notebook. */
+export declare function jobLockPath(orgId: string, notebookId: string, type: string, resourceKey: string): string;
 export declare function invitePath(inviteId: string): string;
 /** GCS object key builders (mirror Firestore nesting). */
 export declare const gcsKeys: {

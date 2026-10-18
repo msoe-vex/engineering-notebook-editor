@@ -136,19 +136,33 @@ Over-limit bodies return **413**. Clients should preflight with `assertUploadSiz
 - `POST /internal/collab/connections`
 - `GET /internal/collab/yjs`
 
-### Compile (user + worker) — [ADR-006](../02-architecture/decisions/ADR-006-compile-job.md)
+### Notebook jobs (user + worker) — [ADR-006](../02-architecture/decisions/ADR-006-compile-job.md)
 
-- `POST /orgs/:orgId/notebooks/:notebookId/compile` → `202 { jobId }` (ACL). Forwards to `COMPILE_SERVICE_URL/jobs`. `503` if unset.
-- Worker: `POST /jobs` `{ orgId, notebookId, jobId }` (`x-internal-secret`)
+Firestore: `organizations/{orgId}/notebooks/{notebookId}/jobs/{jobId}` (+ `jobLocks/` for single-flight).
 
-Internal (header `x-internal-secret`):
+- `POST /orgs/:orgId/notebooks/:notebookId/jobs` — `{ type, resourceKey?, payload? }` → `202 { jobId }` | `409 { jobId }` (in flight) | `503` (no worker)
+- `GET /orgs/:orgId/notebooks/:notebookId/jobs/:jobId`
+- `POST …/compile` — shortcut for `{ type: "compile", resourceKey: "notebook" }`
 
-- `GET /internal/compile/snapshot?orgId&notebookId`
-- `PUT /internal/compile/export?orgId&notebookId&exportId=latest&jobId=`
-- `POST /internal/compile/progress` — `{ orgId, notebookId, jobId, status, progress }`
-- `POST /internal/compile/failed` — `{ orgId, notebookId, error, jobId? }`
+Worker (compile): `POST /jobs` `{ orgId, notebookId, jobId, type?, payload? }` (`x-internal-secret`)
 
-SSE: `compile.progress` | `compile.done` | `compile.failed`
+Internal generic (header `x-internal-secret`):
+
+- `POST /internal/jobs/:jobId/progress` — `{ orgId, notebookId, status?, progress? }`
+- `POST /internal/jobs/:jobId/complete` — `{ orgId, notebookId, result? }`
+- `POST /internal/jobs/:jobId/fail` — `{ orgId, notebookId, error? }`
+
+Internal compile helpers:
+
+- `GET /internal/compile/snapshot?orgId&notebookId` — **metadata only** (`schema: paths-v1`): entry `tipTapGcsPath`, assets `{ contentType, gcsPath }` (no base64 / TipTap bodies)
+- `GET /internal/storage/object?orgId&notebookId&key=` — stream notebook-scoped GCS object (worker pull)
+- `GET /internal/compile/asset-ref?orgId&notebookId&assetId=` — resolve `{ contentType, gcsPath }` for TipTap-discovered ids
+- `PUT /internal/compile/export?orgId&notebookId&exportId=latest&jobId=` (also completes the job)
+- `POST /internal/compile/progress` | `/failed` — thin wrappers around job progress/fail
+
+SSE: `job.progress` | `job.done` | `job.failed` (fields include `jobType`)
+
+Dispatch: `JOB_DISPATCH=http|tasks|none`; compile worker URL via `COMPILE_SERVICE_URL` (or `JOB_WORKER_URLS` JSON map).
 
 ## Collaboration (`services/collab`)
 
