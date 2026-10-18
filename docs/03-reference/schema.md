@@ -94,8 +94,8 @@ Do not conflate org ACL Members with notebook credits Members.
 
 | Field | Notes |
 | --- | --- |
-| `AssetMetadata.gcsPathOriginal` | Never written (compressed path is used) |
-| `NotebookMember.linkedUid` | Members UI does not wire account link yet |
+| `AssetMetadata.gcsPathOriginal` | Never written — client uploads a single compressed JPEG today |
+| `NotebookMember.linkedUid` | Optional credits ↔ org person; PATCH `null` clears. Cosmetic until something consumes the link |
 | Metrics | In-memory in Core; Firestore `metrics/…` aspirational |
 
 See [backlog.md](../01-requirements/backlog.md).

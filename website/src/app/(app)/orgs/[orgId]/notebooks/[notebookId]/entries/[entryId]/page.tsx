@@ -37,8 +37,7 @@ import { generateEntryLatex, latexPhaseRef } from "@/lib/latex/latex";
 import {
   buildResourceTypeIndex,
   extractResources,
-  readLastAuthors,
-  writeLastAuthors,
+  readDefaultAuthors,
   type ProjectPhase,
   type TipTapNode,
 } from "@/lib/notebook/metadata";
@@ -138,7 +137,7 @@ export default function EntryPage() {
     for (const e of Object.values(entries)) {
       for (const a of e.authors || []) fromEntries.add(a);
     }
-    for (const a of readLastAuthors()) fromEntries.add(a);
+    for (const a of readDefaultAuthors()) fromEntries.add(a);
     setAuthorOptions([...fromEntries].sort((a, b) => a.localeCompare(b)));
   }, [entries]);
 
@@ -274,16 +273,26 @@ export default function EntryPage() {
     if (narrow && viewMode === "split") setViewMode("editor");
   }, [narrow, viewMode]);
 
-  // Split mode only — editor/preview exclusives render without PanelGroup.
+  // One PanelGroup for all view modes so CollaborativeEntryEditor stays mounted
+  // (LaTeX-only used to unmount it and drop the collab WebSocket).
   useEffect(() => {
-    if (effectiveViewMode !== "split") return;
     const editorPanel = editorPanelRef.current;
     const previewPanel = previewPanelRef.current;
     if (!editorPanel || !previewPanel) return;
-    editorPanel.expand();
-    previewPanel.expand();
-    editorPanel.resize(50);
-    previewPanel.resize(50);
+    if (effectiveViewMode === "editor") {
+      previewPanel.collapse();
+      editorPanel.expand();
+      editorPanel.resize(100);
+    } else if (effectiveViewMode === "preview") {
+      editorPanel.collapse();
+      previewPanel.expand();
+      previewPanel.resize(100);
+    } else {
+      editorPanel.expand();
+      previewPanel.expand();
+      editorPanel.resize(50);
+      previewPanel.resize(50);
+    }
   }, [effectiveViewMode]);
 
   if (notebookUnavailable) {
@@ -487,7 +496,6 @@ export default function EntryPage() {
                 className="min-h-9 bg-nb-surface"
                 onChange={(authors) => {
                   setAuthorsDraft(authors);
-                  writeLastAuthors(authors);
                   patchMeta({ authors });
                 }}
               />
@@ -499,73 +507,69 @@ export default function EntryPage() {
       {/*
         Absolute-fill scroll panes: flex-1 alone fails inside react-resizable-panels
         (Panel is not a flex column). overflow-y-auto class required for RichTextArea.
+        Always mount CollaborativeEntryEditor (collapse its panel in LaTeX-only) so
+        Hocuspocus stays connected and liveLatex keeps updating from onDocChange.
       */}
       <div className="relative min-h-0 flex-1 overflow-hidden">
-        {effectiveViewMode === "split" ? (
-          <PanelGroup
-            direction="horizontal"
-            className="absolute inset-0"
-            id="entry-editor-preview"
+        <PanelGroup
+          direction="horizontal"
+          className="absolute inset-0"
+          id="entry-editor-preview"
+        >
+          <Panel
+            id="entry-editor-panel"
+            ref={editorPanelRef}
+            order={1}
+            defaultSize={effectiveViewMode === "preview" ? 0 : effectiveViewMode === "split" ? 50 : 100}
+            minSize={effectiveViewMode === "split" ? 20 : 0}
+            collapsible
+            collapsedSize={0}
+            className="min-h-0 min-w-0"
           >
-            <Panel
-              id="entry-editor-panel"
-              ref={editorPanelRef}
-              order={1}
-              defaultSize={50}
-              minSize={20}
-              className="min-h-0 min-w-0"
+            <div className="h-full min-h-0 overflow-hidden">
+              <CollaborativeEntryEditor
+                key={entryId}
+                documentName={docName}
+                entryId={entryId}
+                getToken={getIdToken}
+                onDocChange={setDocJson}
+              />
+            </div>
+          </Panel>
+          <PanelResizeHandle
+            className={
+              effectiveViewMode === "split"
+                ? "mx-1 w-1.5 shrink-0 rounded-full bg-nb-outline-variant/25 transition-colors hover:bg-nb-primary/40 data-[resize-handle-active]:bg-nb-primary/50"
+                : "pointer-events-none w-0 overflow-hidden opacity-0"
+            }
+          />
+          <Panel
+            id="entry-preview-panel"
+            ref={previewPanelRef}
+            order={2}
+            defaultSize={effectiveViewMode === "editor" ? 0 : effectiveViewMode === "split" ? 50 : 100}
+            minSize={effectiveViewMode === "split" ? 20 : 0}
+            collapsible
+            collapsedSize={0}
+            className="min-h-0 min-w-0"
+          >
+            <div
+              className={
+                effectiveViewMode === "split"
+                  ? "h-full min-h-0 overflow-y-auto custom-scrollbar border-l border-nb-outline-variant/20"
+                  : "h-full min-h-0 overflow-y-auto custom-scrollbar"
+              }
             >
-              <div className="h-full min-h-0 overflow-hidden">
-                <CollaborativeEntryEditor
-                  key={entryId}
-                  documentName={docName}
-                  entryId={entryId}
-                  getToken={getIdToken}
-                  onDocChange={setDocJson}
-                />
-              </div>
-            </Panel>
-            <PanelResizeHandle className="mx-1 w-1.5 shrink-0 rounded-full bg-nb-outline-variant/25 transition-colors hover:bg-nb-primary/40 data-[resize-handle-active]:bg-nb-primary/50" />
-            <Panel
-              id="entry-preview-panel"
-              ref={previewPanelRef}
-              order={2}
-              defaultSize={50}
-              minSize={20}
-              className="min-h-0 min-w-0"
-            >
-              <div className="h-full min-h-0 overflow-y-auto custom-scrollbar border-l border-nb-outline-variant/20">
-                {liveLatex ? (
-                  <LatexPreview latexContent={liveLatex} />
-                ) : (
-                  <p className="py-8 text-center text-nb-caption text-nb-on-surface-variant">
-                    {docJson ? "Generating LaTeX…" : "Connecting to editor…"}
-                  </p>
-                )}
-              </div>
-            </Panel>
-          </PanelGroup>
-        ) : effectiveViewMode === "preview" ? (
-          <div className="absolute inset-0 overflow-y-auto custom-scrollbar">
-            {liveLatex ? (
-              <LatexPreview latexContent={liveLatex} />
-            ) : (
-              <p className="py-8 text-center text-nb-caption text-nb-on-surface-variant">
-                {docJson ? "Generating LaTeX…" : "Connecting to editor…"}
-              </p>
-            )}
-          </div>
-        ) : (
-          <div className="absolute inset-0 overflow-hidden">
-            <CollaborativeEntryEditor
-              key={entryId}
-              documentName={docName}
-              entryId={entryId}
-              getToken={getIdToken}
-              onDocChange={setDocJson}
-            />
-          </div>
-        )}
+              {liveLatex ? (
+                <LatexPreview latexContent={liveLatex} />
+              ) : (
+                <p className="py-8 text-center text-nb-caption text-nb-on-surface-variant">
+                  {docJson ? "Generating LaTeX…" : "Connecting to editor…"}
+                </p>
+              )}
+            </div>
+          </Panel>
+        </PanelGroup>
       </div>
     </div>
   );

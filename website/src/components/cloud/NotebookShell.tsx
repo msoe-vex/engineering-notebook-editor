@@ -107,6 +107,9 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     ? pathname.split("/entries/")[1]?.split("/")[0] ?? null
     : null;
   const showEntryList = SUBNAV[0].match(pathname || "");
+  /** Calendar needs a definite height so day cells can stretch (not content-sized scroll). */
+  const fillHeightMain =
+    pathname.includes("/schedule") || pathname.includes("/calendar");
 
   const [notebookName, setNotebookName] = useState("");
   const [orgName, setOrgName] = useState("");
@@ -873,8 +876,22 @@ export function NotebookShell({ children }: { children: ReactNode }) {
               </Panel>
             </PanelGroup>
           ) : !notebookUnavailable ? (
-            <section className="min-h-0 min-w-0 flex-1 overflow-auto bg-nb-surface">
-              <div className="p-4 md:p-6">{children}</div>
+            <section
+              className={
+                fillHeightMain
+                  ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-nb-surface"
+                  : "min-h-0 min-w-0 flex-1 overflow-auto bg-nb-surface"
+              }
+            >
+              {fillHeightMain ? (
+                <div className="relative min-h-0 flex-1 overflow-hidden">
+                  <div className="absolute inset-0 flex min-h-0 flex-col overflow-hidden">
+                    {children}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 md:p-6">{children}</div>
+              )}
             </section>
           ) : null}
         </div>

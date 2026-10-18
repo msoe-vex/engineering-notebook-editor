@@ -34,32 +34,61 @@ export const getLocalDateString = () => {
   return `${year}-${month}-${day}`;
 };
 
-const LAST_AUTHORS_KEY = "nb-last-authors";
-const LAST_AUTHOR_KEY = "nb-last-author";
+/** Local cache of Account → Preferences → default authors (synced via PATCH /users/me). */
+const DEFAULT_AUTHORS_KEY = "nb-pref-default-authors";
+/** @deprecated legacy keys — read once for migration, never write */
+const LEGACY_LAST_AUTHORS_KEY = "nb-last-authors";
+const LEGACY_LAST_AUTHOR_KEY = "nb-last-author";
 
-export function readLastAuthors(): string[] {
+export function readDefaultAuthors(): string[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(LAST_AUTHORS_KEY);
+    const raw = localStorage.getItem(DEFAULT_AUTHORS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) return parseAuthors(parsed);
     }
   } catch { /* ignore */ }
-  return parseAuthors(localStorage.getItem(LAST_AUTHOR_KEY));
+  // One-shot migrate from old "last used on entry" keys.
+  try {
+    const legacyArr = localStorage.getItem(LEGACY_LAST_AUTHORS_KEY);
+    if (legacyArr) {
+      const parsed = JSON.parse(legacyArr);
+      if (Array.isArray(parsed)) {
+        const clean = parseAuthors(parsed);
+        if (clean.length) writeDefaultAuthors(clean);
+        localStorage.removeItem(LEGACY_LAST_AUTHORS_KEY);
+        localStorage.removeItem(LEGACY_LAST_AUTHOR_KEY);
+        return clean;
+      }
+    }
+  } catch { /* ignore */ }
+  const legacyOne = parseAuthors(localStorage.getItem(LEGACY_LAST_AUTHOR_KEY));
+  if (legacyOne.length) {
+    writeDefaultAuthors(legacyOne);
+    localStorage.removeItem(LEGACY_LAST_AUTHOR_KEY);
+  }
+  return legacyOne;
 }
 
-export function writeLastAuthors(authors: string[]): void {
+export function writeDefaultAuthors(authors: string[]): void {
   if (typeof window === "undefined") return;
   const clean = parseAuthors(authors);
   if (clean.length === 0) {
-    localStorage.removeItem(LAST_AUTHORS_KEY);
-    localStorage.removeItem(LAST_AUTHOR_KEY);
+    localStorage.removeItem(DEFAULT_AUTHORS_KEY);
+    localStorage.removeItem(LEGACY_LAST_AUTHORS_KEY);
+    localStorage.removeItem(LEGACY_LAST_AUTHOR_KEY);
     return;
   }
-  localStorage.setItem(LAST_AUTHORS_KEY, JSON.stringify(clean));
-  localStorage.setItem(LAST_AUTHOR_KEY, formatAuthors(clean));
+  localStorage.setItem(DEFAULT_AUTHORS_KEY, JSON.stringify(clean));
+  localStorage.removeItem(LEGACY_LAST_AUTHORS_KEY);
+  localStorage.removeItem(LEGACY_LAST_AUTHOR_KEY);
 }
+
+/** @deprecated use readDefaultAuthors */
+export const readLastAuthors = readDefaultAuthors;
+/** @deprecated use writeDefaultAuthors */
+export const writeLastAuthors = writeDefaultAuthors;
 
 /**
  * metadata.ts — resource ↔ entry relationship tracking.

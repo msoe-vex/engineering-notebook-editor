@@ -30,8 +30,14 @@ function SchedulePageInner() {
 
 export default function SchedulePage() {
   return (
-    <Suspense fallback={<p className="text-nb-body text-nb-on-surface-variant">Loading schedule…</p>}>
-      <SchedulePageInner />
+    <Suspense
+      fallback={
+        <p className="p-4 text-nb-body text-nb-on-surface-variant md:p-6">Loading schedule…</p>
+      }
+    >
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+        <SchedulePageInner />
+      </div>
     </Suspense>
   );
 }

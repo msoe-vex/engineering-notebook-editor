@@ -175,7 +175,8 @@ export default function NotebookMembersPage() {
         await cloudApi.patchNotebookMember(orgId, notebookId, editor.id, {
           name: editor.name.trim(),
           role: editor.role || "Member",
-          linkedUid: editor.linkedUid || undefined,
+          // null clears a previous link (undefined would leave it unchanged).
+          linkedUid: editor.linkedUid || null,
         });
       } else {
         await cloudApi.createNotebookMember(orgId, notebookId, {

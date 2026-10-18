@@ -49,7 +49,7 @@ import { Button, DropdownMenu, IconButton, ValidationIssuesTooltip } from "@/com
 import { showNotification } from "@/components/overlays/Notification";
 import { cloudApi } from "@/lib/cloud/api";
 import { useAppDndSensors } from "@/lib/dnd/dndSensors";
-import { readLastAuthors } from "@/lib/notebook/metadata";
+import { readDefaultAuthors } from "@/lib/notebook/metadata";
 import type { ProjectPhase } from "@/lib/notebook/metadata";
 import { getPhaseConfig, getPhases } from "@/lib/notebook/phases";
 import { PhaseChip } from "./PhaseChip";
@@ -800,7 +800,7 @@ export function NotebookEntryList({
     folderId?: string | null;
     fromId?: string;
   }) {
-    const authors = readLastAuthors();
+    const authors = readDefaultAuthors();
     void (async () => {
       try {
         let content: unknown = null;

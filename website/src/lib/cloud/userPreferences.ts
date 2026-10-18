@@ -9,7 +9,7 @@ import {
   type GenAIProviderId,
   isGenAIProviderId,
 } from "@/lib/genai";
-import { readLastAuthors, writeLastAuthors } from "@/lib/notebook/metadata";
+import { readDefaultAuthors, writeDefaultAuthors } from "@/lib/notebook/metadata";
 
 export type ThemeId = "light" | "dark" | "system";
 
@@ -18,7 +18,7 @@ export function collectLocalPreferences(theme?: string | null): UserPreferences 
   const genai = getGenAISettings();
   return {
     theme: theme === "light" || theme === "dark" || theme === "system" ? theme : "system",
-    defaultAuthors: readLastAuthors(),
+    defaultAuthors: readDefaultAuthors(),
     genai: {
       enabled: genai.enabled === true,
       provider: genai.provider,
@@ -35,7 +35,7 @@ export function applyServerPreferences(
 ) {
   if (!prefs) return;
   if (prefs.theme) setTheme(prefs.theme);
-  if (prefs.defaultAuthors?.length) writeLastAuthors(prefs.defaultAuthors);
+  if (prefs.defaultAuthors?.length) writeDefaultAuthors(prefs.defaultAuthors);
   if (prefs.genai) {
     if (typeof prefs.genai.enabled === "boolean") setGenAIEnabled(prefs.genai.enabled);
     if (prefs.genai.provider && isGenAIProviderId(prefs.genai.provider)) {
@@ -76,12 +76,12 @@ export async function hydratePreferencesFromServer(
   try {
     const profile = (await cloudApi.me()) as UserProfile;
     // Prefer local keys; fill gaps from server for non-secret fields.
-    const localAuthors = readLastAuthors();
+    const localAuthors = readDefaultAuthors();
     applyServerPreferences(profile.preferences, setTheme);
     if (localAuthors.length && !profile.preferences?.defaultAuthors?.length) {
-      // keep local authors; they'll sync up on next edit
+      // keep local authors; they'll sync up on next Preferences edit
     } else if (!localAuthors.length && profile.preferences?.defaultAuthors?.length) {
-      writeLastAuthors(profile.preferences.defaultAuthors);
+      writeDefaultAuthors(profile.preferences.defaultAuthors);
     }
     return profile;
   } catch {

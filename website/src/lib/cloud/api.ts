@@ -274,7 +274,7 @@ export const cloudApi = {
     orgId: string,
     notebookId: string,
     memberId: string,
-    body: Partial<NotebookMemberSummary>
+    body: Partial<Omit<NotebookMemberSummary, "linkedUid">> & { linkedUid?: string | null }
   ) =>
     coreFetch<NotebookMemberSummary>(
       `/orgs/${orgId}/notebooks/${notebookId}/members/${memberId}`,

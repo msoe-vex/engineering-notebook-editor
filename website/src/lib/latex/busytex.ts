@@ -43,8 +43,6 @@ export interface CompileResult {
   log: string;
 }
 
-export type CompileMode = "quality" | "compressed";
-
 export type CompileStatusCallback = (status: string, step: number, totalSteps: number, percentage: number) => void;
 
 /** Load shared BusyTeX deps (packages, template, fonts) into the VFS file list. */
@@ -110,7 +108,6 @@ export async function loadBusyTexStaticFiles(
 
 export async function runXeLatex(
   files: FileInput[],
-  mode: CompileMode = "quality",
   onStatus?: CompileStatusCallback
 ): Promise<CompileResult> {
   onStatus?.("Initializing LaTeX engine...", 2, 7, 20);
@@ -133,10 +130,8 @@ export async function runXeLatex(
     log: string;
   }
 
-  const prelude =
-    mode === "quality"
-      ? "\\newif\\ifnotebookqualityimages\\notebookqualityimagestrue\n"
-      : "\\newif\\ifnotebookqualityimages\\notebookqualityimagesfalse\n";
+  // Cloud assets are a single compressed JPEG; keep the sty switch off.
+  const prelude = "\\newif\\ifnotebookqualityimages\\notebookqualityimagesfalse\n";
 
   const result = await (
     xelatex as unknown as {

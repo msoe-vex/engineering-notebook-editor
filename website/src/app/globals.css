@@ -1113,10 +1113,11 @@ pre[class*="language-"],
 .nb-cal {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   height: 100%;
+  min-height: 0;
   background: var(--nb-bg);
   padding: 1.5rem 1.75rem 1.25rem;
-  min-height: 0;
 }
 
 .nb-cal-header {
@@ -1126,6 +1127,7 @@ pre[class*="language-"],
   gap: 1rem;
   margin-bottom: 1rem;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .nb-cal-header-controls {
@@ -1400,73 +1402,60 @@ pre[class*="language-"],
   min-width: 0;
 }
 
-.nb-cal-scroll.is-month {
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
+.nb-cal-scroll.is-month,
 .nb-cal-scroll.is-week {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-}
-
-.nb-cal-month-block {
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
 }
 
+.nb-cal-month-block,
 .nb-cal-week-block {
   flex: 1;
+  min-height: 0;
   min-width: 0;
   height: 100%;
   display: flex;
   flex-direction: column;
-  min-height: 0;
 }
 
 .nb-cal-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  grid-auto-rows: minmax(8.5rem, auto);
-  align-content: start;
   gap: 0.4rem;
   min-height: 0;
 }
 
+/* Six equal week-rows fill the viewport; cards scroll inside each day. */
 .nb-cal-month-block .nb-cal-grid {
-  flex: 1;
+  flex: 1 1 auto;
   height: 100%;
-  grid-auto-rows: minmax(0, 1fr);
+  min-height: 0;
   grid-template-rows: repeat(6, minmax(0, 1fr));
   align-content: stretch;
 }
 
 .nb-cal-week-block .nb-cal-grid {
-  flex: 1;
-  grid-auto-rows: minmax(0, 1fr);
-  grid-template-rows: 1fr;
-  min-height: 16rem;
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+  align-content: stretch;
 }
 
 .nb-cal-day {
   display: flex;
   flex-direction: column;
-  min-height: 8.5rem;
+  min-height: 0;
   min-width: 0;
+  height: 100%;
   overflow: hidden;
   border-radius: 0.85rem;
   border: 1px solid color-mix(in srgb, var(--nb-outline-variant) 35%, transparent);
   background: var(--nb-surface-lowest);
   padding: 0.4rem;
-}
-
-.nb-cal-month-block .nb-cal-day,
-.nb-cal-week-block .nb-cal-day {
-  min-height: 0;
 }
 
 .nb-cal-day.is-spacer {
@@ -1660,37 +1649,34 @@ pre[class*="language-"],
     display: inline;
   }
 
-  /* Keep equal day cell heights on mobile; scroll the calendar viewport, not grow cells. */
-  .nb-cal-scroll.is-month,
-  .nb-cal-scroll.is-week {
+  /* Month: still stretch equal rows inside the viewport (may scroll if very short). */
+  .nb-cal-scroll.is-month {
     overflow: auto;
   }
 
   .nb-cal-month-block {
-    min-height: 28rem;
+    min-height: min(100%, 28rem);
   }
 
   .nb-cal-month-block .nb-cal-grid {
-    flex: 1;
-    height: 100%;
-    min-height: 28rem;
-    grid-template-rows: repeat(6, minmax(0, 1fr));
-    grid-auto-rows: minmax(0, 1fr);
-    align-content: stretch;
+    min-height: min(100%, 28rem);
   }
 
-  .nb-cal-month-block .nb-cal-day {
-    min-height: 0;
+  /* Week on phone: stacked fixed-height days (scroll the calendar). */
+  .nb-cal-scroll.is-week {
+    overflow: auto;
   }
 
   .nb-cal-week-block .nb-cal-grid {
     grid-template-columns: 1fr;
     grid-template-rows: none;
     grid-auto-rows: minmax(5.5rem, 5.5rem);
+    height: auto;
     min-height: 0;
   }
 
   .nb-cal-week-block .nb-cal-day {
+    height: 5.5rem;
     min-height: 5.5rem;
     max-height: 5.5rem;
   }

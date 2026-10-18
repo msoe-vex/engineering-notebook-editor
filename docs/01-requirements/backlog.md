@@ -19,9 +19,9 @@ Forward-looking work. Requirements index: [README.md](./README.md). Parity epics
 ## Product polish (after / outside the active plan)
 
 - [ ] **Server-side entry search** — explorer filters are client-side ([FR-explorer](./features/FR-explorer.md))
-- [ ] **`NotebookMember.linkedUid`** — optional link roster → org member
+- [x] **`NotebookMember.linkedUid`** — optional link roster → org member (unlink via PATCH null)
 - [ ] **Invite `status`** — optional `pending | accepted | revoked`
-- [ ] **`gcsPathOriginal`** — write originals alongside compressed assets
+- [ ] **`gcsPathOriginal`** — only if print-quality / lossless re-export becomes a real need; today one compressed blob is enough
 - [ ] **Metrics persistence** — Core metrics in-memory today ([FR-admin](./features/FR-admin.md))
 - [ ] **Cloud-native Settings/Help/About/Calendar** (optional) — still under `components/pages/`
 - [ ] **Collab presence avatars** — beyond Live/Offline chip ([plan](./plans/cloud-ux-hardening.md) extras)

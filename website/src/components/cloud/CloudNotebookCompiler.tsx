@@ -7,7 +7,6 @@ import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContex
 import { Alert, Button } from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
 import { compileCloudNotebook } from "@/lib/cloud/compileCloudNotebook";
-import type { CompileMode } from "@/lib/latex/busytex";
 
 const LatexPreview = dynamic(() => import("@/components/editor/LatexPreview"), {
   ssr: false,
@@ -26,7 +25,6 @@ export function CloudNotebookCompiler() {
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState(0);
   const [log, setLog] = useState<string | null>(null);
-  const [mode, setMode] = useState<CompileMode>("quality");
 
   useEffect(() => {
     let cancelled = false;
@@ -56,7 +54,6 @@ export function CloudNotebookCompiler() {
         notebookId,
         entries,
         notebookSummary,
-        mode,
         onStatus: (s, _step, _total, pct) => {
           setStatus(s);
           setProgress(pct);
@@ -101,15 +98,6 @@ export function CloudNotebookCompiler() {
           )}
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
-          <select
-            className="min-h-10 min-w-0 flex-1 rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface px-2 py-2 text-nb-label sm:flex-none"
-            value={mode}
-            disabled={busy}
-            onChange={(e) => setMode(e.target.value as CompileMode)}
-          >
-            <option value="quality">Quality images</option>
-            <option value="compressed">Compressed images</option>
-          </select>
           <Button
             variant="primary"
             className="min-h-10 flex-1 sm:flex-none"

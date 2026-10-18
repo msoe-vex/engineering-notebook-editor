@@ -14,7 +14,7 @@ Anyone with notebook access may create/edit/delete entries (subject to future fi
 ## User-facing behavior
 
 - `/…/entries/:entryId` — title, authors chips, phase picker (icon+color), collab editor + format toolbar
-- View modes: editor / split / LaTeX with live source preview from current doc + metadata; **no split on phone** (&lt; `md`)
+- View modes: editor / split / LaTeX with live source preview from current doc + metadata; **no split on phone** (&lt; `md`). Collab editor stays mounted in LaTeX-only (panel collapsed) so the WebSocket and live preview keep updating.
 - Phone: date/phase/authors behind a disclosure; list drawer control in entry chrome
 - Entry meta (date/phase/authors) toggles via chevron; starts collapsed on phone, open on desktop
 - Saving indicator on metadata patches; optimistic sidebar updates; Core SSE keeps other sessions fresh
@@ -29,7 +29,7 @@ Anyone with notebook access may create/edit/delete entries (subject to future fi
 - [ ] Image under 64 MiB uploads; over-limit shows toast (no silent skip)
 - [ ] Two clients can edit same entry body over WSS; flush persists TipTap/Yjs
 - [ ] Two clients: metadata change in one updates sidebar/header in the other via SSE
-- [ ] Create entry seeds authors from last-authors preference when available
+- [x] Create entry seeds authors from Account → Preferences default authors (not last-edited entry)
 - [ ] Delete entry removes associated content pointers / GCS as designed
 - [ ] Saving… / Saved visible on metadata patch; split LaTeX updates while typing
 - [x] Phone: editor | LaTeX only (split hidden); entry body scrolls in a dedicated pane

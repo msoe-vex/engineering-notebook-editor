@@ -16,7 +16,7 @@ Notebook accessors.
 - Label: **Calendar** (route `/…/schedule`; `/calendar` redirects)
 - Month/week; drag entries between days / within day
 - Phase color border + icon on cards; deep links `?date=&view=`
-- Equal-height day cells in month (and fixed week day height on mobile); overflow scrolls inside the day list
+- Month (and desktop week) day cells stretch to fill the notebook main pane; overflow scrolls inside each day list. Mobile week keeps fixed day height and scrolls the calendar.
 
 ## Acceptance criteria
 

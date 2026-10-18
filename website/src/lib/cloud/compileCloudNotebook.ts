@@ -5,7 +5,6 @@ import { ASSETS_DIR, ENTRIES_INDEX_PATH, LATEX_DIR, PHASES_PATH, TEAM_PATH } fro
 import {
   loadBusyTexStaticFiles,
   runXeLatex,
-  type CompileMode,
   type CompileResult,
   type CompileStatusCallback,
 } from "@/lib/latex/busytex";
@@ -103,10 +102,9 @@ export async function compileCloudNotebook(opts: {
   notebookId: string;
   entries: Record<string, EntryMeta>;
   notebookSummary: NotebookSummaryV5 | null;
-  mode?: CompileMode;
   onStatus?: CompileStatusCallback;
 }): Promise<CompileResult & { lastCompiled?: string }> {
-  const { orgId, notebookId, entries, notebookSummary, mode = "quality", onStatus } = opts;
+  const { orgId, notebookId, entries, notebookSummary, onStatus } = opts;
   const TOTAL = 8;
 
   onStatus?.("Loading notebook content...", 1, TOTAL, 8);
@@ -185,7 +183,7 @@ export async function compileCloudNotebook(opts: {
     }
   }
 
-  const result = await runXeLatex(files, mode, (s, step, _t, pct) =>
+  const result = await runXeLatex(files, (s, step, _t, pct) =>
     onStatus?.(s, Math.max(step, 7), TOTAL, Math.max(pct, 85))
   );
 

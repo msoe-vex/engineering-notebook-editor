@@ -138,7 +138,7 @@ Cloud entry page toggles Edit **or** LaTeX full-bleed. LaTeX is generated on dem
 
 - [x] Reuse `ViewToggle` on the entry page: editor / split / latex.
 - [x] Split: resizable panels (`PanelGroup`); collapse/expand by mode.
-- [x] Live LaTeX source in split/latex modes from current metadata + editor JSON via `onDocChange`.
+- [x] Live LaTeX source in split/latex modes from current metadata + editor JSON via `onDocChange` (collab editor stays mounted in latex-only so WS + `docJson` keep updating).
 - [ ] Debounce heavy work if needed; do not block typing.
 - [ ] Amend [FR-compile](../features/FR-compile.md) acceptance: split + live source preview on entry page.
 

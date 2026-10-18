@@ -21,7 +21,7 @@ Notebook accessors.
 
 - [ ] Compile produces downloadable PDF
 - [ ] `lastCompiled` and export URL available after success
-- [ ] Quality vs compressed image mode selectable if exposed in UI
+- [x] Compile uses the single compressed image assets (no quality/original picker)
 - [ ] Split / LaTeX modes update live from editor content + metadata
 
 ## Data and APIs

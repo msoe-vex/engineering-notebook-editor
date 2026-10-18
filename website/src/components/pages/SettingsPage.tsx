@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import { AlertTriangle, ChevronDown, Eye, EyeOff, Globe, KeyRound, Loader2, Monitor, Moon, Search, Settings, Sparkles, Sun, X } from "lucide-react";
-import { readLastAuthors, writeLastAuthors } from "@/lib/notebook/metadata";
+import { readDefaultAuthors, writeDefaultAuthors } from "@/lib/notebook/metadata";
 import {
   GENAI_PROVIDERS,
   getGenAIApiKey,
@@ -39,13 +39,13 @@ const THEME_OPTIONS = [
   { id: "dark", label: "Dark", hint: "Always dark", icon: Moon },
 ] as const;
 
-function subscribeLastAuthors(onChange: () => void) {
+function subscribeDefaultAuthors(onChange: () => void) {
   window.addEventListener("storage", onChange);
   return () => window.removeEventListener("storage", onChange);
 }
 
-function getLastAuthorsJson() {
-  return JSON.stringify(readLastAuthors());
+function getDefaultAuthorsJson() {
+  return JSON.stringify(readDefaultAuthors());
 }
 
 function getEmptyAuthorsJson() {
@@ -63,7 +63,7 @@ function getGenAISettingsJson() {
 export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPageProps) {
   const { theme, setTheme } = useTheme();
   const { metadata } = useCloudWorkspace();
-  const storedAuthorsJson = useSyncExternalStore(subscribeLastAuthors, getLastAuthorsJson, getEmptyAuthorsJson);
+  const storedAuthorsJson = useSyncExternalStore(subscribeDefaultAuthors, getDefaultAuthorsJson, getEmptyAuthorsJson);
   const storedGenAIJson = useSyncExternalStore(subscribeGenAISettings, getGenAISettingsJson, getEmptyGenAIJson);
   const [authorsOverride, setAuthorsOverride] = useState<string[] | null>(null);
   const [apiKeyDraft, setApiKeyDraft] = useState<string | null>(null);
@@ -232,7 +232,7 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
               className="h-14 rounded-2xl bg-nb-surface border-nb-outline-variant px-4"
               onChange={(next) => {
                 setAuthorsOverride(next);
-                writeLastAuthors(next);
+                writeDefaultAuthors(next);
               }}
             />
             <p className="text-xs text-nb-on-surface-variant/70 leading-relaxed ml-1 mb-6">
