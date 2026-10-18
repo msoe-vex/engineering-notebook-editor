@@ -32,6 +32,7 @@ Also: [backlog.md](./backlog.md).
 | [FR-notebooks](./features/FR-notebooks.md) | Notebooks, setup, roster, access | partial |
 | [FR-entries-collab](./features/FR-entries-collab.md) | Entries & collaborative editing | partial |
 | [FR-explorer](./features/FR-explorer.md) | Explorer, folders, search | partial |
+| [FR-trash](./features/FR-trash.md) | Entry trash (soft-delete / restore / purge) | current |
 | [FR-schedule](./features/FR-schedule.md) | Schedule / calendar | partial |
 | [FR-compile](./features/FR-compile.md) | LaTeX preview & BusyTeX compile | partial |
 | [FR-zip](./features/FR-zip.md) | ZIP backup export/import | current |

@@ -22,8 +22,8 @@ Notebook accessors.
 - Shared `ContextMenu` + `DropdownMenu` use the same `MenuItem` builders (Open, Rename, Duplicate, Move…, Delete; folders: New entry/subfolder; multi-select bulk Move/Delete)
 - Double-click entry/folder label to rename inline
 - Toast + refresh/revert on reorder failure
-- Multi-select: Ctrl/Cmd click toggle, Shift click range; bulk Move… / Delete
-- Delete entry/folder (and bulk entry delete): optimistic hide + toast **Undo** (~10s soft-delay before API). Leaving the notebook flushes pending deletes. Entry delete still permanently removes body content once committed (no server recycle bin).
+- Multi-select: Ctrl/Cmd click toggle, Shift click range; bulk Move… / Delete via context menu (no selection toolbar)
+- Entry delete (single/bulk) moves to **Trash** ([FR-trash](./FR-trash.md)); folder delete promotes children (no toast Undo — confirm dialog only)
 - Phone (&lt; `md`): full-screen list when no entry open; overlay drawer when an entry is open (list control + Entries tab)
 - Desktop: double-click the explorer ↔ main resize handle to reset width (default 22/78)
 
@@ -34,7 +34,7 @@ Notebook accessors.
 - [x] Filters hide non-matching entries; chips + Clear all / Clear filters empty state
 - [ ] Templates appear in the unified tree with a distinct icon; New menu lists templates
 - [ ] Multi-select can move or delete several entries at once
-- [ ] Delete entry/folder shows toast Undo that restores before the delayed API commit
+- [ ] Entry delete sends items to Trash (not permanent purge)
 - [x] On phone, explorer is not a persistent side-by-side split; entry edit is full-width
 
 ## Data and APIs

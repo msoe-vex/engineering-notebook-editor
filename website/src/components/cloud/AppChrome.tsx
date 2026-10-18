@@ -408,23 +408,27 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
                 )}
                 {editorChrome.peers.length > 0 && (
                   <div className="hidden items-center -space-x-1.5 lg:flex" aria-label="Editors present">
-                    {editorChrome.peers.slice(0, 3).map((peer) => (
-                      <span
-                        key={peer.clientId}
-                        title={peer.name}
-                        className="inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-nb-surface text-[9px] font-bold text-white shadow-sm"
-                        style={{ backgroundColor: peer.color }}
-                      >
-                        {peer.name
+                    {editorChrome.peers.slice(0, 3).map((peer) => {
+                      const initials =
+                        peer.name
                           .trim()
                           .split(/\s+/)
                           .filter(Boolean)
                           .slice(0, 2)
-                          .map((p) => p[0])
+                          .map((part) => part.charAt(0))
                           .join("")
-                          .toUpperCase() || "?"}
-                      </span>
-                    ))}
+                          .toUpperCase() || "?";
+                      return (
+                        <span
+                          key={peer.clientId}
+                          title={peer.name}
+                          className="inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-nb-surface text-[9px] font-bold text-white shadow-sm"
+                          style={{ backgroundColor: peer.color }}
+                        >
+                          {initials}
+                        </span>
+                      );
+                    })}
                   </div>
                 )}
                 {editorChrome.connection &&

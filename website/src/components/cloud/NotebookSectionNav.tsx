@@ -6,6 +6,7 @@ import {
   FileText,
   Printer,
   Settings,
+  Trash2,
   Users,
 } from "lucide-react";
 import type { WorkspaceHeaderNavItem } from "@/lib/cloud/workspaceHeaderStore";
@@ -15,6 +16,7 @@ const ICONS: Record<string, typeof FileText> = {
   schedule: CalendarDays,
   compile: Printer,
   members: Users,
+  trash: Trash2,
   setup: Settings,
 };
 
@@ -37,7 +39,7 @@ export function NotebookSectionStrip({
         const Icon = ICONS[item.id] ?? FileText;
         return (
           <Link
-            key={item.id}
+            key={item.id || item.href}
             href={item.href}
             aria-current={active ? "page" : undefined}
             className={`inline-flex items-center gap-1.5 rounded-nb-lg px-3 py-1.5 text-nb-label font-semibold transition-colors ${
@@ -75,7 +77,7 @@ export function NotebookSectionBottomTabs({
         const Icon = ICONS[item.id] ?? FileText;
         return (
           <Link
-            key={item.id}
+            key={item.id || item.href}
             href={item.href}
             aria-current={active ? "page" : undefined}
             className={`flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[10px] font-semibold transition-colors ${

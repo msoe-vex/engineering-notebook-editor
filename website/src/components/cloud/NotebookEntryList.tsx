@@ -64,7 +64,7 @@ import { formatEntryListDate, getLocalDateString } from "@/lib/utils";
 import { PhaseChip } from "./PhaseChip";
 import { PhasePicker } from "./PhasePicker";
 import { useNotebookWorkspace } from "./NotebookWorkspaceContext";
-import type { EntryMeta } from "./notebook-types";
+import { isEntryTrashed, type EntryMeta } from "./notebook-types";
 
 type EntryFilters = {
   phaseId: string | null;
@@ -76,9 +76,6 @@ type EntryFilters = {
 };
 
 type EntrySortMode = "name" | "date" | "phase";
-
-/** Soft-delete window before the API runs (toast Undo cancels). */
-const SOFT_DELETE_MS = 10_000;
 
 const EMPTY_FILTERS: EntryFilters = {
   phaseId: null,
@@ -305,13 +302,13 @@ function EntryRowShell({
         ...rowStyle,
         paddingLeft: `${Math.max(6, indent * 18 + 8)}px`,
       }}
-      className={`group relative flex h-[26px] items-center gap-1.5 rounded pr-1.5 text-nb-label transition-colors select-none ${
+      className={`group relative flex h-[26px] items-center gap-1.5 rounded pr-1.5 text-nb-label transition-colors select-none outline-none focus:outline-none ${
         renaming ? "cursor-default" : "cursor-pointer"
       } ${
         isOver
           ? "bg-nb-primary/20 ring-1 ring-nb-primary/60 font-medium"
           : selected
-          ? "bg-nb-tertiary/15 text-nb-on-surface ring-1 ring-nb-tertiary/40 font-medium"
+          ? "bg-nb-tertiary/15 text-nb-on-surface font-medium"
           : active
           ? "bg-nb-primary/15 text-nb-primary font-medium"
           : "text-nb-on-surface hover:bg-nb-surface/80"
@@ -333,7 +330,7 @@ function EntryRowShell({
       <Link
         href={href}
         prefetch
-        className="flex min-w-0 flex-1 items-center gap-1.5 py-0.5"
+        className="flex min-w-0 flex-1 items-center gap-1.5 py-0.5 outline-none focus:outline-none"
         title={entry.title || "Untitled"}
         onClick={(e) => {
           if (renaming) {
@@ -929,27 +926,6 @@ export function NotebookEntryList({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [renaming, setRenaming] = useState<RenameTarget | null>(null);
   const lastClickedIdRef = useRef<string | null>(null);
-  /** Entry soft-deletes: hide locally, call API when timer fires (Undo cancels). */
-  const pendingEntryDeletesRef = useRef(
-    new Map<
-      string,
-      { meta: EntryMeta; timer: ReturnType<typeof setTimeout> }
-    >()
-  );
-  /** Folder soft-deletes: restore folder + promoted children on Undo. */
-  const pendingFolderDeletesRef = useRef(
-    new Map<
-      string,
-      {
-        folder: { name: string; parentId: string | null; order: number };
-        /** Entries that lived in this folder (restore their folderId). */
-        entryIds: string[];
-        /** Direct child folders that were promoted up (restore parentId). */
-        childFolderIds: string[];
-        timer: ReturnType<typeof setTimeout>;
-      }
-    >()
-  );
 
   useEffect(() => {
     const loaded = loadExplorerFilters(notebookId);
@@ -1047,6 +1023,7 @@ export function NotebookEntryList({
       const templates: [string, EntryMeta][] = [];
       const flatMatches: [string, EntryMeta][] = [];
       for (const [id, e] of Object.entries(entries)) {
+        if (isEntryTrashed(e)) continue;
         if (e.isTemplate) templates.push([id, e]);
         if (!entryMatchesFilters(e, q, filters, phaseNames)) continue;
         flatMatches.push([id, e]);
@@ -1065,7 +1042,8 @@ export function NotebookEntryList({
       return { folderList, byFolder, childrenByParent, unfiled, templates, flatMatches };
     }, [entries, folders, q, filters, phaseNames, sortMode]);
 
-  const entryCount = Object.keys(entries).length;
+  const entryCount = Object.values(entries).filter((e) => !isEntryTrashed(e)).length;
+  const trashCount = Object.values(entries).filter((e) => isEntryTrashed(e)).length;
   const matchedEntryCount =
     unfiled.length + Object.values(byFolder).reduce((n, list) => n + list.length, 0);
 
@@ -1120,130 +1098,52 @@ export function NotebookEntryList({
     lastClickedIdRef.current = null;
   }
 
-  function commitEntryDeletes(ids: string[]) {
-    for (const id of ids) {
-      const pending = pendingEntryDeletesRef.current.get(id);
-      if (pending) {
-        clearTimeout(pending.timer);
-        pendingEntryDeletesRef.current.delete(id);
-      }
-    }
-    void Promise.all(ids.map((id) => cloudApi.deleteEntry(orgId, notebookId, id)))
-      .then(() => refresh())
-      .catch((err) => {
-        setError((err as Error).message);
-        refresh();
-      });
-  }
-
-  function undoEntryDeletes(ids: string[]) {
-    const restore: Record<string, EntryMeta> = {};
-    for (const id of ids) {
-      const pending = pendingEntryDeletesRef.current.get(id);
-      if (!pending) continue;
-      clearTimeout(pending.timer);
-      pendingEntryDeletesRef.current.delete(id);
-      restore[id] = pending.meta;
-    }
-    if (!Object.keys(restore).length) return;
-    setEntries?.((prev) => ({ ...prev, ...restore }));
-    showNotification(
-      ids.length === 1 ? "Entry restored" : `${ids.length} entries restored`,
-      "success"
-    );
-  }
-
-  function scheduleEntryDeletes(ids: string[]) {
-    const snapshots: Record<string, EntryMeta> = {};
-    for (const id of ids) {
-      const meta = entries[id];
-      if (!meta) continue;
-      snapshots[id] = meta;
-      const existing = pendingEntryDeletesRef.current.get(id);
-      if (existing) clearTimeout(existing.timer);
-    }
-    if (!Object.keys(snapshots).length) return;
-
+  function moveEntriesToTrash(ids: string[]) {
+    const targets = ids.filter((id) => entries[id] && !isEntryTrashed(entries[id]));
+    if (!targets.length) return;
+    const deletedAt = new Date().toISOString();
     setEntries?.((prev) => {
       const next = { ...prev };
-      for (const id of Object.keys(snapshots)) delete next[id];
+      for (const id of targets) {
+        if (!next[id]) continue;
+        next[id] = { ...next[id], deletedAt };
+      }
       return next;
     });
     clearSelection();
-    if (activeEntryId && snapshots[activeEntryId]) {
+    if (activeEntryId && targets.includes(activeEntryId)) {
       router.push(basePath);
     }
-
-    const scheduledIds = Object.keys(snapshots);
-    for (const id of scheduledIds) {
-      const timer = setTimeout(() => {
-        commitEntryDeletes([id]);
-      }, SOFT_DELETE_MS);
-      pendingEntryDeletesRef.current.set(id, { meta: snapshots[id], timer });
-    }
-
-    const label =
-      scheduledIds.length === 1
-        ? `Deleted “${snapshots[scheduledIds[0]]?.title || "Untitled"}”`
-        : `Deleted ${scheduledIds.length} items`;
-    showNotification(label, "success", {
-      duration: SOFT_DELETE_MS,
-      action: {
-        label: "Undo",
-        onClick: () => undoEntryDeletes(scheduledIds),
-      },
-    });
-  }
-
-  function commitFolderDelete(folderId: string) {
-    const pending = pendingFolderDeletesRef.current.get(folderId);
-    if (pending) {
-      clearTimeout(pending.timer);
-      pendingFolderDeletesRef.current.delete(folderId);
-    }
-    void cloudApi
-      .deleteFolder(orgId, notebookId, folderId)
-      .then(() => refresh())
+    const titles = Object.fromEntries(
+      targets.map((id) => [id, entries[id]?.title || "Untitled"])
+    );
+    void Promise.all(targets.map((id) => cloudApi.deleteEntry(orgId, notebookId, id)))
+      .then(() => {
+        // Prefer SSE upsert; soft refresh keeps deletedAt from the API.
+        refresh();
+        const label =
+          targets.length === 1
+            ? `Moved “${titles[targets[0]]}” to Trash`
+            : `Moved ${targets.length} items to Trash`;
+        showNotification(label, "success", {
+          action: {
+            label: "View Trash",
+            onClick: () => router.push(`${basePath}/trash`),
+          },
+        });
+      })
       .catch((err) => {
         setError((err as Error).message);
         refresh();
       });
   }
 
-  function undoFolderDelete(folderId: string) {
-    const pending = pendingFolderDeletesRef.current.get(folderId);
-    if (!pending) return;
-    clearTimeout(pending.timer);
-    pendingFolderDeletesRef.current.delete(folderId);
-    setFolders?.((prev) => {
-      const next = { ...prev, [folderId]: pending.folder };
-      for (const fid of pending.childFolderIds) {
-        const child = next[fid];
-        if (!child) continue;
-        next[fid] = { ...child, parentId: folderId };
-      }
-      return next;
-    });
-    setEntries?.((prev) => {
-      const next = { ...prev };
-      for (const eid of pending.entryIds) {
-        if (!next[eid]) continue;
-        next[eid] = { ...next[eid], folderId };
-      }
-      return next;
-    });
-    showNotification(`Folder “${pending.folder.name}” restored`, "success");
-  }
-
-  function scheduleFolderDelete(folderId: string) {
+  function deleteFolderNow(folderId: string) {
     const folder = folders[folderId];
     if (!folder) return;
-    const existing = pendingFolderDeletesRef.current.get(folderId);
-    if (existing) clearTimeout(existing.timer);
-
+    const name = folder.name;
     const promoteTo =
       folder.parentId && folders[folder.parentId] ? folder.parentId : null;
-
     const entryIds = Object.entries(entries)
       .filter(([, e]) => (e.folderId ?? null) === folderId)
       .map(([eid]) => eid);
@@ -1272,95 +1172,25 @@ export function NotebookEntryList({
       });
     }
 
-    const timer = setTimeout(() => commitFolderDelete(folderId), SOFT_DELETE_MS);
-    pendingFolderDeletesRef.current.set(folderId, {
-      folder,
-      entryIds,
-      childFolderIds,
-      timer,
-    });
-
-    showNotification(`Deleted folder “${folder.name}”`, "success", {
-      duration: SOFT_DELETE_MS,
-      action: {
-        label: "Undo",
-        onClick: () => undoFolderDelete(folderId),
-      },
-    });
+    void cloudApi
+      .deleteFolder(orgId, notebookId, folderId)
+      .then(() => {
+        refresh();
+        showNotification(`Deleted folder “${name}”`, "success");
+      })
+      .catch((err) => {
+        setError((err as Error).message);
+        refresh();
+      });
   }
-
-  // SSE/refresh can briefly restore soft-deleted rows — keep them hidden until Undo or commit.
-  useEffect(() => {
-    if (!pendingEntryDeletesRef.current.size) return;
-    const leaked = Object.keys(entries).filter((id) =>
-      pendingEntryDeletesRef.current.has(id)
-    );
-    if (!leaked.length) return;
-    setEntries?.((prev) => {
-      let changed = false;
-      const next = { ...prev };
-      for (const id of leaked) {
-        if (id in next) {
-          delete next[id];
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [entries, setEntries]);
-
-  useEffect(() => {
-    if (!pendingFolderDeletesRef.current.size) return;
-    const leaked = Object.keys(folders).filter((id) =>
-      pendingFolderDeletesRef.current.has(id)
-    );
-    if (!leaked.length) return;
-    setFolders?.((prev) => {
-      let changed = false;
-      const next = { ...prev };
-      for (const id of leaked) {
-        if (id in next) {
-          delete next[id];
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [folders, setFolders]);
-
-  // Flush pending deletes if the explorer unmounts (leaving the notebook).
-  useEffect(() => {
-    const pendingEntries = pendingEntryDeletesRef.current;
-    const pendingFolders = pendingFolderDeletesRef.current;
-    return () => {
-      const entryIds = [...pendingEntries.keys()];
-      for (const [, p] of pendingEntries) clearTimeout(p.timer);
-      pendingEntries.clear();
-      if (entryIds.length) {
-        void Promise.all(
-          entryIds.map((id) => cloudApi.deleteEntry(orgId, notebookId, id))
-        ).catch(() => {
-          /* best-effort flush */
-        });
-      }
-      const folderIds = [...pendingFolders.keys()];
-      for (const [, p] of pendingFolders) clearTimeout(p.timer);
-      pendingFolders.clear();
-      for (const fid of folderIds) {
-        void cloudApi.deleteFolder(orgId, notebookId, fid).catch(() => {
-          /* best-effort flush */
-        });
-      }
-    };
-  }, [orgId, notebookId]);
 
   function bulkDelete() {
     const ids = [...selectedIds];
     if (!ids.length) return;
     showConfirm(
-      `Delete ${ids.length} items?`,
-      "Selected entries and templates will be removed. You can Undo from the toast for a few seconds.",
-      () => scheduleEntryDeletes(ids),
+      `Move ${ids.length} items to Trash?`,
+      "Selected entries and templates will move to Trash. You can restore them later.",
+      () => moveEntriesToTrash(ids),
       "danger"
     );
   }
@@ -1583,9 +1413,9 @@ export function NotebookEntryList({
     const meta = entries[id];
     const label = meta?.isTemplate ? "template" : "entry";
     showConfirm(
-      `Delete ${label}?`,
-      `Delete “${meta?.title || "Untitled"}”? You can Undo from the toast for a few seconds.`,
-      () => scheduleEntryDeletes([id]),
+      `Move ${label} to Trash?`,
+      `Move “${meta?.title || "Untitled"}” to Trash? You can restore it later.`,
+      () => moveEntriesToTrash([id]),
       "danger"
     );
   }
@@ -1653,8 +1483,8 @@ export function NotebookEntryList({
     const name = folders[folderId]?.name ?? "Folder";
     showConfirm(
       "Delete folder?",
-      `Delete “${name}”? Entries and subfolders inside will move up. You can Undo from the toast for a few seconds.`,
-      () => scheduleFolderDelete(folderId),
+      `Delete “${name}”? Entries and subfolders inside will move up one level.`,
+      () => deleteFolderNow(folderId),
       "danger"
     );
   }
@@ -1701,7 +1531,7 @@ export function NotebookEntryList({
       { id: "sep-bulk-del", label: "", separator: true },
       {
         id: "bulk-del",
-        label: "Delete selected",
+        label: "Move to Trash",
         icon: <Trash2 size={12} />,
         danger: true,
         onSelect: () => bulkDelete(),
@@ -1756,7 +1586,7 @@ export function NotebookEntryList({
       { id: "sep-del", label: "", separator: true },
       {
         id: "del",
-        label: "Delete",
+        label: "Move to Trash",
         icon: <Trash2 size={12} />,
         danger: true,
         onSelect: () => deleteEntry(id),
@@ -2336,38 +2166,20 @@ export function NotebookEntryList({
         </div>
       )}
 
-      {selectedIds.size > 0 && (
-        <div className="flex flex-wrap items-center gap-1 border-b border-nb-tertiary/30 bg-nb-tertiary/5 px-2 py-1.5">
-          <span className="mr-auto text-[11px] font-semibold text-nb-on-surface">
-            {selectedIds.size} selected
-          </span>
-          <button
-            type="button"
-            className="rounded px-2 py-1 text-[11px] font-semibold text-nb-primary hover:bg-nb-surface"
-            onClick={() => openMoveDialog({ mode: "bulk" })}
-          >
-            Move…
-          </button>
-          <button
-            type="button"
-            className="rounded px-2 py-1 text-[11px] font-semibold text-nb-danger hover:bg-nb-danger/10"
-            onClick={bulkDelete}
-          >
-            Delete
-          </button>
-          <button
-            type="button"
-            className="rounded px-2 py-1 text-[11px] font-semibold text-nb-on-surface-variant hover:bg-nb-surface"
-            onClick={clearSelection}
-          >
-            Clear
-          </button>
-        </div>
-      )}
-
       <div className="flex flex-wrap items-center gap-1 border-b border-nb-outline-variant/15 px-2 py-1">
         <span className="mr-auto text-[11px] font-semibold text-nb-on-surface-variant">
           {entryCount} items
+          {trashCount > 0 ? (
+            <>
+              {" · "}
+              <Link
+                href={`${basePath}/trash`}
+                className="text-nb-on-surface-variant hover:text-nb-primary hover:underline"
+              >
+                {trashCount} in Trash
+              </Link>
+            </>
+          ) : null}
         </span>
         <DropdownMenu
           align="right"

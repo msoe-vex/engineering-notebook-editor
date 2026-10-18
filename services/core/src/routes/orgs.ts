@@ -1079,18 +1079,13 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     return result;
   });
 
-  app.delete("/orgs/:orgId/notebooks/:notebookId/entries/:entryId", async (request, reply) => {
-    const user = getUser(request);
-    const { orgId, notebookId, entryId } = request.params as {
-      orgId: string;
-      notebookId: string;
-      entryId: string;
-    };
-    await assertNotebookAccess(user, orgId, notebookId);
+  async function permanentlyDeleteEntry(
+    orgId: string,
+    notebookId: string,
+    entryId: string,
+    meta: EntryMetadataV5
+  ) {
     const ref = db().doc(entryPath(orgId, notebookId, entryId));
-    const snap = await ref.get();
-    if (!snap.exists) return reply.code(404).send({ error: "not found" });
-    const meta = snap.data() as EntryMetadataV5;
     await safeDeleteObject(storage, meta.tipTapGcsPath || gcsKeys.tipTap(orgId, notebookId, entryId));
     await safeDeleteObject(storage, meta.yjsGcsPath || gcsKeys.yjs(orgId, notebookId, entryId));
     if (meta.assetIds?.length) {
@@ -1103,8 +1098,83 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       entryId,
       at: ts,
     });
-    return { ok: true };
+    return ts;
+  }
+
+  /** Soft-delete: move entry to Trash (keeps TipTap/Yjs until permanent purge). */
+  app.delete("/orgs/:orgId/notebooks/:notebookId/entries/:entryId", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId, entryId } = request.params as {
+      orgId: string;
+      notebookId: string;
+      entryId: string;
+    };
+    await assertNotebookAccess(user, orgId, notebookId);
+    const ref = db().doc(entryPath(orgId, notebookId, entryId));
+    const snap = await ref.get();
+    if (!snap.exists) return reply.code(404).send({ error: "not found" });
+    const meta = snap.data() as EntryMetadataV5;
+    if (meta.deletedAt) {
+      return { ok: true, id: entryId, deletedAt: meta.deletedAt, alreadyTrashed: true };
+    }
+    const ts = nowIso();
+    await ref.update({ deletedAt: ts, updatedAt: ts });
+    const result = { id: entryId, ...meta, deletedAt: ts, updatedAt: ts };
+    publishNotebookEvent(orgId, notebookId, {
+      type: "entry.upserted",
+      entryId,
+      entry: result as Record<string, unknown>,
+      at: ts,
+    });
+    return { ok: true, id: entryId, deletedAt: ts };
   });
+
+  app.post("/orgs/:orgId/notebooks/:notebookId/entries/:entryId/restore", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId, entryId } = request.params as {
+      orgId: string;
+      notebookId: string;
+      entryId: string;
+    };
+    await assertNotebookAccess(user, orgId, notebookId);
+    const ref = db().doc(entryPath(orgId, notebookId, entryId));
+    const snap = await ref.get();
+    if (!snap.exists) return reply.code(404).send({ error: "not found" });
+    const meta = snap.data() as EntryMetadataV5;
+    if (!meta.deletedAt) {
+      return { ok: true, id: entryId, ...(meta as object), alreadyRestored: true };
+    }
+    const ts = nowIso();
+    await ref.update({ deletedAt: null, updatedAt: ts });
+    const result = { id: entryId, ...meta, deletedAt: null, updatedAt: ts };
+    publishNotebookEvent(orgId, notebookId, {
+      type: "entry.upserted",
+      entryId,
+      entry: result as Record<string, unknown>,
+      at: ts,
+    });
+    return result;
+  });
+
+  /** Hard-delete TipTap/Yjs + metadata (empty trash / delete forever). */
+  app.delete(
+    "/orgs/:orgId/notebooks/:notebookId/entries/:entryId/permanent",
+    async (request, reply) => {
+      const user = getUser(request);
+      const { orgId, notebookId, entryId } = request.params as {
+        orgId: string;
+        notebookId: string;
+        entryId: string;
+      };
+      await assertNotebookAccess(user, orgId, notebookId);
+      const ref = db().doc(entryPath(orgId, notebookId, entryId));
+      const snap = await ref.get();
+      if (!snap.exists) return reply.code(404).send({ error: "not found" });
+      const meta = snap.data() as EntryMetadataV5;
+      await permanentlyDeleteEntry(orgId, notebookId, entryId, meta);
+      return { ok: true };
+    }
+  );
 
   app.get("/orgs/:orgId/notebooks/:notebookId/entries/:entryId/content", async (request, reply) => {
     const user = getUser(request);

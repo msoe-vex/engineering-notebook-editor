@@ -303,6 +303,7 @@ export const cloudApi = {
           validationErrors?: string[];
           createdAt?: string;
           updatedAt?: string;
+          deletedAt?: string | null;
         }
       >;
     }>(`/orgs/${orgId}/notebooks/${notebookId}/entries`),
@@ -349,10 +350,22 @@ export const cloudApi = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+  /** Soft-delete: move entry to Trash (content retained until permanent purge). */
   deleteEntry: (orgId: string, notebookId: string, entryId: string) =>
-    coreFetch<{ ok: boolean }>(`/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}`, {
-      method: "DELETE",
+    coreFetch<{ ok: boolean; deletedAt?: string }>(
+      `/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}`,
+      { method: "DELETE" }
+    ),
+  restoreEntry: (orgId: string, notebookId: string, entryId: string) =>
+    coreFetch(`/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}/restore`, {
+      method: "POST",
     }),
+  /** Hard-delete TipTap/Yjs + metadata (empty trash / delete forever). */
+  purgeEntry: (orgId: string, notebookId: string, entryId: string) =>
+    coreFetch<{ ok: boolean }>(
+      `/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}/permanent`,
+      { method: "DELETE" }
+    ),
 
   listAssets: (orgId: string, notebookId: string) =>
     coreFetch<AssetSummary[]>(`/orgs/${orgId}/notebooks/${notebookId}/assets`),

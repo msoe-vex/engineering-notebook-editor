@@ -50,6 +50,7 @@ isTemplate?
 resources?, references?, assetIds?
 isValid?, validationErrors?
 tipTapGcsPath, tipTapRev, yjsGcsPath, yjsRev
+deletedAt?                // soft-delete (Trash); omit/null when live
 createdAt, updatedAt
 ```
 

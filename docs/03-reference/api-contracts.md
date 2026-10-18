@@ -98,7 +98,9 @@ Auth: `Authorization: Bearer <Firebase ID token | local uid>`
   `{ mode: "explorer" | "day", orderedIds[], folderId?, date? }`  
   - `explorer` → `explorerOrder` (file tree)  
   - `day` → `order` (calendar/compile same-day tiebreaker)
-- `GET/PATCH/DELETE /orgs/:orgId/notebooks/:notebookId/entries/:entryId`
+- `GET/PATCH/DELETE /orgs/:orgId/notebooks/:notebookId/entries/:entryId` — `DELETE` soft-deletes (`deletedAt`); SSE `entry.upserted`
+- `POST .../entries/:entryId/restore` — clear `deletedAt`
+- `DELETE .../entries/:entryId/permanent` — hard-delete TipTap/Yjs + metadata; SSE `entry.deleted`
 - `GET/PUT .../entries/:entryId/content` (TipTap JSON via GCS)
 - `GET /orgs/:orgId/notebooks/:notebookId/events` — **SSE** metadata fanout (`text/event-stream`). Auth: `Authorization: Bearer …` (use `fetch`, not `EventSource`). Events: `entry.upserted`, `entry.deleted`, `notebook.updated`, `entries.changed`, `ping`. Website must not open Firestore listeners.
 

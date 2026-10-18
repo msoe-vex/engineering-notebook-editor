@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  Children,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import {
   Panel,
@@ -48,7 +56,7 @@ import {
 import { NotebookWorkspaceProvider } from "./NotebookWorkspaceContext";
 import type { EntryMeta } from "./notebook-types";
 
-function entryFromRealtime(raw: Record<string, unknown>): EntryMeta {
+function entryFromApi(raw: Record<string, unknown>): EntryMeta {
   return {
     title: String(raw.title ?? ""),
     folderId: (raw.folderId as string | null | undefined) ?? null,
@@ -66,7 +74,18 @@ function entryFromRealtime(raw: Record<string, unknown>): EntryMeta {
       : undefined,
     createdAt: raw.createdAt ? String(raw.createdAt) : undefined,
     updatedAt: raw.updatedAt ? String(raw.updatedAt) : undefined,
+    deletedAt: raw.deletedAt ? String(raw.deletedAt) : raw.deletedAt === null ? null : undefined,
   };
+}
+
+function entriesFromApi(
+  raw: Record<string, Record<string, unknown> | EntryMeta>
+): Record<string, EntryMeta> {
+  const next: Record<string, EntryMeta> = {};
+  for (const [id, meta] of Object.entries(raw)) {
+    next[id] = entryFromApi(meta as Record<string, unknown>);
+  }
+  return next;
 }
 
 type ConfirmState = {
@@ -93,11 +112,13 @@ const SUBNAV = [
       !p.includes("/setup") &&
       !p.includes("/team") &&
       !p.includes("/calendar") &&
-      !p.includes("/compile"),
+      !p.includes("/compile") &&
+      !p.includes("/trash"),
   },
   { id: "schedule", label: "Calendar", match: (p: string) => p.includes("/schedule") || p.includes("/calendar") },
   { id: "compile", label: "Compile", match: (p: string) => p.includes("/compile") },
   { id: "members", label: "Contributors", match: (p: string) => p.includes("/members") || p.includes("/contributors") },
+  { id: "trash", label: "Trash", match: (p: string) => p.includes("/trash") },
   { id: "setup", label: "Settings", match: (p: string) => p.includes("/setup") || p.includes("/team") || p.includes("/settings") },
 ] as const;
 
@@ -205,7 +226,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
           setNotebookName(nb.title || nb.name);
           if (org?.name) setOrgName(org.name);
           setFolders(nb.folders ?? {});
-          setEntries(entryRes.entries);
+          setEntries(entriesFromApi(entryRes.entries as Record<string, Record<string, unknown>>));
           setAssets(assetList);
           setNotebookSummary({
             schemaVersion: NOTEBOOK_SCHEMA_VERSION,
@@ -251,7 +272,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     const onEvent = (event: NotebookRealtimeEvent) => {
       if (event.type === "ping") return;
       if (event.type === "entry.upserted") {
-        const next = entryFromRealtime(event.entry);
+        const next = entryFromApi(event.entry);
         setEntries((prev) => ({ ...prev, [event.entryId]: next }));
         return;
       }
@@ -308,7 +329,9 @@ export function NotebookShell({ children }: { children: ReactNode }) {
         void cloudApi
           .listEntries(orgId, notebookId)
           .then((res) => {
-            if (!ac.signal.aborted) setEntries(res.entries);
+            if (!ac.signal.aborted) {
+              setEntries(entriesFromApi(res.entries as Record<string, Record<string, unknown>>));
+            }
           })
           .catch(() => {
             /* keep current */
@@ -323,20 +346,22 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     () => ({
       version: 5,
       entries: Object.fromEntries(
-        Object.entries(entries).map(([id, e]) => [
-          id,
-          {
-            title: e.title,
-            authors: e.authors ?? [],
-            phase: e.phase,
-            createdAt: e.createdAt ?? "",
-            updatedAt: e.updatedAt ?? "",
-            date: e.date,
-            filename: id,
-            order: e.order,
-            isTemplate: e.isTemplate,
-          },
-        ])
+        Object.entries(entries)
+          .filter(([, e]) => !e.deletedAt)
+          .map(([id, e]) => [
+            id,
+            {
+              title: e.title,
+              authors: e.authors ?? [],
+              phase: e.phase,
+              createdAt: e.createdAt ?? "",
+              updatedAt: e.updatedAt ?? "",
+              date: e.date,
+              filename: id,
+              order: e.order,
+              isTemplate: e.isTemplate,
+            },
+          ])
       ),
       phases: (notebookSummary?.phases as NotebookMetadata["phases"]) || {},
       team: {
@@ -374,6 +399,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
       const assetIds = new Set<string>();
 
       for (const [id, meta] of Object.entries(entries)) {
+        if (meta.deletedAt) continue; // Trash excluded from ZIP backup
         entryMeta[id] = {
           title: meta.title,
           authors: meta.authors ?? [],
@@ -596,7 +622,9 @@ export function NotebookShell({ children }: { children: ReactNode }) {
                 ? `${basePath}/compile`
                 : item.id === "members"
                   ? `${basePath}/members`
-                  : `${basePath}/setup`,
+                  : item.id === "trash"
+                    ? `${basePath}/trash`
+                    : `${basePath}/setup`,
       })),
     [basePath]
   );
@@ -751,6 +779,9 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     Boolean(optimisticEntryId) && optimisticEntryId !== activeEntryId;
   const pendingMeta = pendingOpen && optimisticEntryId ? entries[optimisticEntryId] : null;
 
+  // Next may pass `children` as an array; Children.map assigns stable keys.
+  const pageChildren = Children.map(children, (child) => child);
+
   const entryMain = (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-nb-surface">
       <div
@@ -760,14 +791,16 @@ export function NotebookShell({ children }: { children: ReactNode }) {
             : "min-h-0 flex-1 overflow-y-auto p-4 md:p-6"
         }
       >
-        {activeEntryId ? (
-          <div className="absolute inset-0 flex min-h-0 flex-col overflow-hidden">
-            {children}
-          </div>
-        ) : (
-          children
-        )}
-        {pendingOpen && (
+        <div
+          className={
+            activeEntryId
+              ? "absolute inset-0 flex min-h-0 flex-col overflow-hidden"
+              : undefined
+          }
+        >
+          {pageChildren}
+        </div>
+        {pendingOpen ? (
           <div
             className="absolute inset-0 z-10 flex min-h-0 flex-col overflow-hidden bg-nb-surface"
             aria-busy
@@ -784,13 +817,14 @@ export function NotebookShell({ children }: { children: ReactNode }) {
               <SkeletonLines lines={10} className="max-w-2xl" />
             </div>
           </div>
-        )}
+        ) : null}
       </div>
     </section>
   );
 
   return (
     <NotebookWorkspaceProvider value={ctx}>
+      {/* Single child: Provider re-renders `children` as an array; multiple siblings need keys. */}
       <div className="flex h-full min-h-0 w-full flex-col overflow-hidden text-nb-on-surface">
         <input
           ref={importRef}
@@ -854,43 +888,41 @@ export function NotebookShell({ children }: { children: ReactNode }) {
             </div>
           )}
           {!notebookUnavailable && showEntryList && narrow ? (
-            <>
-              {activeEntryId ? (
-                <>
-                  {mobileExplorerOpen && (
-                    <div className="absolute inset-0 z-30 flex md:hidden">
-                      <button
-                        type="button"
-                        className="absolute inset-0 bg-black/40"
-                        aria-label="Close entry list"
-                        onClick={() => setMobileExplorerOpen(false)}
+            activeEntryId ? (
+              <>
+                {mobileExplorerOpen && (
+                  <div className="absolute inset-0 z-30 flex md:hidden">
+                    <button
+                      type="button"
+                      className="absolute inset-0 bg-black/40"
+                      aria-label="Close entry list"
+                      onClick={() => setMobileExplorerOpen(false)}
+                    />
+                    <div className="relative z-10 flex h-full w-[min(100%,20rem)] flex-col bg-nb-surface-low shadow-nb-lg">
+                      <NotebookEntryList
+                        activeEntryId={activeEntryId}
+                        collapsed={false}
+                        onToggleCollapsed={() => setMobileExplorerOpen(false)}
+                        basePath={basePath}
                       />
-                      <div className="relative z-10 flex h-full w-[min(100%,20rem)] flex-col bg-nb-surface-low shadow-nb-lg">
-                        <NotebookEntryList
-                          activeEntryId={activeEntryId}
-                          collapsed={false}
-                          onToggleCollapsed={() => setMobileExplorerOpen(false)}
-                          basePath={basePath}
-                        />
-                      </div>
                     </div>
-                  )}
-                  {entryMain}
-                </>
-              ) : (
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                  <NotebookEntryList
-                    activeEntryId={activeEntryId}
-                    collapsed={false}
-                    onToggleCollapsed={() => undefined}
-                    basePath={basePath}
-                    hideCollapseControl
-                  />
-                </div>
-              )}
-            </>
+                  </div>
+                )}
+                {entryMain}
+              </>
+            ) : (
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                <NotebookEntryList
+                  activeEntryId={activeEntryId}
+                  collapsed={false}
+                  onToggleCollapsed={() => undefined}
+                  basePath={basePath}
+                  hideCollapseControl
+                />
+              </div>
+            )
           ) : !notebookUnavailable && showEntryList && listCollapsed ? (
-            <>
+            <div className="flex min-h-0 flex-1 overflow-hidden">
               <NotebookEntryList
                 activeEntryId={activeEntryId}
                 collapsed
@@ -898,7 +930,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
                 basePath={basePath}
               />
               {entryMain}
-            </>
+            </div>
           ) : !notebookUnavailable && showEntryList ? (
             <PanelGroup
               ref={explorerPanelGroupRef}
@@ -906,7 +938,14 @@ export function NotebookShell({ children }: { children: ReactNode }) {
               autoSaveId="nb-explorer-width"
               className="min-h-0 flex-1"
             >
-              <Panel defaultSize={22} minSize={14} maxSize={42} className="min-h-0">
+              <Panel
+                id="notebook-explorer"
+                order={1}
+                defaultSize={22}
+                minSize={14}
+                maxSize={42}
+                className="min-h-0"
+              >
                 <NotebookEntryList
                   activeEntryId={activeEntryId}
                   collapsed={false}
@@ -921,7 +960,13 @@ export function NotebookShell({ children }: { children: ReactNode }) {
                   explorerPanelGroupRef.current?.setLayout([...EXPLORER_DEFAULT_LAYOUT]);
                 }}
               />
-              <Panel defaultSize={78} minSize={40} className="flex min-h-0 flex-col">
+              <Panel
+                id="notebook-main"
+                order={2}
+                defaultSize={78}
+                minSize={40}
+                className="flex min-h-0 flex-col"
+              >
                 {entryMain}
               </Panel>
             </PanelGroup>
@@ -936,11 +981,11 @@ export function NotebookShell({ children }: { children: ReactNode }) {
               {fillHeightMain ? (
                 <div className="relative min-h-0 flex-1 overflow-hidden">
                   <div className="absolute inset-0 flex min-h-0 flex-col overflow-hidden">
-                    {children}
+                    {pageChildren}
                   </div>
                 </div>
               ) : (
-                <div className="p-4 md:p-6">{children}</div>
+                <div className="p-4 md:p-6">{pageChildren}</div>
               )}
             </section>
           ) : null}
@@ -949,88 +994,88 @@ export function NotebookShell({ children }: { children: ReactNode }) {
         {initialLoaded && !notebookUnavailable && (
           <NotebookSectionBottomTabs items={navItems} activeId={activeNav} />
         )}
+
+        <Dialog
+          isOpen={Boolean(auditResult)}
+          onClose={() => setAuditResult(null)}
+          title="Audit result"
+          wide
+        >
+          <pre className="max-h-[60vh] overflow-auto rounded-nb-lg bg-nb-surface-low p-3 text-nb-caption">
+            {auditResult}
+          </pre>
+          <div className="mt-3 flex justify-end">
+            <Button size="sm" variant="secondary" onClick={() => setAuditResult(null)}>
+              Close
+            </Button>
+          </div>
+        </Dialog>
+
+        <Dialog
+          isOpen={auditHistory !== null}
+          onClose={() => setAuditHistory(null)}
+          title="Audit history"
+          wide
+        >
+          <div className="flex max-h-[60vh] flex-col gap-2 overflow-auto">
+            {(auditHistory || []).length === 0 && (
+              <p className="text-nb-caption text-nb-on-surface-variant">No audits yet.</p>
+            )}
+            {(auditHistory || []).map((a, i) => (
+              <button
+                key={a.id || `audit-${a.createdAt || i}`}
+                type="button"
+                className="rounded-nb-xl border border-nb-outline-variant/25 bg-nb-surface-low px-3 py-2 text-left hover:border-nb-primary/40"
+                onClick={() => {
+                  setAuditResult(JSON.stringify(a, null, 2));
+                  setAuditHistory(null);
+                }}
+              >
+                <div className="text-nb-label font-semibold text-nb-on-surface">
+                  {a.rubric || "Rubric audit"}
+                </div>
+                <div className="text-nb-caption text-nb-on-surface-variant">
+                  {a.createdAt ? new Date(a.createdAt).toLocaleString() : "Unknown date"}
+                  {a.provider ? ` · ${a.provider}` : ""}
+                  {a.summary ? ` — ${a.summary.slice(0, 80)}` : ""}
+                </div>
+              </button>
+            ))}
+          </div>
+          <div className="mt-3 flex justify-end">
+            <Button size="sm" variant="secondary" onClick={() => setAuditHistory(null)}>
+              Close
+            </Button>
+          </div>
+        </Dialog>
+
+        <ShareNotebookDialog open={shareOpen} onClose={() => setShareOpen(false)} />
+
+        <ConfirmationDialog
+          isOpen={Boolean(confirm)}
+          title={confirm?.title || ""}
+          message={confirm?.message || ""}
+          variant={confirm?.variant || "danger"}
+          onConfirm={() => {
+            const fn = confirm?.onConfirm;
+            setConfirm(null);
+            fn?.();
+          }}
+          onCancel={() => setConfirm(null)}
+        />
+        <TextPromptDialog
+          isOpen={Boolean(prompt)}
+          title={prompt?.title || ""}
+          label={prompt?.label}
+          initialValue={prompt?.initialValue || ""}
+          onConfirm={(value) => {
+            const fn = prompt?.onConfirm;
+            setPrompt(null);
+            fn?.(value);
+          }}
+          onCancel={() => setPrompt(null)}
+        />
       </div>
-
-      <Dialog
-        isOpen={Boolean(auditResult)}
-        onClose={() => setAuditResult(null)}
-        title="Audit result"
-        wide
-      >
-        <pre className="max-h-[60vh] overflow-auto rounded-nb-lg bg-nb-surface-low p-3 text-nb-caption">
-          {auditResult}
-        </pre>
-        <div className="mt-3 flex justify-end">
-          <Button size="sm" variant="secondary" onClick={() => setAuditResult(null)}>
-            Close
-          </Button>
-        </div>
-      </Dialog>
-
-      <Dialog
-        isOpen={auditHistory !== null}
-        onClose={() => setAuditHistory(null)}
-        title="Audit history"
-        wide
-      >
-        <div className="flex max-h-[60vh] flex-col gap-2 overflow-auto">
-          {(auditHistory || []).length === 0 && (
-            <p className="text-nb-caption text-nb-on-surface-variant">No audits yet.</p>
-          )}
-          {(auditHistory || []).map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              className="rounded-nb-xl border border-nb-outline-variant/25 bg-nb-surface-low px-3 py-2 text-left hover:border-nb-primary/40"
-              onClick={() => {
-                setAuditResult(JSON.stringify(a, null, 2));
-                setAuditHistory(null);
-              }}
-            >
-              <div className="text-nb-label font-semibold text-nb-on-surface">
-                {a.rubric || "Rubric audit"}
-              </div>
-              <div className="text-nb-caption text-nb-on-surface-variant">
-                {a.createdAt ? new Date(a.createdAt).toLocaleString() : "Unknown date"}
-                {a.provider ? ` · ${a.provider}` : ""}
-                {a.summary ? ` — ${a.summary.slice(0, 80)}` : ""}
-              </div>
-            </button>
-          ))}
-        </div>
-        <div className="mt-3 flex justify-end">
-          <Button size="sm" variant="secondary" onClick={() => setAuditHistory(null)}>
-            Close
-          </Button>
-        </div>
-      </Dialog>
-
-      <ShareNotebookDialog open={shareOpen} onClose={() => setShareOpen(false)} />
-
-      <ConfirmationDialog
-        isOpen={Boolean(confirm)}
-        title={confirm?.title || ""}
-        message={confirm?.message || ""}
-        variant={confirm?.variant || "danger"}
-        onConfirm={() => {
-          const fn = confirm?.onConfirm;
-          setConfirm(null);
-          fn?.();
-        }}
-        onCancel={() => setConfirm(null)}
-      />
-      <TextPromptDialog
-        isOpen={Boolean(prompt)}
-        title={prompt?.title || ""}
-        label={prompt?.label}
-        initialValue={prompt?.initialValue || ""}
-        onConfirm={(value) => {
-          const fn = prompt?.onConfirm;
-          setPrompt(null);
-          fn?.(value);
-        }}
-        onCancel={() => setPrompt(null)}
-      />
     </NotebookWorkspaceProvider>
   );
 }

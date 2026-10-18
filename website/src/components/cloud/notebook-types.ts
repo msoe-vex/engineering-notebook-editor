@@ -17,7 +17,13 @@ export type EntryMeta = {
   validationErrors?: string[];
   createdAt?: string;
   updatedAt?: string;
+  /** Soft-deleted (in Trash) when set. */
+  deletedAt?: string | null;
 };
+
+export function isEntryTrashed(entry: { deletedAt?: string | null } | null | undefined): boolean {
+  return Boolean(entry?.deletedAt);
+}
 
 export type NotebookWorkspaceState = {
   orgId: string;

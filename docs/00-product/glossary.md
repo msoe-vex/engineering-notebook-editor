@@ -10,6 +10,7 @@
 | **Notebook Settings** | Notebook-scoped branding, phases, access (route `/setup`). Distinct from Account **Preferences**. |
 | **Calendar** | Date-ordered entry view (route `/schedule`); same-day sequence uses `order`. |
 | **Entry** | One design entry; **metadata** in Firestore; TipTap/Yjs in GCS |
+| **Trash** | Soft-deleted entries (`deletedAt` set); restore or permanent purge |
 | **Folder** | Tree node in `notebook.folders`; entries have `folderId` |
 | **explorerOrder** | Sibling order in the file explorer within a folder |
 | **order** | Same-day tiebreaker for calendar / compile sequence (with `date`) |

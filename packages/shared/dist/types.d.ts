@@ -129,6 +129,11 @@ export type EntryMetadataV5 = {
     tipTapRev?: number;
     yjsGcsPath?: string;
     yjsRev?: number;
+    /**
+     * Soft-delete timestamp (ISO). When set, entry is in Trash — hidden from explorer,
+     * calendar, and compile until restored or permanently purged.
+     */
+    deletedAt?: string | null;
 };
 export type NotebookSummaryV5 = {
     schemaVersion: typeof NOTEBOOK_SCHEMA_VERSION;

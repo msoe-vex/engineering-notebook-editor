@@ -27,7 +27,7 @@ export function SkeletonLines({
     <div className={cn("flex flex-col gap-2", className)}>
       {Array.from({ length: lines }, (_, i) => (
         <Skeleton
-          key={i}
+          key={`skeleton-line-${i}`}
           className="h-3"
           style={{ width: `${88 - (i % 3) * 12}%` }}
         />

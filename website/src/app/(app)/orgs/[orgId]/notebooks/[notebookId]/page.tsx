@@ -32,7 +32,7 @@ export default function NotebookOverviewPage() {
   );
 
   const recent = Object.entries(entries)
-    .filter(([, e]) => !e.isTemplate)
+    .filter(([, e]) => !e.isTemplate && !e.deletedAt)
     .sort((a, b) => (b[1].updatedAt || b[1].date).localeCompare(a[1].updatedAt || a[1].date))
     .slice(0, 8);
 

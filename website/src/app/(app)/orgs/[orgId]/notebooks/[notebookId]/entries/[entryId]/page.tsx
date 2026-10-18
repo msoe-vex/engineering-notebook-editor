@@ -28,6 +28,7 @@ import {
   LoadingBlock,
   ValidationIssuesTooltip,
 } from "@/components/ui";
+import { showNotification } from "@/components/overlays/Notification";
 import { cloudApi } from "@/lib/cloud/api";
 import { patchEditorChrome } from "@/lib/cloud/editorChromeStore";
 import { formatCloudError } from "@/lib/cloud/errors";
@@ -321,6 +322,40 @@ export default function EntryPage() {
             <Button size="sm" variant="primary" onClick={() => router.push(basePath)}>
               Back to notebook
             </Button>
+          }
+        />
+      </div>
+    );
+  }
+
+  if (meta.deletedAt) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        <EmptyState
+          className="max-w-md"
+          title="This entry is in Trash"
+          description={`“${meta.title || "Untitled"}” was moved to Trash. Restore it to keep editing, or delete it forever from Trash.`}
+          action={
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={() => {
+                  void cloudApi
+                    .restoreEntry(orgId, notebookId, entryId)
+                    .then(() => {
+                      refresh();
+                      showNotification("Entry restored", "success");
+                    })
+                    .catch((err) => setError(formatCloudError(err)));
+                }}
+              >
+                Restore
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => router.push(`${basePath}/trash`)}>
+                Open Trash
+              </Button>
+            </div>
           }
         />
       </div>
