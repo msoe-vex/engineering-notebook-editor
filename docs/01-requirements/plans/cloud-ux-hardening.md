@@ -279,11 +279,13 @@ Pages snap from empty chrome to full content. Spinners/`LoadingBlock` exist but 
 
 - [x] `Skeleton` / `SkeletonLines` UI primitives; notebook shell loading uses explorer+main placeholders.
 - [x] Keep `LoadingBlock` label alongside skeletons for route loads.
-- [ ] Optional follow-up: calendar grid / org list skeletons when those pages fetch slowly.
+- [x] Notebook page skeletons in `notebookPageSkeletons.tsx`: Contributors, Compile, Settings, Calendar (schedule Suspense + `CalendarView` until workspace init).
+- [x] Editor images: IntersectionObserver (~300px) + session `assetCache`; `cloud:{id}` resolves via `getAssetUrl` when visible (not prefetched for off-screen nodes).
 
 ### Acceptance
 
 - [x] Opening a notebook shows structured placeholders before data, not a blank hole then pop-in.
+- [x] Contributors / Compile / Settings / Schedule show page-shaped skeletons while fetching.
 
 ---
 

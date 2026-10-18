@@ -26,13 +26,7 @@ export {
   authorsEqual,
 } from "./notebookSchema";
 
-export const getLocalDateString = () => {
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+export { getLocalDateString } from "@/lib/utils";
 
 /** Local cache of Account → Preferences → default authors (synced via PATCH /users/me). */
 const DEFAULT_AUTHORS_KEY = "nb-pref-default-authors";

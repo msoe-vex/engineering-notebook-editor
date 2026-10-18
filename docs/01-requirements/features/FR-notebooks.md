@@ -14,11 +14,11 @@ Notebooks live under an org. **Settings** controls branding, phases, logo, and a
 
 ## User-facing behavior
 
-- `/orgs/:orgId` — notebook list/create/delete
-- `/…/setup` — **Settings**: name, title, subtitle, logo upload → `logoAssetId`, phases CRUD, access (alias `/settings`)
+- `/orgs/:orgId` — notebook list/create/delete; notebook rows support right-click / ⋯ (Open, Settings, Rename, Delete)
+- `/…/setup` — **Settings**: name, title, subtitle, logo upload → `logoAssetId`, phases CRUD (compact rows; icon button opens glyph grid + color presets), access (alias `/settings`)
 - Notebook chrome **Share** dialog: entire org vs restricted; search/add org people and teams
-- `/…/members` — **Contributors**: name/role/photo/`order` credits (alias `/contributors`)
-- Section nav (Entries / Calendar / Compile / Contributors / Settings): **slim strip** under AppChrome on ≥ `md`; **bottom tab bar** on phone (&lt; `md`) — see [mobile-responsive](../plans/mobile-responsive.md)
+- `/…/members` — **Contributors**: name/role/photo/`order` credits (alias `/contributors`); roster rows support right-click (Edit, photo, Unlink, Remove)
+- Section nav (Entries / Calendar / Compile / Contributors / Settings): **slim strip** with icons under AppChrome on ≥ `md`; **bottom tab bar** with icons on phone (&lt; `md`) — see [mobile-responsive](../plans/mobile-responsive.md). Notebook home shows recent entries (phase glyph + color); section shortcuts live in the strip/tabs only.
 
 ## Acceptance criteria
 
@@ -26,7 +26,7 @@ Notebooks live under an org. **Settings** controls branding, phases, logo, and a
 - [ ] Restricted access hides notebook from unauthorized org members
 - [ ] Logo and phases persist and round-trip in ZIP where supported
 - [ ] UI copy distinguishes Org people vs Notebook contributors
-- [ ] Share dialog can grant a user and a team without using Settings checkboxes
+- [x] Share / Settings restricted ACL uses search + removable pills (not checkbox lists)
 - [x] Notebook section destinations reachable via slim strip (desktop) or bottom tabs (phone)
 
 ## Data and APIs

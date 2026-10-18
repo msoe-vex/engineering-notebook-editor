@@ -11,11 +11,14 @@ export function PhasePicker({
   phases,
   disabled,
   onChange,
+  emptyLabel = "No phase",
 }: {
   phaseId: string | null | undefined;
   phases?: Record<string, ProjectPhase> | null;
   disabled?: boolean;
   onChange: (phaseId: string | null) => void;
+  /** Label when nothing is selected (e.g. "Any phase" in filters). */
+  emptyLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
@@ -61,7 +64,7 @@ export function PhasePicker({
           <ActiveIcon size={15} className="shrink-0" style={{ color: activePhase.color }} />
         ) : null}
         <span className="min-w-0 flex-1 truncate">
-          {activePhase?.name || "No phase"}
+          {activePhase?.name || emptyLabel}
         </span>
         <ChevronDown size={14} className="shrink-0 text-nb-on-surface-variant/60" />
       </button>
@@ -86,7 +89,7 @@ export function PhasePicker({
                 setOpen(false);
               }}
             >
-              <span className="min-w-0 flex-1">No phase</span>
+              <span className="min-w-0 flex-1">{emptyLabel}</span>
               {!phaseId && <Check size={12} className="shrink-0 text-nb-primary" />}
             </button>
             {phaseList.map((p) => {

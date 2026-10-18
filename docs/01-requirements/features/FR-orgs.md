@@ -16,9 +16,9 @@ Organizations are the tenancy root. Admins manage members, email invites (with e
 
 ## User-facing behavior
 
-- `/` — list/create orgs
-- `/orgs/:orgId/people` — members + invites
-- `/orgs/:orgId/teams` — ACL groups
+- `/` — list/create orgs; org rows support right-click / ⋯ (Open, People, Rename/Delete when allowed)
+- `/orgs/:orgId/people` — members + invites; single **Invite** opens a modal (email or account id + role); right-click / ⋯ for change role, remove, copy/renew/revoke invite
+- `/orgs/:orgId/teams` — ACL groups; expand a team to search-add org people and remove via chips; right-click / ⋯ (show people, Rename, Delete)
 - Invite create sets `expiresAt` (default 14 days); accept rejects expired and email mismatch when both emails present
 
 ## Acceptance criteria

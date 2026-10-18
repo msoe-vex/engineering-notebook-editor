@@ -326,7 +326,7 @@ export const NotebookFormatToolbar = React.memo(function NotebookFormatToolbar({
   }, [editor]);
 
   return (
-    <div className="w-full shrink-0 overflow-x-auto bg-nb-surface-mid/40 scrollbar-hide touch-pan-x">
+    <div className="thin-scrollbar w-full shrink-0 overflow-x-auto bg-nb-surface-mid/40 touch-pan-x">
       <div className="flex min-w-max items-center gap-0.5 px-3 py-1.5 md:gap-1 md:px-4 md:py-1.5">
         <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} title="Bold">
           <Bold size={16} />

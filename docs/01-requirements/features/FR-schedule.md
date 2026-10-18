@@ -17,6 +17,7 @@ Notebook accessors.
 - Month/week; drag entries between days / within day
 - Phase color border + icon on cards; deep links `?date=&view=`
 - Month (and desktop week) day cells stretch to fill the notebook main pane; overflow scrolls inside each day list. Mobile week keeps fixed day height and scrolls the calendar.
+- Entry / calendar “today” uses the browser’s local calendar date (`getLocalDateString`), not UTC `toISOString().slice(0, 10)`
 
 ## Acceptance criteria
 

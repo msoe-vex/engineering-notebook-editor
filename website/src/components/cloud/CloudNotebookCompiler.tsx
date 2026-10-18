@@ -4,23 +4,21 @@ import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { Download, Loader2, Play, RefreshCcw } from "lucide-react";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
-import { Alert, Button } from "@/components/ui";
+import { CompilePageSkeleton } from "@/components/cloud/notebookPageSkeletons";
+import { Alert, Button, Skeleton } from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
 import { compileCloudNotebook } from "@/lib/cloud/compileCloudNotebook";
 
 const LatexPreview = dynamic(() => import("@/components/editor/LatexPreview"), {
   ssr: false,
-  loading: () => (
-    <div className="flex h-64 items-center justify-center text-nb-caption text-nb-on-surface-variant">
-      <Loader2 className="mr-2 animate-spin" size={18} /> Loading preview…
-    </div>
-  ),
+  loading: () => <Skeleton className="h-full min-h-[50vh] w-full rounded-nb-xl md:min-h-[70vh]" />,
 });
 
 export function CloudNotebookCompiler() {
   const { orgId, notebookId, entries, notebookSummary, refresh, setError, setNotebookSummary } =
     useNotebookWorkspace();
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfProbeDone, setPdfProbeDone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState(0);
@@ -28,6 +26,7 @@ export function CloudNotebookCompiler() {
 
   useEffect(() => {
     let cancelled = false;
+    setPdfProbeDone(false);
     void cloudApi
       .getExportPdfUrl(orgId, notebookId, "latest")
       .then((r) => {
@@ -35,11 +34,18 @@ export function CloudNotebookCompiler() {
       })
       .catch(() => {
         if (!cancelled) setPdfUrl(null);
+      })
+      .finally(() => {
+        if (!cancelled) setPdfProbeDone(true);
       });
     return () => {
       cancelled = true;
     };
   }, [orgId, notebookId, notebookSummary?.lastCompiled]);
+
+  if (!pdfProbeDone) {
+    return <CompilePageSkeleton />;
+  }
 
   async function runCompile() {
     if (busy) return;

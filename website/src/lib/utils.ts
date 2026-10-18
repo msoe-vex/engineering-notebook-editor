@@ -192,6 +192,25 @@ export function getLocalDateString(d: Date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
+/** Parse a stored YYYY-MM-DD as a local calendar date (no UTC shift). */
+export function parseYmdLocal(dateStr: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr.trim());
+  if (!match) return null;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * Compact month/day for explorer sidebar — uses the browser locale
+ * (e.g. 10/17 vs 17/10), not a hard-coded MM-DD slice.
+ */
+export function formatEntryListDate(dateStr: string): string {
+  if (!dateStr) return "";
+  const date = parseYmdLocal(dateStr);
+  if (!date) return dateStr.slice(5) || dateStr;
+  return date.toLocaleDateString(undefined, { month: "numeric", day: "numeric" });
+}
+
 /**
  * Formats a date string into "Month YYYY" (e.g. "September 2024")
  */
@@ -204,11 +223,11 @@ export function formatDateMonthYear(dateStr: string): string {
       const year = parseInt(parts[0]);
       const month = parseInt(parts[1]) - 1;
       const date = new Date(year, month);
-      return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+      return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
     }
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return dateStr;
-    return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
   } catch {
     return dateStr;
   }

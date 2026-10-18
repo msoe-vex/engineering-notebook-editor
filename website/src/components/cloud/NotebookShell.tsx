@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
-import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
+import {
+  Panel,
+  PanelGroup,
+  PanelResizeHandle,
+  type ImperativePanelGroupHandle,
+} from "react-resizable-panels";
 import { saveAs } from "file-saver";
 import {
   NOTEBOOK_SCHEMA_VERSION,
@@ -106,6 +111,17 @@ export function NotebookShell({ children }: { children: ReactNode }) {
   const activeEntryId = pathname.includes("/entries/")
     ? pathname.split("/entries/")[1]?.split("/")[0] ?? null
     : null;
+  const [optimisticEntryId, setOptimisticEntryId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!optimisticEntryId) return;
+    if (activeEntryId === optimisticEntryId) {
+      setOptimisticEntryId(null);
+      return;
+    }
+    // Left the entries section without landing on the optimistic id.
+    if (!pathname.includes("/entries/")) setOptimisticEntryId(null);
+  }, [activeEntryId, optimisticEntryId, pathname]);
   const showEntryList = SUBNAV[0].match(pathname || "");
   /** Calendar needs a definite height so day cells can stretch (not content-sized scroll). */
   const fillHeightMain =
@@ -140,7 +156,10 @@ export function NotebookShell({ children }: { children: ReactNode }) {
   const [mobileExplorerOpen, setMobileExplorerOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
+  const explorerPanelGroupRef = useRef<ImperativePanelGroupHandle>(null);
   const narrow = useNarrowViewport();
+
+  const EXPLORER_DEFAULT_LAYOUT = [22, 78] as const;
 
   function refresh() {
     setReloadToken((n) => n + 1);
@@ -724,13 +743,19 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     showPrompt,
     isNarrowViewport: narrow,
     openMobileExplorer: () => setMobileExplorerOpen(true),
+    optimisticEntryId,
+    setOptimisticEntryId,
   };
+
+  const pendingOpen =
+    Boolean(optimisticEntryId) && optimisticEntryId !== activeEntryId;
+  const pendingMeta = pendingOpen && optimisticEntryId ? entries[optimisticEntryId] : null;
 
   const entryMain = (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-nb-surface">
       <div
         className={
-          activeEntryId
+          activeEntryId || pendingOpen
             ? "relative min-h-0 flex-1 overflow-hidden"
             : "min-h-0 flex-1 overflow-y-auto p-4 md:p-6"
         }
@@ -741,6 +766,24 @@ export function NotebookShell({ children }: { children: ReactNode }) {
           </div>
         ) : (
           children
+        )}
+        {pendingOpen && (
+          <div
+            className="absolute inset-0 z-10 flex min-h-0 flex-col overflow-hidden bg-nb-surface"
+            aria-busy
+            aria-label="Opening entry"
+          >
+            <header className="shrink-0 border-b border-nb-outline-variant/20 px-4 py-2 md:px-6">
+              <h1 className="truncate text-xl font-bold tracking-tight text-nb-on-surface md:text-2xl">
+                {pendingMeta?.title || "Untitled"}
+              </h1>
+              <Skeleton className="mt-2 h-4 w-40 max-w-full" />
+            </header>
+            <div className="min-h-0 flex-1 space-y-3 p-4 md:p-8">
+              <Skeleton className="h-8 w-full max-w-xl" />
+              <SkeletonLines lines={10} className="max-w-2xl" />
+            </div>
+          </div>
         )}
       </div>
     </section>
@@ -858,6 +901,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
             </>
           ) : !notebookUnavailable && showEntryList ? (
             <PanelGroup
+              ref={explorerPanelGroupRef}
               direction="horizontal"
               autoSaveId="nb-explorer-width"
               className="min-h-0 flex-1"
@@ -870,7 +914,13 @@ export function NotebookShell({ children }: { children: ReactNode }) {
                   basePath={basePath}
                 />
               </Panel>
-              <PanelResizeHandle className="w-1.5 shrink-0 bg-nb-outline-variant/20 transition-colors hover:bg-nb-primary/40 data-[resize-handle-active]:bg-nb-primary/50" />
+              <PanelResizeHandle
+                className="w-1.5 shrink-0 bg-nb-outline-variant/20 transition-colors hover:bg-nb-primary/40 data-[resize-handle-active]:bg-nb-primary/50"
+                title="Drag to resize · double-click to reset"
+                onDoubleClick={() => {
+                  explorerPanelGroupRef.current?.setLayout([...EXPLORER_DEFAULT_LAYOUT]);
+                }}
+              />
               <Panel defaultSize={78} minSize={40} className="flex min-h-0 flex-col">
                 {entryMain}
               </Panel>

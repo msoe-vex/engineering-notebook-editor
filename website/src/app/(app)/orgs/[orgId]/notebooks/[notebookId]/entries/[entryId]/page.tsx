@@ -91,18 +91,21 @@ export default function EntryPage() {
   const titleInputRef = useRef<HTMLInputElement>(null);
   const authorsFieldRef = useRef<HTMLDivElement>(null);
   /** entryId we've hydrated drafts for once meta was available (full reload races empty meta). */
-  const hydratedEntryIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    hydratedEntryIdRef.current = null;
-    setTitleDraft("");
-    setAuthorsDraft([]);
+  const hydratedEntryIdRef = useRef<string | null>(meta ? entryId : null);
+  /** Track entry switches during render so header meta paints immediately (no blank flash). */
+  const [draftEntryId, setDraftEntryId] = useState(entryId);
+  if (draftEntryId !== entryId) {
+    setDraftEntryId(entryId);
+    setTitleDraft(meta?.title ?? "");
+    setAuthorsDraft(meta?.authors || []);
+    hydratedEntryIdRef.current = meta ? entryId : null;
     setDocJson(null);
     setSaveState("idle");
     setMetaOpen(!narrow);
+  }
+
+  useEffect(() => {
     patchEditorChrome({ saveState: "idle" });
-    // Intentionally only on entry change — use current narrow for initial open state.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- narrow snapshot on navigate
   }, [entryId]);
 
   // Keep header drafts in sync with SSE/meta unless the user is actively editing that field.
@@ -542,6 +545,16 @@ export default function EntryPage() {
                 ? "mx-1 w-1.5 shrink-0 rounded-full bg-nb-outline-variant/25 transition-colors hover:bg-nb-primary/40 data-[resize-handle-active]:bg-nb-primary/50"
                 : "pointer-events-none w-0 overflow-hidden opacity-0"
             }
+            title={
+              effectiveViewMode === "split"
+                ? "Drag to resize · double-click to reset"
+                : undefined
+            }
+            onDoubleClick={() => {
+              if (effectiveViewMode !== "split") return;
+              editorPanelRef.current?.resize(50);
+              previewPanelRef.current?.resize(50);
+            }}
           />
           <Panel
             id="entry-preview-panel"

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useParams } from "next/navigation";
 import { NodeViewWrapper, ReactNodeViewRenderer, NodeViewProps } from "@tiptap/react";
 import { Image as TiptapImage, type ImageOptions } from "@tiptap/extension-image";
 import Image from "next/image";
@@ -12,18 +13,41 @@ import { ValidationIssuesTooltip } from "@/components/ui";
 import { NodeViewInput } from "./NodeViewInput";
 import { resourceMetaErrors } from "./resourceValidation";
 import GenerateButton from "../ui/GenerateButton";
+
+function isInlineOrRemoteSrc(src: string | null | undefined): boolean {
+  if (!src) return false;
+  return src.startsWith("data:") || src.startsWith("http://") || src.startsWith("https://") || src.startsWith("blob:");
+}
+
+function cloudAssetIdFromPath(path: string, attrsId?: string | null): string | null {
+  if (path.startsWith("cloud:")) return path.slice("cloud:".length);
+  if (attrsId && !path.includes("/") && !isInlineOrRemoteSrc(path)) return attrsId;
+  return null;
+}
+
 export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName, editor }: NodeViewProps & { dbName: string }) => {
-  const isDataUrl = Boolean(node.attrs.src?.startsWith('data:'));
-  const [resolvedSrc, setResolvedSrc] = useState(isDataUrl ? node.attrs.src : "");
-  const [isVisible, setIsVisible] = useState(isDataUrl);
-  const [isLoading, setIsLoading] = useState(!isDataUrl);
+  const params = useParams();
+  const orgId = typeof params?.orgId === "string" ? params.orgId : "";
+  const notebookId = typeof params?.notebookId === "string" ? params.notebookId : "";
+  const initialSrc = isInlineOrRemoteSrc(node.attrs.src) ? (node.attrs.src as string) : "";
+  const [resolvedSrc, setResolvedSrc] = useState(initialSrc);
+  const [isVisible, setIsVisible] = useState(Boolean(initialSrc));
+  const [isLoading, setIsLoading] = useState(!initialSrc);
   const [dragEnabled, setDragEnabled] = useState(false);
   const [, setIsResizing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputId = `replace-image-${node.attrs.id}`;
 
   useEffect(() => {
-    if (isDataUrl || isVisible) return;
+    if (isInlineOrRemoteSrc(node.attrs.src)) {
+      setResolvedSrc(node.attrs.src as string);
+      setIsLoading(false);
+      setIsVisible(true);
+    }
+  }, [node.attrs.src]);
+
+  useEffect(() => {
+    if (isVisible) return;
     const el = containerRef.current;
     if (!el || typeof IntersectionObserver === "undefined") {
       setIsVisible(true);
@@ -42,19 +66,28 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, [isDataUrl, isVisible]);
+  }, [isVisible]);
 
   useEffect(() => {
     if (!isVisible) return;
     let active = true;
     const load = async () => {
-      const targetPath = (node.attrs.filePath as string) || (node.attrs.src as string) || "";
+      const srcAttr = (node.attrs.src as string) || "";
+      if (isInlineOrRemoteSrc(srcAttr)) {
+        if (active) {
+          setResolvedSrc(srcAttr);
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      const targetPath = (node.attrs.filePath as string) || srcAttr || "";
       if (!targetPath) {
         if (active) setIsLoading(false);
         return;
       }
 
-      if (targetPath.startsWith('data:')) {
+      if (isInlineOrRemoteSrc(targetPath)) {
         if (active) {
           setResolvedSrc(targetPath);
           setIsLoading(false);
@@ -65,11 +98,33 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
       try {
         const { workspaceState } = await import("@/lib/cloud/workspaceState");
 
-        // In-memory session cache (populated on upload / cloud hydrate)
+        // In-memory session cache (populated on upload / prior lazy fetch)
         if (workspaceState.assetCache.has(targetPath)) {
           const cached = workspaceState.assetCache.get(targetPath)!;
           if (active) {
             setResolvedSrc(cached);
+            setIsLoading(false);
+          }
+          return;
+        }
+
+        const assetId = cloudAssetIdFromPath(targetPath, node.attrs.id as string | null);
+        if (assetId && orgId && notebookId) {
+          const cacheKey = `cloud:${assetId}`;
+          if (workspaceState.assetCache.has(cacheKey)) {
+            const cached = workspaceState.assetCache.get(cacheKey)!;
+            if (active) {
+              setResolvedSrc(cached);
+              setIsLoading(false);
+            }
+            return;
+          }
+          const { cloudApi } = await import("@/lib/cloud/api");
+          const { url } = await cloudApi.getAssetUrl(orgId, notebookId, assetId);
+          workspaceState.assetCache.set(cacheKey, url);
+          if (targetPath !== cacheKey) workspaceState.assetCache.set(targetPath, url);
+          if (active) {
+            setResolvedSrc(url);
             setIsLoading(false);
           }
           return;
@@ -84,7 +139,7 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
     };
     load();
     return () => { active = false; };
-  }, [node.attrs.src, node.attrs.filePath, dbName, isVisible]);
+  }, [node.attrs.src, node.attrs.filePath, node.attrs.id, dbName, isVisible, orgId, notebookId]);
 
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -206,7 +261,7 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
         </div>
 
         <div className="relative flex justify-center min-h-30 bg-nb-surface-low/10">
-          {isLoading || !resolvedSrc || !resolvedSrc.startsWith('data:') ? (
+          {isLoading || !isInlineOrRemoteSrc(resolvedSrc) ? (
             <div
               style={{ width: node.attrs.width ?? "100%" }}
               className="h-44 rounded-lg bg-nb-surface-low animate-pulse flex flex-col items-center justify-center gap-2 text-nb-on-surface-variant/40"

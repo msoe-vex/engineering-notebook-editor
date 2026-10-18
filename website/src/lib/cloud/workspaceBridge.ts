@@ -7,6 +7,7 @@ import {
   type ProjectPhase,
   type TeamMetadata,
 } from "@/lib/notebook/metadata";
+import { getLocalDateString } from "@/lib/utils";
 
 export type CloudWorkspaceBridge = {
   orgId: string;
@@ -19,8 +20,7 @@ export type CloudWorkspaceBridge = {
 let active: CloudWorkspaceBridge | null = null;
 
 function todayYmd() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return getLocalDateString();
 }
 
 async function cloudSaveTeam(_team: TeamMetadata, phases?: Record<string, ProjectPhase>) {

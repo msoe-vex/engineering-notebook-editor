@@ -34,17 +34,19 @@ export function NotebookSectionStrip({
     >
       {items.map((item) => {
         const active = activeId === item.id;
+        const Icon = ICONS[item.id] ?? FileText;
         return (
           <Link
             key={item.id}
             href={item.href}
             aria-current={active ? "page" : undefined}
-            className={`rounded-nb-lg px-3 py-1.5 text-nb-label font-semibold transition-colors ${
+            className={`inline-flex items-center gap-1.5 rounded-nb-lg px-3 py-1.5 text-nb-label font-semibold transition-colors ${
               active
                 ? "bg-nb-primary/10 text-nb-primary"
                 : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface"
             }`}
           >
+            <Icon size={14} strokeWidth={active ? 2.25 : 1.75} aria-hidden />
             {item.label}
           </Link>
         );

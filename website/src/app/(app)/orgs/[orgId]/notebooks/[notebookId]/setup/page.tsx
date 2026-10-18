@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ImagePlus } from "lucide-react";
+import { AccessAllowlistPicker } from "@/components/cloud/AccessAllowlistPicker";
 import { NotebookPhasesEditor } from "@/components/cloud/NotebookPhasesEditor";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
+import { SettingsPageSkeleton } from "@/components/cloud/notebookPageSkeletons";
 import { showNotification } from "@/components/overlays/Notification";
 import { Button, TextField } from "@/components/ui";
 import {
@@ -18,8 +20,15 @@ import {
 } from "@engineering-notebook/shared";
 
 export default function NotebookSetupPage() {
-  const { orgId, notebookId, notebookSummary, refresh, setError, setNotebookSummary } =
-    useNotebookWorkspace();
+  const {
+    orgId,
+    notebookId,
+    notebookSummary,
+    initialLoaded,
+    refresh,
+    setError,
+    setNotebookSummary,
+  } = useNotebookWorkspace();
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [name, setName] = useState("");
@@ -31,6 +40,7 @@ export default function NotebookSetupPage() {
   const [userIds, setUserIds] = useState<string[]>([]);
   const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [people, setPeople] = useState<MemberSummary[]>([]);
+  const [aclListsLoaded, setAclListsLoaded] = useState(false);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -67,12 +77,14 @@ export default function NotebookSetupPage() {
   }, [orgId, notebookId, logoAssetId]);
 
   useEffect(() => {
+    setAclListsLoaded(false);
     void Promise.all([
       cloudApi.listTeams(orgId).catch(() => [] as TeamSummary[]),
       cloudApi.listMembers(orgId).catch(() => [] as MemberSummary[]),
     ]).then(([t, m]) => {
       setTeams(t);
       setPeople(m);
+      setAclListsLoaded(true);
     });
   }, [orgId]);
 
@@ -144,6 +156,10 @@ export default function NotebookSetupPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (!initialLoaded || !aclListsLoaded || !notebookSummary) {
+    return <SettingsPageSkeleton />;
   }
 
   return (
@@ -242,56 +258,20 @@ export default function NotebookSetupPage() {
         </div>
 
         {accessMode === "restricted" && (
-          <div className="grid gap-4 rounded-nb-xl border border-nb-outline-variant/30 p-4">
-            <div>
-              <h3 className="mb-2 text-nb-label font-semibold">Org teams</h3>
-              <div className="flex flex-col gap-2">
-                {teams.map((t) => {
-                  const on = teamIds.includes(t.id);
-                  return (
-                    <label key={t.id} className="flex items-center gap-2 text-nb-body">
-                      <input
-                        type="checkbox"
-                        checked={on}
-                        onChange={() =>
-                          setTeamIds((prev) =>
-                            on ? prev.filter((id) => id !== t.id) : [...prev, t.id]
-                          )
-                        }
-                      />
-                      {t.name}
-                    </label>
-                  );
-                })}
-                {!teams.length && (
-                  <p className="text-nb-caption text-nb-on-surface-variant">
-                    No teams yet. Create teams under the organization.
-                  </p>
-                )}
-              </div>
-            </div>
-            <div>
-              <h3 className="mb-2 text-nb-label font-semibold">Org people</h3>
-              <div className="flex flex-col gap-2">
-                {people.map((p) => {
-                  const on = userIds.includes(p.uid);
-                  return (
-                    <label key={p.uid} className="flex items-center gap-2 text-nb-body">
-                      <input
-                        type="checkbox"
-                        checked={on}
-                        onChange={() =>
-                          setUserIds((prev) =>
-                            on ? prev.filter((id) => id !== p.uid) : [...prev, p.uid]
-                          )
-                        }
-                      />
-                      {p.email || p.uid}
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
+          <div className="rounded-nb-xl border border-nb-outline-variant/30 p-4">
+            <AccessAllowlistPicker
+              teams={teams}
+              people={people}
+              teamIds={teamIds}
+              userIds={userIds}
+              onTeamIdsChange={setTeamIds}
+              onUserIdsChange={setUserIds}
+            />
+            {!teams.length && !people.length && (
+              <p className="mt-2 text-nb-caption text-nb-on-surface-variant">
+                No teams or people yet. Create teams or invite people under the organization.
+              </p>
+            )}
           </div>
         )}
       </section>

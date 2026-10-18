@@ -13,14 +13,16 @@ Anyone with notebook access may create/edit/delete entries (subject to future fi
 
 ## User-facing behavior
 
-- `/…/entries/:entryId` — title, authors chips, phase picker (icon+color), collab editor + format toolbar
-- View modes: editor / split / LaTeX with live source preview from current doc + metadata; **no split on phone** (&lt; `md`). Collab editor stays mounted in LaTeX-only (panel collapsed) so the WebSocket and live preview keep updating.
+- `/…/entries/:entryId` — title, authors chips, phase picker (icon+color), collab editor + format toolbar; sidebar highlight + header meta paint immediately on open while collab content syncs (editor skeleton)
+- View modes: editor / split / LaTeX with live source preview from current doc + metadata; **no split on phone** (&lt; `md`). Collab editor stays mounted in LaTeX-only (panel collapsed) so the WebSocket and live preview keep updating. In split, double-click the resize handle to reset 50/50.
+- Format toolbar uses a thin horizontal scrollbar when controls overflow.
 - Phone: date/phase/authors behind a disclosure; list drawer control in entry chrome
 - Entry meta (date/phase/authors) toggles via chevron; starts collapsed on phone, open on desktop
 - Saving indicator on metadata patches; optimistic sidebar updates; Core SSE keeps other sessions fresh
 - Presence via collab WebSocket: Live/Offline plus peer awareness avatars (initials)
 - Validation on content flush; metadata-field revalidation when notebook phases change (Core)
 - Toasts on asset upload failure and other transient outcomes
+- Images lazy-load near viewport (`IntersectionObserver`); `cloud:{assetId}` resolves via signed URL + session cache on first visible fetch
 - Title GenAI when GenAI enabled — see [FR-genai-audit](./FR-genai-audit.md)
 
 ## Acceptance criteria

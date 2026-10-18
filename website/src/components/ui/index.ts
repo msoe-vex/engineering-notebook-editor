@@ -12,5 +12,6 @@ export { PageHeader } from "./PageHeader";
 export { Breadcrumbs, type Crumb } from "./Breadcrumbs";
 export { TabNav, type TabItem } from "./TabNav";
 export { DropdownMenu, type MenuItem } from "./DropdownMenu";
+export { ContextMenu } from "./ContextMenu";
 export { Dialog } from "./Dialog";
 export { ValidationIssuesTooltip } from "./ValidationIssuesTooltip";

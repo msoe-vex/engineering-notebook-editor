@@ -1,11 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, Calendar, Plus, Users } from "lucide-react";
+import { FileText, Plus } from "lucide-react";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
 import { Button, EmptyState, ListRow } from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
+import type { ProjectPhase } from "@/lib/notebook/metadata";
+import { getPhaseConfig, getPhases } from "@/lib/notebook/phases";
+import { formatEntryListDate, getLocalDateString } from "@/lib/utils";
 
 /** Notebook overview — does not auto-jump to an entry. */
 export default function NotebookOverviewPage() {
@@ -21,6 +25,11 @@ export default function NotebookOverviewPage() {
     showPrompt,
   } = useNotebookWorkspace();
   const basePath = `/orgs/${orgId}/notebooks/${notebookId}`;
+  const phases = (notebookSummary?.phases || null) as Record<string, ProjectPhase> | null;
+  const phaseCfg = useMemo(
+    () => getPhaseConfig(getPhases(phases || {})),
+    [phases]
+  );
 
   const recent = Object.entries(entries)
     .filter(([, e]) => !e.isTemplate)
@@ -33,7 +42,7 @@ export default function NotebookOverviewPage() {
         .createEntry(orgId, notebookId, {
           title,
           order: Object.keys(entries).length,
-          date: new Date().toISOString().slice(0, 10),
+          date: getLocalDateString(),
         })
         .then((created) => {
           refresh();
@@ -61,39 +70,54 @@ export default function NotebookOverviewPage() {
         </Button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Link
-          href={`${basePath}/schedule`}
-          className="inline-flex items-center gap-1.5 rounded-nb-lg border border-nb-outline-variant/30 px-3 py-1.5 text-nb-label font-semibold text-nb-on-surface hover:bg-nb-surface-low"
-        >
-          <Calendar size={14} /> Calendar
-        </Link>
-        <Link
-          href={`${basePath}/members`}
-          className="inline-flex items-center gap-1.5 rounded-nb-lg border border-nb-outline-variant/30 px-3 py-1.5 text-nb-label font-semibold text-nb-on-surface hover:bg-nb-surface-low"
-        >
-          <Users size={14} /> Contributors
-        </Link>
-        <Link
-          href={`${basePath}/setup`}
-          className="inline-flex items-center gap-1.5 rounded-nb-lg border border-nb-outline-variant/30 px-3 py-1.5 text-nb-label font-semibold text-nb-on-surface hover:bg-nb-surface-low"
-        >
-          <BookOpen size={14} /> Settings
-        </Link>
-      </div>
-
       <section className="flex flex-col gap-3">
         <h2 className="text-nb-title font-semibold">Recent entries</h2>
         {recent.length > 0 ? (
           <div className="grid gap-2">
-            {recent.map(([id, e]) => (
-              <ListRow key={id} interactive>
-                <Link href={`${basePath}/entries/${id}`} className="min-w-0 flex-1">
-                  <div className="font-semibold text-nb-on-surface">{e.title}</div>
-                  <div className="text-nb-caption text-nb-on-surface-variant">{e.date}</div>
-                </Link>
-              </ListRow>
-            ))}
+            {recent.map(([id, e]) => {
+              const cfg = e.phase ? phaseCfg[e.phase] : null;
+              const Icon = cfg?.icon || FileText;
+              const phaseName = e.phase && phases?.[e.phase]?.name;
+              return (
+                <ListRow key={id} interactive>
+                  <Link
+                    href={`${basePath}/entries/${id}`}
+                    className="flex min-w-0 flex-1 items-center gap-3"
+                  >
+                    <span
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-nb-lg"
+                      style={
+                        cfg
+                          ? {
+                              backgroundColor: cfg.bg,
+                              color: cfg.color,
+                              border: `1px solid ${cfg.border}`,
+                            }
+                          : undefined
+                      }
+                    >
+                      <Icon
+                        size={16}
+                        className={cfg ? undefined : "text-nb-on-surface-variant/55"}
+                      />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-semibold text-nb-on-surface">
+                        {e.title || "Untitled"}
+                      </div>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-nb-caption text-nb-on-surface-variant">
+                        {e.date ? <span>{formatEntryListDate(e.date)}</span> : null}
+                        {phaseName ? (
+                          <span className="font-semibold" style={cfg ? { color: cfg.color } : undefined}>
+                            {phaseName}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </Link>
+                </ListRow>
+              );
+            })}
           </div>
         ) : (
           <EmptyState

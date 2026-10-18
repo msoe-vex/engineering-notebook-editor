@@ -8,6 +8,8 @@ Forward-looking work. Requirements index: [README.md](./README.md). Parity epics
 
 **[Mobile-responsive shell](./plans/mobile-responsive.md)** — Phone/tablet layouts for all signed-in surfaces; notebook section nav (slim strip desktop, bottom tabs mobile); explorer drawer; entry editor without split on narrow; [NFR-responsive](./quality/NFR-responsive.md).
 
+**[Explorer search & context menus](./plans/explorer-search-context-menus.md)** — Sidebar search/filter chips + empty states; shared `ContextMenu` primitive; standardize right-click for explorer, orgs, notebooks, people/teams, contributors.
+
 ## Done (architecture hygiene)
 
 - [x] Archive unreachable legacy UI under `website/archive/legacy/`
@@ -18,7 +20,7 @@ Forward-looking work. Requirements index: [README.md](./README.md). Parity epics
 
 ## Product polish (after / outside the active plan)
 
-- [ ] **Server-side entry search** — explorer filters are client-side ([FR-explorer](./features/FR-explorer.md))
+- [ ] **Server-side entry search** — explorer filters are client-side; stretch epic in [explorer-search-context-menus](./plans/explorer-search-context-menus.md)
 - [x] **`NotebookMember.linkedUid`** — optional link roster → org member (unlink via PATCH null)
 - [ ] **Invite `status`** — optional `pending | accepted | revoked`
 - [ ] **`gcsPathOriginal`** — only if print-quality / lossless re-export becomes a real need; today one compressed blob is enough

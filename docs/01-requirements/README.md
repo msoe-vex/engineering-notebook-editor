@@ -19,6 +19,7 @@ Product context: [00-product/](../00-product/). Contracts: [03-reference/](../03
 | --- | --- |
 | [Cloud UX hardening & legacy parity](./plans/cloud-ux-hardening.md) | active |
 | [Mobile-responsive shell](./plans/mobile-responsive.md) | active |
+| [Explorer search & context menus](./plans/explorer-search-context-menus.md) | mostly done (F deferred) |
 
 Also: [backlog.md](./backlog.md).
 

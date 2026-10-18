@@ -3,8 +3,10 @@
 import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import CalendarView from "@/components/pages/CalendarView";
-import { workspaceState } from "@/lib/cloud/workspaceState";
+import { CalendarPageSkeleton } from "@/components/cloud/notebookPageSkeletons";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
+import { workspaceState } from "@/lib/cloud/workspaceState";
+import { getLocalDateString } from "@/lib/utils";
 
 function SchedulePageInner() {
   const router = useRouter();
@@ -16,7 +18,7 @@ function SchedulePageInner() {
     const date =
       searchParams.get("date") ||
       workspaceState.calendarCursor ||
-      new Date().toISOString().slice(0, 10);
+      getLocalDateString();
     const view = searchParams.get("view") === "week" ? "week" : "month";
     workspaceState.setCalendar(date, view);
 
@@ -30,11 +32,7 @@ function SchedulePageInner() {
 
 export default function SchedulePage() {
   return (
-    <Suspense
-      fallback={
-        <p className="p-4 text-nb-body text-nb-on-surface-variant md:p-6">Loading schedule…</p>
-      }
-    >
+    <Suspense fallback={<CalendarPageSkeleton />}>
       <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
         <SchedulePageInner />
       </div>

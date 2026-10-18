@@ -1,12 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Plus, Users } from "lucide-react";
+import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { Edit2, Plus, Search, Trash2, Users, X } from "lucide-react";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import TextPromptDialog from "@/components/dialogs/TextPromptDialog";
 import { useOrgWorkspace } from "@/components/cloud/OrgWorkspaceContext";
-import { Button, EmptyState, ListRow } from "@/components/ui";
-import { cloudApi, type TeamSummary } from "@/lib/cloud/api";
+import {
+  Button,
+  ContextMenu,
+  DropdownMenu,
+  EmptyState,
+  ListRow,
+  type MenuItem,
+} from "@/components/ui";
+import { cloudApi, type MemberSummary, type TeamSummary } from "@/lib/cloud/api";
 
 export default function OrgTeamsPage() {
   const { orgId, teams, members, canManage, busy, setBusy, refresh, setError } =
@@ -16,9 +23,45 @@ export default function OrgTeamsPage() {
   const [deleteTeam, setDeleteTeam] = useState<TeamSummary | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [teamUids, setTeamUids] = useState<Record<string, string[]>>({});
+  const [memberQuery, setMemberQuery] = useState("");
+  const [ctx, setCtx] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
+
+  function teamMenuItems(team: TeamSummary): MenuItem[] {
+    return [
+      {
+        id: "toggle",
+        label: expandedId === team.id ? "Hide people" : "Show people",
+        onSelect: () => setExpandedId(expandedId === team.id ? null : team.id),
+      },
+      ...(canManage
+        ? [
+            { id: "sep", label: "", separator: true as const },
+            {
+              id: "rename",
+              label: "Rename",
+              icon: <Edit2 size={14} />,
+              onSelect: () => setRenameTeam(team),
+            },
+            {
+              id: "delete",
+              label: "Delete",
+              icon: <Trash2 size={14} />,
+              danger: true as const,
+              onSelect: () => setDeleteTeam(team),
+            },
+          ]
+        : []),
+    ];
+  }
+
+  function onTeamContextMenu(e: ReactMouseEvent, team: TeamSummary) {
+    e.preventDefault();
+    setCtx({ x: e.clientX, y: e.clientY, items: teamMenuItems(team) });
+  }
 
   useEffect(() => {
     if (!expandedId) return;
+    setMemberQuery("");
     let cancelled = false;
     void cloudApi
       .listTeamMembers(orgId, expandedId)
@@ -34,6 +77,30 @@ export default function OrgTeamsPage() {
       cancelled = true;
     };
   }, [expandedId, orgId, setError]);
+
+  function refreshTeamMembers(teamId: string) {
+    return cloudApi.listTeamMembers(orgId, teamId).then((list) => {
+      setTeamUids((prev) => ({
+        ...prev,
+        [teamId]: list.map((x) => x.uid),
+      }));
+    });
+  }
+
+  function addMember(teamId: string, uid: string) {
+    void cloudApi
+      .addTeamMember(orgId, teamId, uid)
+      .then(() => refreshTeamMembers(teamId))
+      .then(() => setMemberQuery(""))
+      .catch((err) => setError((err as Error).message));
+  }
+
+  function removeMember(teamId: string, uid: string) {
+    void cloudApi
+      .removeTeamMember(orgId, teamId, uid)
+      .then(() => refreshTeamMembers(teamId))
+      .catch((err) => setError((err as Error).message));
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -54,8 +121,13 @@ export default function OrgTeamsPage() {
         {teams.map((team) => {
           const open = expandedId === team.id;
           const uids = teamUids[team.id] || [];
+          const onTeam = members.filter((m) => uids.includes(m.uid));
           return (
-            <ListRow key={team.id} className="flex-wrap">
+            <ListRow
+              key={team.id}
+              className="flex-wrap"
+              onContextMenu={(e) => onTeamContextMenu(e, team)}
+            >
               <button
                 type="button"
                 className="flex min-w-0 flex-1 items-center gap-4 text-left"
@@ -69,64 +141,25 @@ export default function OrgTeamsPage() {
                     {team.name}
                   </h3>
                   <p className="mt-0.5 text-nb-caption text-nb-on-surface-variant">
-                    {open ? "Hide people" : "Show people"}
+                    {open
+                      ? "Hide people"
+                      : uids.length
+                        ? `${uids.length} ${uids.length === 1 ? "person" : "people"}`
+                        : "Show people"}
                   </p>
                 </div>
               </button>
-              {canManage && (
-                <div className="flex gap-2">
-                  <Button size="sm" variant="ghost" onClick={() => setRenameTeam(team)}>
-                    Rename
-                  </Button>
-                  <Button size="sm" variant="link" className="text-nb-danger" onClick={() => setDeleteTeam(team)}>
-                    Delete
-                  </Button>
-                </div>
-              )}
+              <DropdownMenu items={teamMenuItems(team)} />
               {open && (
-                <div className="mt-3 basis-full w-full border-t border-nb-outline-variant/20 pt-3">
-                  <ul className="space-y-2">
-                    {members.map((m) => {
-                      const onTeam = uids.includes(m.uid);
-                      return (
-                        <li
-                          key={m.uid}
-                          className="flex items-center justify-between gap-2 text-nb-body"
-                        >
-                          <span className="truncate">{m.email || m.uid}</span>
-                          {canManage && (
-                            <Button
-                              size="sm"
-                              variant={onTeam ? "secondary" : "primary"}
-                              onClick={() => {
-                                const op = onTeam
-                                  ? cloudApi.removeTeamMember(orgId, team.id, m.uid)
-                                  : cloudApi.addTeamMember(orgId, team.id, m.uid);
-                                void op
-                                  .then(() =>
-                                    cloudApi.listTeamMembers(orgId, team.id).then((list) => {
-                                      setTeamUids((prev) => ({
-                                        ...prev,
-                                        [team.id]: list.map((x) => x.uid),
-                                      }));
-                                    })
-                                  )
-                                  .catch((err) => setError((err as Error).message));
-                              }}
-                            >
-                              {onTeam ? "Remove" : "Add"}
-                            </Button>
-                          )}
-                        </li>
-                      );
-                    })}
-                    {!members.length && (
-                      <li className="text-nb-on-surface-variant">
-                        Add people to the organization first.
-                      </li>
-                    )}
-                  </ul>
-                </div>
+                <TeamPeoplePanel
+                  canManage={canManage}
+                  members={members}
+                  onTeam={onTeam}
+                  query={memberQuery}
+                  onQueryChange={setMemberQuery}
+                  onAdd={(uid) => addMember(team.id, uid)}
+                  onRemove={(uid) => removeMember(team.id, uid)}
+                />
               )}
             </ListRow>
           );
@@ -199,6 +232,116 @@ export default function OrgTeamsPage() {
             .catch((err) => setError((err as Error).message));
         }}
       />
+
+      <ContextMenu
+        open={Boolean(ctx)}
+        x={ctx?.x ?? 0}
+        y={ctx?.y ?? 0}
+        items={ctx?.items ?? []}
+        onClose={() => setCtx(null)}
+      />
+    </div>
+  );
+}
+
+function TeamPeoplePanel({
+  canManage,
+  members,
+  onTeam,
+  query,
+  onQueryChange,
+  onAdd,
+  onRemove,
+}: {
+  canManage: boolean;
+  members: MemberSummary[];
+  onTeam: MemberSummary[];
+  query: string;
+  onQueryChange: (q: string) => void;
+  onAdd: (uid: string) => void;
+  onRemove: (uid: string) => void;
+}) {
+  const q = query.trim().toLowerCase();
+  const onTeamIds = useMemo(() => new Set(onTeam.map((m) => m.uid)), [onTeam]);
+
+  const suggestions = useMemo(() => {
+    if (!q) return [] as MemberSummary[];
+    return members.filter(
+      (m) =>
+        !onTeamIds.has(m.uid) &&
+        ((m.email || "").toLowerCase().includes(q) || m.uid.toLowerCase().includes(q))
+    );
+  }, [q, members, onTeamIds]);
+
+  return (
+    <div className="mt-3 basis-full w-full space-y-3 border-t border-nb-outline-variant/20 pt-3">
+      {canManage && (
+        <div className="relative">
+          <Search
+            size={14}
+            className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-nb-on-surface-variant/60"
+          />
+          <input
+            value={query}
+            onChange={(e) => onQueryChange(e.target.value)}
+            placeholder={
+              members.length ? "Search people to add…" : "Add people to the organization first"
+            }
+            disabled={!members.length}
+            className="w-full rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface py-2 pr-3 pl-8 text-nb-label outline-none focus:border-nb-primary disabled:opacity-50"
+            aria-label="Search people to add to team"
+          />
+          {q ? (
+            <div className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface shadow-nb-md">
+              {suggestions.length > 0 ? (
+                <ul className="py-1">
+                  {suggestions.map((m) => (
+                    <li key={m.uid}>
+                      <button
+                        type="button"
+                        className="flex w-full items-center px-3 py-2 text-left text-nb-label hover:bg-nb-surface-low"
+                        onClick={() => onAdd(m.uid)}
+                      >
+                        {m.email || m.uid}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="px-3 py-2 text-nb-caption text-nb-on-surface-variant">No matches</p>
+              )}
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      {onTeam.length > 0 ? (
+        <ul className="flex flex-wrap gap-1.5">
+          {onTeam.map((m) => (
+            <li key={m.uid}>
+              {canManage ? (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-full border border-nb-outline-variant/40 bg-nb-surface-low px-2 py-0.5 text-[11px] font-medium text-nb-on-surface"
+                  onClick={() => onRemove(m.uid)}
+                  title="Remove from team"
+                >
+                  {m.email || m.uid}
+                  <X size={12} />
+                </button>
+              ) : (
+                <span className="inline-flex items-center rounded-full border border-nb-outline-variant/40 bg-nb-surface-low px-2 py-0.5 text-[11px] font-medium text-nb-on-surface">
+                  {m.email || m.uid}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-nb-caption text-nb-on-surface-variant">
+          {canManage ? "No one on this team yet — search to add people." : "No one on this team yet."}
+        </p>
+      )}
     </div>
   );
 }

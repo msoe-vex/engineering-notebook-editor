@@ -59,4 +59,10 @@ export type NotebookWorkspaceState = {
   isNarrowViewport?: boolean;
   /** Open the entry-list drawer while an entry is open (phone). */
   openMobileExplorer?: () => void;
+  /**
+   * Entry id highlighted/opened immediately on click before the route catches up.
+   * Cleared when `pathname` matches or navigation is cancelled.
+   */
+  optimisticEntryId?: string | null;
+  setOptimisticEntryId?: (id: string | null) => void;
 };

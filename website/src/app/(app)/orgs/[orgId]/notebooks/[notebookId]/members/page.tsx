@@ -13,11 +13,18 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Camera, GripVertical, Plus, UserRound } from "lucide-react";
+import { Camera, GripVertical, Plus, Unlink, UserRound } from "lucide-react";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
 import { showNotification } from "@/components/overlays/Notification";
-import { Button, EmptyState, TextField } from "@/components/ui";
+import { ContributorsPageSkeleton } from "@/components/cloud/notebookPageSkeletons";
+import {
+  Button,
+  ContextMenu,
+  EmptyState,
+  TextField,
+  type MenuItem,
+} from "@/components/ui";
 import { Dialog } from "@/components/ui/Dialog";
 import { cloudApi, type MemberSummary, type NotebookMemberSummary } from "@/lib/cloud/api";
 import { useAppDndSensors } from "@/lib/dnd/dndSensors";
@@ -28,12 +35,14 @@ function SortableMember({
   onEdit,
   onRemove,
   onPhoto,
+  onContextMenu,
 }: {
   member: NotebookMemberSummary;
   photoUrl?: string;
   onEdit: () => void;
   onRemove: () => void;
   onPhoto: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: member.id,
@@ -43,11 +52,12 @@ function SortableMember({
     <div
       ref={setNodeRef}
       style={{
-        transform: CSS.Transform.toString(transform),
+        transform: CSS.Translate.toString(transform),
         transition,
         opacity: isDragging ? 0.45 : 1,
       }}
       className="flex items-center gap-2 rounded-nb-xl border border-nb-outline-variant/25 bg-nb-surface px-2 py-2"
+      onContextMenu={onContextMenu}
     >
       <button
         type="button"
@@ -104,15 +114,63 @@ export default function NotebookMembersPage() {
   );
   const [deleteMember, setDeleteMember] = useState<NotebookMemberSummary | null>(null);
   const [busy, setBusy] = useState(false);
+  const [rosterLoaded, setRosterLoaded] = useState(false);
+  const [ctx, setCtx] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const photoTargetRef = useRef<string | null>(null);
   const sensors = useAppDndSensors();
 
+  function memberMenuItems(m: NotebookMemberSummary): MenuItem[] {
+    return [
+      { id: "edit", label: "Edit", onSelect: () => setEditor({ ...m }) },
+      {
+        id: "photo",
+        label: "Upload photo",
+        icon: <Camera size={14} />,
+        onSelect: () => {
+          photoTargetRef.current = m.id;
+          photoInputRef.current?.click();
+        },
+      },
+      ...(m.linkedUid
+        ? [
+            {
+              id: "unlink",
+              label: "Unlink account",
+              icon: <Unlink size={14} />,
+              onSelect: () => {
+                void cloudApi
+                  .patchNotebookMember(orgId, notebookId, m.id, { linkedUid: null })
+                  .then(() => {
+                    setMembers((prev) =>
+                      prev.map((row) =>
+                        row.id === m.id ? { ...row, linkedUid: undefined } : row
+                      )
+                    );
+                    showNotification("Account unlinked", "success");
+                  })
+                  .catch((err) => setError((err as Error).message));
+              },
+            },
+          ]
+        : []),
+      { id: "sep", label: "", separator: true },
+      {
+        id: "remove",
+        label: "Remove",
+        danger: true,
+        onSelect: () => setDeleteMember(m),
+      },
+    ];
+  }
+
   function load() {
+    setRosterLoaded(false);
     void cloudApi
       .listNotebookMembers(orgId, notebookId)
       .then(setMembers)
-      .catch((err) => setError((err as Error).message));
+      .catch((err) => setError((err as Error).message))
+      .finally(() => setRosterLoaded(true));
   }
 
   useEffect(() => {
@@ -223,6 +281,10 @@ export default function NotebookMembersPage() {
     }
   }
 
+  if (!rosterLoaded) {
+    return <ContributorsPageSkeleton />;
+  }
+
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -252,6 +314,14 @@ export default function NotebookMembersPage() {
                   onPhoto={() => {
                     photoTargetRef.current = m.id;
                     photoInputRef.current?.click();
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setCtx({
+                      x: e.clientX,
+                      y: e.clientY,
+                      items: memberMenuItems(m),
+                    });
                   }}
                 />
               ))}
@@ -346,6 +416,14 @@ export default function NotebookMembersPage() {
             .then(load)
             .catch((err) => setError((err as Error).message));
         }}
+      />
+
+      <ContextMenu
+        open={Boolean(ctx)}
+        x={ctx?.x ?? 0}
+        y={ctx?.y ?? 0}
+        items={ctx?.items ?? []}
+        onClose={() => setCtx(null)}
       />
     </div>
   );

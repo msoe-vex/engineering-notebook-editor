@@ -1,20 +1,69 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type MouseEvent as ReactMouseEvent } from "react";
 import Link from "next/link";
-import { ArrowRight, BookOpen, Edit2, Plus, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowRight, BookOpen, Edit2, Plus, Settings, Trash2 } from "lucide-react";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import TextPromptDialog from "@/components/dialogs/TextPromptDialog";
 import { useOrgWorkspace } from "@/components/cloud/OrgWorkspaceContext";
-import { Button, DropdownMenu, EmptyState, ListRow, Skeleton } from "@/components/ui";
+import {
+  Button,
+  ContextMenu,
+  DropdownMenu,
+  EmptyState,
+  ListRow,
+  Skeleton,
+  type MenuItem,
+} from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
 
 export default function OrgNotebooksPage() {
+  const router = useRouter();
   const { orgId, notebooks, busy, setBusy, refresh, setError, initialLoaded } =
     useOrgWorkspace();
   const [createOpen, setCreateOpen] = useState(false);
   const [renameNb, setRenameNb] = useState<{ id: string; name: string } | null>(null);
   const [deleteNb, setDeleteNb] = useState<{ id: string; name: string } | null>(null);
+  const [ctx, setCtx] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
+
+  function notebookMenuItems(nb: { id: string; name: string; title?: string }): MenuItem[] {
+    return [
+      {
+        id: "open",
+        label: "Open",
+        onSelect: () => router.push(`/orgs/${orgId}/notebooks/${nb.id}`),
+      },
+      {
+        id: "settings",
+        label: "Settings",
+        icon: <Settings size={14} />,
+        onSelect: () => router.push(`/orgs/${orgId}/notebooks/${nb.id}/setup`),
+      },
+      { id: "sep", label: "", separator: true },
+      {
+        id: "rename",
+        label: "Rename",
+        icon: <Edit2 size={14} />,
+        onSelect: () => setRenameNb(nb),
+      },
+      {
+        id: "delete",
+        label: "Delete",
+        icon: <Trash2 size={14} />,
+        danger: true,
+        onSelect: () => setDeleteNb(nb),
+      },
+    ];
+  }
+
+  function onNotebookContextMenu(
+    e: ReactMouseEvent,
+    nb: { id: string; name: string; title?: string }
+  ) {
+    e.preventDefault();
+    setCtx({ x: e.clientX, y: e.clientY, items: notebookMenuItems(nb) });
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -46,7 +95,11 @@ export default function OrgNotebooksPage() {
           ))}
         {initialLoaded &&
           notebooks.map((nb) => (
-          <ListRow key={nb.id} interactive>
+          <ListRow
+            key={nb.id}
+            interactive
+            onContextMenu={(e) => onNotebookContextMenu(e, nb)}
+          >
             <Link
               href={`/orgs/${orgId}/notebooks/${nb.id}`}
               className="flex min-w-0 flex-1 cursor-pointer items-center gap-4"
@@ -67,23 +120,7 @@ export default function OrgNotebooksPage() {
                 className="shrink-0 text-nb-on-surface-variant opacity-0 transition-opacity group-hover:opacity-100"
               />
             </Link>
-            <DropdownMenu
-              items={[
-                {
-                  id: "rename",
-                  label: "Rename",
-                  icon: <Edit2 size={14} />,
-                  onSelect: () => setRenameNb(nb),
-                },
-                {
-                  id: "delete",
-                  label: "Delete",
-                  icon: <Trash2 size={14} />,
-                  danger: true,
-                  onSelect: () => setDeleteNb(nb),
-                },
-              ]}
-            />
+            <DropdownMenu items={notebookMenuItems(nb)} />
           </ListRow>
         ))}
         {initialLoaded && !notebooks.length && (
@@ -151,6 +188,14 @@ export default function OrgNotebooksPage() {
             .then(refresh)
             .catch((err) => setError((err as Error).message));
         }}
+      />
+
+      <ContextMenu
+        open={Boolean(ctx)}
+        x={ctx?.x ?? 0}
+        y={ctx?.y ?? 0}
+        items={ctx?.items ?? []}
+        onClose={() => setCtx(null)}
       />
     </div>
   );

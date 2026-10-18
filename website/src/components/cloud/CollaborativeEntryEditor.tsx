@@ -8,6 +8,7 @@ import { cloudApi, collabWsUrl } from "@/lib/cloud/api";
 import { analyzeEntryContent } from "@/lib/cloud/entryQuality";
 import RichTextArea from "@/components/editor/RichTextArea";
 import { NotebookFormatToolbar, insertBlock } from "@/components/editor/NotebookFormatToolbar";
+import { Skeleton, SkeletonLines } from "@/components/ui";
 import type { TipTapNode } from "@/lib/notebook/metadata";
 import type { ProjectPhase } from "@engineering-notebook/shared";
 import { showNotification } from "@/components/overlays/Notification";
@@ -378,10 +379,27 @@ export function CollaborativeEntryEditor({
 
   if (!provider || !synced) {
     return (
-      <p className="p-4 text-sm text-nb-on-surface-variant">
-        Connecting to collaboration… ({status}
-        {provider && !synced ? ", syncing" : ""})
-      </p>
+      <div
+        className="flex h-full min-h-0 flex-col text-nb-on-surface"
+        aria-busy
+        aria-label={
+          provider && !synced
+            ? "Syncing entry content"
+            : "Connecting to collaboration"
+        }
+      >
+        <div className="shrink-0 border-b border-nb-outline-variant/20 bg-nb-surface px-3 py-2">
+          <Skeleton className="h-8 w-full max-w-xl" />
+        </div>
+        <div className="min-h-0 flex-1 space-y-3 overflow-hidden p-4 md:p-8">
+          <Skeleton className="h-5 w-1/3 max-w-xs" />
+          <SkeletonLines lines={10} className="max-w-2xl" />
+          <span className="sr-only">
+            Connecting to collaboration… ({status}
+            {provider && !synced ? ", syncing" : ""})
+          </span>
+        </div>
+      </div>
     );
   }
 

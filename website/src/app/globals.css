@@ -1095,6 +1095,7 @@ pre[class*="language-"],
 
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
+  height: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
@@ -1108,6 +1109,39 @@ pre[class*="language-"],
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: var(--color-nb-on-surface-variant);
+}
+
+/* Ultra-thin horizontal strip (format toolbar, node chrome). */
+.thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-nb-outline-variant) transparent;
+}
+
+.thin-scrollbar::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+}
+
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-nb-outline-variant) 70%, transparent);
+  border-radius: 99px;
+}
+
+.thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-nb-on-surface-variant);
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
 .nb-cal {

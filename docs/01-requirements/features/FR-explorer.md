@@ -14,19 +14,23 @@ Notebook accessors.
 ## User-facing behavior
 
 - `NotebookEntryList`: create/rename/delete folder; nest via `parentId`; assign `folderId`
+- New entry/folder creates immediately with a default name; sidebar name becomes an inline text field (Enter save, Esc cancel). Rename from the row menu uses the same inline field.
 - DnD reorder siblings → `POST …/entries/reorder` mode `explorer`
 - Phase icon+color as entry glyph when set; template glyph for templates
 - Duplicate entry; **New** dropdown (blank entry, blank template, from each template); mark template
-- Search filters panel (title/authors/date/phase text + structured filters)
+- Search + filters: text query, phase dropdown (`PhasePicker`), author typeahead, date range, Show/Sort selects; scrollable filter panel (max height) with clearer separation from the list; while filtering, flat sorted match list; active filter chips; session-persisted per notebook; `/` focuses search; empty “No matches” + Clear filters
+- Shared `ContextMenu` + `DropdownMenu` use the same `MenuItem` builders (Open, Rename, Duplicate, Move…, Delete; folders: New entry/subfolder; multi-select bulk Move/Delete)
+- Double-click entry/folder label to rename inline
 - Toast + refresh/revert on reorder failure
 - Multi-select: Ctrl/Cmd click toggle, Shift click range; bulk Move… / Delete
 - Phone (&lt; `md`): full-screen list when no entry open; overlay drawer when an entry is open (list control + Entries tab)
+- Desktop: double-click the explorer ↔ main resize handle to reset width (default 22/78)
 
 ## Acceptance criteria
 
 - [ ] Create folder → move entry → reload → still nested
 - [ ] Explorer DnD does not change calendar `order` / `date`
-- [ ] Filters hide non-matching entries; clear resets
+- [x] Filters hide non-matching entries; chips + Clear all / Clear filters empty state
 - [ ] Templates appear in the unified tree with a distinct icon; New menu lists templates
 - [ ] Multi-select can move or delete several entries at once
 - [x] On phone, explorer is not a persistent side-by-side split; entry edit is full-width

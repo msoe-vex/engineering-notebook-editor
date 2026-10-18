@@ -1,20 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MouseEvent as ReactMouseEvent, Suspense } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
-import { Building2, BookOpen, Mail, Plus, ArrowRight, Edit2, Trash2 } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Building2, BookOpen, Mail, Plus, ArrowRight, Edit2, Trash2, Users } from "lucide-react";
 import Logo from "@/components/icons/Logo";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import TextPromptDialog from "@/components/dialogs/TextPromptDialog";
 import {
   Alert,
   Button,
+  ContextMenu,
   DropdownMenu,
   EmptyState,
   ListRow,
   Skeleton,
+  type MenuItem,
 } from "@/components/ui";
 import { cloudApi, type NotebookSummary, type OrgSummary } from "@/lib/cloud/api";
 import { isOrgAdminRole, orgRoleLabel } from "@/lib/cloud/roles";
@@ -23,6 +24,7 @@ import { getDevToken, getFirebaseAuth } from "@/lib/cloud/firebase";
 type RecentNotebook = NotebookSummary & { orgId: string; orgName: string };
 
 function HomeInner() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [orgs, setOrgs] = useState<OrgSummary[]>([]);
   const [recent, setRecent] = useState<RecentNotebook[]>([]);
@@ -36,6 +38,49 @@ function HomeInner() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<OrgSummary | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<OrgSummary | null>(null);
+  const [ctx, setCtx] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
+
+  function orgMenuItems(org: OrgSummary): MenuItem[] {
+    const items: MenuItem[] = [
+      {
+        id: "open",
+        label: "Open",
+        onSelect: () => router.push(`/orgs/${org.id}`),
+      },
+      {
+        id: "people",
+        label: "People",
+        icon: <Users size={14} />,
+        onSelect: () => router.push(`/orgs/${org.id}/people`),
+      },
+    ];
+    if (isOrgAdminRole(org.role)) {
+      items.push(
+        { id: "sep", label: "", separator: true },
+        {
+          id: "rename",
+          label: "Rename",
+          icon: <Edit2 size={14} />,
+          onSelect: () => setRenameTarget(org),
+        }
+      );
+      if (org.role === "owner") {
+        items.push({
+          id: "delete",
+          label: "Delete",
+          icon: <Trash2 size={14} />,
+          danger: true,
+          onSelect: () => setDeleteTarget(org),
+        });
+      }
+    }
+    return items;
+  }
+
+  function onOrgContextMenu(e: ReactMouseEvent, org: OrgSummary) {
+    e.preventDefault();
+    setCtx({ x: e.clientX, y: e.clientY, items: orgMenuItems(org) });
+  }
 
   useEffect(() => {
     const invite = searchParams.get("invite");
@@ -179,7 +224,11 @@ function HomeInner() {
         <h2 className="text-nb-title font-semibold">Organizations</h2>
         <div className="grid gap-2">
           {orgs.map((org) => (
-            <ListRow key={org.id} interactive>
+            <ListRow
+              key={org.id}
+              interactive
+              onContextMenu={(e) => onOrgContextMenu(e, org)}
+            >
               <Link
                 href={`/orgs/${org.id}`}
                 className="flex min-w-0 flex-1 cursor-pointer items-center gap-4"
@@ -194,29 +243,7 @@ function HomeInner() {
                   </p>
                 </div>
               </Link>
-              {isOrgAdminRole(org.role) && (
-                <DropdownMenu
-                  items={[
-                    {
-                      id: "rename",
-                      label: "Rename",
-                      icon: <Edit2 size={14} />,
-                      onSelect: () => setRenameTarget(org),
-                    },
-                    ...(org.role === "owner"
-                      ? [
-                          {
-                            id: "delete",
-                            label: "Delete",
-                            icon: <Trash2 size={14} />,
-                            danger: true as const,
-                            onSelect: () => setDeleteTarget(org),
-                          },
-                        ]
-                      : []),
-                  ]}
-                />
-              )}
+              <DropdownMenu items={orgMenuItems(org)} />
             </ListRow>
           ))}
           {!orgs.length && (
@@ -309,6 +336,14 @@ function HomeInner() {
             .then(refresh)
             .catch((err) => setError((err as Error).message));
         }}
+      />
+
+      <ContextMenu
+        open={Boolean(ctx)}
+        x={ctx?.x ?? 0}
+        y={ctx?.y ?? 0}
+        items={ctx?.items ?? []}
+        onClose={() => setCtx(null)}
       />
     </div>
   );

@@ -13,6 +13,7 @@ import {
 } from "@dnd-kit/core";
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Rows3, X, type LucideIcon } from "lucide-react";
 import { PhaseChip } from "@/components/cloud/PhaseChip";
+import { CalendarPageSkeleton } from "@/components/cloud/notebookPageSkeletons";
 import { useCloudWorkspace } from "@/hooks/useCloudWorkspace";
 import { formatAuthors, sortedEntries } from "@/lib/notebook/metadata";
 import { getPhaseConfig, getPhases } from "@/lib/notebook/phases";
@@ -412,7 +413,14 @@ function formatEntryDate(dateStr?: string): string {
 }
 
 export default function CalendarView({ onClose }: { onClose?: () => void }) {
-  const { metadata, navigateTo, reorderCalendarEntry, calendarMode, calendarCursor } = useCloudWorkspace();
+  const {
+    metadata,
+    navigateTo,
+    reorderCalendarEntry,
+    calendarMode,
+    calendarCursor,
+    isInitialized,
+  } = useCloudWorkspace();
   const isMobileLayout = useMobileCalendarLayout();
   const mode = isMobileLayout ? "week" : calendarMode;
   const cursor = useMemo(() => parseYmd(calendarCursor), [calendarCursor]);
@@ -603,6 +611,10 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
   };
 
   const hoverCard = hover ? cards[hover.id] : null;
+
+  if (!isInitialized) {
+    return <CalendarPageSkeleton />;
+  }
 
   const renderDay = (d: Date) => {
     const key = toYmd(d);
