@@ -12,6 +12,7 @@ import { registerUserRoutes } from "./routes/users.js";
 import { registerStaticAssetRoutes } from "./routes/staticAssets.js";
 import { registerAuditRoutes } from "./routes/audits.js";
 import { registerAiRoutes } from "./routes/ai.js";
+import { registerInternalCompileRoutes } from "./routes/internalCompile.js";
 
 /** Default 64 MiB — assets, logos, and compiled PDF exports share this Fastify limit. */
 const bodyLimit = Number(process.env.BODY_LIMIT_BYTES || MAX_UPLOAD_BYTES);
@@ -77,6 +78,22 @@ app.get("/auth/session", async (request, reply) => {
   return auth.verifySession(token);
 });
 
+// Raw binary bodies for asset / export / internal compile uploads (register once).
+for (const type of [
+  "application/octet-stream",
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/gif",
+  "image/webp",
+  "image/svg+xml",
+]) {
+  app.addContentTypeParser(type, (_req, payload, done) => {
+    done(null, payload);
+  });
+}
+
 app.register(async (scoped) => {
   scoped.addHook("preHandler", requireAuth);
   await registerUserRoutes(scoped);
@@ -87,6 +104,7 @@ app.register(async (scoped) => {
 });
 
 await registerStaticAssetRoutes(app, storage);
+await registerInternalCompileRoutes(app, storage);
 
 app.post("/internal/collab/connections", async (request) => {
   const body = request.body as { activeConnections?: number };

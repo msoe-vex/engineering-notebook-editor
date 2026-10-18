@@ -1,7 +1,7 @@
 # Hot-reload overlay for Core / Collab (`tsx watch`).
 # See docs/04-guides/local-development.md — run website with `npm run dev` on the host.
 #
-#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build firebase gcs core collab
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build firebase gcs core collab compile
 #
 # Polling helps WSL2/Docker Desktop file-watch misses.
 services:

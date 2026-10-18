@@ -1212,22 +1212,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     return { ok: true, tipTapRev, tipTapGcsPath: key };
   });
 
-  // Browser uploads go through Core (auth + CORS). Pass the raw stream — do not buffer.
-  const binaryTypes = [
-    "application/octet-stream",
-    "application/pdf",
-    "image/png",
-    "image/jpeg",
-    "image/jpg",
-    "image/gif",
-    "image/webp",
-    "image/svg+xml",
-  ];
-  for (const type of binaryTypes) {
-    app.addContentTypeParser(type, (_req, payload, done) => {
-      done(null, payload);
-    });
-  }
+  // Binary content-type parsers are registered once on the root Fastify app (index.ts).
 
   app.post("/orgs/:orgId/notebooks/:notebookId/assets", async (request, reply) => {
     const user = getUser(request);
@@ -1381,5 +1366,67 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     if (!exists) return reply.code(404).send({ error: "export not found" });
     const url = await storage.getSignedUrl(key, "read");
     return { url, exportId, gcsPath: key };
+  });
+
+  /**
+   * Enqueue server-side XeLaTeX compile (local Compose worker / later Cloud Run Job).
+   * Returns 202 + jobId; progress/done/failed arrive on notebook SSE.
+   * 503 when COMPILE_SERVICE_URL is unset (UI may fall back to BusyTeX).
+   */
+  app.post("/orgs/:orgId/notebooks/:notebookId/compile", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
+    await assertNotebookAccess(user, orgId, notebookId);
+
+    const compileUrl = (process.env.COMPILE_SERVICE_URL || "").replace(/\/$/, "");
+    if (!compileUrl) {
+      return reply.code(503).send({
+        error: "compile_service_unavailable",
+        message: "Server compile is not configured (set COMPILE_SERVICE_URL).",
+      });
+    }
+
+    const jobId = randomUUID();
+    const at = nowIso();
+    publishNotebookEvent(orgId, notebookId, {
+      type: "compile.progress",
+      jobId,
+      status: "Queued…",
+      progress: 5,
+      at,
+    });
+
+    const secret = process.env.INTERNAL_SERVICE_SECRET;
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    if (secret) headers["x-internal-secret"] = secret;
+
+    try {
+      const res = await fetch(`${compileUrl}/jobs`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ orgId, notebookId, jobId }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        publishNotebookEvent(orgId, notebookId, {
+          type: "compile.failed",
+          jobId,
+          error: `compile worker ${res.status}: ${text.slice(0, 200)}`,
+          at: nowIso(),
+        });
+        return reply.code(502).send({ error: "compile_worker_error", jobId, detail: text.slice(0, 500) });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      publishNotebookEvent(orgId, notebookId, {
+        type: "compile.failed",
+        jobId,
+        error: message,
+        at: nowIso(),
+      });
+      return reply.code(502).send({ error: "compile_worker_unreachable", jobId, message });
+    }
+
+    return reply.code(202).send({ ok: true, jobId });
   });
 }

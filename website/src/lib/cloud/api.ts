@@ -489,6 +489,35 @@ export const cloudApi = {
       `/orgs/${orgId}/notebooks/${notebookId}/exports/${exportId}/url`
     ),
 
+  /**
+   * Enqueue server XeLaTeX compile. Returns `{ unavailable: true }` when Core has no
+   * COMPILE_SERVICE_URL (UI should fall back to BusyTeX).
+   */
+  async startCompile(
+    orgId: string,
+    notebookId: string
+  ): Promise<{ unavailable: true } | { unavailable?: false; jobId: string }> {
+    const url = `${coreBase()}/orgs/${orgId}/notebooks/${notebookId}/compile`;
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: await authHeaders(true),
+        body: "{}",
+      });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(`Cannot reach Core API at ${coreBase()} (${detail}).`);
+    }
+    if (res.status === 503) return { unavailable: true };
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`${res.status} ${body}`);
+    }
+    const data = (await res.json()) as { jobId: string };
+    return { jobId: data.jobId };
+  },
+
   aiComplete: (body: { prompt: string; temperature?: number; model?: string }) =>
     coreFetch<{ provider: "vertex"; model: string; text: string }>("/ai/complete", {
       method: "POST",

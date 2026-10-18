@@ -1,0 +1,479 @@
+/**
+ * TipTap → LaTeX helpers — kept in sync with website/src/lib/latex/latex.ts
+ * (imports remapped for the compile job; no Next.js aliases).
+ */
+import {
+  type Identified,
+  type ProjectPhase,
+  type TeamMetadata,
+  type TipTapNode,
+  type EntryMetadata,
+  formatAuthors,
+  sortedEntries,
+  sortedMembers,
+  sortedPhases,
+} from "./types.js";
+
+const ASSETS_DIR = "data/assets";
+
+export function latexPhaseRef(
+  phase: string | null | undefined,
+  phases?: Record<string, ProjectPhase> | Identified<ProjectPhase>[]
+): string {
+  if (!phase) return "";
+  if (!phases) return "";
+  if (Array.isArray(phases)) {
+    const p = phases.find((x) => x.id === phase);
+    return p ? String(p.order + 1) : "";
+  }
+  const p = phases[phase];
+  return p ? String(p.order + 1) : "";
+}
+
+export const escapeLaTeX = (text?: string) =>
+  (text || "")
+    .replace(/\\/g, "\\textbackslash{}")
+    .replace(/&/g, "\\&")
+    .replace(/%/g, "\\%")
+    .replace(/\$/g, "\\$")
+    .replace(/#/g, "\\#")
+    .replace(/_/g, "\\_")
+    .replace(/\{/g, "\\{")
+    .replace(/\}/g, "\\}")
+    .replace(/\^/g, "\\^{}")
+    .replace(/~/g, "\\~{}");
+
+
+export const mapLanguageToLatex = (lang: string): string => {
+  const mapping: Record<string, string> = {
+    "cpp": "C++",
+    "c": "C",
+    "python": "Python",
+    "javascript": "JavaScript",
+    "typescript": "JavaScript",
+    "typescriptreact": "JavaScript",
+    "javascriptreact": "JavaScript",
+    "tsx": "JavaScript",
+    "jsx": "JavaScript",
+    "json": "JavaScript",
+    "html": "HTML",
+    "css": "CSS",
+    "java": "Java",
+    "bash": "bash",
+    "sql": "SQL",
+    "rust": "Rust",
+    "go": "Go",
+    "csharp": "[Sharp]C",
+    "plaintext": "{}",
+    "latex": "TeX",
+  };
+  return mapping[lang] || lang;
+};
+
+// Recursively extract plain text from a TipTap node tree (no formatting commands).
+// Used for headings / moving arguments where LaTeX commands would break.
+const plainTextFromNode = (node: TipTapNode): string => {
+  if (!node) return "";
+  if (node.type === "text") return escapeLaTeX(node.text ?? "");
+  return (node.content || []).map(plainTextFromNode).join("");
+};
+
+const cssColorToHex = (colorStr: string | undefined): string => {
+  if (!colorStr) return "000000";
+  const str = colorStr as string;
+  if (str.startsWith("rgb")) {
+    const rgbMatch = str.match(/\d+/g);
+    if (rgbMatch && rgbMatch.length >= 3) {
+      const r = parseInt(rgbMatch[0]).toString(16).padStart(2, "0");
+      const g = parseInt(rgbMatch[1]).toString(16).padStart(2, "0");
+      const b = parseInt(rgbMatch[2]).toString(16).padStart(2, "0");
+      return r + g + b;
+    }
+  }
+  return str.replace("#", "");
+};
+
+export const convertBlockChildrenToLatex = (
+  content: TipTapNode[],
+  resourceTypes?: Record<string, string>
+): string => {
+  let result = "";
+  const stack: ("bullet" | "ordered")[] = [];
+
+  const closeStackToLevel = (level: number) => {
+    while (stack.length > level) {
+      const type = stack.pop();
+      if (type === "bullet") {
+        result += "\\end{notebookunorderedlist}\n";
+      } else if (type === "ordered") {
+        result += "\\end{notebookorderedlist}\n";
+      }
+    }
+  };
+
+  content.forEach((child) => {
+    if (child.type === "notebookListItem") {
+      const attrs = child.attrs || {};
+      const indent = typeof attrs.indent === "number" ? attrs.indent : 1;
+      const listType = (attrs.listType ?? "bullet") as "bullet" | "ordered";
+
+      // 1. If we are deeper than the target indent, pop/close environments
+      if (stack.length > indent) {
+        closeStackToLevel(indent);
+      }
+
+      // 2. If the list type at the current level differs, OR if we explicitly restart, close the level
+      if (attrs.restart || (stack.length === indent && stack[indent - 1] !== listType)) {
+        closeStackToLevel(indent - 1);
+      }
+
+      // 3. If we are shallower than the target indent, open new environments
+      while (stack.length < indent) {
+        stack.push(listType);
+        if (listType === "bullet") {
+          result += "\\begin{notebookunorderedlist}\n";
+        } else {
+          result += "\\begin{notebookorderedlist}\n";
+        }
+        // If we are still shallower than the target indent, it means we just opened
+        // a parent environment that won't have its own direct item.
+        // We MUST output an empty \item[] to prevent LaTeX's "missing \item" error!
+        if (stack.length < indent) {
+          result += "  \\item[]\n";
+        }
+      }
+
+      // 4. Render the list item inline content
+      const innerText = (child.content || [])
+        .map((n) => convertNodeToLatex(n, resourceTypes))
+        .join("");
+      result += `  \\item ${innerText.trim()}\n`;
+    } else {
+      // Non-list item: close all open list environments first!
+      closeStackToLevel(0);
+      result += convertNodeToLatex(child, resourceTypes);
+    }
+  });
+
+  // Close any remaining list environments at the end
+  closeStackToLevel(0);
+  return result;
+};
+
+export const convertNodeToLatex = (node: TipTapNode, resourceTypes?: Record<string, string>): string => {
+  if (!node) return "";
+
+  // Helper to get resource type (entry, header, image, codeBlock, table, etc.)
+  const getResourceType = (id: string): string | null => {
+    if (!resourceTypes) return null;
+    return resourceTypes[id] || null;
+  };
+
+  const children = () => (node.content || []).map(n => convertNodeToLatex(n, resourceTypes)).join("");
+
+  switch (node.type) {
+    case "doc":
+      return convertBlockChildrenToLatex(node.content || [], resourceTypes);
+
+    case "text": {
+      let t = escapeLaTeX(node.text ?? "");
+
+      const marks = node.marks || [];
+      const hasBold = marks.some(m => m.type === "bold");
+      const hasItalic = marks.some(m => m.type === "italic");
+      const hasCode = marks.some(m => m.type === "code");
+      const hasUnderline = marks.some(m => m.type === "underline");
+      const strikeMark = marks.find(m => m.type === "strike");
+      const colorMark = marks.find(m => m.type === "textStyle" && m.attrs?.color);
+      const highlightMark = marks.find(m => m.type === "highlight");
+      const superscriptMark = marks.find(m => m.type === "superscript");
+      const subscriptMark = marks.find(m => m.type === "subscript");
+      const linkMark = marks.find(m => m.type === "link");
+
+      // Auto-wrap abnormally long unbreakable words for regular text
+      // (Scripts are handled natively character-by-character in engineering_notebook.sty)
+      if (!superscriptMark && !subscriptMark) {
+        t = t.replace(/(\S{40,})/g, "\\notebookcharsplit{$1}");
+      }
+
+      // Innermost: Scripts (Now handled natively in engineering_notebook.sty via expl3)
+      if (superscriptMark) t = `\\notebooksuperscript{${t}}`;
+      if (subscriptMark) t = `\\notebooksubscript{${t}}`;
+
+      // Ulem-based universal rich text decorator for line breaking
+      let hlColor = "";
+      if (highlightMark) {
+        hlColor = highlightMark.attrs?.color ? cssColorToHex(highlightMark.attrs.color as string) : "ffff00";
+      }
+      const hasUl = hasUnderline ? 1 : 0;
+      const hasSt = strikeMark ? 1 : 0;
+
+      if (hlColor || hasUl || hasSt) {
+        t = `\\notebookdecoration{${hlColor}}{${hasUl}}{${hasSt}}{${t}}`;
+      }
+
+      // Semantic: Bold and Italic
+      if (hasBold) t = `\\notebookbold{${t}}`;
+      if (hasItalic) t = `\\notebookitalic{${t}}`;
+
+      if (hasCode) t = `\\notebookinlinecode{${t}}`;
+
+      if (colorMark) {
+        const hex = cssColorToHex(colorMark.attrs?.color as string);
+        t = `\\notebooktextcolor{${hex}}{${t}}`;
+      }
+
+      if (linkMark) {
+        const { href, resourceId, entryId } = linkMark.attrs ?? {};
+        const finalResourceId = (resourceId || entryId) as string | undefined;
+
+        if (finalResourceId) {
+          const resType = getResourceType(finalResourceId);
+          if (resType === "heading") {
+            t = `\\notebooklink{${t}}{heading}{${finalResourceId}}`;
+          } else if (resType === "entry") {
+            t = `\\notebooklink{${t}}{entry}{${finalResourceId}}`;
+          } else if (resType === "image" || resType === "codeBlock" || resType === "table") {
+            t = `\\notebooklink{${t}}{${resType}}{${finalResourceId}}`;
+          } else if (resType) {
+            t = `\\notebooklink{${t}}{${resType}}{${finalResourceId}}`;
+          } else {
+            t = `\\notebooklink{${t}}{resource}{${finalResourceId}}`;
+          }
+        } else if (href) {
+          t = `\\notebooklink{${t}}{url}{${href}}`;
+        }
+      }
+      return t;
+    }
+
+    case "hardBreak":
+      return "\\\\\n";
+
+    case "paragraph": {
+      const inner = children();
+      return inner.trim() ? `${inner}\n\n` : "\n";
+    }
+
+    case "heading": {
+      const level = node.attrs?.level ?? 2;
+      const formattedText = children().trim();
+      const plainText = plainTextFromNode(node).trim();
+      const uuid = (node.attrs?.id as string) || "";
+
+      if (uuid) {
+        // notebookheader{formatted}{plain}{level}{uuid}
+        return `\\notebookheader{${formattedText}}{${plainText}}{${level}}{${uuid}}\n\n`;
+      } else {
+        // Fallback: standard heading without label (plain text only)
+        const cmd = level === 1 ? "subsection" : (level === 2 ? "subsubsection" : "paragraph");
+        return `\\${cmd}{${plainText}}\n\n`;
+      }
+    }
+
+    case "notebookListItem": {
+      const innerText = children();
+      return `  \\item ${innerText.trim()}\n`;
+    }
+
+    case "codeBlock": {
+      const attrs = (node.attrs || {}) as Record<string, string | undefined>;
+      const lang = mapLanguageToLatex(attrs.language ?? "plaintext");
+      const code = (node.content || []).map((n) => n.text ?? "").join("");
+      const title = escapeLaTeX(attrs.title ?? "");
+      const caption = escapeLaTeX(attrs.caption ?? "");
+      const labelId = attrs.id || "";
+      return `\\begin{notebookcodeblock}{${lang}}{${title}}{${caption}}{${labelId}}\n${code}\n\\end{notebookcodeblock}\n\n`;
+    }
+
+    case "image": {
+      const attrs = (node.attrs || {}) as Record<string, string | undefined>;
+      const filePath = attrs.filePath;
+      const originalFilePath = attrs.originalFilePath || filePath;
+      const src = attrs.src ?? "";
+      const imgSrc = filePath
+        ? filePath
+        : src.startsWith("data:") ? `${ASSETS_DIR}/embedded_image.png` : src;
+      const qualitySrc = originalFilePath || imgSrc;
+
+      // Keep full project-relative path (for example: data/assets/compressed/...).
+
+      const title = escapeLaTeX(attrs.title ?? "");
+      const caption = escapeLaTeX(attrs.caption || attrs.alt || "");
+
+      // Convert "55%" to "0.55\textwidth"
+      const rawWidth = (attrs.width ?? "100%").toString().replace("%", "");
+      const widthNum = parseFloat(rawWidth);
+      const latexWidth = isNaN(widthNum) ? "1" : (widthNum / 100).toFixed(2);
+
+      const labelId = attrs.id || "";
+      return `\\notebookimage{${imgSrc}}{${qualitySrc}}{${title}}{${caption}}{${latexWidth}\\textwidth}{${labelId}}\n\n`;
+    }
+
+    case "table": {
+      const attrs = (node.attrs || {}) as Record<string, string | undefined>;
+      const rows = node.content ?? [];
+      if (!rows.length) return "";
+      const colCount = (rows[0]?.content ?? []).length;
+      const colSpec = "|l".repeat(colCount) + "|";
+      const title = escapeLaTeX(attrs.title ?? "");
+      const caption = escapeLaTeX(attrs.caption ?? "Design Data");
+
+      const body = rows.map((row) => {
+        const cells = (row.content ?? []).map((cell) =>
+          convertBlockChildrenToLatex(cell.content ?? [], resourceTypes).replace(/\n+$/, "").trim()
+        );
+        return cells.join(" & ") + " \\\\ \\hline";
+      }).join("\n");
+
+      const labelId = (node.attrs?.id as string) || "";
+
+      return `\\notebooktable{${colSpec}}{${title}}{${body}}{${caption}}{${labelId}}\n\n`;
+    }
+
+    // tableRow / tableCell / tableHeader — just recurse
+    case "tableRow":
+    case "tableCell":
+    case "tableHeader":
+      return children();
+
+    case "blockquote":
+      return `\\begin{quote}\n${children()}\\end{quote}\n\n`;
+
+    case "rawLatex": {
+      const code = (node.content || []).map((n) => n.text ?? "").join("");
+      return code + "\n\n";
+    }
+
+    case "inlineMath": {
+      return `$${node.attrs?.latex || ""}$`;
+    }
+
+    case "mathBlock": {
+      const attrs = (node.attrs || {}) as Record<string, string | undefined>;
+      const title = escapeLaTeX(attrs.title ?? "");
+      const caption = escapeLaTeX(attrs.caption ?? "");
+      const latex = attrs.latex || "";
+      const labelId = attrs.id || "";
+
+      return `\\notebookequation{${latex}}{${title}}{${caption}}{${labelId}}\n\n`;
+    }
+
+    case "horizontalRule":
+      return "\\noindent\\rule{\\linewidth}{0.4pt}\n\n";
+
+    default:
+      return children();
+  }
+};
+
+export const convertJsonToLatex = (input: TipTapNode | string, resourceTypes?: Record<string, string>): string => {
+  if (!input) return "";
+
+  let doc = input;
+  if (typeof input === 'string') {
+    try {
+      doc = JSON.parse(input);
+    } catch {
+      // Legacy: plain HTML or raw text — strip tags as fallback
+      return input.replace(/<[^>]*>/g, "").trim() + "\n";
+    }
+  }
+
+  // Unwrap if it's the standard wrapper { version: 3, content: { type: 'doc', ... } }
+  if (doc && typeof doc === 'object' && 'content' in doc && !('type' in doc)) {
+    doc = (doc as Record<string, unknown>).content as TipTapNode;
+  }
+
+  return convertNodeToLatex(doc as TipTapNode, resourceTypes).replace(/\n{3,}/g, "\n\n").trim() + "\n";
+};
+
+export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: string | string[], p: string | number | null, initialCreatedAt: string | undefined, id?: string, resourceTypes?: Record<string, string>, date?: string): string => {
+  let dateObj = initialCreatedAt ? new Date(initialCreatedAt) : new Date();
+
+  // Fallback for mangled timestamps (e.g. 2026-04-28T17-36-32)
+  if (isNaN(dateObj.getTime()) && initialCreatedAt) {
+    const repaired = initialCreatedAt.replace(/(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})/, "$1T$2:$3:$4");
+    dateObj = new Date(repaired);
+  }
+
+  // Final fallback to now if still invalid
+  if (isNaN(dateObj.getTime())) {
+    dateObj = new Date();
+  }
+
+  // Build a local fallback map when callers do not provide notebook-wide types.
+  const resolvedResourceTypes: Record<string, string> = { ...(resourceTypes || {}) };
+  if (id) {
+    resolvedResourceTypes[id] = "entry";
+  }
+
+  const dateStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+  const authorStr = Array.isArray(a) ? formatAuthors(a) : a;
+  let latex = `\\notebookentry{${escapeLaTeX(t)}}{${date || dateStr}}{${escapeLaTeX(authorStr)}}{${p ?? ""}}{${id ?? ""}}\n\n`;
+  latex += convertJsonToLatex(cnt, resolvedResourceTypes);
+  return latex;
+};
+
+export const generateAllEntriesLatex = (metadata: { entries: Record<string, EntryMetadata> }, prefix: string = ""): string => {
+  const entries = sortedEntries(metadata.entries).filter(entry => !entry.isTemplate);
+
+  return entries
+    .map(entry => `\\input{${prefix}latex/entries/${entry.id}.tex}`)
+    .join("\n") + "\n";
+};
+
+export const generateTeamLatex = (team: TeamMetadata): string => {
+  const cleanImg = (p: string | undefined) => {
+    if (!p) return "";
+    if (p.startsWith("./")) return p.slice(2);
+    return p;
+  };
+
+  const members = sortedMembers(team.members);
+
+  let latex = `\\teamname{${escapeLaTeX(team.teamName || "")}}\n`;
+  latex += `\\teamnumber{${escapeLaTeX(team.teamNumber || "")}}\n`;
+  latex += `\\startdate{${escapeLaTeX(team.startDate || "")}}\n`;
+  latex += `\\projectenddate{${escapeLaTeX(team.endDate || "")}}\n`;
+  latex += `\\organization{${escapeLaTeX(team.organization || "")}}\n`;
+  latex += `\\teamlogo{${cleanImg(team.logo)}}{${cleanImg(team.logoOriginal || team.logo)}}\n\n`;
+
+  latex += `\\teammembers{\n`;
+  members.forEach((m, i) => {
+    latex += `    \\teammember{${escapeLaTeX(m.name)}}{${escapeLaTeX(m.role)}}{${cleanImg(m.image)}}{${cleanImg(m.imageOriginal || m.image)}}`;
+    if (i % 2 === 0 && i < members.length - 1) {
+      latex += ` \\hfill`;
+    } else if (i < members.length - 1) {
+      latex += ` \\\\`;
+    }
+    latex += `\n`;
+  });
+  latex += `}\n`;
+  return latex;
+};
+
+export const generatePhasesLatex = (phases: Record<string, ProjectPhase> | Identified<ProjectPhase>[]): string => {
+  const list = Array.isArray(phases) ? [...phases].sort((a, b) => a.order - b.order) : sortedPhases(phases);
+  let latex = "% DESIGN PROCESS PHASES - AUTOMATICALLY GENERATED\n\n";
+
+  let phaseListLatex = "\\newcommand{\\phaselist}{\n";
+
+  list.forEach((p) => {
+    const colorName = `PhaseID${p.id.toString().replace(/-/g, "")}`;
+    const hex = p.color.startsWith("#") ? p.color.substring(1) : p.color;
+    const n = p.order + 1;
+
+    latex += `% Phase: ${p.name}\n`;
+    latex += `\\definecolor{${colorName}}{HTML}{${hex}}\n`;
+    latex += `\\csdef{phasecolor@${n}}{${colorName}}\n`;
+    latex += `\\csdef{phasename@${n}}{${escapeLaTeX(p.name)}}\n\n`;
+
+    phaseListLatex += `    \\notebookphase{${colorName}}{${escapeLaTeX(p.name)}}{${escapeLaTeX(p.description || "")}}\n`;
+  });
+
+  phaseListLatex += "}\n";
+
+  return latex + phaseListLatex;
+};
+

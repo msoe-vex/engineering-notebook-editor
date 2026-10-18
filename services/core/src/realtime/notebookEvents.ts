@@ -22,6 +22,25 @@ export type NotebookRealtimeEvent =
       at: string;
     }
   | {
+      type: "compile.progress";
+      jobId: string;
+      status: string;
+      progress: number;
+      at: string;
+    }
+  | {
+      type: "compile.done";
+      jobId: string;
+      lastCompiled: string;
+      at: string;
+    }
+  | {
+      type: "compile.failed";
+      jobId: string;
+      error: string;
+      at: string;
+    }
+  | {
       type: "ping";
       at: string;
     };

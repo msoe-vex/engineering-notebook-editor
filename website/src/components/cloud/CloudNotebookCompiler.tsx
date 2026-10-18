@@ -1,13 +1,14 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Download, Loader2, Play, RefreshCcw } from "lucide-react";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
 import { CompilePageSkeleton } from "@/components/cloud/notebookPageSkeletons";
 import { Alert, Button, Skeleton } from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
 import { compileCloudNotebook } from "@/lib/cloud/compileCloudNotebook";
+import { subscribeNotebookEvents } from "@/lib/cloud/notebookEvents";
 
 const LatexPreview = dynamic(() => import("@/components/editor/LatexPreview"), {
   ssr: false,
@@ -23,6 +24,8 @@ export function CloudNotebookCompiler() {
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState(0);
   const [log, setLog] = useState<string | null>(null);
+  const [engine, setEngine] = useState<"server" | "busytex" | null>(null);
+  const jobIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,6 +50,86 @@ export function CloudNotebookCompiler() {
     return <CompilePageSkeleton />;
   }
 
+  async function runBusyTexFallback() {
+    setEngine("busytex");
+    setStatus("Compiling in browser (BusyTeX)…");
+    const result = await compileCloudNotebook({
+      orgId,
+      notebookId,
+      entries,
+      notebookSummary,
+      onStatus: (s, _step, _total, pct) => {
+        setStatus(s);
+        setProgress(pct);
+      },
+    });
+    if (result.success && result.pdfUrl) {
+      setPdfUrl((prev) => {
+        if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+        return result.pdfUrl!;
+      });
+      if (result.lastCompiled && notebookSummary) {
+        setNotebookSummary({ ...notebookSummary, lastCompiled: result.lastCompiled });
+      }
+      refresh();
+    } else {
+      setLog(result.log || "Compilation failed.");
+      setError("Compilation failed. See log below.");
+    }
+  }
+
+  async function runServerCompile(jobId: string) {
+    setEngine("server");
+    jobIdRef.current = jobId;
+    setStatus("Queued on server…");
+    setProgress(5);
+
+    await new Promise<void>((resolve, reject) => {
+      const ac = new AbortController();
+      const timeout = setTimeout(
+        () => {
+          ac.abort();
+          reject(new Error("Server compile timed out (10 minutes)."));
+        },
+        10 * 60 * 1000
+      );
+
+      subscribeNotebookEvents(
+        orgId,
+        notebookId,
+        (event) => {
+          if (event.type === "compile.progress") {
+            if (jobIdRef.current && event.jobId !== jobIdRef.current) return;
+            setStatus(event.status || "Working…");
+            setProgress(event.progress ?? 0);
+            return;
+          }
+          if (event.type === "compile.done") {
+            if (jobIdRef.current && event.jobId !== jobIdRef.current) return;
+            clearTimeout(timeout);
+            ac.abort();
+            if (notebookSummary) {
+              setNotebookSummary({
+                ...notebookSummary,
+                lastCompiled: event.lastCompiled,
+              });
+            }
+            refresh();
+            resolve();
+            return;
+          }
+          if (event.type === "compile.failed") {
+            if (jobIdRef.current && event.jobId !== jobIdRef.current) return;
+            clearTimeout(timeout);
+            ac.abort();
+            reject(new Error(event.error || "Server compile failed"));
+          }
+        },
+        ac.signal
+      );
+    });
+  }
+
   async function runCompile() {
     if (busy) return;
     setBusy(true);
@@ -54,37 +137,35 @@ export function CloudNotebookCompiler() {
     setStatus("Starting…");
     setProgress(0);
     setError(null);
+    setEngine(null);
+    jobIdRef.current = null;
     try {
-      const result = await compileCloudNotebook({
-        orgId,
-        notebookId,
-        entries,
-        notebookSummary,
-        onStatus: (s, _step, _total, pct) => {
-          setStatus(s);
-          setProgress(pct);
-        },
-      });
-      if (result.success && result.pdfUrl) {
-        setPdfUrl((prev) => {
-          if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
-          return result.pdfUrl!;
-        });
-        if (result.lastCompiled && notebookSummary) {
-          setNotebookSummary({ ...notebookSummary, lastCompiled: result.lastCompiled });
-        }
-        refresh();
+      const enqueued = await cloudApi.startCompile(orgId, notebookId);
+      if (enqueued.unavailable) {
+        await runBusyTexFallback();
       } else {
-        setLog(result.log || "Compilation failed.");
-        setError("Compilation failed. See log below.");
+        await runServerCompile(enqueued.jobId);
       }
     } catch (err) {
-      setError((err as Error).message);
-      setLog(String((err as Error).message));
+      const message = err instanceof Error ? err.message : String(err);
+      // Worker down → fall back to BusyTeX once.
+      if (/compile_worker|502|503|unreachable/i.test(message) && engine !== "busytex") {
+        try {
+          await runBusyTexFallback();
+          return;
+        } catch (fallbackErr) {
+          setError((fallbackErr as Error).message);
+          setLog(String((fallbackErr as Error).message));
+          return;
+        }
+      }
+      setError(message);
+      setLog(message);
     } finally {
       setBusy(false);
       setStatus("");
       setProgress(0);
+      jobIdRef.current = null;
     }
   }
 
@@ -101,7 +182,7 @@ export function CloudNotebookCompiler() {
             )}
           </div>
           <p className="mt-0.5 hidden text-nb-caption text-nb-on-surface-variant sm:block">
-            BusyTeX · entry order follows calendar date, then same-day order
+            Server XeLaTeX when available · BusyTeX fallback · calendar entry order
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -152,7 +233,10 @@ export function CloudNotebookCompiler() {
       {busy && (
         <div className="shrink-0 border-b border-nb-outline-variant/20 bg-nb-surface-low px-4 py-2">
           <div className="mb-1.5 flex justify-between text-nb-caption font-semibold text-nb-on-surface-variant">
-            <span className="truncate pr-3">{status}</span>
+            <span className="truncate pr-3">
+              {status}
+              {engine === "server" ? " · server" : engine === "busytex" ? " · browser" : ""}
+            </span>
             <span className="shrink-0">{progress}%</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-nb-surface">

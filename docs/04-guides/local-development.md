@@ -30,10 +30,10 @@ docker run --rm -v "$PWD":/repo -w /repo alpine chown -R "$(id -u):$(id -g)" ser
 
 ```bash
 cd infra
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build firebase gcs core collab
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build firebase gcs core collab compile
 ```
 
-First boot can take a few minutes (Firebase emulator installs JDK + tools). Leave this running.
+First boot can take a few minutes (Firebase emulator installs JDK + tools; **compile** pulls TeX Live once). Leave this running.
 
 **Terminal 2 — website**
 
@@ -48,6 +48,14 @@ Open **http://localhost:3000**.
 Sign in with **Continue with dev token** → `service-admin`, or create an email/password user (Auth emulator).
 
 Create an organization → notebook → **New entry** (opens `/orgs/…/notebooks/…/entries/…`).
+
+### Server compile (Compose `compile`)
+
+Include `compile` in the backend `up` (above). The Compile page POSTs to Core → worker (`:8090`) → SSE progress; BusyTeX is used only if the worker is down / unset.
+
+One-shot still works: `COMPILE_MODE=job docker compose run --rm -e ORG_ID=… -e NOTEBOOK_ID=… compile`.
+
+See [`services/compile/README.md`](../../services/compile/README.md) and [ADR-006](../02-architecture/decisions/ADR-006-compile-job.md).
 
 | Route | Screen |
 | --- | --- |

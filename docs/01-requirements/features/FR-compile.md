@@ -29,6 +29,12 @@ Notebook accessors.
 - `PUT|GET …/exports/:exportId/content|url` (use `latest`)
 - Client: `compileCloudNotebook.ts` + `busytex` helpers (no legacy `compileNotebook` store path)
 
+## Server compile (local + future Jobs)
+
+- Compile page → `POST …/compile` → Compose worker [`services/compile`](../../../services/compile/README.md) → SSE progress/done ([ADR-006](../../02-architecture/decisions/ADR-006-compile-job.md))
+- BusyTeX fallback when `COMPILE_SERVICE_URL` unset or worker unreachable
+- Later: same Core endpoint; worker becomes Cloud Run Job / scale-to-zero service
+
 ## Non-goals
 
-- Server-side TeX live service (compile runs in browser WASM against uploaded content)
+- Running full TeX inside a Core request (timeouts / memory)

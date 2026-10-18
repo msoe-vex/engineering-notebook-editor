@@ -134,6 +134,21 @@ Over-limit bodies return **413**. Clients should preflight with `assertUploadSiz
 
 - `POST /internal/collab/flush`
 - `POST /internal/collab/connections`
+- `GET /internal/collab/yjs`
+
+### Compile (user + worker) — [ADR-006](../02-architecture/decisions/ADR-006-compile-job.md)
+
+- `POST /orgs/:orgId/notebooks/:notebookId/compile` → `202 { jobId }` (ACL). Forwards to `COMPILE_SERVICE_URL/jobs`. `503` if unset.
+- Worker: `POST /jobs` `{ orgId, notebookId, jobId }` (`x-internal-secret`)
+
+Internal (header `x-internal-secret`):
+
+- `GET /internal/compile/snapshot?orgId&notebookId`
+- `PUT /internal/compile/export?orgId&notebookId&exportId=latest&jobId=`
+- `POST /internal/compile/progress` — `{ orgId, notebookId, jobId, status, progress }`
+- `POST /internal/compile/failed` — `{ orgId, notebookId, error, jobId? }`
+
+SSE: `compile.progress` | `compile.done` | `compile.failed`
 
 ## Collaboration (`services/collab`)
 

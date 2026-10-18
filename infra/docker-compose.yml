@@ -107,6 +107,8 @@ services:
       GCS_PUBLIC_BASE_URL: http://localhost:4443/storage/v1/b/engineering-notebook/o
       SERVICE_ADMIN_UID: service-admin
       INTERNAL_SERVICE_SECRET: local-dev-secret
+      # Local XeLaTeX worker (Compose service `compile`).
+      COMPILE_SERVICE_URL: http://compile:8090
       # Local: Vertex /ai/complete stays fail-closed until ADC/token configured.
       VERTEX_STUB: "true"
       # Persist blobs in fake-gcs (not in-process memory).
@@ -173,6 +175,34 @@ services:
         condition: service_started
       collab:
         condition: service_started
+
+  # XeLaTeX worker (HTTP). Scale-to-zero on Cloud Run later; local stays up with the stack.
+  # One-shot still works: COMPILE_MODE=job docker compose run --rm -e ORG_ID=… -e NOTEBOOK_ID=… compile
+  compile:
+    build:
+      context: ..
+      dockerfile: services/compile/Dockerfile
+    ports:
+      - "8090:8090"
+    environment:
+      PORT: "8090"
+      COMPILE_MODE: server
+      CORE_API_URL: http://core:8080
+      INTERNAL_SERVICE_SECRET: local-dev-secret
+      TEMPLATE_DIR: /app/template
+    depends_on:
+      core:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:8090/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
 
 volumes:
   firebase_emulator_data:
