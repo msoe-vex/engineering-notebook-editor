@@ -13,7 +13,7 @@ Notebook accessors.
 
 ## User-facing behavior
 
-- `NotebookEntryList`: create/rename/delete folder; nest via `parentId`; assign `folderId`
+- `NotebookEntryList`: create/rename/delete folder; nest via `parentId`; assign `folderId`. Deleting a folder promotes its entries and child folders one level up (to the deleted folder’s parent / root) — contents are not deleted.
 - New entry/folder creates immediately with a default name; sidebar name becomes an inline text field (Enter save, Esc cancel). Rename from the row menu uses the same inline field.
 - DnD reorder siblings → `POST …/entries/reorder` mode `explorer`
 - Phase icon+color as entry glyph when set; template glyph for templates
@@ -23,6 +23,7 @@ Notebook accessors.
 - Double-click entry/folder label to rename inline
 - Toast + refresh/revert on reorder failure
 - Multi-select: Ctrl/Cmd click toggle, Shift click range; bulk Move… / Delete
+- Delete entry/folder (and bulk entry delete): optimistic hide + toast **Undo** (~10s soft-delay before API). Leaving the notebook flushes pending deletes. Entry delete still permanently removes body content once committed (no server recycle bin).
 - Phone (&lt; `md`): full-screen list when no entry open; overlay drawer when an entry is open (list control + Entries tab)
 - Desktop: double-click the explorer ↔ main resize handle to reset width (default 22/78)
 
@@ -33,6 +34,7 @@ Notebook accessors.
 - [x] Filters hide non-matching entries; chips + Clear all / Clear filters empty state
 - [ ] Templates appear in the unified tree with a distinct icon; New menu lists templates
 - [ ] Multi-select can move or delete several entries at once
+- [ ] Delete entry/folder shows toast Undo that restores before the delayed API commit
 - [x] On phone, explorer is not a persistent side-by-side split; entry edit is full-width
 
 ## Data and APIs

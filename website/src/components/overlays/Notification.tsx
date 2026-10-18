@@ -10,9 +10,10 @@ interface NotificationProps {
   message: string;
   type: NotificationType;
   t: { visible: boolean; id: string };
+  action?: { label: string; onClick: () => void };
 }
 
-export function Notification({ message, type, t }: NotificationProps) {
+export function Notification({ message, type, t, action }: NotificationProps) {
   const icons = {
     success: <CheckCircle2 className="text-emerald-600 dark:text-emerald-400" size={18} />,
     error: <AlertCircle className="text-red-600 dark:text-red-400" size={18} />,
@@ -61,6 +62,19 @@ export function Notification({ message, type, t }: NotificationProps) {
           <div className="custom-scrollbar max-h-48 overflow-y-auto text-xs font-medium leading-relaxed wrap-break-word select-text text-nb-on-surface-variant">
             {message}
           </div>
+          {action ? (
+            <button
+              type="button"
+              className="mt-2 text-xs font-bold text-nb-primary hover:underline"
+              onClick={(e) => {
+                e.stopPropagation();
+                action.onClick();
+                toast.remove(t.id);
+              }}
+            >
+              {action.label}
+            </button>
+          ) : null}
         </div>
 
         <button
@@ -81,6 +95,7 @@ export function Notification({ message, type, t }: NotificationProps) {
 export interface NotificationOptions {
   duration?: number;
   persistent?: boolean;
+  action?: { label: string; onClick: () => void };
 }
 
 export function showNotification(
@@ -95,13 +110,18 @@ export function showNotification(
     duration = options.duration;
   } else if (type === "loading") {
     duration = Infinity;
+  } else if (options?.action) {
+    duration = 10000;
   } else {
     duration = 4000;
   }
 
-  return toast.custom((t) => <Notification message={message} type={type} t={t} />, {
-    duration,
-  });
+  return toast.custom(
+    (t) => (
+      <Notification message={message} type={type} t={t} action={options?.action} />
+    ),
+    { duration }
+  );
 }
 
 /** Bridge `SHOW_NOTIFICATION` events (and direct callers) to react-hot-toast. */

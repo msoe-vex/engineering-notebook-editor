@@ -766,17 +766,31 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
     const nb = snap.data() as NotebookSummaryV5;
     await requireNotebookAccess(user, orgId, nb);
-    if (!nb.folders?.[folderId]) return reply.code(404).send({ error: "folder not found" });
+    const existingFolder = nb.folders?.[folderId];
+    if (!existingFolder) return reply.code(404).send({ error: "folder not found" });
+    // Promote children one level up (to this folder's parent), do not delete them.
+    const promoteTo =
+      existingFolder.parentId && nb.folders?.[existingFolder.parentId]
+        ? existingFolder.parentId
+        : null;
     const entries = await db().collection(entriesCollection(orgId, notebookId)).get();
     const batch = db().batch();
     const ts = nowIso();
+    let entriesMoved = false;
     for (const doc of entries.docs) {
       const meta = doc.data() as EntryMetadataV5;
       if (meta.folderId === folderId) {
-        batch.update(doc.ref, { folderId: null, updatedAt: ts });
+        batch.update(doc.ref, { folderId: promoteTo, updatedAt: ts });
+        entriesMoved = true;
       }
     }
     const folders = { ...(nb.folders ?? {}) };
+    for (const [fid, folder] of Object.entries(folders)) {
+      if (fid === folderId) continue;
+      if (folder.parentId === folderId) {
+        folders[fid] = { ...folder, parentId: promoteTo };
+      }
+    }
     delete folders[folderId];
     batch.update(ref, { folders, updatedAt: ts });
     await batch.commit();
@@ -785,7 +799,9 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       notebook: { id: notebookId, folders, updatedAt: ts },
       at: ts,
     });
-    publishNotebookEvent(orgId, notebookId, { type: "entries.changed", at: ts });
+    if (entriesMoved) {
+      publishNotebookEvent(orgId, notebookId, { type: "entries.changed", at: ts });
+    }
     return { ok: true, folders };
   });
 

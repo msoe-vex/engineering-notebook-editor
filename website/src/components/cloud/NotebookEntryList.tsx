@@ -77,6 +77,9 @@ type EntryFilters = {
 
 type EntrySortMode = "name" | "date" | "phase";
 
+/** Soft-delete window before the API runs (toast Undo cancels). */
+const SOFT_DELETE_MS = 10_000;
+
 const EMPTY_FILTERS: EntryFilters = {
   phaseId: null,
   author: null,
@@ -926,6 +929,27 @@ export function NotebookEntryList({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [renaming, setRenaming] = useState<RenameTarget | null>(null);
   const lastClickedIdRef = useRef<string | null>(null);
+  /** Entry soft-deletes: hide locally, call API when timer fires (Undo cancels). */
+  const pendingEntryDeletesRef = useRef(
+    new Map<
+      string,
+      { meta: EntryMeta; timer: ReturnType<typeof setTimeout> }
+    >()
+  );
+  /** Folder soft-deletes: restore folder + promoted children on Undo. */
+  const pendingFolderDeletesRef = useRef(
+    new Map<
+      string,
+      {
+        folder: { name: string; parentId: string | null; order: number };
+        /** Entries that lived in this folder (restore their folderId). */
+        entryIds: string[];
+        /** Direct child folders that were promoted up (restore parentId). */
+        childFolderIds: string[];
+        timer: ReturnType<typeof setTimeout>;
+      }
+    >()
+  );
 
   useEffect(() => {
     const loaded = loadExplorerFilters(notebookId);
@@ -1096,28 +1120,247 @@ export function NotebookEntryList({
     lastClickedIdRef.current = null;
   }
 
+  function commitEntryDeletes(ids: string[]) {
+    for (const id of ids) {
+      const pending = pendingEntryDeletesRef.current.get(id);
+      if (pending) {
+        clearTimeout(pending.timer);
+        pendingEntryDeletesRef.current.delete(id);
+      }
+    }
+    void Promise.all(ids.map((id) => cloudApi.deleteEntry(orgId, notebookId, id)))
+      .then(() => refresh())
+      .catch((err) => {
+        setError((err as Error).message);
+        refresh();
+      });
+  }
+
+  function undoEntryDeletes(ids: string[]) {
+    const restore: Record<string, EntryMeta> = {};
+    for (const id of ids) {
+      const pending = pendingEntryDeletesRef.current.get(id);
+      if (!pending) continue;
+      clearTimeout(pending.timer);
+      pendingEntryDeletesRef.current.delete(id);
+      restore[id] = pending.meta;
+    }
+    if (!Object.keys(restore).length) return;
+    setEntries?.((prev) => ({ ...prev, ...restore }));
+    showNotification(
+      ids.length === 1 ? "Entry restored" : `${ids.length} entries restored`,
+      "success"
+    );
+  }
+
+  function scheduleEntryDeletes(ids: string[]) {
+    const snapshots: Record<string, EntryMeta> = {};
+    for (const id of ids) {
+      const meta = entries[id];
+      if (!meta) continue;
+      snapshots[id] = meta;
+      const existing = pendingEntryDeletesRef.current.get(id);
+      if (existing) clearTimeout(existing.timer);
+    }
+    if (!Object.keys(snapshots).length) return;
+
+    setEntries?.((prev) => {
+      const next = { ...prev };
+      for (const id of Object.keys(snapshots)) delete next[id];
+      return next;
+    });
+    clearSelection();
+    if (activeEntryId && snapshots[activeEntryId]) {
+      router.push(basePath);
+    }
+
+    const scheduledIds = Object.keys(snapshots);
+    for (const id of scheduledIds) {
+      const timer = setTimeout(() => {
+        commitEntryDeletes([id]);
+      }, SOFT_DELETE_MS);
+      pendingEntryDeletesRef.current.set(id, { meta: snapshots[id], timer });
+    }
+
+    const label =
+      scheduledIds.length === 1
+        ? `Deleted “${snapshots[scheduledIds[0]]?.title || "Untitled"}”`
+        : `Deleted ${scheduledIds.length} items`;
+    showNotification(label, "success", {
+      duration: SOFT_DELETE_MS,
+      action: {
+        label: "Undo",
+        onClick: () => undoEntryDeletes(scheduledIds),
+      },
+    });
+  }
+
+  function commitFolderDelete(folderId: string) {
+    const pending = pendingFolderDeletesRef.current.get(folderId);
+    if (pending) {
+      clearTimeout(pending.timer);
+      pendingFolderDeletesRef.current.delete(folderId);
+    }
+    void cloudApi
+      .deleteFolder(orgId, notebookId, folderId)
+      .then(() => refresh())
+      .catch((err) => {
+        setError((err as Error).message);
+        refresh();
+      });
+  }
+
+  function undoFolderDelete(folderId: string) {
+    const pending = pendingFolderDeletesRef.current.get(folderId);
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pendingFolderDeletesRef.current.delete(folderId);
+    setFolders?.((prev) => {
+      const next = { ...prev, [folderId]: pending.folder };
+      for (const fid of pending.childFolderIds) {
+        const child = next[fid];
+        if (!child) continue;
+        next[fid] = { ...child, parentId: folderId };
+      }
+      return next;
+    });
+    setEntries?.((prev) => {
+      const next = { ...prev };
+      for (const eid of pending.entryIds) {
+        if (!next[eid]) continue;
+        next[eid] = { ...next[eid], folderId };
+      }
+      return next;
+    });
+    showNotification(`Folder “${pending.folder.name}” restored`, "success");
+  }
+
+  function scheduleFolderDelete(folderId: string) {
+    const folder = folders[folderId];
+    if (!folder) return;
+    const existing = pendingFolderDeletesRef.current.get(folderId);
+    if (existing) clearTimeout(existing.timer);
+
+    const promoteTo =
+      folder.parentId && folders[folder.parentId] ? folder.parentId : null;
+
+    const entryIds = Object.entries(entries)
+      .filter(([, e]) => (e.folderId ?? null) === folderId)
+      .map(([eid]) => eid);
+    const childFolderIds = Object.entries(folders)
+      .filter(([fid, f]) => fid !== folderId && f.parentId === folderId)
+      .map(([fid]) => fid);
+
+    setFolders?.((prev) => {
+      const next = { ...prev };
+      for (const fid of childFolderIds) {
+        const child = next[fid];
+        if (!child) continue;
+        next[fid] = { ...child, parentId: promoteTo };
+      }
+      delete next[folderId];
+      return next;
+    });
+    if (entryIds.length) {
+      setEntries?.((prev) => {
+        const next = { ...prev };
+        for (const eid of entryIds) {
+          if (!next[eid]) continue;
+          next[eid] = { ...next[eid], folderId: promoteTo };
+        }
+        return next;
+      });
+    }
+
+    const timer = setTimeout(() => commitFolderDelete(folderId), SOFT_DELETE_MS);
+    pendingFolderDeletesRef.current.set(folderId, {
+      folder,
+      entryIds,
+      childFolderIds,
+      timer,
+    });
+
+    showNotification(`Deleted folder “${folder.name}”`, "success", {
+      duration: SOFT_DELETE_MS,
+      action: {
+        label: "Undo",
+        onClick: () => undoFolderDelete(folderId),
+      },
+    });
+  }
+
+  // SSE/refresh can briefly restore soft-deleted rows — keep them hidden until Undo or commit.
+  useEffect(() => {
+    if (!pendingEntryDeletesRef.current.size) return;
+    const leaked = Object.keys(entries).filter((id) =>
+      pendingEntryDeletesRef.current.has(id)
+    );
+    if (!leaked.length) return;
+    setEntries?.((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const id of leaked) {
+        if (id in next) {
+          delete next[id];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [entries, setEntries]);
+
+  useEffect(() => {
+    if (!pendingFolderDeletesRef.current.size) return;
+    const leaked = Object.keys(folders).filter((id) =>
+      pendingFolderDeletesRef.current.has(id)
+    );
+    if (!leaked.length) return;
+    setFolders?.((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const id of leaked) {
+        if (id in next) {
+          delete next[id];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [folders, setFolders]);
+
+  // Flush pending deletes if the explorer unmounts (leaving the notebook).
+  useEffect(() => {
+    const pendingEntries = pendingEntryDeletesRef.current;
+    const pendingFolders = pendingFolderDeletesRef.current;
+    return () => {
+      const entryIds = [...pendingEntries.keys()];
+      for (const [, p] of pendingEntries) clearTimeout(p.timer);
+      pendingEntries.clear();
+      if (entryIds.length) {
+        void Promise.all(
+          entryIds.map((id) => cloudApi.deleteEntry(orgId, notebookId, id))
+        ).catch(() => {
+          /* best-effort flush */
+        });
+      }
+      const folderIds = [...pendingFolders.keys()];
+      for (const [, p] of pendingFolders) clearTimeout(p.timer);
+      pendingFolders.clear();
+      for (const fid of folderIds) {
+        void cloudApi.deleteFolder(orgId, notebookId, fid).catch(() => {
+          /* best-effort flush */
+        });
+      }
+    };
+  }, [orgId, notebookId]);
+
   function bulkDelete() {
     const ids = [...selectedIds];
     if (!ids.length) return;
     showConfirm(
       `Delete ${ids.length} items?`,
-      "Selected entries and templates will be permanently deleted.",
-      () => {
-        void (async () => {
-          try {
-            await Promise.all(
-              ids.map((id) => cloudApi.deleteEntry(orgId, notebookId, id))
-            );
-            clearSelection();
-            refresh();
-            showNotification(`Deleted ${ids.length} items`, "success");
-          } catch (err) {
-            const message = (err as Error).message;
-            setError(message);
-            refresh();
-          }
-        })();
-      },
+      "Selected entries and templates will be removed. You can Undo from the toast for a few seconds.",
+      () => scheduleEntryDeletes(ids),
       "danger"
     );
   }
@@ -1341,16 +1584,8 @@ export function NotebookEntryList({
     const label = meta?.isTemplate ? "template" : "entry";
     showConfirm(
       `Delete ${label}?`,
-      `Delete "${meta?.title || "Untitled"}"? This cannot be undone.`,
-      () => {
-        void cloudApi
-          .deleteEntry(orgId, notebookId, id)
-          .then(() => {
-            refresh();
-            if (activeEntryId === id) router.push(basePath);
-          })
-          .catch((err) => setError((err as Error).message));
-      },
+      `Delete “${meta?.title || "Untitled"}”? You can Undo from the toast for a few seconds.`,
+      () => scheduleEntryDeletes([id]),
       "danger"
     );
   }
@@ -1418,13 +1653,8 @@ export function NotebookEntryList({
     const name = folders[folderId]?.name ?? "Folder";
     showConfirm(
       "Delete folder?",
-      `Delete "${name}"? Entries inside will move to root.`,
-      () => {
-        void cloudApi
-          .deleteFolder(orgId, notebookId, folderId)
-          .then(() => refresh())
-          .catch((err) => setError((err as Error).message));
-      },
+      `Delete “${name}”? Entries and subfolders inside will move up. You can Undo from the toast for a few seconds.`,
+      () => scheduleFolderDelete(folderId),
       "danger"
     );
   }
