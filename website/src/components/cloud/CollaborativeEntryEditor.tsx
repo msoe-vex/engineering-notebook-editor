@@ -67,12 +67,15 @@ export function CollaborativeEntryEditor({
   const [status, setStatus] = useState("connecting");
   const [ydoc] = useState(() => new Y.Doc());
   const [provider, setProvider] = useState<HocuspocusProvider | null>(null);
+  /** TipTap must not bind until Yjs has synced — otherwise an empty local fragment races the load. */
+  const [synced, setSynced] = useState(false);
   const [editor, setEditor] = useState<TiptapEditor | null>(null);
   const providerRef = useRef<HocuspocusProvider | null>(null);
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
   const editorRef = useRef<TiptapEditor | null>(null);
   editorRef.current = editor;
+  const lastTipTapMirrorRef = useRef("");
 
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [textColorPos, setTextColorPos] = useState({ top: 0, left: 0 });
@@ -98,6 +101,7 @@ export function CollaborativeEntryEditor({
         "Editor";
       const localColor = colorForId(authUser?.uid || localName);
 
+      setSynced(false);
       p = new HocuspocusProvider({
         url: collabWsUrl(),
         name: documentName,
@@ -106,6 +110,10 @@ export function CollaborativeEntryEditor({
         onStatus: ({ status: s }) => {
           setStatus(s);
           patchEditorChrome({ connection: mapCollabStatus(s) });
+        },
+        onSynced: ({ state }) => {
+          if (cancelled) return;
+          setSynced(Boolean(state));
         },
         onAuthenticationFailed: ({ reason }) => {
           console.warn("Collab auth failed", reason);
@@ -155,6 +163,8 @@ export function CollaborativeEntryEditor({
       }
       providerRef.current = p;
       setProvider(p);
+      // Provider may already be synced (cached room) before onSynced fires.
+      if (p.synced) setSynced(true);
     })();
 
     return () => {
@@ -162,7 +172,9 @@ export function CollaborativeEntryEditor({
       providerRef.current = null;
       p?.destroy();
       setProvider(null);
+      setSynced(false);
       setEditor(null);
+      lastTipTapMirrorRef.current = "";
       patchEditorChrome({ connection: null, peers: [], onReconnect: null });
     };
   }, [documentName, ydoc]);
@@ -196,9 +208,10 @@ export function CollaborativeEntryEditor({
     };
   }, [editor]);
 
-  // Debounced quality pass: resources / references / isValid → Firestore entry meta.
+  // Debounced quality pass + TipTap JSON mirror (compile / title-gen / GET content).
+  // Collab flush persists Yjs only; TipTap GCS stays a create-time stub unless we PUT here.
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || !synced) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const run = () => {
@@ -206,6 +219,13 @@ export function CollaborativeEntryEditor({
       if (!meta) return;
       try {
         const doc = editor.getJSON() as TipTapNode;
+        const tipTapPayload = JSON.stringify(doc);
+        if (tipTapPayload !== lastTipTapMirrorRef.current) {
+          lastTipTapMirrorRef.current = tipTapPayload;
+          void cloudApi
+            .putEntryContent(orgId, notebookId, entryId, doc)
+            .catch((err) => console.warn("Entry TipTap mirror failed", err));
+        }
         const result = analyzeEntryContent(
           entryId,
           meta,
@@ -246,7 +266,7 @@ export function CollaborativeEntryEditor({
       if (timer) clearTimeout(timer);
       editor.off("update", schedule);
     };
-  }, [editor, entryId, metaFingerprint, orgId, notebookId]);
+  }, [editor, synced, entryId, metaFingerprint, orgId, notebookId]);
 
   const linkAssetToEntry = useCallback(
     async (assetId: string) => {
@@ -356,18 +376,19 @@ export function CollaborativeEntryEditor({
     input.click();
   }, [editor, uploadImageBytes]);
 
-  if (!provider) {
+  if (!provider || !synced) {
     return (
-      <p className="text-sm text-nb-on-surface-variant">
-        Connecting to collaboration… ({status})
+      <p className="p-4 text-sm text-nb-on-surface-variant">
+        Connecting to collaboration… ({status}
+        {provider && !synced ? ", syncing" : ""})
       </p>
     );
   }
 
   return (
-    <div className="flex flex-col gap-2 text-nb-on-surface">
+    <div className="flex h-full min-h-0 flex-col text-nb-on-surface">
       {editor && (
-        <div className="sticky top-0 z-30 overflow-hidden rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface shadow-nb-sm">
+        <div className="z-20 shrink-0 border-b border-nb-outline-variant/20 bg-nb-surface">
           <NotebookFormatToolbar
             editor={editor}
             activeMenu={activeMenu}
@@ -387,7 +408,7 @@ export function CollaborativeEntryEditor({
           />
         </div>
       )}
-      <div className="rounded-xl border border-nb-outline-variant/30 bg-nb-surface">
+      <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar">
         <RichTextArea
           key={documentName}
           filename={entryId}

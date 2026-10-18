@@ -9,8 +9,9 @@ Editors diverge; “disconnected”; content missing after reload; flush errors 
 1. Collab service up; `NEXT_PUBLIC_COLLAB_WS_URL` / Cloud Run WSS (`wss://`)
 2. Session affinity + HTTP/2 on Collab Cloud Run
 3. `COLLAB_AUTH_DISABLED` must be false in prod
-4. Core reachable from Collab (`CORE_API_URL`) for flush
-5. Document name matches `org:…:notebook:…:entry:…`
+4. Core reachable from Collab (`CORE_API_URL`) for flush / `GET /internal/collab/yjs`
+5. Local fake-gcs: Core must use `GCS_EMULATOR_ENDPOINT=http://gcs:4443` (not `STORAGE_EMULATOR_HOST`) and compose `-public-host`/`-external-url` must be `gcs:4443`. Wrong host or the Node env var makes `download()`/`exists()` 404 while `save()` still works.
+6. Document name matches `org:…:notebook:…:entry:…`
 
 ## Mitigations
 

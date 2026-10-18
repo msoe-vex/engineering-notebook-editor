@@ -4,9 +4,12 @@ import { Table } from "@tiptap/extension-table";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { GripVertical, Trash2, Table as TableIcon, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Rows3, Columns3 } from "lucide-react";
+import { ValidationIssuesTooltip } from "@/components/ui";
 import { NodeViewInput } from "./NodeViewInput";
+import { resourceMetaErrors } from "./resourceValidation";
 import GenerateButton from "../ui/GenerateButton";
 import { generateResourceCaption, generateResourceTitle } from "@/lib/genai";
+
 export function TableNodeView({ node, updateAttributes, deleteNode, editor, selected, getPos }: NodeViewProps) {
   const [isCursorInside, setIsCursorInside] = useState(false);
   const [isHoveringToolbar, setIsHoveringToolbar] = useState(false);
@@ -65,9 +68,10 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
               value={node.attrs.title || ""}
               onUpdate={(title) => updateAttributes({ title })}
               placeholder="Table Title..."
-              required
-              missingMessage="Title is required for this table."
               className="bg-transparent border-none outline-none text-[12px] font-bold tracking-wider text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30 w-48"
+            />
+            <ValidationIssuesTooltip
+              errors={resourceMetaErrors(node.attrs.title, node.attrs.caption, "table")}
             />
             <GenerateButton
               label="Generate title"
@@ -156,8 +160,6 @@ export function TableNodeView({ node, updateAttributes, deleteNode, editor, sele
             value={node.attrs.caption || ""}
             onUpdate={(caption) => updateAttributes({ caption })}
             placeholder="Describe this table..."
-            required
-            missingMessage="Caption is required for this table."
             multiline
             className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface/50 group-hover/caption:text-nb-on-surface focus:text-nb-on-surface focus:opacity-100 transition-all leading-relaxed"
           />

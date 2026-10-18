@@ -138,7 +138,8 @@ Over-limit bodies return **413**. Clients should preflight with `assertUploadSiz
 - `WSS /` (Hocuspocus)
   - Auth token required unless `COLLAB_AUTH_DISABLED=true`
   - Org / notebook access checked from document name
-  - Debounced flush → Core `/internal/collab/flush` (Yjs; TipTap only when real JSON supplied)
+  - Debounced flush → Core `/internal/collab/flush` (Yjs body)
+  - Website mirrors TipTap JSON with `PUT …/entries/:id/content` after the provider is synced (keeps compile / `GET …/content` current)
 
 ## GenAI on Core ([ADR-005](../02-architecture/decisions/ADR-005-genai-in-core.md)) — shipped
 

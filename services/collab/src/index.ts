@@ -7,7 +7,6 @@ const authDisabled = process.env.COLLAB_AUTH_DISABLED === "true";
 const coreUrl = (process.env.CORE_API_URL || "http://localhost:8080").replace(/\/$/, "");
 const internalSecret = process.env.INTERNAL_SERVICE_SECRET || "";
 
-const pendingFlushes = new Map<string, ReturnType<typeof setTimeout>>();
 let adminApp: typeof import("firebase-admin") | null = null;
 
 async function getAdmin() {
@@ -60,15 +59,19 @@ function internalHeaders(): Record<string, string> {
   return headers;
 }
 
+function fragmentHasNodes(document: Y.Doc): boolean {
+  return document.getXmlFragment("default").length > 0;
+}
+
 async function flushDocument(documentName: string, document: Y.Doc) {
   const parsed = parseCollabDocName(documentName);
   if (!parsed) return;
 
   // Persist Yjs only. Never flush TipTap stub JSON — that previously wiped entry bodies.
+  // TipTap JSON is mirrored from the website via PUT …/content after sync.
   const yjsUpdate = Y.encodeStateAsUpdate(document);
-  const fragment = document.getXmlFragment("default");
   // Don't clobber GCS with an empty doc (failed load / brand-new unload race).
-  if (fragment.length === 0 && yjsUpdate.byteLength < 64) {
+  if (!fragmentHasNodes(document) && yjsUpdate.byteLength < 64) {
     return;
   }
   // Yjs body only — entry title/authors/phase/date live on Core REST/Firestore.
@@ -99,23 +102,26 @@ async function loadYjsFromCore(documentName: string, document: Y.Doc) {
   url.searchParams.set("notebookId", parsed.notebookId);
   url.searchParams.set("entryId", parsed.entryId);
 
-  try {
-    const res = await fetch(url, { headers: internalHeaders() });
-    if (res.status === 404) return; // first open
-    if (!res.ok) {
-      console.error("collab yjs load failed", res.status, await res.text());
-      return;
-    }
-    const body = (await res.json()) as { yjsBase64?: string };
-    if (!body.yjsBase64) return;
-    Y.applyUpdate(document, new Uint8Array(Buffer.from(body.yjsBase64, "base64")));
-  } catch (err) {
-    console.error("collab yjs load error", err);
+  const res = await fetch(url, { headers: internalHeaders() });
+  if (res.status === 404) return; // first open — no blob yet
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("collab yjs load failed", res.status, text);
+    // Throw so Hocuspocus does not treat this as an empty new doc and flush-overwrite GCS.
+    throw new Error(`collab yjs load failed: ${res.status}`);
   }
+  const body = (await res.json()) as { yjsBase64?: string };
+  if (!body.yjsBase64) return;
+  Y.applyUpdate(document, new Uint8Array(Buffer.from(body.yjsBase64, "base64")));
 }
 
 const server = new Server({
   port,
+  // Let Hocuspocus debounce onStoreDocument and flush-on-disconnect via its own timer.
+  // A nested setTimeout previously returned before the write finished, so unload could
+  // race a late empty flush.
+  debounce: 500,
+  maxDebounce: 2_000,
   async onAuthenticate(data) {
     if (authDisabled) return { user: { uid: "local-dev" } };
     const token = typeof data.token === "string" ? data.token : "";
@@ -134,28 +140,7 @@ const server = new Server({
     await loadYjsFromCore(documentName, document as Y.Doc);
   },
   async onStoreDocument({ documentName, document }) {
-    const existingTimer = pendingFlushes.get(documentName);
-    if (existingTimer) clearTimeout(existingTimer);
-
-    const doc = document as Y.Doc;
-    const timer = setTimeout(() => {
-      void flushDocument(documentName, doc);
-      pendingFlushes.delete(documentName);
-    }, 500);
-    pendingFlushes.set(documentName, timer);
-  },
-  async onDisconnect({ documentName, document }) {
-    const existingTimer = pendingFlushes.get(documentName);
-    if (existingTimer) {
-      clearTimeout(existingTimer);
-      pendingFlushes.delete(documentName);
-    }
-    // Persist before Hocuspocus drops the in-memory doc (browser reload).
-    try {
-      await flushDocument(documentName, document as Y.Doc);
-    } catch (err) {
-      console.error("collab disconnect flush failed", err);
-    }
+    await flushDocument(documentName, document as Y.Doc);
   },
 });
 

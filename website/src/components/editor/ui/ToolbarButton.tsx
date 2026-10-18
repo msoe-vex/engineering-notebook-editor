@@ -18,10 +18,10 @@ export const ToolbarButton = ({
     onClick={(e) => !disabled && onClick(e)}
     disabled={disabled}
     title={title}
-    className={`p-2 rounded-lg transition-all flex items-center justify-center border cursor-pointer ${active
-      ? "bg-nb-primary text-white shadow-md border-nb-primary scale-105"
-      : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface border-transparent"
-      } ${disabled ? "opacity-30 cursor-not-allowed grayscale" : ""}`}
+    className={`flex min-h-10 min-w-10 items-center justify-center rounded-lg border p-2 transition-all cursor-pointer md:min-h-0 md:min-w-0 ${active
+      ? "scale-105 border-nb-primary bg-nb-primary text-white shadow-md"
+      : "border-transparent text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface"
+      } ${disabled ? "cursor-not-allowed opacity-30 grayscale" : ""}`}
   >
     {children}
   </button>

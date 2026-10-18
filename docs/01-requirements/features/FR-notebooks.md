@@ -18,6 +18,7 @@ Notebooks live under an org. **Settings** controls branding, phases, logo, and a
 - `/…/setup` — **Settings**: name, title, subtitle, logo upload → `logoAssetId`, phases CRUD, access (alias `/settings`)
 - Notebook chrome **Share** dialog: entire org vs restricted; search/add org people and teams
 - `/…/members` — **Contributors**: name/role/photo/`order` credits (alias `/contributors`)
+- Section nav (Entries / Calendar / Compile / Contributors / Settings): **slim strip** under AppChrome on ≥ `md`; **bottom tab bar** on phone (&lt; `md`) — see [mobile-responsive](../plans/mobile-responsive.md)
 
 ## Acceptance criteria
 
@@ -26,6 +27,7 @@ Notebooks live under an org. **Settings** controls branding, phases, logo, and a
 - [ ] Logo and phases persist and round-trip in ZIP where supported
 - [ ] UI copy distinguishes Org people vs Notebook contributors
 - [ ] Share dialog can grant a user and a team without using Settings checkboxes
+- [x] Notebook section destinations reachable via slim strip (desktop) or bottom tabs (phone)
 
 ## Data and APIs
 

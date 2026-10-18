@@ -3,7 +3,9 @@ import { createPortal } from "react-dom";
 import { NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer, NodeViewProps } from "@tiptap/react";
 import { CodeBlock, type CodeBlockOptions } from "@tiptap/extension-code-block";
 import { GripVertical, Trash2, Code2, ChevronDown, Check } from "lucide-react";
+import { ValidationIssuesTooltip } from "@/components/ui";
 import { NodeViewInput } from "./NodeViewInput";
+import { resourceMetaErrors } from "./resourceValidation";
 import GenerateButton from "../ui/GenerateButton";
 import { generateResourceCaption, generateResourceTitle } from "@/lib/genai";
 
@@ -116,9 +118,10 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
               value={node.attrs.title || ""}
               onUpdate={(title) => updateAttributes({ title })}
               placeholder="Code Snippet Title..."
-              required
-              missingMessage="Title is required for this code block."
               className="flex-1 bg-transparent border-none outline-none text-[12px] font-bold tracking-wider text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
+            />
+            <ValidationIssuesTooltip
+              errors={resourceMetaErrors(node.attrs.title, node.attrs.caption, "code block")}
             />
             <GenerateButton
               label="Generate title"
@@ -208,8 +211,6 @@ export function CodeBlockNodeView({ node, updateAttributes, deleteNode, editor, 
             value={node.attrs.caption || ""}
             onUpdate={(caption) => updateAttributes({ caption })}
             placeholder="What does this code do?"
-            required
-            missingMessage="Caption is required for this code block."
             multiline
             className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface/50 group-hover/caption:text-nb-on-surface focus:text-nb-on-surface focus:opacity-100 transition-all leading-relaxed"
           />

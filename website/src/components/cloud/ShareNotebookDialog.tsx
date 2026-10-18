@@ -164,7 +164,7 @@ export function ShareNotebookDialog({ open, onClose }: Props) {
               </div>
             )}
 
-            <div className="grid max-h-64 gap-3 overflow-auto rounded-nb-xl border border-nb-outline-variant/30 p-3 sm:grid-cols-2">
+            <div className="grid max-h-48 gap-3 overflow-auto rounded-nb-xl border border-nb-outline-variant/30 p-3 sm:max-h-64 sm:grid-cols-2">
               <div>
                 <h3 className="mb-2 text-nb-caption font-semibold text-nb-on-surface-variant">
                   Teams

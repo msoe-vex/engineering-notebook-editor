@@ -47,7 +47,7 @@ export function AccountShell({ children }: { children: ReactNode }) {
           })}
         </nav>
       </aside>
-      <div className="min-w-0 flex-1 overflow-y-auto custom-scrollbar bg-nb-surface p-6 sm:p-8 md:p-10 lg:p-12">
+      <div className="min-w-0 flex-1 overflow-y-auto custom-scrollbar bg-nb-surface p-4 sm:p-6 md:p-10 lg:p-12">
         <div className="mx-auto w-full max-w-4xl">{children}</div>
       </div>
     </div>

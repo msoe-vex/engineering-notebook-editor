@@ -13,3 +13,4 @@ export { Breadcrumbs, type Crumb } from "./Breadcrumbs";
 export { TabNav, type TabItem } from "./TabNav";
 export { DropdownMenu, type MenuItem } from "./DropdownMenu";
 export { Dialog } from "./Dialog";
+export { ValidationIssuesTooltip } from "./ValidationIssuesTooltip";

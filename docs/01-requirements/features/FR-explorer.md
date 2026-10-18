@@ -20,6 +20,7 @@ Notebook accessors.
 - Search filters panel (title/authors/date/phase text + structured filters)
 - Toast + refresh/revert on reorder failure
 - Multi-select: Ctrl/Cmd click toggle, Shift click range; bulk Move… / Delete
+- Phone (&lt; `md`): full-screen list when no entry open; overlay drawer when an entry is open (list control + Entries tab)
 
 ## Acceptance criteria
 
@@ -28,6 +29,7 @@ Notebook accessors.
 - [ ] Filters hide non-matching entries; clear resets
 - [ ] Templates appear in the unified tree with a distinct icon; New menu lists templates
 - [ ] Multi-select can move or delete several entries at once
+- [x] On phone, explorer is not a persistent side-by-side split; entry edit is full-width
 
 ## Data and APIs
 

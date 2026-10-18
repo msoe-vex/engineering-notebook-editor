@@ -20,9 +20,6 @@ export type WorkspaceHeaderState = {
   notebookId: string;
   orgName: string;
   notebookName: string;
-  /** Section tabs (Entries / Calendar / …) — rendered in AppChrome, not a second bar. */
-  navItems: WorkspaceHeaderNavItem[];
-  activeNavId: string;
   menuItems: WorkspaceHeaderMenuItem[];
 } | null;
 

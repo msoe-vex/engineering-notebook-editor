@@ -76,18 +76,20 @@ function SortableMember({
         </span>
       </button>
       <div className="min-w-0 flex-1">
-        <div className="font-semibold text-nb-on-surface">{member.name}</div>
-        <div className="text-nb-caption text-nb-on-surface-variant">
+        <div className="truncate font-semibold text-nb-on-surface">{member.name}</div>
+        <div className="truncate text-nb-caption text-nb-on-surface-variant">
           {member.role || "Member"}
           {member.linkedUid ? " · linked account" : ""}
         </div>
       </div>
-      <Button size="sm" variant="ghost" onClick={onEdit}>
-        Edit
-      </Button>
-      <Button size="sm" variant="link" className="text-nb-danger" onClick={onRemove}>
-        Remove
-      </Button>
+      <div className="flex shrink-0 items-center gap-1">
+        <Button size="sm" variant="ghost" onClick={onEdit}>
+          Edit
+        </Button>
+        <Button size="sm" variant="link" className="text-nb-danger" onClick={onRemove}>
+          Remove
+        </Button>
+      </div>
     </div>
   );
 }

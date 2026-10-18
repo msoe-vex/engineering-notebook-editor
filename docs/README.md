@@ -16,7 +16,7 @@ Cloud engineering notebook: Firebase Auth, Firestore + GCS, Hocuspocus/Yjs on Cl
 | Area | Purpose |
 | --- | --- |
 | [00-product/](./00-product/) | Vision, personas, journeys, glossary |
-| [01-requirements/](./01-requirements/) | Features (FR-\*) and quality (NFR-\*), backlog, [plans](./01-requirements/plans/) ([UX hardening](./01-requirements/plans/cloud-ux-hardening.md), [Agents GenAI gateway](./01-requirements/plans/agents-genai-gateway.md)) |
+| [01-requirements/](./01-requirements/) | Features (FR-\*) and quality (NFR-\*), backlog, [plans](./01-requirements/plans/) ([UX hardening](./01-requirements/plans/cloud-ux-hardening.md), [Mobile responsive](./01-requirements/plans/mobile-responsive.md), [Agents GenAI gateway](./01-requirements/plans/agents-genai-gateway.md)) |
 | [02-architecture/](./02-architecture/) | Services, ACL, realtime, ADRs |
 | [03-reference/](./03-reference/) | API contracts, schema, env vars |
 | [04-guides/](./04-guides/) | Local dev, deploy, smoke tests, onboarding |

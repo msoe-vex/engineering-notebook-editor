@@ -86,9 +86,9 @@ export function CloudNotebookCompiler() {
   }
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 pb-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-nb-display font-bold tracking-tight">Compile</h1>
           <p className="mt-1 text-nb-body text-nb-on-surface-variant">
             Build a PDF with BusyTeX (XeLaTeX). Entry order follows calendar date, then same-day
@@ -100,9 +100,9 @@ export function CloudNotebookCompiler() {
             </p>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
           <select
-            className="rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface px-2 py-2 text-nb-label"
+            className="min-h-10 min-w-0 flex-1 rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface px-2 py-2 text-nb-label sm:flex-none"
             value={mode}
             disabled={busy}
             onChange={(e) => setMode(e.target.value as CompileMode)}
@@ -110,13 +110,19 @@ export function CloudNotebookCompiler() {
             <option value="quality">Quality images</option>
             <option value="compressed">Compressed images</option>
           </select>
-          <Button variant="primary" disabled={busy} onClick={() => void runCompile()}>
+          <Button
+            variant="primary"
+            className="min-h-10 flex-1 sm:flex-none"
+            disabled={busy}
+            onClick={() => void runCompile()}
+          >
             {busy ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
             {busy ? "Compiling…" : "Compile"}
           </Button>
           {pdfUrl && (
             <Button
               variant="secondary"
+              className="min-h-10"
               onClick={() => {
                 const a = document.createElement("a");
                 a.href = pdfUrl;
@@ -130,7 +136,9 @@ export function CloudNotebookCompiler() {
           )}
           <Button
             variant="ghost"
+            className="min-h-10 min-w-10"
             disabled={busy}
+            aria-label="Refresh PDF"
             onClick={() => {
               void cloudApi
                 .getExportPdfUrl(orgId, notebookId, "latest")
@@ -164,11 +172,11 @@ export function CloudNotebookCompiler() {
         </Alert>
       )}
 
-      <div className="min-h-[70vh] overflow-hidden rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface">
+      <div className="min-h-[50vh] overflow-hidden rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface md:min-h-[70vh]">
         {pdfUrl ? (
           <LatexPreview latexContent="" pdfUrl={pdfUrl} />
         ) : (
-          <div className="flex h-72 flex-col items-center justify-center gap-2 text-nb-caption text-nb-on-surface-variant">
+          <div className="flex h-56 flex-col items-center justify-center gap-2 px-4 text-center text-nb-caption text-nb-on-surface-variant md:h-72">
             <p>No compiled PDF yet.</p>
             <Button size="sm" variant="primary" disabled={busy} onClick={() => void runCompile()}>
               Compile now

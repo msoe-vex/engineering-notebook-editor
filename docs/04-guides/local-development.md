@@ -85,7 +85,7 @@ cp .env.example .env.local
 | Firebase Emulator UI | http://localhost:4000 |
 | Auth emulator | localhost:9099 |
 | Firestore emulator | localhost:8081 |
-| fake-gcs | http://localhost:4443 |
+| fake-gcs | http://localhost:4443 (host). Core uses `GCS_EMULATOR_ENDPOINT=http://gcs:4443` plus compose `-public-host`/`-external-url` for that Docker DNS name. Do not set `STORAGE_EMULATOR_HOST` — the Node client then omits `/storage/v1` on reads. |
 
 ## Firebase emulator
 

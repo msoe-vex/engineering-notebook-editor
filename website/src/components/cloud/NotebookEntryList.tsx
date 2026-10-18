@@ -35,7 +35,6 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
-  AlertTriangle,
   GripVertical,
   LayoutTemplate,
   PanelLeft,
@@ -46,7 +45,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { Button, DropdownMenu, IconButton } from "@/components/ui";
+import { Button, DropdownMenu, IconButton, ValidationIssuesTooltip } from "@/components/ui";
 import { showNotification } from "@/components/overlays/Notification";
 import { cloudApi } from "@/lib/cloud/api";
 import { useAppDndSensors } from "@/lib/dnd/dndSensors";
@@ -243,12 +242,13 @@ function EntryRowShell({
         </span>
 
         {entry.isValid === false && (
-          <span
-            title={(entry.validationErrors || ["Incomplete entry"]).join("\n")}
-            className="inline-flex shrink-0 text-nb-warning"
-          >
-            <AlertTriangle size={12} />
-          </span>
+          <ValidationIssuesTooltip
+            errors={entry.validationErrors || ["Incomplete entry"]}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+          />
         )}
 
         <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-1">
@@ -561,11 +561,14 @@ export function NotebookEntryList({
   collapsed,
   onToggleCollapsed,
   basePath,
+  hideCollapseControl = false,
 }: {
   activeEntryId: string | null;
   collapsed: boolean;
   onToggleCollapsed: () => void;
   basePath: string;
+  /** Full-screen mobile list — no desktop collapse control. */
+  hideCollapseControl?: boolean;
 }) {
   const {
     orgId,
@@ -1392,9 +1395,11 @@ export function NotebookEntryList({
         >
           <SlidersHorizontal size={16} />
         </IconButton>
-        <IconButton aria-label="Collapse entry list" onClick={onToggleCollapsed}>
-          <PanelLeftClose size={16} />
-        </IconButton>
+        {!hideCollapseControl && (
+          <IconButton aria-label="Collapse entry list" onClick={onToggleCollapsed}>
+            <PanelLeftClose size={16} />
+          </IconButton>
+        )}
       </div>
 
       {filtersOpen && (

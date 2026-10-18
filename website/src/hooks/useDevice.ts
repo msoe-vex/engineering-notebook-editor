@@ -1,5 +1,23 @@
 import { useSyncExternalStore } from "react";
 
+/** Tailwind `md` — phone / small tablet portrait. */
+export const NARROW_VIEWPORT_MQ = "(max-width: 767px)";
+
+function subscribeNarrowViewport(onChange: () => void) {
+  const mq = window.matchMedia(NARROW_VIEWPORT_MQ);
+  mq.addEventListener("change", onChange);
+  return () => mq.removeEventListener("change", onChange);
+}
+
+/** True when viewport is below the `md` breakpoint (layout, not UA). */
+export function useNarrowViewport(): boolean {
+  return useSyncExternalStore(
+    subscribeNarrowViewport,
+    () => window.matchMedia(NARROW_VIEWPORT_MQ).matches,
+    () => false
+  );
+}
+
 /**
  * Checks whether the current environment is a mobile or touch-primary device
  * using interaction media queries, User-Agent Client Hints, and user-agent fallbacks.

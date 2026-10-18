@@ -50,7 +50,8 @@ Core authorizes the SSE subscription the same way as REST (`canAccessNotebook`).
 
 ## Notes
 
-- Debounced flush from Collab → Core
-- TipTap JSON written when real JSON supplied; Yjs always may persist
+- Debounced flush from Collab → Core persists **Yjs** (source of truth for the editor reload path)
+- Website mirrors TipTap JSON via `PUT …/entries/:id/content` after sync (compile, title-gen, `GET …/content`)
+- Editor mounts only after Hocuspocus `synced` so an empty local fragment cannot race the GCS load
 - Website densifies metadata for calendar/settings via `workspaceState` (not legacy store); today refreshed by full fetch — push replaces that for multi-client freshness
 - Local smoke may set `COLLAB_AUTH_DISABLED=true` — never in production

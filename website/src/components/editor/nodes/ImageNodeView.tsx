@@ -8,7 +8,9 @@ import { events, EventNames } from "@/lib/events";
 
 import { compressImageToJpeg, hashContent, convertSvgToPng, getExtensionFromDataUrl } from "@/lib/utils";
 import { ASSETS_COMPRESSED_DIR, ASSETS_ORIGINAL_DIR } from "@/lib/constants";
+import { ValidationIssuesTooltip } from "@/components/ui";
 import { NodeViewInput } from "./NodeViewInput";
+import { resourceMetaErrors } from "./resourceValidation";
 import GenerateButton from "../ui/GenerateButton";
 export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, dbName, editor }: NodeViewProps & { dbName: string }) => {
   const isDataUrl = Boolean(node.attrs.src?.startsWith('data:'));
@@ -109,6 +111,7 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
     caption: node.attrs.caption,
     imageDataUrl: resolvedSrc?.startsWith("data:") ? resolvedSrc : undefined,
   });
+  const metaErrors = resourceMetaErrors(node.attrs.title, node.attrs.caption, "image");
 
   return (
     <NodeViewWrapper
@@ -144,10 +147,9 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
               value={node.attrs.title || ""}
               onUpdate={(title) => updateAttributes({ title })}
               placeholder="Give this image a title..."
-              required
-              missingMessage="Title is required for this image."
               className="flex-1 bg-transparent border-none outline-none text-[12px] font-bold tracking-wider text-nb-on-surface-variant placeholder:text-nb-on-surface-variant/30"
             />
+            <ValidationIssuesTooltip errors={metaErrors} />
             <GenerateButton
               label="Generate title"
               disabled={!resolvedSrc}
@@ -242,8 +244,6 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
             value={node.attrs.caption || ""}
             onUpdate={(caption) => updateAttributes({ caption })}
             placeholder="Add figure description..."
-            required
-            missingMessage="Caption is required for this image."
             multiline
             className="w-full bg-transparent border-none outline-none text-center text-xs font-medium italic text-nb-on-surface/50 group-hover/caption:text-nb-on-surface focus:text-nb-on-surface focus:opacity-100 transition-all leading-relaxed"
           />

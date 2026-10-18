@@ -30,16 +30,23 @@ services:
       retries: 18
       start_period: 90s
 
+  # Official-ish GCS API emulator (Google does not ship a GCS emulator).
+  # public-host / external-url MUST be the Docker DNS name Core uses (gcs:4443).
+  # Using localhost here makes @google-cloud/storage download()/exists() 404 from Core
+  # while save() still appears to work — entry bodies look "unsaved" after refresh.
+  # Browser-facing URLs stay on localhost via GCS_PUBLIC_BASE_URL / Core asset proxy.
   gcs:
-    image: fsouza/fake-gcs-server:latest
+    image: fsouza/fake-gcs-server:1.52.3
     command:
       [
         "-scheme",
         "http",
         "-port",
         "4443",
+        "-public-host",
+        "gcs:4443",
         "-external-url",
-        "http://localhost:4443",
+        "http://gcs:4443",
         "-data",
         "/data",
       ]
@@ -94,7 +101,9 @@ services:
       FIREBASE_AUTH_EMULATOR_HOST: firebase:9099
       AUTH_FALLBACK: "true"
       GCS_BUCKET: engineering-notebook
-      STORAGE_EMULATOR_HOST: http://gcs:4443
+      # Use GCS_EMULATOR_ENDPOINT (not STORAGE_EMULATOR_HOST): the Node GCS client
+      # mishandles STORAGE_EMULATOR_HOST and drops /storage/v1 on reads.
+      GCS_EMULATOR_ENDPOINT: http://gcs:4443
       GCS_PUBLIC_BASE_URL: http://localhost:4443/storage/v1/b/engineering-notebook/o
       SERVICE_ADMIN_UID: service-admin
       INTERNAL_SERVICE_SECRET: local-dev-secret

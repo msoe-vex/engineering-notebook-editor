@@ -27,11 +27,21 @@ export async function createStorage(): Promise<StoragePort> {
     return new MemoryStorage(process.env.GCS_PUBLIC_BASE_URL || "http://localhost:4443");
   }
 
-  const apiEndpoint = process.env.STORAGE_EMULATOR_HOST
-    ? process.env.STORAGE_EMULATOR_HOST.startsWith("http")
-      ? process.env.STORAGE_EMULATOR_HOST
-      : `http://${process.env.STORAGE_EMULATOR_HOST}`
+  // Prefer explicit apiEndpoint. If STORAGE_EMULATOR_HOST is left set, @google-cloud/storage
+  // omits `/storage/v1` on reads (uploads still work) — classic fake-gcs "saved but gone on refresh".
+  // See https://github.com/fsouza/fake-gcs-server/issues/2198
+  const rawEmulator =
+    process.env.GCS_EMULATOR_ENDPOINT ||
+    process.env.STORAGE_EMULATOR_HOST ||
+    "";
+  const apiEndpoint = rawEmulator
+    ? rawEmulator.startsWith("http")
+      ? rawEmulator.replace(/\/$/, "")
+      : `http://${rawEmulator}`
     : undefined;
+  if (apiEndpoint && process.env.STORAGE_EMULATOR_HOST) {
+    delete process.env.STORAGE_EMULATOR_HOST;
+  }
 
   const projectId =
     process.env.FIREBASE_PROJECT_ID || process.env.GCP_PROJECT_ID || "demo-engineering-notebook";
@@ -43,7 +53,7 @@ export async function createStorage(): Promise<StoragePort> {
 
   const storage = new Storage({
     projectId,
-    apiEndpoint,
+    ...(apiEndpoint ? { apiEndpoint } : {}),
   });
 
   const bucket = storage.bucket(bucketName);
@@ -55,6 +65,8 @@ export async function createStorage(): Promise<StoragePort> {
       console.warn("[storage] bucket ensure failed", err);
     }
   }
+
+  const publicBase = process.env.GCS_PUBLIC_BASE_URL?.replace(/\/$/, "");
 
   return {
     async putObject(key, data, contentType = "application/octet-stream") {
@@ -104,7 +116,10 @@ export async function createStorage(): Promise<StoragePort> {
     },
     async getSignedUrl(key, action, expiresMs = 3600_000) {
       if (apiEndpoint) {
-        // fake-gcs-server: unsigned public-style URL
+        // Prefer host-reachable base (localhost) over Docker DNS (gcs:4443).
+        if (publicBase) {
+          return `${publicBase}/${encodeURIComponent(key)}?alt=media`;
+        }
         return `${apiEndpoint}/storage/v1/b/${bucketName}/o/${encodeURIComponent(key)}?alt=media`;
       }
       const [url] = await bucket.file(key).getSignedUrl({
@@ -115,8 +130,8 @@ export async function createStorage(): Promise<StoragePort> {
       return url;
     },
     publicUrl(key) {
-      if (process.env.GCS_PUBLIC_BASE_URL) {
-        return `${process.env.GCS_PUBLIC_BASE_URL.replace(/\/$/, "")}/${key}`;
+      if (publicBase) {
+        return `${publicBase}/${key}`;
       }
       if (apiEndpoint) {
         return `${apiEndpoint}/storage/v1/b/${bucketName}/o/${encodeURIComponent(key)}?alt=media`;

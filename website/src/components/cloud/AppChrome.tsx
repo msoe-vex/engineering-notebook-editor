@@ -37,6 +37,7 @@ import {
   getWorkspaceHeader,
   subscribeWorkspaceHeader,
 } from "@/lib/cloud/workspaceHeaderStore";
+import { useNarrowViewport } from "@/hooks/useDevice";
 import Logo from "@/components/icons/Logo";
 import {
   Alert,
@@ -55,6 +56,7 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
   const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
   const notebookWorkspace = /\/orgs\/[^/]+\/notebooks\/[^/]+/.test(pathname || "");
+  const narrow = useNarrowViewport();
   const onAdmin = pathname?.startsWith("/admin");
   const onAccount = pathname?.startsWith("/account");
   const onHelp = pathname?.startsWith("/help");
@@ -335,36 +337,20 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
               </span>
               <span className="hidden sm:inline">ENGen</span>
             </Link>
-            <div className="min-w-0 shrink">
-              <Breadcrumbs items={crumbs} />
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <Breadcrumbs
+                className="flex-nowrap"
+                items={
+                  narrow && ws && crumbs.length > 2
+                    ? [crumbs[0]!, crumbs[crumbs.length - 1]!]
+                    : crumbs
+                }
+              />
             </div>
             {title && !ws && (
               <span className="hidden truncate text-sm text-nb-on-surface-variant lg:inline">
                 {title}
               </span>
-            )}
-            {ws && ws.navItems.length > 0 && (
-              <nav
-                className="ml-1 hidden min-w-0 items-center gap-0.5 md:flex"
-                aria-label="Notebook sections"
-              >
-                {ws.navItems.map((item) => {
-                  const active = ws.activeNavId === item.id;
-                  return (
-                    <Link
-                      key={item.id}
-                      href={item.href}
-                      className={`rounded-nb-lg px-2.5 py-1 text-nb-label font-semibold transition-colors ${
-                        active
-                          ? "bg-nb-primary/10 text-nb-primary"
-                          : "text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface"
-                      }`}
-                    >
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </nav>
             )}
           </div>
 
@@ -455,36 +441,16 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
               </div>
             )}
             {ws && (
-              <>
-                {/* Section nav for narrow viewports (inline nav is md+) */}
-                <DropdownMenu
-                  className="md:hidden"
-                  ariaLabel="Notebook sections"
-                  items={ws.navItems.map((item) => ({
-                    id: item.id,
-                    label: item.label,
-                    onSelect: () => router.push(item.href),
-                  }))}
-                  trigger={
-                    <span className={iconBtn} title="Sections">
-                      <span className="text-nb-label font-semibold">
-                        {ws.navItems.find((n) => n.id === ws.activeNavId)?.label || "Sections"}
-                      </span>
-                      <ChevronDown size={12} className="opacity-60" />
-                    </span>
-                  }
-                />
-                <DropdownMenu
-                  ariaLabel="Notebook actions"
-                  items={ws.menuItems}
-                  trigger={
-                    <span className={iconBtn} title="Notebook actions">
-                      <span className="sr-only">Notebook actions</span>
-                      <MoreVertical size={16} />
-                    </span>
-                  }
-                />
-              </>
+              <DropdownMenu
+                ariaLabel="Notebook actions"
+                items={ws.menuItems}
+                trigger={
+                  <span className={iconBtn} title="Notebook actions">
+                    <span className="sr-only">Notebook actions</span>
+                    <MoreVertical size={16} />
+                  </span>
+                }
+              />
             )}
             {mountedTheme && (
               <button

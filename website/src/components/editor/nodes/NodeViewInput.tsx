@@ -1,6 +1,5 @@
 import React, { useState, useLayoutEffect, useRef } from "react";
 import type { TiptapEditor } from "@/lib/types";
-import ValidationTooltip from "../ui/ValidationTooltip";
 
 interface NodeViewInputProps {
   value: string;
@@ -8,7 +7,9 @@ interface NodeViewInputProps {
   placeholder?: string;
   className?: string;
   style?: React.CSSProperties;
+  /** @deprecated Validation is shown once per resource block, not per field. */
   required?: boolean;
+  /** @deprecated Unused — kept so call sites can drop gradually. */
   missingMessage?: string;
   editor?: TiptapEditor | null;
   multiline?: boolean;
@@ -24,8 +25,8 @@ export function NodeViewInput({
   placeholder,
   className,
   style,
-  required = false,
-  missingMessage = "This field is required.",
+  required: _required = false,
+  missingMessage: _missingMessage,
   editor,
   multiline = false,
 }: NodeViewInputProps) {
@@ -37,7 +38,6 @@ export function NodeViewInput({
   }
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
   const cursorPositionRef = useRef<number | null>(null);
-  const showError = required && !localValue.trim();
 
   useLayoutEffect(() => {
     if (
@@ -85,50 +85,35 @@ export function NodeViewInput({
     }
   };
 
-  const wrapperClass = className?.includes("w-full")
-    ? `w-full flex ${multiline ? "items-start" : "items-center"} justify-center gap-1.5`
-    : className?.includes("flex-1")
-      ? "flex-1 min-w-0 flex items-center gap-1.5"
-      : "inline-flex items-center gap-1.5 min-w-0";
-
   const fieldClassName = multiline
     ? `${className || ""} whitespace-pre-wrap break-words resize-none overflow-hidden`.trim()
     : className;
 
+  if (multiline) {
+    return (
+      <textarea
+        ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+        rows={1}
+        value={localValue}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        className={fieldClassName}
+        style={style}
+      />
+    );
+  }
+
   return (
-    <div className={wrapperClass}>
-      {multiline ? (
-        <textarea
-          ref={inputRef as React.RefObject<HTMLTextAreaElement>}
-          rows={1}
-          value={localValue}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          className={fieldClassName}
-          style={style}
-        />
-      ) : (
-        <input
-          ref={inputRef as React.RefObject<HTMLInputElement>}
-          type="text"
-          value={localValue}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          className={className}
-          style={style}
-        />
-      )}
-      {showError && (
-        <ValidationTooltip
-          errors={[missingMessage]}
-          size={12}
-          position="bottom"
-          className="shrink-0"
-          iconContainerClassName="text-amber-500"
-        />
-      )}
-    </div>
+    <input
+      ref={inputRef as React.RefObject<HTMLInputElement>}
+      type="text"
+      value={localValue}
+      onChange={handleChange}
+      onKeyDown={handleKeyDown}
+      placeholder={placeholder}
+      className={className}
+      style={style}
+    />
   );
 }

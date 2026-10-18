@@ -34,7 +34,12 @@ import { setWorkspaceHeader } from "@/lib/cloud/workspaceHeaderStore";
 import { runNotebookAudit } from "@/lib/genai/auditJudge";
 import { workspaceState } from "@/lib/cloud/workspaceState";
 import type { NotebookMetadata } from "@/lib/notebook/metadata";
+import { useNarrowViewport } from "@/hooks/useDevice";
 import { NotebookEntryList } from "./NotebookEntryList";
+import {
+  NotebookSectionBottomTabs,
+  NotebookSectionStrip,
+} from "./NotebookSectionNav";
 import { NotebookWorkspaceProvider } from "./NotebookWorkspaceContext";
 import type { EntryMeta } from "./notebook-types";
 
@@ -129,8 +134,10 @@ export function NotebookShell({ children }: { children: ReactNode }) {
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [prompt, setPrompt] = useState<PromptState>(null);
   const [listCollapsed, setListCollapsed] = useState(false);
+  const [mobileExplorerOpen, setMobileExplorerOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
+  const narrow = useNarrowViewport();
 
   function refresh() {
     setReloadToken((n) => n + 1);
@@ -572,14 +579,17 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     [basePath]
   );
 
+  // Close drawer when opening an entry (legacy mobile behavior).
+  useEffect(() => {
+    if (narrow && activeEntryId) setMobileExplorerOpen(false);
+  }, [narrow, activeEntryId]);
+
   useEffect(() => {
     setWorkspaceHeader({
       orgId,
       notebookId,
       orgName,
       notebookName,
-      navItems: notebookUnavailable ? [] : navItems,
-      activeNavId: activeNav,
       menuItems: notebookUnavailable
         ? []
         : [
@@ -682,8 +692,6 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     orgName,
     notebookName,
     notebookUnavailable,
-    navItems,
-    activeNav,
     showPrompt,
     showConfirm,
     router,
@@ -711,7 +719,29 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     setNotebookSummary,
     showConfirm,
     showPrompt,
+    isNarrowViewport: narrow,
+    openMobileExplorer: () => setMobileExplorerOpen(true),
   };
+
+  const entryMain = (
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-nb-surface">
+      <div
+        className={
+          activeEntryId
+            ? "relative min-h-0 flex-1 overflow-hidden"
+            : "min-h-0 flex-1 overflow-y-auto p-4 md:p-6"
+        }
+      >
+        {activeEntryId ? (
+          <div className="absolute inset-0 flex min-h-0 flex-col overflow-hidden">
+            {children}
+          </div>
+        ) : (
+          children
+        )}
+      </div>
+    </section>
+  );
 
   return (
     <NotebookWorkspaceProvider value={ctx}>
@@ -727,6 +757,10 @@ export function NotebookShell({ children }: { children: ReactNode }) {
             if (file) void handleImportZip(file);
           }}
         />
+
+        {initialLoaded && !notebookUnavailable && (
+          <NotebookSectionStrip items={navItems} activeId={activeNav} />
+        )}
 
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
           {initialLoaded && notebookUnavailable && (
@@ -758,7 +792,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
           )}
           {!initialLoaded && (
             <div className="absolute inset-0 z-40 flex bg-nb-surface">
-              <aside className="flex w-[22%] min-w-[10rem] flex-col gap-2 border-r border-nb-outline-variant/20 p-3">
+              <aside className="hidden w-[22%] min-w-[10rem] flex-col gap-2 border-r border-nb-outline-variant/20 p-3 md:flex">
                 <Skeleton className="h-8 w-full" />
                 <Skeleton className="h-7 w-24" />
                 <SkeletonLines lines={8} className="mt-2" />
@@ -773,7 +807,43 @@ export function NotebookShell({ children }: { children: ReactNode }) {
               </div>
             </div>
           )}
-          {!notebookUnavailable && showEntryList && listCollapsed ? (
+          {!notebookUnavailable && showEntryList && narrow ? (
+            <>
+              {activeEntryId ? (
+                <>
+                  {mobileExplorerOpen && (
+                    <div className="absolute inset-0 z-30 flex md:hidden">
+                      <button
+                        type="button"
+                        className="absolute inset-0 bg-black/40"
+                        aria-label="Close entry list"
+                        onClick={() => setMobileExplorerOpen(false)}
+                      />
+                      <div className="relative z-10 flex h-full w-[min(100%,20rem)] flex-col bg-nb-surface-low shadow-nb-lg">
+                        <NotebookEntryList
+                          activeEntryId={activeEntryId}
+                          collapsed={false}
+                          onToggleCollapsed={() => setMobileExplorerOpen(false)}
+                          basePath={basePath}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {entryMain}
+                </>
+              ) : (
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                  <NotebookEntryList
+                    activeEntryId={activeEntryId}
+                    collapsed={false}
+                    onToggleCollapsed={() => undefined}
+                    basePath={basePath}
+                    hideCollapseControl
+                  />
+                </div>
+              )}
+            </>
+          ) : !notebookUnavailable && showEntryList && listCollapsed ? (
             <>
               <NotebookEntryList
                 activeEntryId={activeEntryId}
@@ -781,17 +851,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
                 onToggleCollapsed={() => setListCollapsed(false)}
                 basePath={basePath}
               />
-              <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-nb-surface">
-                <div
-                  className={
-                    activeEntryId
-                      ? "flex h-full min-h-0 flex-col overflow-hidden"
-                      : "min-h-0 flex-1 overflow-y-auto p-4 md:p-6"
-                  }
-                >
-                  {children}
-                </div>
-              </section>
+              {entryMain}
             </>
           ) : !notebookUnavailable && showEntryList ? (
             <PanelGroup
@@ -808,18 +868,8 @@ export function NotebookShell({ children }: { children: ReactNode }) {
                 />
               </Panel>
               <PanelResizeHandle className="w-1.5 shrink-0 bg-nb-outline-variant/20 transition-colors hover:bg-nb-primary/40 data-[resize-handle-active]:bg-nb-primary/50" />
-              <Panel defaultSize={78} minSize={40} className="min-h-0">
-                <section className="flex h-full min-h-0 flex-col overflow-hidden bg-nb-surface">
-                  <div
-                    className={
-                      activeEntryId
-                        ? "flex h-full min-h-0 flex-col overflow-hidden"
-                        : "h-full min-h-0 overflow-y-auto p-4 md:p-6"
-                    }
-                  >
-                    {children}
-                  </div>
-                </section>
+              <Panel defaultSize={78} minSize={40} className="flex min-h-0 flex-col">
+                {entryMain}
               </Panel>
             </PanelGroup>
           ) : !notebookUnavailable ? (
@@ -828,6 +878,10 @@ export function NotebookShell({ children }: { children: ReactNode }) {
             </section>
           ) : null}
         </div>
+
+        {initialLoaded && !notebookUnavailable && (
+          <NotebookSectionBottomTabs items={navItems} activeId={activeNav} />
+        )}
       </div>
 
       <Dialog

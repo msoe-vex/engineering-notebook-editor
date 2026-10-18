@@ -7,7 +7,7 @@ Related: [FR-notebooks](../features/FR-notebooks.md), [FR-entries-collab](../fea
 
 - Notebook/org delete removes Firestore children **and** related GCS objects (TipTap, Yjs, assets, exports, audits).
 - Image insert uses server-returned asset id; `assetIds` / `usedBy` stay consistent.
-- Collab flush eventually persists; clients tolerate TipTap GCS lag behind Yjs.
+- Collab flush eventually persists Yjs; website mirrors TipTap JSON after sync. Clients tolerate brief TipTap lag behind Yjs.
 - ZIP import is LWW and remaps assets without corrupting unrelated notebooks.
 
 ## Current implementation

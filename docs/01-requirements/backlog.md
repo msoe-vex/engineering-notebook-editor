@@ -2,9 +2,11 @@
 
 Forward-looking work. Requirements index: [README.md](./README.md). Parity epics A–H are done (git history).
 
-## Active plan
+## Active plans
 
 **[Cloud UX hardening & legacy parity](./plans/cloud-ux-hardening.md)** — P0 image upload `bodyLimit`, toasts, phase icons, split/live LaTeX, metadata save + sync, validation revalidation, editor chrome, unified templates, calendar day height, skeletons, share dialog. Prefer that plan over ad-hoc polish until it is marked done.
+
+**[Mobile-responsive shell](./plans/mobile-responsive.md)** — Phone/tablet layouts for all signed-in surfaces; notebook section nav (slim strip desktop, bottom tabs mobile); explorer drawer; entry editor without split on narrow; [NFR-responsive](./quality/NFR-responsive.md).
 
 ## Done (architecture hygiene)
 

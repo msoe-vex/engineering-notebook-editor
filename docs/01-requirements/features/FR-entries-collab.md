@@ -14,7 +14,9 @@ Anyone with notebook access may create/edit/delete entries (subject to future fi
 ## User-facing behavior
 
 - `/…/entries/:entryId` — title, authors chips, phase picker (icon+color), collab editor + format toolbar
-- View modes: editor / split / LaTeX with live source preview from current doc + metadata
+- View modes: editor / split / LaTeX with live source preview from current doc + metadata; **no split on phone** (&lt; `md`)
+- Phone: date/phase/authors behind a disclosure; list drawer control in entry chrome
+- Entry meta (date/phase/authors) toggles via chevron; starts collapsed on phone, open on desktop
 - Saving indicator on metadata patches; optimistic sidebar updates; Core SSE keeps other sessions fresh
 - Presence via collab WebSocket: Live/Offline plus peer awareness avatars (initials)
 - Validation on content flush; metadata-field revalidation when notebook phases change (Core)
@@ -30,6 +32,7 @@ Anyone with notebook access may create/edit/delete entries (subject to future fi
 - [ ] Create entry seeds authors from last-authors preference when available
 - [ ] Delete entry removes associated content pointers / GCS as designed
 - [ ] Saving… / Saved visible on metadata patch; split LaTeX updates while typing
+- [x] Phone: editor | LaTeX only (split hidden); entry body scrolls in a dedicated pane
 
 ## Data and APIs
 

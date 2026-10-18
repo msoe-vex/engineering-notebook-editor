@@ -18,6 +18,7 @@ Product context: [00-product/](../00-product/). Contracts: [03-reference/](../03
 | Plan | Status |
 | --- | --- |
 | [Cloud UX hardening & legacy parity](./plans/cloud-ux-hardening.md) | active |
+| [Mobile-responsive shell](./plans/mobile-responsive.md) | active |
 
 Also: [backlog.md](./backlog.md).
 
@@ -47,4 +48,5 @@ Also: [backlog.md](./backlog.md).
 | [NFR-reliability](./quality/NFR-reliability.md) | Reliability & data integrity | current |
 | [NFR-performance](./quality/NFR-performance.md) | Performance | partial |
 | [NFR-accessibility](./quality/NFR-accessibility.md) | Accessibility | partial |
+| [NFR-responsive](./quality/NFR-responsive.md) | Responsive & mobile usability | planned |
 | [NFR-compliance](./quality/NFR-compliance.md) | Compliance posture | partial |

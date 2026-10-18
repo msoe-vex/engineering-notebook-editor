@@ -9,7 +9,7 @@
  *   ASSETS_APP_VERSION (default: latest)
  *   BUSYTEX_DIR (default: website/public/busytex)
  *   LATEX_DIR (default: website/public/latex)
- *   STORAGE_EMULATOR_HOST (optional, for fake-gcs-server)
+ *   GCS_EMULATOR_ENDPOINT (optional, for fake-gcs-server; prefer over STORAGE_EMULATOR_HOST)
  */
 import { Storage } from "@google-cloud/storage";
 import * as fs from "node:fs";
@@ -25,15 +25,20 @@ const version = process.env.ASSETS_APP_VERSION || "latest";
 const busytexDir = process.env.BUSYTEX_DIR || path.resolve("website/public/busytex");
 const latexDir = process.env.LATEX_DIR || path.resolve("website/public/latex");
 
-const apiEndpoint = process.env.STORAGE_EMULATOR_HOST
-  ? process.env.STORAGE_EMULATOR_HOST.startsWith("http")
-    ? process.env.STORAGE_EMULATOR_HOST
-    : `http://${process.env.STORAGE_EMULATOR_HOST}`
+const rawEmulator = process.env.GCS_EMULATOR_ENDPOINT || process.env.STORAGE_EMULATOR_HOST || "";
+const apiEndpoint = rawEmulator
+  ? rawEmulator.startsWith("http")
+    ? rawEmulator.replace(/\/$/, "")
+    : `http://${rawEmulator}`
   : undefined;
+// STORAGE_EMULATOR_HOST makes @google-cloud/storage omit /storage/v1 on reads.
+if (apiEndpoint && process.env.STORAGE_EMULATOR_HOST) {
+  delete process.env.STORAGE_EMULATOR_HOST;
+}
 
 const storage = new Storage({
   projectId: process.env.GCP_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || "demo-engineering-notebook",
-  apiEndpoint,
+  ...(apiEndpoint ? { apiEndpoint } : {}),
 });
 
 async function uploadDir(localDir: string, gcsPrefix: string) {

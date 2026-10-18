@@ -55,4 +55,8 @@ export type NotebookWorkspaceState = {
     onConfirm: (value: string) => void,
     label?: string
   ) => void;
+  /** Viewport below `md` — mobile shell (drawer explorer, no split). */
+  isNarrowViewport?: boolean;
+  /** Open the entry-list drawer while an entry is open (phone). */
+  openMobileExplorer?: () => void;
 };

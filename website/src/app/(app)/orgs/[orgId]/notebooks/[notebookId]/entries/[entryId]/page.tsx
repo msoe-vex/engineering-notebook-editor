@@ -20,7 +20,14 @@ import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContex
 import AuthorsInput from "@/components/editor/ui/AuthorsInput";
 import GenerateButton from "@/components/editor/ui/GenerateButton";
 import ViewToggle, { type ViewMode } from "@/components/editor/ui/ViewToggle";
-import { Alert, Badge, Button, DropdownMenu, EmptyState, LoadingBlock } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  DropdownMenu,
+  EmptyState,
+  LoadingBlock,
+  ValidationIssuesTooltip,
+} from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
 import { patchEditorChrome } from "@/lib/cloud/editorChromeStore";
 import { formatCloudError } from "@/lib/cloud/errors";
@@ -35,6 +42,7 @@ import {
   type ProjectPhase,
   type TipTapNode,
 } from "@/lib/notebook/metadata";
+import { ChevronDown, PanelLeft } from "lucide-react";
 
 const LatexPreview = dynamic(() => import("@/components/editor/LatexPreview"), {
   ssr: false,
@@ -61,6 +69,8 @@ export default function EntryPage() {
     setError,
     showConfirm,
     showPrompt,
+    isNarrowViewport,
+    openMobileExplorer,
   } = useNotebookWorkspace();
   const meta = entries[entryId];
   const docName = collabDocName(orgId, notebookId, entryId);
@@ -70,7 +80,11 @@ export default function EntryPage() {
   const [authorOptions, setAuthorOptions] = useState<string[]>([]);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [viewMode, setViewMode] = useState<ViewMode>("editor");
+  const [metaOpen, setMetaOpen] = useState(true);
   const [docJson, setDocJson] = useState<TipTapNode | null>(null);
+  const narrow = Boolean(isNarrowViewport);
+  const effectiveViewMode: ViewMode =
+    narrow && viewMode === "split" ? "editor" : viewMode;
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const titleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorPanelRef = useRef<ImperativePanelHandle>(null);
@@ -86,7 +100,10 @@ export default function EntryPage() {
     setAuthorsDraft([]);
     setDocJson(null);
     setSaveState("idle");
+    setMetaOpen(!narrow);
     patchEditorChrome({ saveState: "idle" });
+    // Intentionally only on entry change — use current narrow for initial open state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- narrow snapshot on navigate
   }, [entryId]);
 
   // Keep header drafts in sync with SSE/meta unless the user is actively editing that field.
@@ -254,22 +271,20 @@ export default function EntryPage() {
   ]);
 
   useEffect(() => {
+    if (narrow && viewMode === "split") setViewMode("editor");
+  }, [narrow, viewMode]);
+
+  // Split mode only — editor/preview exclusives render without PanelGroup.
+  useEffect(() => {
+    if (effectiveViewMode !== "split") return;
     const editorPanel = editorPanelRef.current;
     const previewPanel = previewPanelRef.current;
     if (!editorPanel || !previewPanel) return;
-    if (viewMode === "editor") {
-      editorPanel.expand();
-      previewPanel.collapse();
-    } else if (viewMode === "preview") {
-      previewPanel.expand();
-      editorPanel.collapse();
-    } else {
-      editorPanel.expand();
-      previewPanel.expand();
-      editorPanel.resize(50);
-      previewPanel.resize(50);
-    }
-  }, [viewMode]);
+    editorPanel.expand();
+    previewPanel.expand();
+    editorPanel.resize(50);
+    previewPanel.resize(50);
+  }, [effectiveViewMode]);
 
   if (notebookUnavailable) {
     return null;
@@ -304,9 +319,19 @@ export default function EntryPage() {
   const savingMeta = saveState === "saving";
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-nb-outline-variant/20 bg-nb-surface px-4 py-2 md:px-6">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <header className="shrink-0 border-b border-nb-outline-variant/20 bg-nb-surface/95 px-4 py-2 backdrop-blur-sm md:px-6">
         <div className="flex flex-wrap items-center gap-2">
+          {narrow && openMobileExplorer && (
+            <button
+              type="button"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-nb-lg text-nb-on-surface-variant hover:bg-nb-surface-low hover:text-nb-on-surface md:hidden"
+              aria-label="Open entry list"
+              onClick={() => openMobileExplorer()}
+            >
+              <PanelLeft size={18} />
+            </button>
+          )}
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <input
               ref={titleInputRef}
@@ -360,7 +385,29 @@ export default function EntryPage() {
             />
           </div>
           {meta?.isTemplate && <Badge tone="tertiary">Template</Badge>}
-          <ViewToggle viewMode={viewMode} onSetViewMode={setViewMode} />
+          {meta?.isValid === false && (meta.validationErrors?.length ?? 0) > 0 && (
+            <ValidationIssuesTooltip
+              errors={meta.validationErrors!}
+              onClick={() => setMetaOpen(true)}
+            />
+          )}
+          <ViewToggle
+            viewMode={effectiveViewMode}
+            onSetViewMode={setViewMode}
+            isMobile={narrow}
+          />
+          <button
+            type="button"
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-nb-lg text-nb-on-surface-variant transition-transform hover:bg-nb-surface-low hover:text-nb-on-surface ${
+              metaOpen ? "rotate-180" : ""
+            }`}
+            aria-expanded={metaOpen}
+            aria-label={metaOpen ? "Hide entry details" : "Show entry details"}
+            title={metaOpen ? "Hide details" : "Date, phase & authors"}
+            onClick={() => setMetaOpen((v) => !v)}
+          >
+            <ChevronDown size={16} />
+          </button>
           <DropdownMenu
             items={[
               {
@@ -401,108 +448,124 @@ export default function EntryPage() {
           />
         </div>
 
-        {meta?.isValid === false && (meta.validationErrors?.length ?? 0) > 0 && (
-          <Alert variant="warning" className="mt-2">
-            <ul className="list-disc pl-4 text-nb-label">
-              {meta.validationErrors!.map((err) => (
-                <li key={err}>{err}</li>
-              ))}
-            </ul>
-          </Alert>
-        )}
-
-        <div className="mt-2 grid grid-cols-1 items-end gap-2 sm:grid-cols-2 xl:grid-cols-[10rem_12rem_minmax(0,1fr)]">
-          <label className="flex flex-col gap-1 text-nb-caption font-semibold text-nb-on-surface-variant">
-            Date
-            <input
-              type="date"
-              className="h-9 rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface px-2 text-nb-label text-nb-on-surface"
-              value={meta?.date || ""}
-              disabled={savingMeta}
-              onChange={(e) => patchMeta({ date: e.target.value })}
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-nb-caption font-semibold text-nb-on-surface-variant">
-            Phase
-            <PhasePicker
-              phaseId={meta?.phase}
-              phases={phasesRecord}
-              disabled={savingMeta}
-              onChange={(phase) => patchMeta({ phase })}
-            />
-          </label>
-          <div
-            ref={authorsFieldRef}
-            className="flex min-w-0 flex-col gap-1 text-nb-caption font-semibold text-nb-on-surface-variant sm:col-span-2 xl:col-span-1"
-          >
-            Authors
-            <AuthorsInput
-              authors={authorsDraft}
-              options={authorOptions}
-              placeholder="Add authors"
-              className="min-h-9 bg-nb-surface"
-              onChange={(authors) => {
-                setAuthorsDraft(authors);
-                writeLastAuthors(authors);
-                patchMeta({ authors });
-              }}
-            />
+        <div
+          className={`overflow-hidden transition-[max-height,opacity,margin] duration-200 ease-out ${
+            metaOpen
+              ? "mt-2 max-h-[40rem] opacity-100"
+              : "pointer-events-none mt-0 max-h-0 opacity-0"
+          }`}
+        >
+          <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-2 xl:grid-cols-[10rem_12rem_minmax(0,1fr)]">
+            <label className="flex flex-col gap-1 text-nb-caption font-semibold text-nb-on-surface-variant">
+              Date
+              <input
+                type="date"
+                className="h-9 rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface px-2 text-nb-label text-nb-on-surface"
+                value={meta?.date || ""}
+                disabled={savingMeta}
+                onChange={(e) => patchMeta({ date: e.target.value })}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-nb-caption font-semibold text-nb-on-surface-variant">
+              Phase
+              <PhasePicker
+                phaseId={meta?.phase}
+                phases={phasesRecord}
+                disabled={savingMeta}
+                onChange={(phase) => patchMeta({ phase })}
+              />
+            </label>
+            <div
+              ref={authorsFieldRef}
+              className="flex min-w-0 flex-col gap-1 text-nb-caption font-semibold text-nb-on-surface-variant sm:col-span-2 xl:col-span-1"
+            >
+              Authors
+              <AuthorsInput
+                authors={authorsDraft}
+                options={authorOptions}
+                placeholder="Add authors"
+                className="min-h-9 bg-nb-surface"
+                onChange={(authors) => {
+                  setAuthorsDraft(authors);
+                  writeLastAuthors(authors);
+                  patchMeta({ authors });
+                }}
+              />
+            </div>
           </div>
         </div>
       </header>
 
       {/*
-        Panel sets inline overflow:hidden — scroll must live on an inner wrapper.
-        Use overflow-y-auto so RichTextArea scroll helpers (closest) find this node.
+        Absolute-fill scroll panes: flex-1 alone fails inside react-resizable-panels
+        (Panel is not a flex column). overflow-y-auto class required for RichTextArea.
       */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-2 md:px-6">
-        <PanelGroup direction="horizontal" className="h-full min-h-0" id="entry-editor-preview">
-          <Panel
-            id="entry-editor-panel"
-            ref={editorPanelRef}
-            order={1}
-            defaultSize={viewMode === "preview" ? 0 : viewMode === "split" ? 50 : 100}
-            minSize={viewMode === "preview" ? 0 : 20}
-            collapsible
-            collapsedSize={0}
-            className="min-h-0 min-w-0"
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+        {effectiveViewMode === "split" ? (
+          <PanelGroup
+            direction="horizontal"
+            className="absolute inset-0"
+            id="entry-editor-preview"
           >
-            <div className="h-full min-h-0 overflow-y-auto custom-scrollbar">
-              <CollaborativeEntryEditor
-                key={entryId}
-                documentName={docName}
-                entryId={entryId}
-                getToken={getIdToken}
-                onDocChange={setDocJson}
-              />
-            </div>
-          </Panel>
-          <PanelResizeHandle
-            className={`mx-1 w-1.5 shrink-0 rounded-full bg-nb-outline-variant/25 transition-colors hover:bg-nb-primary/40 data-[resize-handle-active]:bg-nb-primary/50 ${
-              viewMode !== "split" ? "hidden" : ""
-            }`}
-          />
-          <Panel
-            id="entry-preview-panel"
-            ref={previewPanelRef}
-            order={2}
-            defaultSize={viewMode === "editor" ? 0 : viewMode === "split" ? 50 : 100}
-            minSize={viewMode === "editor" ? 0 : 20}
-            collapsible
-            collapsedSize={0}
-            className="min-h-0 min-w-0"
-          >
-            <div className="h-full min-h-0 overflow-y-auto custom-scrollbar rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface">
-              {liveLatex ? (
-                <LatexPreview latexContent={liveLatex} />
-              ) : (
-                <p className="py-8 text-center text-nb-caption text-nb-on-surface-variant">
-                  {docJson ? "Generating LaTeX…" : "Connecting to editor…"}
-                </p>
-              )}
-            </div>
-          </Panel>
-        </PanelGroup>
+            <Panel
+              id="entry-editor-panel"
+              ref={editorPanelRef}
+              order={1}
+              defaultSize={50}
+              minSize={20}
+              className="min-h-0 min-w-0"
+            >
+              <div className="h-full min-h-0 overflow-hidden">
+                <CollaborativeEntryEditor
+                  key={entryId}
+                  documentName={docName}
+                  entryId={entryId}
+                  getToken={getIdToken}
+                  onDocChange={setDocJson}
+                />
+              </div>
+            </Panel>
+            <PanelResizeHandle className="mx-1 w-1.5 shrink-0 rounded-full bg-nb-outline-variant/25 transition-colors hover:bg-nb-primary/40 data-[resize-handle-active]:bg-nb-primary/50" />
+            <Panel
+              id="entry-preview-panel"
+              ref={previewPanelRef}
+              order={2}
+              defaultSize={50}
+              minSize={20}
+              className="min-h-0 min-w-0"
+            >
+              <div className="h-full min-h-0 overflow-y-auto custom-scrollbar border-l border-nb-outline-variant/20">
+                {liveLatex ? (
+                  <LatexPreview latexContent={liveLatex} />
+                ) : (
+                  <p className="py-8 text-center text-nb-caption text-nb-on-surface-variant">
+                    {docJson ? "Generating LaTeX…" : "Connecting to editor…"}
+                  </p>
+                )}
+              </div>
+            </Panel>
+          </PanelGroup>
+        ) : effectiveViewMode === "preview" ? (
+          <div className="absolute inset-0 overflow-y-auto custom-scrollbar">
+            {liveLatex ? (
+              <LatexPreview latexContent={liveLatex} />
+            ) : (
+              <p className="py-8 text-center text-nb-caption text-nb-on-surface-variant">
+                {docJson ? "Generating LaTeX…" : "Connecting to editor…"}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="absolute inset-0 overflow-hidden">
+            <CollaborativeEntryEditor
+              key={entryId}
+              documentName={docName}
+              entryId={entryId}
+              getToken={getIdToken}
+              onDocChange={setDocJson}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
