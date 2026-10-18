@@ -6,7 +6,7 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import type { PageProps } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
-import { Loader2, ZoomIn, ZoomOut, FileText } from "lucide-react";
+import { Loader2, ZoomIn, ZoomOut, FileText, ChevronLeft, ChevronRight } from "lucide-react";
 
 // Set up worker using the version from the package
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -32,13 +32,20 @@ export default function LatexPreview({ latexContent, pdfUrl }: LatexPreviewProps
   const [pageNumber, setPageNumber] = useState(1);
   const [pageInput, setPageInput] = useState("1");
   const [scale, setScale] = useState(1.0);
+  const [scaleInput, setScaleInput] = useState("100");
   const [contentHeight, setContentHeight] = useState(0);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const sizerRef = useRef<HTMLDivElement>(null);
   const pageInputRef = useRef<HTMLInputElement>(null);
+  const scaleInputRef = useRef<HTMLInputElement>(null);
   const pendingZoomAdjustment = useRef<{ scrollTop: number; scrollLeft: number } | null>(null);
+
+  // Sync zoom percentage input with current scale
+  useEffect(() => {
+    setScaleInput(String(Math.round(scale * 100)));
+  }, [scale]);
 
   // Measure unscaled content height to drive the sizer wrapper
   useEffect(() => {
@@ -161,8 +168,8 @@ export default function LatexPreview({ latexContent, pdfUrl }: LatexPreviewProps
     }
   };
 
-  const jumpToPage = (target: string) => {
-    const p = parseInt(target);
+  const jumpToPage = (target: string | number) => {
+    const p = typeof target === "number" ? target : parseInt(target);
     if (isNaN(p) || p < 1 || (numPages && p > numPages)) {
       setPageInput(pageNumber.toString());
       return;
@@ -181,46 +188,115 @@ export default function LatexPreview({ latexContent, pdfUrl }: LatexPreviewProps
     }
   };
 
+  const prevPage = () => jumpToPage(pageNumber - 1);
+  const nextPage = () => jumpToPage(pageNumber + 1);
+
   const zoomIn = () => zoomTo(scale + 0.1);
   const zoomOut = () => zoomTo(scale - 0.1);
   const zoomReset = () => zoomTo(1.0);
 
+  const applyScaleInput = (val: string) => {
+    const parsed = parseFloat(val.replace(/%/g, "").trim());
+    if (isNaN(parsed) || parsed <= 0) {
+      setScaleInput(String(Math.round(scale * 100)));
+      return;
+    }
+    zoomTo(parsed / 100);
+  };
+
   return (
-    <div className="flex flex-col h-full bg-nb-bg transition-colors duration-300 overflow-hidden relative group">
+    <div className="flex flex-col h-full bg-nb-bg transition-colors duration-300 overflow-hidden relative">
       {pdfUrl && numPages && (
-        <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 p-1.5 bg-nb-surface/80 backdrop-blur-md border border-nb-outline-variant/30 rounded-2xl shadow-nb-lg animate-in slide-in-from-top-4 duration-500 transition-opacity whitespace-nowrap min-w-max opacity-100 lg:opacity-0 lg:group-hover:opacity-100`}>
-          <form onSubmit={(e) => { e.preventDefault(); jumpToPage(pageInput); pageInputRef.current?.blur(); }} className="flex items-center gap-1.5 px-3 py-1 whitespace-nowrap">
-            <input
-              ref={pageInputRef}
-              type="text"
-              value={pageInput}
-              onChange={(e) => setPageInput(e.target.value)}
-              onBlur={() => jumpToPage(pageInput)}
-              className="w-10 h-6 bg-nb-surface-low border border-nb-outline-variant/30 rounded-md text-[10px] font-black text-center text-nb-on-surface focus:outline-none focus:border-nb-primary/50 transition-colors"
-            />
-            <span className="text-[10px] font-black tracking-widest uppercase text-nb-on-surface-variant/40">
-              of {numPages}
-            </span>
-          </form>
-          <div className="w-px h-4 bg-nb-outline-variant/30 mx-1" />
+        <div className="flex shrink-0 items-center justify-between border-b border-nb-outline-variant/20 bg-nb-surface px-3 py-1.5 text-xs text-nb-on-surface sm:justify-center sm:gap-6">
           <div className="flex items-center gap-1">
             <button
+              type="button"
+              onClick={prevPage}
+              disabled={pageNumber <= 1}
+              aria-label="Previous page"
+              className="rounded-md p-1 text-nb-on-surface transition-colors hover:bg-nb-surface-low disabled:pointer-events-none disabled:opacity-30 cursor-pointer"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                jumpToPage(pageInput);
+                pageInputRef.current?.blur();
+              }}
+              className="flex items-center gap-1.5"
+            >
+              <input
+                ref={pageInputRef}
+                type="text"
+                value={pageInput}
+                onChange={(e) => setPageInput(e.target.value)}
+                onFocus={(e) => e.target.select()}
+                onBlur={() => jumpToPage(pageInput)}
+                aria-label="Page number"
+                className="h-6 w-10 rounded-md border border-nb-outline-variant/30 bg-nb-surface-low text-center text-xs font-semibold text-nb-on-surface transition-colors focus:border-nb-primary/50 focus:outline-none"
+              />
+              <span className="text-xs font-medium text-nb-on-surface-variant">
+                / {numPages}
+              </span>
+            </form>
+            <button
+              type="button"
+              onClick={nextPage}
+              disabled={!numPages || pageNumber >= numPages}
+              aria-label="Next page"
+              className="rounded-md p-1 text-nb-on-surface transition-colors hover:bg-nb-surface-low disabled:pointer-events-none disabled:opacity-30 cursor-pointer"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+
+          <div className="hidden h-4 w-px bg-nb-outline-variant/30 sm:block" />
+
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
               onClick={zoomOut}
-              className="p-1.5 rounded-lg hover:bg-nb-surface-low text-nb-on-surface transition-colors cursor-pointer"
+              aria-label="Zoom out"
+              className="rounded-md p-1 text-nb-on-surface transition-colors hover:bg-nb-surface-low cursor-pointer"
             >
               <ZoomOut size={16} />
             </button>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                applyScaleInput(scaleInput);
+                scaleInputRef.current?.blur();
+              }}
+              className="flex items-center gap-1"
+            >
+              <input
+                ref={scaleInputRef}
+                type="text"
+                value={scaleInput}
+                onChange={(e) => setScaleInput(e.target.value)}
+                onFocus={(e) => e.target.select()}
+                onBlur={() => applyScaleInput(scaleInput)}
+                aria-label="Zoom percentage"
+                className="h-6 w-11 rounded-md border border-nb-outline-variant/30 bg-nb-surface-low text-center text-xs font-semibold text-nb-on-surface transition-colors focus:border-nb-primary/50 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={zoomReset}
+                title="Reset zoom to 100%"
+                aria-label="Reset zoom to 100%"
+                className="text-xs font-semibold text-nb-on-surface-variant transition-colors hover:text-nb-on-surface cursor-pointer"
+              >
+                %
+              </button>
+            </form>
             <button
+              type="button"
               onClick={zoomIn}
-              className="p-1.5 rounded-lg hover:bg-nb-surface-low text-nb-on-surface transition-colors cursor-pointer"
+              aria-label="Zoom in"
+              className="rounded-md p-1 text-nb-on-surface transition-colors hover:bg-nb-surface-low cursor-pointer"
             >
               <ZoomIn size={16} />
-            </button>
-            <button
-              onClick={zoomReset}
-              className="px-2 py-1 text-[10px] font-black text-nb-on-surface-variant hover:text-nb-on-surface transition-colors cursor-pointer min-w-[45px]"
-            >
-              {Math.round(scale * 100)}%
             </button>
           </div>
         </div>

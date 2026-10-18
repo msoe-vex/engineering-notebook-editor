@@ -21,7 +21,7 @@ Clients never talk to Firestore directly (`infra/firestore.rules` deny); Core / 
 | `teams/{teamId}` | Org ACL groups (not notebook branding) | `name`, `createdBy`, timestamps |
 | `teams/{teamId}/members/{uid}` | Team membership | `joinedAt` |
 | `notebooks/{notebookId}` | Notebook summary | See below |
-| `notebooks/{id}/members/{memberId}` | **Credits roster** (may lack app account) | `name`, `role`, `order`, `imageAssetId?`, `linkedUid?` |
+| `notebooks/{id}/members/{memberId}` | **Credits roster** (may lack app account) | `name`, `role`, `order`, `imageAssetId?` |
 | `notebooks/{id}/entries/{entryId}` | Entry **metadata only** | See below |
 | `notebooks/{id}/assets/{assetId}` | Asset metadata | `contentType`, `byteSize`, `gcsPath`, `createdBy`, `usedBy[]` |
 | `notebooks/{id}/audits/{auditId}` | Rubric audit runs | `status` (`running`\|`completed`\|`failed`), `provider`, `scores`, `advice[]`, `steps?`, `summary?`, `error?`, … |
@@ -96,7 +96,6 @@ Do not conflate org ACL Members with notebook credits Members.
 | Field | Notes |
 | --- | --- |
 | `AssetMetadata.gcsPathOriginal` | Never written — client uploads a single compressed JPEG today |
-| `NotebookMember.linkedUid` | Optional credits ↔ org person; PATCH `null` clears. Cosmetic until something consumes the link |
 | Metrics | In-memory in Core; Firestore `metrics/…` aspirational |
 
 See [backlog.md](../01-requirements/backlog.md).

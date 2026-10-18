@@ -39,7 +39,6 @@ export type NotebookWorkspaceState = {
   assets: AssetSummary[];
   error: string | null;
   busy: boolean;
-  auditResult: string | null;
   refresh: () => void;
   setEntries?: React.Dispatch<React.SetStateAction<Record<string, EntryMeta>>>;
   setFolders?: React.Dispatch<
@@ -47,7 +46,6 @@ export type NotebookWorkspaceState = {
   >;
   setError: (message: string | null) => void;
   setBusy: (busy: boolean) => void;
-  setAuditResult: (result: string | null) => void;
   setNotebookSummary: (summary: NotebookSummaryV5 | null) => void;
   showConfirm: (
     title: string,

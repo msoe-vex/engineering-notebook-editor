@@ -44,7 +44,6 @@ import {
   deactivateCloudWorkspaceBridge,
 } from "@/lib/cloud/workspaceBridge";
 import { setWorkspaceHeader } from "@/lib/cloud/workspaceHeaderStore";
-import { runNotebookAudit } from "@/lib/genai/auditJudge";
 import { workspaceState } from "@/lib/cloud/workspaceState";
 import type { NotebookMetadata } from "@/lib/notebook/metadata";
 import { useNarrowViewport } from "@/hooks/useDevice";
@@ -163,10 +162,6 @@ export function NotebookShell({ children }: { children: ReactNode }) {
   const [assets, setAssets] = useState<Awaited<ReturnType<typeof cloudApi.listAssets>>>([]);
   const [error, setErrorState] = useState<string | null>(null);
   const [notebookUnavailable, setNotebookUnavailable] = useState(false);
-  const [auditResult, setAuditResult] = useState<string | null>(null);
-  const [auditHistory, setAuditHistory] = useState<
-    Awaited<ReturnType<typeof cloudApi.listAudits>> | null
-  >(null);
   const [busy, setBusy] = useState(false);
   const [initialLoaded, setInitialLoaded] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
@@ -439,7 +434,6 @@ export function NotebookShell({ children }: { children: ReactNode }) {
             role: m.role,
             order: m.order,
             imageAssetId: m.imageAssetId,
-            linkedUid: m.linkedUid,
           },
         ])
       );
@@ -552,7 +546,6 @@ export function NotebookShell({ children }: { children: ReactNode }) {
             role: m.role,
             order: m.order,
             imageAssetId: remapAsset(m.imageAssetId),
-            linkedUid: m.linkedUid,
           });
         } catch {
           /* ignore duplicates / ACL */
@@ -681,49 +674,6 @@ export function NotebookShell({ children }: { children: ReactNode }) {
               },
             },
             {
-              id: "audit",
-              label: "Run audit",
-              onSelect: () => {
-                if (busyRef.current) return;
-                setBusy(true);
-                setAuditResult("Starting audit…");
-                void runNotebookAudit(orgId, notebookId, {
-                  onProgress: (a) => {
-                    const last = a.steps?.[a.steps.length - 1]?.message;
-                    setAuditResult(
-                      [
-                        `status: ${a.status ?? "running"}`,
-                        last ? `step: ${last}` : null,
-                        a.summary ? `summary: ${a.summary}` : null,
-                        a.error ? `error: ${a.error}` : null,
-                        a.scores && Object.keys(a.scores).length
-                          ? `scores: ${JSON.stringify(a.scores, null, 2)}`
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join("\n\n")
-                    );
-                  },
-                })
-                  .then((r) => setAuditResult(JSON.stringify(r, null, 2)))
-                  .catch((err) => {
-                    setError((err as Error).message);
-                    setAuditResult(null);
-                  })
-                  .finally(() => setBusy(false));
-              },
-            },
-            {
-              id: "audit-history",
-              label: "Audit history",
-              onSelect: () => {
-                void cloudApi
-                  .listAudits(orgId, notebookId)
-                  .then(setAuditHistory)
-                  .catch((err) => setError((err as Error).message));
-              },
-            },
-            {
               id: "delete",
               label: "Delete notebook",
               danger: true,
@@ -766,13 +716,11 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     assets,
     error,
     busy,
-    auditResult,
     refresh,
     setEntries,
     setFolders,
     setError,
     setBusy,
-    setAuditResult,
     setNotebookSummary,
     showConfirm,
     showPrompt,
@@ -1002,59 +950,6 @@ export function NotebookShell({ children }: { children: ReactNode }) {
           <NotebookSectionBottomTabs items={navItems} activeId={activeNav} />
         )}
 
-        <Dialog
-          isOpen={Boolean(auditResult)}
-          onClose={() => setAuditResult(null)}
-          title="Audit result"
-          wide
-        >
-          <pre className="max-h-[60vh] overflow-auto rounded-nb-lg bg-nb-surface-low p-3 text-nb-caption">
-            {auditResult}
-          </pre>
-          <div className="mt-3 flex justify-end">
-            <Button size="sm" variant="secondary" onClick={() => setAuditResult(null)}>
-              Close
-            </Button>
-          </div>
-        </Dialog>
-
-        <Dialog
-          isOpen={auditHistory !== null}
-          onClose={() => setAuditHistory(null)}
-          title="Audit history"
-          wide
-        >
-          <div className="flex max-h-[60vh] flex-col gap-2 overflow-auto">
-            {(auditHistory || []).length === 0 && (
-              <p className="text-nb-caption text-nb-on-surface-variant">No audits yet.</p>
-            )}
-            {(auditHistory || []).map((a, i) => (
-              <button
-                key={a.id || `audit-${a.createdAt || i}`}
-                type="button"
-                className="rounded-nb-xl border border-nb-outline-variant/25 bg-nb-surface-low px-3 py-2 text-left hover:border-nb-primary/40"
-                onClick={() => {
-                  setAuditResult(JSON.stringify(a, null, 2));
-                  setAuditHistory(null);
-                }}
-              >
-                <div className="text-nb-label font-semibold text-nb-on-surface">
-                  {a.rubric || "Rubric audit"}
-                </div>
-                <div className="text-nb-caption text-nb-on-surface-variant">
-                  {a.createdAt ? new Date(a.createdAt).toLocaleString() : "Unknown date"}
-                  {a.provider ? ` · ${a.provider}` : ""}
-                  {a.summary ? ` — ${a.summary.slice(0, 80)}` : ""}
-                </div>
-              </button>
-            ))}
-          </div>
-          <div className="mt-3 flex justify-end">
-            <Button size="sm" variant="secondary" onClick={() => setAuditHistory(null)}>
-              Close
-            </Button>
-          </div>
-        </Dialog>
 
         <ShareNotebookDialog open={shareOpen} onClose={() => setShareOpen(false)} />
 

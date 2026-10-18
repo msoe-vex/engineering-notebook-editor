@@ -13,7 +13,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Camera, GripVertical, Plus, Unlink, UserRound } from "lucide-react";
+import { Camera, GripVertical, Plus, UserRound } from "lucide-react";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
 import { showNotification } from "@/components/overlays/Notification";
@@ -26,7 +26,7 @@ import {
   type MenuItem,
 } from "@/components/ui";
 import { Dialog } from "@/components/ui/Dialog";
-import { cloudApi, type MemberSummary, type NotebookMemberSummary } from "@/lib/cloud/api";
+import { cloudApi, type NotebookMemberSummary } from "@/lib/cloud/api";
 import { useAppDndSensors } from "@/lib/dnd/dndSensors";
 
 function SortableMember({
@@ -89,7 +89,6 @@ function SortableMember({
         <div className="truncate font-semibold text-nb-on-surface">{member.name}</div>
         <div className="truncate text-nb-caption text-nb-on-surface-variant">
           {member.role || "Member"}
-          {member.linkedUid ? " · linked account" : ""}
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1">
@@ -107,7 +106,6 @@ function SortableMember({
 export default function NotebookMembersPage() {
   const { orgId, notebookId, setError } = useNotebookWorkspace();
   const [members, setMembers] = useState<NotebookMemberSummary[]>([]);
-  const [orgPeople, setOrgPeople] = useState<MemberSummary[]>([]);
   const [photos, setPhotos] = useState<Record<string, string>>({});
   const [editor, setEditor] = useState<Partial<NotebookMemberSummary> & { id?: string } | null>(
     null
@@ -132,28 +130,6 @@ export default function NotebookMembersPage() {
           photoInputRef.current?.click();
         },
       },
-      ...(m.linkedUid
-        ? [
-            {
-              id: "unlink",
-              label: "Unlink account",
-              icon: <Unlink size={14} />,
-              onSelect: () => {
-                void cloudApi
-                  .patchNotebookMember(orgId, notebookId, m.id, { linkedUid: null })
-                  .then(() => {
-                    setMembers((prev) =>
-                      prev.map((row) =>
-                        row.id === m.id ? { ...row, linkedUid: undefined } : row
-                      )
-                    );
-                    showNotification("Account unlinked", "success");
-                  })
-                  .catch((err) => setError((err as Error).message));
-              },
-            },
-          ]
-        : []),
       { id: "sep", label: "", separator: true },
       {
         id: "remove",
@@ -175,7 +151,6 @@ export default function NotebookMembersPage() {
 
   useEffect(() => {
     load();
-    void cloudApi.listMembers(orgId).then(setOrgPeople).catch(() => setOrgPeople([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId, notebookId]);
 
@@ -233,15 +208,12 @@ export default function NotebookMembersPage() {
         await cloudApi.patchNotebookMember(orgId, notebookId, editor.id, {
           name: editor.name.trim(),
           role: editor.role || "Member",
-          // null clears a previous link (undefined would leave it unchanged).
-          linkedUid: editor.linkedUid || null,
         });
       } else {
         await cloudApi.createNotebookMember(orgId, notebookId, {
           name: editor.name.trim(),
           role: editor.role || "Member",
           order: members.length,
-          linkedUid: editor.linkedUid || undefined,
         });
       }
       setEditor(null);
@@ -370,25 +342,6 @@ export default function NotebookMembersPage() {
             value={editor?.role || ""}
             onChange={(e) => setEditor((prev) => (prev ? { ...prev, role: e.target.value } : prev))}
           />
-          <label className="flex flex-col gap-1 text-nb-caption font-semibold text-nb-on-surface-variant">
-            Link org account (optional)
-            <select
-              className="rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface px-2 py-2 text-nb-label"
-              value={editor?.linkedUid || ""}
-              onChange={(e) =>
-                setEditor((prev) =>
-                  prev ? { ...prev, linkedUid: e.target.value || undefined } : prev
-                )
-              }
-            >
-              <option value="">None</option>
-              {orgPeople.map((p) => (
-                <option key={p.uid} value={p.uid}>
-                  {p.email || p.uid}
-                </option>
-              ))}
-            </select>
-          </label>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => setEditor(null)}>
               Cancel

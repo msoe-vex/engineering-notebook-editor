@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -11,10 +12,29 @@ import {
   useDraggable,
   useDroppable,
 } from "@dnd-kit/core";
-import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Rows3, X, type LucideIcon } from "lucide-react";
+import {
+  CalendarDays,
+  Calendar as CalendarIcon,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  LayoutGrid,
+  Rows3,
+  Trash2,
+  X,
+  type LucideIcon,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import { PhaseChip } from "@/components/cloud/PhaseChip";
 import { CalendarPageSkeleton } from "@/components/cloud/notebookPageSkeletons";
+import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
+import { showNotification } from "@/components/overlays/Notification";
+import { Button, ContextMenu, Dialog, TextField } from "@/components/ui";
+import type { MenuItem } from "@/components/ui/menuTypes";
 import { useCloudWorkspace } from "@/hooks/useCloudWorkspace";
+import { cloudApi } from "@/lib/cloud/api";
+import { workspaceState } from "@/lib/cloud/workspaceState";
 import { formatAuthors, sortedEntries } from "@/lib/notebook/metadata";
 import { getPhaseConfig, getPhases } from "@/lib/notebook/phases";
 import { useAppDndSensors } from "@/lib/dnd/dndSensors";
@@ -119,9 +139,10 @@ interface CardProps {
   PhaseIcon?: LucideIcon;
   onOpen: () => void;
   onHover: (el: HTMLElement | null) => void;
+  onContextMenu?: (e: ReactMouseEvent) => void;
 }
 
-function SortableCard({ id, title, color, PhaseIcon, onOpen, onHover }: CardProps) {
+function SortableCard({ id, title, color, PhaseIcon, onOpen, onHover, onContextMenu }: CardProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id,
     data: { type: "entry" },
@@ -139,14 +160,22 @@ function SortableCard({ id, title, color, PhaseIcon, onOpen, onHover }: CardProp
       {...attributes}
       {...listeners}
       onPointerDown={(e) => {
+        // Only left-click starts drag / open tracking (right-click is context menu).
+        if (e.button !== 0) return;
         pointerStart.current = { x: e.clientX, y: e.clientY };
         listeners?.onPointerDown?.(e);
       }}
       onPointerUp={(e) => {
         const start = pointerStart.current;
         pointerStart.current = null;
-        if (!start || isDragging) return;
+        if (e.button !== 0 || !start || isDragging) return;
         if (Math.hypot(e.clientX - start.x, e.clientY - start.y) < 6) onOpen();
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (isDragging) return;
+        onContextMenu?.(e);
       }}
       onMouseEnter={(e) => {
         if (!isDragging) onHover(e.currentTarget);
@@ -171,6 +200,7 @@ function DayColumn({
   cards,
   onOpen,
   onHover,
+  onEntryContextMenu,
 }: {
   dateKey: string;
   label: string;
@@ -181,6 +211,7 @@ function DayColumn({
   cards: Record<string, { title: string; color?: string; PhaseIcon?: LucideIcon; phaseId?: string }>;
   onOpen: (id: string) => void;
   onHover: (id: string | null, el: HTMLElement | null) => void;
+  onEntryContextMenu?: (e: ReactMouseEvent, id: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `day:${dateKey}`, data: { date: dateKey, type: "day" } });
   return (
@@ -203,6 +234,7 @@ function DayColumn({
             PhaseIcon={cards[id]?.PhaseIcon}
             onOpen={() => onOpen(id)}
             onHover={(el) => onHover(id, el)}
+            onContextMenu={(e) => onEntryContextMenu?.(e, id)}
           />
         ))}
       </div>
@@ -421,6 +453,15 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
     calendarCursor,
     isInitialized,
   } = useCloudWorkspace();
+  const {
+    orgId,
+    notebookId,
+    refresh,
+    setError,
+    setEntries,
+  } = useNotebookWorkspace();
+  const router = useRouter();
+  const basePath = `/orgs/${orgId}/notebooks/${notebookId}`;
   const isMobileLayout = useMobileCalendarLayout();
   const mode = isMobileLayout ? "week" : calendarMode;
   const cursor = useMemo(() => parseYmd(calendarCursor), [calendarCursor]);
@@ -428,6 +469,11 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerDate, setPickerDate] = useState(() => new Date());
   const [hover, setHover] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [ctx, setCtx] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
+  const [dateEditor, setDateEditor] = useState<{ id: string; title: string; date: string } | null>(
+    null
+  );
+  const [confirmTrash, setConfirmTrash] = useState<{ id: string; title: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const cursorRef = useRef(cursor);
   const modeRef = useRef(mode);
@@ -610,6 +656,100 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
     setHover({ id, x: rect.left + rect.width / 2, y: rect.bottom + 8 });
   };
 
+  const moveEntryToDate = useCallback(
+    async (id: string, nextDate: string) => {
+      const destKey = nextDate.trim() ? nextDate.trim() : UNDATED;
+      const destIds = [...(byDate[destKey] || [])];
+      const targetDate = destKey === UNDATED ? "" : destKey;
+      await reorderCalendarEntry(id, targetDate, destIds, destIds.length);
+    },
+    [byDate, reorderCalendarEntry]
+  );
+
+  const trashEntry = useCallback(
+    (id: string, title: string) => {
+      const deletedAt = new Date().toISOString();
+      setEntries?.((prev) => {
+        if (!prev[id]) return prev;
+        return { ...prev, [id]: { ...prev[id], deletedAt } };
+      });
+      if (workspaceState.metadata.entries[id]) {
+        const entries = { ...workspaceState.metadata.entries };
+        delete entries[id];
+        workspaceState.setMetadata({ ...workspaceState.metadata, entries });
+      }
+      void cloudApi
+        .deleteEntry(orgId, notebookId, id)
+        .then(() => {
+          refresh();
+          showNotification(`Moved “${title}” to Trash`, "success", {
+            action: {
+              label: "View Trash",
+              onClick: () => router.push(`${basePath}/trash`),
+            },
+          });
+        })
+        .catch((err) => {
+          setError((err as Error).message);
+          refresh();
+        });
+    },
+    [orgId, notebookId, refresh, setEntries, setError, router, basePath]
+  );
+
+  const entryMenuItems = useCallback(
+    (id: string): MenuItem[] => {
+      const entry = metadata.entries[id];
+      const title = entry?.title || cards[id]?.title || "Untitled";
+      const hasDate = Boolean(entry?.date?.trim());
+      return [
+        {
+          id: "open",
+          label: "Open",
+          onSelect: () => navigateTo({ entry: id, resource: null }, "/workspace/editor"),
+        },
+        {
+          id: "change-date",
+          label: "Change date…",
+          icon: <CalendarIcon size={12} />,
+          onSelect: () =>
+            setDateEditor({
+              id,
+              title,
+              date: entry?.date?.trim() || "",
+            }),
+        },
+        ...(hasDate
+          ? [
+              {
+                id: "clear-date",
+                label: "Remove date",
+                onSelect: () => void moveEntryToDate(id, ""),
+              },
+            ]
+          : []),
+        { id: "sep-del", separator: true, label: "" },
+        {
+          id: "trash",
+          label: "Move to Trash",
+          icon: <Trash2 size={12} />,
+          danger: true,
+          onSelect: () => setConfirmTrash({ id, title }),
+        },
+      ];
+    },
+    [metadata.entries, cards, moveEntryToDate, navigateTo]
+  );
+
+  const handleEntryContextMenu = (e: ReactMouseEvent, id: string) => {
+    setHover(null);
+    setCtx({
+      x: e.clientX,
+      y: e.clientY,
+      items: entryMenuItems(id),
+    });
+  };
+
   const hoverCard = hover ? cards[hover.id] : null;
 
   if (!isInitialized) {
@@ -630,6 +770,7 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
         cards={cards}
         onOpen={openEntry}
         onHover={handleHover}
+        onEntryContextMenu={handleEntryContextMenu}
       />
     );
   };
@@ -744,6 +885,7 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
               cards={cards}
               onOpen={openEntry}
               onHover={handleHover}
+              onEntryContextMenu={handleEntryContextMenu}
             />
           </div>
         )}
@@ -791,6 +933,83 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
           <div className="nb-cal-tip-row">{hoverCard.date}</div>
         </div>
       )}
+
+      <ContextMenu
+        open={Boolean(ctx)}
+        x={ctx?.x || 0}
+        y={ctx?.y || 0}
+        items={ctx?.items || []}
+        onClose={() => setCtx(null)}
+      />
+
+      <Dialog
+        isOpen={Boolean(dateEditor)}
+        onClose={() => setDateEditor(null)}
+        title="Change date"
+        size="sm"
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-nb-caption text-nb-on-surface-variant">
+            {dateEditor?.title || "Entry"}
+          </p>
+          <TextField
+            label="Date"
+            type="date"
+            value={dateEditor?.date || ""}
+            onChange={(e) =>
+              setDateEditor((prev) => (prev ? { ...prev, date: e.target.value } : prev))
+            }
+          />
+          <div className="flex flex-wrap justify-end gap-2">
+            {dateEditor?.date ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="mr-auto"
+                onClick={() => {
+                  const id = dateEditor.id;
+                  setDateEditor(null);
+                  void moveEntryToDate(id, "");
+                }}
+              >
+                Remove date
+              </Button>
+            ) : null}
+            <Button type="button" variant="secondary" size="sm" onClick={() => setDateEditor(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              disabled={!dateEditor?.date}
+              onClick={() => {
+                if (!dateEditor?.date) return;
+                const { id, date } = dateEditor;
+                setDateEditor(null);
+                void moveEntryToDate(id, date);
+              }}
+            >
+              Save
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      <ConfirmationDialog
+        isOpen={Boolean(confirmTrash)}
+        title="Move entry to Trash?"
+        message={`Move “${confirmTrash?.title || "Untitled"}” to Trash? You can restore it later.`}
+        confirmLabel="Move to Trash"
+        variant="danger"
+        onCancel={() => setConfirmTrash(null)}
+        onConfirm={() => {
+          const target = confirmTrash;
+          setConfirmTrash(null);
+          if (target) trashEntry(target.id, target.title);
+        }}
+      />
     </div>
   );
 }

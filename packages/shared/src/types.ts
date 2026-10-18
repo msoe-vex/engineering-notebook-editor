@@ -99,7 +99,6 @@ export type NotebookMember = {
   role: string;
   order: number;
   imageAssetId?: string;
-  linkedUid?: string;
 };
 
 export type ProjectPhase = {

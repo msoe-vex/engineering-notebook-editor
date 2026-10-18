@@ -21,7 +21,6 @@ Forward-looking work. Requirements index: [README.md](./README.md). Parity epics
 ## Product polish (after / outside the active plan)
 
 - [ ] **Server-side entry search** — explorer filters are client-side; stretch epic in [explorer-search-context-menus](./plans/explorer-search-context-menus.md)
-- [x] **`NotebookMember.linkedUid`** — optional link roster → org member (unlink via PATCH null)
 - [ ] **Invite `status`** — optional `pending | accepted | revoked`
 - [ ] **`gcsPathOriginal`** — only if print-quality / lossless re-export becomes a real need; today one compressed blob is enough
 - [ ] **Metrics persistence** — Core metrics in-memory today ([FR-admin](./features/FR-admin.md))

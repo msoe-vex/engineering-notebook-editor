@@ -112,7 +112,6 @@ export type NotebookMemberSummary = {
   role: string;
   order: number;
   imageAssetId?: string;
-  linkedUid?: string;
 };
 
 export const cloudApi = {
@@ -264,7 +263,7 @@ export const cloudApi = {
   createNotebookMember: (
     orgId: string,
     notebookId: string,
-    body: { name: string; role?: string; order?: number; imageAssetId?: string; linkedUid?: string }
+    body: { name: string; role?: string; order?: number; imageAssetId?: string }
   ) =>
     coreFetch<NotebookMemberSummary>(`/orgs/${orgId}/notebooks/${notebookId}/members`, {
       method: "POST",
@@ -274,7 +273,7 @@ export const cloudApi = {
     orgId: string,
     notebookId: string,
     memberId: string,
-    body: Partial<Omit<NotebookMemberSummary, "linkedUid">> & { linkedUid?: string | null }
+    body: Partial<NotebookMemberSummary>
   ) =>
     coreFetch<NotebookMemberSummary>(
       `/orgs/${orgId}/notebooks/${notebookId}/members/${memberId}`,

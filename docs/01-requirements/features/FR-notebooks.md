@@ -17,7 +17,7 @@ Notebooks live under an org. **Settings** controls branding, phases, logo, and a
 - `/orgs/:orgId` — notebook list/create/delete; notebook rows support right-click / ⋯ (Open, Settings, Rename, Delete)
 - `/…/setup` — **Settings**: name, title, subtitle, logo upload → `logoAssetId`, phases CRUD (compact rows; icon button opens glyph grid + color presets), access (alias `/settings`)
 - Notebook chrome **Share** dialog: entire org vs restricted; search/add org people and teams
-- `/…/members` — **Contributors**: name/role/photo/`order` credits (alias `/contributors`); roster rows support right-click (Edit, photo, Unlink, Remove)
+- `/…/members` — **Contributors**: name/role/photo/`order` credits (alias `/contributors`); roster rows support right-click (Edit, photo, Remove)
 - Section nav (Entries / Calendar / Compile / Contributors / Settings): **slim strip** with icons under AppChrome on ≥ `md`; **bottom tab bar** with icons on phone (&lt; `md`) — see [mobile-responsive](../plans/mobile-responsive.md). Notebook home shows recent entries (phase glyph + color); section shortcuts live in the strip/tabs only.
 
 ## Acceptance criteria

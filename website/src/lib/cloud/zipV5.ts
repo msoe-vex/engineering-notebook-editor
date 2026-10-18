@@ -65,7 +65,7 @@ export async function importNotebookZip(
   tipTapByEntryId: Record<string, unknown>;
   members: Record<
     string,
-    { name: string; role: string; order: number; imageAssetId?: string; linkedUid?: string }
+    { name: string; role: string; order: number; imageAssetId?: string }
   >;
   assets: Record<string, ZipAssetBlob>;
 }> {

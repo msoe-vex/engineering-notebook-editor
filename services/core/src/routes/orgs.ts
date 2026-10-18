@@ -842,7 +842,6 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       role: body.role?.trim() || "Member",
       order: body.order ?? 0,
       imageAssetId: body.imageAssetId,
-      linkedUid: body.linkedUid,
     }) as NotebookMember;
     await db().doc(notebookMemberPath(orgId, notebookId, id)).set(member);
     return member;
@@ -861,19 +860,13 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const ref = db().doc(notebookMemberPath(orgId, notebookId, memberId));
     const snap = await ref.get();
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
-    const body = request.body as Partial<NotebookMember> & { linkedUid?: string | null };
+    const body = request.body as Partial<NotebookMember>;
     const patch: Record<string, unknown> = {};
     for (const key of ["name", "role", "order", "imageAssetId"] as const) {
       if (body[key] !== undefined) patch[key] = body[key];
     }
-    // null / "" clears the org-account link (omitUndefined would leave the old uid).
-    if (body.linkedUid !== undefined) {
-      const { FieldValue } = await import("firebase-admin/firestore");
-      patch.linkedUid = body.linkedUid ? body.linkedUid : FieldValue.delete();
-    }
     await ref.update(omitUndefined(patch));
     const next = { ...snap.data(), ...patch } as Record<string, unknown>;
-    if (!body.linkedUid) delete next.linkedUid;
     return { id: memberId, ...next };
   });
 
