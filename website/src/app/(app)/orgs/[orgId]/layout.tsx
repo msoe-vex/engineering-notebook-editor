@@ -1,15 +1,12 @@
 "use client";
 
 import { useParams, usePathname, useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
-import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
-import TextPromptDialog from "@/components/dialogs/TextPromptDialog";
+import type { ReactNode } from "react";
 import { Button, EmptyState, LoadingBlock, TabNav } from "@/components/ui";
 import {
   OrgWorkspaceProvider,
   useOrgWorkspace,
 } from "@/components/cloud/OrgWorkspaceContext";
-import { cloudApi } from "@/lib/cloud/api";
 import { orgRoleLabel } from "@/lib/cloud/roles";
 
 function OrgChrome({ children }: { children: ReactNode }) {
@@ -31,16 +28,15 @@ function OrgChrome({ children }: { children: ReactNode }) {
     setError,
   } = useOrgWorkspace();
 
-  const [renameOpen, setRenameOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-
-  const activeTab = pathname.includes("/teams")
-    ? "teams"
-    : pathname.includes("/people") ||
-        pathname.includes("/members") ||
-        pathname.includes("/invites")
-      ? "people"
-      : "notebooks";
+  const activeTab = pathname.includes("/settings")
+    ? "settings"
+    : pathname.includes("/teams")
+      ? "teams"
+      : pathname.includes("/people") ||
+          pathname.includes("/members") ||
+          pathname.includes("/invites")
+        ? "people"
+        : "notebooks";
 
   if (!initialLoaded) {
     return (
@@ -85,18 +81,6 @@ function OrgChrome({ children }: { children: ReactNode }) {
             </p>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {canManage && (
-            <Button size="sm" variant="secondary" onClick={() => setRenameOpen(true)}>
-              Rename
-            </Button>
-          )}
-          {canDeleteOrg && (
-            <Button size="sm" variant="danger" onClick={() => setDeleteOpen(true)}>
-              Delete org
-            </Button>
-          )}
-        </div>
       </div>
 
       <TabNav
@@ -120,42 +104,19 @@ function OrgChrome({ children }: { children: ReactNode }) {
             href: `/orgs/${orgId}/people`,
             count: members.length + pendingInviteCount,
           },
+          ...(canManage
+            ? [
+                {
+                  id: "settings",
+                  label: "Settings",
+                  href: `/orgs/${orgId}/settings`,
+                },
+              ]
+            : []),
         ]}
       />
 
       {children}
-
-      <TextPromptDialog
-        isOpen={renameOpen}
-        title="Rename organization"
-        label="Organization name"
-        initialValue={org?.name || ""}
-        confirmLabel="Save"
-        onCancel={() => setRenameOpen(false)}
-        onConfirm={(name) => {
-          setRenameOpen(false);
-          void cloudApi
-            .patchOrg(orgId, { name })
-            .then(refresh)
-            .catch((err) => setError((err as Error).message));
-        }}
-      />
-
-      <ConfirmationDialog
-        isOpen={deleteOpen}
-        title="Delete organization?"
-        message="Delete this organization and all notebooks? This cannot be undone."
-        confirmLabel="Delete"
-        variant="danger"
-        onCancel={() => setDeleteOpen(false)}
-        onConfirm={() => {
-          setDeleteOpen(false);
-          void cloudApi
-            .deleteOrg(orgId)
-            .then(() => router.push("/"))
-            .catch((err) => setError((err as Error).message));
-        }}
-      />
     </div>
   );
 }

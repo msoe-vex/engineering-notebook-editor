@@ -23,6 +23,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendEmailVerification,
+  updateProfile,
   signOut,
   type User,
 } from "@/lib/cloud/firebase";
@@ -105,6 +106,17 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
   }, []);
 
   useEffect(() => bindNotificationEvents(), []);
+
+  useEffect(() => {
+    const onProfileUpdate = (e: Event) => {
+      const custom = e as CustomEvent<{ displayName?: string }>;
+      if (custom.detail) {
+        setProfile((prev) => (prev ? { ...prev, displayName: custom.detail.displayName } : prev));
+      }
+    };
+    window.addEventListener("ene:profile-updated", onProfileUpdate);
+    return () => window.removeEventListener("ene:profile-updated", onProfileUpdate);
+  }, []);
 
   useEffect(() => {
     const auth = getFirebaseAuth();
@@ -278,7 +290,7 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
           <div className="mt-8 space-y-3">
             {isSignUp && (
               <TextField
-                placeholder="Full name (e.g. Alex Needham)"
+                placeholder="Full name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />

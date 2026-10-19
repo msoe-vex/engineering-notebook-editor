@@ -352,7 +352,8 @@ function HomeInner() {
         isOpen={Boolean(deleteTarget)}
         title="Delete organization?"
         message={`Delete “${deleteTarget?.name}” and all of its notebooks? This cannot be undone.`}
-        confirmLabel="Delete"
+        confirmLabel="Delete organization"
+        confirmText={deleteTarget?.name}
         variant="danger"
         onCancel={() => setDeleteTarget(null)}
         onConfirm={() => {

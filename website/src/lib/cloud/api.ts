@@ -68,6 +68,7 @@ export type InviteSummary = {
   role: string;
   createdAt?: string;
   acceptedAt?: string;
+  expiresAt?: string;
   acceptPath?: string;
 };
 export type AssetSummary = {

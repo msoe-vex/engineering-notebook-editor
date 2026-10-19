@@ -52,7 +52,8 @@ export type NotebookWorkspaceState = {
     title: string,
     message: string,
     onConfirm: () => void,
-    variant?: "danger" | "warning" | "info"
+    variant?: "danger" | "warning" | "info",
+    confirmText?: string
   ) => void;
   showPrompt: (
     title: string,

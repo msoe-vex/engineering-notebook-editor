@@ -93,6 +93,7 @@ type ConfirmState = {
   title: string;
   message: string;
   variant: "danger" | "warning" | "info";
+  confirmText?: string;
   onConfirm: () => void;
 } | null;
 
@@ -195,9 +196,10 @@ export function NotebookShell({ children }: { children: ReactNode }) {
       title: string,
       message: string,
       onConfirm: () => void,
-      variant: "danger" | "warning" | "info" = "danger"
+      variant: "danger" | "warning" | "info" = "danger",
+      confirmText?: string
     ) => {
-      setConfirm({ title, message, variant, onConfirm });
+      setConfirm({ title, message, variant, onConfirm, confirmText });
     },
     []
   );
@@ -694,14 +696,15 @@ export function NotebookShell({ children }: { children: ReactNode }) {
                     onSelect: () =>
                       showConfirm(
                         "Delete notebook?",
-                        "Delete this notebook and all entries? This cannot be undone.",
+                        `Delete this notebook and all entries? This cannot be undone.`,
                         () => {
                           void cloudApi
                             .deleteNotebook(orgId, notebookId)
                             .then(() => router.push(`/orgs/${orgId}`))
                             .catch((err) => setError((err as Error).message));
                         },
-                        "danger"
+                        "danger",
+                        notebookName
                       ),
                   },
                 ]
@@ -976,6 +979,8 @@ export function NotebookShell({ children }: { children: ReactNode }) {
           title={confirm?.title || ""}
           message={confirm?.message || ""}
           variant={confirm?.variant || "danger"}
+          confirmText={confirm?.confirmText}
+          confirmTextPlaceholder={confirm?.confirmText}
           onConfirm={() => {
             const fn = confirm?.onConfirm;
             setConfirm(null);

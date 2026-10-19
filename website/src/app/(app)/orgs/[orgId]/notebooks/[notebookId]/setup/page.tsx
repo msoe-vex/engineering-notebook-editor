@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ImagePlus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Check, ImagePlus, Trash2 } from "lucide-react";
 import { AccessAllowlistPicker } from "@/components/cloud/AccessAllowlistPicker";
 import { NotebookPhasesEditor } from "@/components/cloud/NotebookPhasesEditor";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
 import { SettingsPageSkeleton } from "@/components/cloud/notebookPageSkeletons";
+import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import { showNotification } from "@/components/overlays/Notification";
 import { Button, TextField } from "@/components/ui";
 import {
@@ -44,6 +46,8 @@ export default function NotebookSetupPage() {
   const [aclListsLoaded, setAclListsLoaded] = useState(false);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
+  const router = useRouter();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -109,7 +113,27 @@ export default function NotebookSetupPage() {
       e.returnValue = "";
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+
+    const handleClickCapture = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement).closest("a");
+      if (!target) return;
+      const href = target.getAttribute("href");
+      if (!href || href.startsWith("#") || target.target === "_blank") return;
+
+      if (href !== window.location.pathname) {
+        const ok = window.confirm("You have unsaved changes in notebook settings. Are you sure you want to leave?");
+        if (!ok) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    };
+    document.addEventListener("click", handleClickCapture, true);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("click", handleClickCapture, true);
+    };
   }, [isDirty]);
 
   useEffect(() => {
@@ -363,6 +387,52 @@ export default function NotebookSetupPage() {
           </span>
         )}
       </div>
+
+      {canManage && (
+        <section className="flex flex-col gap-4 rounded-nb-xl border border-nb-danger/30 bg-nb-danger/5 p-5">
+          <div>
+            <h2 className="text-nb-title font-semibold text-nb-danger">Danger Zone</h2>
+            <p className="mt-1 text-nb-body text-nb-on-surface-variant">
+              Permanently delete this notebook and all of its entries, assets, and history. This action cannot be undone.
+            </p>
+          </div>
+          <div>
+            <Button
+              variant="danger"
+              disabled={busy}
+              onClick={() => setShowDeleteConfirm(true)}
+              className="border-0 bg-nb-danger text-white hover:bg-nb-danger-dim"
+            >
+              <Trash2 size={16} className="mr-1.5" />
+              Delete this notebook
+            </Button>
+          </div>
+        </section>
+      )}
+
+      <ConfirmationDialog
+        isOpen={showDeleteConfirm}
+        title="Delete notebook?"
+        message={`This will permanently delete "${notebookSummary.name}" and all of its contents. This cannot be undone.`}
+        variant="danger"
+        confirmText={notebookSummary.name}
+        confirmTextPlaceholder={notebookSummary.name}
+        onConfirm={async () => {
+          setShowDeleteConfirm(false);
+          setBusy(true);
+          try {
+            await cloudApi.deleteNotebook(orgId, notebookId);
+            showNotification("Notebook deleted", "success");
+            router.push(`/orgs/${orgId}`);
+          } catch (err) {
+            const message = (err as Error).message;
+            setError(message);
+            showNotification(message, "error");
+            setBusy(false);
+          }
+        }}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </div>
   );
 }

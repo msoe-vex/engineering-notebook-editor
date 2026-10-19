@@ -195,8 +195,9 @@ export default function OrgNotebooksPage() {
       <ConfirmationDialog
         isOpen={Boolean(deleteNb)}
         title="Delete Notebook?"
-        message={`Delete “${deleteNb?.name}”? This cannot be undone.`}
-        confirmLabel="Delete"
+        message={`Delete “${deleteNb?.name}”? All entries, assets, and history will be permanently destroyed. This cannot be undone.`}
+        confirmLabel="Delete notebook"
+        confirmText={deleteNb?.name}
         variant="danger"
         onCancel={() => setDeleteNb(null)}
         onConfirm={() => {
