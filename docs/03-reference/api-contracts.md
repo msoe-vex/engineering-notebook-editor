@@ -180,7 +180,7 @@ Extract and score are **separate** jobs (Python LangGraph worker — [ADR-007](.
 - `GET …/judgments` | `GET …/judgments/:judgmentId`
 - `DELETE …/judgments/:judgmentId` | `DELETE …/judgments` — delete one grade / clear all past grades
 
-Internal: `GET/PATCH /internal/judge/rubric`, `POST /internal/judge/normalize-complete`, `POST /internal/judge/progress|complete|failed`, `POST /internal/ai/complete` (Vertex), `POST /internal/ai/byok`
+Internal: `GET/PATCH /internal/judge/rubric`, `POST /internal/judge/normalize-complete`, `POST /internal/judge/progress|complete|failed`, `POST /internal/ai/complete` (unified Vertex + BYOK; `/internal/ai/byok` alias)
 
 Normalized shape: `RubricMatrix` — criteria rows × level columns (label, points, description) + `totalMaxPoints`. Judgment includes awarded level per criterion, `entryIds`, and denormalized `rubricName`.
 
@@ -200,12 +200,12 @@ Website **orchestrates** titles and the rubric judge loop. Core **Vertex-infers*
 
 | Provider | Hop |
 | --- | --- |
-| `local` | Browser → user base URL |
-| BYOK (`openai` / `gemini` / `anthropic` / …) | Browser → provider, or browser → `POST /api/genai` (CORS BFF) → provider. Keys ephemeral ([ADR-003](../02-architecture/decisions/ADR-003-byok-keys-local.md)). **Not Core.** |
+| `local` | Browser → user base URL (`http://localhost:11434`) |
+| BYOK (`openai` / `gemini` / `anthropic` / …) | Browser → provider, or browser → `POST /api/ai/complete` (CORS BFF; alias `/api/genai`) → provider. Keys ephemeral ([ADR-003](../02-architecture/decisions/ADR-003-byok-keys-local.md)). **Not Core.** |
 | `vertex` | Browser → Core `POST /ai/complete` (Bearer + `grants.platformAi` or service_admin) |
 
-- `POST /ai/complete` — **Vertex only**; one model turn per request (chat/completions-shaped body; schema TBD). Reject BYOK/local here.
-- BYOK model list stays on `POST /api/genai/models` (or browser-direct if the provider allows).
+- `POST /ai/complete` — **Vertex only**; one model turn per request. Reject BYOK/local here.
+- BYOK model list stays on `POST /api/ai/models` (alias `/api/genai/models`, or browser-direct if the provider allows).
 
 ### Audits (notebook-scoped) — multi-request progress
 

@@ -162,27 +162,27 @@ async def ai_complete(
     prompt: str,
     temperature: float = 0.2,
 ) -> str:
+    payload: dict[str, Any] = {
+        "prompt": prompt,
+        "temperature": temperature,
+    }
+    if inference == "vertex":
+        payload["provider"] = "vertex"
+    else:
+        if not byok or not byok.get("model"):
+            raise RuntimeError("BYOK credentials missing on judge job")
+        payload["provider"] = byok.get("provider") or "openai"
+        payload["apiKey"] = byok.get("apiKey", "")
+        payload["model"] = byok["model"]
+        if byok.get("baseUrl"):
+            payload["baseUrl"] = byok["baseUrl"]
+
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        if inference == "vertex":
-            res = await client.post(
-                f"{core_base()}/internal/ai/complete",
-                headers=_headers({"content-type": "application/json"}),
-                json={"prompt": prompt, "temperature": temperature},
-            )
-        else:
-            if not byok or not byok.get("apiKey") or not byok.get("model"):
-                raise RuntimeError("BYOK credentials missing on judge job")
-            res = await client.post(
-                f"{core_base()}/internal/ai/byok",
-                headers=_headers({"content-type": "application/json"}),
-                json={
-                    "provider": byok.get("provider") or "openai",
-                    "apiKey": byok["apiKey"],
-                    "model": byok["model"],
-                    "prompt": prompt,
-                    "temperature": temperature,
-                },
-            )
+        res = await client.post(
+            f"{core_base()}/internal/ai/complete",
+            headers=_headers({"content-type": "application/json"}),
+            json=payload,
+        )
         text = res.text
         try:
             data = res.json()

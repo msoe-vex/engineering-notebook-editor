@@ -14,7 +14,8 @@ Notebooks live under an org. **Settings** controls branding, phases, logo, and a
 
 ## User-facing behavior
 
-- `/orgs/:orgId` — notebook list/create/delete; notebook rows support right-click / ⋯ (Open, Settings, Rename, Delete)
+- `/orgs/:orgId` — notebook list, creation with immediate permission configuration (Entire organization vs Restricted), and delete; notebook rows support right-click / ⋯ (Open, Share…, Settings, Rename, Delete)
+- Quick **Share…** option in notebook options menus (org dashboard and home recent notebooks) allows modifying ACL directly without opening the notebook or going to Settings
 - `/…/setup` — **Settings**: name, title, subtitle, logo upload → `logoAssetId`, phases CRUD (compact rows; icon button opens glyph grid + color presets), access (alias `/settings`)
 - Notebook chrome **Share** dialog: entire org vs restricted; search/add org people and teams
 - `/…/members` — **Contributors**: name/role/photo/`order` credits (alias `/contributors`); roster rows support right-click (Edit, photo, Remove)

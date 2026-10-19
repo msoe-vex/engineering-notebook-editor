@@ -12,6 +12,7 @@ export type ByokCompleteInput = {
   model: string;
   prompt: string;
   temperature?: number;
+  baseUrl?: string;
 };
 
 export type ByokCompleteResult =
@@ -59,12 +60,15 @@ async function withRetries(
 }
 
 async function openaiComplete(input: ByokCompleteInput): Promise<ByokCompleteResult> {
+  const url = input.baseUrl
+    ? `${input.baseUrl.replace(/\/+$/, "")}/chat/completions`
+    : "https://api.openai.com/v1/chat/completions";
   const result = await withRetries("OpenAI", async () => {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    const res = await fetch(url, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${input.apiKey}`,
+        authorization: `Bearer ${input.apiKey || "dummy"}`,
       },
       body: JSON.stringify({
         model: input.model,
@@ -166,7 +170,7 @@ export async function byokComplete(input: ByokCompleteInput): Promise<ByokComple
   const apiKey = input.apiKey?.trim();
   const model = input.model?.trim();
   const prompt = input.prompt?.trim();
-  if (!apiKey) return { ok: false, status: 400, error: "apiKey required" };
+  if (!apiKey && !input.baseUrl) return { ok: false, status: 400, error: "apiKey required" };
   if (!model) return { ok: false, status: 400, error: "model required" };
   if (!prompt) return { ok: false, status: 400, error: "prompt required" };
 

@@ -41,7 +41,7 @@ export async function runGenerate(prompt: string, images?: GenAIImagePart[], tem
       getGenAIBaseUrl(settings.provider),
     );
   }
-  const response = await fetch("/api/genai", {
+  const response = await fetch("/api/ai/complete", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -75,7 +75,7 @@ export async function fetchGenAIModels(
     const models = await runProviderListModels(provider, key, baseUrl, signal);
     return models;
   }
-  const response = await fetch("/api/genai/models", {
+  const response = await fetch("/api/ai/models", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ provider, apiKey: key }),

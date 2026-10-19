@@ -5,10 +5,13 @@ import { byokComplete, type ByokProvider } from "../ai/byokComplete.js";
 import { vertexComplete } from "../ai/vertexComplete.js";
 
 type CompleteBody = {
+  provider?: "vertex" | "openai" | "anthropic" | "gemini";
   prompt?: string;
   messages?: Array<{ role?: string; content?: string }>;
   model?: string;
   temperature?: number;
+  apiKey?: string;
+  baseUrl?: string;
   system?: string;
 };
 
@@ -35,8 +38,8 @@ function assertInternalSecret(
 }
 
 /**
- * Vertex-only model turn for the website. BYOK stays in browser (/api/genai) or
- * worker via /internal/ai/byok (ephemeral key, not stored).
+ * Vertex-only model turn for the website. BYOK stays in browser (/api/ai/complete) or
+ * worker via /internal/ai/complete (ephemeral key, not stored).
  */
 export async function registerAiRoutes(app: FastifyInstance) {
   app.post("/ai/complete", async (request, reply) => {
@@ -69,13 +72,13 @@ export async function registerAiRoutes(app: FastifyInstance) {
   });
 }
 
-/** Worker LLM: Vertex (platform) + BYOK (ephemeral keys from job dispatch). */
+/** Worker LLM: unified internal AI endpoint for Vertex + BYOK. */
 export async function registerInternalAiRoutes(app: FastifyInstance) {
-  app.post("/internal/ai/complete", async (request, reply) => {
-    const denied = assertInternalSecret(
-      request as { headers: Record<string, unknown> },
-      reply
-    );
+  const handleInternalComplete = async (
+    request: { body?: unknown; headers: Record<string, unknown>; log: any },
+    reply: { code: (n: number) => { send: (b: unknown) => unknown } }
+  ) => {
+    const denied = assertInternalSecret(request, reply);
     if (denied) return denied;
 
     const body = (request.body || {}) as CompleteBody;
@@ -84,47 +87,39 @@ export async function registerInternalAiRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "prompt or messages required" });
     }
 
-    const result = await vertexComplete(
-      {
-        prompt,
-        temperature: body.temperature,
-        model: body.model,
-      },
-      request.log
-    );
-    if (!result.ok) {
-      return reply.code(result.status).send({
-        error: result.error,
-        detail: "detail" in result ? result.detail : undefined,
-      });
+    const provider = body.provider || "vertex";
+
+    if (provider === "vertex") {
+      const result = await vertexComplete(
+        {
+          prompt,
+          temperature: body.temperature,
+          model: body.model,
+        },
+        request.log
+      );
+      if (!result.ok) {
+        return reply.code(result.status).send({
+          error: result.error,
+          detail: "detail" in result ? result.detail : undefined,
+        });
+      }
+      return { provider: "vertex", model: result.model, text: result.text };
     }
-    return { provider: "vertex", model: result.model, text: result.text };
-  });
 
-  app.post("/internal/ai/byok", async (request, reply) => {
-    const denied = assertInternalSecret(
-      request as { headers: Record<string, unknown> },
-      reply
-    );
-    if (denied) return denied;
-
-    const body = (request.body || {}) as CompleteBody & {
-      provider?: string;
-      apiKey?: string;
-    };
-    const provider = body.provider as ByokProvider;
     if (provider !== "openai" && provider !== "anthropic" && provider !== "gemini") {
       return reply.code(400).send({
-        error: "provider must be openai|anthropic|gemini (local models not supported for judge)",
+        error: "provider must be vertex|openai|anthropic|gemini",
       });
     }
-    const prompt = promptFromBody(body);
+
     const result = await byokComplete({
       provider,
       apiKey: String(body.apiKey || ""),
       model: String(body.model || ""),
       prompt,
       temperature: body.temperature,
+      baseUrl: body.baseUrl,
     });
     if (!result.ok) {
       return reply.code(result.status).send({ error: result.error });
@@ -134,5 +129,8 @@ export async function registerInternalAiRoutes(app: FastifyInstance) {
       model: result.model,
       text: result.text,
     };
-  });
+  };
+
+  app.post("/internal/ai/complete", handleInternalComplete);
+  app.post("/internal/ai/byok", handleInternalComplete);
 }

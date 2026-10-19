@@ -11,45 +11,107 @@ import {
   type TeamSummary,
 } from "@/lib/cloud/api";
 import { AccessAllowlistPicker } from "./AccessAllowlistPicker";
-import { useNotebookWorkspace } from "./NotebookWorkspaceContext";
+import { useOptionalNotebookWorkspace } from "./NotebookWorkspaceContext";
 
-type Props = {
+export type ShareNotebookDialogProps = {
   open: boolean;
   onClose: () => void;
+  orgId?: string;
+  notebookId?: string;
+  notebookName?: string;
+  initialAccess?: NotebookAccess;
+  teams?: TeamSummary[];
+  people?: MemberSummary[];
+  onSaved?: (access: NotebookAccess) => void;
 };
 
 /**
  * Google-style share sheet for notebook ACL (org-open vs restricted user/team allowlists).
  * Does not invite emails outside the org — use org invites for that.
+ * Works both inside NotebookShell (auto-reads workspace) and standalone from notebook menus.
  */
-export function ShareNotebookDialog({ open, onClose }: Props) {
-  const { orgId, notebookId, notebookSummary, setNotebookSummary, refresh } =
-    useNotebookWorkspace();
-  const access = notebookSummary?.access;
-  const [accessMode, setAccessMode] = useState<"org" | "restricted">(
-    access?.mode === "restricted" ? "restricted" : "org"
-  );
-  const [teamIds, setTeamIds] = useState<string[]>(access?.teamIds || []);
-  const [userIds, setUserIds] = useState<string[]>(access?.userIds || []);
+export function ShareNotebookDialog({
+  open,
+  onClose,
+  orgId: propOrgId,
+  notebookId: propNotebookId,
+  notebookName: propNotebookName,
+  initialAccess: propInitialAccess,
+  teams: propTeams,
+  people: propPeople,
+  onSaved,
+}: ShareNotebookDialogProps) {
+  const workspace = useOptionalNotebookWorkspace();
+  const effectiveOrgId = propOrgId ?? workspace?.orgId ?? "";
+  const effectiveNotebookId = propNotebookId ?? workspace?.notebookId ?? "";
+  const effectiveNotebookName = propNotebookName || workspace?.notebookName || "";
+
+  const [accessMode, setAccessMode] = useState<"org" | "restricted">("org");
+  const [teamIds, setTeamIds] = useState<string[]>([]);
+  const [userIds, setUserIds] = useState<string[]>([]);
   const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [people, setPeople] = useState<MemberSummary[]>([]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
-    setAccessMode(access?.mode === "restricted" ? "restricted" : "org");
-    setTeamIds(access?.teamIds || []);
-    setUserIds(access?.userIds || []);
-    void Promise.all([
-      cloudApi.listTeams(orgId).catch(() => [] as TeamSummary[]),
-      cloudApi.listMembers(orgId).catch(() => [] as MemberSummary[]),
-    ]).then(([t, m]) => {
-      setTeams(t);
-      setPeople(m);
-    });
-  }, [open, access, orgId]);
+    if (!open || !effectiveOrgId) return;
+
+    let cancelled = false;
+
+    // Load teams & people allowlist options
+    if (propTeams && propPeople) {
+      setTeams(propTeams);
+      setPeople(propPeople);
+    } else {
+      void Promise.all([
+        cloudApi.listTeams(effectiveOrgId).catch(() => [] as TeamSummary[]),
+        cloudApi.listMembers(effectiveOrgId).catch(() => [] as MemberSummary[]),
+      ]).then(([t, m]) => {
+        if (!cancelled) {
+          setTeams(t);
+          setPeople(m);
+        }
+      });
+    }
+
+    // Set initial access state
+    if (propInitialAccess) {
+      setAccessMode(propInitialAccess.mode === "restricted" ? "restricted" : "org");
+      setTeamIds(propInitialAccess.teamIds || []);
+      setUserIds(propInitialAccess.userIds || []);
+    } else if (workspace?.notebookSummary?.access) {
+      const a = workspace.notebookSummary.access;
+      setAccessMode(a.mode === "restricted" ? "restricted" : "org");
+      setTeamIds(a.teamIds || []);
+      setUserIds(a.userIds || []);
+    } else if (effectiveNotebookId) {
+      void cloudApi
+        .getNotebook(effectiveOrgId, effectiveNotebookId)
+        .then((nb) => {
+          if (!cancelled && nb?.access) {
+            setAccessMode(nb.access.mode === "restricted" ? "restricted" : "org");
+            setTeamIds(nb.access.teamIds || []);
+            setUserIds(nb.access.userIds || []);
+          }
+        })
+        .catch(() => {});
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    open,
+    effectiveOrgId,
+    effectiveNotebookId,
+    propInitialAccess,
+    propTeams,
+    propPeople,
+    workspace?.notebookSummary?.access,
+  ]);
 
   async function save() {
+    if (!effectiveOrgId || !effectiveNotebookId) return;
     setBusy(true);
     const next: NotebookAccess = {
       mode: accessMode,
@@ -57,13 +119,22 @@ export function ShareNotebookDialog({ open, onClose }: Props) {
       userIds: accessMode === "restricted" ? userIds : [],
     };
     try {
-      const updated = await cloudApi.patchNotebook(orgId, notebookId, { access: next });
-      setNotebookSummary(
-        notebookSummary
-          ? { ...notebookSummary, ...updated, access: next }
-          : notebookSummary
-      );
-      refresh();
+      const updated = await cloudApi.patchNotebook(effectiveOrgId, effectiveNotebookId, {
+        access: next,
+      });
+      if (workspace?.setNotebookSummary) {
+        const prev = workspace.notebookSummary;
+        if (prev) {
+          workspace.setNotebookSummary({
+            ...prev,
+            ...updated,
+            phases: (updated.phases as unknown as typeof prev.phases) ?? prev.phases,
+            access: next,
+          });
+        }
+        workspace.refresh();
+      }
+      onSaved?.(next);
       showNotification(
         accessMode === "org" ? "Shared with entire organization" : "Access updated",
         "success"
@@ -76,8 +147,12 @@ export function ShareNotebookDialog({ open, onClose }: Props) {
     }
   }
 
+  const dialogTitle = effectiveNotebookName
+    ? `Share “${effectiveNotebookName}”`
+    : "Share notebook";
+
   return (
-    <Dialog isOpen={open} onClose={onClose} title="Share notebook" wide>
+    <Dialog isOpen={open} onClose={onClose} title={dialogTitle} wide>
       <div className="flex flex-col gap-4">
         <p className="text-nb-body text-nb-on-surface-variant">
           Organization owners and admins can always open every notebook. Choose who else can

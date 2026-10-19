@@ -3,10 +3,11 @@
 import { useEffect, useState, type MouseEvent as ReactMouseEvent, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Building2, BookOpen, Mail, Plus, ArrowRight, Edit2, Trash2, Users } from "lucide-react";
+import { Building2, BookOpen, Mail, Plus, ArrowRight, Edit2, Share2, Trash2, Users } from "lucide-react";
 import Logo from "@/components/icons/Logo";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import TextPromptDialog from "@/components/dialogs/TextPromptDialog";
+import { ShareNotebookDialog } from "@/components/cloud/ShareNotebookDialog";
 import {
   Alert,
   Button,
@@ -36,6 +37,7 @@ function HomeInner() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [shareNb, setShareNb] = useState<RecentNotebook | null>(null);
   const [renameTarget, setRenameTarget] = useState<OrgSummary | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<OrgSummary | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
@@ -209,6 +211,21 @@ function HomeInner() {
                   </div>
                   <ArrowRight size={16} className="text-nb-on-surface-variant opacity-50" />
                 </Link>
+                <DropdownMenu
+                  items={[
+                    {
+                      id: "open",
+                      label: "Open",
+                      onSelect: () => router.push(`/orgs/${nb.orgId}/notebooks/${nb.id}`),
+                    },
+                    {
+                      id: "share",
+                      label: "Share…",
+                      icon: <Share2 size={14} />,
+                      onSelect: () => setShareNb(nb),
+                    },
+                  ]}
+                />
               </ListRow>
             ))}
           </div>
@@ -318,6 +335,16 @@ function HomeInner() {
             .then(refresh)
             .catch((err) => setError((err as Error).message));
         }}
+      />
+
+      <ShareNotebookDialog
+        open={Boolean(shareNb)}
+        onClose={() => setShareNb(null)}
+        orgId={shareNb?.orgId}
+        notebookId={shareNb?.id}
+        notebookName={shareNb?.title || shareNb?.name}
+        initialAccess={shareNb?.access}
+        onSaved={() => refresh()}
       />
 
       <ConfirmationDialog

@@ -24,3 +24,8 @@ export function useNotebookWorkspace(): NotebookWorkspaceState {
   }
   return ctx;
 }
+
+export function useOptionalNotebookWorkspace(): NotebookWorkspaceState | null {
+  return useContext(NotebookWorkspaceContext);
+}
+

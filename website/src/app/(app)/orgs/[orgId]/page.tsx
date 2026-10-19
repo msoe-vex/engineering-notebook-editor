@@ -3,10 +3,12 @@
 import { useState, type MouseEvent as ReactMouseEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, BookOpen, Edit2, Plus, Settings, Trash2 } from "lucide-react";
+import { ArrowRight, BookOpen, Edit2, Plus, Settings, Share2, Trash2 } from "lucide-react";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import TextPromptDialog from "@/components/dialogs/TextPromptDialog";
 import { useOrgWorkspace } from "@/components/cloud/OrgWorkspaceContext";
+import { CreateNotebookDialog } from "@/components/cloud/CreateNotebookDialog";
+import { ShareNotebookDialog } from "@/components/cloud/ShareNotebookDialog";
 import {
   Button,
   ContextMenu,
@@ -16,18 +18,19 @@ import {
   Skeleton,
   type MenuItem,
 } from "@/components/ui";
-import { cloudApi } from "@/lib/cloud/api";
+import { cloudApi, type NotebookSummary } from "@/lib/cloud/api";
 
 export default function OrgNotebooksPage() {
   const router = useRouter();
-  const { orgId, notebooks, busy, setBusy, refresh, setError, initialLoaded } =
+  const { orgId, notebooks, teams, members, busy, setBusy, refresh, setError, initialLoaded } =
     useOrgWorkspace();
   const [createOpen, setCreateOpen] = useState(false);
+  const [shareNb, setShareNb] = useState<NotebookSummary | null>(null);
   const [renameNb, setRenameNb] = useState<{ id: string; name: string } | null>(null);
   const [deleteNb, setDeleteNb] = useState<{ id: string; name: string } | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
 
-  function notebookMenuItems(nb: { id: string; name: string; title?: string }): MenuItem[] {
+  function notebookMenuItems(nb: NotebookSummary): MenuItem[] {
     return [
       {
         id: "open",
@@ -35,12 +38,18 @@ export default function OrgNotebooksPage() {
         onSelect: () => router.push(`/orgs/${orgId}/notebooks/${nb.id}`),
       },
       {
+        id: "share",
+        label: "Share…",
+        icon: <Share2 size={14} />,
+        onSelect: () => setShareNb(nb),
+      },
+      {
         id: "settings",
         label: "Settings",
         icon: <Settings size={14} />,
         onSelect: () => router.push(`/orgs/${orgId}/notebooks/${nb.id}/setup`),
       },
-      { id: "sep", label: "", separator: true },
+      { id: "sep", separator: true },
       {
         id: "rename",
         label: "Rename",
@@ -59,7 +68,7 @@ export default function OrgNotebooksPage() {
 
   function onNotebookContextMenu(
     e: ReactMouseEvent,
-    nb: { id: string; name: string; title?: string }
+    nb: NotebookSummary
   ) {
     e.preventDefault();
     setCtx({ x: e.clientX, y: e.clientY, items: notebookMenuItems(nb) });
@@ -136,21 +145,28 @@ export default function OrgNotebooksPage() {
         )}
       </div>
 
-      <TextPromptDialog
+      <CreateNotebookDialog
         isOpen={createOpen}
-        title="Create Notebook"
-        label="Notebook name"
-        initialValue="Competition Notebook"
-        confirmLabel="Create"
-        onCancel={() => setCreateOpen(false)}
-        onConfirm={(name) => {
-          setCreateOpen(false);
-          setBusy(true);
-          void cloudApi
-            .createNotebook(orgId, name)
-            .then(refresh)
-            .catch((err) => setError((err as Error).message))
-            .finally(() => setBusy(false));
+        onClose={() => setCreateOpen(false)}
+        orgId={orgId}
+        teams={teams}
+        members={members}
+        onCreated={() => {
+          refresh();
+        }}
+      />
+
+      <ShareNotebookDialog
+        open={Boolean(shareNb)}
+        onClose={() => setShareNb(null)}
+        orgId={orgId}
+        notebookId={shareNb?.id}
+        notebookName={shareNb?.title || shareNb?.name}
+        initialAccess={shareNb?.access}
+        teams={teams}
+        people={members}
+        onSaved={() => {
+          refresh();
         }}
       />
 
