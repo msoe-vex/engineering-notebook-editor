@@ -160,6 +160,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
   const [userRole, setUserRole] = useState<string | null>(null);
   const canManage = isOrgAdminRole(userRole);
   const [notebookSummary, setNotebookSummary] = useState<NotebookSummaryV5 | null>(null);
+  const isArchived = Boolean(notebookSummary?.archivedAt);
   const [folders, setFolders] = useState<
     Record<string, { name: string; parentId: string | null; order: number }>
   >({});
@@ -246,6 +247,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
             access: nb.access,
             phases: nb.phases as NotebookSummaryV5["phases"],
             lastCompiled: nb.lastCompiled,
+            archivedAt: nb.archivedAt,
             createdAt: nb.createdAt,
             updatedAt: nb.updatedAt ?? new Date().toISOString(),
           });
@@ -314,6 +316,9 @@ export function NotebookShell({ children }: { children: ReactNode }) {
           }
           if (nb.lastCompiled !== undefined) {
             next.lastCompiled = nb.lastCompiled as string | undefined;
+          }
+          if (nb.archivedAt !== undefined) {
+            next.archivedAt = nb.archivedAt as string | null | undefined;
           }
           next.updatedAt = String(nb.updatedAt ?? prev.updatedAt);
           return next;
@@ -647,6 +652,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
       notebookId,
       orgName,
       notebookName,
+      isArchived,
       menuItems: notebookUnavailable
         ? []
         : [
@@ -679,7 +685,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
                 if (!busyRef.current) void exportZipRef.current();
               },
             },
-            ...(canManage
+            ...(canManage && !isArchived
               ? [
                   {
                     id: "import",
@@ -688,6 +694,10 @@ export function NotebookShell({ children }: { children: ReactNode }) {
                       if (!busyRef.current) importRef.current?.click();
                     },
                   },
+                ]
+              : []),
+            ...(canManage
+              ? [
                   {
                     id: "delete",
                     label: "Delete notebook",
@@ -717,6 +727,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     notebookId,
     orgName,
     notebookName,
+    isArchived,
     notebookUnavailable,
     canManage,
     showPrompt,
@@ -729,6 +740,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     notebookId,
     notebookName,
     notebookSummary,
+    isArchived,
     initialLoaded,
     notebookUnavailable,
     folders,
@@ -816,6 +828,41 @@ export function NotebookShell({ children }: { children: ReactNode }) {
 
         {initialLoaded && !notebookUnavailable && (
           <NotebookSectionStrip items={navItems} activeId={activeNav} />
+        )}
+
+        {initialLoaded && !notebookUnavailable && isArchived && (
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-medium text-amber-900 dark:text-amber-200">
+            <div className="flex items-center gap-2">
+              <span className="font-bold">Archived</span>
+              <span>This notebook is read-only. Entries and settings cannot be modified.</span>
+            </div>
+            {canManage && (
+              <Button
+                size="sm"
+                variant="secondary"
+                className="h-6 text-xs border-amber-500/40 hover:bg-amber-500/20 text-amber-900 dark:text-amber-200"
+                onClick={() => {
+                  showConfirm(
+                    "Unarchive notebook?",
+                    `Unarchiving "${notebookName}" will allow members to edit and create entries again.`,
+                    () => {
+                      void cloudApi
+                        .unarchiveNotebook(orgId, notebookId)
+                        .then(() => {
+                          showNotification("Notebook unarchived", "success");
+                          refresh();
+                        })
+                        .catch((err) => setError((err as Error).message));
+                    },
+                    "info",
+                    "Unarchive"
+                  );
+                }}
+              >
+                Unarchive
+              </Button>
+            )}
+          </div>
         )}
 
         <div className="relative flex min-h-0 flex-1 overflow-hidden">

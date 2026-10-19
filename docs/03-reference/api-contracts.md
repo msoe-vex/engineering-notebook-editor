@@ -77,8 +77,10 @@ Auth: `Authorization: Bearer <Firebase ID token | local uid>`
 
 - `GET/POST /orgs/:orgId/notebooks`
 - `GET/PATCH/DELETE /orgs/:orgId/notebooks/:notebookId`  
-  PATCH fields include `name`, `title`, `subtitle`, `logoAssetId`, `folders`, `access`, `phases`, `lastCompiled`  
+  PATCH fields include `name`, `title`, `subtitle`, `logoAssetId`, `folders`, `access`, `phases`, `lastCompiled`, `archivedAt`  
   DELETE cascades entries/assets/audits GCS blobs + subcollections
+- `POST /orgs/:orgId/notebooks/:notebookId/archive` — sets `archivedAt`, locks notebook into read-only mode (admins/owners only; blocks entry/folder/asset/contributor/rubric/judge/compile mutations with 403)
+- `POST /orgs/:orgId/notebooks/:notebookId/unarchive` — clears `archivedAt`, restores write permissions (admins/owners only)
 
 ### Notebook folders
 

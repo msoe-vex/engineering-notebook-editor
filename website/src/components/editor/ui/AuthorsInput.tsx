@@ -9,6 +9,7 @@ interface AuthorsInputProps {
   onChange: (authors: string[]) => void;
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
 }
 
 export default function AuthorsInput({
@@ -17,6 +18,7 @@ export default function AuthorsInput({
   onChange,
   placeholder = "Author",
   className = "",
+  disabled = false,
 }: AuthorsInputProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -102,16 +104,23 @@ export default function AuthorsInput({
     <div
       ref={containerRef}
       role="button"
-      tabIndex={0}
+      tabIndex={disabled ? -1 : 0}
       aria-expanded={isOpen}
       aria-haspopup="dialog"
+      aria-disabled={disabled}
       aria-label={summary || placeholder}
-      className={`flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all hover:border-nb-primary/50 relative cursor-pointer select-none overflow-hidden min-w-0 ${className}`}
+      className={`flex items-center gap-2.5 px-3 rounded-xl bg-nb-surface-low border border-nb-outline-variant/30 group transition-all relative select-none overflow-hidden min-w-0 ${
+        disabled
+          ? "opacity-60 cursor-not-allowed"
+          : "cursor-pointer hover:border-nb-primary/50"
+      } ${className}`}
       onClick={() => {
+        if (disabled) return;
         if (!isOpen) updateCoords();
         setIsOpen((open) => !open);
       }}
       onKeyDown={(e) => {
+        if (disabled) return;
         if (e.target !== e.currentTarget) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();

@@ -36,6 +36,7 @@ function SortableMember({
   onRemove,
   onPhoto,
   onContextMenu,
+  readOnly = false,
 }: {
   member: NotebookMemberSummary;
   photoUrl?: string;
@@ -43,9 +44,11 @@ function SortableMember({
   onRemove: () => void;
   onPhoto: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
+  readOnly?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: member.id,
+    disabled: readOnly,
   });
 
   return (
@@ -59,21 +62,24 @@ function SortableMember({
       className="flex items-center gap-2 rounded-nb-xl border border-nb-outline-variant/25 bg-nb-surface px-2 py-2"
       onContextMenu={onContextMenu}
     >
+      {!readOnly && (
+        <button
+          type="button"
+          className="shrink-0 cursor-grab touch-none p-1 text-nb-on-surface-variant/40 hover:text-nb-on-surface-variant active:cursor-grabbing"
+          title="Drag to reorder"
+          aria-label="Drag to reorder"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical size={16} />
+        </button>
+      )}
       <button
         type="button"
-        className="shrink-0 cursor-grab touch-none p-1 text-nb-on-surface-variant/40 hover:text-nb-on-surface-variant active:cursor-grabbing"
-        title="Drag to reorder"
-        aria-label="Drag to reorder"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical size={16} />
-      </button>
-      <button
-        type="button"
-        onClick={onPhoto}
-        className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-nb-lg bg-nb-surface-low text-nb-on-surface-variant"
-        title="Upload photo"
+        onClick={readOnly ? undefined : onPhoto}
+        disabled={readOnly}
+        className={`relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-nb-lg bg-nb-surface-low text-nb-on-surface-variant ${readOnly ? "cursor-default" : ""}`}
+        title={readOnly ? undefined : "Upload photo"}
       >
         {photoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -81,9 +87,11 @@ function SortableMember({
         ) : (
           <UserRound size={18} />
         )}
-        <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-opacity hover:bg-black/35 hover:opacity-100">
-          <Camera size={14} className="text-white" />
-        </span>
+        {!readOnly && (
+          <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-opacity hover:bg-black/35 hover:opacity-100">
+            <Camera size={14} className="text-white" />
+          </span>
+        )}
       </button>
       <div className="min-w-0 flex-1">
         <div className="truncate font-semibold text-nb-on-surface">{member.name}</div>
@@ -91,20 +99,22 @@ function SortableMember({
           {member.role || "Member"}
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-1">
-        <Button size="sm" variant="ghost" onClick={onEdit}>
-          Edit
-        </Button>
-        <Button size="sm" variant="link" className="text-nb-danger" onClick={onRemove}>
-          Remove
-        </Button>
-      </div>
+      {!readOnly && (
+        <div className="flex shrink-0 items-center gap-1">
+          <Button size="sm" variant="ghost" onClick={onEdit}>
+            Edit
+          </Button>
+          <Button size="sm" variant="link" className="text-nb-danger" onClick={onRemove}>
+            Remove
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
 
 export default function NotebookMembersPage() {
-  const { orgId, notebookId, setError } = useNotebookWorkspace();
+  const { orgId, notebookId, isArchived, setError } = useNotebookWorkspace();
   const [members, setMembers] = useState<NotebookMemberSummary[]>([]);
   const [photos, setPhotos] = useState<Record<string, string>>({});
   const [editor, setEditor] = useState<Partial<NotebookMemberSummary> & { id?: string } | null>(
@@ -119,6 +129,7 @@ export default function NotebookMembersPage() {
   const sensors = useAppDndSensors();
 
   function memberMenuItems(m: NotebookMemberSummary): MenuItem[] {
+    if (isArchived) return [];
     return [
       { id: "edit", label: "Edit", onSelect: () => setEditor({ ...m }) },
       {
@@ -193,7 +204,7 @@ export default function NotebookMembersPage() {
   }
 
   function onDragEnd(event: DragEndEvent) {
-    if (!event.over) return;
+    if (isArchived || !event.over) return;
     const from = sorted.findIndex((m) => m.id === event.active.id);
     const to = sorted.findIndex((m) => m.id === event.over?.id);
     if (from < 0 || to < 0 || from === to) return;
@@ -267,9 +278,11 @@ export default function NotebookMembersPage() {
             open the notebook under Settings.
           </p>
         </div>
-        <Button variant="primary" onClick={() => setEditor({ name: "", role: "Member" })}>
-          <Plus size={14} /> Add person
-        </Button>
+        {!isArchived && (
+          <Button variant="primary" onClick={() => setEditor({ name: "", role: "Member" })}>
+            <Plus size={14} /> Add person
+          </Button>
+        )}
       </div>
 
       {sorted.length > 0 ? (
@@ -280,6 +293,7 @@ export default function NotebookMembersPage() {
                 <SortableMember
                   key={m.id}
                   member={m}
+                  readOnly={isArchived}
                   photoUrl={photos[m.id]}
                   onEdit={() => setEditor({ ...m })}
                   onRemove={() => setDeleteMember(m)}
@@ -288,6 +302,7 @@ export default function NotebookMembersPage() {
                     photoInputRef.current?.click();
                   }}
                   onContextMenu={(e) => {
+                    if (isArchived) return;
                     e.preventDefault();
                     setCtx({
                       x: e.clientX,
@@ -305,9 +320,11 @@ export default function NotebookMembersPage() {
           title="No roster yet"
           description="Add contributors who should appear in this notebook’s credits."
           action={
-            <Button variant="primary" onClick={() => setEditor({ name: "", role: "Member" })}>
-              Add person
-            </Button>
+            !isArchived ? (
+              <Button variant="primary" onClick={() => setEditor({ name: "", role: "Member" })}>
+                Add person
+              </Button>
+            ) : undefined
           }
         />
       )}

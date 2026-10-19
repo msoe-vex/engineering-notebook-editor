@@ -64,7 +64,7 @@ export function CollaborativeEntryEditor({
   getToken,
   onDocChange,
 }: Props) {
-  const { orgId, notebookId, entries, notebookSummary } = useNotebookWorkspace();
+  const { orgId, notebookId, entries, notebookSummary, isArchived } = useNotebookWorkspace();
   const [status, setStatus] = useState("connecting");
   const [ydoc] = useState(() => new Y.Doc());
   const [provider, setProvider] = useState<HocuspocusProvider | null>(null);
@@ -405,7 +405,7 @@ export function CollaborativeEntryEditor({
 
   return (
     <div className="flex h-full min-h-0 flex-col text-nb-on-surface">
-      {editor && (
+      {editor && !isArchived && (
         <div className="z-20 shrink-0 border-b border-nb-outline-variant/20 bg-nb-surface">
           <NotebookFormatToolbar
             editor={editor}
@@ -431,6 +431,7 @@ export function CollaborativeEntryEditor({
           key={documentName}
           filename={entryId}
           entryId={entryId}
+          editable={!isArchived}
           collaborationDoc={ydoc}
           onEditorInit={setEditor}
           onImageUpload={(path, _base64) => {

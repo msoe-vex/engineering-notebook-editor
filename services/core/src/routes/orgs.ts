@@ -46,6 +46,7 @@ import {
   requireNotebookAccess,
   canAccessNotebook,
   isServiceAdmin,
+  assertNotebookNotArchived,
 } from "../rbac.js";
 import { getUser } from "../http/authPlugin.js";
 import type { StoragePort } from "../storage/storagePort.js";
@@ -199,6 +200,17 @@ async function assertNotebookAccess(
     throw err;
   }
   await requireNotebookAccess(user, orgId, snap.data() as NotebookSummaryV5);
+  return snap;
+}
+
+async function assertNotebookWritable(
+  user: ReturnType<typeof getUser>,
+  orgId: string,
+  notebookId: string
+) {
+  const snap = await assertNotebookAccess(user, orgId, notebookId);
+  const data = snap.data() as NotebookSummaryV5;
+  assertNotebookNotArchived(data);
   return snap;
 }
 
@@ -742,6 +754,9 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     if (body.access !== undefined && callerRole !== "owner" && callerRole !== "admin" && !isServiceAdmin(user)) {
       return reply.code(403).send({ error: "Only admins and owners can modify notebook access" });
     }
+    if (body.archivedAt !== undefined && callerRole !== "owner" && callerRole !== "admin" && !isServiceAdmin(user)) {
+      return reply.code(403).send({ error: "Only admins and owners can archive or unarchive notebooks" });
+    }
     const patch: Record<string, unknown> = { updatedAt: nowIso() };
     for (const key of [
       "name",
@@ -752,6 +767,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       "access",
       "phases",
       "lastCompiled",
+      "archivedAt",
     ] as const) {
       if (body[key] !== undefined) patch[key] = body[key];
     }
@@ -767,6 +783,52 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
         console.warn("[revalidate] notebook phases", orgId, notebookId, err);
       });
     }
+    return merged;
+  });
+
+  app.post("/orgs/:orgId/notebooks/:notebookId/archive", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
+    const ref = db().doc(notebookPath(orgId, notebookId));
+    const snap = await ref.get();
+    if (!snap.exists) return reply.code(404).send({ error: "not found" });
+    const existing = snap.data() as NotebookSummaryV5;
+    const callerRole = await requireNotebookAccess(user, orgId, existing);
+    if (callerRole !== "owner" && callerRole !== "admin" && !isServiceAdmin(user)) {
+      return reply.code(403).send({ error: "Only admins and owners can archive notebooks" });
+    }
+    const ts = nowIso();
+    const patch = { archivedAt: ts, updatedAt: ts };
+    await ref.update(patch);
+    const merged = { id: notebookId, ...existing, ...patch };
+    publishNotebookEvent(orgId, notebookId, {
+      type: "notebook.updated",
+      notebook: merged as Record<string, unknown>,
+      at: ts,
+    });
+    return merged;
+  });
+
+  app.post("/orgs/:orgId/notebooks/:notebookId/unarchive", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
+    const ref = db().doc(notebookPath(orgId, notebookId));
+    const snap = await ref.get();
+    if (!snap.exists) return reply.code(404).send({ error: "not found" });
+    const existing = snap.data() as NotebookSummaryV5;
+    const callerRole = await requireNotebookAccess(user, orgId, existing);
+    if (callerRole !== "owner" && callerRole !== "admin" && !isServiceAdmin(user)) {
+      return reply.code(403).send({ error: "Only admins and owners can unarchive notebooks" });
+    }
+    const ts = nowIso();
+    const patch = { archivedAt: null, updatedAt: ts };
+    await ref.update(patch);
+    const merged = { id: notebookId, ...existing, ...patch };
+    publishNotebookEvent(orgId, notebookId, {
+      type: "notebook.updated",
+      notebook: merged as Record<string, unknown>,
+      at: ts,
+    });
     return merged;
   });
 
@@ -795,6 +857,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
     const nb = snap.data() as NotebookSummaryV5;
     await requireNotebookAccess(user, orgId, nb);
+    assertNotebookNotArchived(nb);
     const id = randomUUID();
     const folder: NotebookFolder = {
       name,
@@ -825,6 +888,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
     const nb = snap.data() as NotebookSummaryV5;
     await requireNotebookAccess(user, orgId, nb);
+    assertNotebookNotArchived(nb);
     const existing = nb.folders?.[folderId];
     if (!existing) return reply.code(404).send({ error: "folder not found" });
     const folder: NotebookFolder = {
@@ -855,6 +919,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
     const nb = snap.data() as NotebookSummaryV5;
     await requireNotebookAccess(user, orgId, nb);
+    assertNotebookNotArchived(nb);
     const existingFolder = nb.folders?.[folderId];
     if (!existingFolder) return reply.code(404).send({ error: "folder not found" });
     // Promote children one level up (to this folder's parent), do not delete them.
@@ -911,7 +976,9 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
     const nb = await db().doc(notebookPath(orgId, notebookId)).get();
     if (!nb.exists) return reply.code(404).send({ error: "not found" });
-    await requireNotebookAccess(user, orgId, nb.data() as NotebookSummaryV5);
+    const nbData = nb.data() as NotebookSummaryV5;
+    await requireNotebookAccess(user, orgId, nbData);
+    assertNotebookNotArchived(nbData);
     const body = request.body as Partial<NotebookMember> & { id?: string };
     const name = body.name?.trim();
     if (!name) return reply.code(400).send({ error: "name required" });
@@ -936,7 +1003,9 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     };
     const nb = await db().doc(notebookPath(orgId, notebookId)).get();
     if (!nb.exists) return reply.code(404).send({ error: "not found" });
-    await requireNotebookAccess(user, orgId, nb.data() as NotebookSummaryV5);
+    const nbData = nb.data() as NotebookSummaryV5;
+    await requireNotebookAccess(user, orgId, nbData);
+    assertNotebookNotArchived(nbData);
     const ref = db().doc(notebookMemberPath(orgId, notebookId, memberId));
     const snap = await ref.get();
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
@@ -959,7 +1028,9 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     };
     const nb = await db().doc(notebookPath(orgId, notebookId)).get();
     if (!nb.exists) return reply.code(404).send({ error: "not found" });
-    await requireNotebookAccess(user, orgId, nb.data() as NotebookSummaryV5);
+    const nbData = nb.data() as NotebookSummaryV5;
+    await requireNotebookAccess(user, orgId, nbData);
+    assertNotebookNotArchived(nbData);
     const ref = db().doc(notebookMemberPath(orgId, notebookId, memberId));
     const snap = await ref.get();
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
@@ -985,7 +1056,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
   app.post("/orgs/:orgId/notebooks/:notebookId/entries/reorder", async (request, reply) => {
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
-    await assertNotebookAccess(user, orgId, notebookId);
+    await assertNotebookWritable(user, orgId, notebookId);
     const body = request.body as {
       mode?: "explorer" | "day";
       orderedIds?: string[];
@@ -1031,7 +1102,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
   app.post("/orgs/:orgId/notebooks/:notebookId/entries", async (request, reply) => {
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
-    await assertNotebookAccess(user, orgId, notebookId);
+    await assertNotebookWritable(user, orgId, notebookId);
     const body = (request.body ?? {}) as Partial<EntryMetadataV5> & { id?: string };
     const id = body.id || randomUUID();
     const ts = nowIso();
@@ -1089,7 +1160,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       notebookId: string;
       entryId: string;
     };
-    await assertNotebookAccess(user, orgId, notebookId);
+    await assertNotebookWritable(user, orgId, notebookId);
     const body = request.body as Partial<EntryMetadataV5>;
     const ref = db().doc(entryPath(orgId, notebookId, entryId));
     const snap = await ref.get();
@@ -1191,7 +1262,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       notebookId: string;
       entryId: string;
     };
-    await assertNotebookAccess(user, orgId, notebookId);
+    await assertNotebookWritable(user, orgId, notebookId);
     const ref = db().doc(entryPath(orgId, notebookId, entryId));
     const snap = await ref.get();
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
@@ -1218,7 +1289,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       notebookId: string;
       entryId: string;
     };
-    await assertNotebookAccess(user, orgId, notebookId);
+    await assertNotebookWritable(user, orgId, notebookId);
     const ref = db().doc(entryPath(orgId, notebookId, entryId));
     const snap = await ref.get();
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
@@ -1248,7 +1319,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
         notebookId: string;
         entryId: string;
       };
-      await assertNotebookAccess(user, orgId, notebookId);
+      await assertNotebookWritable(user, orgId, notebookId);
       const ref = db().doc(entryPath(orgId, notebookId, entryId));
       const snap = await ref.get();
       if (!snap.exists) return reply.code(404).send({ error: "not found" });
@@ -1282,7 +1353,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       notebookId: string;
       entryId: string;
     };
-    await assertNotebookAccess(user, orgId, notebookId);
+    await assertNotebookWritable(user, orgId, notebookId);
     const ref = db().doc(entryPath(orgId, notebookId, entryId));
     const snap = await ref.get();
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
@@ -1299,7 +1370,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
   app.post("/orgs/:orgId/notebooks/:notebookId/assets", async (request, reply) => {
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
-    await assertNotebookAccess(user, orgId, notebookId);
+    await assertNotebookWritable(user, orgId, notebookId);
     const body = request.body as {
       contentType?: string;
       byteSize?: number;
@@ -1330,7 +1401,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       notebookId: string;
       assetId: string;
     };
-    await assertNotebookAccess(user, orgId, notebookId);
+    await assertNotebookWritable(user, orgId, notebookId);
     const ref = db().doc(assetPath(orgId, notebookId, assetId));
     const snap = await ref.get();
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
@@ -1389,7 +1460,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       notebookId: string;
       assetId: string;
     };
-    await assertNotebookAccess(user, orgId, notebookId);
+    await assertNotebookWritable(user, orgId, notebookId);
     const ref = db().doc(assetPath(orgId, notebookId, assetId));
     const snap = await ref.get();
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
@@ -1457,7 +1528,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
   app.post("/orgs/:orgId/notebooks/:notebookId/jobs", async (request, reply) => {
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
-    await assertNotebookAccess(user, orgId, notebookId);
+    await assertNotebookWritable(user, orgId, notebookId);
 
     const body = (request.body || {}) as {
       type?: string;
@@ -1525,7 +1596,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
   app.post("/orgs/:orgId/notebooks/:notebookId/compile", async (request, reply) => {
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
-    await assertNotebookAccess(user, orgId, notebookId);
+    await assertNotebookWritable(user, orgId, notebookId);
 
     const result = await enqueueNotebookJob({
       orgId,

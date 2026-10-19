@@ -20,8 +20,16 @@ const allowBusyTex =
   process.env.NEXT_PUBLIC_ALLOW_BUSYTEX_COMPILE === "true";
 
 export function CloudNotebookCompiler() {
-  const { orgId, notebookId, entries, notebookSummary, refresh, setError, setNotebookSummary } =
-    useNotebookWorkspace();
+  const {
+    orgId,
+    notebookId,
+    entries,
+    notebookSummary,
+    refresh,
+    setError,
+    setNotebookSummary,
+    isArchived,
+  } = useNotebookWorkspace();
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfProbeDone, setPdfProbeDone] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -146,7 +154,7 @@ export function CloudNotebookCompiler() {
   }
 
   async function runCompile() {
-    if (busy) return;
+    if (busy || isArchived) return;
     setBusy(true);
     setLog(null);
     setStatus("Starting…");
@@ -185,6 +193,11 @@ export function CloudNotebookCompiler() {
         <div className="min-w-0">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <h1 className="text-nb-title font-bold tracking-tight text-nb-on-surface">Compile</h1>
+            {isArchived && (
+              <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                (Read-only)
+              </span>
+            )}
             {notebookSummary?.lastCompiled && (
               <p className="text-nb-caption text-nb-on-surface-variant">
                 Last {new Date(notebookSummary.lastCompiled).toLocaleString()}
@@ -192,8 +205,9 @@ export function CloudNotebookCompiler() {
             )}
           </div>
           <p className="mt-0.5 hidden text-nb-caption text-nb-on-surface-variant sm:block">
-            Server XeLaTeX job · calendar entry order
-            {allowBusyTex ? " · BusyTeX escape hatch enabled" : ""}
+            {isArchived
+              ? "Archived notebook · Compilation is disabled for read-only notebooks."
+              : `Server XeLaTeX job · calendar entry order${allowBusyTex ? " · BusyTeX escape hatch enabled" : ""}`}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -201,7 +215,8 @@ export function CloudNotebookCompiler() {
             variant="primary"
             size="sm"
             className="min-h-9 flex-1 sm:flex-none"
-            disabled={busy}
+            disabled={busy || isArchived}
+            title={isArchived ? "Archived notebooks cannot be compiled" : undefined}
             onClick={() => void runCompile()}
           >
             {busy ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
@@ -273,9 +288,15 @@ export function CloudNotebookCompiler() {
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center text-nb-caption text-nb-on-surface-variant">
             <p>No compiled PDF yet.</p>
-            <Button size="sm" variant="primary" disabled={busy} onClick={() => void runCompile()}>
-              Compile now
-            </Button>
+            {isArchived ? (
+              <p className="text-xs text-nb-on-surface-variant/70">
+                This notebook is archived. Unarchive it to compile.
+              </p>
+            ) : (
+              <Button size="sm" variant="primary" disabled={busy} onClick={() => void runCompile()}>
+                Compile now
+              </Button>
+            )}
           </div>
         )}
       </div>

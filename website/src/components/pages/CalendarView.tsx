@@ -140,12 +140,23 @@ interface CardProps {
   onOpen: () => void;
   onHover: (el: HTMLElement | null) => void;
   onContextMenu?: (e: ReactMouseEvent) => void;
+  disabled?: boolean;
 }
 
-function SortableCard({ id, title, color, PhaseIcon, onOpen, onHover, onContextMenu }: CardProps) {
+function SortableCard({
+  id,
+  title,
+  color,
+  PhaseIcon,
+  onOpen,
+  onHover,
+  onContextMenu,
+  disabled = false,
+}: CardProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id,
     data: { type: "entry" },
+    disabled,
   });
   const pointerStart = React.useRef<{ x: number; y: number } | null>(null);
   const style = {
@@ -157,13 +168,13 @@ function SortableCard({ id, title, color, PhaseIcon, onOpen, onHover, onContextM
       ref={setNodeRef}
       type="button"
       style={style}
-      {...attributes}
-      {...listeners}
+      {...(disabled ? {} : attributes)}
+      {...(disabled ? {} : listeners)}
       onPointerDown={(e) => {
         // Only left-click starts drag / open tracking (right-click is context menu).
         if (e.button !== 0) return;
         pointerStart.current = { x: e.clientX, y: e.clientY };
-        listeners?.onPointerDown?.(e);
+        if (!disabled) listeners?.onPointerDown?.(e);
       }}
       onPointerUp={(e) => {
         const start = pointerStart.current;
@@ -181,7 +192,7 @@ function SortableCard({ id, title, color, PhaseIcon, onOpen, onHover, onContextM
         if (!isDragging) onHover(e.currentTarget);
       }}
       onMouseLeave={() => onHover(null)}
-      className="nb-cal-card touch-none"
+      className={`nb-cal-card touch-none ${disabled ? "cursor-pointer" : ""}`}
       data-cal-entry={id}
     >
       {PhaseIcon ? <PhaseIcon size={12} className="nb-cal-card-icon shrink-0" style={{ color }} /> : null}
@@ -201,6 +212,7 @@ function DayColumn({
   onOpen,
   onHover,
   onEntryContextMenu,
+  disabled = false,
 }: {
   dateKey: string;
   label: string;
@@ -212,13 +224,18 @@ function DayColumn({
   onOpen: (id: string) => void;
   onHover: (id: string | null, el: HTMLElement | null) => void;
   onEntryContextMenu?: (e: ReactMouseEvent, id: string) => void;
+  disabled?: boolean;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `day:${dateKey}`, data: { date: dateKey, type: "day" } });
+  const { setNodeRef, isOver } = useDroppable({
+    id: `day:${dateKey}`,
+    data: { date: dateKey, type: "day" },
+    disabled,
+  });
   return (
     <div
       ref={setNodeRef}
       data-cal-day={dateKey}
-      className={`nb-cal-day ${isToday ? "is-today" : ""} ${isMuted ? "is-muted" : ""} ${isOver ? "is-over" : ""}`}
+      className={`nb-cal-day ${isToday ? "is-today" : ""} ${isMuted ? "is-muted" : ""} ${!disabled && isOver ? "is-over" : ""}`}
     >
       <div className="nb-cal-day-label">
         {weekday ? <span className="nb-cal-dow">{weekday} </span> : null}
@@ -235,6 +252,7 @@ function DayColumn({
             onOpen={() => onOpen(id)}
             onHover={(el) => onHover(id, el)}
             onContextMenu={(e) => onEntryContextMenu?.(e, id)}
+            disabled={disabled}
           />
         ))}
       </div>
@@ -247,18 +265,24 @@ function CalNavButton({
   label,
   onClick,
   children,
+  disabled = false,
 }: {
   navId: string;
   label: string;
   onClick: () => void;
   children: React.ReactNode;
+  disabled?: boolean;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: navId, data: { type: "nav" } });
+  const { setNodeRef, isOver } = useDroppable({
+    id: navId,
+    data: { type: "nav" },
+    disabled,
+  });
   return (
     <button
       ref={setNodeRef}
       type="button"
-      className={`nb-cal-nav ${isOver ? "is-drop" : ""}`}
+      className={`nb-cal-nav ${!disabled && isOver ? "is-drop" : ""}`}
       onClick={onClick}
       aria-label={label}
       title={label}
@@ -459,6 +483,7 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
     refresh,
     setError,
     setEntries,
+    isArchived,
   } = useNotebookWorkspace();
   const router = useRouter();
   const basePath = `/orgs/${orgId}/notebooks/${notebookId}`;
@@ -600,6 +625,7 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
   };
 
   const handleDragOver = (event: DragOverEvent) => {
+    if (isArchived) return;
     const overId = event.over?.id != null ? String(event.over.id) : "";
     if (overId !== "nav:prev" && overId !== "nav:next") {
       clearNavTimer();
@@ -634,6 +660,7 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
+    if (isArchived) return;
     const movedId = String(event.active.id);
     clearNavTimer();
     setActiveId(null);
@@ -658,16 +685,18 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
 
   const moveEntryToDate = useCallback(
     async (id: string, nextDate: string) => {
+      if (isArchived) return;
       const destKey = nextDate.trim() ? nextDate.trim() : UNDATED;
       const destIds = [...(byDate[destKey] || [])];
       const targetDate = destKey === UNDATED ? "" : destKey;
       await reorderCalendarEntry(id, targetDate, destIds, destIds.length);
     },
-    [byDate, reorderCalendarEntry]
+    [byDate, reorderCalendarEntry, isArchived]
   );
 
   const trashEntry = useCallback(
     (id: string, title: string) => {
+      if (isArchived) return;
       const deletedAt = new Date().toISOString();
       setEntries?.((prev) => {
         if (!prev[id]) return prev;
@@ -694,7 +723,7 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
           refresh();
         });
     },
-    [orgId, notebookId, refresh, setEntries, setError, router, basePath]
+    [orgId, notebookId, refresh, setEntries, setError, router, basePath, isArchived]
   );
 
   const entryMenuItems = useCallback(
@@ -702,6 +731,15 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
       const entry = metadata.entries[id];
       const title = entry?.title || cards[id]?.title || "Untitled";
       const hasDate = Boolean(entry?.date?.trim());
+      if (isArchived) {
+        return [
+          {
+            id: "open",
+            label: "Open",
+            onSelect: () => navigateTo({ entry: id, resource: null }, "/workspace/editor"),
+          },
+        ];
+      }
       return [
         {
           id: "open",
@@ -738,7 +776,7 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
         },
       ];
     },
-    [metadata.entries, cards, moveEntryToDate, navigateTo]
+    [metadata.entries, cards, moveEntryToDate, navigateTo, isArchived]
   );
 
   const handleEntryContextMenu = (e: ReactMouseEvent, id: string) => {
@@ -771,6 +809,7 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
         onOpen={openEntry}
         onHover={handleHover}
         onEntryContextMenu={handleEntryContextMenu}
+        disabled={isArchived}
       />
     );
   };
@@ -785,20 +824,26 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
             element instanceof HTMLElement && element.classList.contains("nb-cal-day-list"),
         }}
         onDragStart={(e) => {
+          if (isArchived) return;
           setActiveId(String(e.active.id));
           setHover(null);
           setPickerOpen(false);
         }}
-        onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
+        onDragOver={isArchived ? undefined : handleDragOver}
+        onDragEnd={isArchived ? undefined : handleDragEnd}
       >
       <header className="nb-cal-header">
         <div className="flex items-center gap-3">
           <CalendarDays size={20} className="text-nb-primary" />
           <h1 className="text-lg font-bold tracking-tight text-nb-on-surface">Calendar</h1>
+          {isArchived && (
+            <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+              (Read-only)
+            </span>
+          )}
         </div>
         <div className="nb-cal-header-controls">
-          <CalNavButton navId="nav:prev" label="Previous" onClick={() => shift(-1)}>
+          <CalNavButton navId="nav:prev" label="Previous" onClick={() => shift(-1)} disabled={isArchived}>
             <ChevronLeft size={16} />
           </CalNavButton>
           <div className="nb-cal-picker-wrap">
@@ -846,7 +891,7 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
               </>
             )}
           </div>
-          <CalNavButton navId="nav:next" label="Next" onClick={() => shift(1)}>
+          <CalNavButton navId="nav:next" label="Next" onClick={() => shift(1)} disabled={isArchived}>
             <ChevronRight size={16} />
           </CalNavButton>
           <button type="button" className="nb-cal-today" onClick={() => { commitView(mode, new Date()); setPickerOpen(false); }}>
@@ -886,6 +931,7 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
               onOpen={openEntry}
               onHover={handleHover}
               onEntryContextMenu={handleEntryContextMenu}
+              disabled={isArchived}
             />
           </div>
         )}

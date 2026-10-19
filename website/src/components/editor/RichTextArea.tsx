@@ -88,6 +88,7 @@ interface RichTextAreaProps {
   /** When set, TipTap syncs via Yjs (Hocuspocus) instead of local content/onChange. */
   collaborationDoc?: YDoc;
   collaborationField?: string;
+  editable?: boolean;
 }
 
 const RichTextArea = ({
@@ -100,6 +101,7 @@ const RichTextArea = ({
   entryId,
   collaborationDoc,
   collaborationField = "default",
+  editable = true,
 }: RichTextAreaProps) => {
   const { metadata } = useCloudWorkspace();
   const dbName = "notebook-cloud";
@@ -517,6 +519,7 @@ const RichTextArea = ({
 
   const editor = useEditor({
     immediatelyRender: false,
+    editable,
     extensions,
     ...(isCollab ? {} : { content: parseContent(content) }),
     onCreate: () => {
@@ -538,8 +541,12 @@ const RichTextArea = ({
     editorProps: {
       attributes: {
         class: isCollab
-          ? "focus:outline-none min-h-[320px] h-full max-w-none p-2 cursor-text text-neutral-900"
-          : "focus:outline-none min-h-[800px] h-full max-w-5xl mx-auto p-4 lg:p-6 cursor-text",
+          ? `focus:outline-none min-h-[320px] h-full max-w-none p-2 text-neutral-900 ${
+              editable ? "cursor-text" : "cursor-default"
+            }`
+          : `focus:outline-none min-h-[800px] h-full max-w-5xl mx-auto p-4 lg:p-6 ${
+              editable ? "cursor-text" : "cursor-default"
+            }`,
       },
       handleDOMEvents: {
         mousedown: (view, event) => {
@@ -655,6 +662,12 @@ const RichTextArea = ({
       onEditorInit(editor);
     }
   }, [editor, onEditorInit]);
+
+  useEffect(() => {
+    if (editor && !editor.isDestroyed && editor.isEditable !== editable) {
+      editor.setEditable(editable);
+    }
+  }, [editor, editable]);
 
   // Trigger a re-validation of links when metadata changes
   useEffect(() => {

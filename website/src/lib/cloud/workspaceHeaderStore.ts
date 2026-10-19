@@ -23,6 +23,7 @@ export type WorkspaceHeaderState = {
   notebookId: string;
   orgName: string;
   notebookName: string;
+  isArchived?: boolean;
   menuItems: WorkspaceHeaderMenuItem[];
 } | null;
 

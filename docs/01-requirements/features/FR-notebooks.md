@@ -20,6 +20,12 @@ Notebooks live under an org. **Settings** controls branding, phases, logo, and a
 - Notebook chrome **Share** dialog: entire org vs restricted; search/add org people and teams
 - `/…/members` — **Contributors**: name/role/photo/`order` credits (alias `/contributors`); roster rows support right-click (Edit, photo, Remove)
 - Section nav (Entries / Calendar / Compile / Contributors / Settings): **slim strip** with icons under AppChrome on ≥ `md`; **bottom tab bar** with icons on phone (&lt; `md`) — see [mobile-responsive](../plans/mobile-responsive.md). Notebook home shows recent entries (phase glyph + color); section shortcuts live in the strip/tabs only.
+- **Archiving & Read-Only**: Admins/owners can archive a notebook from Settings or the org notebook menu. When archived:
+  - An amber banner appears in the shell header and breadcrumbs.
+  - All mutations (creating/editing/reordering/deleting entries, folders, contributors, assets, rubrics, past grades, running judge or compile jobs) are blocked backend-wide (403) and disabled in UI.
+  - Calendar drag & drop and mutating context actions are disabled.
+  - Viewing, full-text search, export (ZIP), existing compiled PDF download, and browsing grades/rubrics remain fully accessible.
+  - Admins/owners can unarchive at any time to restore write access.
 
 ## Acceptance criteria
 
@@ -29,10 +35,12 @@ Notebooks live under an org. **Settings** controls branding, phases, logo, and a
 - [ ] UI copy distinguishes Org people vs Notebook contributors
 - [x] Share / Settings restricted ACL uses search + removable pills (not checkbox lists)
 - [x] Notebook section destinations reachable via slim strip (desktop) or bottom tabs (phone)
+- [x] Notebook archiving locks notebook into read-only mode, preserves export/compile, and supports unarchiving by admins/owners
 
 ## Data and APIs
 
-- `NotebookSummaryV5`: folders, phases, access, `logoAssetId`, `lastCompiled`
+- `NotebookSummaryV5`: folders, phases, access, `logoAssetId`, `lastCompiled`, `archivedAt`
+- `POST /orgs/:orgId/notebooks/:notebookId/archive` and `.../unarchive`
 - `notebooks/{id}/members/{memberId}` contributors roster
 - Folder helpers: `POST|PATCH|DELETE …/folders`
 

@@ -28,6 +28,8 @@ export default function OrgNotebooksPage() {
   const [shareNb, setShareNb] = useState<NotebookSummary | null>(null);
   const [renameNb, setRenameNb] = useState<{ id: string; name: string } | null>(null);
   const [deleteNb, setDeleteNb] = useState<{ id: string; name: string } | null>(null);
+  const [archiveNb, setArchiveNb] = useState<NotebookSummary | null>(null);
+  const [unarchiveNb, setUnarchiveNb] = useState<NotebookSummary | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
 
   function notebookMenuItems(nb: NotebookSummary): MenuItem[] {
@@ -50,6 +52,17 @@ export default function OrgNotebooksPage() {
               label: "Settings",
               icon: <Settings size={14} />,
               onSelect: () => router.push(`/orgs/${orgId}/notebooks/${nb.id}/setup`),
+            },
+            {
+              id: "archive",
+              label: nb.archivedAt ? "Unarchive" : "Archive",
+              onSelect: () => {
+                if (nb.archivedAt) {
+                  setUnarchiveNb(nb);
+                } else {
+                  setArchiveNb(nb);
+                }
+              },
             },
             { id: "sep", separator: true },
             {
@@ -121,9 +134,16 @@ export default function OrgNotebooksPage() {
                 <BookOpen size={22} />
               </div>
               <div className="min-w-0 flex-1">
-                <h3 className="truncate text-sm font-bold text-nb-on-surface">
-                  {nb.title || nb.name}
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="truncate text-sm font-bold text-nb-on-surface">
+                    {nb.title || nb.name}
+                  </h3>
+                  {nb.archivedAt && (
+                    <span className="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                      Archived
+                    </span>
+                  )}
+                </div>
                 <p className="mt-0.5 text-nb-caption text-nb-on-surface-variant">
                   {nb.subtitle || "Open notebook"}
                 </p>
@@ -206,6 +226,43 @@ export default function OrgNotebooksPage() {
           if (!id) return;
           void cloudApi
             .deleteNotebook(orgId, id)
+            .then(refresh)
+            .catch((err) => setError((err as Error).message));
+        }}
+      />
+
+      <ConfirmationDialog
+        isOpen={Boolean(archiveNb)}
+        title="Archive Notebook?"
+        message={`Archive “${archiveNb?.name}”? It will become read-only and no further entries or edits will be permitted until it is unarchived.`}
+        confirmLabel="Archive notebook"
+        confirmText={archiveNb?.name}
+        variant="warning"
+        onCancel={() => setArchiveNb(null)}
+        onConfirm={() => {
+          const id = archiveNb?.id;
+          setArchiveNb(null);
+          if (!id) return;
+          void cloudApi
+            .archiveNotebook(orgId, id)
+            .then(refresh)
+            .catch((err) => setError((err as Error).message));
+        }}
+      />
+
+      <ConfirmationDialog
+        isOpen={Boolean(unarchiveNb)}
+        title="Unarchive Notebook?"
+        message={`Unarchive “${unarchiveNb?.name}”? Write access will be restored for members.`}
+        confirmLabel="Unarchive notebook"
+        variant="info"
+        onCancel={() => setUnarchiveNb(null)}
+        onConfirm={() => {
+          const id = unarchiveNb?.id;
+          setUnarchiveNb(null);
+          if (!id) return;
+          void cloudApi
+            .unarchiveNotebook(orgId, id)
             .then(refresh)
             .catch((err) => setError((err as Error).message));
         }}

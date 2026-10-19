@@ -12,6 +12,7 @@ type Props = {
   basePath: string;
   onOpenGrade: (id: string) => void;
   onNewRubric: () => void;
+  isArchived?: boolean;
 };
 
 function formatWhen(iso?: string) {
@@ -34,6 +35,7 @@ export function JudgeHomeView({
   basePath,
   onOpenGrade,
   onNewRubric,
+  isArchived,
 }: Props) {
   const completed = grades.filter((g) => g.status === "completed");
   const latest = completed[0] || null;
@@ -42,11 +44,13 @@ export function JudgeHomeView({
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
         <p className="text-nb-body text-nb-on-surface-variant">
-          Create a rubric to get started.
+          {isArchived ? "No rubrics or grades in this notebook." : "Create a rubric to get started."}
         </p>
-        <Button variant="primary" size="sm" onClick={onNewRubric}>
-          <Plus size={14} /> New rubric
-        </Button>
+        {!isArchived && (
+          <Button variant="primary" size="sm" onClick={onNewRubric}>
+            <Plus size={14} /> New rubric
+          </Button>
+        )}
       </div>
     );
   }
@@ -60,10 +64,14 @@ export function JudgeHomeView({
         </div>
         <p className="text-nb-body text-nb-on-surface-variant">
           {hasRubrics
-            ? "No completed grades yet. Select a ready rubric and run judge to see scores here."
-            : "Create a rubric, then run judge to see scores here."}
+            ? (isArchived
+                ? "No completed grades in this notebook."
+                : "No completed grades yet. Select a ready rubric and run judge to see scores here.")
+            : (isArchived
+                ? "No completed grades in this notebook."
+                : "Create a rubric, then run judge to see scores here.")}
         </p>
-        {!hasRubrics && (
+        {!hasRubrics && !isArchived && (
           <Button variant="primary" size="sm" className="self-start" onClick={onNewRubric}>
             <Plus size={14} /> New rubric
           </Button>

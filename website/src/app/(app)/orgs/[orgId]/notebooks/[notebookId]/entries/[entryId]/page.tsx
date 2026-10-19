@@ -62,6 +62,7 @@ export default function EntryPage() {
     notebookId,
     entries,
     notebookSummary,
+    isArchived,
     initialLoaded,
     notebookUnavailable,
     refresh,
@@ -382,8 +383,11 @@ export default function EntryPage() {
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <input
               ref={titleInputRef}
-              className="min-w-0 flex-1 border-0 bg-transparent text-xl font-bold tracking-tight text-nb-on-surface outline-none placeholder:text-nb-on-surface-variant/40 md:text-2xl"
+              className={`min-w-0 flex-1 border-0 bg-transparent text-xl font-bold tracking-tight text-nb-on-surface outline-none placeholder:text-nb-on-surface-variant/40 md:text-2xl ${
+                isArchived ? "cursor-default select-text" : ""
+              }`}
               value={titleDraft}
+              disabled={isArchived}
               onChange={(e) => {
                 const next = e.target.value;
                 setTitleDraft(next);
@@ -402,34 +406,36 @@ export default function EntryPage() {
               }}
               placeholder="Untitled entry"
             />
-            <GenerateButton
-              label="Generate entry title"
-              run={async () => {
-                let body = "";
-                try {
-                  const doc = (await cloudApi.getEntryContent(orgId, notebookId, entryId)) as {
-                    content?: Array<{ content?: Array<{ text?: string }> }>;
-                  };
-                  body = JSON.stringify(doc).slice(0, 4000);
-                } catch {
-                  body = "";
-                }
-                const phaseName = phases.find(([id]) => id === meta?.phase)?.[1]?.name;
-                return generateEntryTitle({
-                  title: titleDraft,
-                  body,
-                  date: meta?.date,
-                  authors: authorsDraft,
-                  phase: phaseName,
-                });
-              }}
-              onResult={(next) => {
-                const t = next.trim();
-                if (!t) return;
-                setTitleDraft(t);
-                patchMeta({ title: t });
-              }}
-            />
+            {!isArchived && (
+              <GenerateButton
+                label="Generate entry title"
+                run={async () => {
+                  let body = "";
+                  try {
+                    const doc = (await cloudApi.getEntryContent(orgId, notebookId, entryId)) as {
+                      content?: Array<{ content?: Array<{ text?: string }> }>;
+                    };
+                    body = JSON.stringify(doc).slice(0, 4000);
+                  } catch {
+                    body = "";
+                  }
+                  const phaseName = phases.find(([id]) => id === meta?.phase)?.[1]?.name;
+                  return generateEntryTitle({
+                    title: titleDraft,
+                    body,
+                    date: meta?.date,
+                    authors: authorsDraft,
+                    phase: phaseName,
+                  });
+                }}
+                onResult={(next) => {
+                  const t = next.trim();
+                  if (!t) return;
+                  setTitleDraft(t);
+                  patchMeta({ title: t });
+                }}
+              />
+            )}
           </div>
           {meta?.isTemplate && <Badge tone="tertiary">Template</Badge>}
           {meta?.isValid === false && (meta.validationErrors?.length ?? 0) > 0 && (
@@ -455,44 +461,46 @@ export default function EntryPage() {
           >
             <ChevronDown size={16} />
           </button>
-          <DropdownMenu
-            items={[
-              {
-                id: "rename",
-                label: "Rename",
-                onSelect: () =>
-                  showPrompt("Rename entry", title, (next) => {
-                    setTitleDraft(next);
-                    patchMeta({ title: next });
-                  }),
-              },
-              {
-                id: "template",
-                label: meta?.isTemplate ? "Unset template" : "Mark as template",
-                onSelect: () => patchMeta({ isTemplate: !meta?.isTemplate }),
-              },
-              {
-                id: "delete",
-                label: "Delete",
-                danger: true,
-                onSelect: () =>
-                  showConfirm(
-                    "Delete entry?",
-                    `Delete "${title}"? This cannot be undone.`,
-                    () => {
-                      void cloudApi
-                        .deleteEntry(orgId, notebookId, entryId)
-                        .then(() => {
-                          refresh();
-                          router.push(basePath);
-                        })
-                        .catch((err) => setError((err as Error).message));
-                    },
-                    "danger"
-                  ),
-              },
-            ]}
-          />
+          {!isArchived && (
+            <DropdownMenu
+              items={[
+                {
+                  id: "rename",
+                  label: "Rename",
+                  onSelect: () =>
+                    showPrompt("Rename entry", title, (next) => {
+                      setTitleDraft(next);
+                      patchMeta({ title: next });
+                    }),
+                },
+                {
+                  id: "template",
+                  label: meta?.isTemplate ? "Unset template" : "Mark as template",
+                  onSelect: () => patchMeta({ isTemplate: !meta?.isTemplate }),
+                },
+                {
+                  id: "delete",
+                  label: "Delete",
+                  danger: true,
+                  onSelect: () =>
+                    showConfirm(
+                      "Delete entry?",
+                      `Delete "${title}"? This cannot be undone.`,
+                      () => {
+                        void cloudApi
+                          .deleteEntry(orgId, notebookId, entryId)
+                          .then(() => {
+                            refresh();
+                            router.push(basePath);
+                          })
+                          .catch((err) => setError((err as Error).message));
+                      },
+                      "danger"
+                    ),
+                },
+              ]}
+            />
+          )}
         </div>
 
         <div
@@ -507,9 +515,9 @@ export default function EntryPage() {
               Date
               <input
                 type="date"
-                className="h-9 rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface px-2 text-nb-label text-nb-on-surface"
+                className="h-9 rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface px-2 text-nb-label text-nb-on-surface disabled:opacity-60 disabled:cursor-not-allowed"
                 value={meta?.date || ""}
-                disabled={savingMeta}
+                disabled={savingMeta || isArchived}
                 onChange={(e) => patchMeta({ date: e.target.value })}
               />
             </label>
@@ -518,7 +526,7 @@ export default function EntryPage() {
               <PhasePicker
                 phaseId={meta?.phase}
                 phases={phasesRecord}
-                disabled={savingMeta}
+                disabled={savingMeta || isArchived}
                 onChange={(phase) => patchMeta({ phase })}
               />
             </label>
@@ -532,6 +540,7 @@ export default function EntryPage() {
                 options={authorOptions}
                 placeholder="Add authors"
                 className="min-h-9 bg-nb-surface"
+                disabled={savingMeta || isArchived}
                 onChange={(authors) => {
                   setAuthorsDraft(authors);
                   patchMeta({ authors });

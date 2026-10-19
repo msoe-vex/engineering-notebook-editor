@@ -18,6 +18,7 @@ export default function NotebookTrashPage() {
     notebookId,
     entries,
     folders,
+    isArchived,
     refresh,
     setEntries,
     setError,
@@ -156,6 +157,12 @@ export default function NotebookTrashPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4 md:p-6">
+      {isArchived && (
+        <div className="rounded-nb-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs font-medium text-amber-900 dark:text-amber-200">
+          <strong>This notebook is archived.</strong> Trashed entries and rubrics cannot be restored or permanently deleted.
+        </div>
+      )}
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-nb-title font-semibold text-nb-on-surface">Trash</h1>
@@ -164,7 +171,7 @@ export default function NotebookTrashPage() {
             forever.
           </p>
         </div>
-        {totalCount > 0 && (
+        {totalCount > 0 && !isArchived && (
           <Button
             size="sm"
             variant="danger"
@@ -207,7 +214,7 @@ export default function NotebookTrashPage() {
                 <Button
                   size="sm"
                   variant="secondary"
-                  disabled={busy}
+                  disabled={busy || isArchived}
                   onClick={() => restoreOne(id)}
                 >
                   <RotateCcw size={14} /> Restore
@@ -216,7 +223,7 @@ export default function NotebookTrashPage() {
                   size="sm"
                   variant="secondary"
                   className="text-nb-danger"
-                  disabled={busy}
+                  disabled={busy || isArchived}
                   onClick={() => setPurgeId(id)}
                 >
                   Delete forever
@@ -249,7 +256,7 @@ export default function NotebookTrashPage() {
                 <Button
                   size="sm"
                   variant="secondary"
-                  disabled={busy}
+                  disabled={busy || isArchived}
                   onClick={() => restoreRubric(r.id)}
                 >
                   <RotateCcw size={14} /> Restore
@@ -258,7 +265,7 @@ export default function NotebookTrashPage() {
                   size="sm"
                   variant="secondary"
                   className="text-nb-danger"
-                  disabled={busy}
+                  disabled={busy || isArchived}
                   onClick={() => setPurgeRubricId(r.id)}
                 >
                   Delete forever

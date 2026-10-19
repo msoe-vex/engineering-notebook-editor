@@ -34,6 +34,7 @@ export type NotebookWorkspaceState = {
   initialLoaded: boolean;
   /** Notebook/org failed to load (missing or forbidden) — show empty state, not the editor. */
   notebookUnavailable: boolean;
+  isArchived?: boolean;
   folders: Record<string, { name: string; parentId: string | null; order: number }>;
   entries: Record<string, EntryMeta>;
   assets: AssetSummary[];

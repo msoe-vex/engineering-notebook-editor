@@ -14,7 +14,7 @@ import {
 } from "@engineering-notebook/shared";
 import { getFirestore } from "../db/firestore.js";
 import { omitUndefined } from "../db/sanitize.js";
-import { isServiceAdmin, requireNotebookAccess } from "../rbac.js";
+import { isServiceAdmin, requireNotebookAccess, assertNotebookNotArchived } from "../rbac.js";
 import { getUser } from "../http/authPlugin.js";
 import type { StoragePort } from "../storage/storagePort.js";
 import { createJobDispatch } from "../jobs/createJobDispatch.js";
@@ -40,6 +40,22 @@ async function assertNotebookAccess(
     throw err;
   }
   await requireNotebookAccess(user, orgId, snap.data() as NotebookSummaryV5);
+}
+
+async function assertNotebookWritable(
+  user: ReturnType<typeof getUser>,
+  orgId: string,
+  notebookId: string
+) {
+  const snap = await getFirestore().doc(notebookPath(orgId, notebookId)).get();
+  if (!snap.exists) {
+    const err = new Error("not found");
+    (err as Error & { statusCode: number }).statusCode = 404;
+    throw err;
+  }
+  const data = snap.data() as NotebookSummaryV5;
+  await requireNotebookAccess(user, orgId, data);
+  assertNotebookNotArchived(data);
 }
 
 function assertInternalSecret(
@@ -206,7 +222,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
   app.post("/orgs/:orgId/notebooks/:notebookId/rubrics", async (request, reply) => {
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
-    await assertNotebookAccess(user, orgId, notebookId);
+    await assertNotebookWritable(user, orgId, notebookId);
 
     const contentType = String(request.headers["content-type"] || "application/octet-stream")
       .split(";")[0]
@@ -267,7 +283,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
   app.post("/orgs/:orgId/notebooks/:notebookId/rubrics/custom", async (request, reply) => {
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
-    await assertNotebookAccess(user, orgId, notebookId);
+    await assertNotebookWritable(user, orgId, notebookId);
     const body = (request.body || {}) as { name?: string; matrix?: RubricMatrix };
     const id = randomUUID();
     const ts = nowIso();
@@ -299,7 +315,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
       notebookId: string;
       rubricId: string;
     };
-    await assertNotebookAccess(user, orgId, notebookId);
+    await assertNotebookWritable(user, orgId, notebookId);
     const ref = db().doc(rubricPath(orgId, notebookId, rubricId));
     const snap = await ref.get();
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
@@ -333,7 +349,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
         notebookId: string;
         rubricId: string;
       };
-      await assertNotebookAccess(user, orgId, notebookId);
+      await assertNotebookWritable(user, orgId, notebookId);
       const ref = db().doc(rubricPath(orgId, notebookId, rubricId));
       const snap = await ref.get();
       if (!snap.exists) return reply.code(404).send({ error: "not found" });
@@ -356,7 +372,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
         notebookId: string;
         rubricId: string;
       };
-      await assertNotebookAccess(user, orgId, notebookId);
+      await assertNotebookWritable(user, orgId, notebookId);
       const ref = db().doc(rubricPath(orgId, notebookId, rubricId));
       const snap = await ref.get();
       if (!snap.exists) return reply.code(404).send({ error: "not found" });
@@ -380,7 +396,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
         notebookId: string;
         rubricId: string;
       };
-      await assertNotebookAccess(user, orgId, notebookId);
+      await assertNotebookWritable(user, orgId, notebookId);
       const ref = db().doc(rubricPath(orgId, notebookId, rubricId));
       const snap = await ref.get();
       if (!snap.exists) return reply.code(404).send({ error: "not found" });
@@ -410,7 +426,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
         notebookId: string;
         rubricId: string;
       };
-      await assertNotebookAccess(user, orgId, notebookId);
+      await assertNotebookWritable(user, orgId, notebookId);
       const rubricSnap = await db().doc(rubricPath(orgId, notebookId, rubricId)).get();
       if (!rubricSnap.exists) return reply.code(404).send({ error: "rubric not found" });
       const rubric = rubricSnap.data() as NotebookRubric;
@@ -509,7 +525,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
         notebookId: string;
         judgmentId: string;
       };
-      await assertNotebookAccess(user, orgId, notebookId);
+      await assertNotebookWritable(user, orgId, notebookId);
       const ref = db().doc(judgmentPath(orgId, notebookId, judgmentId));
       const snap = await ref.get();
       if (!snap.exists) return reply.code(404).send({ error: "not found" });
@@ -522,7 +538,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
   app.delete("/orgs/:orgId/notebooks/:notebookId/judgments", async (request, reply) => {
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
-    await assertNotebookAccess(user, orgId, notebookId);
+    await assertNotebookWritable(user, orgId, notebookId);
     const snap = await db().collection(judgmentsCollection(orgId, notebookId)).get();
     const batchSize = 400;
     let deleted = 0;
@@ -551,7 +567,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
   app.post("/orgs/:orgId/notebooks/:notebookId/judge", async (request, reply) => {
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
-    await assertNotebookAccess(user, orgId, notebookId);
+    await assertNotebookWritable(user, orgId, notebookId);
 
     const body = (request.body || {}) as InferenceBody & { rubricId?: string };
     const rubricId = body.rubricId?.trim();

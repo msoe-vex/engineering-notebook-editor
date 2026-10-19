@@ -26,6 +26,7 @@ export default function NotebookSetupPage() {
     orgId,
     notebookId,
     notebookSummary,
+    isArchived,
     initialLoaded,
     canManage,
     refresh,
@@ -48,6 +49,8 @@ export default function NotebookSetupPage() {
   const [busy, setBusy] = useState(false);
   const router = useRouter();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  const [showUnarchiveConfirm, setShowUnarchiveConfirm] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -260,6 +263,12 @@ export default function NotebookSetupPage() {
         )}
       </div>
 
+      {isArchived && (
+        <div className="rounded-nb-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs font-medium text-amber-900 dark:text-amber-200">
+          <strong>This notebook is archived and read-only.</strong> Settings and access permissions cannot be modified while archived.
+        </div>
+      )}
+
       <section className="flex flex-col gap-4">
         <h2 className="text-nb-title font-semibold">Branding</h2>
         <div className="flex flex-wrap items-center gap-4">
@@ -275,7 +284,7 @@ export default function NotebookSetupPage() {
             <Button
               size="sm"
               variant="secondary"
-              disabled={busy}
+              disabled={busy || isArchived}
               onClick={() => logoInputRef.current?.click()}
             >
               Upload logo
@@ -284,7 +293,7 @@ export default function NotebookSetupPage() {
               <Button
                 size="sm"
                 variant="ghost"
-                disabled={busy}
+                disabled={busy || isArchived}
                 onClick={() => {
                   setLogoAssetId(undefined);
                   setLogoPreview(null);
@@ -306,20 +315,27 @@ export default function NotebookSetupPage() {
             />
           </div>
         </div>
-        <TextField label="Display title" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <TextField
+          label="Display title"
+          value={title}
+          disabled={isArchived}
+          onChange={(e) => setTitle(e.target.value)}
+        />
         <TextField
           label="Subtitle"
           value={subtitle}
+          disabled={isArchived}
           onChange={(e) => setSubtitle(e.target.value)}
         />
         <TextField
           label="Internal name"
           value={name}
+          disabled={isArchived}
           onChange={(e) => setName(e.target.value)}
         />
       </section>
 
-      <section>
+      <section className={isArchived ? "pointer-events-none opacity-60" : ""}>
         <NotebookPhasesEditor value={phases} onChange={setPhases} />
       </section>
 
@@ -343,6 +359,7 @@ export default function NotebookSetupPage() {
               <Button
                 size="sm"
                 variant={accessMode === "org" ? "primary" : "secondary"}
+                disabled={isArchived}
                 onClick={() => setAccessMode("org")}
               >
                 Entire organization
@@ -350,6 +367,7 @@ export default function NotebookSetupPage() {
               <Button
                 size="sm"
                 variant={accessMode === "restricted" ? "primary" : "secondary"}
+                disabled={isArchived}
                 onClick={() => setAccessMode("restricted")}
               >
                 Restricted
@@ -357,7 +375,7 @@ export default function NotebookSetupPage() {
             </div>
 
             {accessMode === "restricted" && (
-              <div className="rounded-nb-xl border border-nb-outline-variant/30 p-4">
+              <div className={`rounded-nb-xl border border-nb-outline-variant/30 p-4 ${isArchived ? "pointer-events-none opacity-60" : ""}`}>
                 <AccessAllowlistPicker
                   teams={teams}
                   people={people}
@@ -378,7 +396,7 @@ export default function NotebookSetupPage() {
       </section>
 
       <div className="flex items-center gap-3">
-        <Button variant="primary" disabled={busy || !isDirty} onClick={() => void save()}>
+        <Button variant="primary" disabled={busy || !isDirty || isArchived} onClick={() => void save()}>
           {busy ? "Saving…" : "Save settings"}
         </Button>
         {saved && !isDirty && (
@@ -387,6 +405,41 @@ export default function NotebookSetupPage() {
           </span>
         )}
       </div>
+
+      {canManage && (
+        <section className="flex flex-col gap-4 rounded-nb-xl border border-amber-500/30 bg-amber-500/5 p-5">
+          <div>
+            <h2 className="text-nb-title font-semibold text-amber-800 dark:text-amber-400">
+              {isArchived ? "Unarchive Notebook" : "Archive Notebook"}
+            </h2>
+            <p className="mt-1 text-nb-body text-nb-on-surface-variant">
+              {isArchived
+                ? "This notebook is currently archived and read-only. Unarchiving will restore edit, creation, and deletion permissions for members."
+                : "Archiving makes this notebook read-only. Members can still view, search, export, and compile entries, but cannot add, edit, or delete content. Admins can unarchive it at any time."}
+            </p>
+          </div>
+          <div>
+            {isArchived ? (
+              <Button
+                variant="primary"
+                disabled={busy}
+                onClick={() => setShowUnarchiveConfirm(true)}
+              >
+                Unarchive this notebook
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                disabled={busy}
+                onClick={() => setShowArchiveConfirm(true)}
+                className="border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10"
+              >
+                Archive this notebook
+              </Button>
+            )}
+          </div>
+        </section>
+      )}
 
       {canManage && (
         <section className="flex flex-col gap-4 rounded-nb-xl border border-nb-danger/30 bg-nb-danger/5 p-5">
@@ -409,6 +462,54 @@ export default function NotebookSetupPage() {
           </div>
         </section>
       )}
+
+      <ConfirmationDialog
+        isOpen={showArchiveConfirm}
+        title="Archive notebook?"
+        message={`Archiving "${notebookSummary.name}" makes it read-only. Members will not be able to modify entries or settings until it is unarchived.`}
+        variant="warning"
+        confirmText={notebookSummary.name}
+        confirmTextPlaceholder={notebookSummary.name}
+        onConfirm={async () => {
+          setShowArchiveConfirm(false);
+          setBusy(true);
+          try {
+            await cloudApi.archiveNotebook(orgId, notebookId);
+            showNotification("Notebook archived", "success");
+            refresh();
+          } catch (err) {
+            const message = (err as Error).message;
+            setError(message);
+            showNotification(message, "error");
+          } finally {
+            setBusy(false);
+          }
+        }}
+        onCancel={() => setShowArchiveConfirm(false)}
+      />
+
+      <ConfirmationDialog
+        isOpen={showUnarchiveConfirm}
+        title="Unarchive notebook?"
+        message={`Unarchiving "${notebookSummary.name}" will restore write access for members.`}
+        variant="info"
+        onConfirm={async () => {
+          setShowUnarchiveConfirm(false);
+          setBusy(true);
+          try {
+            await cloudApi.unarchiveNotebook(orgId, notebookId);
+            showNotification("Notebook unarchived", "success");
+            refresh();
+          } catch (err) {
+            const message = (err as Error).message;
+            setError(message);
+            showNotification(message, "error");
+          } finally {
+            setBusy(false);
+          }
+        }}
+        onCancel={() => setShowUnarchiveConfirm(false)}
+      />
 
       <ConfirmationDialog
         isOpen={showDeleteConfirm}

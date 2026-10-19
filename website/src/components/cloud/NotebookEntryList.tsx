@@ -464,6 +464,7 @@ function DraggableEntryRow({
   onOpenIntent,
   isOverEntry,
   wasDraggedRef,
+  disabled = false,
 }: {
   id: string;
   active: boolean;
@@ -481,14 +482,15 @@ function DraggableEntryRow({
   onOpenIntent?: (id: string) => void;
   isOverEntry?: boolean;
   wasDraggedRef?: MutableRefObject<boolean>;
+  disabled?: boolean;
 }) {
   const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
     id,
-    disabled: renaming,
+    disabled: renaming || disabled,
   });
   const { setNodeRef: setDropRef, isOver } = useDroppable({
     id,
-    disabled: renaming,
+    disabled: renaming || disabled,
   });
 
   const setCombinedRef = (node: HTMLElement | null) => {
@@ -513,8 +515,8 @@ function DraggableEntryRow({
       rowStyle={{
         opacity: isDragging ? 0.35 : 1,
       }}
-      dragAttributes={attributes}
-      dragListeners={listeners}
+      dragAttributes={disabled ? undefined : attributes}
+      dragListeners={disabled ? undefined : listeners}
       isDragging={isDragging}
       isOver={(isOverEntry ?? isOver) && !isDragging}
       onContextMenu={onContextMenu}
@@ -676,6 +678,7 @@ function DraggableAndDroppableFolderRow({
   onContextMenu,
   onPlainClick,
   isOverFolder,
+  disabled = false,
 }: {
   id: string;
   name: string;
@@ -692,15 +695,16 @@ function DraggableAndDroppableFolderRow({
   onContextMenu?: (e: ReactMouseEvent) => void;
   onPlainClick?: () => void;
   isOverFolder?: boolean;
+  disabled?: boolean;
 }) {
   const fullId = `folder:${id}`;
   const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
     id: fullId,
-    disabled: renaming,
+    disabled: renaming || disabled,
   });
   const { setNodeRef: setDropRef, isOver } = useDroppable({
     id: fullId,
-    disabled: renaming,
+    disabled: renaming || disabled,
   });
 
   const setCombinedRef = (node: HTMLElement | null) => {
@@ -725,8 +729,8 @@ function DraggableAndDroppableFolderRow({
       renaming={renaming}
       onRenameCommit={onRenameCommit}
       onRenameCancel={onRenameCancel}
-      dragAttributes={attributes}
-      dragListeners={listeners}
+      dragAttributes={disabled ? undefined : attributes}
+      dragListeners={disabled ? undefined : listeners}
       onContextMenu={onContextMenu}
       onPlainClick={onPlainClick}
       isOver={(isOverFolder ?? isOver) && !isDragging}
@@ -738,13 +742,16 @@ function EmptyFolderDropTarget({
   folderId,
   depth,
   isOver,
+  disabled = false,
 }: {
   folderId: string;
   depth: number;
   isOver: boolean;
+  disabled?: boolean;
 }) {
   const { setNodeRef } = useDroppable({
     id: `folder-empty:${folderId}`,
+    disabled,
   });
 
   return (
@@ -770,9 +777,18 @@ function EmptyFolderDropTarget({
   );
 }
 
-function RootDropTarget({ isOver, active }: { isOver: boolean; active?: boolean }) {
+function RootDropTarget({
+  isOver,
+  active,
+  disabled = false,
+}: {
+  isOver: boolean;
+  active?: boolean;
+  disabled?: boolean;
+}) {
   const { setNodeRef } = useDroppable({
     id: "root-drop-target",
+    disabled,
   });
 
   return (
@@ -902,6 +918,7 @@ export function NotebookEntryList({
     entries,
     folders,
     notebookSummary,
+    isArchived,
     refresh,
     setEntries,
     setFolders,
@@ -1514,6 +1531,7 @@ export function NotebookEntryList({
   }
 
   function getBulkMenuItems(): MenuItem[] {
+    if (isArchived) return [];
     return [
       {
         id: "bulk-label",
@@ -1540,6 +1558,15 @@ export function NotebookEntryList({
   }
 
   function getEntryMenuItems(id: string, e: EntryMeta): MenuItem[] {
+    if (isArchived) {
+      return [
+        {
+          id: "open",
+          label: "Open",
+          onSelect: () => router.push(`${basePath}/entries/${id}`),
+        },
+      ];
+    }
     return [
       {
         id: "open",
@@ -1595,6 +1622,7 @@ export function NotebookEntryList({
   }
 
   function getFolderMenuItems(fid: string): MenuItem[] {
+    if (isArchived) return [];
     return [
       {
         id: "new-here",
@@ -1625,6 +1653,7 @@ export function NotebookEntryList({
   }
 
   function handleFolderContextMenu(e: ReactMouseEvent, fid: string) {
+    if (isArchived) return;
     e.preventDefault();
     e.stopPropagation();
     setContextMenu({
@@ -1639,6 +1668,7 @@ export function NotebookEntryList({
     e.stopPropagation();
     const bulk =
       selectedIds.size > 1 && selectedIds.has(id) ? getBulkMenuItems() : getEntryMenuItems(id, entryMeta);
+    if (!bulk.length) return;
     setContextMenu({
       x: e.clientX,
       y: e.clientY,
@@ -1647,6 +1677,7 @@ export function NotebookEntryList({
   }
 
   function handleRootContextMenu(e: ReactMouseEvent) {
+    if (isArchived) return;
     // Only if right clicking on the empty background of the nav
     if (e.target !== e.currentTarget && !(e.target as HTMLElement).classList.contains("custom-scrollbar")) {
       return;
@@ -1731,6 +1762,7 @@ export function NotebookEntryList({
   const wasDraggedRef = useRef(false);
 
   function handleDragStart(event: DragStartEvent) {
+    if (isArchived) return;
     wasDraggedRef.current = true;
     setActiveDragId(String(event.active.id));
   }
@@ -1745,6 +1777,7 @@ export function NotebookEntryList({
   }
 
   function handleDragOver(event: DragOverEvent) {
+    if (isArchived) return;
     const { active, over } = event;
     if (!over) {
       setDragOverId(null);
@@ -1770,7 +1803,7 @@ export function NotebookEntryList({
       wasDraggedRef.current = false;
     }, 120);
 
-    if (!over) return;
+    if (isArchived || !over) return;
 
     const activeId = String(active.id);
     const overId = String(over.id);
@@ -1849,6 +1882,7 @@ export function NotebookEntryList({
             onOpenIntent={(entryId) => setOptimisticEntryId?.(entryId)}
             isOverEntry={dragOverId === id}
             wasDraggedRef={wasDraggedRef}
+            disabled={isArchived}
           />
         ))}
       </>
@@ -1883,15 +1917,16 @@ export function NotebookEntryList({
             count={count}
             depth={depth}
             onToggle={() => toggleFolder(fid)}
-            menu={folderMenu(fid)}
-            onContextMenu={(e) => handleFolderContextMenu(e, fid)}
+            menu={isArchived ? null : folderMenu(fid)}
+            onContextMenu={isArchived ? undefined : (e) => handleFolderContextMenu(e, fid)}
             onPlainClick={clearSelection}
             isOverFolder={isOver}
             renaming={renaming?.kind === "folder" && renaming.id === fid}
             onRenameCommit={(name) => commitRename({ kind: "folder", id: fid }, name)}
             onRenameCancel={() => setRenaming(null)}
-            onNewEntry={() => createEntry({ title: "Untitled entry", folderId: fid })}
-            onNewSubfolder={() => createFolderImmediate(fid, "New folder")}
+            onNewEntry={isArchived ? undefined : () => createEntry({ title: "Untitled entry", folderId: fid })}
+            onNewSubfolder={isArchived ? undefined : () => createFolderImmediate(fid, "New folder")}
+            disabled={isArchived}
           />
           {open && (
             <div className="relative">
@@ -1902,6 +1937,7 @@ export function NotebookEntryList({
                   folderId={fid}
                   depth={depth}
                   isOver={dragOverId === `folder-empty:${fid}`}
+                  disabled={isArchived}
                 />
               )}
             </div>
@@ -2181,58 +2217,62 @@ export function NotebookEntryList({
             </>
           ) : null}
         </span>
-        <DropdownMenu
-          align="right"
-          ariaLabel="New entry"
-          trigger={
-            <span className="inline-flex items-center gap-1 rounded-nb bg-nb-primary px-2 py-1 text-[11px] font-medium text-white hover:bg-nb-primary-dim">
-              <Plus size={12} /> New
-            </span>
-          }
-          items={[
-            {
-              id: "blank",
-              label: "Blank entry",
-              icon: <FileText size={14} />,
-              onSelect: () => createEntry({ title: "Untitled entry" }),
-            },
-            {
-              id: "blank-template",
-              label: "Blank template",
-              icon: <LayoutTemplate size={14} />,
-              onSelect: () =>
-                createEntry({ title: "Untitled template", isTemplate: true }),
-            },
-            ...templates.map(([tid, te]) => {
-              const cfg = te.phase ? phaseCfgMap[te.phase] : null;
-              const Icon = cfg?.icon || LayoutTemplate;
-              return {
-                id: `tpl-${tid}`,
-                label: te.title || "Untitled template",
-                icon: (
-                  <Icon
-                    size={14}
-                    style={cfg?.color ? { color: cfg.color } : undefined}
-                  />
-                ),
-                onSelect: () =>
-                  createEntry({
-                    title: te.title || "New Entry",
-                    isTemplate: false,
-                    fromId: tid,
-                  }),
-              };
-            }),
-          ]}
-        />
-        <IconButton
-          aria-label="New folder"
-          title="New folder"
-          className="h-7 w-7"
-          onClick={() => createFolderImmediate(null, "New folder")}
-        >
-          <FolderPlus size={14} />
-        </IconButton>
+        {!isArchived && (
+          <>
+            <DropdownMenu
+              align="right"
+              ariaLabel="New entry"
+              trigger={
+                <span className="inline-flex items-center gap-1 rounded-nb bg-nb-primary px-2 py-1 text-[11px] font-medium text-white hover:bg-nb-primary-dim">
+                  <Plus size={12} /> New
+                </span>
+              }
+              items={[
+                {
+                  id: "blank",
+                  label: "Blank entry",
+                  icon: <FileText size={14} />,
+                  onSelect: () => createEntry({ title: "Untitled entry" }),
+                },
+                {
+                  id: "blank-template",
+                  label: "Blank template",
+                  icon: <LayoutTemplate size={14} />,
+                  onSelect: () =>
+                    createEntry({ title: "Untitled template", isTemplate: true }),
+                },
+                ...templates.map(([tid, te]) => {
+                  const cfg = te.phase ? phaseCfgMap[te.phase] : null;
+                  const Icon = cfg?.icon || LayoutTemplate;
+                  return {
+                    id: `tpl-${tid}`,
+                    label: te.title || "Untitled template",
+                    icon: (
+                      <Icon
+                        size={14}
+                        style={cfg?.color ? { color: cfg.color } : undefined}
+                      />
+                    ),
+                    onSelect: () =>
+                      createEntry({
+                        title: te.title || "New Entry",
+                        isTemplate: false,
+                        fromId: tid,
+                      }),
+                  };
+                }),
+              ]}
+            />
+            <IconButton
+              aria-label="New folder"
+              title="New folder"
+              className="h-7 w-7"
+              onClick={() => createFolderImmediate(null, "New folder")}
+            >
+              <FolderPlus size={14} />
+            </IconButton>
+          </>
+        )}
       </div>
 
       <DndContext
@@ -2292,6 +2332,7 @@ export function NotebookEntryList({
           <RootDropTarget
             active={Boolean(activeDragId)}
             isOver={dragOverId === "root-drop-target"}
+            disabled={isArchived}
           />
         </nav>
 

@@ -96,4 +96,14 @@ export async function requireNotebookAccess(
   return role;
 }
 
+export function assertNotebookNotArchived(
+  notebook: { archivedAt?: string | null }
+): void {
+  if (notebook.archivedAt) {
+    const err = new Error("This notebook is archived and read-only");
+    (err as Error & { statusCode: number }).statusCode = 403;
+    throw err;
+  }
+}
+
 export type { PlatformRole };

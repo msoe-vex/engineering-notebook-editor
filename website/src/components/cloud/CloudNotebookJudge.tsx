@@ -47,7 +47,7 @@ function formatWhen(iso?: string) {
 export function CloudNotebookJudge() {
   const router = useRouter();
   const pathname = usePathname() || "";
-  const { orgId, notebookId, setError } = useNotebookWorkspace();
+  const { orgId, notebookId, setError, isArchived } = useNotebookWorkspace();
   const basePath = `/orgs/${orgId}/notebooks/${notebookId}`;
   const selection = useMemo(
     () => selectionFromJudgePath(pathname, basePath),
@@ -240,6 +240,7 @@ export function CloudNotebookJudge() {
   }
 
   async function runJudge(rubricIdOverride?: string) {
+    if (isArchived) return;
     const target =
       (rubricIdOverride && rubrics.find((r) => r.id === rubricIdOverride)) ||
       readyRubric ||
@@ -270,16 +271,19 @@ export function CloudNotebookJudge() {
   }
 
   function openNewRubric() {
+    if (isArchived) return;
     setEditingRubric(null);
     setEditorOpen(true);
   }
 
   function openEditRubric(r: RubricRecord) {
+    if (isArchived) return;
     setEditingRubric(r);
     setEditorOpen(true);
   }
 
   function trashRubric(id: string) {
+    if (isArchived) return;
     setBusy(true);
     void cloudApi
       .trashRubric(orgId, notebookId, id)
@@ -300,6 +304,7 @@ export function CloudNotebookJudge() {
   }
 
   function deleteGrade(id: string) {
+    if (isArchived) return;
     setBusy(true);
     void cloudApi
       .deleteJudgment(orgId, notebookId, id)
@@ -315,6 +320,7 @@ export function CloudNotebookJudge() {
   }
 
   function clearAllGrades() {
+    if (isArchived) return;
     setBusy(true);
     void cloudApi
       .clearJudgments(orgId, notebookId)
@@ -328,6 +334,15 @@ export function CloudNotebookJudge() {
   }
 
   function rubricMenuItems(r: RubricRecord): MenuItem[] {
+    if (isArchived) {
+      return [
+        {
+          id: "open",
+          label: "Open",
+          onSelect: () => navigate({ kind: "rubric", id: r.id }),
+        },
+      ];
+    }
     return [
       {
         id: "open",
@@ -363,6 +378,15 @@ export function CloudNotebookJudge() {
   }
 
   function gradeMenuItems(g: JudgmentRecord): MenuItem[] {
+    if (isArchived) {
+      return [
+        {
+          id: "open",
+          label: "Open grade",
+          onSelect: () => navigate({ kind: "grade", id: g.id }),
+        },
+      ];
+    }
     return [
       {
         id: "open",
@@ -398,6 +422,7 @@ export function CloudNotebookJudge() {
   }
 
   function onGradesHeaderContextMenu(e: ReactMouseEvent) {
+    if (isArchived) return;
     e.preventDefault();
     e.stopPropagation();
     setCtx({
@@ -419,9 +444,18 @@ export function CloudNotebookJudge() {
   return (
     <div className="flex h-full min-h-0 flex-col bg-nb-surface">
       <header className="shrink-0 border-b border-nb-outline-variant/25 px-3 py-2.5 md:px-4">
-        <h1 className="text-nb-title font-bold tracking-tight text-nb-on-surface">Judge</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-nb-title font-bold tracking-tight text-nb-on-surface">Judge</h1>
+          {isArchived && (
+            <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+              (Read-only)
+            </span>
+          )}
+        </div>
         <p className="mt-0.5 text-nb-caption text-nb-on-surface-variant">
-          Manage rubrics, then score the notebook — extract and judge are separate steps
+          {isArchived
+            ? "Rubrics and past grades are read-only while this notebook is archived."
+            : "Manage rubrics, then score the notebook — extract and judge are separate steps"}
         </p>
       </header>
 
@@ -465,14 +499,16 @@ export function CloudNotebookJudge() {
                 }`}
               />
             </button>
-            <IconButton
-              aria-label="New rubric"
-              title="New rubric"
-              disabled={busy}
-              onClick={openNewRubric}
-            >
-              <Plus size={16} />
-            </IconButton>
+            {!isArchived && (
+              <IconButton
+                aria-label="New rubric"
+                title="New rubric"
+                disabled={busy}
+                onClick={openNewRubric}
+              >
+                <Plus size={16} />
+              </IconButton>
+            )}
           </div>
           <div className="min-h-0 flex-1 overflow-auto px-1.5 py-1.5">
             {rubrics.length === 0 ? (
@@ -543,7 +579,7 @@ export function CloudNotebookJudge() {
                   }`}
                 />
               </button>
-              {grades.length > 0 && (
+              {grades.length > 0 && !isArchived && (
                 <button
                   type="button"
                   className="shrink-0 rounded px-1.5 py-1 text-[10px] font-medium text-nb-on-surface-variant hover:bg-nb-surface/80 hover:text-nb-error"
@@ -629,46 +665,48 @@ export function CloudNotebookJudge() {
                       : "Matrix not ready"}
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => openEditRubric(selectedRubric)}
-                  >
-                    <Pencil size={14} /> Edit
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={busy}
-                    className="text-nb-error hover:bg-nb-error/10"
-                    onClick={() =>
-                      setConfirm({
-                        kind: "trash-rubric",
-                        id: selectedRubric.id,
-                        name: selectedRubric.name || "Rubric",
-                      })
-                    }
-                  >
-                    <Trash2 size={14} /> Delete
-                  </Button>
-                  {readyRubric && (
+                {!isArchived && (
+                  <div className="flex flex-wrap gap-2">
                     <Button
-                      variant="primary"
+                      variant="secondary"
                       size="sm"
                       disabled={busy}
-                      onClick={() => void runJudge(selectedRubric.id)}
+                      onClick={() => openEditRubric(selectedRubric)}
                     >
-                      {busy ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : (
-                        <Play size={14} />
-                      )}
-                      {busy ? "Judging…" : "Run judge"}
+                      <Pencil size={14} /> Edit
                     </Button>
-                  )}
-                </div>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={busy}
+                      className="text-nb-error hover:bg-nb-error/10"
+                      onClick={() =>
+                        setConfirm({
+                          kind: "trash-rubric",
+                          id: selectedRubric.id,
+                          name: selectedRubric.name || "Rubric",
+                        })
+                      }
+                    >
+                      <Trash2 size={14} /> Delete
+                    </Button>
+                    {readyRubric && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => void runJudge(selectedRubric.id)}
+                      >
+                        {busy ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <Play size={14} />
+                        )}
+                        {busy ? "Judging…" : "Run judge"}
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
               {selectedRubric.error && (
                 <Alert variant="error">{selectedRubric.error}</Alert>
@@ -687,6 +725,7 @@ export function CloudNotebookJudge() {
               rubrics={rubrics}
               onOpenRubric={(id) => navigate({ kind: "rubric", id })}
               onNewRubric={openNewRubric}
+              isArchived={isArchived}
             />
           ) : (
             <JudgeHomeView
@@ -695,6 +734,7 @@ export function CloudNotebookJudge() {
               basePath={basePath}
               onOpenGrade={(id) => navigate({ kind: "grade", id })}
               onNewRubric={openNewRubric}
+              isArchived={isArchived}
             />
           )}
         </main>

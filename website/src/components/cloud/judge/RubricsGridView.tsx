@@ -8,18 +8,21 @@ type Props = {
   rubrics: RubricRecord[];
   onOpenRubric: (id: string) => void;
   onNewRubric: () => void;
+  isArchived?: boolean;
 };
 
-export function RubricsGridView({ rubrics, onOpenRubric, onNewRubric }: Props) {
+export function RubricsGridView({ rubrics, onOpenRubric, onNewRubric, isArchived }: Props) {
   if (rubrics.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
         <p className="text-nb-body text-nb-on-surface-variant">
-          Create a rubric to get started.
+          {isArchived ? "No rubrics in this notebook." : "Create a rubric to get started."}
         </p>
-        <Button variant="primary" size="sm" onClick={onNewRubric}>
-          <Plus size={14} /> New rubric
-        </Button>
+        {!isArchived && (
+          <Button variant="primary" size="sm" onClick={onNewRubric}>
+            <Plus size={14} /> New rubric
+          </Button>
+        )}
       </div>
     );
   }
@@ -33,9 +36,11 @@ export function RubricsGridView({ rubrics, onOpenRubric, onNewRubric }: Props) {
             {rubrics.length} {rubrics.length === 1 ? "rubric" : "rubrics"} for this notebook.
           </p>
         </div>
-        <Button variant="secondary" size="sm" onClick={onNewRubric}>
-          <Plus size={14} /> New rubric
-        </Button>
+        {!isArchived && (
+          <Button variant="secondary" size="sm" onClick={onNewRubric}>
+            <Plus size={14} /> New rubric
+          </Button>
+        )}
       </div>
 
       <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

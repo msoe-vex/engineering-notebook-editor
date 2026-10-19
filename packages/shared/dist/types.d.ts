@@ -149,6 +149,7 @@ export type NotebookSummaryV5 = {
     updatedAt: string;
     createdAt?: string;
     createdBy?: string;
+    archivedAt?: string | null;
 };
 export type AssetMetadata = {
     id: string;

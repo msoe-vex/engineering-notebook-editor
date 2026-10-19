@@ -110,6 +110,7 @@ export type NotebookSummary = {
   updatedAt?: string;
   createdAt?: string;
   createdBy?: string;
+  archivedAt?: string | null;
   orgId?: string;
 };
 
@@ -235,6 +236,14 @@ export const cloudApi = {
     }),
   deleteNotebook: (orgId: string, notebookId: string) =>
     coreFetch<{ ok: boolean }>(`/orgs/${orgId}/notebooks/${notebookId}`, { method: "DELETE" }),
+  archiveNotebook: (orgId: string, notebookId: string) =>
+    coreFetch<NotebookSummary>(`/orgs/${orgId}/notebooks/${notebookId}/archive`, {
+      method: "POST",
+    }),
+  unarchiveNotebook: (orgId: string, notebookId: string) =>
+    coreFetch<NotebookSummary>(`/orgs/${orgId}/notebooks/${notebookId}/unarchive`, {
+      method: "POST",
+    }),
 
   createFolder: (
     orgId: string,

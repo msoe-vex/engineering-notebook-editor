@@ -435,7 +435,7 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
               </span>
               <span className="hidden sm:inline">ENGen</span>
             </Link>
-            <div className="min-w-0 flex-1 overflow-hidden">
+            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
               <Breadcrumbs
                 className="flex-nowrap"
                 items={
@@ -444,6 +444,11 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
                     : crumbs
                 }
               />
+              {ws?.isArchived && (
+                <span className="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                  Archived
+                </span>
+              )}
             </div>
             {title && !ws && (
               <span className="hidden truncate text-sm text-nb-on-surface-variant lg:inline">
