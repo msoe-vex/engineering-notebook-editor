@@ -10,6 +10,7 @@ import {
   notebookMemberPath,
   notebookMembersCollection,
   orgPath,
+  userPath,
   invitePath,
   entriesCollection,
   entryPath,
@@ -253,6 +254,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       uid: user.uid,
       role: "owner" as const,
       email: user.email,
+      displayName: user.displayName,
       joinedAt: ts,
     }) as OrgMember;
     await db().doc(orgPath(id)).set(org);
@@ -430,17 +432,43 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const { orgId } = request.params as { orgId: string };
     await requireOrgMember(user, orgId);
     const snap = await db().collection(membersCollection(orgId)).get();
-    return snap.docs.map((d) => d.data());
+    const members = snap.docs.map((d) => d.data() as OrgMember);
+    const missingNames = members.filter((m) => !m.displayName);
+    if (missingNames.length > 0) {
+      await Promise.all(
+        missingNames.map(async (m) => {
+          try {
+            const uSnap = await db().doc(userPath(m.uid)).get();
+            if (uSnap.exists && uSnap.data()?.displayName) {
+              m.displayName = uSnap.data()!.displayName;
+            }
+          } catch {
+            // ignore
+          }
+        })
+      );
+    }
+    return members;
   });
+
+  async function countOrgOwners(orgId: string): Promise<number> {
+    const snap = await db()
+      .collection(membersCollection(orgId))
+      .where("role", "==", "owner")
+      .get();
+    return snap.size;
+  }
 
   app.post("/orgs/:orgId/members", async (request, reply) => {
     const user = getUser(request);
     const { orgId } = request.params as { orgId: string };
-    await requireOrgMember(user, orgId, "admin");
+    const callerRole = await requireOrgMember(user, orgId, "admin");
     const body = request.body as { uid?: string; email?: string; role?: OrgRole };
     if (!body.uid) return reply.code(400).send({ error: "uid required" });
     const role: OrgRole = body.role ?? "member";
-    if (role === "owner") return reply.code(400).send({ error: "cannot assign owner via this route" });
+    if (role === "owner" && callerRole !== "owner" && !isServiceAdmin(user)) {
+      return reply.code(403).send({ error: "only owners can assign owner role" });
+    }
     const member = omitUndefined({
       uid: body.uid,
       role,
@@ -454,30 +482,51 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
   app.patch("/orgs/:orgId/members/:uid", async (request, reply) => {
     const user = getUser(request);
     const { orgId, uid } = request.params as { orgId: string; uid: string };
-    await requireOrgMember(user, orgId, "admin");
+    const callerRole = await requireOrgMember(user, orgId, "admin");
     const body = request.body as { role?: OrgRole };
-    if (!body.role || body.role === "owner") {
+    if (!body.role || !["owner", "admin", "member"].includes(body.role)) {
       return reply.code(400).send({ error: "invalid role" });
+    }
+    if (body.role === "owner" && callerRole !== "owner" && !isServiceAdmin(user)) {
+      return reply.code(403).send({ error: "only owners can promote members to owner" });
     }
     const ref = db().doc(memberPath(orgId, uid));
     const snap = await ref.get();
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
-    if (snap.data()?.role === "owner") {
-      return reply.code(400).send({ error: "cannot demote owner" });
+    const targetMember = snap.data() as OrgMember;
+
+    if (targetMember.role === "owner" && body.role !== "owner") {
+      if (callerRole !== "owner" && !isServiceAdmin(user)) {
+        return reply.code(403).send({ error: "only owners can demote an owner" });
+      }
+      const numOwners = await countOrgOwners(orgId);
+      if (numOwners <= 1) {
+        return reply.code(400).send({ error: "cannot demote the last owner of an organization" });
+      }
     }
+
     await ref.update({ role: body.role });
-    return { ...(snap.data() as OrgMember), role: body.role };
+    return { ...targetMember, role: body.role };
   });
 
   app.delete("/orgs/:orgId/members/:uid", async (request, reply) => {
     const user = getUser(request);
     const { orgId, uid } = request.params as { orgId: string; uid: string };
-    await requireOrgMember(user, orgId, "admin");
+    const callerRole = await requireOrgMember(user, orgId, "admin");
     const snap = await db().doc(memberPath(orgId, uid)).get();
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
-    if (snap.data()?.role === "owner") {
-      return reply.code(400).send({ error: "cannot remove owner" });
+    const targetMember = snap.data() as OrgMember;
+
+    if (targetMember.role === "owner") {
+      if (callerRole !== "owner" && !isServiceAdmin(user)) {
+        return reply.code(403).send({ error: "only owners can remove an owner" });
+      }
+      const numOwners = await countOrgOwners(orgId);
+      if (numOwners <= 1) {
+        return reply.code(400).send({ error: "cannot remove the last owner of an organization" });
+      }
     }
+
     await db().doc(memberPath(orgId, uid)).delete();
     return { ok: true };
   });
@@ -485,9 +534,12 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
   app.post("/orgs/:orgId/invites", async (request, reply) => {
     const user = getUser(request);
     const { orgId } = request.params as { orgId: string };
-    await requireOrgMember(user, orgId, "admin");
+    const callerRole = await requireOrgMember(user, orgId, "admin");
     const body = request.body as { email?: string; role?: OrgRole; expiresInDays?: number };
-    if (!body.email) return reply.code(400).send({ error: "email required" });
+    const role: OrgRole = body.role === "owner" || body.role === "admin" ? body.role : "member";
+    if (role === "owner" && callerRole !== "owner" && !isServiceAdmin(user)) {
+      return reply.code(403).send({ error: "only owners can create owner invites" });
+    }
     const id = randomUUID();
     const ttlDays = Math.min(
       90,
@@ -497,14 +549,13 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const invite: Invite = {
       id,
       orgId,
-      email: body.email.toLowerCase(),
-      role: body.role === "admin" ? "admin" : "member",
+      email: body.email ? body.email.trim().toLowerCase() : undefined,
+      role,
       createdBy: user.uid,
       createdAt: nowIso(),
       expiresAt,
     };
     await db().doc(invitePath(id)).set(omitUndefined({ ...invite }));
-    // Resend wiring is env-gated; return invite token for local testing
     return { ...invite, acceptPath: `/invites/${id}/accept` };
   });
 
@@ -541,14 +592,40 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     }
     const inviteEmail = (invite.email || "").trim().toLowerCase();
     const userEmail = (user.email || "").trim().toLowerCase();
-    if (inviteEmail && userEmail && inviteEmail !== userEmail) {
-      return reply.code(403).send({ error: "invite email does not match signed-in user" });
+    // Only check email if the invite was specifically restricted to an email
+    if (inviteEmail) {
+      if (userEmail && inviteEmail !== userEmail) {
+        return reply.code(403).send({ error: "invite email does not match signed-in user" });
+      }
+      if (user.emailVerified === false && !isServiceAdmin(user)) {
+        return reply.code(403).send({
+          error: "email_not_verified",
+          message: "You must verify your email address before accepting this invite.",
+        });
+      }
+    }
+    const existingSnap = await db().doc(memberPath(invite.orgId, user.uid)).get();
+    let finalRole: OrgRole = invite.role;
+    let joinedAt = nowIso();
+    if (existingSnap.exists) {
+      const existing = existingSnap.data() as OrgMember;
+      const roleRank: Record<OrgRole, number> = { owner: 3, admin: 2, member: 1 };
+      const currentRank = roleRank[existing.role] || 0;
+      const inviteRank = roleRank[invite.role] || 0;
+      // Never downgrade an existing member's role upon accepting an invite
+      if (currentRank >= inviteRank) {
+        finalRole = existing.role;
+      }
+      if (existing.joinedAt) {
+        joinedAt = existing.joinedAt;
+      }
     }
     const member = omitUndefined({
       uid: user.uid,
-      role: invite.role,
+      role: finalRole,
       email: user.email ?? invite.email,
-      joinedAt: nowIso(),
+      displayName: user.displayName,
+      joinedAt,
     }) as OrgMember;
     await db().doc(memberPath(invite.orgId, user.uid)).set(member);
     await db().doc(invitePath(inviteId)).update({ acceptedAt: nowIso() });
@@ -660,8 +737,11 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const snap = await ref.get();
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
     const existing = snap.data() as NotebookSummaryV5;
-    await requireNotebookAccess(user, orgId, existing);
+    const callerRole = await requireNotebookAccess(user, orgId, existing);
     const body = request.body as Partial<NotebookSummaryV5>;
+    if (body.access !== undefined && callerRole !== "owner" && callerRole !== "admin" && !isServiceAdmin(user)) {
+      return reply.code(403).send({ error: "Only admins and owners can modify notebook access" });
+    }
     const patch: Record<string, unknown> = { updatedAt: nowIso() };
     for (const key of [
       "name",

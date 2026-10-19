@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
-import { Edit2, Plus, Search, Trash2, Users, X } from "lucide-react";
+import { Edit2, Plus, Search, Trash2, User, Users, X } from "lucide-react";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import TextPromptDialog from "@/components/dialogs/TextPromptDialog";
 import { useOrgWorkspace } from "@/components/cloud/OrgWorkspaceContext";
@@ -269,7 +269,9 @@ function TeamPeoplePanel({
     return members.filter(
       (m) =>
         !onTeamIds.has(m.uid) &&
-        ((m.email || "").toLowerCase().includes(q) || m.uid.toLowerCase().includes(q))
+        ((m.displayName || "").toLowerCase().includes(q) ||
+          (m.email || "").toLowerCase().includes(q) ||
+          m.uid.toLowerCase().includes(q))
     );
   }, [q, members, onTeamIds]);
 
@@ -285,7 +287,7 @@ function TeamPeoplePanel({
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
             placeholder={
-              members.length ? "Search people to add…" : "Add people to the organization first"
+              members.length ? "Search people (by name or email) to add…" : "Add people to the organization first"
             }
             disabled={!members.length}
             className="w-full rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface py-2 pr-3 pl-8 text-nb-label outline-none focus:border-nb-primary disabled:opacity-50"
@@ -299,10 +301,27 @@ function TeamPeoplePanel({
                     <li key={m.uid}>
                       <button
                         type="button"
-                        className="flex w-full items-center px-3 py-2 text-left text-nb-label hover:bg-nb-surface-low"
+                        className="flex w-full items-center justify-between px-3 py-2 text-left text-nb-label hover:bg-nb-surface-low"
                         onClick={() => onAdd(m.uid)}
                       >
-                        {m.email || m.uid}
+                        <div className="flex items-center gap-2 min-w-0">
+                          <User size={14} className="text-nb-on-surface-variant shrink-0" />
+                          <div className="truncate">
+                            {m.displayName ? (
+                              <>
+                                <span className="font-semibold text-nb-on-surface">{m.displayName}</span>
+                                {m.email && (
+                                  <span className="ml-1.5 text-nb-caption text-nb-on-surface-variant">
+                                    ({m.email})
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-nb-on-surface">{m.email || m.uid}</span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-nb-caption text-nb-on-surface-variant shrink-0">Add</span>
                       </button>
                     </li>
                   ))}
@@ -316,30 +335,42 @@ function TeamPeoplePanel({
       )}
 
       {onTeam.length > 0 ? (
-        <ul className="flex flex-wrap gap-1.5">
+        <div className="max-h-56 overflow-y-auto rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface divide-y divide-nb-outline-variant/15">
           {onTeam.map((m) => (
-            <li key={m.uid}>
-              {canManage ? (
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 rounded-full border border-nb-outline-variant/40 bg-nb-surface-low px-2 py-0.5 text-[11px] font-medium text-nb-on-surface"
+            <div
+              key={m.uid}
+              className="flex items-center justify-between gap-3 px-3.5 py-2 text-nb-body"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-nb-primary/10 text-nb-primary">
+                  <User size={14} />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-nb-on-surface text-nb-label">
+                    {m.displayName || m.email || m.uid}
+                  </p>
+                  {m.displayName && m.email && (
+                    <p className="truncate text-nb-caption text-nb-on-surface-variant">{m.email}</p>
+                  )}
+                </div>
+              </div>
+              {canManage && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 p-0 text-nb-on-surface-variant hover:text-nb-danger"
                   onClick={() => onRemove(m.uid)}
-                  title="Remove from team"
+                  title={`Remove ${m.displayName || m.email || m.uid} from team`}
                 >
-                  {m.email || m.uid}
-                  <X size={12} />
-                </button>
-              ) : (
-                <span className="inline-flex items-center rounded-full border border-nb-outline-variant/40 bg-nb-surface-low px-2 py-0.5 text-[11px] font-medium text-nb-on-surface">
-                  {m.email || m.uid}
-                </span>
+                  <X size={14} />
+                </Button>
               )}
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
       ) : (
         <p className="text-nb-caption text-nb-on-surface-variant">
-          {canManage ? "No one on this team yet — search to add people." : "No one on this team yet."}
+          {canManage ? "No one on this team yet — search above to add people." : "No one on this team yet."}
         </p>
       )}
     </div>

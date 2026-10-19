@@ -62,11 +62,17 @@ function sanitizePreferences(raw: unknown): UserPreferences | undefined {
 export async function registerUserRoutes(app: FastifyInstance) {
   app.post("/users/me/bootstrap", async (request) => {
     const user = getUser(request);
+    const body = (request.body as { displayName?: string } | undefined) ?? {};
+    const displayName = body.displayName?.trim() || user.displayName;
     const ref = getFirestore().doc(userPath(user.uid));
     const snap = await ref.get();
     const ts = new Date().toISOString();
     if (snap.exists) {
       const data = snap.data() as UserProfile;
+      if (displayName && !data.displayName) {
+        await ref.update({ displayName, updatedAt: ts });
+        data.displayName = displayName;
+      }
       return data;
     }
     const serviceAdminUid = process.env.SERVICE_ADMIN_UID;
@@ -75,7 +81,7 @@ export async function registerUserRoutes(app: FastifyInstance) {
     const profile = omitUndefined({
       uid: user.uid,
       email: user.email,
-      displayName: user.displayName,
+      displayName,
       platformRole: isAdmin ? ("service_admin" as const) : undefined,
       grants: {},
       preferences: {},

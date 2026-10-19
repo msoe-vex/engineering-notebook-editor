@@ -32,6 +32,16 @@ Core `canAccessNotebook` gates list/get and Agents audit routes.
 | Org **members** / **teams** | Application ACL |
 | Notebook **members** roster | Printed credits / branding |
 
-## Invites
+## Role hierarchy & ownership
+- `owner`: full control over organization, members, teams, invites, notebooks, and org settings. Can appoint or demote other owners. The last remaining owner cannot be demoted or removed.
+- `admin`: can manage members (up to admin), invites (up to admin), teams, notebooks, and org settings. Cannot demote or remove owners.
+- `member`: baseline access to org notebooks according to notebook ACL.
 
-Create as org admin → `expiresAt` (default 14d) → accept checks expiry + email match when both present.
+Membership is strictly stored in `members/{uid}` (no fallback zombie-owner logic).
+
+## Invites & Share codes
+
+Create as org admin or owner → `expiresAt` (default 14d, configurable via `expiresInDays`) → shareable link or code.
+- If `email` is specified during creation, acceptance requires the recipient's authenticated email to match and be verified (`emailVerified: true`).
+- If `email` is omitted, any authenticated user can redeem the share code / invite link.
+- Acceptance never demotes an existing member if their current role rank is higher than the invite's role.

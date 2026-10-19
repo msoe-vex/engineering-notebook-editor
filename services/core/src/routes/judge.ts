@@ -176,7 +176,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
     const trashedOnly = String((request.query as { trashed?: string }).trashed || "") === "1";
     const snap = await db().collection(rubricsCollection(orgId, notebookId)).get();
     return snap.docs
-      .map((d) => ({ id: d.id, ...(d.data() as NotebookRubric) }))
+      .map((d) => ({ ...(d.data() as NotebookRubric), id: d.id }))
       .filter((r) => {
         if (trashedOnly) return Boolean(r.deletedAt);
         // Hide in-progress extract drafts until ready (they are not "created" for the user yet).
@@ -366,7 +366,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
       }
       const ts = nowIso();
       await ref.update({ deletedAt: null, updatedAt: ts });
-      return { id: rubricId, ...prev, deletedAt: null, updatedAt: ts };
+      return { ...prev, id: rubricId, deletedAt: null, updatedAt: ts };
     }
   );
 

@@ -39,6 +39,7 @@ export type NotebookWorkspaceState = {
   assets: AssetSummary[];
   error: string | null;
   busy: boolean;
+  canManage?: boolean;
   refresh: () => void;
   setEntries?: React.Dispatch<React.SetStateAction<Record<string, EntryMeta>>>;
   setFolders?: React.Dispatch<

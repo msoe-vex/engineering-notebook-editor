@@ -54,11 +54,17 @@ export type OrgSummary = {
   /** Current user's org role when returned from list/get membership context. */
   role?: string | null;
 };
-export type MemberSummary = { uid: string; role: string; email?: string; joinedAt?: string };
+export type MemberSummary = {
+  uid: string;
+  role: string;
+  email?: string;
+  displayName?: string;
+  joinedAt?: string;
+};
 export type InviteSummary = {
   id: string;
   orgId: string;
-  email: string;
+  email?: string;
   role: string;
   createdAt?: string;
   acceptedAt?: string;
@@ -115,7 +121,8 @@ export type NotebookMemberSummary = {
 };
 
 export const cloudApi = {
-  bootstrap: () => coreFetch("/users/me/bootstrap", { method: "POST", body: "{}" }),
+  bootstrap: (body?: { displayName?: string }) =>
+    coreFetch("/users/me/bootstrap", { method: "POST", body: JSON.stringify(body || {}) }),
   me: () => coreFetch("/users/me"),
   patchMe: (body: {
     displayName?: string;
@@ -166,7 +173,10 @@ export const cloudApi = {
     coreFetch<{ ok: boolean }>(`/orgs/${orgId}/members/${uid}`, { method: "DELETE" }),
 
   listInvites: (orgId: string) => coreFetch<InviteSummary[]>(`/orgs/${orgId}/invites`),
-  createInvite: (orgId: string, body: { email: string; role?: string }) =>
+  createInvite: (
+    orgId: string,
+    body: { email?: string; role?: string; expiresInDays?: number }
+  ) =>
     coreFetch<InviteSummary>(`/orgs/${orgId}/invites`, {
       method: "POST",
       body: JSON.stringify(body),

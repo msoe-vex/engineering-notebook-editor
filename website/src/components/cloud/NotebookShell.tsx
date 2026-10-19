@@ -25,8 +25,10 @@ import {
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import TextPromptDialog from "@/components/dialogs/TextPromptDialog";
 import { Button, Dialog, EmptyState, LoadingBlock, Skeleton, SkeletonLines } from "@/components/ui";
+import { Edit2, Share2, Trash2 } from "lucide-react";
 import { showNotification } from "@/components/overlays/Notification";
 import { cloudApi } from "@/lib/cloud/api";
+import { isOrgAdminRole } from "@/lib/cloud/roles";
 import { formatCloudError, isForbiddenError, isNotFoundError } from "@/lib/cloud/errors";
 import { ShareNotebookDialog } from "./ShareNotebookDialog";
 import {
@@ -154,6 +156,8 @@ export function NotebookShell({ children }: { children: ReactNode }) {
 
   const [notebookName, setNotebookName] = useState("");
   const [orgName, setOrgName] = useState("");
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const canManage = isOrgAdminRole(userRole);
   const [notebookSummary, setNotebookSummary] = useState<NotebookSummaryV5 | null>(null);
   const [folders, setFolders] = useState<
     Record<string, { name: string; parentId: string | null; order: number }>
@@ -225,6 +229,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
           if (cancelled) return;
           setNotebookName(nb.title || nb.name);
           if (org?.name) setOrgName(org.name);
+          if (org?.role) setUserRole(org.role);
           setFolders(nb.folders ?? {});
           setEntries(entriesFromApi(entryRes.entries as Record<string, Record<string, unknown>>));
           setAssets(assetList);
@@ -643,22 +648,28 @@ export function NotebookShell({ children }: { children: ReactNode }) {
       menuItems: notebookUnavailable
         ? []
         : [
-            {
-              id: "rename",
-              label: "Rename notebook",
-              onSelect: () =>
-                showPrompt("Rename notebook", notebookName, (next) => {
-                  void cloudApi
-                    .patchNotebook(orgId, notebookId, { name: next, title: next })
-                    .then(refresh)
-                    .catch((err) => setError((err as Error).message));
-                }),
-            },
-            {
-              id: "share",
-              label: "Share…",
-              onSelect: () => setShareOpen(true),
-            },
+            ...(canManage
+              ? [
+                  {
+                    id: "rename",
+                    label: "Rename notebook",
+                    icon: <Edit2 size={14} />,
+                    onSelect: () =>
+                      showPrompt("Rename notebook", notebookName, (next) => {
+                        void cloudApi
+                          .patchNotebook(orgId, notebookId, { name: next, title: next })
+                          .then(refresh)
+                          .catch((err) => setError((err as Error).message));
+                      }),
+                  },
+                  {
+                    id: "share",
+                    label: "Share…",
+                    icon: <Share2 size={14} />,
+                    onSelect: () => setShareOpen(true),
+                  },
+                ]
+              : []),
             {
               id: "export",
               label: "Export ZIP",
@@ -666,30 +677,35 @@ export function NotebookShell({ children }: { children: ReactNode }) {
                 if (!busyRef.current) void exportZipRef.current();
               },
             },
-            {
-              id: "import",
-              label: "Import ZIP",
-              onSelect: () => {
-                if (!busyRef.current) importRef.current?.click();
-              },
-            },
-            {
-              id: "delete",
-              label: "Delete notebook",
-              danger: true,
-              onSelect: () =>
-                showConfirm(
-                  "Delete notebook?",
-                  "Delete this notebook and all entries? This cannot be undone.",
-                  () => {
-                    void cloudApi
-                      .deleteNotebook(orgId, notebookId)
-                      .then(() => router.push(`/orgs/${orgId}`))
-                      .catch((err) => setError((err as Error).message));
+            ...(canManage
+              ? [
+                  {
+                    id: "import",
+                    label: "Import ZIP",
+                    onSelect: () => {
+                      if (!busyRef.current) importRef.current?.click();
+                    },
                   },
-                  "danger"
-                ),
-            },
+                  {
+                    id: "delete",
+                    label: "Delete notebook",
+                    icon: <Trash2 size={14} />,
+                    danger: true,
+                    onSelect: () =>
+                      showConfirm(
+                        "Delete notebook?",
+                        "Delete this notebook and all entries? This cannot be undone.",
+                        () => {
+                          void cloudApi
+                            .deleteNotebook(orgId, notebookId)
+                            .then(() => router.push(`/orgs/${orgId}`))
+                            .catch((err) => setError((err as Error).message));
+                        },
+                        "danger"
+                      ),
+                  },
+                ]
+              : []),
           ],
     });
     return () => setWorkspaceHeader(null);
@@ -699,6 +715,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     orgName,
     notebookName,
     notebookUnavailable,
+    canManage,
     showPrompt,
     showConfirm,
     router,
@@ -716,6 +733,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     assets,
     error,
     busy,
+    canManage,
     refresh,
     setEntries,
     setFolders,

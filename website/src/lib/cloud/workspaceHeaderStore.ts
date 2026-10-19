@@ -2,9 +2,12 @@
 
 /** NotebookShell registers workspace chrome into AppChrome (single top bar). */
 
+import type { ReactNode } from "react";
+
 export type WorkspaceHeaderMenuItem = {
   id: string;
   label: string;
+  icon?: ReactNode;
   danger?: boolean;
   onSelect: () => void;
 };

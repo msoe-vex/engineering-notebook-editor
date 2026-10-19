@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { ImagePlus } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, ImagePlus } from "lucide-react";
 import { AccessAllowlistPicker } from "@/components/cloud/AccessAllowlistPicker";
 import { NotebookPhasesEditor } from "@/components/cloud/NotebookPhasesEditor";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
@@ -25,6 +25,7 @@ export default function NotebookSetupPage() {
     notebookId,
     notebookSummary,
     initialLoaded,
+    canManage,
     refresh,
     setError,
     setNotebookSummary,
@@ -56,6 +57,60 @@ export default function NotebookSetupPage() {
     setTeamIds(access?.teamIds ?? []);
     setUserIds(access?.userIds ?? []);
   }, [notebookSummary]);
+
+  const initialTitle = notebookSummary?.title || notebookSummary?.name || "";
+  const initialSubtitle = notebookSummary?.subtitle || "";
+  const initialName = notebookSummary?.name || "";
+  const initialLogoAssetId = notebookSummary?.logoAssetId;
+  const initialPhases = useMemo(
+    () => (notebookSummary?.phases as Record<string, ProjectPhase>) || {},
+    [notebookSummary?.phases]
+  );
+  const initialAccess = notebookSummary?.access;
+  const initialAccessMode = initialAccess?.mode === "restricted" ? "restricted" : "org";
+  const initialTeamIds = useMemo(() => initialAccess?.teamIds ?? [], [initialAccess?.teamIds]);
+  const initialUserIds = useMemo(() => initialAccess?.userIds ?? [], [initialAccess?.userIds]);
+
+  const isDirty = useMemo(() => {
+    if (!notebookSummary) return false;
+    if (title !== initialTitle) return true;
+    if (subtitle !== initialSubtitle) return true;
+    if (name !== initialName) return true;
+    if (logoAssetId !== initialLogoAssetId) return true;
+    if (JSON.stringify(phases) !== JSON.stringify(initialPhases)) return true;
+    if (accessMode !== initialAccessMode) return true;
+    if (JSON.stringify([...teamIds].sort()) !== JSON.stringify([...initialTeamIds].sort())) return true;
+    if (JSON.stringify([...userIds].sort()) !== JSON.stringify([...initialUserIds].sort())) return true;
+    return false;
+  }, [
+    notebookSummary,
+    title,
+    initialTitle,
+    subtitle,
+    initialSubtitle,
+    name,
+    initialName,
+    logoAssetId,
+    initialLogoAssetId,
+    phases,
+    initialPhases,
+    accessMode,
+    initialAccessMode,
+    teamIds,
+    initialTeamIds,
+    userIds,
+    initialUserIds,
+  ]);
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
 
   useEffect(() => {
     if (!logoAssetId) {
@@ -125,14 +180,17 @@ export default function NotebookSetupPage() {
       userIds: accessMode === "restricted" ? userIds : [],
     };
     try {
-      const updated = await cloudApi.patchNotebook(orgId, notebookId, {
+      const payload: Record<string, unknown> = {
         name: name.trim() || title.trim() || "Untitled Notebook",
         title: title.trim() || name.trim(),
         subtitle: subtitle.trim() || undefined,
         logoAssetId: logoAssetId || undefined,
         phases,
-        access,
-      });
+      };
+      if (canManage) {
+        payload.access = access;
+      }
+      const updated = await cloudApi.patchNotebook(orgId, notebookId, payload);
       setNotebookSummary({
         ...(notebookSummary || {
           schemaVersion: NOTEBOOK_SCHEMA_VERSION,
@@ -164,11 +222,18 @@ export default function NotebookSetupPage() {
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-8">
-      <div>
-        <h1 className="text-nb-display font-bold tracking-tight">Settings</h1>
-        <p className="mt-1 text-nb-body text-nb-on-surface-variant">
-          Notebook branding, design phases, and who can open this notebook.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-nb-display font-bold tracking-tight">Settings</h1>
+          <p className="mt-1 text-nb-body text-nb-on-surface-variant">
+            Notebook branding, design phases, and who can open this notebook.
+          </p>
+        </div>
+        {isDirty && (
+          <span className="rounded-full bg-amber-500/10 border border-amber-500/30 px-3 py-1 text-nb-caption font-semibold text-amber-700 dark:text-amber-400">
+            Unsaved changes
+          </span>
+        )}
       </div>
 
       <section className="flex flex-col gap-4">
@@ -240,47 +305,63 @@ export default function NotebookSetupPage() {
           Organization owners and admins can always open every notebook. This controls who else
           can open it — not the credits list on the Contributors page.
         </p>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            variant={accessMode === "org" ? "primary" : "secondary"}
-            onClick={() => setAccessMode("org")}
-          >
-            Entire organization
-          </Button>
-          <Button
-            size="sm"
-            variant={accessMode === "restricted" ? "primary" : "secondary"}
-            onClick={() => setAccessMode("restricted")}
-          >
-            Restricted
-          </Button>
-        </div>
-
-        {accessMode === "restricted" && (
-          <div className="rounded-nb-xl border border-nb-outline-variant/30 p-4">
-            <AccessAllowlistPicker
-              teams={teams}
-              people={people}
-              teamIds={teamIds}
-              userIds={userIds}
-              onTeamIdsChange={setTeamIds}
-              onUserIdsChange={setUserIds}
-            />
-            {!teams.length && !people.length && (
-              <p className="mt-2 text-nb-caption text-nb-on-surface-variant">
-                No teams or people yet. Create teams or invite people under the organization.
-              </p>
-            )}
+        {!canManage ? (
+          <div className="rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface-low/50 p-3 text-nb-label text-nb-on-surface-variant">
+            Current mode:{" "}
+            <strong className="text-nb-on-surface">
+              {accessMode === "org" ? "Entire organization" : "Restricted"}
+            </strong>
+            . Only organization admins and owners can modify notebook access permissions.
           </div>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant={accessMode === "org" ? "primary" : "secondary"}
+                onClick={() => setAccessMode("org")}
+              >
+                Entire organization
+              </Button>
+              <Button
+                size="sm"
+                variant={accessMode === "restricted" ? "primary" : "secondary"}
+                onClick={() => setAccessMode("restricted")}
+              >
+                Restricted
+              </Button>
+            </div>
+
+            {accessMode === "restricted" && (
+              <div className="rounded-nb-xl border border-nb-outline-variant/30 p-4">
+                <AccessAllowlistPicker
+                  teams={teams}
+                  people={people}
+                  teamIds={teamIds}
+                  userIds={userIds}
+                  onTeamIdsChange={setTeamIds}
+                  onUserIdsChange={setUserIds}
+                />
+                {!teams.length && !people.length && (
+                  <p className="mt-2 text-nb-caption text-nb-on-surface-variant">
+                    No teams or people yet. Create teams or invite people under the organization.
+                  </p>
+                )}
+              </div>
+            )}
+          </>
         )}
       </section>
 
       <div className="flex items-center gap-3">
-        <Button variant="primary" disabled={busy} onClick={() => void save()}>
-          Save settings
+        <Button variant="primary" disabled={busy || !isDirty} onClick={() => void save()}>
+          {busy ? "Saving…" : "Save settings"}
         </Button>
-        {saved && <span className="text-nb-label text-nb-success">Saved</span>}
+        {saved && !isDirty && (
+          <span className="text-nb-label text-nb-success flex items-center gap-1 font-medium">
+            <Check size={14} /> Saved
+          </span>
+        )}
       </div>
     </div>
   );

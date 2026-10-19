@@ -7,6 +7,7 @@ interface TextPromptDialogProps {
   isOpen: boolean;
   title: string;
   label?: string;
+  placeholder?: string;
   initialValue?: string;
   confirmLabel?: string;
   cancelLabel?: string;
@@ -18,6 +19,7 @@ export default function TextPromptDialog({
   isOpen,
   title,
   label,
+  placeholder,
   initialValue = "",
   confirmLabel = "Save",
   cancelLabel = "Cancel",
@@ -34,6 +36,7 @@ export default function TextPromptDialog({
     <Dialog isOpen={isOpen} onClose={onCancel} title={title}>
       <TextField
         label={label}
+        placeholder={placeholder}
         autoFocus
         value={value}
         onChange={(e) => setValue(e.target.value)}

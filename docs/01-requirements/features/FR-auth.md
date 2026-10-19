@@ -16,14 +16,18 @@ Users sign in with Firebase Auth (emulator locally). Core APIs accept a Bearer F
 
 ## User-facing behavior
 
-- Website `/` requires auth chrome; Continue with Google / email / **dev token** (local)
+- Website `/` requires auth chrome; email & password / **dev token** (local)
+- Email verification enforced: On sign-up, verification email is dispatched; users must verify their email before accessing notebooks. An `EmailVerificationScreen` offers status check, resend (with cooldown), and dev bypass.
+- Email-restricted invites require `emailVerified === true` before acceptance in Core.
 - Emulator: `NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true`
 
 ## Acceptance criteria
 
 - [ ] Unauthenticated API calls to protected Core routes return 401
-- [ ] Valid Bearer token identifies `uid` and optional email for invite checks
-- [ ] Local compose: plain uid bearer works when `AUTH_FALLBACK=true`
+- [ ] Valid Bearer token identifies `uid`, optional email, and `emailVerified`
+- [ ] Users with unverified emails are presented with verification gate before accessing workspace
+- [ ] Email-restricted invite acceptance rejects unverified accounts with 403 `email_not_verified`
+- [ ] Local compose: plain uid bearer works when `AUTH_FALLBACK=true`; dev bypass available for local emulator testing
 
 ## Data and APIs
 

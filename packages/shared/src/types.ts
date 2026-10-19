@@ -45,13 +45,14 @@ export type OrgMember = {
   uid: string;
   role: OrgRole;
   email?: string;
+  displayName?: string;
   joinedAt: string;
 };
 
 export type Invite = {
   id: string;
   orgId: string;
-  email: string;
+  email?: string;
   role: OrgRole;
   createdBy: string;
   createdAt: string;

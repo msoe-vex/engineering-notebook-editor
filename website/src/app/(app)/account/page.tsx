@@ -38,7 +38,16 @@ export default function AccountProfilePage() {
     setError(null);
     setMessage(null);
     try {
-      await cloudApi.patchMe({ displayName: displayName.trim() || undefined });
+      const name = displayName.trim() || undefined;
+      await cloudApi.patchMe({ displayName: name });
+      if (authUser && name) {
+        try {
+          const { updateProfile } = await import("@/lib/cloud/firebase");
+          await updateProfile(authUser, { displayName: name });
+        } catch {
+          // ignore
+        }
+      }
       setMessage("Profile saved.");
     } catch (err) {
       setError((err as Error).message);

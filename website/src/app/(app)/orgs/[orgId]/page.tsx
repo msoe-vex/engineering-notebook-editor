@@ -22,7 +22,7 @@ import { cloudApi, type NotebookSummary } from "@/lib/cloud/api";
 
 export default function OrgNotebooksPage() {
   const router = useRouter();
-  const { orgId, notebooks, teams, members, busy, setBusy, refresh, setError, initialLoaded } =
+  const { orgId, notebooks, teams, members, busy, canManage, setBusy, refresh, setError, initialLoaded } =
     useOrgWorkspace();
   const [createOpen, setCreateOpen] = useState(false);
   const [shareNb, setShareNb] = useState<NotebookSummary | null>(null);
@@ -37,32 +37,36 @@ export default function OrgNotebooksPage() {
         label: "Open",
         onSelect: () => router.push(`/orgs/${orgId}/notebooks/${nb.id}`),
       },
-      {
-        id: "share",
-        label: "Share…",
-        icon: <Share2 size={14} />,
-        onSelect: () => setShareNb(nb),
-      },
-      {
-        id: "settings",
-        label: "Settings",
-        icon: <Settings size={14} />,
-        onSelect: () => router.push(`/orgs/${orgId}/notebooks/${nb.id}/setup`),
-      },
-      { id: "sep", separator: true },
-      {
-        id: "rename",
-        label: "Rename",
-        icon: <Edit2 size={14} />,
-        onSelect: () => setRenameNb(nb),
-      },
-      {
-        id: "delete",
-        label: "Delete",
-        icon: <Trash2 size={14} />,
-        danger: true,
-        onSelect: () => setDeleteNb(nb),
-      },
+      ...(canManage
+        ? [
+            {
+              id: "share",
+              label: "Share…",
+              icon: <Share2 size={14} />,
+              onSelect: () => setShareNb(nb),
+            },
+            {
+              id: "settings",
+              label: "Settings",
+              icon: <Settings size={14} />,
+              onSelect: () => router.push(`/orgs/${orgId}/notebooks/${nb.id}/setup`),
+            },
+            { id: "sep", separator: true },
+            {
+              id: "rename",
+              label: "Rename",
+              icon: <Edit2 size={14} />,
+              onSelect: () => setRenameNb(nb),
+            },
+            {
+              id: "delete",
+              label: "Delete",
+              icon: <Trash2 size={14} />,
+              danger: true,
+              onSelect: () => setDeleteNb(nb),
+            },
+          ]
+        : []),
     ];
   }
 

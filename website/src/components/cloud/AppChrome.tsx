@@ -22,9 +22,11 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   signOut,
   type User,
 } from "@/lib/cloud/firebase";
+import { EmailVerificationScreen } from "./EmailVerificationScreen";
 import { Toaster } from "react-hot-toast";
 import { bindNotificationEvents } from "@/components/overlays/Notification";
 import { cloudApi, type OrgSummary } from "@/lib/cloud/api";
@@ -81,6 +83,8 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
 
   const [user, setUser] = useState<User | null>(null);
   const [devUid, setDevUid] = useState("");
+  const [name, setName] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -88,10 +92,13 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
   const [profile, setProfile] = useState<{
     platformRole?: string;
     email?: string;
+    displayName?: string;
   } | null>(null);
   const [orgs, setOrgs] = useState<OrgSummary[]>([]);
   const [orgName, setOrgName] = useState<string | null>(null);
   const [mountedTheme, setMountedTheme] = useState(false);
+  const [devBypassed, setDevBypassed] = useState(false);
+  const [authTick, setAuthTick] = useState(0);
 
   useEffect(() => {
     queueMicrotask(() => setMountedTheme(true));
@@ -176,10 +183,37 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
     setError(null);
     try {
       const auth = getFirebaseAuth();
-      if (create) await createUserWithEmailAndPassword(auth, email, password);
-      else await signInWithEmailAndPassword(auth, email, password);
-      setDevToken(null);
-      await cloudApi.bootstrap();
+      if (create) {
+        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        if (name.trim()) {
+          try {
+            await updateProfile(cred.user, { displayName: name.trim() });
+          } catch (e) {
+            console.warn("Failed to set Firebase displayName:", e);
+          }
+        }
+        try {
+          await sendEmailVerification(cred.user);
+        } catch (e) {
+          console.warn("Failed to send initial verification email:", e);
+        }
+        setDevToken(null);
+        const p = (await cloudApi.bootstrap({ displayName: name.trim() || undefined })) as {
+          platformRole?: string;
+          email?: string;
+          displayName?: string;
+        };
+        setProfile(p);
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+        setDevToken(null);
+        const p = (await cloudApi.bootstrap()) as {
+          platformRole?: string;
+          email?: string;
+          displayName?: string;
+        };
+        setProfile(p);
+      }
     } catch (err) {
       setError((err as Error).message);
     }
@@ -231,16 +265,27 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
             </div>
             <div>
               <p className="text-nb-label font-semibold text-nb-on-surface-variant">ENGen</p>
-              <h1 className="text-nb-display font-bold tracking-tight">Sign in</h1>
+              <h1 className="text-nb-display font-bold tracking-tight">
+                {isSignUp ? "Create account" : "Sign in"}
+              </h1>
             </div>
           </div>
           <p className="text-sm text-nb-on-surface-variant">
-            Organizations → Notebooks → workspace. Use Firebase Auth, or a local dev token with
-            docker-compose.
+            {isSignUp
+              ? "Create your account to collaborate on engineering notebooks."
+              : "Organizations → Notebooks → workspace. Use Firebase Auth, or a local dev token."}
           </p>
           <div className="mt-8 space-y-3">
+            {isSignUp && (
+              <TextField
+                placeholder="Full name (e.g. Alex Needham)"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            )}
             <TextField
               placeholder="Email"
+              type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -250,13 +295,39 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
-            <div className="flex gap-2">
-              <Button variant="primary" onClick={() => void handleEmailSignIn(false)}>
-                Sign in
+            <div className="flex flex-col gap-3 pt-1">
+              <Button
+                variant="primary"
+                className="w-full justify-center"
+                onClick={() => void handleEmailSignIn(isSignUp)}
+              >
+                {isSignUp ? "Create account" : "Sign in"}
               </Button>
-              <Button variant="secondary" onClick={() => void handleEmailSignIn(true)}>
-                Create account
-              </Button>
+              <div className="text-center text-nb-caption text-nb-on-surface-variant">
+                {isSignUp ? (
+                  <>
+                    Already have an account?{" "}
+                    <button
+                      type="button"
+                      className="font-semibold text-nb-primary hover:underline"
+                      onClick={() => setIsSignUp(false)}
+                    >
+                      Sign in
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    Don&apos;t have an account?{" "}
+                    <button
+                      type="button"
+                      className="font-semibold text-nb-primary hover:underline"
+                      onClick={() => setIsSignUp(true)}
+                    >
+                      Create account
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
           <details className="mt-10 border-t border-nb-outline-variant/30 pt-6">
@@ -280,6 +351,21 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
           )}
         </div>
       </div>
+    );
+  }
+
+  if (user && !user.emailVerified && !getDevToken() && !devBypassed) {
+    return (
+      <EmailVerificationScreen
+        user={user}
+        onSignOut={() => void handleSignOut()}
+        onVerified={() => {
+          const current = getFirebaseAuth().currentUser;
+          setUser(current);
+          setAuthTick((t) => t + 1);
+        }}
+        onBypass={() => setDevBypassed(true)}
+      />
     );
   }
 
@@ -511,10 +597,20 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
                 },
               ]}
               trigger={
-                <span className={iconBtn} title={displayEmail || "Account"}>
+                <span
+                  className={iconBtn}
+                  title={
+                    profile?.displayName || user?.displayName
+                      ? `${profile?.displayName || user?.displayName} (${displayEmail})`
+                      : displayEmail || "Account"
+                  }
+                >
                   <UserRound size={16} />
                   <span className="hidden lg:inline max-w-[8rem] truncate">
-                    {displayEmail?.split("@")[0] || "Account"}
+                    {profile?.displayName ||
+                      user?.displayName ||
+                      displayEmail?.split("@")[0] ||
+                      "Account"}
                   </span>
                   <ChevronDown size={12} className="opacity-60" />
                 </span>

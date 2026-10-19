@@ -45,27 +45,33 @@ export class FirebaseAuthAdapter implements AuthPort {
     let email: string | undefined;
     let displayName: string | undefined;
 
+    let emailVerified = false;
+
     const admin = await this.getAdmin();
     if (admin && !useFallbackAuth()) {
       const decoded = await admin.auth().verifyIdToken(trimmed);
       uid = decoded.uid;
       email = decoded.email;
       displayName = typeof decoded.name === "string" ? decoded.name : undefined;
+      emailVerified = Boolean(decoded.email_verified);
     } else if (admin && process.env.FIREBASE_AUTH_EMULATOR_HOST) {
       try {
         const decoded = await admin.auth().verifyIdToken(trimmed);
         uid = decoded.uid;
         email = decoded.email;
         displayName = typeof decoded.name === "string" ? decoded.name : undefined;
+        emailVerified = Boolean(decoded.email_verified);
       } catch {
         // Emulator / local: allow bare uid tokens for smoke tests
         uid = trimmed;
+        emailVerified = true;
       }
     } else {
       // Fallback: bearer token is the uid (optional email via "uid|email")
       const parts = trimmed.split("|");
       uid = parts[0];
       email = parts[1];
+      emailVerified = true;
     }
 
     const profile = await this.loadProfile(uid);
@@ -81,6 +87,7 @@ export class FirebaseAuthAdapter implements AuthPort {
       displayName: displayName ?? profile?.displayName,
       platformRole,
       grants: profile?.grants ?? {},
+      emailVerified,
     };
   }
 

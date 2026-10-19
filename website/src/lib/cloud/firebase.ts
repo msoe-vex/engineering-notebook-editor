@@ -8,6 +8,8 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  sendEmailVerification,
+  updateProfile,
   type Auth,
   type User,
 } from "firebase/auth";
@@ -75,5 +77,7 @@ export {
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  sendEmailVerification,
+  updateProfile,
 };
 export type { User };

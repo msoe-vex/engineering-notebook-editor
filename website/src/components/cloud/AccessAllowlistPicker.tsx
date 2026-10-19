@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, X } from "lucide-react";
+import { Search, User, Users, X } from "lucide-react";
 import type { MemberSummary, TeamSummary } from "@/lib/cloud/api";
+import { Button } from "@/components/ui/Button";
 
 type Props = {
   teams: TeamSummary[];
@@ -14,8 +15,7 @@ type Props = {
 };
 
 /**
- * Restricted-access allowlist: search to add, pills to remove.
- * Prefer this over long checkbox lists (Share sheet + Settings).
+ * Restricted-access allowlist: search to add, vertical list to manage.
  */
 export function AccessAllowlistPicker({
   teams,
@@ -40,7 +40,9 @@ export function AccessAllowlistPicker({
       people: people.filter(
         (p) =>
           !userIds.includes(p.uid) &&
-          ((p.email || "").toLowerCase().includes(q) || p.uid.toLowerCase().includes(q))
+          ((p.displayName || "").toLowerCase().includes(q) ||
+            (p.email || "").toLowerCase().includes(q) ||
+            p.uid.toLowerCase().includes(q))
       ),
     };
   }, [q, teams, people, teamIds, userIds]);
@@ -57,7 +59,7 @@ export function AccessAllowlistPicker({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search people or teams to add"
+          placeholder="Search people (by name or email) or teams to add"
           className="w-full rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface py-2 pr-3 pl-8 text-nb-label outline-none focus:border-nb-primary"
           aria-label="Search people or teams"
         />
@@ -69,14 +71,17 @@ export function AccessAllowlistPicker({
                   <li key={`t-${t.id}`}>
                     <button
                       type="button"
-                      className="flex w-full items-center px-3 py-2 text-left text-nb-label hover:bg-nb-surface-low"
+                      className="flex w-full items-center justify-between px-3 py-2 text-left text-nb-label hover:bg-nb-surface-low"
                       onClick={() => {
                         onTeamIdsChange([...teamIds, t.id]);
                         setQuery("");
                       }}
                     >
-                      <span className="mr-2 text-nb-caption text-nb-on-surface-variant">Team</span>
-                      {t.name}
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Users size={14} className="text-nb-tertiary shrink-0" />
+                        <span className="font-semibold text-nb-on-surface truncate">{t.name}</span>
+                      </div>
+                      <span className="text-nb-caption text-nb-on-surface-variant shrink-0">Team</span>
                     </button>
                   </li>
                 ))}
@@ -84,14 +89,30 @@ export function AccessAllowlistPicker({
                   <li key={`u-${p.uid}`}>
                     <button
                       type="button"
-                      className="flex w-full items-center px-3 py-2 text-left text-nb-label hover:bg-nb-surface-low"
+                      className="flex w-full items-center justify-between px-3 py-2 text-left text-nb-label hover:bg-nb-surface-low"
                       onClick={() => {
                         onUserIdsChange([...userIds, p.uid]);
                         setQuery("");
                       }}
                     >
-                      <span className="mr-2 text-nb-caption text-nb-on-surface-variant">Person</span>
-                      {p.email || p.uid}
+                      <div className="flex items-center gap-2 min-w-0">
+                        <User size={14} className="text-nb-on-surface-variant shrink-0" />
+                        <div className="truncate">
+                          {p.displayName ? (
+                            <>
+                              <span className="font-semibold text-nb-on-surface">{p.displayName}</span>
+                              {p.email && (
+                                <span className="ml-1.5 text-nb-caption text-nb-on-surface-variant">
+                                  ({p.email})
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-nb-on-surface">{p.email || p.uid}</span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-nb-caption text-nb-on-surface-variant shrink-0">Person</span>
                     </button>
                   </li>
                 ))}
@@ -103,34 +124,66 @@ export function AccessAllowlistPicker({
         )}
       </div>
 
-      {(selectedTeams.length > 0 || selectedPeople.length > 0) ? (
-        <div className="flex flex-wrap gap-1.5">
+      {selectedTeams.length > 0 || selectedPeople.length > 0 ? (
+        <div className="max-h-56 overflow-y-auto rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface divide-y divide-nb-outline-variant/15">
           {selectedTeams.map((t) => (
-            <button
+            <div
               key={t.id}
-              type="button"
-              className="inline-flex items-center gap-1 rounded-full border border-nb-outline-variant/40 bg-nb-surface-low px-2 py-0.5 text-[11px] font-medium"
-              onClick={() => onTeamIdsChange(teamIds.filter((id) => id !== t.id))}
+              className="flex items-center justify-between gap-3 px-3.5 py-2 text-nb-body"
             >
-              Team: {t.name}
-              <X size={12} />
-            </button>
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-nb-tertiary/10 text-nb-tertiary">
+                  <Users size={14} />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-nb-on-surface text-nb-label">{t.name}</p>
+                  <p className="text-nb-caption text-nb-on-surface-variant">Team</p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0 text-nb-on-surface-variant hover:text-nb-danger"
+                onClick={() => onTeamIdsChange(teamIds.filter((id) => id !== t.id))}
+                title={`Remove team ${t.name}`}
+              >
+                <X size={14} />
+              </Button>
+            </div>
           ))}
           {selectedPeople.map((p) => (
-            <button
+            <div
               key={p.uid}
-              type="button"
-              className="inline-flex items-center gap-1 rounded-full border border-nb-outline-variant/40 bg-nb-surface-low px-2 py-0.5 text-[11px] font-medium"
-              onClick={() => onUserIdsChange(userIds.filter((id) => id !== p.uid))}
+              className="flex items-center justify-between gap-3 px-3.5 py-2 text-nb-body"
             >
-              {p.email || p.uid}
-              <X size={12} />
-            </button>
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-nb-primary/10 text-nb-primary">
+                  <User size={14} />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-nb-on-surface text-nb-label">
+                    {p.displayName || p.email || p.uid}
+                  </p>
+                  {p.displayName && p.email && (
+                    <p className="truncate text-nb-caption text-nb-on-surface-variant">{p.email}</p>
+                  )}
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0 text-nb-on-surface-variant hover:text-nb-danger"
+                onClick={() => onUserIdsChange(userIds.filter((id) => id !== p.uid))}
+                title={`Remove ${p.displayName || p.email || p.uid}`}
+              >
+                <X size={14} />
+              </Button>
+            </div>
           ))}
         </div>
       ) : (
         <p className="text-nb-caption text-nb-on-surface-variant">
-          No one selected yet — search to grant access. Owners and admins always have access.
+          No one selected yet — search above to grant access. Owners and admins always have access.
         </p>
       )}
     </div>

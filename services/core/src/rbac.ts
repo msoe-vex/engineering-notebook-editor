@@ -1,5 +1,6 @@
 import {
   memberPath,
+  orgPath,
   teamMemberPath,
   type NotebookAccess,
   type NotebookSummaryV5,

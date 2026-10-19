@@ -298,7 +298,8 @@ function HomeInner() {
       <TextPromptDialog
         isOpen={inviteOpen}
         title="Accept invite"
-        label="Invite id or paste from invite link"
+        label="Paste invite link or enter share code"
+        placeholder="e.g. 5fa5ba86-96fd... or https://.../?invite=..."
         initialValue={inviteDefault}
         confirmLabel="Accept"
         onCancel={() => setInviteOpen(false)}

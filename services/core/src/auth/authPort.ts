@@ -6,6 +6,7 @@ export interface SessionUser {
   displayName?: string;
   platformRole?: PlatformRole;
   grants?: UserGrants;
+  emailVerified?: boolean;
 }
 
 export interface AuthPort {
