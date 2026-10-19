@@ -21,6 +21,7 @@ import {
 import { cloudApi, type NotebookSummary, type OrgSummary } from "@/lib/cloud/api";
 import { isOrgAdminRole, orgRoleLabel } from "@/lib/cloud/roles";
 import { getDevToken, getFirebaseAuth } from "@/lib/cloud/firebase";
+import { GITHUB_ISSUES_URL } from "@/lib/constants";
 
 type RecentNotebook = NotebookSummary & { orgId: string; orgName: string };
 
@@ -374,6 +375,23 @@ function HomeInner() {
         items={ctx?.items ?? []}
         onClose={() => setCtx(null)}
       />
+
+      <footer className="mt-16 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-nb-outline-variant/20 pt-8 pb-8 text-[11px] font-semibold text-nb-on-surface-variant">
+        <Link href="/about" className="hover:text-nb-primary transition-colors">
+          About
+        </Link>
+        <Link href="/help" className="hover:text-nb-primary transition-colors">
+          Help &amp; Docs
+        </Link>
+        <a
+          href={GITHUB_ISSUES_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-nb-primary transition-colors"
+        >
+          Report Issue
+        </a>
+      </footer>
     </div>
   );
 }

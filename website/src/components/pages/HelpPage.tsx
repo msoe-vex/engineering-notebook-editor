@@ -16,9 +16,11 @@ import {
   Loader2,
   ExternalLink,
   Play,
-  Sparkles
+  Sparkles,
+  Bug
 } from "lucide-react";
 import GithubIcon from "@/components/icons/GithubIcon";
+import { GITHUB_ISSUES_URL } from "@/lib/constants";
 
 interface HelpPageProps {
   path: string;
@@ -164,6 +166,18 @@ export default function HelpPage({ path, onClose, navigateTo, isEmbedded = false
           <NavButton active={activeTab === 'phases'} onClick={() => setActiveTab('phases')} icon={<Target size={15} />} label="Design Process" />
           <NavButton active={activeTab === 'tips'} onClick={() => setActiveTab('tips')} icon={<Lightbulb size={15} />} label="Notebook Tips" />
           <NavButton active={activeTab === 'resources'} onClick={() => setActiveTab('resources')} icon={<ExternalLink size={15} />} label="Resources" />
+
+          <div className="mt-auto pt-4 border-t border-nb-outline-variant/30 flex flex-col gap-1">
+            <a
+              href={GITHUB_ISSUES_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-nb-lg text-nb-label font-semibold transition-colors cursor-pointer text-left text-nb-on-surface-variant hover:bg-nb-surface hover:text-nb-on-surface"
+            >
+              <div className="text-nb-on-surface-variant/80"><Bug size={15} /></div>
+              <span className="truncate">Report Issue</span>
+            </a>
+          </div>
         </div>
 
         {/* Content Area */}

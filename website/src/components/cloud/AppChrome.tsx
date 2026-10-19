@@ -5,6 +5,7 @@ import { useParams, usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useTheme } from "next-themes";
 import {
+  Bug,
   ChevronDown,
   CircleHelp,
   Info,
@@ -15,6 +16,7 @@ import {
   Sun,
   UserRound,
 } from "lucide-react";
+import { GITHUB_ISSUES_URL } from "@/lib/constants";
 import {
   getFirebaseAuth,
   getDevToken,
@@ -64,6 +66,7 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
   const onAccount = pathname?.startsWith("/account");
   const onHelp = pathname?.startsWith("/help");
   const onAbout = pathname?.startsWith("/about");
+  const isPublicPage = Boolean(onHelp || onAbout);
   /** Match notebook: header + main span the viewport (no max-w-6xl “page in a page”). */
   const fullBleedChrome = true;
   /** Help, Account, and notebooks fill remaining height and manage internal pane scrolling. */
@@ -267,7 +270,7 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
     );
   }
 
-  if (!signedIn) {
+  if (!signedIn && !isPublicPage) {
     return (
       <div className="cloud-shell min-h-screen bg-nb-surface text-nb-on-surface">
         <div className="mx-auto max-w-md px-6 py-16">
@@ -361,12 +364,40 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
               {error}
             </Alert>
           )}
+
+          <div className="mt-12 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-nb-outline-variant/20 pt-8 text-[11px] font-semibold text-nb-on-surface-variant">
+            <Link href="/about" className="hover:text-nb-primary transition-colors">
+              About
+            </Link>
+            <Link href="/help" className="hover:text-nb-primary transition-colors">
+              Help &amp; Docs
+            </Link>
+            <a
+              href={GITHUB_ISSUES_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-nb-primary transition-colors"
+            >
+              Report Issue
+            </a>
+            {mountedTheme && (
+              <button
+                type="button"
+                onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+                className="inline-flex items-center gap-1 hover:text-nb-primary transition-colors cursor-pointer"
+                title="Toggle Theme"
+              >
+                {resolvedTheme === "dark" ? <Sun size={13} /> : <Moon size={13} />}
+                <span>{resolvedTheme === "dark" ? "Light" : "Dark"}</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
   }
 
-  if (user && !user.emailVerified && !getDevToken() && !devBypassed) {
+  if (user && !user.emailVerified && !getDevToken() && !devBypassed && !isPublicPage) {
     return (
       <EmailVerificationScreen
         user={user}
@@ -569,70 +600,111 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
                 {resolvedTheme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
               </button>
             )}
-            <DropdownMenu
-              ariaLabel="Account menu"
-              items={[
-                {
-                  id: "profile",
-                  label: "Profile",
-                  icon: <UserRound size={14} />,
-                  onSelect: () => router.push("/account"),
-                },
-                {
-                  id: "preferences",
-                  label: "Preferences",
-                  icon: <Settings2 size={14} />,
-                  onSelect: () => router.push("/account/preferences"),
-                },
-                {
-                  id: "help",
-                  label: "Help",
-                  icon: <CircleHelp size={14} />,
-                  onSelect: () => router.push("/help"),
-                },
-                {
-                  id: "about",
-                  label: "About",
-                  icon: <Info size={14} />,
-                  onSelect: () => router.push("/about"),
-                },
-                ...(isServiceAdmin
-                  ? [
-                      {
-                        id: "admin",
-                        label: "Admin",
-                        onSelect: () => router.push("/admin"),
-                      },
-                    ]
-                  : []),
-                {
-                  id: "signout",
-                  label: "Sign out",
-                  icon: <LogOut size={14} />,
-                  danger: true,
-                  onSelect: () => void handleSignOut(),
-                },
-              ]}
-              trigger={
-                <span
-                  className={iconBtn}
-                  title={
-                    profile?.displayName || user?.displayName
-                      ? `${profile?.displayName || user?.displayName} (${displayEmail})`
-                      : displayEmail || "Account"
-                  }
-                >
-                  <UserRound size={16} />
-                  <span className="hidden lg:inline max-w-[8rem] truncate">
-                    {profile?.displayName ||
-                      user?.displayName ||
-                      displayEmail?.split("@")[0] ||
-                      "Account"}
+            {signedIn ? (
+              <DropdownMenu
+                ariaLabel="Account menu"
+                items={[
+                  {
+                    id: "profile",
+                    label: "Profile",
+                    icon: <UserRound size={14} />,
+                    onSelect: () => router.push("/account"),
+                  },
+                  {
+                    id: "preferences",
+                    label: "Preferences",
+                    icon: <Settings2 size={14} />,
+                    onSelect: () => router.push("/account/preferences"),
+                  },
+                  {
+                    id: "help",
+                    label: "Help",
+                    icon: <CircleHelp size={14} />,
+                    onSelect: () => router.push("/help"),
+                  },
+                  {
+                    id: "about",
+                    label: "About",
+                    icon: <Info size={14} />,
+                    onSelect: () => router.push("/about"),
+                  },
+                  {
+                    id: "report-issue",
+                    label: "Report Issue",
+                    icon: <Bug size={14} />,
+                    onSelect: () =>
+                      window.open(GITHUB_ISSUES_URL, "_blank", "noopener,noreferrer"),
+                  },
+                  ...(isServiceAdmin
+                    ? [
+                        {
+                          id: "admin",
+                          label: "Admin",
+                          onSelect: () => router.push("/admin"),
+                        },
+                      ]
+                    : []),
+                  {
+                    id: "signout",
+                    label: "Sign out",
+                    icon: <LogOut size={14} />,
+                    danger: true,
+                    onSelect: () => void handleSignOut(),
+                  },
+                ]}
+                trigger={
+                  <span
+                    className={iconBtn}
+                    title={
+                      profile?.displayName || user?.displayName
+                        ? `${profile?.displayName || user?.displayName} (${displayEmail})`
+                        : displayEmail || "Account"
+                    }
+                  >
+                    <UserRound size={16} />
+                    <span className="hidden lg:inline max-w-[8rem] truncate">
+                      {profile?.displayName ||
+                        user?.displayName ||
+                        displayEmail?.split("@")[0] ||
+                        "Account"}
+                    </span>
+                    <ChevronDown size={12} className="opacity-60" />
                   </span>
-                  <ChevronDown size={12} className="opacity-60" />
-                </span>
-              }
-            />
+                }
+              />
+            ) : (
+              <div className="flex items-center gap-1 sm:gap-2">
+                {!onHelp && (
+                  <Link href="/help" className={iconBtn} title="Help & Docs">
+                    <CircleHelp size={16} />
+                    <span className="hidden md:inline">Help</span>
+                  </Link>
+                )}
+                {!onAbout && (
+                  <Link href="/about" className={iconBtn} title="About">
+                    <Info size={16} />
+                    <span className="hidden md:inline">About</span>
+                  </Link>
+                )}
+                <a
+                  href={GITHUB_ISSUES_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={iconBtn}
+                  title="Report Issue"
+                >
+                  <Bug size={16} />
+                  <span className="hidden sm:inline">Report Issue</span>
+                </a>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => router.push("/")}
+                >
+                  Sign in
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </header>

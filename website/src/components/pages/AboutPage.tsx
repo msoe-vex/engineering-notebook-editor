@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import Logo from "@/components/icons/Logo";
 import GithubIcon from "@/components/icons/GithubIcon";
+import { GITHUB_ISSUES_URL } from "@/lib/constants";
 
 const BLINK_CSS = `
   @keyframes blink {
@@ -501,6 +502,14 @@ export default function AboutPage({
                 Help & Docs
               </Link>
             )}
+            <a
+              href={GITHUB_ISSUES_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] font-black uppercase tracking-widest text-nb-on-surface-variant hover:text-nb-primary transition-colors cursor-pointer"
+            >
+              Report Issue
+            </a>
           </div>
         </div>
       </footer>
