@@ -112,6 +112,7 @@ export default function Sidebar({
         date: meta?.date,
         order: meta?.order ?? 0,
         isTemplate: meta?.isTemplate || false,
+        hidden: !!meta?.hidden,
         isValid: meta?.isValid !== false,
         validationErrors: meta?.validationErrors || []
       };

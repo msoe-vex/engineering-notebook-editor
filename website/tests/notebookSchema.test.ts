@@ -5,11 +5,13 @@ import {
   normalizeNotebookMetadata,
   notebookIndexEqualIgnoringUpdatedAt,
   entryMetadataEqualIgnoringUpdatedAt,
+  includedInCompilation,
   placeCreatedEntry,
   reorderTemplateSequence,
   serializeNotebookMetadata,
   sortedEntries,
 } from "@/lib/notebook/notebookSchema";
+import { generateAllEntriesLatex } from "@/lib/latex/latex";
 
 describe("normalizeNotebookMetadata", () => {
   it("migrates v3 dict entries, member arrays, and numeric phases", () => {
@@ -59,6 +61,49 @@ describe("normalizeNotebookMetadata", () => {
     const keys = Object.keys(JSON.parse(JSON.stringify(normalized.entries["e-1"])));
     expect(normalized.entries["e-1"].authors).toEqual(["Ada"]);
     expect(keys.slice(0, 4)).toEqual(["title", "authors", "phase", "createdAt"]);
+  });
+
+  it("persists hidden:true and omits it when false / absent (no migration needed)", () => {
+    const withHidden = normalizeNotebookMetadata({
+      version: 4,
+      entries: {
+        a: { title: "A", authors: ["x"], phase: null, date: "2026-09-01", createdAt: "", updatedAt: "", filename: "a", order: 0, hidden: true },
+        b: { title: "B", authors: ["x"], phase: null, date: "2026-09-02", createdAt: "", updatedAt: "", filename: "b", order: 1 },
+      },
+      phases: {},
+      team: { teamName: "", teamNumber: "", organization: "", members: {} },
+    });
+    expect(withHidden.entries.a.hidden).toBe(true);
+    expect(withHidden.entries.b.hidden).toBeUndefined();
+    expect(includedInCompilation(withHidden.entries.a)).toBe(false);
+    expect(includedInCompilation(withHidden.entries.b)).toBe(true);
+
+    const cleared = normalizeNotebookMetadata({
+      ...withHidden,
+      entries: {
+        a: { ...withHidden.entries.a, hidden: false },
+        b: withHidden.entries.b,
+      },
+    });
+    expect(cleared.entries.a.hidden).toBeUndefined();
+    expect(JSON.parse(serializeNotebookMetadata(cleared)).entries.a.hidden).toBeUndefined();
+  });
+
+  it("excludes hidden entries from generateAllEntriesLatex but not templates-only rule for dated entries", () => {
+    const meta = normalizeNotebookMetadata({
+      version: 4,
+      entries: {
+        visible: { title: "V", authors: ["x"], phase: null, date: "2026-09-01", createdAt: "", updatedAt: "", filename: "v", order: 0 },
+        hidden: { title: "H", authors: ["x"], phase: null, date: "2026-09-02", createdAt: "", updatedAt: "", filename: "h", order: 1, hidden: true },
+        tmpl: { title: "T", authors: [], phase: null, date: "", createdAt: "", updatedAt: "", filename: "t", order: 2, isTemplate: true },
+      },
+      phases: {},
+      team: { teamName: "", teamNumber: "", organization: "", members: {} },
+    });
+    const latex = generateAllEntriesLatex(meta);
+    expect(latex).toContain("latex/entries/visible.tex");
+    expect(latex).not.toContain("latex/entries/hidden.tex");
+    expect(latex).not.toContain("latex/entries/tmpl.tex");
   });
 
   it("migrates a comma-separated author string into authors", () => {

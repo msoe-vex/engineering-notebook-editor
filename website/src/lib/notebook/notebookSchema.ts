@@ -195,6 +195,7 @@ function migrateEntries(
         filename: asString(item.filename, `data/entries/${id}.json`),
         order: asNumber(item.order, fallbackOrder),
         ...(item.isTemplate ? { isTemplate: true } : {}),
+        ...(item.hidden ? { hidden: true } : {}),
         resources: isRecord(item.resources)
           ? (item.resources as EntryMetadata["resources"])
           : {},
@@ -319,12 +320,18 @@ function canonicalEntry(e: EntryMetadata): EntryMetadata {
     filename: e.filename || "",
     order: e.order,
     ...(e.isTemplate ? { isTemplate: true } : {}),
+    ...(e.hidden ? { hidden: true } : {}),
     resources: canonicalResources(e.resources),
     references: e.references || [],
     assets: e.assets || [],
     ...(e.isValid !== undefined ? { isValid: e.isValid } : {}),
     ...(e.validationErrors ? { validationErrors: e.validationErrors } : {}),
   };
+}
+
+/** Regular dated entries that appear in the compiled notebook (PDF / TOC). */
+export function includedInCompilation(e: EntryMetadata | undefined): boolean {
+  return !!e && !e.isTemplate && !e.hidden;
 }
 
 function canonicalTeam(team: TeamMetadata | undefined): TeamMetadata | undefined {
@@ -633,7 +640,8 @@ export function entryHeaderMetadataEqual(
     JSON.stringify(parseAuthors(a.authors)) === JSON.stringify(parseAuthors(b.authors)) &&
     (a.phase ?? null) === (b.phase ?? null) &&
     (a.date || "") === (b.date || "") &&
-    !!a.isTemplate === !!b.isTemplate
+    !!a.isTemplate === !!b.isTemplate &&
+    !!a.hidden === !!b.hidden
   );
 }
 
@@ -652,6 +660,7 @@ export function entriesEqualForMerge(
     date: e.date || "",
     filename: e.filename || "",
     ...(e.isTemplate ? { isTemplate: true as const } : {}),
+    ...(e.hidden ? { hidden: true as const } : {}),
     resources: canonicalResources(e.resources),
     references: [...(e.references || [])].sort(),
     assets: [...(e.assets || [])].sort(),

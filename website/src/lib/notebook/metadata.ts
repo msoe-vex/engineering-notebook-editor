@@ -12,6 +12,7 @@ export {
   resourcesEqual,
   entriesEqualForMerge,
   entryHeaderMetadataEqual,
+  includedInCompilation,
   sortedEntries,
   sortedMembers,
   sortedPhases,
@@ -99,6 +100,8 @@ export interface EntryMetadata {
   filename: string; // Path to the entry file (e.g. "data/entries/uuid.json")
   order: number;
   isTemplate?: boolean; // When true, excluded from LaTeX entries.tex compilation and export
+  /** When true, entry stays editable/visible in the app but is omitted from compiled PDF/TOC. */
+  hidden?: boolean;
   resources?: Record<string, { title: string, caption: string, type: string }>; // block uuid -> metadata
   isValid?: boolean;
   references?: string[]; // List of target UUIDs this entry points to

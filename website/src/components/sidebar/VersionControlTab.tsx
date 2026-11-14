@@ -178,6 +178,7 @@ export default function VersionControlTab({ showConfirm }: VersionControlTabProp
         if (baseEntry.title !== entry.title) notes.push("title");
         if (baseEntry.phase !== entry.phase) notes.push("phase");
         if (JSON.stringify(baseEntry.authors || []) !== JSON.stringify(entry.authors || [])) notes.push("authors");
+        if (!!baseEntry.hidden !== !!entry.hidden) notes.push(entry.hidden ? "hidden" : "unhidden");
         if ((baseEntry.updatedAt || "") !== (entry.updatedAt || "")) notes.push("updated");
         if (notes.length > 0) metadataFieldNotes.set(id, notes);
 

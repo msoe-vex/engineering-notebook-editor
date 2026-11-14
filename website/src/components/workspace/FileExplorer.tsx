@@ -9,7 +9,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   FileText, Plus, X, Calendar, SortAsc, SortDesc,
   ChevronDown, ExternalLink, Trash2, FileJson, FileCode,
-  Download, Copy, Layers, FolderTree, GripVertical
+  Download, Copy, Layers, FolderTree, GripVertical, EyeOff
 } from "lucide-react";
 import ValidationTooltip from "@/components/editor/ui/ValidationTooltip";
 
@@ -84,6 +84,7 @@ function FileRow({
   const tooltipLines = [file.title || (file.isTemplate ? "Untitled Template" : "Untitled Entry")];
   if (file.author) tooltipLines.push(`By ${file.author}`);
   if (!file.isTemplate && file.date) tooltipLines.push(file.date);
+  if (file.hidden) tooltipLines.push("Hidden from compiled notebook");
 
   const subtitle = file.isTemplate
     ? (phaseLabel || "Template")
@@ -169,19 +170,28 @@ function FileRow({
             : 'bg-transparent border-transparent hover:bg-nb-surface-mid text-nb-on-surface'
         }
         ${isDeleted ? 'opacity-30 grayscale' : ''}
+        ${!isDeleted && file.hidden ? 'opacity-70' : ''}
       `}
     >
       {dragHandle}
-      <div className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center ${isOpened ? 'bg-white/20 text-white' : isSelected ? 'bg-nb-tertiary/10 text-nb-tertiary' : 'bg-nb-surface-low text-nb-tertiary'}`}>
+      <div className={`relative shrink-0 w-8 h-8 rounded-xl flex items-center justify-center ${isOpened ? 'bg-white/20 text-white' : isSelected ? 'bg-nb-tertiary/10 text-nb-tertiary' : 'bg-nb-surface-low text-nb-tertiary'}`}>
         {icon}
+        {file.hidden && !isDeleted && (
+          <span
+            className={`absolute -bottom-0.5 -right-0.5 rounded-md p-0.5 shadow-sm ${isOpened ? 'bg-white text-nb-tertiary' : 'bg-nb-surface text-nb-on-surface-variant'}`}
+            title="Hidden from compiled notebook"
+          >
+            <EyeOff size={9} strokeWidth={2.5} />
+          </span>
+        )}
       </div>
 
       <div className="flex flex-col flex-1 min-w-0">
-        <span className={`truncate font-bold tracking-tight leading-tight ${isOpened ? 'text-white' : 'text-nb-on-surface'}`}>
+        <span className={`truncate font-bold tracking-tight leading-tight ${isOpened ? 'text-white' : file.hidden ? 'text-nb-on-surface-variant' : 'text-nb-on-surface'}`}>
           {file.title || "Untitled Entry"}
         </span>
         <span className={`text-[9px] font-mono truncate mt-0.5 ${isOpened ? 'text-white/70' : 'opacity-40'}`}>
-          {subtitle}
+          {file.hidden && !file.isTemplate ? `Hidden · ${subtitle}` : subtitle}
         </span>
       </div>
 
