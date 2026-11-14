@@ -101,7 +101,7 @@ export interface IWorkspaceStore {
   createTemporaryProject(): Promise<string>;
   selectProject(id: string): Promise<void>;
   openEntry(id: string): Promise<void>;
-  updateDraft(tiptapContent: string | null, info: { title?: string; authors?: string[]; phase?: string | null; date?: string }): void;
+  updateDraft(tiptapContent: string | null, info: { title?: string; authors?: string[]; phase?: string | null; date?: string; hidden?: boolean }): void;
   updateEntry(id: string, latex: string, tiptapContent: string, info: { title: string; authors: string[]; phase: string | null; date: string }): Promise<void>;
   createEntry(): Promise<string>;
   duplicateEntry(sourceId: string, options?: { asTemplate?: boolean; title?: string; authors?: string[]; phase?: string | null; date?: string }): Promise<string>;

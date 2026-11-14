@@ -175,8 +175,8 @@ export async function compileNotebook(mode: CompileMode = "quality", onStatus?: 
     files.push({ path: ENTRIES_INDEX_PATH, content: entriesIndexTex });
   }
 
-  // 4. Map entry .tex files (templates do not have or need .tex files)
-  for (const [id] of Object.entries(store.metadata.entries).filter(([, e]) => !e.isTemplate)) {
+  // 4. Map entry .tex files (templates / hidden entries are omitted from the PDF)
+  for (const [id] of Object.entries(store.metadata.entries).filter(([, e]) => !e.isTemplate && !e.hidden)) {
     const entryTexPath = `${LATEX_DIR}/${id}.tex`;
     const tex = await store.getFileContent(entryTexPath);
     if (tex) {

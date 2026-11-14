@@ -568,6 +568,33 @@ describe("reconcileNotebookMerge", () => {
     expect(orphanIds).toEqual([]);
   });
 
+  it("keeps local hidden-only index edits when entry JSON was not re-staged", () => {
+    const base = notebook({
+      entryA: { title: "A", order: 0, date: "2026-09-01" },
+      entryB: { title: "B", order: 1, date: "2026-09-02" },
+    });
+    const local = notebook({
+      entryA: { title: "A", order: 0, date: "2026-09-01", hidden: true, updatedAt: "2026-09-05T12:00:00.000Z" },
+      entryB: { title: "B", order: 1, date: "2026-09-02" },
+    });
+    const remote = notebook({
+      entryA: { title: "A", order: 0, date: "2026-09-01" },
+      entryB: { title: "B", order: 1, date: "2026-09-02" },
+    });
+    const { fileIds, pendingUpsertIds, pendingDeleteIds } = collectEntryFileIds(
+      ["data/entries/entryA.json", "data/entries/entryB.json"],
+      []
+    );
+
+    const { merged } = reconcileNotebookMerge(base, local, remote, {
+      fileIds,
+      pendingUpsertIds,
+      pendingDeleteIds,
+    });
+
+    expect(merged.entries.entryA.hidden).toBe(true);
+  });
+
   it("keeps local date-only index edits when entry JSON was not re-staged", () => {
     const base = notebook({
       entryA: { title: "A", order: 0, date: "2026-09-01" },

@@ -12,7 +12,8 @@ import {
   Undo2, Redo2, ImagePlus, ChevronDown, ChevronUp, List, ListOrdered,
   Code, Table as TableIcon, Heading, Bold, Italic, Image as ImageIcon,
   Terminal, Link as LinkIcon, Underline as UnderlineIcon, Sigma,
-  FileJson, Strikethrough, Palette, Highlighter, Superscript, Subscript, HelpCircle
+  FileJson, Strikethrough, Palette, Highlighter, Superscript, Subscript, HelpCircle,
+  Eye, EyeOff
 } from "lucide-react";
 import ValidationTooltip from "./ui/ValidationTooltip";
 import * as LucideIcons from "lucide-react";
@@ -749,6 +750,7 @@ const EditorContent = React.memo(function EditorContent({
   const [editor, setEditor] = useState<TiptapEditor | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const isTemplate = metadata.entries[entryId]?.isTemplate || false;
+  const isHidden = !!metadata.entries[entryId]?.hidden;
 
   const validate = useCallback(() => {
     const entryIdMeta = metadata.entries[entryId];
@@ -1254,6 +1256,21 @@ const EditorContent = React.memo(function EditorContent({
                       />
                     </div>
 
+                    {!isTemplate && (
+                      <button
+                        type="button"
+                        title={isHidden ? "Show in compiled notebook" : "Hide from compiled notebook"}
+                        onClick={() => updateDraft(null, { hidden: !isHidden })}
+                        className={`shrink-0 h-9 w-9 rounded-xl border flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
+                          isHidden
+                            ? "border-nb-tertiary/40 bg-nb-tertiary/10 text-nb-tertiary"
+                            : "border-nb-outline-variant/30 bg-nb-surface-low text-nb-on-surface-variant hover:text-nb-on-surface hover:bg-nb-surface-mid"
+                        }`}
+                      >
+                        {isHidden ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    )}
+
                     {!localIsValid && validationErrors.filter((e) => !/missing for /i.test(e)).length > 0 && (
                       <ValidationTooltip
                         errors={validationErrors.filter((e) => !/missing for /i.test(e))}
@@ -1264,6 +1281,13 @@ const EditorContent = React.memo(function EditorContent({
                       />
                     )}
                   </div>
+
+                  {isHidden && !isTemplate && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-nb-tertiary/10 text-nb-tertiary text-[10px] font-bold tracking-wide">
+                      <EyeOff size={12} className="shrink-0" />
+                      Hidden from compiled notebook (still editable; excluded from PDF / TOC)
+                    </div>
+                  )}
 
                   <div className={`grid w-full min-w-0 gap-2 ${isTemplate ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3"}`}>
                     {!isTemplate && (

@@ -12,7 +12,8 @@ import {
   Image as ImageIcon,
   SlidersHorizontal,
   Check,
-  Filter
+  Filter,
+  EyeOff
 } from "lucide-react";
 import { ExplorerFile } from "@/lib/types";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -101,7 +102,8 @@ export default function SearchTab({
         createdAt: meta?.createdAt,
         updatedAt: meta?.updatedAt,
         resources: meta?.resources,
-        isTemplate: meta?.isTemplate ?? f.isTemplate ?? false
+        isTemplate: meta?.isTemplate ?? f.isTemplate ?? false,
+        hidden: !!meta?.hidden,
       };
     });
   }, [entries, metadata]);
@@ -620,13 +622,13 @@ export default function SearchTab({
               <div
                 key={file.path}
                 onClick={() => onSelectEntry(file)}
-                title={[file.title || (file.isTemplate ? "Untitled Template" : "Untitled Entry"), file.author ? `By ${file.author}` : null, file.isTemplate ? null : file.date || null].filter(Boolean).join(' · ')}
-                className="w-full text-left p-2.5 rounded-xl bg-nb-surface hover:bg-nb-surface-high/80 border border-nb-outline-variant/30 hover:border-nb-primary/40 transition-all cursor-pointer group shadow-nb-xs"
+                title={[file.title || (file.isTemplate ? "Untitled Template" : "Untitled Entry"), file.author ? `By ${file.author}` : null, file.isTemplate ? null : file.date || null, file.hidden ? "Hidden from compiled notebook" : null].filter(Boolean).join(' · ')}
+                className={`w-full text-left p-2.5 rounded-xl bg-nb-surface hover:bg-nb-surface-high/80 border border-nb-outline-variant/30 hover:border-nb-primary/40 transition-all cursor-pointer group shadow-nb-xs ${file.hidden ? "opacity-70" : ""}`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     {/* Title */}
-                    <div className="text-[12px] font-bold text-nb-on-surface truncate group-hover:text-nb-primary transition-colors">
+                    <div className={`text-[12px] font-bold truncate group-hover:text-nb-primary transition-colors ${file.hidden ? "text-nb-on-surface-variant" : "text-nb-on-surface"}`}>
                       {matchesTitle ? highlightMatch(file.title || "Untitled Entry", query) : (file.title || "Untitled Entry")}
                     </div>
 
@@ -657,6 +659,12 @@ export default function SearchTab({
                       <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-md border bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400 flex items-center gap-0.5">
                         <Layers size={8} />
                         Template
+                      </span>
+                    )}
+                    {file.hidden && !file.isTemplate && (
+                      <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-md border bg-nb-tertiary/10 border-nb-tertiary/30 text-nb-tertiary flex items-center gap-0.5">
+                        <EyeOff size={8} />
+                        Hidden
                       </span>
                     )}
                     {phase && (

@@ -137,7 +137,7 @@ export class EntryManager {
 
   updateDraft(
     tiptapContent: string | null,
-    info: { title?: string; authors?: string[]; phase?: string | null; date?: string }
+    info: { title?: string; authors?: string[]; phase?: string | null; date?: string; hidden?: boolean }
   ) {
     if (!this.store.openFile) return;
     const id = this.store.openFile.id;
@@ -147,9 +147,12 @@ export class EntryManager {
     const authorChanged = info.authors !== undefined && !authorsEqual(info.authors, this.store.openFile.authors);
     const phaseChanged = info.phase !== undefined && info.phase !== this.store.openFile.phase;
     const dateChanged = info.date !== undefined && info.date !== this.store.openFile.date;
+    const hiddenChanged =
+      info.hidden !== undefined &&
+      !!info.hidden !== !!this.store.metadata.entries[id]?.hidden;
     const contentChanged = tiptapContent !== null && tiptapContent !== this.store.openFile.tiptapContent;
 
-    if (!titleChanged && !authorChanged && !phaseChanged && !dateChanged && !contentChanged) {
+    if (!titleChanged && !authorChanged && !phaseChanged && !dateChanged && !hiddenChanged && !contentChanged) {
       return; // No real change, do not bump updatedAt or stage pending saves
     }
 
@@ -170,19 +173,20 @@ export class EntryManager {
     }
     const existingEntry = meta.entries[id];
     if (existingEntry) {
+      const nextEntry: EntryMetadata = {
+        ...existingEntry,
+        ...(info.title !== undefined ? { title: info.title } : {}),
+        ...(info.authors !== undefined ? { authors: info.authors } : {}),
+        ...(info.phase !== undefined ? { phase: info.phase } : {}),
+        ...(!dateChanged && info.date !== undefined ? { date: info.date } : {}),
+        updatedAt: this.store.openFile.updatedAt,
+      };
+      if (info.hidden === true) nextEntry.hidden = true;
+      else if (info.hidden === false) delete nextEntry.hidden;
+
       this.store.metadata = normalizeNotebookMetadata({
         ...meta,
-        entries: {
-          ...meta.entries,
-          [id]: {
-            ...existingEntry,
-            ...(info.title !== undefined ? { title: info.title } : {}),
-            ...(info.authors !== undefined ? { authors: info.authors } : {}),
-            ...(info.phase !== undefined ? { phase: info.phase } : {}),
-            ...(!dateChanged && info.date !== undefined ? { date: info.date } : {}),
-            updatedAt: this.store.openFile.updatedAt,
-          }
-        }
+        entries: { ...meta.entries, [id]: nextEntry },
       });
     }
 
@@ -434,6 +438,7 @@ export class EntryManager {
       filename: newPath,
       order: Object.keys(this.store.metadata.entries || {}).length,
       isTemplate: isTemplate || undefined,
+      ...(!isTemplate && sourceMeta.hidden ? { hidden: true as const } : {}),
       resources: remappedEntryMeta.resources,
       references: remappedEntryMeta.references,
       assets: sourceMeta.assets ? [...sourceMeta.assets] : undefined

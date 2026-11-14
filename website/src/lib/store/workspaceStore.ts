@@ -181,7 +181,7 @@ class WorkspaceStore implements IWorkspaceStore {
     return this.entryManager.openEntry(id);
   }
 
-  public updateDraft(tiptapContent: string | null, info: { title?: string; authors?: string[]; phase?: string | null; date?: string }) {
+  public updateDraft(tiptapContent: string | null, info: { title?: string; authors?: string[]; phase?: string | null; date?: string; hidden?: boolean }) {
     return this.entryManager.updateDraft(tiptapContent, info);
   }
 

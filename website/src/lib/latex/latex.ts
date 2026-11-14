@@ -401,7 +401,9 @@ export const generateEntryLatex = (cnt: TipTapNode | string, t: string, a: strin
 };
 
 export const generateAllEntriesLatex = (metadata: { entries: Record<string, EntryMetadata> }, prefix: string = ""): string => {
-  const entries = sortedEntries(metadata.entries).filter(entry => !entry.isTemplate);
+  const entries = sortedEntries(metadata.entries).filter(
+    (entry) => !entry.isTemplate && !entry.hidden
+  );
 
   return entries
     .map(entry => `\\input{${prefix}latex/entries/${entry.id}.tex}`)
