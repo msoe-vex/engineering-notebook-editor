@@ -1,7 +1,9 @@
 # Cloud data model (schema v5)
 
 Authoritative TypeScript types: [`packages/shared/src/types.ts`](../../packages/shared/src/types.ts).  
-Clients never talk to Firestore directly (`infra/firestore.rules` deny); Core / Agents / Collab use Admin SDK.
+Clients never talk to Firestore/metadata store directly (`infra/firestore.rules` deny); Core / Collab use server adapters ([ADR-009](../02-architecture/decisions/ADR-009-platform-ports.md)).
+
+**Shipped** fields are below. **Planned** product surfaces (public org page, public notebooks, alumni, richer auth) are sketched at the end so FRs and implementation share one contract — update this file when those land in `types.ts`.
 
 ## Current collections (implemented)
 
@@ -112,3 +114,60 @@ See [backlog.md](../01-requirements/backlog.md).
 ## Cascade deletes
 
 Notebook (and org) delete removes Firestore children (entries, assets, audits, roster) **and** related GCS objects (TipTap, Yjs, assets, exports).
+
+---
+
+## Planned (not in `types.ts` yet)
+
+Contract sketches for [FR-org-public-page](../01-requirements/features/FR-org-public-page.md), [FR-public-notebook](../01-requirements/features/FR-public-notebook.md), [FR-orgs](../01-requirements/features/FR-orgs.md) alumni, [FR-auth](../01-requirements/features/FR-auth.md). Shapes may tighten at implement time; keep FRs and this section in sync.
+
+### Org slug + public page
+
+| Path / field | Notes |
+| --- | --- |
+| `organizations/{orgId}.slug` | Globally unique, URL-safe; admin-set if not taken; reserved list |
+| `orgSlugs/{slug}` → `{ orgId }` | Lookup / uniqueness (or equivalent unique index) |
+| `organizations/{orgId}.publicPage` | `{ visibility: "public" \| "hidden", announcement?, mission?, cta?, … }` |
+| `…/publicDonors/{id}` | name, logoAssetId?, url?, tier?, order |
+| `…/publicProjects/{id}` | title, season?, summary, highlights[], media[], externalUrl?, order, visibility |
+| `…/publicEvents/{id}` | kind: `recurring` \| `dated`; day/time or date; title; location; order |
+| `…/publicMembers/{id}` | curated card (name, role, classYear?, photoAssetId?, order) — not ACL dump |
+| `…/publicSocial/{id}` | label, url, order |
+| `…/publicMedia/{id}` | assetId, caption?, order |
+
+Public URLs: `/o/:slug`, `/o/:slug/projects`, `/events`, `/members`.
+
+### Public notebook
+
+On `notebooks/{notebookId}` (in addition to summary fields today):
+
+```
+publicAccess?: "off" | "unlisted" | "public"   // default off
+publicKey?: string        // per-org slug segment (unique within org)
+publicToken?: string      // opaque revoke/rotate secret (optional alternate key)
+publishedAt?, publishedBy?
+```
+
+| Lookup | Purpose |
+| --- | --- |
+| `organizations/{orgId}/publicNotebookKeys/{publicKey}` → `{ notebookId }` | Resolve `/o/:orgSlug/n/:publicKey` |
+
+URL: **`/o/:orgSlug/n/:publicKey`** (token/id allowed as `publicKey` value if desired). Multiple published notebooks per org = multiple keys.
+
+### Org member alumni
+
+| Field | Notes |
+| --- | --- |
+| `members/{uid}.status` | `"active"` \| `"alumni"` (default active) |
+| `members/{uid}.alumniAt?` | set when moved to alumni |
+
+### Auth / user profile extras
+
+| Field | Notes |
+| --- | --- |
+| `users/{uid}.secondaryEmails[]` | `{ email, verified, verifiedAt? }` — invite matching when verified |
+| `users/{uid}.linkedProviders[]` | provider ids from IdP (informational; source of truth is IdP) |
+
+### Notifications
+
+No durable “mail queue” required in MVP; optional later `notificationLog/{id}` for admin audit. Provider secrets stay in env — [FR-notifications](../01-requirements/features/FR-notifications.md).

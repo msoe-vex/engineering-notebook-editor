@@ -10,5 +10,6 @@
 | [ADR-006](./ADR-006-compile-job.md) | Async notebook jobs (compile first) |
 | [ADR-007](./ADR-007-python-langgraph-judge.md) | Python LangGraph judge worker |
 | [ADR-008](./ADR-008-job-dispatch-evolution.md) | Job dispatch evolution (HTTP → Pub/Sub; Tasks optional) |
+| [ADR-009](./ADR-009-platform-ports.md) | Platform ports (metadata, storage, identity, notifications) |
 
 Add new ADRs by copying an existing file; do not renumber accepted ADRs.

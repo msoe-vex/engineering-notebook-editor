@@ -13,7 +13,9 @@
 | **Contributors** | Notebook credits list (name/role/photo); may lack app accounts. Distinct from org **People** / ACL members. |
 | **Notebook Settings** | Notebook-scoped branding, phases, access (route `/setup`). Distinct from Account **Preferences**. |
 | **Calendar** | Date-ordered entry view (route `/schedule`); same-day sequence uses `order`. |
-| **Entry** | One design entry; **metadata** in Firestore; TipTap/Yjs in GCS |
+| **Entry** | One design entry; **metadata** in the app metadata store (Firestore adapter today); TipTap/Yjs in object storage (GCS adapter today) |
+| **Port / adapter** | Interface Core depends on (`MetadataStore`, `StoragePort`, Identity, `NotificationPort`, …); vendor SDKs live only in adapters |
+| **Primary / secondary email** | Primary from IdP; secondaries on user profile, verified before invite matching (planned) |
 | **Trash** | Soft-deleted entries (`deletedAt` set); restore or permanent purge |
 | **Folder** | Tree node in `notebook.folders`; entries have `folderId` |
 | **explorerOrder** | Sibling order in the file explorer within a folder |

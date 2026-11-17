@@ -1,11 +1,11 @@
 # FR-public-notebook: Public notebook share link
 
 Status: planned  
-Related: [FR-notebooks](./FR-notebooks.md), [roadmap](../../00-product/roadmap.md), [tenancy-acl](../../02-architecture/tenancy-acl.md)
+Related: [FR-notebooks](./FR-notebooks.md), [FR-org-public-page](./FR-org-public-page.md), [roadmap](../../00-product/roadmap.md), [tenancy-acl](../../02-architecture/tenancy-acl.md), [schema](../../03-reference/schema.md)
 
 ## Summary
 
-Allow publishing a **read-only public (or unlisted) link** to a notebook so outsiders (judges, mentors, alumni, recruiters) can view content without becoming org members. Default remains private.
+Allow publishing a **read-only public (or unlisted) link** to a notebook so outsiders (judges, mentors, alumni, recruiters) can view content without becoming org members. Default remains private. Multiple notebooks per org can be published (e.g. season versions) under the same org slug.
 
 ## Actors and permissions
 
@@ -18,30 +18,37 @@ Allow publishing a **read-only public (or unlisted) link** to a notebook so outs
 
 ## User-facing behavior
 
-- Notebook **Settings**: toggle “Public link” / “Anyone with the link” / Off
-- Copy share URL (slug or opaque token)
+- Notebook **Settings**: toggle `off` | `unlisted` | `public`
+- Share URL under the org’s public slug:
+
+  **`/o/:orgSlug/n/:notebookKey`**
+
+  where `notebookKey` is a **per-org** public slug (preferred), or opaque token / id fallback. Lets one org publish several notebooks (e.g. `…/n/high-stakes-2025`, `…/n/over-under-2024`) without colliding across orgs.
 - Public view: read-only explorer + entry render (no collab write, no Settings)
-- Revoke regenerates or disables the token
+- Revoke disables access; changing `notebookKey` or regenerating token invalidates old URLs (redirects optional later)
+- Unlisted: reachable by URL, `noindex`; not listed on the org public Projects page unless explicitly featured
 
 ## Acceptance criteria
 
 - [ ] Unpublished notebooks are not reachable via old links after revoke
 - [ ] Public view never exposes org People invites, admin APIs, or other notebooks
 - [ ] Restricted-mode notebooks still require an explicit publish action
+- [ ] `notebookKey` unique within the org; org slug + key resolves to at most one notebook
 - [ ] Audit: who published / revoked is recorded (admin-visible)
 
 ## Data and APIs
 
-- Notebook fields e.g. `publicAccess: "off" | "unlisted" | "public"`, `publicSlug` / `publicToken`, `publishedAt`
-- Public GET routes (no org membership) — details in [api-contracts](../../03-reference/api-contracts.md) when implemented
+- Notebook fields — [schema.md](../../03-reference/schema.md) Planned: `publicAccess`, `publicKey` / `publicToken`, `publishedAt`, `publishedBy`
+- Public GET under `/o/:orgSlug/n/:notebookKey` (no org membership) — [api-contracts](../../03-reference/api-contracts.md) when implemented
 
 ## Non-goals
 
 - Public **write** collaboration
-- SEO indexing of unlisted links (robots/noindex for unlisted)
+- SEO indexing of unlisted links
 - Publishing a single entry without the notebook (follow-up)
+- Global short `/n/:token` URLs in MVP (optional later alias)
 
 ## Open questions / risks
 
-- PDF compile on public view: allow download of last compiled PDF only vs live compile  
-- Whether entry bodies use a frozen snapshot or live read of GCS
+- PDF on public view: last compiled download only vs live compile  
+- Live GCS read vs frozen publish snapshot

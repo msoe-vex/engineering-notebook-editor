@@ -5,14 +5,14 @@ Related: [tenancy-acl](../../02-architecture/tenancy-acl.md), [FR-auth](../featu
 
 ## Requirement
 
-- Clients never access Firestore/GCS with user credentials; Admin SDK only in Core/Collab/Agents (`firestore.rules` deny).
-- Every Core/Agents mutating route authenticates and authorizes org/notebook access (restricted mode respected).
+- Clients never access metadata/object stores with user credentials; Admin/server SDKs only inside Core/Collab **adapters** (`firestore.rules` deny for Firestore).
+- Every Core mutating route authenticates and authorizes org/notebook access (restricted mode respected).
 - Collab WSS authenticates unless explicitly disabled for local smoke (`COLLAB_AUTH_DISABLED`).
-- Invites expire and optionally bind to email.
+- Invites expire and optionally bind to a **verified** email (primary or secondary — [FR-auth](../features/FR-auth.md)).
 
 ## Current implementation
 
-Firebase Auth bearer → Core; nested Firestore paths; Agents audit ACL; invite `expiresAt` + email match.
+Identity bearer → Core `AuthPort` (Firebase adapter); Firestore paths for metadata; invite `expiresAt` + email match. Ports expansion: [ADR-009](../../02-architecture/decisions/ADR-009-platform-ports.md).
 
 ## Verification
 

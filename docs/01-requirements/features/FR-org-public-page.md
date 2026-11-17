@@ -1,11 +1,37 @@
 # FR-org-public-page: Public organization profile
 
 Status: planned  
-Related: [FR-orgs](./FR-orgs.md), [roadmap](../../00-product/roadmap.md), [vex-website](https://github.com/msoe-vex/vex-website)
+Related: [FR-orgs](./FR-orgs.md), [FR-public-notebook](./FR-public-notebook.md), [roadmap](../../00-product/roadmap.md), [vex-website](https://github.com/msoe-vex/vex-website) / [msoevex.com](https://msoevex.com)
 
 ## Summary
 
-Optional **public org page** for people outside the org: projects, donors, sponsors, events, social links, photos/media. Visibility is **public** or **hidden**. This is separate from the signed-in **org dashboard** (notebooks, people, teams).
+Optional **public org page** for people outside the org — a multi-tenant “club site” surface inspired by [msoevex.com](https://msoevex.com) (Raider Robotics): mission, donors/sponsors, projects/robots, events, public members/board, contact/social, media. Visibility is **public** or **hidden**. Separate from the signed-in **org dashboard** (notebooks, people, teams).
+
+## URL / IA decision
+
+**Do not** make `/orgs/:orgId` the public page and shove the app under `/orgs/:orgId/dashboard`.
+
+| Surface | Path | Audience |
+| --- | --- | --- |
+| **Org dashboard** (keep) | `/orgs/:orgId`, `/people`, `/teams`, `/notebooks/…` | Signed-in members |
+| **Public org site** | `/o/:orgSlug` (+ section paths below) | Anyone when visibility = public |
+| **Admin preview / editor** | `/orgs/:orgId/public` (or Settings → Public page) | Org admins; preview + CMS |
+
+**Org slug:** Admins set `organizations.slug` (lowercase URL-safe). Must be **globally unique** if not taken; rename updates public URLs (optional redirect from old slug — later). Reserved words blocked (`admin`, `api`, `o`, `orgs`, …). Schema: [schema.md](../../03-reference/schema.md) planned section.
+
+**Why:** `/orgs/:orgId` is already the member home (notebooks). Flipping it to marketing breaks bookmarks and mixes app chrome with a public layout. Slug URLs (`/o/raider-robotics`) are shareable and SEO-friendly; UUIDs are not. This matches msoevex.com’s split: public **Projects / Events / Members** vs a separate **Dashboard** entry to the app.
+
+Public notebooks nest under the org slug ([FR-public-notebook](./FR-public-notebook.md)): `/o/:orgSlug/n/:notebookKey` — not under the dashboard tree.
+
+### Public section routes (MVP)
+
+| Path | Content |
+| --- | --- |
+| `/o/:slug` | Home: mission, announcement strip, donors teaser, featured projects, board teaser, CTA |
+| `/o/:slug/projects` | Project / robot archive (season filters) |
+| `/o/:slug/events` | Recurring meetings + upcoming competitions |
+| `/o/:slug/members` | Public roster / board (+ alumni later) |
+| `/o/:slug/donate` or CTA | External donate link or short donor blurb (optional) |
 
 ## Actors and permissions
 
@@ -15,36 +41,55 @@ Optional **public org page** for people outside the org: projects, donors, spons
 | Org member | no (unless granted later) | yes | no |
 | Anonymous visitor | no | yes | no (404 / gated) |
 
-## User-facing behavior
+## Content model (from msoevex.com)
 
-- Dashboard: `/orgs/:orgId` — manage notebooks & membership (unchanged primary job)
-- Public: e.g. `/o/:orgSlug` or `/orgs/:orgId/public` — marketing profile
-- CMS sections (MVP): about blurb, projects, sponsors/donors, events, social links, media gallery
-- Toggle: Public | Hidden
+MVP sections admins can edit (each public|hidden at section or page level as needed):
 
-## Relationship to vex-website
+| Section | Fields (indicative) |
+| --- | --- |
+| **Branding** | Display name, logo, tagline, accent colors (optional) |
+| **Announcement** | Optional top banner (e.g. “Next meeting…”) + link |
+| **Mission / about** | Short blurb |
+| **Donors / sponsors** | Name, logo, URL, tier/order |
+| **Projects** | Title, season/year, summary, highlights[], media, optional “Source / CAD” URL |
+| **Events** | Recurring rows (day/time/title/location) + dated competitions/milestones |
+| **Members (public)** | Curated board/roster cards (name, role, major/class, photo) — **not** full ACL People dump |
+| **Contact / social** | Email, Discord, GitHub, other links |
+| **Media** | Photo/video gallery (reuse asset/GCS patterns) |
+| **CTA** | Join / donate copy + links |
+| **Footer** | Org copyright, parent org credit, trademark disclaimer (templated) |
 
-[msoe-vex/vex-website](https://github.com/msoe-vex/vex-website) remains the current MSOE VEX club site. ENGen’s public org page is multi-tenant (any org). Deep integration or content migration from vex-website is a later optional project — not a blocker for MVP.
+**Toggle:** whole page Public | Hidden. Unpublished projects/members can stay draft.
+
+## Relationship to vex-website / msoevex.com
+
+[msoe-vex/vex-website](https://github.com/msoe-vex/vex-website) remains the current MSOE VEX club site. ENGen’s public org page is multi-tenant (any org). Migrating Raider content into ENGen is optional later — not an MVP blocker. Feature parity target for MVP is the **information architecture** above, not pixel-perfect clone.
 
 ## Acceptance criteria
 
-- [ ] Hidden pages are not listed on any public directory and return non-success for anonymous users
-- [ ] Editing public page content never requires notebook ACL beyond org admin
-- [ ] Dashboard IA clearly separates “Public page” from “People / Notebooks”
+- [ ] `/orgs/:orgId` remains the signed-in dashboard (notebooks); public site is `/o/:orgSlug`
+- [ ] Org admin can claim/change slug; conflict if taken; invalid/reserved slugs rejected
+- [ ] Hidden pages are not listed publicly and return non-success for anonymous users
+- [ ] Editing public page content is org-admin (not notebook ACL)
+- [ ] Dashboard nav has a clear “Public page” / “View public site” entry
+- [ ] Home + Projects + Events + Members sections ship for MVP (donate may be CTA-only)
 - [ ] Media uploads use existing asset/GCS patterns with size limits
+- [ ] Public layout does **not** use notebook AppChrome (marketing shell)
 
 ## Data and APIs
 
-- Org profile document / subcollection: `publicPage: { visibility, sections… }`, optional `slug`
-- Public read API without membership; write API admin-only — see schema/API when implemented
+- See [schema.md](../../03-reference/schema.md) **Planned** — `slug`, `publicPage`, donors/projects/events/…  
+- Public GET by slug (no membership); write APIs admin-only — [api-contracts](../../03-reference/api-contracts.md) when implemented
 
 ## Non-goals
 
 - Full CMS / blog engine  
-- Replacing vex-website in v1  
-- Mixing notebook editor chrome into the public marketing layout
+- Replacing msoevex.com in v1  
+- Custom domains per org (later)  
+- Auto-publishing every ACL member onto the public Members page (curated / board first; alumni opt-in later)
 
 ## Open questions / risks
 
-- Custom domains per org (out of scope initially)  
-- Whether alumni roster is auto-pulled onto the public page ([FR-orgs](./FR-orgs.md) alumni)
+- Whether published **notebooks** appear as projects or only manually curated project cards  
+- Alumni auto-pull onto Members ([FR-orgs](./FR-orgs.md))  
+- Old-slug redirects after rename

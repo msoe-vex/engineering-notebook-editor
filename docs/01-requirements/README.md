@@ -20,6 +20,7 @@ Product context: [00-product/](../00-product/). Contracts: [03-reference/](../03
 | [Cloud UX hardening & legacy parity](./plans/cloud-ux-hardening.md) | active |
 | [Mobile-responsive shell](./plans/mobile-responsive.md) | active |
 | [Explorer search & context menus](./plans/explorer-search-context-menus.md) | mostly done (F deferred) |
+| [Platform ports (metadata, identity, notifications)](./plans/platform-ports.md) | planned |
 
 Also: [backlog.md](./backlog.md) · [roadmap](../00-product/roadmap.md).
 
@@ -27,7 +28,8 @@ Also: [backlog.md](./backlog.md) · [roadmap](../00-product/roadmap.md).
 
 | ID | Title | Status |
 | --- | --- | --- |
-| [FR-auth](./features/FR-auth.md) | Authentication & session | current |
+| [FR-auth](./features/FR-auth.md) | Authentication & session (reset / social / multi-email planned) | partial |
+| [FR-notifications](./features/FR-notifications.md) | Transactional email & notifications | planned |
 | [FR-orgs](./features/FR-orgs.md) | Organizations, people, invites, teams (+ alumni planned) | current |
 | [FR-notebooks](./features/FR-notebooks.md) | Notebooks, Settings, Contributors, access | partial |
 | [FR-public-notebook](./features/FR-public-notebook.md) | Public notebook share link | planned |

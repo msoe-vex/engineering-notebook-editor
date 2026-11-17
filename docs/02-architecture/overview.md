@@ -1,8 +1,9 @@
 # Architecture overview
 
-**Live storage:** Firestore + GCS on GCP only. **Realtime:** Hocuspocus/Yjs.  
+**Live storage (current adapters):** Firestore + GCS on GCP. **Realtime:** Hocuspocus/Yjs.  
+**Ports:** `AuthPort` / Identity, `StoragePort`, `JobDispatchPort` exist; **`MetadataStore`** + **`NotificationPort`** planned — [ADR-009](./decisions/ADR-009-platform-ports.md), [platform-ports plan](../01-requirements/plans/platform-ports.md).  
 **Async jobs:** Core durable jobs + worker services (`compile`, `judge`) via `JobDispatchPort` (HTTP today; Pub/Sub next for local↔prod parity) — [ADR-006](./decisions/ADR-006-compile-job.md), [ADR-008](./decisions/ADR-008-job-dispatch-evolution.md), [async-jobs.md](./async-jobs.md).  
-**Not used for sync:** GitHub, local FS, S3 (ZIP backup only; LWW — [ADR-001](./decisions/ADR-001-gcp-only-sync.md), [ADR-002](./decisions/ADR-002-zip-lww-backup.md)).
+**Not used for sync:** GitHub, local FS as live backends (ZIP backup only; LWW — [ADR-001](./decisions/ADR-001-gcp-only-sync.md), [ADR-002](./decisions/ADR-002-zip-lww-backup.md)). One adapter set per deployment (no dual-write).
 
 **Diagrams (system + sequences):** [diagrams.md](./diagrams.md)
 

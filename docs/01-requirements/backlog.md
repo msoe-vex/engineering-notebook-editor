@@ -10,6 +10,8 @@ Forward-looking work. Requirements index: [README.md](./README.md). Parity epics
 
 **[Explorer search & context menus](./plans/explorer-search-context-menus.md)** — Sidebar search/filter chips + empty states; shared `ContextMenu` primitive; standardize right-click for explorer, orgs, notebooks, people/teams, contributors.
 
+**[Platform ports](./plans/platform-ports.md)** — `MetadataStore`, harden `StoragePort`, grow identity port (reset / verify / social link / multi-email), `NotificationPort` — [ADR-009](../02-architecture/decisions/ADR-009-platform-ports.md), [FR-auth](./features/FR-auth.md), [FR-notifications](./features/FR-notifications.md).
+
 ## Done (architecture hygiene)
 
 - [x] Archive unreachable legacy UI under `website/archive/legacy/`
@@ -46,9 +48,21 @@ See [async-jobs.md](../02-architecture/async-jobs.md), [ADR-008](../02-architect
 - [ ] **`JOB_DISPATCH=pubsub`** + Compose Pub/Sub emulator (same topic/sub names as GCP) — [#93](https://github.com/msoe-vex/engineering-notebook-editor/issues/93)
 - [ ] Optional **Cloud Tasks** dispatcher as an alternate port (not the preferred parity path)
 
+## Platform / ports & identity (planned)
+
+See [platform-ports.md](./plans/platform-ports.md), [ADR-009](../02-architecture/decisions/ADR-009-platform-ports.md).
+
+- [x] `AuthPort` (verify) + `StoragePort` + `JobDispatchPort` (thin)
+- [ ] **Password reset** + keep email verification — [FR-auth](./features/FR-auth.md)
+- [ ] **Social login + provider linking** (GitHub / Google; LinkedIn if practical)
+- [ ] **Multi-email** (verified secondaries for invite matching)
+- [ ] **`MetadataStore`** + Firestore adapter; migrate routes off raw Firestore
+- [ ] **`NotificationPort`** + local/catcher adapter — [FR-notifications](./features/FR-notifications.md)
+- [ ] Collab shares Core identity verify (no divergent Admin Auth path)
+
 ## Non-goals
 
-See [vision.md](../00-product/vision.md) and ADRs 001–008.
+See [vision.md](../00-product/vision.md) and ADRs 001–009.
 
 ## Context
 

@@ -21,7 +21,8 @@ Organizations are the tenancy root. Admins manage members, email invites (with e
 ## User-facing behavior
 
 - `/` — list/create orgs; org rows support right-click / ⋯ (Open, People, Rename/Delete when allowed)
-- `/orgs/:orgId` — **dashboard**: notebooks + nav to People / Teams (management)
+- `/orgs/:orgId` — **dashboard**: notebooks + nav to People / Teams (management). Public marketing site is **`/o/:orgSlug`**, not this path — [FR-org-public-page](./FR-org-public-page.md)
+- `/orgs/:orgId/public` — admin editor / preview for the public page (planned)
 - `/orgs/:orgId/people` — members + invites; share code / invite link generator with role selection (member/admin, and owner if caller is owner), configurable expiration (7, 14, 30, 90 days), and optional email restriction; right-click / ⋯ for change role, remove, copy/renew/revoke invite; **Active** vs **Alumni** sections (planned)
 - `/orgs/:orgId/teams` — ACL groups; expand a team to search-add org people and remove via chips; right-click / ⋯ (show people, Rename, Delete)
 - Invites / Share codes: generate an invite link / share code with `expiresAt`. If email is specified, accept enforces email match; if omitted, any authenticated user can join. Accepts preserve higher existing role ranks (owner/admin not demoted).

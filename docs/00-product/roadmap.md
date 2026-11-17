@@ -24,6 +24,8 @@ GitHub issues: [msoe-vex/engineering-notebook-editor/issues](https://github.com/
 | Docs Diátaxis + plans | Done | UX / mobile / explorer / GenAI plans under `01-requirements/plans/` |
 | Job dispatch → Pub/Sub | Planned | [ADR-008](../02-architecture/decisions/ADR-008-job-dispatch-evolution.md), [#93](https://github.com/msoe-vex/engineering-notebook-editor/issues/93) — local emulator ↔ GCP parity |
 | Cloud Tasks dispatch | Optional alternate | Push-HTTP wake without a bus; weaker local 1:1 than Pub/Sub |
+| Platform ports (metadata / identity / email) | Planned | [ADR-009](../02-architecture/decisions/ADR-009-platform-ports.md), [platform-ports plan](../01-requirements/plans/platform-ports.md) |
+| Auth: reset / social / multi-email | Planned | [FR-auth](../01-requirements/features/FR-auth.md); Firebase remains first IdP adapter |
 
 Open bugs / older requests: tables [#87](https://github.com/msoe-vex/engineering-notebook-editor/issues/87), descriptions [#81](https://github.com/msoe-vex/engineering-notebook-editor/issues/81), comments [#79](https://github.com/msoe-vex/engineering-notebook-editor/issues/79), tagging [#64](https://github.com/msoe-vex/engineering-notebook-editor/issues/64), LuaLaTeX [#67](https://github.com/msoe-vex/engineering-notebook-editor/issues/67), explorer dual modes [#69](https://github.com/msoe-vex/engineering-notebook-editor/issues/69), AI judge UX [#68](https://github.com/msoe-vex/engineering-notebook-editor/issues/68).
 
@@ -36,6 +38,14 @@ Open bugs / older requests: tables [#87](https://github.com/msoe-vex/engineering
 **Next:** `JOB_DISPATCH=pubsub` — Core publishes; workers subscribe; Compose Pub/Sub emulator uses the **same topic/sub names** as GCP ([ADR-008](../02-architecture/decisions/ADR-008-job-dispatch-evolution.md), [#93](https://github.com/msoe-vex/engineering-notebook-editor/issues/93)).
 
 **Optional:** Cloud Tasks as an alternate port if push-HTTP wake is enough without a bus.
+
+---
+
+## Platform: ports & identity
+
+**Current:** thin `AuthPort` + `StoragePort` + `JobDispatchPort`; Firestore and Vertex still hardcoded.
+
+**Plan:** [platform-ports.md](../01-requirements/plans/platform-ports.md) / [ADR-009](../02-architecture/decisions/ADR-009-platform-ports.md) — `MetadataStore`, `NotificationPort`, richer identity (password reset, verification, social link, multi-email) with **swappable adapters** (Firebase/GCS/Firestore remain the first implementations; one backend set per deployment).
 
 ---
 
@@ -64,10 +74,14 @@ Split People into **Active** and **Alumni**; alumni lose write access. [FR-orgs]
 ## Suggested delivery order
 
 1. Finish active UX/mobile/explorer plans as needed for stability  
-2. **Pub/Sub** job dispatch (`JOB_DISPATCH=pubsub` + emulator) — [#93](https://github.com/msoe-vex/engineering-notebook-editor/issues/93)  
-3. **Alumni status** — [#91](https://github.com/msoe-vex/engineering-notebook-editor/issues/91)  
-4. **Public notebook link** — [#89](https://github.com/msoe-vex/engineering-notebook-editor/issues/89)  
-5. **Public org page** + dashboard IA split — [#90](https://github.com/msoe-vex/engineering-notebook-editor/issues/90), [#92](https://github.com/msoe-vex/engineering-notebook-editor/issues/92)  
+2. **Auth product slice** — password reset + verification hardening ([FR-auth](../01-requirements/features/FR-auth.md))  
+3. **`NotificationPort` skeleton** + one template ([FR-notifications](../01-requirements/features/FR-notifications.md))  
+4. **Pub/Sub** job dispatch (`JOB_DISPATCH=pubsub` + emulator) — [#93](https://github.com/msoe-vex/engineering-notebook-editor/issues/93)  
+5. **`MetadataStore`** + route migration ([platform-ports](../01-requirements/plans/platform-ports.md))  
+6. **Social login / linking / multi-email** — [FR-auth](../01-requirements/features/FR-auth.md)  
+7. **Alumni status** — [#91](https://github.com/msoe-vex/engineering-notebook-editor/issues/91)  
+8. **Public notebook link** — [#89](https://github.com/msoe-vex/engineering-notebook-editor/issues/89)  
+9. **Public org page** + dashboard IA split — [#90](https://github.com/msoe-vex/engineering-notebook-editor/issues/90), [#92](https://github.com/msoe-vex/engineering-notebook-editor/issues/92)  
 
 ---
 
@@ -77,4 +91,5 @@ Split People into **Active** and **Alumni**; alumni lose write access. [FR-orgs]
 - Merging vex-website into this repo in the first pass  
 - Public crawl of private notebooks without explicit publish  
 - Billing / paid org pages  
-- Requiring Cloud Tasks before Pub/Sub for “modularity” (job protocol is enough; Pub/Sub is for parity — ADR-008)
+- Requiring Cloud Tasks before Pub/Sub for “modularity” (job protocol is enough; Pub/Sub is for parity — ADR-008)  
+- Dual-writing two clouds or replacing the IdP wholesale before ports exist (ADR-009)
