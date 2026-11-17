@@ -1,6 +1,7 @@
 # Architecture overview
 
 **Live storage:** Firestore + GCS on GCP only. **Realtime:** Hocuspocus/Yjs.  
+**Async jobs:** Core durable jobs + worker services (`compile`, `judge`) via `JobDispatchPort` (HTTP today; Pub/Sub next for local↔prod parity) — [ADR-006](./decisions/ADR-006-compile-job.md), [ADR-008](./decisions/ADR-008-job-dispatch-evolution.md), [async-jobs.md](./async-jobs.md).  
 **Not used for sync:** GitHub, local FS, S3 (ZIP backup only; LWW — [ADR-001](./decisions/ADR-001-gcp-only-sync.md), [ADR-002](./decisions/ADR-002-zip-lww-backup.md)).
 
 **Diagrams (system + sequences):** [diagrams.md](./diagrams.md)
@@ -10,7 +11,7 @@
 - API: [../03-reference/api-contracts.md](../03-reference/api-contracts.md)
 - Schema: [../03-reference/schema.md](../03-reference/schema.md)
 - Requirements: [../01-requirements/](../01-requirements/)
-- ACL: [tenancy-acl.md](./tenancy-acl.md) · Realtime: [realtime.md](./realtime.md)
+- ACL: [tenancy-acl.md](./tenancy-acl.md) · Realtime: [realtime.md](./realtime.md) · Async: [async-jobs.md](./async-jobs.md)
 
 ## Services
 

@@ -33,20 +33,28 @@ Happy paths for the live App Router product. Feature detail: [01-requirements/fe
 
 ## 6. Org people
 
-1. People: members + invites (expiry, email match)
+1. People: **Active** members + invites (expiry, email match); **Alumni** section (planned)
 2. Teams: ACL groups for restricted notebooks
+
+## 7. Public sharing (planned)
+
+1. Publish notebook public / unlisted link — [FR-public-notebook](../01-requirements/features/FR-public-notebook.md)
+2. Optional public org page (projects, sponsors, events, media) — [FR-org-public-page](../01-requirements/features/FR-org-public-page.md)
+3. Roadmap: [roadmap.md](./roadmap.md)
 
 ## Route map (IA)
 
 ```
 /                         Organizations
-/orgs/:orgId              Notebooks + People / Teams
+/orgs/:orgId              Dashboard: Notebooks + People / Teams (+ Public page editor, planned)
 /orgs/:orgId/notebooks/:notebookId
   ├── entries/:entryId    Collaborative editor
   ├── schedule            Calendar (alias /calendar)
   ├── compile             BusyTeX PDF
-  ├── setup               Settings: branding, access, phases, logo (alias /settings)
+  ├── setup               Settings: branding, access, phases, logo, public link (planned)
   └── members             Contributors credits (alias /contributors)
+/o/:orgSlug               Public org page (planned; visibility public|hidden)
+/p/:notebookSlug          Public notebook view (planned)
 /account                  Profile
 /account/preferences      Theme, GenAI prefs
 /help · /about

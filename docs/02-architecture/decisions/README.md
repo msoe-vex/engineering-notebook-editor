@@ -9,5 +9,6 @@
 | [ADR-005](./ADR-005-genai-in-core.md) | GenAI tools / Vertex in Core |
 | [ADR-006](./ADR-006-compile-job.md) | Async notebook jobs (compile first) |
 | [ADR-007](./ADR-007-python-langgraph-judge.md) | Python LangGraph judge worker |
+| [ADR-008](./ADR-008-job-dispatch-evolution.md) | Job dispatch evolution (HTTP → Pub/Sub; Tasks optional) |
 
 Add new ADRs by copying an existing file; do not renumber accepted ADRs.

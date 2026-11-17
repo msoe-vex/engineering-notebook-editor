@@ -21,20 +21,22 @@ Product context: [00-product/](../00-product/). Contracts: [03-reference/](../03
 | [Mobile-responsive shell](./plans/mobile-responsive.md) | active |
 | [Explorer search & context menus](./plans/explorer-search-context-menus.md) | mostly done (F deferred) |
 
-Also: [backlog.md](./backlog.md).
+Also: [backlog.md](./backlog.md) · [roadmap](../00-product/roadmap.md).
 
 ## Feature index
 
 | ID | Title | Status |
 | --- | --- | --- |
 | [FR-auth](./features/FR-auth.md) | Authentication & session | current |
-| [FR-orgs](./features/FR-orgs.md) | Organizations, people, invites, teams | current |
-| [FR-notebooks](./features/FR-notebooks.md) | Notebooks, setup, roster, access | partial |
+| [FR-orgs](./features/FR-orgs.md) | Organizations, people, invites, teams (+ alumni planned) | current |
+| [FR-notebooks](./features/FR-notebooks.md) | Notebooks, Settings, Contributors, access | partial |
+| [FR-public-notebook](./features/FR-public-notebook.md) | Public notebook share link | planned |
+| [FR-org-public-page](./features/FR-org-public-page.md) | Public organization profile page | planned |
 | [FR-entries-collab](./features/FR-entries-collab.md) | Entries & collaborative editing | partial |
 | [FR-explorer](./features/FR-explorer.md) | Explorer, folders, search | partial |
 | [FR-trash](./features/FR-trash.md) | Entry trash (soft-delete / restore / purge) | current |
 | [FR-schedule](./features/FR-schedule.md) | Schedule / calendar | partial |
-| [FR-compile](./features/FR-compile.md) | LaTeX preview & BusyTeX compile | partial |
+| [FR-compile](./features/FR-compile.md) | LaTeX preview & server compile jobs | partial |
 | [FR-zip](./features/FR-zip.md) | ZIP backup export/import | current |
 | [FR-genai-audit](./features/FR-genai-audit.md) | GenAI & rubric audit | current |
 | [FR-account](./features/FR-account.md) | Account preferences | current |

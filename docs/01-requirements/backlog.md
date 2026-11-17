@@ -17,6 +17,8 @@ Forward-looking work. Requirements index: [README.md](./README.md). Parity epics
 - [x] Archive `lib/github`, `lib/storage`, `hooks/useWorkspace`, classic `Editor.tsx`
 - [x] Extract live `NotebookFormatToolbar` + `insertBlock`
 - [x] Docs restructure (product / FR-NFR / architecture / reference / guides / ops)
+- [x] Async compile + judge workers (Compose HTTP dispatch) — [ADR-006](../02-architecture/decisions/ADR-006-compile-job.md), [ADR-007](../02-architecture/decisions/ADR-007-python-langgraph-judge.md)
+- [x] Retire `services/agents` in favor of Core + website GenAI — [ADR-004](../02-architecture/decisions/ADR-004-agents-genai-gateway.md), [ADR-005](../02-architecture/decisions/ADR-005-genai-in-core.md)
 
 ## Product polish (after / outside the active plan)
 
@@ -27,9 +29,26 @@ Forward-looking work. Requirements index: [README.md](./README.md). Parity epics
 - [ ] **Cloud-native Settings/Help/About/Calendar** (optional) — still under `components/pages/`
 - [ ] **Collab presence avatars** — beyond Live/Offline chip ([plan](./plans/cloud-ux-hardening.md) extras)
 
+## Public / org storytelling (planned)
+
+See [roadmap.md](../00-product/roadmap.md).
+
+- [ ] **Active vs alumni** org members — [FR-orgs](./features/FR-orgs.md) · [#91](https://github.com/msoe-vex/engineering-notebook-editor/issues/91)
+- [ ] **Public notebook share link** — [FR-public-notebook](./features/FR-public-notebook.md) · [#89](https://github.com/msoe-vex/engineering-notebook-editor/issues/89)
+- [ ] **Public org page** (projects, donors/sponsors, events, social, media; public\|hidden) — [FR-org-public-page](./features/FR-org-public-page.md) · [#90](https://github.com/msoe-vex/engineering-notebook-editor/issues/90)
+- [ ] Keep [vex-website](https://github.com/msoe-vex/vex-website) as current club site until an explicit migration plan exists
+
+## Platform / job dispatch (planned)
+
+See [async-jobs.md](../02-architecture/async-jobs.md), [ADR-008](../02-architecture/decisions/ADR-008-job-dispatch-evolution.md).
+
+- [x] Compose `compile` + `judge` workers + Core job docs/SSE (`JOB_DISPATCH=http`)
+- [ ] **`JOB_DISPATCH=pubsub`** + Compose Pub/Sub emulator (same topic/sub names as GCP) — [#93](https://github.com/msoe-vex/engineering-notebook-editor/issues/93)
+- [ ] Optional **Cloud Tasks** dispatcher as an alternate port (not the preferred parity path)
+
 ## Non-goals
 
-See [vision.md](../00-product/vision.md) and ADRs 001–003.
+See [vision.md](../00-product/vision.md) and ADRs 001–008.
 
 ## Context
 

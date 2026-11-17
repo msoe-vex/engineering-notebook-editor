@@ -102,6 +102,12 @@ cp .env.example .env.local
 | Auth emulator | localhost:9099 |
 | Firestore emulator | localhost:8081 |
 | fake-gcs | http://localhost:4443 (host). Core uses `GCS_EMULATOR_ENDPOINT=http://gcs:4443` plus compose `-public-host`/`-external-url` for that Docker DNS name. Do not set `STORAGE_EMULATOR_HOST` — the Node client then omits `/storage/v1` on reads. |
+| Compile worker | http://localhost:8090 |
+| Judge worker | http://localhost:8091 |
+
+### Async jobs (shipped locally)
+
+Compose already runs **`compile`** and **`judge`** workers. Core enqueues durable jobs and dispatches via `JobDispatchPort` (`JOB_DISPATCH=http` today). Preferred next step is **Pub/Sub** (`JOB_DISPATCH=pubsub`) with the emulator in Compose so local topic/sub names match GCP — [async-jobs.md](../02-architecture/async-jobs.md), [ADR-008](../02-architecture/decisions/ADR-008-job-dispatch-evolution.md).
 
 ## Firebase emulator
 

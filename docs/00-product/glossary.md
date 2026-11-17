@@ -3,8 +3,12 @@
 | Term | Meaning |
 | --- | --- |
 | **Organization** | Tenancy root; owns notebooks, org members, org teams |
+| **Org dashboard** | Signed-in management UI: notebooks, People, Teams, settings |
+| **Public org page** | Optional public/hidden profile (projects, sponsors, events, media) for outsiders — not the dashboard |
 | **Org member** | ACL identity (`owner` \| `admin` \| `member`) under an org |
+| **Active / Alumni** | Org member status: active participates; alumni are historical / non-writing (planned) |
 | **Org team** | Named ACL group of org members (not notebook branding) |
+| **Public notebook link** | Explicit publish of a read-only notebook URL (planned) |
 | **Notebook** | Design notebook summary: folders, phases, access mode, branding |
 | **Contributors** | Notebook credits list (name/role/photo); may lack app accounts. Distinct from org **People** / ACL members. |
 | **Notebook Settings** | Notebook-scoped branding, phases, access (route `/setup`). Distinct from Account **Preferences**. |

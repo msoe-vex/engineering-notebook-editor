@@ -1,27 +1,32 @@
 # FR-orgs: Organizations, people, invites, teams
 
-Status: current  
-Related: [tenancy-acl](../../02-architecture/tenancy-acl.md), [schema](../../03-reference/schema.md)
+Status: current (alumni / public profile: planned)  
+Related: [tenancy-acl](../../02-architecture/tenancy-acl.md), [schema](../../03-reference/schema.md), [FR-org-public-page](./FR-org-public-page.md), [roadmap](../../00-product/roadmap.md)
 
 ## Summary
 
 Organizations are the tenancy root. Admins manage members, email invites (with expiry), and ACL **teams**.
 
+**Planned:** split People into **Active** vs **Alumni**, and optionally drive a separate [public org page](./FR-org-public-page.md) (distinct from the signed-in org dashboard).
+
 ## Actors and permissions
 
-| Role | Org CRUD | Members / invites | Teams |
-| --- | --- | --- | --- |
-| owner | yes | yes (all roles, including owner management) | yes |
-| admin | yes (non-destructive) | yes (admin/member roles only) | yes |
-| member | read notebooks (ACL permitting) | no | no |
+| Role / status | Org CRUD | Members / invites | Teams | Notebook write |
+| --- | --- | --- | --- | --- |
+| owner (active) | yes | yes (all roles, including owner management) | yes | ACL permitting |
+| admin (active) | yes (non-destructive) | yes (admin/member roles only) | yes | ACL permitting |
+| member (active) | no | no | no | ACL permitting |
+| alumni | no | no | no | no (read optional / policy TBD) |
 
 ## User-facing behavior
 
 - `/` — list/create orgs; org rows support right-click / ⋯ (Open, People, Rename/Delete when allowed)
-- `/orgs/:orgId/people` — members + invites; share code / invite link generator with role selection (member/admin, and owner if caller is owner), configurable expiration (7, 14, 30, 90 days), and optional email restriction; right-click / ⋯ for change role, remove, copy/renew/revoke invite
+- `/orgs/:orgId` — **dashboard**: notebooks + nav to People / Teams (management)
+- `/orgs/:orgId/people` — members + invites; share code / invite link generator with role selection (member/admin, and owner if caller is owner), configurable expiration (7, 14, 30, 90 days), and optional email restriction; right-click / ⋯ for change role, remove, copy/renew/revoke invite; **Active** vs **Alumni** sections (planned)
 - `/orgs/:orgId/teams` — ACL groups; expand a team to search-add org people and remove via chips; right-click / ⋯ (show people, Rename, Delete)
 - Invites / Share codes: generate an invite link / share code with `expiresAt`. If email is specified, accept enforces email match; if omitted, any authenticated user can join. Accepts preserve higher existing role ranks (owner/admin not demoted).
 - Multiple owners: Orgs can have multiple owners. Only owners can promote, invite, or demote/remove owners. A last-owner guard prevents demoting or removing the sole remaining owner.
+- Mark member as alumni (and reactivate) without deleting history (planned)
 
 ## Acceptance criteria
 
@@ -30,12 +35,16 @@ Organizations are the tenancy root. Admins manage members, email invites (with e
 - [ ] Share codes work without email restriction, or with email restriction if specified
 - [ ] Invite accept joins org; second accept fails; expired invite fails; existing higher roles are preserved
 - [ ] Team membership can grant notebook access in restricted mode
+- [ ] Alumni are listed separately from active members in People UI
+- [ ] Alumni cannot mutate notebooks or org ACL (exact read policy documented when shipped)
 
 ## Data and APIs
 
 - `organizations/{orgId}`, `members/{uid}`, `teams/…`, `invites/{id}`
+- Member field planned: `status: "active" | "alumni"` (and optional `alumniAt`)
 - Routes under `/orgs`, `/invites/:id/accept` — [api-contracts](../../03-reference/api-contracts.md)
 
 ## Non-goals
 
 - Billing; multi-org SSO federation beyond Firebase
+- Using “alumni” as a substitute for notebook **Contributors** credits ([FR-notebooks](./FR-notebooks.md))

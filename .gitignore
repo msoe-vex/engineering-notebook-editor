@@ -4,3 +4,6 @@ node_modules/
 **/__pycache__/
 .venv/
 **.log
+
+# Firebase emulator export dumps (local only)
+infra/firebase-export-*/
