@@ -22,6 +22,15 @@ export type UserPreferences = {
   explorerSort?: { by: "date" | "title" | "order"; direction: "asc" | "desc" };
 };
 
+export type SecondaryEmail = {
+  email: string;
+  verified: boolean;
+  verifiedAt?: string;
+  /** Opaque verify token (server-only; omit from public responses when possible). */
+  verifyToken?: string;
+  addedAt: string;
+};
+
 export type UserProfile = {
   uid: string;
   email?: string;
@@ -29,23 +38,42 @@ export type UserProfile = {
   platformRole?: PlatformRole;
   grants?: UserGrants;
   preferences?: UserPreferences;
+  /** Additional emails for invite matching once verified. */
+  secondaryEmails?: SecondaryEmail[];
   createdAt: string;
   updatedAt: string;
+};
+
+export type OrgPublicPage = {
+  visibility: "public" | "hidden";
+  announcement?: { text: string; href?: string };
+  mission?: string;
+  cta?: { title?: string; body?: string; joinUrl?: string; donateUrl?: string };
 };
 
 export type Organization = {
   id: string;
   name: string;
+  /** Globally unique public URL slug (`/o/:slug`). */
+  slug?: string;
+  publicPage?: OrgPublicPage;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
 };
+
+export type OrgMemberStatus = "active" | "alumni";
 
 export type OrgMember = {
   uid: string;
   role: OrgRole;
   email?: string;
   displayName?: string;
+  /** Org member avatar (asset id). */
+  imageAssetId?: string;
+  /** Missing ⇒ active (back-compat). */
+  status?: OrgMemberStatus;
+  alumniAt?: string;
   joinedAt: string;
 };
 
@@ -100,6 +128,8 @@ export type NotebookMember = {
   role: string;
   order: number;
   imageAssetId?: string;
+  /** Optional link to `organizations/{orgId}/members/{uid}` (credits ≠ ACL). */
+  orgMemberUid?: string;
 };
 
 export type ProjectPhase = {
@@ -161,6 +191,12 @@ export type NotebookSummaryV5 = {
   createdAt?: string;
   createdBy?: string;
   archivedAt?: string | null;
+  /** Public share: off (default) | unlisted | public */
+  publicAccess?: "off" | "unlisted" | "public";
+  /** Per-org key for `/o/:orgSlug/n/:publicKey` */
+  publicKey?: string;
+  publishedAt?: string;
+  publishedBy?: string;
 };
 
 export type AssetMetadata = {

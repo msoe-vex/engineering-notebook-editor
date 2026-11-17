@@ -1,5 +1,5 @@
 import type { JobDispatchPort } from "./jobDispatchPort.js";
-import { HttpJobDispatch } from "./httpJobDispatch.js";
+import { PubSubJobDispatch } from "./pubsubJobDispatch.js";
 
 class NoopJobDispatch implements JobDispatchPort {
   supports(_type: string): boolean {
@@ -16,16 +16,16 @@ class NoopJobDispatch implements JobDispatchPort {
 
 /**
  * Factory — swap via env without changing Core routes.
- * - `http` (default): Compose / HTTP worker URLs
- * - `tasks`: reserved for Cloud Tasks (falls back to http until wired)
+ * - `pubsub` (default): publish to Pub/Sub topics (emulator locally / GCP prod)
  * - `none`: always 503
  */
 export function createJobDispatch(): JobDispatchPort {
-  const mode = (process.env.JOB_DISPATCH || "http").toLowerCase().trim();
+  const mode = (process.env.JOB_DISPATCH || "pubsub").toLowerCase().trim();
   if (mode === "none") return new NoopJobDispatch();
-  if (mode === "tasks") {
-    // Prod Cloud Tasks adapter not wired yet — same HTTP delivery until deploy.
-    return new HttpJobDispatch();
+  if (mode === "http" || mode === "tasks") {
+    console.warn(
+      `[jobs] JOB_DISPATCH=${mode} is retired; using pubsub. Set JOB_DISPATCH=pubsub or none.`
+    );
   }
-  return new HttpJobDispatch();
+  return new PubSubJobDispatch();
 }

@@ -62,6 +62,35 @@ services:
       timeout: 3s
       retries: 10
 
+  # Pub/Sub emulator — same topics/subs as GCP (ADR-008).
+  pubsub:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    command:
+      [
+        "gcloud",
+        "beta",
+        "emulators",
+        "pubsub",
+        "start",
+        "--host-port=0.0.0.0:8085",
+        "--project=demo-engineering-notebook",
+      ]
+    ports:
+      - "8085:8085"
+
+  pubsub-init:
+    image: curlimages/curl:8.5.0
+    depends_on:
+      pubsub:
+        condition: service_started
+    restart: "no"
+    environment:
+      PUBSUB_EMULATOR_HOST: pubsub:8085
+      GOOGLE_CLOUD_PROJECT: demo-engineering-notebook
+    volumes:
+      - ./pubsub-init.sh:/pubsub-init.sh:ro
+    entrypoint: ["/bin/sh", "/pubsub-init.sh"]
+
   # Ensure the notebook bucket exists (fake-gcs starts empty even with a volume).
   gcs-init:
     image: curlimages/curl:8.5.0
@@ -105,10 +134,12 @@ services:
       GCS_PUBLIC_BASE_URL: http://localhost:4443/storage/v1/b/engineering-notebook/o
       SERVICE_ADMIN_UID: service-admin
       INTERNAL_SERVICE_SECRET: local-dev-secret
-      # Local workers (JobDispatchPort=http).
-      JOB_DISPATCH: http
-      COMPILE_SERVICE_URL: http://compile:8090
-      JUDGE_SERVICE_URL: http://judge:8091
+      # Pub/Sub-only job wake (JobDispatchPort=pubsub).
+      JOB_DISPATCH: pubsub
+      PUBSUB_EMULATOR_HOST: pubsub:8085
+      GOOGLE_CLOUD_PROJECT: demo-engineering-notebook
+      PUBSUB_TOPIC_COMPILE: notebook-jobs-compile
+      PUBSUB_TOPIC_JUDGE: notebook-jobs-judge
       # Local: Vertex /ai/complete stays fail-closed until ADC/token configured.
       VERTEX_STUB: "true"
       # Persist blobs in fake-gcs (not in-process memory).
@@ -118,6 +149,8 @@ services:
       gcs:
         condition: service_started
       gcs-init:
+        condition: service_completed_successfully
+      pubsub-init:
         condition: service_completed_successfully
     healthcheck:
       test:
@@ -176,8 +209,7 @@ services:
       collab:
         condition: service_started
 
-  # XeLaTeX worker (HTTP). Scale-to-zero on Cloud Run later; local stays up with the stack.
-  # One-shot still works: COMPILE_MODE=job docker compose run --rm -e ORG_ID=… -e NOTEBOOK_ID=… compile
+  # XeLaTeX worker — Pub/Sub pull. One-shot: COMPILE_MODE=job docker compose run --rm …
   compile:
     build:
       context: ..
@@ -190,9 +222,14 @@ services:
       CORE_API_URL: http://core:8080
       INTERNAL_SERVICE_SECRET: local-dev-secret
       TEMPLATE_DIR: /app/template
+      PUBSUB_EMULATOR_HOST: pubsub:8085
+      GOOGLE_CLOUD_PROJECT: demo-engineering-notebook
+      PUBSUB_SUBSCRIPTION_COMPILE: notebook-jobs-compile-worker
     depends_on:
       core:
         condition: service_healthy
+      pubsub-init:
+        condition: service_completed_successfully
     healthcheck:
       test:
         [
@@ -204,7 +241,7 @@ services:
       retries: 12
       start_period: 40s
 
-  # Rubric normalize + LangGraph judge (Python; BYOK or Core Vertex) — ADR-007.
+  # Rubric normalize + LangGraph judge — Pub/Sub pull (ADR-007).
   judge:
     build:
       context: ..
@@ -215,9 +252,14 @@ services:
       PORT: "8091"
       CORE_API_URL: http://core:8080
       INTERNAL_SERVICE_SECRET: local-dev-secret
+      PUBSUB_EMULATOR_HOST: pubsub:8085
+      GOOGLE_CLOUD_PROJECT: demo-engineering-notebook
+      PUBSUB_SUBSCRIPTION_JUDGE: notebook-jobs-judge-worker
     depends_on:
       core:
         condition: service_healthy
+      pubsub-init:
+        condition: service_completed_successfully
     healthcheck:
       test:
         [

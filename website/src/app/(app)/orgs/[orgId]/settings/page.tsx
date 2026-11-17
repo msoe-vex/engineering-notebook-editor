@@ -24,7 +24,13 @@ export default function OrgSettingsPage() {
   } = useOrgWorkspace();
 
   const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  const [publicVisibility, setPublicVisibility] = useState<"public" | "hidden">("hidden");
+  const [mission, setMission] = useState("");
   const [initialName, setInitialName] = useState("");
+  const [initialSlug, setInitialSlug] = useState("");
+  const [initialVisibility, setInitialVisibility] = useState<"public" | "hidden">("hidden");
+  const [initialMission, setInitialMission] = useState("");
   const [saved, setSaved] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
@@ -33,9 +39,20 @@ export default function OrgSettingsPage() {
       setName(org.name);
       setInitialName(org.name);
     }
-  }, [org?.name]);
+    setSlug(org?.slug || "");
+    setInitialSlug(org?.slug || "");
+    const vis = org?.publicPage?.visibility === "public" ? "public" : "hidden";
+    setPublicVisibility(vis);
+    setInitialVisibility(vis);
+    setMission(org?.publicPage?.mission || "");
+    setInitialMission(org?.publicPage?.mission || "");
+  }, [org?.name, org?.slug, org?.publicPage?.visibility, org?.publicPage?.mission]);
 
-  const isDirty = name.trim() !== initialName.trim() && name.trim().length > 0;
+  const isDirty =
+    (name.trim() !== initialName.trim() && name.trim().length > 0) ||
+    slug.trim() !== initialSlug.trim() ||
+    publicVisibility !== initialVisibility ||
+    mission.trim() !== initialMission.trim();
 
   useEffect(() => {
     if (!isDirty) return;
@@ -75,8 +92,21 @@ export default function OrgSettingsPage() {
     setSaved(false);
     setError(null);
     try {
-      await cloudApi.patchOrg(orgId, { name: name.trim() });
+      const body: Parameters<typeof cloudApi.patchOrg>[1] = {
+        name: name.trim(),
+        publicPage: {
+          visibility: publicVisibility,
+          mission: mission.trim() || undefined,
+          announcement: org?.publicPage?.announcement,
+          cta: org?.publicPage?.cta,
+        },
+      };
+      if (slug.trim()) body.slug = slug.trim().toLowerCase();
+      await cloudApi.patchOrg(orgId, body);
       setInitialName(name.trim());
+      setInitialSlug(slug.trim().toLowerCase());
+      setInitialVisibility(publicVisibility);
+      setInitialMission(mission.trim());
       setSaved(true);
       refresh();
       showNotification("Organization updated", "success");
@@ -121,6 +151,49 @@ export default function OrgSettingsPage() {
           onChange={(e) => setName(e.target.value)}
           placeholder="Organization name"
         />
+        <TextField
+          label="Public slug"
+          value={slug}
+          onChange={(e) => setSlug(e.target.value)}
+          placeholder="raider-robotics"
+        />
+        <p className="text-nb-caption text-nb-on-surface-variant">
+          {slug.trim()
+            ? `Public site: /o/${slug.trim().toLowerCase()}`
+            : "Claim a unique URL for the public org page"}
+        </p>
+        <label className="flex flex-col gap-1 text-nb-label">
+          <span className="font-medium">Public page visibility</span>
+          <select
+            className="rounded-nb-lg border border-nb-outline-variant/40 bg-nb-surface-low px-3 py-2"
+            value={publicVisibility}
+            onChange={(e) => setPublicVisibility(e.target.value as "public" | "hidden")}
+          >
+            <option value="hidden">Hidden</option>
+            <option value="public">Public</option>
+          </select>
+        </label>
+        <TextField
+          label="Mission (public)"
+          value={mission}
+          onChange={(e) => setMission(e.target.value)}
+          placeholder="Short about blurb for /o/slug"
+        />
+        <div className="flex flex-wrap gap-4 text-sm font-semibold">
+          <a href={`/orgs/${orgId}/public`} className="text-nb-primary hover:underline">
+            Edit public page content →
+          </a>
+          {slug.trim() && publicVisibility === "public" && (
+            <a
+              className="text-nb-primary hover:underline"
+              href={`/o/${slug.trim().toLowerCase()}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              View public site ↗
+            </a>
+          )}
+        </div>
 
         {org?.role && (
           <div className="flex items-center gap-2 text-nb-caption text-nb-on-surface-variant">

@@ -1,5 +1,5 @@
 import type { AuthPort, SessionUser } from "./authPort.js";
-import { getFirestore } from "../db/firestore.js";
+import { getMetadataStore } from "../db/metadataStore.js";
 import { userPath } from "@engineering-notebook/shared";
 
 function useFallbackAuth(): boolean {
@@ -93,13 +93,12 @@ export class FirebaseAuthAdapter implements AuthPort {
 
   private async loadProfile(uid: string) {
     try {
-      const db = getFirestore();
-      const snap = await Promise.race([
-        db.doc(userPath(uid)).get(),
+      const profile = await Promise.race([
+        getMetadataStore().get(userPath(uid)),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
       ]);
-      if (!snap || !("exists" in snap) || !snap.exists) return null;
-      return snap.data() as {
+      if (!profile) return null;
+      return profile as {
         email?: string;
         displayName?: string;
         platformRole?: "service_admin";

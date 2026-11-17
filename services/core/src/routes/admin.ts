@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { userPath, type UserGrants, type UserProfile } from "@engineering-notebook/shared";
 import { getFirestore } from "../db/firestore.js";
+import { getMetadataStore } from "../db/metadataStore.js";
 import { omitUndefined } from "../db/sanitize.js";
 import { requireServiceAdmin } from "../rbac.js";
 import { getUser } from "../http/authPlugin.js";
@@ -27,9 +28,9 @@ export async function registerAdminRoutes(app: FastifyInstance) {
   app.get("/api/admin/users/:uid", async (request, reply) => {
     requireServiceAdmin(getUser(request));
     const { uid } = request.params as { uid: string };
-    const snap = await getFirestore().doc(userPath(uid)).get();
-    if (!snap.exists) return reply.code(404).send({ error: "not found" });
-    return { uid, ...snap.data() };
+    const data = await getMetadataStore().get(userPath(uid));
+    if (!data) return reply.code(404).send({ error: "not found" });
+    return { uid, ...data };
   });
 
   app.patch("/api/admin/users/:uid", async (request, reply) => {
@@ -40,9 +41,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       grants?: UserGrants;
       displayName?: string;
     };
-    const ref = getFirestore().doc(userPath(uid));
-    const snap = await ref.get();
-    const existing = (snap.data() ?? {}) as Partial<UserProfile>;
+    const existing = ((await getMetadataStore().get(userPath(uid))) ?? {}) as Partial<UserProfile>;
     const updated = omitUndefined({
       uid,
       email: existing.email,
@@ -55,7 +54,9 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       createdAt: existing.createdAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }) as UserProfile;
-    await ref.set(updated, { merge: true });
+    await getMetadataStore().set(userPath(uid), updated as unknown as Record<string, unknown>, {
+      merge: true,
+    });
     return updated;
   });
 

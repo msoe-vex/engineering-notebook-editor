@@ -10,12 +10,22 @@ import {
   notebookMemberPath,
   notebookMembersCollection,
   orgPath,
+  orgSlugPath,
+  publicNotebookKeyPath,
+  publicNotebookKeysCollection,
   userPath,
   invitePath,
+  publicDonorsCollection,
+  publicProjectsCollection,
+  publicEventsCollection,
+  publicMembersCollection,
+  publicSocialCollection,
   entriesCollection,
   entryPath,
   assetsCollection,
   assetPath,
+  orgAssetsCollection,
+  orgAssetPath,
   auditsCollection,
   judgmentsCollection,
   rubricsCollection,
@@ -43,6 +53,7 @@ import { getFirestore } from "../db/firestore.js";
 import { omitUndefined } from "../db/sanitize.js";
 import {
   requireOrgMember,
+  requireOrgReader,
   requireNotebookAccess,
   canAccessNotebook,
   isServiceAdmin,
@@ -54,8 +65,34 @@ import { publishNotebookEvent, subscribeNotebookEvents } from "../realtime/noteb
 import { createJobDispatch } from "../jobs/createJobDispatch.js";
 import { enqueueNotebookJob } from "../jobs/enqueueJob.js";
 import { getJob } from "../jobs/jobStore.js";
+import { createNotificationPort } from "../notifications/notificationPort.js";
 
 const jobDispatch = createJobDispatch();
+const notifications = createNotificationPort();
+
+const RESERVED_SLUGS = new Set([
+  "admin",
+  "api",
+  "o",
+  "orgs",
+  "n",
+  "help",
+  "about",
+  "account",
+  "login",
+  "public",
+]);
+
+function normalizeOrgSlug(raw: string): string | null {
+  const slug = raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+  if (!slug || slug.length < 2) return null;
+  return slug;
+}
 
 function nowIso() {
   return new Date().toISOString();
@@ -191,7 +228,8 @@ async function syncAssetUsedBy(
 async function assertNotebookAccess(
   user: ReturnType<typeof getUser>,
   orgId: string,
-  notebookId: string
+  notebookId: string,
+  opts?: { write?: boolean }
 ) {
   const snap = await getFirestore().doc(notebookPath(orgId, notebookId)).get();
   if (!snap.exists) {
@@ -199,7 +237,9 @@ async function assertNotebookAccess(
     (err as Error & { statusCode: number }).statusCode = 404;
     throw err;
   }
-  await requireNotebookAccess(user, orgId, snap.data() as NotebookSummaryV5);
+  await requireNotebookAccess(user, orgId, snap.data() as NotebookSummaryV5, {
+    write: opts?.write === true,
+  });
   return snap;
 }
 
@@ -208,7 +248,7 @@ async function assertNotebookWritable(
   orgId: string,
   notebookId: string
 ) {
-  const snap = await assertNotebookAccess(user, orgId, notebookId);
+  const snap = await assertNotebookAccess(user, orgId, notebookId, { write: true });
   const data = snap.data() as NotebookSummaryV5;
   assertNotebookNotArchived(data);
   return snap;
@@ -277,14 +317,16 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
   app.get("/orgs/:orgId", async (request, reply) => {
     const user = getUser(request);
     const { orgId } = request.params as { orgId: string };
-    await requireOrgMember(user, orgId);
+    await requireOrgReader(user, orgId);
     const snap = await db().doc(orgPath(orgId)).get();
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
     const member = await db().doc(memberPath(orgId, user.uid)).get();
+    const m = member.data() as OrgMember | undefined;
     return {
       id: snap.id,
       ...snap.data(),
-      role: (member.data() as OrgMember | undefined)?.role ?? null,
+      role: m?.role ?? null,
+      memberStatus: m?.status === "alumni" ? "alumni" : "active",
     };
   });
 
@@ -292,15 +334,44 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const user = getUser(request);
     const { orgId } = request.params as { orgId: string };
     await requireOrgMember(user, orgId, "admin");
-    const body = request.body as { name?: string };
-    const name = body.name?.trim();
-    if (!name) return reply.code(400).send({ error: "name required" });
+    const body = request.body as {
+      name?: string;
+      slug?: string;
+      publicPage?: Organization["publicPage"];
+    };
     const ref = db().doc(orgPath(orgId));
     const snap = await ref.get();
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
-    const patch = { name, updatedAt: nowIso() };
-    await ref.update(patch);
-    return { id: orgId, ...snap.data(), ...patch };
+    const existing = snap.data() as Organization;
+    const patch: Record<string, unknown> = { updatedAt: nowIso() };
+    if (body.name !== undefined) {
+      const name = body.name.trim();
+      if (!name) return reply.code(400).send({ error: "name required" });
+      patch.name = name;
+    }
+    if (body.publicPage !== undefined) patch.publicPage = body.publicPage;
+    if (body.slug !== undefined) {
+      const slug = normalizeOrgSlug(body.slug);
+      if (!slug) return reply.code(400).send({ error: "invalid slug" });
+      if (RESERVED_SLUGS.has(slug)) return reply.code(400).send({ error: "slug reserved" });
+      if (slug !== existing.slug) {
+        const taken = await db().doc(orgSlugPath(slug)).get();
+        if (taken.exists && (taken.data() as { orgId?: string }).orgId !== orgId) {
+          return reply.code(409).send({ error: "slug_taken" });
+        }
+        if (existing.slug) {
+          await db().doc(orgSlugPath(existing.slug)).delete().catch(() => undefined);
+        }
+        await db().doc(orgSlugPath(slug)).set({ orgId, updatedAt: nowIso() });
+        patch.slug = slug;
+      }
+    }
+    if (Object.keys(patch).length <= 1 && body.name === undefined && body.slug === undefined && body.publicPage === undefined) {
+      return reply.code(400).send({ error: "no fields to update" });
+    }
+    await ref.update(omitUndefined(patch));
+    const { id: _ignoreId, ...existingRest } = existing as Organization & { id?: string };
+    return { id: orgId, ...existingRest, ...patch };
   });
 
   app.delete("/orgs/:orgId", async (request, reply) => {
@@ -322,6 +393,32 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       await t.ref.delete();
     }
     await deleteCollectionDocs(membersCollection(orgId));
+
+    // Public CMS sections + lookup keys
+    for (const coll of [
+      publicDonorsCollection(orgId),
+      publicProjectsCollection(orgId),
+      publicEventsCollection(orgId),
+      publicMembersCollection(orgId),
+      publicSocialCollection(orgId),
+      publicNotebookKeysCollection(orgId),
+    ]) {
+      await deleteCollectionDocs(coll);
+    }
+
+    // Org-scoped assets (avatars / CMS media)
+    const orgAssets = await db().collection(orgAssetsCollection(orgId)).get();
+    for (const a of orgAssets.docs) {
+      const asset = a.data() as AssetMetadata;
+      await safeDeleteObject(storage, asset.gcsPath);
+      await safeDeleteObject(storage, asset.gcsPathOriginal);
+      await a.ref.delete();
+    }
+
+    const orgData = snap.data() as Organization;
+    if (orgData.slug) {
+      await db().doc(orgSlugPath(orgData.slug)).delete().catch(() => undefined);
+    }
     const invites = await db().collection("invites").where("orgId", "==", orgId).get();
     const inviteBatch = db().batch();
     for (const inv of invites.docs) inviteBatch.delete(inv.ref);
@@ -442,7 +539,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
   app.get("/orgs/:orgId/members", async (request) => {
     const user = getUser(request);
     const { orgId } = request.params as { orgId: string };
-    await requireOrgMember(user, orgId);
+    await requireOrgReader(user, orgId);
     const snap = await db().collection(membersCollection(orgId)).get();
     const members = snap.docs.map((d) => d.data() as OrgMember);
     const missingNames = members.filter((m) => !m.displayName);
@@ -495,30 +592,56 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const user = getUser(request);
     const { orgId, uid } = request.params as { orgId: string; uid: string };
     const callerRole = await requireOrgMember(user, orgId, "admin");
-    const body = request.body as { role?: OrgRole };
-    if (!body.role || !["owner", "admin", "member"].includes(body.role)) {
-      return reply.code(400).send({ error: "invalid role" });
-    }
-    if (body.role === "owner" && callerRole !== "owner" && !isServiceAdmin(user)) {
-      return reply.code(403).send({ error: "only owners can promote members to owner" });
-    }
+    const body = request.body as {
+      role?: OrgRole;
+      status?: "active" | "alumni";
+      imageAssetId?: string | null;
+      displayName?: string;
+    };
     const ref = db().doc(memberPath(orgId, uid));
     const snap = await ref.get();
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
     const targetMember = snap.data() as OrgMember;
+    const patch: Record<string, unknown> = {};
 
-    if (targetMember.role === "owner" && body.role !== "owner") {
-      if (callerRole !== "owner" && !isServiceAdmin(user)) {
-        return reply.code(403).send({ error: "only owners can demote an owner" });
+    if (body.role !== undefined) {
+      if (!["owner", "admin", "member"].includes(body.role)) {
+        return reply.code(400).send({ error: "invalid role" });
       }
-      const numOwners = await countOrgOwners(orgId);
-      if (numOwners <= 1) {
-        return reply.code(400).send({ error: "cannot demote the last owner of an organization" });
+      if (body.role === "owner" && callerRole !== "owner" && !isServiceAdmin(user)) {
+        return reply.code(403).send({ error: "only owners can promote members to owner" });
       }
+      if (targetMember.role === "owner" && body.role !== "owner") {
+        if (callerRole !== "owner" && !isServiceAdmin(user)) {
+          return reply.code(403).send({ error: "only owners can demote an owner" });
+        }
+        const numOwners = await countOrgOwners(orgId);
+        if (numOwners <= 1) {
+          return reply.code(400).send({ error: "cannot demote the last owner of an organization" });
+        }
+      }
+      patch.role = body.role;
     }
 
-    await ref.update({ role: body.role });
-    return { ...targetMember, role: body.role };
+    if (body.status !== undefined) {
+      if (body.status !== "active" && body.status !== "alumni") {
+        return reply.code(400).send({ error: "invalid status" });
+      }
+      patch.status = body.status;
+      patch.alumniAt = body.status === "alumni" ? nowIso() : null;
+    }
+    if (body.imageAssetId !== undefined) {
+      patch.imageAssetId = body.imageAssetId || null;
+    }
+    if (body.displayName !== undefined) {
+      patch.displayName = body.displayName.trim() || null;
+    }
+    if (Object.keys(patch).length === 0) {
+      return reply.code(400).send({ error: "no fields to update" });
+    }
+
+    await ref.update(omitUndefined(patch));
+    return { ...targetMember, ...patch };
   });
 
   app.delete("/orgs/:orgId/members/:uid", async (request, reply) => {
@@ -568,7 +691,22 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       expiresAt,
     };
     await db().doc(invitePath(id)).set(omitUndefined({ ...invite }));
-    return { ...invite, acceptPath: `/invites/${id}/accept` };
+    const acceptPath = `/invites/${id}/accept`;
+    if (invite.email) {
+      const site = (process.env.PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+      try {
+        await notifications.send({
+          to: invite.email,
+          subject: "Organization invite",
+          template: "org_invite",
+          text: `You were invited to join an organization as ${invite.role}. Accept: ${site}${acceptPath}`,
+          data: { orgId, role: invite.role, acceptPath },
+        });
+      } catch (err) {
+        request.log.warn({ err }, "invite email send failed");
+      }
+    }
+    return { ...invite, acceptPath };
   });
 
   app.get("/orgs/:orgId/invites", async (request) => {
@@ -606,10 +744,20 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const userEmail = (user.email || "").trim().toLowerCase();
     // Only check email if the invite was specifically restricted to an email
     if (inviteEmail) {
-      if (userEmail && inviteEmail !== userEmail) {
+      const profile = (await db().doc(userPath(user.uid)).get()).data() as
+        | { secondaryEmails?: Array<{ email?: string; verified?: boolean }> }
+        | undefined;
+      const verifiedSecondaries = new Set(
+        (profile?.secondaryEmails || [])
+          .filter((e) => e.verified && e.email)
+          .map((e) => String(e.email).trim().toLowerCase())
+      );
+      const matchesPrimary = Boolean(userEmail && inviteEmail === userEmail);
+      const matchesSecondary = verifiedSecondaries.has(inviteEmail);
+      if (!matchesPrimary && !matchesSecondary) {
         return reply.code(403).send({ error: "invite email does not match signed-in user" });
       }
-      if (user.emailVerified === false && !isServiceAdmin(user)) {
+      if (matchesPrimary && user.emailVerified === false && !isServiceAdmin(user)) {
         return reply.code(403).send({
           error: "email_not_verified",
           message: "You must verify your email address before accepting this invite.",
@@ -647,7 +795,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
   app.get("/orgs/:orgId/notebooks", async (request) => {
     const user = getUser(request);
     const { orgId } = request.params as { orgId: string };
-    const role = await requireOrgMember(user, orgId);
+    const role = await requireOrgReader(user, orgId);
     const snap = await db().collection(notebooksCollection(orgId)).get();
     const out = [];
     for (const d of snap.docs) {
@@ -771,6 +919,61 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     ] as const) {
       if (body[key] !== undefined) patch[key] = body[key];
     }
+
+    // Public share link (admin+)
+    if (
+      body.publicAccess !== undefined ||
+      body.publicKey !== undefined ||
+      (body as { revokePublic?: boolean }).revokePublic
+    ) {
+      if (callerRole !== "owner" && callerRole !== "admin" && !isServiceAdmin(user)) {
+        return reply.code(403).send({ error: "Only admins and owners can publish notebooks" });
+      }
+      const access = body.publicAccess ?? existing.publicAccess ?? "off";
+      if (access !== "off" && access !== "unlisted" && access !== "public") {
+        return reply.code(400).send({ error: "invalid publicAccess" });
+      }
+      let key =
+        (body.publicKey !== undefined ? String(body.publicKey) : existing.publicKey || "")
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9-]+/g, "-")
+          .replace(/^-+|-+$/g, "") || "";
+      if ((body as { revokePublic?: boolean }).revokePublic || access === "off") {
+        if (existing.publicKey) {
+          await db().doc(publicNotebookKeyPath(orgId, existing.publicKey)).delete().catch(() => undefined);
+        }
+        patch.publicAccess = "off";
+        patch.publicKey = null;
+        patch.publishedAt = null;
+        patch.publishedBy = null;
+      } else {
+        if (!key) key = notebookId.slice(0, 12);
+        if (key !== existing.publicKey) {
+          const taken = await db().doc(publicNotebookKeyPath(orgId, key)).get();
+          if (taken.exists && (taken.data() as { notebookId?: string }).notebookId !== notebookId) {
+            return reply.code(409).send({ error: "public_key_taken" });
+          }
+          if (existing.publicKey) {
+            await db().doc(publicNotebookKeyPath(orgId, existing.publicKey)).delete().catch(() => undefined);
+          }
+          await db().doc(publicNotebookKeyPath(orgId, key)).set({
+            notebookId,
+            updatedAt: nowIso(),
+          });
+        } else if (!existing.publicKey) {
+          await db().doc(publicNotebookKeyPath(orgId, key)).set({
+            notebookId,
+            updatedAt: nowIso(),
+          });
+        }
+        patch.publicAccess = access;
+        patch.publicKey = key;
+        patch.publishedAt = existing.publishedAt || nowIso();
+        patch.publishedBy = existing.publishedBy || user.uid;
+      }
+    }
+
     await ref.update(omitUndefined(patch));
     const merged = { id: notebookId, ...existing, ...patch };
     publishNotebookEvent(orgId, notebookId, {
@@ -989,6 +1192,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       role: body.role?.trim() || "Member",
       order: body.order ?? 0,
       imageAssetId: body.imageAssetId,
+      orgMemberUid: body.orgMemberUid,
     }) as NotebookMember;
     await db().doc(notebookMemberPath(orgId, notebookId, id)).set(member);
     return member;
@@ -1009,10 +1213,20 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const ref = db().doc(notebookMemberPath(orgId, notebookId, memberId));
     const snap = await ref.get();
     if (!snap.exists) return reply.code(404).send({ error: "not found" });
-    const body = request.body as Partial<NotebookMember>;
+    const body = request.body as Partial<NotebookMember> & { orgMemberUid?: string | null };
     const patch: Record<string, unknown> = {};
     for (const key of ["name", "role", "order", "imageAssetId"] as const) {
       if (body[key] !== undefined) patch[key] = body[key];
+    }
+    if (body.orgMemberUid !== undefined) {
+      patch.orgMemberUid = body.orgMemberUid || null;
+      if (body.orgMemberUid) {
+        const orgMem = await db().doc(memberPath(orgId, body.orgMemberUid)).get();
+        if (!orgMem.exists) return reply.code(400).send({ error: "org member not found" });
+        const om = orgMem.data() as OrgMember;
+        if (body.name === undefined && om.displayName) patch.name = om.displayName;
+        if (body.imageAssetId === undefined && om.imageAssetId) patch.imageAssetId = om.imageAssetId;
+      }
     }
     await ref.update(omitUndefined(patch));
     const next = { ...snap.data(), ...patch } as Record<string, unknown>;
@@ -1367,6 +1581,94 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
 
   // Binary content-type parsers are registered once on the root Fastify app (index.ts).
 
+  // ── Org-scoped assets (People avatars / public CMS media) ───────────────
+
+  app.post("/orgs/:orgId/assets", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId } = request.params as { orgId: string };
+    await requireOrgMember(user, orgId, "admin");
+    const body = request.body as { contentType?: string; byteSize?: number };
+    const id = randomUUID();
+    const gcsPath = gcsKeys.orgAsset(orgId, id, "compressed");
+    const asset: AssetMetadata = {
+      id,
+      contentType: body.contentType || "application/octet-stream",
+      byteSize: body.byteSize ?? 0,
+      gcsPath,
+      createdBy: user.uid,
+      createdAt: nowIso(),
+      usedBy: [],
+    };
+    await db().doc(orgAssetPath(orgId, id)).set(omitUndefined({ ...asset }));
+    const uploadPath = `/orgs/${orgId}/assets/${id}/content`;
+    return { asset, uploadPath, uploadUrl: uploadPath };
+  });
+
+  app.put("/orgs/:orgId/assets/:assetId/content", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, assetId } = request.params as { orgId: string; assetId: string };
+    await requireOrgMember(user, orgId, "admin");
+    const ref = db().doc(orgAssetPath(orgId, assetId));
+    const snap = await ref.get();
+    if (!snap.exists) return reply.code(404).send({ error: "not found" });
+    const asset = snap.data() as AssetMetadata;
+    const contentType =
+      (typeof request.headers["content-type"] === "string"
+        ? request.headers["content-type"].split(";")[0].trim()
+        : null) || asset.contentType;
+    const body = request.body as NodeJS.ReadableStream | Uint8Array | Buffer | undefined;
+    let byteSize: number;
+    if (body && typeof (body as NodeJS.ReadableStream).pipe === "function") {
+      const result = await storage.putObjectStream(
+        asset.gcsPath,
+        body as import("node:stream").Readable,
+        contentType
+      );
+      byteSize = result.byteSize;
+    } else if (body instanceof Uint8Array || Buffer.isBuffer(body)) {
+      const data = Buffer.from(body);
+      await storage.putObject(asset.gcsPath, data, contentType);
+      byteSize = data.byteLength;
+    } else {
+      return reply.code(400).send({ error: "expected binary body stream" });
+    }
+    await ref.update({ byteSize, contentType });
+    return { ok: true, byteSize };
+  });
+
+  app.get("/orgs/:orgId/assets", async (request) => {
+    const user = getUser(request);
+    const { orgId } = request.params as { orgId: string };
+    await requireOrgMember(user, orgId);
+    const snap = await db().collection(orgAssetsCollection(orgId)).get();
+    return snap.docs.map((d) => d.data());
+  });
+
+  app.get("/orgs/:orgId/assets/:assetId/url", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, assetId } = request.params as { orgId: string; assetId: string };
+    await requireOrgMember(user, orgId);
+    const snap = await db().doc(orgAssetPath(orgId, assetId)).get();
+    if (!snap.exists) return reply.code(404).send({ error: "not found" });
+    const asset = snap.data() as AssetMetadata;
+    const url = await storage.getSignedUrl(asset.gcsPath, "read");
+    return { url, asset };
+  });
+
+  app.delete("/orgs/:orgId/assets/:assetId", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, assetId } = request.params as { orgId: string; assetId: string };
+    await requireOrgMember(user, orgId, "admin");
+    const ref = db().doc(orgAssetPath(orgId, assetId));
+    const snap = await ref.get();
+    if (!snap.exists) return reply.code(404).send({ error: "not found" });
+    const asset = snap.data() as AssetMetadata;
+    await safeDeleteObject(storage, asset.gcsPath);
+    await safeDeleteObject(storage, asset.gcsPathOriginal);
+    await ref.delete();
+    return { ok: true };
+  });
+
   app.post("/orgs/:orgId/notebooks/:notebookId/assets", async (request, reply) => {
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
@@ -1629,5 +1931,61 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       message: result.error,
       detail: result.detail,
     });
+  });
+
+  // ── Public page CMS (admin) ────────────────────────────────────────────
+  const publicCollections = {
+    donors: publicDonorsCollection,
+    projects: publicProjectsCollection,
+    events: publicEventsCollection,
+    members: publicMembersCollection,
+    social: publicSocialCollection,
+  } as const;
+
+  app.get("/orgs/:orgId/public", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId } = request.params as { orgId: string };
+    await requireOrgMember(user, orgId, "admin");
+    const orgSnap = await db().doc(orgPath(orgId)).get();
+    if (!orgSnap.exists) return reply.code(404).send({ error: "not found" });
+    const orgData = orgSnap.data() as Organization;
+    const org = { ...orgData, id: orgSnap.id };
+    const sections: Record<string, unknown[]> = {};
+    for (const [key, coll] of Object.entries(publicCollections)) {
+      const snap = await db().collection(coll(orgId)).get();
+      sections[key] = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+    }
+    return { org, ...sections };
+  });
+
+  app.put("/orgs/:orgId/public/:section/:itemId", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, section, itemId } = request.params as {
+      orgId: string;
+      section: string;
+      itemId: string;
+    };
+    await requireOrgMember(user, orgId, "admin");
+    const coll = publicCollections[section as keyof typeof publicCollections];
+    if (!coll) return reply.code(400).send({ error: "invalid section" });
+    const body = (request.body || {}) as Record<string, unknown>;
+    const id = itemId === "new" ? randomUUID() : itemId;
+    const doc = omitUndefined({ ...body, id, updatedAt: nowIso() });
+    await db().doc(`${coll(orgId)}/${id}`).set(doc, { merge: true });
+    return { id, ...doc };
+  });
+
+  app.delete("/orgs/:orgId/public/:section/:itemId", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, section, itemId } = request.params as {
+      orgId: string;
+      section: string;
+      itemId: string;
+    };
+    await requireOrgMember(user, orgId, "admin");
+    const coll = publicCollections[section as keyof typeof publicCollections];
+    if (!coll) return reply.code(400).send({ error: "invalid section" });
+    await db().doc(`${coll(orgId)}/${itemId}`).delete();
+    return { ok: true };
   });
 }

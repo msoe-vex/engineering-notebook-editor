@@ -30,13 +30,15 @@ function OrgChrome({ children }: { children: ReactNode }) {
 
   const activeTab = pathname.includes("/settings")
     ? "settings"
-    : pathname.includes("/teams")
-      ? "teams"
-      : pathname.includes("/people") ||
-          pathname.includes("/members") ||
-          pathname.includes("/invites")
-        ? "people"
-        : "notebooks";
+    : pathname.includes("/public")
+      ? "public"
+      : pathname.includes("/teams")
+        ? "teams"
+        : pathname.includes("/people") ||
+            pathname.includes("/members") ||
+            pathname.includes("/invites")
+          ? "people"
+          : "notebooks";
 
   if (!initialLoaded) {
     return (
@@ -106,6 +108,11 @@ function OrgChrome({ children }: { children: ReactNode }) {
           },
           ...(canManage
             ? [
+                {
+                  id: "public",
+                  label: "Public page",
+                  href: `/orgs/${orgId}/public`,
+                },
                 {
                   id: "settings",
                   label: "Settings",

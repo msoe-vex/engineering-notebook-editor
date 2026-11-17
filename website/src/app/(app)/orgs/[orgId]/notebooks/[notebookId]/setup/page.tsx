@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ImagePlus, Trash2 } from "lucide-react";
+import { Check, Copy, ImagePlus, Trash2 } from "lucide-react";
 import { AccessAllowlistPicker } from "@/components/cloud/AccessAllowlistPicker";
 import { NotebookPhasesEditor } from "@/components/cloud/NotebookPhasesEditor";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
 import { SettingsPageSkeleton } from "@/components/cloud/notebookPageSkeletons";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import { showNotification } from "@/components/overlays/Notification";
-import { Button, TextField } from "@/components/ui";
+import { Alert, Button, TextField } from "@/components/ui";
 import {
   cloudApi,
   type MemberSummary,
@@ -47,11 +47,19 @@ export default function NotebookSetupPage() {
   const [aclListsLoaded, setAclListsLoaded] = useState(false);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [orgSlug, setOrgSlug] = useState<string | null>(null);
   const router = useRouter();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showUnarchiveConfirm, setShowUnarchiveConfirm] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    void cloudApi
+      .getOrg(orgId)
+      .then((o) => setOrgSlug(o.slug || null))
+      .catch(() => setOrgSlug(null));
+  }, [orgId]);
 
   useEffect(() => {
     setTitle(notebookSummary?.title || notebookSummary?.name || "");
@@ -405,6 +413,115 @@ export default function NotebookSetupPage() {
           </span>
         )}
       </div>
+
+      {canManage && (
+        <section className="flex flex-col gap-4 rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface-low/40 p-5">
+          <div>
+            <h2 className="text-nb-title font-semibold text-nb-on-surface">Public link</h2>
+            <p className="mt-1 text-nb-body text-nb-on-surface-variant">
+              Share a read-only notebook at{" "}
+              <code className="text-nb-caption">/o/&lt;org-slug&gt;/n/&lt;key&gt;</code>. Org must have a
+              public slug set in organization settings.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              className="rounded-nb-lg border border-nb-outline-variant/40 bg-nb-surface px-3 py-2 text-nb-label"
+              defaultValue={notebookSummary.publicAccess || "off"}
+              id="public-access-select"
+              disabled={busy || isArchived}
+            >
+              <option value="off">Off</option>
+              <option value="unlisted">Unlisted (anyone with link)</option>
+              <option value="public">Public</option>
+            </select>
+            <Button
+              variant="secondary"
+              disabled={busy || isArchived}
+              onClick={() => {
+                const sel = document.getElementById("public-access-select") as HTMLSelectElement | null;
+                const access = (sel?.value || "off") as "off" | "unlisted" | "public";
+                setBusy(true);
+                void cloudApi
+                  .patchNotebook(orgId, notebookId, {
+                    publicAccess: access,
+                    revokePublic: access === "off",
+                  })
+                  .then(() => {
+                    showNotification(
+                      access === "off" ? "Public link disabled" : "Public link updated",
+                      "success"
+                    );
+                    refresh();
+                  })
+                  .catch((err) => showNotification((err as Error).message, "error"))
+                  .finally(() => setBusy(false));
+              }}
+            >
+              Update public link
+            </Button>
+          </div>
+          {!orgSlug && (
+            <Alert variant="warning">
+              This organization has no public slug yet. Set one under{" "}
+              <a className="font-semibold underline" href={`/orgs/${orgId}/settings`}>
+                Organization settings
+              </a>{" "}
+              before the public notebook URL works.
+            </Alert>
+          )}
+          {notebookSummary.publicKey &&
+            notebookSummary.publicAccess &&
+            notebookSummary.publicAccess !== "off" && (
+              <div className="flex flex-col gap-2">
+                <p className="text-nb-caption text-nb-on-surface-variant">
+                  Path:{" "}
+                  <code>
+                    /o/{orgSlug || "<org-slug>"}/n/{notebookSummary.publicKey}
+                  </code>
+                </p>
+                {(notebookSummary.publishedAt || notebookSummary.publishedBy) && (
+                  <p className="text-nb-caption text-nb-on-surface-variant">
+                    Published
+                    {notebookSummary.publishedAt
+                      ? ` ${new Date(notebookSummary.publishedAt).toLocaleString()}`
+                      : ""}
+                    {notebookSummary.publishedBy ? ` by ${notebookSummary.publishedBy}` : ""}
+                    {" "}
+                    (admin only — not shown on the public page)
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={!orgSlug}
+                    onClick={() => {
+                      if (!orgSlug || typeof window === "undefined") return;
+                      const url = `${window.location.origin}/o/${orgSlug}/n/${notebookSummary.publicKey}`;
+                      void navigator.clipboard.writeText(url).then(
+                        () => showNotification("Public URL copied", "success"),
+                        () => showNotification("Could not copy", "error")
+                      );
+                    }}
+                  >
+                    <Copy size={14} /> Copy public URL
+                  </Button>
+                  {orgSlug && (
+                    <a
+                      className="inline-flex items-center text-sm font-semibold text-nb-primary hover:underline"
+                      href={`/o/${orgSlug}/n/${notebookSummary.publicKey}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open public view ↗
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+        </section>
+      )}
 
       {canManage && (
         <section className="flex flex-col gap-4 rounded-nb-xl border border-amber-500/30 bg-amber-500/5 p-5">

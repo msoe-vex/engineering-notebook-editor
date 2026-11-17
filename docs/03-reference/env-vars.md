@@ -31,10 +31,14 @@ See [`website/.env.example`](../../website/.env.example).
 | `VERTEX_ACCESS_TOKEN` | optional | Vertex bearer; else ADC via `google-auth-library` |
 | `VERTEX_LOCATION` / `VERTEX_MODEL` | `us-central1` / `gemini-2.0-flash-001` | Vertex target |
 | `GCP_PROJECT_ID` | prod project | Vertex project (falls back to `FIREBASE_PROJECT_ID`) |
-| `JOB_DISPATCH` | `http` | `http` \| `tasks` \| `none` — Core job delivery ([ADR-006](../02-architecture/decisions/ADR-006-compile-job.md)) |
-| `COMPILE_SERVICE_URL` | `http://compile:8090` | Worker base for `type=compile` (Compose / Run) |
-| `JUDGE_SERVICE_URL` | `http://judge:8091` | Worker base for `type=judge` |
-| `JOB_WORKER_URLS` | optional JSON | e.g. `{"compile":"http://compile:8090","judge":"http://judge:8091"}` |
+| `JOB_DISPATCH` | `pubsub` | `pubsub` \| `none` — Core job wake ([ADR-008](../02-architecture/decisions/ADR-008-job-dispatch-evolution.md)) |
+| `PUBSUB_EMULATOR_HOST` | `pubsub:8085` local | Emulator host; omit in GCP |
+| `GOOGLE_CLOUD_PROJECT` / `GCP_PROJECT_ID` | `demo-engineering-notebook` local | Pub/Sub + Vertex project |
+| `PUBSUB_TOPIC_COMPILE` / `PUBSUB_TOPIC_JUDGE` | `notebook-jobs-compile` / `notebook-jobs-judge` | Topic overrides |
+| `PUBSUB_SUBSCRIPTION_COMPILE` / `PUBSUB_SUBSCRIPTION_JUDGE` | `…-worker` | Worker pull subscriptions |
+| `NOTIFICATION_PROVIDER` | `console` | `console` \| `none` \| `resend` |
+| `RESEND_API_KEY` / `RESEND_FROM` | — | Required when provider=`resend` |
+| `PUBLIC_APP_URL` | `http://localhost:3000` | Links in invite / secondary-email verify emails |
 | `INTERNAL_SERVICE_SECRET` | compose secret | Core ↔ worker / collab |
 
 Deploy wiring: [deploy-cloudrun.md](../04-guides/deploy-cloudrun.md).

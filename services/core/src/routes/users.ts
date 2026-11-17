@@ -1,12 +1,26 @@
 import type { FastifyInstance } from "fastify";
+import { randomUUID } from "node:crypto";
 import {
   userPath,
+  type SecondaryEmail,
   type UserPreferences,
   type UserProfile,
 } from "@engineering-notebook/shared";
-import { getFirestore } from "../db/firestore.js";
+import { getMetadataStore } from "../db/metadataStore.js";
 import { omitUndefined } from "../db/sanitize.js";
 import { getUser } from "../http/authPlugin.js";
+import { createNotificationPort } from "../notifications/notificationPort.js";
+
+const notifications = createNotificationPort();
+
+function publicSecondaryEmails(list: SecondaryEmail[] | undefined) {
+  return (list || []).map(({ email, verified, verifiedAt, addedAt }) => ({
+    email,
+    verified,
+    verifiedAt,
+    addedAt,
+  }));
+}
 
 function sanitizePreferences(raw: unknown): UserPreferences | undefined {
   if (!raw || typeof raw !== "object") return undefined;
@@ -60,20 +74,21 @@ function sanitizePreferences(raw: unknown): UserPreferences | undefined {
 }
 
 export async function registerUserRoutes(app: FastifyInstance) {
+  const store = () => getMetadataStore();
+
   app.post("/users/me/bootstrap", async (request) => {
     const user = getUser(request);
     const body = (request.body as { displayName?: string } | undefined) ?? {};
     const displayName = body.displayName?.trim() || user.displayName;
-    const ref = getFirestore().doc(userPath(user.uid));
-    const snap = await ref.get();
+    const path = userPath(user.uid);
+    const existing = (await store().get(path)) as UserProfile | null;
     const ts = new Date().toISOString();
-    if (snap.exists) {
-      const data = snap.data() as UserProfile;
-      if (displayName && !data.displayName) {
-        await ref.update({ displayName, updatedAt: ts });
-        data.displayName = displayName;
+    if (existing) {
+      if (displayName && !existing.displayName) {
+        await store().set(path, { ...existing, displayName, updatedAt: ts }, { merge: true });
+        existing.displayName = displayName;
       }
-      return data;
+      return existing;
     }
     const serviceAdminUid = process.env.SERVICE_ADMIN_UID;
     const isAdmin =
@@ -88,27 +103,131 @@ export async function registerUserRoutes(app: FastifyInstance) {
       createdAt: ts,
       updatedAt: ts,
     }) as UserProfile;
-    await ref.set(profile);
+    await store().set(path, profile as unknown as Record<string, unknown>);
     return profile;
   });
 
   app.get("/users/me", async (request, reply) => {
     const user = getUser(request);
-    const snap = await getFirestore().doc(userPath(user.uid)).get();
-    if (!snap.exists) {
+    const profile = (await store().get(userPath(user.uid))) as UserProfile | null;
+    if (!profile) {
       return reply.code(404).send({ error: "bootstrap required" });
     }
-    return snap.data();
+    return {
+      ...profile,
+      secondaryEmails: publicSecondaryEmails(profile.secondaryEmails),
+    };
+  });
+
+  app.post("/users/me/secondary-emails", async (request, reply) => {
+    const user = getUser(request);
+    const path = userPath(user.uid);
+    const profile = (await store().get(path)) as UserProfile | null;
+    if (!profile) return reply.code(404).send({ error: "bootstrap required" });
+    const body = request.body as { email?: string };
+    const email = (body.email || "").trim().toLowerCase();
+    if (!email || !email.includes("@")) {
+      return reply.code(400).send({ error: "valid email required" });
+    }
+    const primary = (user.email || profile.email || "").trim().toLowerCase();
+    if (email === primary) {
+      return reply.code(400).send({ error: "email is already your primary" });
+    }
+    const existing = profile.secondaryEmails || [];
+    if (existing.some((e) => e.email === email)) {
+      return reply.code(400).send({ error: "email already added" });
+    }
+    const verifyToken = randomUUID();
+    const entry: SecondaryEmail = {
+      email,
+      verified: false,
+      verifyToken,
+      addedAt: new Date().toISOString(),
+    };
+    const next = [...existing, entry];
+    await store().set(
+      path,
+      { ...profile, secondaryEmails: next, updatedAt: new Date().toISOString() } as unknown as Record<
+        string,
+        unknown
+      >,
+      { merge: true }
+    );
+    const site = (process.env.PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+    const verifyUrl = `${site}/account?verifyEmail=${encodeURIComponent(verifyToken)}`;
+    try {
+      await notifications.send({
+        to: email,
+        subject: "Verify secondary email",
+        template: "secondary_email_verify",
+        text: `Confirm this email for your ENGen account: ${verifyUrl}`,
+        data: { verifyUrl },
+      });
+    } catch (err) {
+      request.log.warn({ err }, "secondary email verify send failed");
+    }
+    return { secondaryEmails: publicSecondaryEmails(next) };
+  });
+
+  app.post("/users/me/secondary-emails/verify", async (request, reply) => {
+    const user = getUser(request);
+    const path = userPath(user.uid);
+    const profile = (await store().get(path)) as UserProfile | null;
+    if (!profile) return reply.code(404).send({ error: "bootstrap required" });
+    const body = request.body as { token?: string };
+    const token = (body.token || "").trim();
+    if (!token) return reply.code(400).send({ error: "token required" });
+    const list = profile.secondaryEmails || [];
+    const idx = list.findIndex((e) => e.verifyToken === token);
+    if (idx < 0) return reply.code(404).send({ error: "invalid token" });
+    const next = list.map((e, i) =>
+      i === idx
+        ? {
+            ...e,
+            verified: true,
+            verifiedAt: new Date().toISOString(),
+            verifyToken: undefined,
+          }
+        : e
+    );
+    await store().set(
+      path,
+      { ...profile, secondaryEmails: next, updatedAt: new Date().toISOString() } as unknown as Record<
+        string,
+        unknown
+      >,
+      { merge: true }
+    );
+    return { secondaryEmails: publicSecondaryEmails(next) };
+  });
+
+  app.delete("/users/me/secondary-emails/:email", async (request, reply) => {
+    const user = getUser(request);
+    const path = userPath(user.uid);
+    const profile = (await store().get(path)) as UserProfile | null;
+    if (!profile) return reply.code(404).send({ error: "bootstrap required" });
+    const email = decodeURIComponent((request.params as { email: string }).email)
+      .trim()
+      .toLowerCase();
+    const next = (profile.secondaryEmails || []).filter((e) => e.email !== email);
+    await store().set(
+      path,
+      { ...profile, secondaryEmails: next, updatedAt: new Date().toISOString() } as unknown as Record<
+        string,
+        unknown
+      >,
+      { merge: true }
+    );
+    return { secondaryEmails: publicSecondaryEmails(next) };
   });
 
   app.patch("/users/me", async (request, reply) => {
     const user = getUser(request);
-    const ref = getFirestore().doc(userPath(user.uid));
-    const snap = await ref.get();
-    if (!snap.exists) {
+    const path = userPath(user.uid);
+    const existing = (await store().get(path)) as UserProfile | null;
+    if (!existing) {
       return reply.code(404).send({ error: "bootstrap required" });
     }
-    const existing = snap.data() as UserProfile;
     const body = (request.body ?? {}) as {
       displayName?: string;
       preferences?: unknown;
@@ -119,7 +238,6 @@ export async function registerUserRoutes(app: FastifyInstance) {
     }
     if (body.preferences !== undefined) {
       const next = sanitizePreferences(body.preferences);
-      // Shallow-merge top-level preference keys; replace genai object when provided.
       patch.preferences = omitUndefined({
         ...(existing.preferences || {}),
         ...(next || {}),
@@ -129,8 +247,8 @@ export async function registerUserRoutes(app: FastifyInstance) {
             : existing.preferences?.genai,
       });
     }
-    await ref.update(omitUndefined(patch));
-    const updated = await ref.get();
-    return updated.data();
+    const merged = omitUndefined({ ...existing, ...patch }) as UserProfile;
+    await store().set(path, merged as unknown as Record<string, unknown>, { merge: true });
+    return merged;
   });
 }

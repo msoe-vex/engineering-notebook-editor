@@ -7,8 +7,8 @@ export type EnqueueJobInput = {
 };
 
 /**
- * Delivers a queued job to a worker (HTTP today, Cloud Tasks later).
- * Core routes depend on this port — never on Tasks vs Compose details.
+ * Delivers a queued job wake to workers (Pub/Sub publish).
+ * Core routes depend on this port — never on emulator vs GCP details.
  */
 export interface JobDispatchPort {
   /** True when this adapter can enqueue the given job type. */

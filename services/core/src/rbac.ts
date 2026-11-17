@@ -1,6 +1,5 @@
 import {
   memberPath,
-  orgPath,
   teamMemberPath,
   type NotebookAccess,
   type NotebookSummaryV5,
@@ -8,7 +7,7 @@ import {
   type PlatformRole,
 } from "@engineering-notebook/shared";
 import type { SessionUser } from "./auth/authPort.js";
-import { getFirestore } from "./db/firestore.js";
+import { getMetadataStore } from "./db/metadataStore.js";
 
 const ROLE_RANK: Record<OrgRole, number> = {
   member: 1,
@@ -20,25 +19,50 @@ export function isServiceAdmin(user: SessionUser): boolean {
   return user.platformRole === "service_admin";
 }
 
+export type OrgMembership = {
+  role: OrgRole;
+  status: "active" | "alumni";
+};
+
+export async function getOrgMembership(orgId: string, uid: string): Promise<OrgMembership | null> {
+  const data = await getMetadataStore().get(memberPath(orgId, uid));
+  if (!data) return null;
+  const role = (data.role as OrgRole) ?? null;
+  if (!role) return null;
+  const status = data.status === "alumni" ? "alumni" : "active";
+  return { role, status };
+}
+
 export async function getOrgRole(orgId: string, uid: string): Promise<OrgRole | null> {
-  const snap = await getFirestore().doc(memberPath(orgId, uid)).get();
-  if (!snap.exists) return null;
-  return (snap.data()?.role as OrgRole) ?? null;
+  const m = await getOrgMembership(orgId, uid);
+  return m?.role ?? null;
 }
 
 export async function requireOrgMember(
   user: SessionUser,
   orgId: string,
-  minRole: OrgRole = "member"
+  minRole: OrgRole = "member",
+  opts?: { allowAlumni?: boolean }
 ): Promise<OrgRole> {
   if (isServiceAdmin(user)) return "owner";
-  const role = await getOrgRole(orgId, user.uid);
-  if (!role || ROLE_RANK[role] < ROLE_RANK[minRole]) {
+  const membership = await getOrgMembership(orgId, user.uid);
+  if (!membership || ROLE_RANK[membership.role] < ROLE_RANK[minRole]) {
     const err = new Error("forbidden");
     (err as Error & { statusCode: number }).statusCode = 403;
     throw err;
   }
-  return role;
+  if (membership.status === "alumni" && !opts?.allowAlumni) {
+    const err = new Error("alumni_readonly");
+    (err as Error & { statusCode: number; code?: string }).statusCode = 403;
+    (err as Error & { code?: string }).code = "alumni_readonly";
+    throw err;
+  }
+  return membership.role;
+}
+
+/** Read-only org access (active or alumni). */
+export async function requireOrgReader(user: SessionUser, orgId: string): Promise<OrgRole> {
+  return requireOrgMember(user, orgId, "member", { allowAlumni: true });
 }
 
 export function requireServiceAdmin(user: SessionUser): void {
@@ -74,9 +98,10 @@ export async function canAccessNotebook(
 
   if (access.userIds.includes(user.uid)) return true;
 
+  const store = getMetadataStore();
   for (const teamId of access.teamIds) {
-    const snap = await getFirestore().doc(teamMemberPath(orgId, teamId, user.uid)).get();
-    if (snap.exists) return true;
+    const tm = await store.get(teamMemberPath(orgId, teamId, user.uid));
+    if (tm) return true;
   }
   return false;
 }
@@ -84,9 +109,12 @@ export async function canAccessNotebook(
 export async function requireNotebookAccess(
   user: SessionUser,
   orgId: string,
-  notebook: Pick<NotebookSummaryV5, "access"> | { access?: NotebookAccess }
+  notebook: Pick<NotebookSummaryV5, "access"> | { access?: NotebookAccess },
+  opts?: { write?: boolean }
 ): Promise<OrgRole> {
-  const role = await requireOrgMember(user, orgId);
+  const role = await requireOrgMember(user, orgId, "member", {
+    allowAlumni: opts?.write === false,
+  });
   const ok = await canAccessNotebook(user, orgId, notebook, role);
   if (!ok) {
     const err = new Error("forbidden");

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, type MouseEvent as ReactMouseEvent } from "react";
-import { Check, Copy, KeyRound, Mail, Shield, Trash2, UserPlus, Users } from "lucide-react";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { Camera, Check, Copy, KeyRound, Mail, Shield, Trash2, UserPlus, Users } from "lucide-react";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import { useOrgWorkspace } from "@/components/cloud/OrgWorkspaceContext";
 import {
@@ -29,11 +29,17 @@ export default function OrgPeoplePage() {
   const [createdInvite, setCreatedInvite] = useState<InviteSummary | null>(null);
   const [copied, setCopied] = useState(false);
   const [ctx, setCtx] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
+  const [photos, setPhotos] = useState<Record<string, string>>({});
+  const [photoBusy, setPhotoBusy] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [photoTargetUid, setPhotoTargetUid] = useState<string | null>(null);
 
   const currentUid = getFirebaseAuth().currentUser?.uid || getDevToken()?.split("|")[0];
   const isOwner = org?.role === "owner";
   const ownerCount = members.filter((m) => m.role === "owner").length;
   const pending = invites.filter((i) => !i.acceptedAt);
+  const activeMembers = members.filter((m) => m.status !== "alumni");
+  const alumniMembers = members.filter((m) => m.status === "alumni");
 
   function formatInviteExpiration(expiresAt?: string): {
     label: string;
@@ -89,6 +95,28 @@ export default function OrgPeoplePage() {
     }
   }
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const next: Record<string, string> = {};
+      await Promise.all(
+        members.map(async (m) => {
+          if (!m.imageAssetId) return;
+          try {
+            const { url } = await cloudApi.getOrgAssetUrl(orgId, m.imageAssetId);
+            next[m.uid] = url;
+          } catch {
+            /* ignore */
+          }
+        })
+      );
+      if (!cancelled) setPhotos(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [members, orgId]);
+
   function checkAndSetRole(uid: string, targetRole: string) {
     const isSelf = uid === currentUid;
     const currentMember = members.find((m) => m.uid === uid);
@@ -99,6 +127,47 @@ export default function OrgPeoplePage() {
       return;
     }
     setMemberRole(uid, targetRole);
+  }
+
+  async function uploadMemberPhoto(uid: string, file: File) {
+    setPhotoBusy(uid);
+    try {
+      const prev = members.find((m) => m.uid === uid)?.imageAssetId;
+      const { asset } = await cloudApi.createOrgAsset(orgId, {
+        contentType: file.type || "image/jpeg",
+        byteSize: file.size,
+      });
+      await cloudApi.uploadOrgAssetContent(orgId, asset.id, file, file.type || "image/jpeg");
+      await cloudApi.patchMember(orgId, uid, { imageAssetId: asset.id });
+      if (prev) {
+        await cloudApi.deleteOrgAsset(orgId, prev).catch(() => undefined);
+      }
+      await refresh();
+      showNotification("Photo updated", "success");
+    } catch (err) {
+      const message = (err as Error).message;
+      setError(message);
+      showNotification(message, "error");
+    } finally {
+      setPhotoBusy(null);
+    }
+  }
+
+  async function clearMemberPhoto(uid: string) {
+    setPhotoBusy(uid);
+    try {
+      const prev = members.find((m) => m.uid === uid)?.imageAssetId;
+      await cloudApi.patchMember(orgId, uid, { imageAssetId: null });
+      if (prev) {
+        await cloudApi.deleteOrgAsset(orgId, prev).catch(() => undefined);
+      }
+      await refresh();
+      showNotification("Photo removed", "success");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setPhotoBusy(null);
+    }
   }
 
   function setMemberRole(uid: string, role: string) {
@@ -169,6 +238,35 @@ export default function OrgPeoplePage() {
       });
     }
 
+    const isAlumni = m.status === "alumni";
+    items.push({
+      id: "status",
+      label: isAlumni ? "Mark active" : "Mark alumni",
+      onSelect: () => {
+        void cloudApi
+          .patchMember(orgId, m.uid, { status: isAlumni ? "active" : "alumni" })
+          .then(refresh)
+          .catch((err) => setError((err as Error).message));
+      },
+    });
+
+    items.push({
+      id: "photo",
+      label: m.imageAssetId ? "Replace photo" : "Upload photo",
+      icon: <Camera size={14} />,
+      onSelect: () => {
+        setPhotoTargetUid(m.uid);
+        photoInputRef.current?.click();
+      },
+    });
+    if (m.imageAssetId) {
+      items.push({
+        id: "photo-clear",
+        label: "Clear photo",
+        onSelect: () => void clearMemberPhoto(m.uid),
+      });
+    }
+
     items.push({ id: "sep", separator: true });
 
     items.push({
@@ -231,6 +329,19 @@ export default function OrgPeoplePage() {
 
   return (
     <div className="flex flex-col gap-8">
+      <input
+        ref={photoInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          const uid = photoTargetUid;
+          e.target.value = "";
+          setPhotoTargetUid(null);
+          if (file && uid) void uploadMemberPhoto(uid, file);
+        }}
+      />
       <section className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -246,10 +357,12 @@ export default function OrgPeoplePage() {
           )}
         </div>
 
+        <h3 className="text-nb-body font-semibold text-nb-on-surface">Active</h3>
         <ul className="divide-y divide-nb-outline-variant/20 rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface">
-          {members.map((m) => {
+          {activeMembers.map((m) => {
             const isTargetOwner = m.role === "owner";
             const isTargetLastOwner = isTargetOwner && ownerCount <= 1;
+            const photoUrl = photos[m.uid];
 
             return (
               <li
@@ -257,8 +370,18 @@ export default function OrgPeoplePage() {
                 className="flex flex-wrap items-center gap-3 px-4 py-3 text-nb-body first:rounded-t-nb-xl last:rounded-b-nb-xl"
                 onContextMenu={(e) => openCtx(e, memberMenuItems(m))}
               >
-                <div className="flex h-9 w-9 items-center justify-center rounded-nb-lg bg-nb-surface-low text-nb-on-surface-variant">
-                  {isTargetOwner ? <KeyRound size={16} /> : <Users size={16} />}
+                <div className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-nb-lg bg-nb-surface-low text-nb-on-surface-variant">
+                  {photoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={photoUrl} alt="" className="h-full w-full object-cover" />
+                  ) : isTargetOwner ? (
+                    <KeyRound size={16} />
+                  ) : (
+                    <Users size={16} />
+                  )}
+                  {photoBusy === m.uid && (
+                    <span className="absolute inset-0 bg-nb-surface/60 text-[10px] leading-9 text-center">…</span>
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium text-nb-on-surface">
@@ -310,12 +433,49 @@ export default function OrgPeoplePage() {
               </li>
             );
           })}
-          {!members.length && (
+          {!activeMembers.length && (
             <li className="px-4 py-8 text-center text-nb-on-surface-variant">
-              No people in this organization yet.
+              No active members.
             </li>
           )}
         </ul>
+
+        {alumniMembers.length > 0 && (
+          <>
+            <h3 className="mt-4 text-nb-body font-semibold text-nb-on-surface">Alumni</h3>
+            <ul className="divide-y divide-nb-outline-variant/20 rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface">
+              {alumniMembers.map((m) => {
+                const photoUrl = photos[m.uid];
+                return (
+                <li
+                  key={m.uid}
+                  className="flex flex-wrap items-center gap-3 px-4 py-3 text-nb-body"
+                  onContextMenu={(e) => openCtx(e, memberMenuItems(m))}
+                >
+                  <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-nb-lg bg-nb-surface-low text-nb-on-surface-variant">
+                    {photoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={photoUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <Users size={16} />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium text-nb-on-surface">
+                      {m.displayName || m.email || m.uid}
+                      <span className="ml-2 text-nb-caption text-nb-on-surface-variant">Alumni</span>
+                    </div>
+                    <div className="text-nb-caption text-nb-on-surface-variant">
+                      {orgRoleLabel(m.role)} (read-only)
+                    </div>
+                  </div>
+                  {canManage && <DropdownMenu items={memberMenuItems(m)} />}
+                </li>
+              );
+              })}
+            </ul>
+          </>
+        )}
       </section>
 
       <section className="flex flex-col gap-4">

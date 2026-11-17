@@ -102,12 +102,17 @@ cp .env.example .env.local
 | Auth emulator | localhost:9099 |
 | Firestore emulator | localhost:8081 |
 | fake-gcs | http://localhost:4443 (host). Core uses `GCS_EMULATOR_ENDPOINT=http://gcs:4443` plus compose `-public-host`/`-external-url` for that Docker DNS name. Do not set `STORAGE_EMULATOR_HOST` — the Node client then omits `/storage/v1` on reads. |
-| Compile worker | http://localhost:8090 |
-| Judge worker | http://localhost:8091 |
+| Compile worker (health) | http://localhost:8090 |
+| Judge worker (health) | http://localhost:8091 |
+| Pub/Sub emulator | localhost:8085 |
 
-### Async jobs (shipped locally)
+### Async jobs (Pub/Sub)
 
-Compose already runs **`compile`** and **`judge`** workers. Core enqueues durable jobs and dispatches via `JobDispatchPort` (`JOB_DISPATCH=http` today). Preferred next step is **Pub/Sub** (`JOB_DISPATCH=pubsub`) with the emulator in Compose so local topic/sub names match GCP — [async-jobs.md](../02-architecture/async-jobs.md), [ADR-008](../02-architecture/decisions/ADR-008-job-dispatch-evolution.md).
+Compose runs **`pubsub`** emulator, **`pubsub-init`** (topics/subs), and **`compile`** / **`judge`** pull workers. Core publishes via `JobDispatchPort` (`JOB_DISPATCH=pubsub`). Same topic names as GCP — [async-jobs.md](../02-architecture/async-jobs.md), [ADR-008](../02-architecture/decisions/ADR-008-job-dispatch-evolution.md).
+
+```bash
+cd infra && docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build firebase gcs pubsub core collab compile judge website
+```
 
 ## Firebase emulator
 
@@ -141,5 +146,32 @@ cd ../infra && docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 - Compose sets `AUTH_FALLBACK=true`: bearer can be a plain uid (`service-admin`) or Firebase ID token.
 - `service-admin` is the local Service Administrator (`SERVICE_ADMIN_UID`).
+- Password reset uses Firebase Auth emulator (`sendPasswordResetEmail`). Social / link providers need Firebase console config (limited on emulator).
+- `NOTIFICATION_PROVIDER=console` logs invite + secondary-email verify messages; set `resend` + `RESEND_API_KEY` for prod.
 
 See [api-contracts.md](../03-reference/api-contracts.md) for routes.
+
+## Compose smoke checklist
+
+With the full stack up (`firebase gcs pubsub core collab compile judge website`):
+
+1. **Pub/Sub jobs** — Compile a notebook; Core publishes; compile worker pull completes; SSE shows progress. Repeat for Judge normalize/score.
+2. **Password reset** — Forgot password on auth chrome; check Auth emulator for the reset link.
+3. **Public org** — Set org slug + visibility public; open `/o/<slug>`; edit CMS at `/orgs/<id>/public`.
+4. **Public notebook** — Enable public/unlisted in notebook Settings; copy `/o/<slug>/n/<key>`; open entry (TipTap read-only); download last PDF if compiled.
+5. **Alumni** — Mark a member alumni; confirm they get 403 on notebook writes.
+6. **Member photo** — People → upload photo; avatar shows; public Members card uses `imageAssetId` when curated.
+7. **Secondary email** — Account → add secondary; verify via console-logged link (`?verifyEmail=`); invite matching accepts verified secondary.
+
+## Handoff / continue later
+
+Branch: **`microservices`**. Source of truth for “what’s done / what’s next”: [roadmap.md](../00-product/roadmap.md) and [backlog.md](../01-requirements/backlog.md).
+
+After pull on another machine:
+
+```bash
+cd packages/shared && npm run build
+cd ../../infra && docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build firebase gcs pubsub core collab compile judge website
+```
+
+Next product work (not blocked on ports): cloud UX hardening → mobile → explorer search. Ports remainder: MetadataStore org/audit migration.

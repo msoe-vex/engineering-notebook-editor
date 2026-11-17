@@ -31,8 +31,9 @@ flowchart LR
   Web -.->|"BYOK GenAI<br/>(browser → provider)"| ExtLLM["OpenAI / Anthropic / Gemini"]
 
   Collab -->|"/internal/collab/*"| Core
-  Core -->|"POST /jobs"| Compile
-  Core -->|"POST /jobs"| Judge
+  Core -->|"publish"| PubSub["Pub/Sub"]
+  PubSub -->|"pull"| Compile
+  PubSub -->|"pull"| Judge
   Compile -->|"snapshot, storage,<br/>export, progress"| Core
   Judge -->|"rubric, snapshot,<br/>storage, AI, progress"| Core
 
@@ -256,10 +257,10 @@ flowchart LR
   Core --> Lock["jobLocks single-flight"]
   Core --> Jobs["Firestore jobs/{id}"]
   Core --> Port["JobDispatchPort"]
-  Port -->|"JOB_DISPATCH=http"| HTTP["HttpJobDispatch"]
-  Port -.->|"JOB_DISPATCH=tasks<br/>future"| Tasks["Cloud Tasks"]
-  HTTP -->|"COMPILE_SERVICE_URL"| Compile
-  HTTP -->|"JUDGE_SERVICE_URL"| Judge
+  Port -->|"JOB_DISPATCH=pubsub"| Pub["PubSubJobDispatch"]
+  Pub -->|"topics compile/judge"| Bus["Pub/Sub"]
+  Bus -->|"pull subs"| Compile
+  Bus -->|"pull subs"| Judge
   Compile --> Internal["/internal/compile/*"]
   Judge --> InternalJ["/internal/judge/* + /internal/ai/*"]
   Internal --> Core

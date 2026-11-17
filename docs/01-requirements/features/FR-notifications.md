@@ -1,6 +1,7 @@
 # FR-notifications: Transactional email & notifications
 
-Status: planned  
+Status: partial  
+
 Related: [FR-auth](./FR-auth.md), [platform-ports plan](../plans/platform-ports.md), [ADR-009](../../02-architecture/decisions/ADR-009-platform-ports.md)
 
 ## Summary
@@ -24,11 +25,16 @@ Core sends **application** notifications (email first) through a **`Notification
 
 ## Acceptance criteria
 
-- [ ] `NotificationPort` exists in Core; vendor SDK only inside an adapter
-- [ ] Local Compose uses a non-sending or catcher adapter
-- [ ] At least one product template ships (invite **or** secondary-email verify)
-- [ ] Failures are logged; user-facing flows degrade gracefully (invite still created if mail fails, with UI warning)
-- [ ] Secrets (API keys) only via env — [env-vars](../../03-reference/env-vars.md)
+- [x] `NotificationPort` exists in Core; vendor SDK only inside an adapter
+- [x] Local Compose uses a non-sending or catcher adapter
+- [x] At least one product template ships (invite **or** secondary-email verify)
+- [x] Failures are logged; user-facing flows degrade gracefully (invite still created if mail fails, with UI warning)
+- [x] Secrets (API keys) only via env — [env-vars](../../03-reference/env-vars.md)
+
+### Remaining
+
+- [x] Resend (or other prod) adapter behind `NOTIFICATION_PROVIDER`
+- [x] Secondary-email verification template
 
 ## Data and APIs
 

@@ -28,12 +28,12 @@ Also: [backlog.md](./backlog.md) · [roadmap](../00-product/roadmap.md).
 
 | ID | Title | Status |
 | --- | --- | --- |
-| [FR-auth](./features/FR-auth.md) | Authentication & session (reset / social / multi-email planned) | partial |
-| [FR-notifications](./features/FR-notifications.md) | Transactional email & notifications | planned |
-| [FR-orgs](./features/FR-orgs.md) | Organizations, people, invites, teams (+ alumni planned) | current |
+| [FR-auth](./features/FR-auth.md) | Authentication & session (multi-email / Collab IdentityPort remaining) | partial |
+| [FR-notifications](./features/FR-notifications.md) | Transactional email & notifications (console; Resend remaining) | partial |
+| [FR-orgs](./features/FR-orgs.md) | Organizations, people, invites, teams, alumni | current |
 | [FR-notebooks](./features/FR-notebooks.md) | Notebooks, Settings, Contributors, access | partial |
-| [FR-public-notebook](./features/FR-public-notebook.md) | Public notebook share link | planned |
-| [FR-org-public-page](./features/FR-org-public-page.md) | Public organization profile page | planned |
+| [FR-public-notebook](./features/FR-public-notebook.md) | Public notebook share link (audits stay private) | partial |
+| [FR-org-public-page](./features/FR-org-public-page.md) | Public organization profile page | partial |
 | [FR-entries-collab](./features/FR-entries-collab.md) | Entries & collaborative editing | partial |
 | [FR-explorer](./features/FR-explorer.md) | Explorer, folders, search | partial |
 | [FR-trash](./features/FR-trash.md) | Entry trash (soft-delete / restore / purge) | current |

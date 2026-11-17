@@ -4,13 +4,13 @@ Forward-looking work. Requirements index: [README.md](./README.md). Parity epics
 
 ## Active plans
 
-**[Cloud UX hardening & legacy parity](./plans/cloud-ux-hardening.md)** — P0 image upload `bodyLimit`, toasts, phase icons, split/live LaTeX, metadata save + sync, validation revalidation, editor chrome, unified templates, calendar day height, skeletons, share dialog. Prefer that plan over ad-hoc polish until it is marked done.
+**[Cloud UX hardening & legacy parity](./plans/cloud-ux-hardening.md)** — P0 image upload `bodyLimit`, toasts, phase icons, split/live LaTeX, metadata save + sync, validation revalidation, editor chrome, unified templates, calendar day height, skeletons, share dialog.
 
-**[Mobile-responsive shell](./plans/mobile-responsive.md)** — Phone/tablet layouts for all signed-in surfaces; notebook section nav (slim strip desktop, bottom tabs mobile); explorer drawer; entry editor without split on narrow; [NFR-responsive](./quality/NFR-responsive.md).
+**[Mobile-responsive shell](./plans/mobile-responsive.md)** — Phone/tablet layouts; notebook section nav; explorer drawer; [NFR-responsive](./quality/NFR-responsive.md).
 
-**[Explorer search & context menus](./plans/explorer-search-context-menus.md)** — Sidebar search/filter chips + empty states; shared `ContextMenu` primitive; standardize right-click for explorer, orgs, notebooks, people/teams, contributors.
+**[Explorer search & context menus](./plans/explorer-search-context-menus.md)** — Sidebar search/filter; shared `ContextMenu`.
 
-**[Platform ports](./plans/platform-ports.md)** — `MetadataStore`, harden `StoragePort`, grow identity port (reset / verify / social link / multi-email), `NotificationPort` — [ADR-009](../02-architecture/decisions/ADR-009-platform-ports.md), [FR-auth](./features/FR-auth.md), [FR-notifications](./features/FR-notifications.md).
+**[Platform ports](./plans/platform-ports.md)** — MetadataStore depth, identity, notifications — [ADR-009](../02-architecture/decisions/ADR-009-platform-ports.md).
 
 ## Done (architecture hygiene)
 
@@ -19,46 +19,40 @@ Forward-looking work. Requirements index: [README.md](./README.md). Parity epics
 - [x] Archive `lib/github`, `lib/storage`, `hooks/useWorkspace`, classic `Editor.tsx`
 - [x] Extract live `NotebookFormatToolbar` + `insertBlock`
 - [x] Docs restructure (product / FR-NFR / architecture / reference / guides / ops)
-- [x] Async compile + judge workers (Compose HTTP dispatch) — [ADR-006](../02-architecture/decisions/ADR-006-compile-job.md), [ADR-007](../02-architecture/decisions/ADR-007-python-langgraph-judge.md)
-- [x] Retire `services/agents` in favor of Core + website GenAI — [ADR-004](../02-architecture/decisions/ADR-004-agents-genai-gateway.md), [ADR-005](../02-architecture/decisions/ADR-005-genai-in-core.md)
+- [x] Async compile + judge workers + **Pub/Sub-only** wake — [ADR-006](../02-architecture/decisions/ADR-006-compile-job.md), [ADR-007](../02-architecture/decisions/ADR-007-python-langgraph-judge.md), [ADR-008](../02-architecture/decisions/ADR-008-job-dispatch-evolution.md)
+- [x] Retire `services/agents` — [ADR-004](../02-architecture/decisions/ADR-004-agents-genai-gateway.md), [ADR-005](../02-architecture/decisions/ADR-005-genai-in-core.md)
+- [x] `NotificationPort` console + invite email hook
+- [x] Password reset + Google/GitHub sign-in hooks (Firebase client)
+- [x] Alumni `status` API + People Active/Alumni sections
+- [x] Public org/notebook APIs + `/o/:slug` routes (MVP)
 
-## Product polish (after / outside the active plan)
+## Product polish
 
-- [ ] **Server-side entry search** — explorer filters are client-side; stretch epic in [explorer-search-context-menus](./plans/explorer-search-context-menus.md)
+- [ ] **Server-side entry search**
 - [ ] **Invite `status`** — optional `pending | accepted | revoked`
-- [ ] **`gcsPathOriginal`** — only if print-quality / lossless re-export becomes a real need; today one compressed blob is enough
-- [ ] **Metrics persistence** — Core metrics in-memory today ([FR-admin](./features/FR-admin.md))
-- [ ] **Cloud-native Settings/Help/About/Calendar** (optional) — still under `components/pages/`
-- [ ] **Collab presence avatars** — beyond Live/Offline chip ([plan](./plans/cloud-ux-hardening.md) extras)
+- [ ] **`gcsPathOriginal`** — only if print-quality need appears
+- [ ] **Metrics persistence**
+- [ ] **Collab presence avatars**
 
-## Public / org storytelling (planned)
+## Public / people polish
 
-See [roadmap.md](../00-product/roadmap.md).
+- [x] **Org-scoped assets** + People photo upload
+- [x] **Public CMS admin UI** (`/orgs/:id/public`) + delete cascade
+- [x] **Public notebook** TipTap read-only + copy URL + last PDF
+- [ ] Keep [vex-website](https://github.com/msoe-vex/vex-website) until explicit migration
 
-- [ ] **Active vs alumni** org members — [FR-orgs](./features/FR-orgs.md) · [#91](https://github.com/msoe-vex/engineering-notebook-editor/issues/91)
-- [ ] **Public notebook share link** — [FR-public-notebook](./features/FR-public-notebook.md) · [#89](https://github.com/msoe-vex/engineering-notebook-editor/issues/89)
-- [ ] **Public org page** (projects, donors/sponsors, events, social, media; public\|hidden) — [FR-org-public-page](./features/FR-org-public-page.md) · [#90](https://github.com/msoe-vex/engineering-notebook-editor/issues/90)
-- [ ] Keep [vex-website](https://github.com/msoe-vex/vex-website) as current club site until an explicit migration plan exists
+## Platform / job dispatch
 
-## Platform / job dispatch (planned)
+- [x] `JOB_DISPATCH=pubsub` + Compose emulator + worker pull — [#93](https://github.com/msoe-vex/engineering-notebook-editor/issues/93)
+- [x] **Prod Pub/Sub** topics/IAM + Cloud Run always-on note for pull workers
 
-See [async-jobs.md](../02-architecture/async-jobs.md), [ADR-008](../02-architecture/decisions/ADR-008-job-dispatch-evolution.md).
+## Platform / ports & identity
 
-- [x] Compose `compile` + `judge` workers + Core job docs/SSE (`JOB_DISPATCH=http`)
-- [ ] **`JOB_DISPATCH=pubsub`** + Compose Pub/Sub emulator (same topic/sub names as GCP) — [#93](https://github.com/msoe-vex/engineering-notebook-editor/issues/93)
-- [ ] Optional **Cloud Tasks** dispatcher as an alternate port (not the preferred parity path)
-
-## Platform / ports & identity (planned)
-
-See [platform-ports.md](./plans/platform-ports.md), [ADR-009](../02-architecture/decisions/ADR-009-platform-ports.md).
-
-- [x] `AuthPort` (verify) + `StoragePort` + `JobDispatchPort` (thin)
-- [ ] **Password reset** + keep email verification — [FR-auth](./features/FR-auth.md)
-- [ ] **Social login + provider linking** (GitHub / Google; LinkedIn if practical)
-- [ ] **Multi-email** (verified secondaries for invite matching)
-- [ ] **`MetadataStore`** + Firestore adapter; migrate routes off raw Firestore
-- [ ] **`NotificationPort`** + local/catcher adapter — [FR-notifications](./features/FR-notifications.md)
-- [ ] Collab shares Core identity verify (no divergent Admin Auth path)
+- [x] `AuthPort` + `StoragePort` + `JobDispatchPort` (pubsub) + `NotificationPort` (console / Resend)
+- [x] Password reset + social sign-in hooks
+- [x] **Multi-email** (verified secondaries) + Resend adapter
+- [x] **`MetadataStore`** migrate users/rbac (+ more)
+- [x] Collab shares Core identity / ACL (no divergent Admin Auth path)
 
 ## Non-goals
 

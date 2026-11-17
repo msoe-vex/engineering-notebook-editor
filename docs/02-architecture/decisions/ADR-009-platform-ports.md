@@ -10,7 +10,7 @@ Core already has thin ports for **auth verify** (`AuthPort`), **blobs** (`Storag
 
 ## Decision
 
-1. **Ports first, adapters second.** Product and route code depend on interfaces; GCP/Firebase (and HTTP job dispatch) are the **default adapters**, not the domain model.  
+1. **Ports first, adapters second.** Product and route code depend on interfaces; GCP/Firebase are the **default adapters**, not the domain model. Job wake is **Pub/Sub-only** ([ADR-008](./ADR-008-job-dispatch-evolution.md)) — HTTP Core→worker wake is retired.  
 2. **Add `MetadataStore`** — all durable app documents go through it. Firestore is the first adapter. Logical path helpers in `packages/shared` remain IDs, not SDK types.  
 3. **Keep `StoragePort`** as the only blob API; GCS remains the first adapter.  
 4. **Grow identity behind a port** (evolve `AuthPort`): session verify for Core + Collab; client identity adapter for sign-in/reset/verify/link. Roles/grants stay in app metadata, not required IdP custom claims.  
@@ -22,8 +22,9 @@ Core already has thin ports for **auth verify** (`AuthPort`), **blobs** (`Storag
 
 - Plan: [platform-ports.md](../../01-requirements/plans/platform-ports.md)  
 - Requirements: [FR-auth](../../01-requirements/features/FR-auth.md), [FR-notifications](../../01-requirements/features/FR-notifications.md)  
-- A future AWS/Mongo/Cognito (or similar) migration is an **adapter + ops** project, not a product rewrite — *after* MetadataStore lands.  
-- Collab must stop being a second source of truth for “how we talk to Firebase.”
+- **Shipped (2026-11):** MetadataStore on users/rbac/jobStore reads-updates; Collab `/internal/collab/authorize`; NotificationPort console + Resend; secondary emails. Remaining: org route migration, query/batch on MetadataStore, StoragePort audit.  
+- A future AWS/Mongo/Cognito (or similar) migration is an **adapter + ops** project, not a product rewrite — *after* MetadataStore covers remaining routes.  
+- Collab must not be a second source of truth for identity/membership (authorize via Core).
 
 ## Alternatives considered
 

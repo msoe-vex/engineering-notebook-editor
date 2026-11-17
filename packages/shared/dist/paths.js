@@ -47,6 +47,13 @@ export function assetPath(orgId, notebookId, assetId) {
 export function assetsCollection(orgId, notebookId) {
     return `organizations/${orgId}/notebooks/${notebookId}/assets`;
 }
+/** Org-scoped assets (People avatars, public CMS media) — not notebook-scoped. */
+export function orgAssetPath(orgId, assetId) {
+    return `organizations/${orgId}/assets/${assetId}`;
+}
+export function orgAssetsCollection(orgId) {
+    return `organizations/${orgId}/assets`;
+}
 export function auditPath(orgId, notebookId, auditId) {
     return `organizations/${orgId}/notebooks/${notebookId}/audits/${auditId}`;
 }
@@ -79,11 +86,37 @@ export function jobLockPath(orgId, notebookId, type, resourceKey) {
 export function invitePath(inviteId) {
     return `invites/${inviteId}`;
 }
+/** Global uniqueness lookup for public org slugs. */
+export function orgSlugPath(slug) {
+    return `orgSlugs/${slug}`;
+}
+export function publicNotebookKeyPath(orgId, publicKey) {
+    return `organizations/${orgId}/publicNotebookKeys/${publicKey}`;
+}
+export function publicNotebookKeysCollection(orgId) {
+    return `organizations/${orgId}/publicNotebookKeys`;
+}
+export function publicDonorsCollection(orgId) {
+    return `organizations/${orgId}/publicDonors`;
+}
+export function publicProjectsCollection(orgId) {
+    return `organizations/${orgId}/publicProjects`;
+}
+export function publicEventsCollection(orgId) {
+    return `organizations/${orgId}/publicEvents`;
+}
+export function publicMembersCollection(orgId) {
+    return `organizations/${orgId}/publicMembers`;
+}
+export function publicSocialCollection(orgId) {
+    return `organizations/${orgId}/publicSocial`;
+}
 /** GCS object key builders (mirror Firestore nesting). */
 export const gcsKeys = {
     busytex: (appVersion, ...rest) => ["static", "busytex", appVersion, ...rest].join("/"),
     latexTemplate: (appVersion, ...rest) => ["static", "latex-template", appVersion, ...rest].join("/"),
     asset: (orgId, notebookId, assetId, variant = "compressed") => `organizations/${orgId}/notebooks/${notebookId}/assets/${assetId}/${variant}`,
+    orgAsset: (orgId, assetId, variant = "compressed") => `organizations/${orgId}/assets/${assetId}/${variant}`,
     yjs: (orgId, notebookId, entryId) => `organizations/${orgId}/notebooks/${notebookId}/yjs/${entryId}.ydoc`,
     tipTap: (orgId, notebookId, entryId) => `organizations/${orgId}/notebooks/${notebookId}/entries/${entryId}.json`,
     exportPdf: (orgId, notebookId, exportId) => `organizations/${orgId}/notebooks/${notebookId}/exports/${exportId}.pdf`,

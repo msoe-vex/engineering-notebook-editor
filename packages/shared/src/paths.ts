@@ -64,6 +64,15 @@ export function assetsCollection(orgId: string, notebookId: string): string {
   return `organizations/${orgId}/notebooks/${notebookId}/assets`;
 }
 
+/** Org-scoped assets (People avatars, public CMS media) — not notebook-scoped. */
+export function orgAssetPath(orgId: string, assetId: string): string {
+  return `organizations/${orgId}/assets/${assetId}`;
+}
+
+export function orgAssetsCollection(orgId: string): string {
+  return `organizations/${orgId}/assets`;
+}
+
 export function auditPath(orgId: string, notebookId: string, auditId: string): string {
   return `organizations/${orgId}/notebooks/${notebookId}/audits/${auditId}`;
 }
@@ -111,6 +120,39 @@ export function invitePath(inviteId: string): string {
   return `invites/${inviteId}`;
 }
 
+/** Global uniqueness lookup for public org slugs. */
+export function orgSlugPath(slug: string): string {
+  return `orgSlugs/${slug}`;
+}
+
+export function publicNotebookKeyPath(orgId: string, publicKey: string): string {
+  return `organizations/${orgId}/publicNotebookKeys/${publicKey}`;
+}
+
+export function publicNotebookKeysCollection(orgId: string): string {
+  return `organizations/${orgId}/publicNotebookKeys`;
+}
+
+export function publicDonorsCollection(orgId: string): string {
+  return `organizations/${orgId}/publicDonors`;
+}
+
+export function publicProjectsCollection(orgId: string): string {
+  return `organizations/${orgId}/publicProjects`;
+}
+
+export function publicEventsCollection(orgId: string): string {
+  return `organizations/${orgId}/publicEvents`;
+}
+
+export function publicMembersCollection(orgId: string): string {
+  return `organizations/${orgId}/publicMembers`;
+}
+
+export function publicSocialCollection(orgId: string): string {
+  return `organizations/${orgId}/publicSocial`;
+}
+
 /** GCS object key builders (mirror Firestore nesting). */
 export const gcsKeys = {
   busytex: (appVersion: string, ...rest: string[]) =>
@@ -119,6 +161,8 @@ export const gcsKeys = {
     ["static", "latex-template", appVersion, ...rest].join("/"),
   asset: (orgId: string, notebookId: string, assetId: string, variant: "compressed" | "original" = "compressed") =>
     `organizations/${orgId}/notebooks/${notebookId}/assets/${assetId}/${variant}`,
+  orgAsset: (orgId: string, assetId: string, variant: "compressed" | "original" = "compressed") =>
+    `organizations/${orgId}/assets/${assetId}/${variant}`,
   yjs: (orgId: string, notebookId: string, entryId: string) =>
     `organizations/${orgId}/notebooks/${notebookId}/yjs/${entryId}.ydoc`,
   tipTap: (orgId: string, notebookId: string, entryId: string) =>

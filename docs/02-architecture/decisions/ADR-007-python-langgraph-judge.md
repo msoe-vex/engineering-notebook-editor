@@ -11,9 +11,9 @@ The notebook Judge job (`type: judge`) needs real tool use: list/search/read ent
 
 ## Decision
 
-1. **`services/judge` is a Python worker** (LangGraph + tools) that preserves the existing job HTTP contract:
+1. **`services/judge` is a Python worker** (LangGraph + tools) that runs the existing job protocol:
    - `GET /health`
-   - `POST /jobs` `{ jobId, type: "judge", orgId, notebookId, payload }` → `202`
+   - Job wake via **Pub/Sub pull** ([ADR-008](./ADR-008-job-dispatch-evolution.md)); payload `{ jobId, type: "judge", orgId, notebookId, payload }` (HTTP `POST /jobs` wake superseded)
    - Same Core internal APIs (`/internal/judge/*`, `/internal/compile/snapshot`, `/internal/storage/object`, `/internal/ai/byok|complete`)
 2. **Phases unchanged:** `payload.phase` = `normalize` | `score` (Core enqueue paths unchanged).
 3. **LLM still via Core** — BYOK keys remain dispatch-only; Vertex via `/internal/ai/complete`. The worker does not call provider APIs with stored keys.
@@ -24,7 +24,7 @@ The notebook Judge job (`type: judge`) needs real tool use: list/search/read ent
 ## Consequences
 
 - Compose/Cloud Run build `services/judge` with a Python base image; healthcheck uses Python/`curl`, not Node.
-- Local and prod `JUDGE_SERVICE_URL` keep pointing at the same port (8091).
+- Workers subscribe to the judge topic/sub; no `JUDGE_SERVICE_URL` wake from Core.
 - Node-based judge implementation is retired (superseded by this worker).
 - Future agent quality work (better retrieval, multi-step critique) lands in the Python graph without Core API changes.
 

@@ -67,14 +67,14 @@ MVP sections admins can edit (each public|hidden at section or page level as nee
 
 ## Acceptance criteria
 
-- [ ] `/orgs/:orgId` remains the signed-in dashboard (notebooks); public site is `/o/:orgSlug`
-- [ ] Org admin can claim/change slug; conflict if taken; invalid/reserved slugs rejected
-- [ ] Hidden pages are not listed publicly and return non-success for anonymous users
-- [ ] Editing public page content is org-admin (not notebook ACL)
-- [ ] Dashboard nav has a clear “Public page” / “View public site” entry
-- [ ] Home + Projects + Events + Members sections ship for MVP (donate may be CTA-only)
-- [ ] Media uploads use existing asset/GCS patterns with size limits
-- [ ] Public layout does **not** use notebook AppChrome (marketing shell)
+- [x] `/orgs/:orgId` remains the signed-in dashboard (notebooks); public site is `/o/:orgSlug`
+- [x] Org admin can claim/change slug; conflict if taken; invalid/reserved slugs rejected
+- [x] Hidden pages are not listed publicly and return non-success for anonymous users
+- [x] Editing public page content is org-admin (not notebook ACL)
+- [x] Dashboard nav has a clear “Public page” / “View public site” entry
+- [x] Home + Projects + Events + Members sections ship for MVP (donate may be CTA-only)
+- [x] Media uploads use existing asset/GCS patterns with size limits
+- [x] Public layout does **not** use notebook AppChrome (marketing shell)
 
 ## Data and APIs
 

@@ -1,12 +1,19 @@
 /**
- * Local / Cloud Run-style compile worker HTTP server.
- * Core POSTs /jobs; we run XeLaTeX and report via Core internal APIs + SSE.
+ * Compile worker: health HTTP + Pub/Sub pull subscriber.
+ * Core publishes to notebook-jobs-compile; we run XeLaTeX and report via Core.
  */
 import http from "node:http";
+import { PubSub, type Message } from "@google-cloud/pubsub";
 import { runCompileJobSafe } from "./runJob.js";
 
 const port = Number(process.env.PORT || 8090);
-const secret = process.env.INTERNAL_SERVICE_SECRET || "";
+const projectId =
+  process.env.GOOGLE_CLOUD_PROJECT ||
+  process.env.GCP_PROJECT_ID ||
+  process.env.FIREBASE_PROJECT_ID ||
+  "demo-engineering-notebook";
+const subscriptionName =
+  process.env.PUBSUB_SUBSCRIPTION_COMPILE || "notebook-jobs-compile-worker";
 
 type JobBody = {
   orgId?: string;
@@ -19,25 +26,16 @@ type JobBody = {
 let busy = false;
 const queue: Array<{ orgId: string; notebookId: string; jobId: string }> = [];
 
-function assertSecret(req: http.IncomingMessage): boolean {
-  if (!secret) return true;
-  return req.headers["x-internal-secret"] === secret;
-}
-
-function readJson(req: http.IncomingMessage): Promise<JobBody> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    req.on("data", (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
-    req.on("end", () => {
-      try {
-        const raw = Buffer.concat(chunks).toString("utf8") || "{}";
-        resolve(JSON.parse(raw) as JobBody);
-      } catch (err) {
-        reject(err);
-      }
-    });
-    req.on("error", reject);
-  });
+function enqueueCompile(body: JobBody): { ok: true; jobId: string } | { ok: false; error: string } {
+  const orgId = body.orgId?.trim();
+  const notebookId = body.notebookId?.trim();
+  const jobId = body.jobId?.trim() || `job-${Date.now()}`;
+  const jobType = (body.type || "compile").trim();
+  if (!orgId || !notebookId) return { ok: false, error: "orgId and notebookId required" };
+  if (jobType !== "compile") return { ok: false, error: `unsupported job type: ${jobType}` };
+  queue.push({ orgId, notebookId, jobId });
+  void drainQueue();
+  return { ok: true, jobId };
 }
 
 async function drainQueue() {
@@ -54,45 +52,47 @@ async function drainQueue() {
   }
 }
 
+function startPubSubPull() {
+  const pubsub = new PubSub({ projectId });
+  const sub = pubsub.subscription(subscriptionName);
+  console.log(`[compile] pubsub pull subscription=${subscriptionName} project=${projectId}`);
+
+  sub.on("message", (message: Message) => {
+    try {
+      const body = JSON.parse(message.data.toString("utf8")) as JobBody;
+      const result = enqueueCompile(body);
+      if (!result.ok) {
+        console.warn(`[compile] bad message: ${result.error}`);
+        message.ack();
+        return;
+      }
+      message.ack();
+      console.log(`[compile] accepted job=${result.jobId} from pubsub`);
+    } catch (err) {
+      console.error("[compile] pubsub message error", err);
+      message.nack();
+    }
+  });
+
+  sub.on("error", (err) => {
+    console.error("[compile] pubsub subscription error", err);
+  });
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
 
   if (req.method === "GET" && url.pathname === "/health") {
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ status: "ok", service: "compile", busy, queued: queue.length }));
-    return;
-  }
-
-  if (req.method === "POST" && url.pathname === "/jobs") {
-    if (!assertSecret(req)) {
-      res.writeHead(403, { "content-type": "application/json" });
-      res.end(JSON.stringify({ error: "forbidden" }));
-      return;
-    }
-    try {
-      const body = await readJson(req);
-      const orgId = body.orgId?.trim();
-      const notebookId = body.notebookId?.trim();
-      const jobId = body.jobId?.trim() || `job-${Date.now()}`;
-      const jobType = (body.type || "compile").trim();
-      if (!orgId || !notebookId) {
-        res.writeHead(400, { "content-type": "application/json" });
-        res.end(JSON.stringify({ error: "orgId and notebookId required" }));
-        return;
-      }
-      if (jobType !== "compile") {
-        res.writeHead(400, { "content-type": "application/json" });
-        res.end(JSON.stringify({ error: `unsupported job type: ${jobType}` }));
-        return;
-      }
-      queue.push({ orgId, notebookId, jobId });
-      void drainQueue();
-      res.writeHead(202, { "content-type": "application/json" });
-      res.end(JSON.stringify({ ok: true, jobId, queued: queue.length + (busy ? 1 : 0) }));
-    } catch (err) {
-      res.writeHead(400, { "content-type": "application/json" });
-      res.end(JSON.stringify({ error: err instanceof Error ? err.message : "bad request" }));
-    }
+    res.end(
+      JSON.stringify({
+        status: "ok",
+        service: "compile",
+        busy,
+        queued: queue.length,
+        subscription: subscriptionName,
+      })
+    );
     return;
   }
 
@@ -101,5 +101,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(port, "0.0.0.0", () => {
-  console.log(`[compile] listening on :${port}`);
+  console.log(`[compile] health on :${port}`);
+  startPubSubPull();
 });

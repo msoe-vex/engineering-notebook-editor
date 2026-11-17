@@ -15,6 +15,7 @@ import { registerAiRoutes, registerInternalAiRoutes } from "./routes/ai.js";
 import { registerInternalCompileRoutes } from "./routes/internalCompile.js";
 import { registerInternalJobRoutes } from "./routes/internalJobs.js";
 import { registerJudgeInternalRoutes, registerJudgeUserRoutes } from "./routes/judge.js";
+import { registerPublicRoutes } from "./routes/public.js";
 
 /** Default 64 MiB — assets, logos, and compiled PDF exports share this Fastify limit. */
 const bodyLimit = Number(process.env.BODY_LIMIT_BYTES || MAX_UPLOAD_BYTES);
@@ -118,6 +119,7 @@ app.register(async (scoped) => {
 });
 
 await registerStaticAssetRoutes(app, storage);
+await registerPublicRoutes(app, storage);
 await registerInternalJobRoutes(app);
 await registerInternalCompileRoutes(app, storage);
 await registerJudgeInternalRoutes(app, storage);
@@ -138,6 +140,45 @@ function assertInternalSecret(request: { headers: Record<string, unknown> }, rep
   }
   return null;
 }
+
+/**
+ * Collab authorization — verify bearer via AuthPort + org membership via MetadataStore/rbac.
+ * Collab must not fork Firebase Admin membership checks.
+ */
+app.post("/internal/collab/authorize", async (request, reply) => {
+  const denied = assertInternalSecret(request as { headers: Record<string, unknown> }, reply);
+  if (denied) return denied;
+  const body = request.body as {
+    token?: string;
+    orgId?: string;
+    notebookId?: string;
+    entryId?: string;
+  };
+  if (!body.token || !body.orgId) {
+    return reply.code(400).send({ error: "token and orgId required" });
+  }
+  let user;
+  try {
+    user = await auth.verifySession(body.token);
+  } catch {
+    return reply.code(401).send({ error: "invalid token" });
+  }
+  const { requireOrgReader, canAccessNotebook } = await import("./rbac.js");
+  const { notebookPath } = await import("@engineering-notebook/shared");
+  const { getMetadataStore } = await import("./db/metadataStore.js");
+  try {
+    await requireOrgReader(user, body.orgId);
+  } catch {
+    return reply.code(403).send({ error: "forbidden" });
+  }
+  if (body.notebookId) {
+    const nb = await getMetadataStore().get(notebookPath(body.orgId, body.notebookId));
+    if (!nb) return reply.code(404).send({ error: "notebook not found" });
+    const ok = await canAccessNotebook(user, body.orgId, nb as { access?: import("@engineering-notebook/shared").NotebookAccess });
+    if (!ok) return reply.code(403).send({ error: "forbidden" });
+  }
+  return { ok: true, uid: user.uid, email: user.email };
+});
 
 /** Collab loads persisted Yjs from Core storage (works with memory backend + fake-gcs). */
 app.get("/internal/collab/yjs", async (request, reply) => {

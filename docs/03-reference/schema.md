@@ -19,13 +19,14 @@ Clients never talk to Firestore/metadata store directly (`infra/firestore.rules`
 
 | Path | Role | Key fields |
 | --- | --- | --- |
-| `members/{uid}` | Org ACL | `role` (`owner` \| `admin` \| `member`), `email?`, `joinedAt` |
+| `members/{uid}` | Org ACL | `role`, `email?`, `displayName?`, `imageAssetId?` (org asset), `status?` (`active`\|`alumni`), `joinedAt` |
+| `assets/{assetId}` | Org-scoped media | `contentType`, `byteSize`, `gcsPath`, `createdBy`, `usedBy[]` — GCS `organizations/{orgId}/assets/{id}/compressed` |
 | `teams/{teamId}` | Org ACL groups (not notebook branding) | `name`, `createdBy`, timestamps |
 | `teams/{teamId}/members/{uid}` | Team membership | `joinedAt` |
 | `notebooks/{notebookId}` | Notebook summary | See below |
-| `notebooks/{id}/members/{memberId}` | **Credits roster** (may lack app account) | `name`, `role`, `order`, `imageAssetId?` |
+| `notebooks/{id}/members/{memberId}` | **Credits roster** (may lack app account) | `name`, `role`, `order`, `imageAssetId?`, `orgMemberUid?` |
 | `notebooks/{id}/entries/{entryId}` | Entry **metadata only** | See below |
-| `notebooks/{id}/assets/{assetId}` | Asset metadata | `contentType`, `byteSize`, `gcsPath`, `createdBy`, `usedBy[]` |
+| `notebooks/{id}/assets/{assetId}` | Notebook asset metadata | `contentType`, `byteSize`, `gcsPath`, `createdBy`, `usedBy[]` |
 | `notebooks/{id}/audits/{auditId}` | Rubric audit runs | `status` (`running`\|`completed`\|`failed`), `provider`, `scores`, `advice[]`, `steps?`, `summary?`, `error?`, … |
 
 ### Notebook summary (`NotebookSummaryV5`)
@@ -117,9 +118,9 @@ Notebook (and org) delete removes Firestore children (entries, assets, audits, r
 
 ---
 
-## Planned (not in `types.ts` yet)
+## Public / people / auth extras (in `types.ts`; wire remaining UI polish as needed)
 
-Contract sketches for [FR-org-public-page](../01-requirements/features/FR-org-public-page.md), [FR-public-notebook](../01-requirements/features/FR-public-notebook.md), [FR-orgs](../01-requirements/features/FR-orgs.md) alumni, [FR-auth](../01-requirements/features/FR-auth.md). Shapes may tighten at implement time; keep FRs and this section in sync.
+Implemented fields for [FR-org-public-page](../01-requirements/features/FR-org-public-page.md), [FR-public-notebook](../01-requirements/features/FR-public-notebook.md), [FR-orgs](../01-requirements/features/FR-orgs.md) alumni, [FR-auth](../01-requirements/features/FR-auth.md). Keep FRs in sync as acceptance criteria are checked off.
 
 ### Org slug + public page
 

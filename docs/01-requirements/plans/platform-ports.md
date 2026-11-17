@@ -47,10 +47,11 @@ Website: no direct Firestore/GCS; may keep a **client Identity adapter** (Fireba
 
 **P0 for portability**
 
-- [ ] Define `MetadataStore` (get/set/delete/query/batch/transaction) with document IDs matching logical paths in [`packages/shared` paths](../../../packages/shared/src/paths.ts) — paths stay **logical**, not Firestore-specific in call sites
-- [ ] Firestore adapter implements the port; `getFirestore()` confined to `db/firestore*` adapter files
-- [ ] Migrate routes incrementally (`users`, `orgs`, `jobStore`, `rbac`, audits, judge metadata)
-- [ ] Collab membership reads go through Core internal ACL **or** a shared store client that only uses the port (no second Firebase Admin + path dialect)
+- [x] Define `MetadataStore` (`get`/`set`/`update`/`delete`; query/batch/transaction still TBD) with document IDs matching logical paths in [`packages/shared` paths](../../../packages/shared/src/paths.ts)
+- [x] Firestore adapter implements the port (`services/core/src/db/metadataStore.ts`)
+- [x] Migrate routes incrementally — `users`, `rbac`, `jobStore` get/update (create batch + list query still Firestore)
+- [ ] Continue: `orgs` helpers, audits, judge metadata; confine remaining `getFirestore()` to adapter + batch/query helpers
+- [x] Collab membership reads go through Core internal ACL (`POST /internal/collab/authorize`)
 
 **Done when:** Core business routes import `MetadataStore`, not `firebase-admin/firestore` types.
 
@@ -70,13 +71,13 @@ Website: no direct Firestore/GCS; may keep a **client Identity adapter** (Fireba
 
 See [FR-auth](../features/FR-auth.md).
 
-- [ ] **Email verification** — keep gate; ensure resend works; document whether mail is IdP-sent or `NotificationPort`
-- [ ] **Password reset** — forgot-password + reset confirmation UX; Firebase `sendPasswordResetEmail` (or IdP equivalent) acceptable for v1 if behind Identity client helpers
-- [ ] **Social login** — configure providers (at least GitHub + Google; LinkedIn via OIDC if feasible); sign-in buttons on auth chrome
-- [ ] **Account linking** — signed-in user can link/unlink providers; conflict UX when provider email already bound to another uid
-- [ ] **Multi-email** — primary email from IdP; **secondary emails** stored on `users/{uid}` (app metadata) with verify-via-`NotificationPort` (or IdP) before use for invites matching
-- [ ] Expand Core `AuthPort` → session includes `uid`, primary email, `emailVerified`, linked provider ids; **roles/grants stay in MetadataStore** (not IdP custom claims required)
-- [ ] Collab verifies via shared Identity verify (same adapter as Core)
+- [x] **Email verification** — gate + resend (IdP-sent)
+- [x] **Password reset** — forgot-password + reset via Firebase client helpers / emulator
+- [x] **Social login** — Google + GitHub hooks (providers must be enabled in Firebase console; emulator limited)
+- [x] **Account linking** — link/unlink Google/GitHub from Account (cannot unlink sole method)
+- [x] **Multi-email** — secondary emails on `users/{uid}` with verify via `NotificationPort`; invite matching accepts verified secondaries
+- [x] Core `AuthPort` session includes `uid`, email, `emailVerified`; **roles/grants stay in MetadataStore**
+- [x] Collab verifies via Core authorize (same AuthPort + rbac/MetadataStore)
 
 **Done when:** user can reset password, verify email, sign in with ≥1 social provider, link a second provider, and add a verified secondary email for invite matching.
 
@@ -84,23 +85,23 @@ See [FR-auth](../features/FR-auth.md).
 
 **P1** — [FR-notifications](../features/FR-notifications.md)
 
-- [ ] `NotificationPort.send({ to, template|subject+body, data })`
-- [ ] First adapter: free/cheap transactional provider (e.g. Resend) **or** SMTP; local = log/Ethreal/Mailhog
-- [ ] Use for: org invites (optional branded), secondary-email verification, job/compile “ready” (optional), admin/system alerts
-- [ ] IdP may still send its own verify/reset templates; do not fork two product templates for the same event without a decision in the FR
+- [x] `NotificationPort.send({ to, template|subject+body, data })`
+- [x] Adapters: `console` (local), `resend` (`NOTIFICATION_PROVIDER` + `RESEND_API_KEY`), `none`
+- [x] Use for: org invites, secondary-email verification
+- [ ] Optional: job/compile “ready” email; admin/system alerts
+- [x] IdP still owns primary verify/reset templates
 
-**Done when:** Core can send at least one product email without importing a vendor SDK outside the adapter package.
+**Done when:** Core can send at least one product email without importing a vendor SDK outside the adapter package. ✅
 
 ---
 
 ## Suggested delivery order
 
-1. **Epic C (product slice):** password reset + tighten verification UX (can ship on Firebase client before full IdentityPort rename)
-2. **Epic D skeleton:** `NotificationPort` + local logger adapter + one invite or secondary-email template
-3. **Epic A:** `MetadataStore` + Firestore adapter; migrate hottest routes
-4. **Epic C (linking):** social providers + link/unlink + secondary emails
-5. **Epic B:** storage audit / docs
-6. Stretch: `GenAiCompletePort`; second-cloud adapters only when a real migration is scheduled
+1. ~~Epic C product + Epic D + Epic A hot paths~~ **done (2026-11)**  
+2. **Next:** Epic A remainder (orgs/audits/judge + query/batch)  
+3. **Epic B:** storage audit / docs  
+4. Stretch: `GenAiCompletePort`; second-cloud adapters only when a real migration is scheduled  
+5. Product UX plans in parallel: [cloud-ux-hardening](./cloud-ux-hardening.md), [mobile-responsive](./mobile-responsive.md), [explorer-search](./explorer-search-context-menus.md)
 
 ---
 

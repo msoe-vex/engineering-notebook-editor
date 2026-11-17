@@ -1,6 +1,7 @@
 # FR-public-notebook: Public notebook share link
 
-Status: planned  
+Status: partial  
+
 Related: [FR-notebooks](./FR-notebooks.md), [FR-org-public-page](./FR-org-public-page.md), [roadmap](../../00-product/roadmap.md), [tenancy-acl](../../02-architecture/tenancy-acl.md), [schema](../../03-reference/schema.md)
 
 ## Summary
@@ -30,16 +31,16 @@ Allow publishing a **read-only public (or unlisted) link** to a notebook so outs
 
 ## Acceptance criteria
 
-- [ ] Unpublished notebooks are not reachable via old links after revoke
-- [ ] Public view never exposes org People invites, admin APIs, or other notebooks
-- [ ] Restricted-mode notebooks still require an explicit publish action
-- [ ] `notebookKey` unique within the org; org slug + key resolves to at most one notebook
-- [ ] Audit: who published / revoked is recorded (admin-visible)
+- [x] Unpublished notebooks are not reachable via old links after revoke
+- [x] Public view never exposes org People invites, admin APIs, or other notebooks
+- [x] Restricted-mode notebooks still require an explicit publish action
+- [x] `notebookKey` unique within the org; org slug + key resolves to at most one notebook
+- [x] Who published is recorded on the notebook (`publishedAt` / `publishedBy`) for **admins only** (settings / GET notebook) — cleared on revoke
 
 ## Data and APIs
 
-- Notebook fields — [schema.md](../../03-reference/schema.md) Planned: `publicAccess`, `publicKey` / `publicToken`, `publishedAt`, `publishedBy`
-- Public GET under `/o/:orgSlug/n/:notebookKey` (no org membership) — [api-contracts](../../03-reference/api-contracts.md) when implemented
+- Notebook fields: `publicAccess`, `publicKey`, `publishedAt`, `publishedBy` — [schema](../../03-reference/schema.md)
+- Public GET under `/o/:orgSlug/n/:notebookKey` — [api-contracts](../../03-reference/api-contracts.md)
 
 ## Non-goals
 
@@ -47,8 +48,8 @@ Allow publishing a **read-only public (or unlisted) link** to a notebook so outs
 - SEO indexing of unlisted links
 - Publishing a single entry without the notebook (follow-up)
 - Global short `/n/:token` URLs in MVP (optional later alias)
+- **Public audits / judge scorecards / publish-revoke history** — rubric audits and any audit trail stay behind notebook ACL; never on `/public/o/…`
 
 ## Open questions / risks
 
-- PDF on public view: last compiled download only vs live compile  
-- Live GCS read vs frozen publish snapshot
+- Live GCS read vs frozen publish snapshot (today: live TipTap + last compiled PDF)

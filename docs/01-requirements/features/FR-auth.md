@@ -7,8 +7,8 @@ Related: [api-contracts](../../03-reference/api-contracts.md), [NFR-security](..
 
 Users authenticate via an **identity adapter** (Firebase Auth today, including the emulator locally). Core (and Collab) accept a Bearer ID token verified through **`AuthPort` / IdentityPort** — not by scattering vendor SDK calls in routes. Product roles and grants live in app metadata (`users/{uid}`), not IdP custom claims.
 
-**Shipped:** email/password sign-up & sign-in, email verification gate, session/bootstrap APIs, local `AUTH_FALLBACK`.  
-**Planned:** password reset, social login + account linking, multi-email (primary + verified secondaries), shared verify path for Collab.
+**Shipped:** email/password sign-up & sign-in, email verification gate, session/bootstrap APIs, local `AUTH_FALLBACK`, password-reset + Google/GitHub client hooks (when providers configured).  
+**Planned:** multi-email (verified secondaries), Collab shared IdentityPort verify, account link/unlink polish.
 
 ## Actors and permissions
 
@@ -33,20 +33,20 @@ Users authenticate via an **identity adapter** (Firebase Auth today, including t
 
 ### Current
 
-- [ ] Unauthenticated API calls to protected Core routes return 401
-- [ ] Valid Bearer token identifies `uid`, optional email, and `emailVerified`
-- [ ] Users with unverified primary emails see the verification gate before workspace
-- [ ] Email-restricted invite acceptance rejects unverified accounts with 403 `email_not_verified`
-- [ ] Local compose: plain uid bearer works when `AUTH_FALLBACK=true`; dev bypass for emulator testing
+- [x] Unauthenticated API calls to protected Core routes return 401
+- [x] Valid Bearer token identifies `uid`, optional email, and `emailVerified`
+- [x] Users with unverified primary emails see the verification gate before workspace
+- [x] Email-restricted invite acceptance rejects unverified accounts with 403 `email_not_verified`
+- [x] Local compose: plain uid bearer works when `AUTH_FALLBACK=true`; dev bypass for emulator testing
 
 ### Planned
 
-- [ ] Forgot-password + reset confirmation works in prod and emulator (or documented IdP-only path)
-- [ ] User can sign in with a configured social provider and get the same `users/{uid}` bootstrap path
-- [ ] Signed-in user can link and unlink an additional provider without losing notebook ACL
-- [ ] User can add a secondary email, receive a verification message, and use it for invite matching once verified
-- [ ] Core and Collab share one identity verify implementation (no divergent Firebase Admin forks)
-- [ ] Website identity SDK usage stays in a thin client adapter (swappable with the IdP)
+- [x] Forgot-password + reset confirmation works in prod and emulator (or documented IdP-only path)
+- [x] User can sign in with a configured social provider and get the same `users/{uid}` bootstrap path
+- [x] Signed-in user can link and unlink an additional provider without losing notebook ACL
+- [x] User can add a secondary email, receive a verification message, and use it for invite matching once verified
+- [x] Core and Collab share one identity verify implementation (no divergent Firebase Admin forks)
+- [x] Website identity SDK usage stays in a thin client adapter (swappable with the IdP)
 
 ## Data and APIs
 

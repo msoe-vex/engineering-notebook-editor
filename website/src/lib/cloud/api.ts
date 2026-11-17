@@ -49,16 +49,27 @@ async function coreFetch<T>(path: string, init?: RequestInit): Promise<T> {
 export type OrgSummary = {
   id: string;
   name: string;
+  slug?: string;
+  publicPage?: {
+    visibility?: "public" | "hidden";
+    announcement?: { text: string; href?: string };
+    mission?: string;
+    cta?: { title?: string; body?: string; joinUrl?: string; donateUrl?: string };
+  };
   createdAt?: string;
   updatedAt?: string;
   /** Current user's org role when returned from list/get membership context. */
   role?: string | null;
+  memberStatus?: "active" | "alumni";
 };
 export type MemberSummary = {
   uid: string;
   role: string;
   email?: string;
   displayName?: string;
+  imageAssetId?: string;
+  status?: "active" | "alumni";
+  alumniAt?: string;
   joinedAt?: string;
 };
 export type InviteSummary = {
@@ -112,6 +123,10 @@ export type NotebookSummary = {
   createdBy?: string;
   archivedAt?: string | null;
   orgId?: string;
+  publicAccess?: "off" | "unlisted" | "public";
+  publicKey?: string;
+  publishedAt?: string;
+  publishedBy?: string;
 };
 
 export type NotebookMemberSummary = {
@@ -120,6 +135,7 @@ export type NotebookMemberSummary = {
   role: string;
   order: number;
   imageAssetId?: string;
+  orgMemberUid?: string;
 };
 
 export const cloudApi = {
@@ -144,6 +160,21 @@ export const cloudApi = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+  addSecondaryEmail: (email: string) =>
+    coreFetch<{ secondaryEmails: Array<{ email: string; verified: boolean }> }>(
+      "/users/me/secondary-emails",
+      { method: "POST", body: JSON.stringify({ email }) }
+    ),
+  verifySecondaryEmail: (token: string) =>
+    coreFetch<{ secondaryEmails: Array<{ email: string; verified: boolean }> }>(
+      "/users/me/secondary-emails/verify",
+      { method: "POST", body: JSON.stringify({ token }) }
+    ),
+  removeSecondaryEmail: (email: string) =>
+    coreFetch<{ secondaryEmails: Array<{ email: string; verified: boolean }> }>(
+      `/users/me/secondary-emails/${encodeURIComponent(email)}`,
+      { method: "DELETE" }
+    ),
 
   listOrgs: () => coreFetch<OrgSummary[]>("/orgs"),
   createOrg: (name: string) =>
@@ -152,7 +183,14 @@ export const cloudApi = {
       body: JSON.stringify({ name }),
     }),
   getOrg: (orgId: string) => coreFetch<OrgSummary>(`/orgs/${orgId}`),
-  patchOrg: (orgId: string, body: { name: string }) =>
+  patchOrg: (
+    orgId: string,
+    body: {
+      name?: string;
+      slug?: string;
+      publicPage?: OrgSummary["publicPage"];
+    }
+  ) =>
     coreFetch<OrgSummary>(`/orgs/${orgId}`, {
       method: "PATCH",
       body: JSON.stringify(body),
@@ -160,13 +198,58 @@ export const cloudApi = {
   deleteOrg: (orgId: string) =>
     coreFetch<{ ok: boolean }>(`/orgs/${orgId}`, { method: "DELETE" }),
 
+  getOrgPublicCms: (orgId: string) => coreFetch<Record<string, unknown>>(`/orgs/${orgId}/public`),
+  upsertPublicItem: (orgId: string, section: string, itemId: string, body: Record<string, unknown>) =>
+    coreFetch(`/orgs/${orgId}/public/${section}/${itemId}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  deletePublicItem: (orgId: string, section: string, itemId: string) =>
+    coreFetch<{ ok: boolean }>(`/orgs/${orgId}/public/${section}/${itemId}`, { method: "DELETE" }),
+
+  getPublicOrg: (slug: string) =>
+    fetch(`${coreBase()}/public/o/${encodeURIComponent(slug)}`).then(async (r) => {
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    }),
+  getPublicNotebook: (slug: string, publicKey: string) =>
+    fetch(
+      `${coreBase()}/public/o/${encodeURIComponent(slug)}/notebooks/${encodeURIComponent(publicKey)}`
+    ).then(async (r) => {
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    }),
+  getPublicEntry: (slug: string, publicKey: string, entryId: string) =>
+    fetch(
+      `${coreBase()}/public/o/${encodeURIComponent(slug)}/notebooks/${encodeURIComponent(publicKey)}/entries/${encodeURIComponent(entryId)}`
+    ).then(async (r) => {
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    }),
+  getPublicNotebookPdf: (slug: string, publicKey: string) =>
+    fetch(
+      `${coreBase()}/public/o/${encodeURIComponent(slug)}/notebooks/${encodeURIComponent(publicKey)}/pdf`
+    ).then(async (r) => {
+      if (!r.ok) throw new Error(await r.text());
+      return r.json() as Promise<{ url: string; lastCompiled?: string }>;
+    }),
+
   listMembers: (orgId: string) => coreFetch<MemberSummary[]>(`/orgs/${orgId}/members`),
   addMember: (orgId: string, body: { uid: string; email?: string; role?: string }) =>
     coreFetch<MemberSummary>(`/orgs/${orgId}/members`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  patchMember: (orgId: string, uid: string, body: { role: string }) =>
+  patchMember: (
+    orgId: string,
+    uid: string,
+    body: {
+      role?: string;
+      status?: "active" | "alumni";
+      imageAssetId?: string | null;
+      displayName?: string;
+    }
+  ) =>
     coreFetch<MemberSummary>(`/orgs/${orgId}/members/${uid}`, {
       method: "PATCH",
       body: JSON.stringify(body),
@@ -283,7 +366,13 @@ export const cloudApi = {
   createNotebookMember: (
     orgId: string,
     notebookId: string,
-    body: { name: string; role?: string; order?: number; imageAssetId?: string }
+    body: {
+      name: string;
+      role?: string;
+      order?: number;
+      imageAssetId?: string;
+      orgMemberUid?: string;
+    }
   ) =>
     coreFetch<NotebookMemberSummary>(`/orgs/${orgId}/notebooks/${notebookId}/members`, {
       method: "POST",
@@ -433,6 +522,46 @@ export const cloudApi = {
         throw new Error("File is too large for the server to accept.");
       }
       throw new Error(`asset upload ${res.status} ${text}`);
+    }
+  },
+
+  listOrgAssets: (orgId: string) => coreFetch<AssetSummary[]>(`/orgs/${orgId}/assets`),
+  createOrgAsset: (orgId: string, body: { contentType?: string; byteSize?: number }) =>
+    coreFetch<{ asset: AssetSummary; uploadPath: string; uploadUrl: string }>(
+      `/orgs/${orgId}/assets`,
+      { method: "POST", body: JSON.stringify(body) }
+    ),
+  getOrgAssetUrl: (orgId: string, assetId: string) =>
+    coreFetch<{ url: string; asset: AssetSummary }>(`/orgs/${orgId}/assets/${assetId}/url`),
+  deleteOrgAsset: (orgId: string, assetId: string) =>
+    coreFetch<{ ok: boolean }>(`/orgs/${orgId}/assets/${assetId}`, { method: "DELETE" }),
+  async uploadOrgAssetContent(
+    orgId: string,
+    assetId: string,
+    bytes: Blob | ArrayBuffer | Uint8Array,
+    contentType: string
+  ) {
+    assertUploadSize(byteLengthOf(bytes), "File");
+    const body: BodyInit =
+      bytes instanceof Blob
+        ? bytes
+        : bytes instanceof ArrayBuffer
+          ? bytes
+          : new Blob([new Uint8Array(bytes)]);
+    const token = await getIdToken();
+    const headers: Record<string, string> = { "content-type": contentType };
+    if (token) headers.authorization = `Bearer ${token}`;
+    const res = await fetch(`${coreBase()}/orgs/${orgId}/assets/${assetId}/content`, {
+      method: "PUT",
+      headers,
+      body,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      if (res.status === 413) {
+        throw new Error("File is too large for the server to accept.");
+      }
+      throw new Error(`org asset upload ${res.status} ${text}`);
     }
   },
   /** @deprecated Prefer uploadAssetContent — signed fake-gcs URLs fail in the browser. */

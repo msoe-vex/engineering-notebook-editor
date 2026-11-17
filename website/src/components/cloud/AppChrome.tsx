@@ -27,6 +27,9 @@ import {
   sendEmailVerification,
   updateProfile,
   signOut,
+  requestPasswordReset,
+  signInWithGoogle,
+  signInWithGithub,
   type User,
 } from "@/lib/cloud/firebase";
 import { EmailVerificationScreen } from "./EmailVerificationScreen";
@@ -66,7 +69,8 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
   const onAccount = pathname?.startsWith("/account");
   const onHelp = pathname?.startsWith("/help");
   const onAbout = pathname?.startsWith("/about");
-  const isPublicPage = Boolean(onHelp || onAbout);
+  const isPublicSite = pathname === "/o" || pathname.startsWith("/o/");
+  const isPublicPage = Boolean(onHelp || onAbout || isPublicSite);
   /** Match notebook: header + main span the viewport (no max-w-6xl “page in a page”). */
   const fullBleedChrome = true;
   /** Help, Account, and notebooks fill remaining height and manage internal pane scrolling. */
@@ -89,6 +93,8 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
   const [devUid, setDevUid] = useState("");
   const [name, setName] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
+  const [forgotPassword, setForgotPassword] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -234,6 +240,35 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
     }
   }
 
+  async function handlePasswordReset() {
+    setError(null);
+    setResetSent(false);
+    try {
+      if (!email.trim()) throw new Error("Enter your email address");
+      await requestPasswordReset(email);
+      setResetSent(true);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function handleSocial(provider: "google" | "github") {
+    setError(null);
+    try {
+      if (provider === "google") await signInWithGoogle();
+      else await signInWithGithub();
+      setDevToken(null);
+      const p = (await cloudApi.bootstrap()) as {
+        platformRole?: string;
+        email?: string;
+        displayName?: string;
+      };
+      setProfile(p);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
   async function handleDevSignIn() {
     setError(null);
     const uid = devUid.trim() || "local-user";
@@ -281,17 +316,19 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
             <div>
               <p className="text-nb-label font-semibold text-nb-on-surface-variant">ENGen</p>
               <h1 className="text-nb-display font-bold tracking-tight">
-                {isSignUp ? "Create account" : "Sign in"}
+                {forgotPassword ? "Reset password" : isSignUp ? "Create account" : "Sign in"}
               </h1>
             </div>
           </div>
           <p className="text-sm text-nb-on-surface-variant">
-            {isSignUp
-              ? "Create your account to collaborate on engineering notebooks."
-              : "Organizations → Notebooks → workspace. Use Firebase Auth, or a local dev token."}
+            {forgotPassword
+              ? "We will email a password reset link (Firebase Auth / emulator)."
+              : isSignUp
+                ? "Create your account to collaborate on engineering notebooks."
+                : "Organizations → Notebooks → workspace. Use Firebase Auth, or a local dev token."}
           </p>
           <div className="mt-8 space-y-3">
-            {isSignUp && (
+            {!forgotPassword && isSignUp && (
               <TextField
                 placeholder="Full name"
                 value={name}
@@ -304,22 +341,58 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
-            <TextField
-              placeholder="Password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+            {!forgotPassword && (
+              <TextField
+                placeholder="Password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            )}
             <div className="flex flex-col gap-3 pt-1">
-              <Button
-                variant="primary"
-                className="w-full justify-center"
-                onClick={() => void handleEmailSignIn(isSignUp)}
-              >
-                {isSignUp ? "Create account" : "Sign in"}
-              </Button>
+              {forgotPassword ? (
+                <Button
+                  variant="primary"
+                  className="w-full justify-center"
+                  onClick={() => void handlePasswordReset()}
+                >
+                  Send reset email
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  className="w-full justify-center"
+                  onClick={() => void handleEmailSignIn(isSignUp)}
+                >
+                  {isSignUp ? "Create account" : "Sign in"}
+                </Button>
+              )}
+              {!forgotPassword && (
+                <div className="grid grid-cols-2 gap-2">
+                  <Button variant="secondary" className="justify-center" onClick={() => void handleSocial("google")}>
+                    Google
+                  </Button>
+                  <Button variant="secondary" className="justify-center" onClick={() => void handleSocial("github")}>
+                    GitHub
+                  </Button>
+                </div>
+              )}
+              {resetSent && (
+                <Alert variant="info">Check your email for a reset link.</Alert>
+              )}
               <div className="text-center text-nb-caption text-nb-on-surface-variant">
-                {isSignUp ? (
+                {forgotPassword ? (
+                  <button
+                    type="button"
+                    className="font-semibold text-nb-primary hover:underline"
+                    onClick={() => {
+                      setForgotPassword(false);
+                      setResetSent(false);
+                    }}
+                  >
+                    Back to sign in
+                  </button>
+                ) : isSignUp ? (
                   <>
                     Already have an account?{" "}
                     <button
@@ -339,6 +412,14 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
                       onClick={() => setIsSignUp(true)}
                     >
                       Create account
+                    </button>
+                    {" · "}
+                    <button
+                      type="button"
+                      className="font-semibold text-nb-primary hover:underline"
+                      onClick={() => setForgotPassword(true)}
+                    >
+                      Forgot password?
                     </button>
                   </>
                 )}

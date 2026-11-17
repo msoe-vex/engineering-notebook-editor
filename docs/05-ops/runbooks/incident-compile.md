@@ -6,7 +6,7 @@ Server compile job stuck or fails; missing TeX packages; export upload 403; blan
 
 ## Checks
 
-1. Compose/Cloud Run **compile** worker healthy (`:8090/health`); Core `COMPILE_SERVICE_URL` / `JOB_DISPATCH`
+1. Compose/Cloud Run **compile** worker healthy (`:8090/health`); Core `JOB_DISPATCH=pubsub`; Pub/Sub topic/sub lag (emulator or GCP)
 2. Notebook SSE `job.progress` | `job.done` | `job.failed`; Firestore `…/jobs/{jobId}` status
 3. Worker logs / `main.log` tail on XeLaTeX errors (e.g. missing `ulem.sty` → `texlive-plain-generic`)
 4. Core export `PUT /internal/compile/export` and GCS `exports/latest.pdf`

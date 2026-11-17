@@ -9,9 +9,16 @@ import {
   signOut,
   onAuthStateChanged,
   sendEmailVerification,
+  sendPasswordResetEmail,
   updateProfile,
+  GoogleAuthProvider,
+  GithubAuthProvider,
+  signInWithPopup,
+  linkWithPopup,
+  unlink,
   type Auth,
   type User,
+  type AuthProvider,
 } from "firebase/auth";
 
 let app: FirebaseApp | null = null;
@@ -72,12 +79,47 @@ export async function getIdToken(): Promise<string | null> {
   return getDevToken();
 }
 
+export async function requestPasswordReset(email: string): Promise<void> {
+  await sendPasswordResetEmail(getFirebaseAuth(), email.trim());
+}
+
+export async function signInWithGoogle(): Promise<User> {
+  const cred = await signInWithPopup(getFirebaseAuth(), new GoogleAuthProvider());
+  return cred.user;
+}
+
+export async function signInWithGithub(): Promise<User> {
+  const cred = await signInWithPopup(getFirebaseAuth(), new GithubAuthProvider());
+  return cred.user;
+}
+
+export async function linkProvider(provider: "google" | "github"): Promise<User> {
+  const auth = getFirebaseAuth();
+  if (!auth.currentUser) throw new Error("Not signed in");
+  const p: AuthProvider = provider === "google" ? new GoogleAuthProvider() : new GithubAuthProvider();
+  const cred = await linkWithPopup(auth.currentUser, p);
+  return cred.user;
+}
+
+export async function unlinkProvider(providerId: string): Promise<User> {
+  const auth = getFirebaseAuth();
+  if (!auth.currentUser) throw new Error("Not signed in");
+  const linked = auth.currentUser.providerData.filter((p) => p.providerId === providerId);
+  if (!linked.length) throw new Error("Provider not linked");
+  if (auth.currentUser.providerData.length <= 1) {
+    throw new Error("Cannot unlink your only sign-in method");
+  }
+  await unlink(auth.currentUser, providerId);
+  return auth.currentUser;
+}
+
 export {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
   sendEmailVerification,
+  sendPasswordResetEmail,
   updateProfile,
 };
 export type { User };

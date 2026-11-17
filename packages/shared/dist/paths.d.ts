@@ -15,6 +15,9 @@ export declare function entryPath(orgId: string, notebookId: string, entryId: st
 export declare function entriesCollection(orgId: string, notebookId: string): string;
 export declare function assetPath(orgId: string, notebookId: string, assetId: string): string;
 export declare function assetsCollection(orgId: string, notebookId: string): string;
+/** Org-scoped assets (People avatars, public CMS media) — not notebook-scoped. */
+export declare function orgAssetPath(orgId: string, assetId: string): string;
+export declare function orgAssetsCollection(orgId: string): string;
 export declare function auditPath(orgId: string, notebookId: string, auditId: string): string;
 export declare function auditsCollection(orgId: string, notebookId: string): string;
 export declare function rubricPath(orgId: string, notebookId: string, rubricId: string): string;
@@ -26,11 +29,21 @@ export declare function jobsCollection(orgId: string, notebookId: string): strin
 /** Single-flight lock per (type, resourceKey) under a notebook. */
 export declare function jobLockPath(orgId: string, notebookId: string, type: string, resourceKey: string): string;
 export declare function invitePath(inviteId: string): string;
+/** Global uniqueness lookup for public org slugs. */
+export declare function orgSlugPath(slug: string): string;
+export declare function publicNotebookKeyPath(orgId: string, publicKey: string): string;
+export declare function publicNotebookKeysCollection(orgId: string): string;
+export declare function publicDonorsCollection(orgId: string): string;
+export declare function publicProjectsCollection(orgId: string): string;
+export declare function publicEventsCollection(orgId: string): string;
+export declare function publicMembersCollection(orgId: string): string;
+export declare function publicSocialCollection(orgId: string): string;
 /** GCS object key builders (mirror Firestore nesting). */
 export declare const gcsKeys: {
     busytex: (appVersion: string, ...rest: string[]) => string;
     latexTemplate: (appVersion: string, ...rest: string[]) => string;
     asset: (orgId: string, notebookId: string, assetId: string, variant?: "compressed" | "original") => string;
+    orgAsset: (orgId: string, assetId: string, variant?: "compressed" | "original") => string;
     yjs: (orgId: string, notebookId: string, entryId: string) => string;
     tipTap: (orgId: string, notebookId: string, entryId: string) => string;
     exportPdf: (orgId: string, notebookId: string, exportId: string) => string;

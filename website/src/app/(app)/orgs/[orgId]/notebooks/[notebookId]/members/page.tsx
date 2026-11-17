@@ -26,7 +26,7 @@ import {
   type MenuItem,
 } from "@/components/ui";
 import { Dialog } from "@/components/ui/Dialog";
-import { cloudApi, type NotebookMemberSummary } from "@/lib/cloud/api";
+import { cloudApi, type MemberSummary, type NotebookMemberSummary } from "@/lib/cloud/api";
 import { useAppDndSensors } from "@/lib/dnd/dndSensors";
 
 function SortableMember({
@@ -151,11 +151,18 @@ export default function NotebookMembersPage() {
     ];
   }
 
+  const [orgPeople, setOrgPeople] = useState<MemberSummary[]>([]);
+
   function load() {
     setRosterLoaded(false);
-    void cloudApi
-      .listNotebookMembers(orgId, notebookId)
-      .then(setMembers)
+    void Promise.all([
+      cloudApi.listNotebookMembers(orgId, notebookId),
+      cloudApi.listMembers(orgId),
+    ])
+      .then(([roster, people]) => {
+        setMembers(roster);
+        setOrgPeople(people.filter((p) => p.status !== "alumni"));
+      })
       .catch((err) => setError((err as Error).message))
       .finally(() => setRosterLoaded(true));
   }
@@ -219,12 +226,14 @@ export default function NotebookMembersPage() {
         await cloudApi.patchNotebookMember(orgId, notebookId, editor.id, {
           name: editor.name.trim(),
           role: editor.role || "Member",
-        });
+          orgMemberUid: editor.orgMemberUid || null,
+        } as Partial<NotebookMemberSummary> & { orgMemberUid?: string | null });
       } else {
         await cloudApi.createNotebookMember(orgId, notebookId, {
           name: editor.name.trim(),
           role: editor.role || "Member",
           order: members.length,
+          orgMemberUid: editor.orgMemberUid,
         });
       }
       setEditor(null);
@@ -359,6 +368,33 @@ export default function NotebookMembersPage() {
             value={editor?.role || ""}
             onChange={(e) => setEditor((prev) => (prev ? { ...prev, role: e.target.value } : prev))}
           />
+          <label className="flex flex-col gap-1 text-nb-label">
+            <span className="font-medium">Link to org member (optional)</span>
+            <select
+              className="rounded-nb-lg border border-nb-outline-variant/40 bg-nb-surface-low px-3 py-2"
+              value={editor?.orgMemberUid || ""}
+              onChange={(e) => {
+                const uid = e.target.value || undefined;
+                const person = orgPeople.find((p) => p.uid === uid);
+                setEditor((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        orgMemberUid: uid,
+                        name: person?.displayName || person?.email || prev.name,
+                      }
+                    : prev
+                );
+              }}
+            >
+              <option value="">Not linked</option>
+              {orgPeople.map((p) => (
+                <option key={p.uid} value={p.uid}>
+                  {p.displayName || p.email || p.uid}
+                </option>
+              ))}
+            </select>
+          </label>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => setEditor(null)}>
               Cancel

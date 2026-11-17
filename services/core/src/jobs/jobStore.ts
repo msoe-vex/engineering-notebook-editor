@@ -6,6 +6,7 @@ import {
   type NotebookJobStatus,
 } from "@engineering-notebook/shared";
 import { getFirestore } from "../db/firestore.js";
+import { getMetadataStore } from "../db/metadataStore.js";
 import { publishNotebookEvent } from "../realtime/notebookEvents.js";
 
 function nowIso() {
@@ -19,9 +20,9 @@ export async function getJob(
   notebookId: string,
   jobId: string
 ): Promise<NotebookJob | null> {
-  const snap = await getFirestore().doc(jobPath(orgId, notebookId, jobId)).get();
-  if (!snap.exists) return null;
-  return snap.data() as NotebookJob;
+  const data = await getMetadataStore().get(jobPath(orgId, notebookId, jobId));
+  if (!data) return null;
+  return data as unknown as NotebookJob;
 }
 
 export async function findActiveJob(
@@ -30,14 +31,14 @@ export async function findActiveJob(
   type: string,
   resourceKey: string
 ): Promise<NotebookJob | null> {
-  const lockRef = getFirestore().doc(jobLockPath(orgId, notebookId, type, resourceKey));
-  const lockSnap = await lockRef.get();
-  if (!lockSnap.exists) return null;
-  const lock = lockSnap.data() as { jobId?: string; status?: string };
-  if (!lock.jobId || !ACTIVE.includes(lock.status as NotebookJobStatus)) return null;
-  const job = await getJob(orgId, notebookId, lock.jobId);
+  const lock = await getMetadataStore().get(jobLockPath(orgId, notebookId, type, resourceKey));
+  if (!lock) return null;
+  const jobId = lock.jobId as string | undefined;
+  const status = lock.status as string | undefined;
+  if (!jobId || !ACTIVE.includes(status as NotebookJobStatus)) return null;
+  const job = await getJob(orgId, notebookId, jobId);
   if (!job || !ACTIVE.includes(job.status)) {
-    await lockRef.delete().catch(() => undefined);
+    await getMetadataStore().delete(jobLockPath(orgId, notebookId, type, resourceKey)).catch(() => undefined);
     return null;
   }
   return job;
@@ -67,6 +68,7 @@ export async function createJob(input: {
     orgId: input.orgId,
     notebookId: input.notebookId,
   };
+  // Atomic job + lock still uses Firestore batch (MetadataStore has no multi-doc txn yet).
   const db = getFirestore();
   const jobRef = db.doc(jobPath(input.orgId, input.notebookId, input.jobId));
   const lockRef = db.doc(
@@ -102,12 +104,13 @@ export async function markJobRunning(
   const job = await getJob(orgId, notebookId, jobId);
   if (!job) return;
   const ts = nowIso();
-  const db = getFirestore();
-  await db.doc(jobPath(orgId, notebookId, jobId)).update({
+  const store = getMetadataStore();
+  await store.update(jobPath(orgId, notebookId, jobId), {
     status: "running",
     updatedAt: ts,
   });
-  await db.doc(jobLockPath(orgId, notebookId, job.type, job.resourceKey)).set(
+  await store.set(
+    jobLockPath(orgId, notebookId, job.type, job.resourceKey),
     {
       jobId,
       type: job.type,
@@ -134,28 +137,26 @@ export async function updateJobProgress(input: {
   const nextStatus: NotebookJobStatus =
     job.status === "queued" ? "running" : job.status;
 
-  await getFirestore()
-    .doc(jobPath(input.orgId, input.notebookId, input.jobId))
-    .update({
-      status: nextStatus,
-      progress,
-      statusMessage,
-      updatedAt: ts,
-    });
+  const store = getMetadataStore();
+  await store.update(jobPath(input.orgId, input.notebookId, input.jobId), {
+    status: nextStatus,
+    progress,
+    statusMessage,
+    updatedAt: ts,
+  });
 
   if (nextStatus === "running") {
-    await getFirestore()
-      .doc(jobLockPath(input.orgId, input.notebookId, job.type, job.resourceKey))
-      .set(
-        {
-          jobId: input.jobId,
-          type: job.type,
-          resourceKey: job.resourceKey,
-          status: "running",
-          updatedAt: ts,
-        },
-        { merge: true }
-      );
+    await store.set(
+      jobLockPath(input.orgId, input.notebookId, job.type, job.resourceKey),
+      {
+        jobId: input.jobId,
+        type: job.type,
+        resourceKey: job.resourceKey,
+        status: "running",
+        updatedAt: ts,
+      },
+      { merge: true }
+    );
   }
 
   publishNotebookEvent(input.orgId, input.notebookId, {
@@ -179,17 +180,16 @@ export async function completeJob(input: {
   const job = await getJob(input.orgId, input.notebookId, input.jobId);
   if (!job) return null;
   const ts = nowIso();
-  const db = getFirestore();
-  await db.doc(jobPath(input.orgId, input.notebookId, input.jobId)).update({
+  const store = getMetadataStore();
+  await store.update(jobPath(input.orgId, input.notebookId, input.jobId), {
     status: "succeeded",
     progress: 100,
     statusMessage: "Done",
     result: input.result || {},
     updatedAt: ts,
   });
-  await db
-    .doc(jobLockPath(input.orgId, input.notebookId, job.type, job.resourceKey))
-    .delete()
+  await store
+    .delete(jobLockPath(input.orgId, input.notebookId, job.type, job.resourceKey))
     .catch(() => undefined);
 
   publishNotebookEvent(input.orgId, input.notebookId, {
@@ -229,16 +229,15 @@ export async function failJob(input: {
     return null;
   }
   const ts = nowIso();
-  const db = getFirestore();
-  await db.doc(jobPath(input.orgId, input.notebookId, input.jobId)).update({
+  const store = getMetadataStore();
+  await store.update(jobPath(input.orgId, input.notebookId, input.jobId), {
     status: "failed",
     error: input.error,
     statusMessage: "Failed",
     updatedAt: ts,
   });
-  await db
-    .doc(jobLockPath(input.orgId, input.notebookId, job.type, job.resourceKey))
-    .delete()
+  await store
+    .delete(jobLockPath(input.orgId, input.notebookId, job.type, job.resourceKey))
     .catch(() => undefined);
 
   publishNotebookEvent(input.orgId, input.notebookId, {
@@ -262,20 +261,19 @@ export async function failJobAfterCreate(input: {
   error: string;
 }): Promise<void> {
   const ts = nowIso();
-  const db = getFirestore();
-  const ref = db.doc(jobPath(input.orgId, input.notebookId, input.jobId));
-  const snap = await ref.get();
-  if (snap.exists) {
-    await ref.update({
+  const store = getMetadataStore();
+  const path = jobPath(input.orgId, input.notebookId, input.jobId);
+  const existing = await store.get(path);
+  if (existing) {
+    await store.update(path, {
       status: "failed",
       error: input.error,
       statusMessage: "Failed",
       updatedAt: ts,
     });
   }
-  await db
-    .doc(jobLockPath(input.orgId, input.notebookId, input.type, input.resourceKey))
-    .delete()
+  await store
+    .delete(jobLockPath(input.orgId, input.notebookId, input.type, input.resourceKey))
     .catch(() => undefined);
   publishNotebookEvent(input.orgId, input.notebookId, {
     type: "job.failed",
@@ -291,6 +289,7 @@ export async function listRecentJobs(
   notebookId: string,
   limit = 20
 ): Promise<NotebookJob[]> {
+  // Ordered query remains on Firestore until MetadataStore gains query support.
   const snap = await getFirestore()
     .collection(jobsCollection(orgId, notebookId))
     .orderBy("createdAt", "desc")
