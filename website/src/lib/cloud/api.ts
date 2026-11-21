@@ -270,12 +270,13 @@ export const cloudApi = {
       if (!r.ok) throw new Error(await r.text());
       return r.json();
     }),
+  /** JSON helper (`?json=1`); prefer the website `/o/.../n/...` proxy for browsers. */
   getPublicNotebookPdf: (slug: string, publicKey: string) =>
     fetch(
-      `${coreBase()}/public/o/${encodeURIComponent(slug)}/notebooks/${encodeURIComponent(publicKey)}/pdf`
+      `${coreBase()}/public/o/${encodeURIComponent(slug)}/notebooks/${encodeURIComponent(publicKey)}/pdf?json=1`
     ).then(async (r) => {
       if (!r.ok) throw new Error(await r.text());
-      return r.json() as Promise<{ url: string; lastCompiled?: string }>;
+      return r.json() as Promise<{ url: string; lastCompiled?: string; exportId?: string }>;
     }),
 
   listMembers: (orgId: string) => coreFetch<MemberSummary[]>(`/orgs/${orgId}/members`),

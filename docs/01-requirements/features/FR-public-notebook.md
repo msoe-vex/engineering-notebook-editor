@@ -20,7 +20,7 @@ Allow sharing a **link that opens the notebook’s compiled PDF directly** (no H
 
 - **Compile** page: preview latest / shared PDFs; **Share this PDF** / **Turn off**; delete saved versions
 - Notebook **Settings**: Off | Anyone with the link (shortcut); prefer Compile for which PDF is bound
-- Share URL: **`/o/:orgSlug/n/:notebookKey`** → redirects to a signed PDF URL
+- Share URL: **`/o/:orgSlug/n/:notebookKey`** → website proxies PDF bytes from Core (visitors never hit GCS directly)
 - Visibility is link-only (`unlisted`). Legacy `public` is accepted and stored as `unlisted`. There is no separate “listed on org site / SEO” mode for notebooks.
 
 ## Acceptance criteria

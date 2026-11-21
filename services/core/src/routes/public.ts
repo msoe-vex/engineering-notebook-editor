@@ -199,8 +199,16 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
     return reply.code(404).send({ error: "not found" });
   });
 
+  /**
+   * Public PDF. Default: stream bytes through Core (works with memory/fake-GCS and
+   * avoids handing visitors raw bucket URLs). Pass `?json=1` for `{ url }` (signed/
+   * storage URL) when a caller explicitly wants a redirect target.
+   */
   app.get("/public/o/:slug/notebooks/:publicKey/pdf", async (request, reply) => {
     const { slug, publicKey } = request.params as { slug: string; publicKey: string };
+    const wantJson =
+      (request.query as { json?: string }).json === "1" ||
+      (request.query as { json?: string }).json === "true";
     const org = await resolveOrgBySlug(slug.toLowerCase());
     if (!org) return reply.code(404).send({ error: "not found" });
     const key = publicKey.trim().toLowerCase();
@@ -217,11 +225,24 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
     const exportId = nb.publicExportId || nb.latestExportId || "latest";
     const resolved = await resolveExportPdfKey(org.id, notebookId, exportId, storage);
     if (!resolved) return reply.code(404).send({ error: "no compiled pdf" });
-    const url = await storage.getSignedUrl(resolved.key, "read");
-    return {
-      url,
-      lastCompiled: nb.lastCompiled,
-      exportId: resolved.exportId,
-    };
+
+    if (wantJson) {
+      const url = await storage.getSignedUrl(resolved.key, "read");
+      return {
+        url,
+        lastCompiled: nb.lastCompiled,
+        exportId: resolved.exportId,
+      };
+    }
+
+    const bytes = await storage.getObject(resolved.key);
+    if (!bytes) return reply.code(404).send({ error: "no compiled pdf" });
+    const filename = `${(nb.title || nb.name || "notebook").replace(/[^\w.-]+/g, "_")}.pdf`;
+    return reply
+      .header("Content-Type", "application/pdf")
+      .header("Content-Disposition", `inline; filename="${filename}"`)
+      .header("Cache-Control", "private, max-age=60")
+      .header("Content-Length", String(bytes.byteLength))
+      .send(bytes);
   });
 }

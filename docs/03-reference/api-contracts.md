@@ -73,9 +73,9 @@ Auth: `Authorization: Bearer <Firebase ID token | local uid>`
 ### Public (no auth)
 
 - `GET /public/o/:slug` — org public page when `publicPage.visibility=public`; omits items with `public === false` and whole sections with `sections.<key> === false`
-- `GET /public/o/:slug/notebooks/:publicKey` — metadata + optional `pdfUrl` (website redirects `/o/…/n/…` straight to the PDF)
+- `GET /public/o/:slug/notebooks/:publicKey` — metadata (+ optional storage `pdfUrl`)
 - `GET /public/o/:slug/notebooks/:publicKey/entries/:entryId` — 404 (PDF-only)
-- `GET /public/o/:slug/notebooks/:publicKey/pdf` — signed URL for `publicExportId` (fallback latest)
+- `GET /public/o/:slug/notebooks/:publicKey/pdf` — streams PDF bytes through Core (default); `?json=1` returns `{ url }` storage/signed URL. Website `/o/…/n/…` proxies this stream.
 
 ### Org teams (ACL groups)
 

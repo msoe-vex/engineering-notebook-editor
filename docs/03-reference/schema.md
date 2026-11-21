@@ -170,7 +170,7 @@ publicExportId?: string   // PDF opened by the share link
 | `…/notebooks/{notebookId}/compileExports/{exportId}` | Retained versions only (latest + shared) |
 | GCS `…/exports/{exportId}.pdf` (+ `latest.pdf` alias) | Compiled PDF bytes |
 
-URL: **`/o/:orgSlug/n/:publicKey`** redirects to the signed PDF. At most two compile exports are kept.
+URL: **`/o/:orgSlug/n/:publicKey`** serves the PDF via website → Core proxy (not a raw GCS URL). At most two compile exports are kept.
 
 ### Org member alumni
 
