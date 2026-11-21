@@ -79,7 +79,7 @@ Suggested ship order: **A → B → C → D → E → F → G**.
 - [x] **Slug editor** on `/orgs/:orgId/public` (same validation/uniqueness as Settings); save with home content or dedicated “Save URL”.
 - [x] **Copy link** buttons:
   - Public org: absolute URL to `/o/:slug` (and optionally section paths).
-  - Public notebook: copy `/o/:slug/n/:publicKey` from notebook Share / Settings when `publicAccess` ≠ `off`.
+  - Public notebook: copy `/o/:slug/n/:key` from Compile → Links for an active share link.
 - [x] **Add / Edit modals** for each CMS section (`donors`, `projects`, `events`, `members`, `social`) — shared dialog pattern; image upload stays in modal.
 - [x] Public layout: header **org name + logo**; nav includes **Home** (link to `/o/:slug`) on section pages.
 - [x] Schema: `organizations.logoAssetId` or `publicPage.logoAssetId` + CMS upload; public API returns signed/logo URL.

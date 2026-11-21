@@ -7,7 +7,7 @@ Related: [FR-orgs](./FR-orgs.md), [FR-public-notebook](./FR-public-notebook.md),
 
 Notebooks live under an org. **Settings** controls branding, phases, logo, and access mode. A **Share** dialog presents the same ACL (org-open vs restricted people/teams) in a share-sheet shape. **Contributors** is a credits list (distinct from org ACL People).
 
-**Shipped:** [PDF share link](./FR-public-notebook.md) (`/o/:orgSlug/n/:key`) for outsiders (judges, mentors) without org membership — Compile manages latest/shared versions.
+**Shipped:** [PDF share links](./FR-public-notebook.md) (`/o/:orgSlug/n/:key`) for outsiders (judges, mentors) without org membership — Compile manages named versions and explicit share links.
 
 ## Actors and permissions
 

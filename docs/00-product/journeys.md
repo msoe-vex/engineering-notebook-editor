@@ -50,8 +50,8 @@ Happy paths for the live App Router product. Feature detail: [01-requirements/fe
 /orgs/:orgId/notebooks/:notebookId
   ├── entries/:entryId    Collaborative editor
   ├── schedule            Calendar (alias /calendar)
-  ├── compile             PDF versions + share link
-  ├── setup               Settings: branding, access, phases, logo, share link
+  ├── compile             PDF versions + share links
+  ├── setup               Settings: branding, access, phases, logo
   └── members             Contributors credits (alias /contributors)
 /o/:orgSlug               Public org page (visibility public|hidden)
 /o/:orgSlug/n/:key        Shared notebook PDF (website → Core proxy)

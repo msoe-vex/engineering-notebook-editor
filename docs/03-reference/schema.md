@@ -45,7 +45,7 @@ access?: { mode: "org" | "restricted", teamIds[], userIds[] }
 phases?: Record<phaseId, { name, description, iconName, color, order, deletedAt? }>
 contributorUids?: string[]   // ordered org member uids for credits
 latestExportId?              // most recent compile export id
-publicExportId?              // export id served by the share link
+publicKey? / publicExportId? // legacy single-link fields; prefer shareLinks/
 createdAt?, createdBy?, updatedAt
 ```
 

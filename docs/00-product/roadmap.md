@@ -67,7 +67,7 @@ HTTP Core→worker wake is **retired**.
 
 1. [Public CMS / collab / comments / jobs SSE / trash](../01-requirements/plans/public-collab-comments-polish.md) — Epics A–F (polish leftovers in plan)  
 2. [Public content IA Option C](../01-requirements/plans/public-content-ia.md) — donors/projects/events tabs; section gates  
-3. [Notebook PDF share link](../01-requirements/features/FR-public-notebook.md) — Compile versions (latest + shared); `/o/:slug/n/:key` proxies PDF via Core  
+3. [Notebook PDF share links](../01-requirements/features/FR-public-notebook.md) — named compile versions + explicit share links; `/o/:slug/n/:key` proxies PDF via Core  
 
 
 

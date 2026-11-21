@@ -50,7 +50,7 @@ Borrow from `NotebookEntryList` + notebook shell explorer:
 
 Remove or rewrite user-facing “how it works” copy, e.g.:
 
-- Compile: “Share link opens the PDF directly…”, “no website wrapper”, “Latest compile and shared link version only” → short labels: **Share**, **Turn off**, **Latest**, **Shared**
+- Compile: short labels for versions / share links (**Latest**, **Copy**, **Revoke**, **New share link**) — no architecture narration
 - Settings public blocks: long URL explanations → one line max or none when controls are clear
 - Org Settings section intros that restate the tab name
 
