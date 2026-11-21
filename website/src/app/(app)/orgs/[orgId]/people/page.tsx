@@ -397,7 +397,7 @@ export default function OrgPeoplePage() {
                         )}
                       </>
                     ) : (
-                      m.email || m.uid
+                      m.email || "Member"
                     )}
                     {isTargetLastOwner && (
                       <span className="ml-2 text-nb-caption text-nb-on-surface-variant/70">
@@ -406,12 +406,27 @@ export default function OrgPeoplePage() {
                     )}
                   </div>
                   <div className="text-nb-caption text-nb-on-surface-variant">
+                    {m.title ? `${m.title} · ` : ""}
                     {orgRoleLabel(m.role)}
                   </div>
                 </div>
 
                 {canManage && (isOwner || !isTargetOwner) && (
                   <>
+                    <input
+                      className="w-28 rounded-nb-lg border border-nb-outline-variant/40 bg-nb-surface-low px-2 py-1.5 text-nb-label"
+                      placeholder="Title"
+                      defaultValue={m.title || ""}
+                      title="Credits / public title"
+                      onBlur={(e) => {
+                        const next = e.target.value.trim();
+                        if (next === (m.title || "")) return;
+                        void cloudApi
+                          .patchMember(orgId, m.uid, { title: next || null })
+                          .then(refresh)
+                          .catch((err) => setError((err as Error).message));
+                      }}
+                    />
                     <select
                       className="rounded-nb-lg border border-nb-outline-variant/40 bg-nb-surface-low px-2 py-1.5 text-nb-label disabled:opacity-60"
                       value={m.role}
@@ -464,7 +479,7 @@ export default function OrgPeoplePage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium text-nb-on-surface">
-                      {m.displayName || m.email || m.uid}
+                      {m.displayName || m.email || "Member"}
                       <span className="ml-2 text-nb-caption text-nb-on-surface-variant">Alumni</span>
                     </div>
                     <div className="text-nb-caption text-nb-on-surface-variant">

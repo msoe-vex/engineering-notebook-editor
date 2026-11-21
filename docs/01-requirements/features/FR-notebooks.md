@@ -20,7 +20,7 @@ Notebooks live under an org. **Settings** controls branding, phases, logo, and a
 - Quick **Share…** option in notebook options menus (org dashboard and home recent notebooks) allows modifying ACL directly without opening the notebook or going to Settings
 - `/…/setup` — **Settings**: name, title, subtitle, logo upload → `logoAssetId`, phases CRUD (compact rows; icon button opens glyph grid + color presets), access (alias `/settings`); public link controls (planned)
 - Notebook chrome **Share** dialog: entire org vs restricted; search/add org people and teams
-- `/…/members` — **Contributors**: name/role/photo/`order` credits (alias `/contributors`); roster rows support right-click (Edit, photo, Remove)
+- `/…/members` — **Contributors**: ordered org member uids (`notebook.contributorUids`); display name / title / photo come from People; picker is org members only
 - Section nav (Entries / Calendar / Compile / Contributors / Settings): **slim strip** with icons under AppChrome on ≥ `md`; **bottom tab bar** with icons on phone (&lt; `md`) — see [mobile-responsive](../plans/mobile-responsive.md). Notebook home shows recent entries (phase glyph + color); section shortcuts live in the strip/tabs only.
 - **Archiving & Read-Only**: Admins/owners can archive a notebook from Settings or the org notebook menu. When archived:
   - An amber banner appears in the shell header and breadcrumbs.
@@ -34,7 +34,7 @@ Notebooks live under an org. **Settings** controls branding, phases, logo, and a
 - [ ] Delete notebook cascades entries, assets, rubrics, judgments, GCS blobs
 - [ ] Restricted access hides notebook from unauthorized org members
 - [ ] Logo and phases persist and round-trip in ZIP where supported
-- [ ] UI copy distinguishes Org people vs Notebook contributors
+- [x] UI copy distinguishes Org people vs Notebook contributors (credits from members)
 - [x] Share / Settings restricted ACL uses search + removable pills (not checkbox lists)
 - [x] Notebook section destinations reachable via slim strip (desktop) or bottom tabs (phone)
 - [x] Notebook archiving locks notebook into read-only mode, preserves export/compile, and supports unarchiving by admins/owners

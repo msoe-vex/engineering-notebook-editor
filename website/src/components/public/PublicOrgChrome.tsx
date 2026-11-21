@@ -22,8 +22,8 @@ export function PublicOrgChrome({
     }`;
 
   return (
-    <div className="min-h-screen bg-nb-surface text-nb-on-surface">
-      <header className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-6 py-6">
+    <div className="flex min-h-screen flex-col bg-nb-surface text-nb-on-surface">
+      <header className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-4 px-6 py-6">
         <Link href={`/o/${slug}`} className="flex min-w-0 items-center gap-3 hover:opacity-90">
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -57,7 +57,17 @@ export function PublicOrgChrome({
           </Link>
         </nav>
       </header>
-      {children}
+      <div className="flex-1">{children}</div>
+      <footer className="mt-auto border-t border-nb-outline-variant/25">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-6 py-6 text-nb-caption text-nb-on-surface-variant">
+          <p>
+            Public page for <span className="font-semibold text-nb-on-surface">{orgName}</span>
+          </p>
+          <Link href="/" className="font-semibold text-nb-primary hover:underline">
+            Open ENGen app →
+          </Link>
+        </div>
+      </footer>
     </div>
   );
 }

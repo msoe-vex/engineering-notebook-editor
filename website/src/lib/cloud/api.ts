@@ -70,6 +70,8 @@ export type MemberSummary = {
   role: string;
   email?: string;
   displayName?: string;
+  /** Credits / public title (not ACL role). */
+  title?: string;
   imageAssetId?: string;
   status?: "active" | "alumni";
   alumniAt?: string;
@@ -254,6 +256,7 @@ export const cloudApi = {
       status?: "active" | "alumni";
       imageAssetId?: string | null;
       displayName?: string;
+      title?: string | null;
     }
   ) =>
     coreFetch<MemberSummary>(`/orgs/${orgId}/members/${uid}`, {
@@ -539,7 +542,7 @@ export const cloudApi = {
     orgId: string,
     notebookId: string,
     entryId: string,
-    body: { body: string; anchorQuote?: string; id?: string }
+    body: { body: string; anchorQuote?: string; id?: string; mentionedUids?: string[] }
   ) =>
     coreFetch<{ id: string; body: string; createdAt: string }>(
       `/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}/comments`,

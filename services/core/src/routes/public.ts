@@ -7,11 +7,11 @@ import {
   entryPath,
   notebookMembersCollection,
   memberPath,
+  membersCollection,
   orgAssetPath,
   publicDonorsCollection,
   publicProjectsCollection,
   publicEventsCollection,
-  publicMembersCollection,
   publicSocialCollection,
   publicNotebookKeyPath,
   gcsKeys,
@@ -39,6 +39,17 @@ async function resolveOrgBySlug(slug: string) {
 export async function registerPublicRoutes(app: FastifyInstance, storage: StoragePort) {
   const store = () => getMetadataStore();
 
+  async function resolveOrgAssetUrl(orgId: string, imageAssetId?: string) {
+    if (!imageAssetId) return undefined;
+    const assetSnap = await store().get(orgAssetPath(orgId, imageAssetId));
+    if (!assetSnap) return undefined;
+    try {
+      return await storage.getSignedUrl((assetSnap as AssetMetadata).gcsPath, "read");
+    } catch {
+      return undefined;
+    }
+  }
+
   app.get("/public/o/:slug", async (request, reply) => {
     const { slug } = request.params as { slug: string };
     const org = await resolveOrgBySlug(slug.toLowerCase());
@@ -47,45 +58,33 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
       return reply.code(404).send({ error: "not found" });
     }
     const orgId = org.id;
-    const [donors, projects, events, members, social] = await Promise.all([
+    const [donors, projects, events, orgMembers, social] = await Promise.all([
       store().query(publicDonorsCollection(orgId)),
       store().query(publicProjectsCollection(orgId)),
       store().query(publicEventsCollection(orgId)),
-      store().query(publicMembersCollection(orgId)),
+      store().query(membersCollection(orgId)),
       store().query(publicSocialCollection(orgId)),
     ]);
 
-    async function resolveOrgAssetUrl(imageAssetId?: string) {
-      if (!imageAssetId) return undefined;
-      const assetSnap = await store().get(orgAssetPath(orgId, imageAssetId));
-      if (!assetSnap) return undefined;
-      try {
-        return await storage.getSignedUrl((assetSnap as AssetMetadata).gcsPath, "read");
-      } catch {
-        return undefined;
-      }
-    }
-
+    // All active org members are public (no separate CMS members collection).
     const enrichedMembers = await Promise.all(
-      members.map(async (d) => {
-        const { id, ...data } = d as {
-          id: string;
-          imageAssetId?: string;
-          orgMemberUid?: string;
-          name?: string;
-          role?: string;
-          classYear?: string;
-        };
-        let imageAssetId = data.imageAssetId;
-        if (!imageAssetId && data.orgMemberUid) {
-          const om = await store().get(memberPath(orgId, data.orgMemberUid));
-          if (om) {
-            imageAssetId = (om as OrgMember).imageAssetId;
-          }
-        }
-        const imageUrl = await resolveOrgAssetUrl(imageAssetId);
-        return { id, ...data, imageAssetId, imageUrl };
-      })
+      orgMembers
+        .map((d) => {
+          const { id, ...rest } = d;
+          return { ...(rest as OrgMember), uid: String(id) };
+        })
+        .filter((m) => (m.status || "active") !== "alumni")
+        .map(async (m) => {
+          const imageUrl = await resolveOrgAssetUrl(orgId, m.imageAssetId);
+          return {
+            id: m.uid,
+            name: m.displayName || m.email || "Member",
+            role: m.title || undefined,
+            title: m.title,
+            imageAssetId: m.imageAssetId,
+            imageUrl,
+          };
+        })
     );
 
     const enrichedDonors = await Promise.all(
@@ -96,13 +95,14 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
           name?: string;
           url?: string;
           tier?: string;
+          iconName?: string;
         };
-        const imageUrl = await resolveOrgAssetUrl(data.imageAssetId);
+        const imageUrl = await resolveOrgAssetUrl(orgId, data.imageAssetId);
         return { id, ...data, imageUrl };
       })
     );
 
-    const logoUrl = await resolveOrgAssetUrl(org.publicPage?.logoAssetId);
+    const logoUrl = await resolveOrgAssetUrl(orgId, org.publicPage?.logoAssetId);
     const publicPage = org.publicPage
       ? {
           ...org.publicPage,
@@ -153,7 +153,7 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
     }
     if (nb.publicKey !== key) return reply.code(404).send({ error: "not found" });
 
-    const [entries, contributors] = await Promise.all([
+    const [entries, legacyContributors] = await Promise.all([
       store().query(entriesCollection(org.id, notebookId)),
       store().query(notebookMembersCollection(org.id, notebookId)),
     ]);
@@ -174,6 +174,64 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
         order: e.order,
       }));
 
+    const uids = nb.contributorUids || [];
+    let contributors: Array<{
+      id: string;
+      name?: string;
+      role?: string;
+      order?: number;
+      imageUrl?: string;
+    }>;
+    if (uids.length) {
+      contributors = (
+        await Promise.all(
+          uids.map(async (uid, order) => {
+            const omSnap = await store().get(memberPath(org.id, uid));
+            if (!omSnap) return null;
+            const { id: _id, ...rest } = omSnap;
+            const om = rest as OrgMember;
+            const imageUrl = await resolveOrgAssetUrl(org.id, om.imageAssetId);
+            return {
+              id: uid,
+              name: om.displayName || om.email || "Member",
+              role: om.title || undefined,
+              order,
+              imageUrl,
+            };
+          })
+        )
+      ).filter(Boolean) as Array<{
+        id: string;
+        name?: string;
+        role?: string;
+        order?: number;
+        imageUrl?: string;
+      }>;
+    } else {
+      contributors = await Promise.all(
+        legacyContributors
+          .map((d) => {
+            const { id, ...data } = d as {
+              id: string;
+              name?: string;
+              role?: string;
+              order?: number;
+              deletedAt?: string | null;
+              imageAssetId?: string;
+            };
+            return { id, ...data };
+          })
+          .filter((m) => !m.deletedAt)
+          .map(async (m) => ({
+            id: m.id,
+            name: m.name || "Contributor",
+            role: m.role,
+            order: m.order,
+            imageUrl: await resolveOrgAssetUrl(org.id, m.imageAssetId),
+          }))
+      );
+    }
+
     return {
       org: { id: org.id, name: org.name, slug: org.slug },
       notebook: {
@@ -190,20 +248,7 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
         // publishedAt / publishedBy / judgments intentionally omitted (admin-only)
       },
       entries: liveEntries,
-      contributors: contributors.map((d) => {
-        const { id, ...data } = d as {
-          id: string;
-          name?: string;
-          role?: string;
-          order?: number;
-        };
-        return {
-          id,
-          name: data.name,
-          role: data.role,
-          order: data.order,
-        };
-      }),
+      contributors,
       noindex: nb.publicAccess === "unlisted",
     };
   });

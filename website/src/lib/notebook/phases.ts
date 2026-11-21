@@ -5,12 +5,16 @@ export { DEFAULT_PHASES };
 
 
 export const AVAILABLE_ICONS = [
-  "Goal", "Brain", "PencilRuler", "Hammer", "SearchCheck", "Zap", "Lightbulb", "Target", 
+  "Goal", "Brain", "PencilRuler", "Hammer", "SearchCheck", "Zap", "Lightbulb", "Target",
   "Cpu", "Settings", "Wrench", "Beaker", "Microscope", "FlaskConical", "Clipboard", "ClipboardCheck",
   "CheckCircle", "AlertCircle", "Info", "HelpCircle", "Code", "Terminal", "Box", "Layers",
   "Layout", "MousePointer", "PenTool", "Brush", "Shapes", "Compass", "Map", "Flag",
-  "Shield", "Lock", "Key", "User", "Users", "Mail", "Phone", "Camera", "ImageIcon", "Video",
-  "Activity", "Heart", "Star", "Cloud", "Sun", "Moon", "Wind"
+  "Shield", "Lock", "Key", "User", "Users", "Mail", "Phone", "Camera", "Image", "Video",
+  "Activity", "Heart", "Star", "Cloud", "Sun", "Moon", "Wind",
+  // Public CMS / social / donors / events
+  "Globe", "Link", "Github", "Twitter", "Instagram", "Youtube", "Linkedin", "Facebook",
+  "DollarSign", "Handshake", "Award", "Trophy", "Rocket", "Calendar", "MapPin", "Building2",
+  "Newspaper", "Megaphone", "Sparkles", "Gift", "Coffee", "Bot",
 ];
 
 export interface PhaseInfo {

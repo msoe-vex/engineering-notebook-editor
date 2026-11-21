@@ -219,30 +219,39 @@ button:disabled {
 
 /* Remote collab carets / selections (TipTap CollaborationCaret) */
 .ProseMirror .collaboration-carets__caret {
-  border-left: 1px solid;
-  border-right: 1px solid;
+  border-left: 2px solid;
+  border-right: 2px solid;
   margin-left: -1px;
   margin-right: -1px;
-  pointer-events: none;
   position: relative;
   word-break: normal;
+  pointer-events: auto;
+}
+
+/* Wide invisible hit target so hover isn’t a 1px sliver */
+.ProseMirror .collaboration-carets__caret::before {
+  content: "";
+  position: absolute;
+  inset: -10px -8px -4px -8px;
+  z-index: 1;
 }
 
 .ProseMirror .collaboration-carets__label {
   border-radius: 0.25rem 0.25rem 0.25rem 0;
   color: #fff;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   left: -1px;
-  line-height: 1;
+  line-height: 1.2;
   opacity: 0;
-  padding: 0.15rem 0.35rem;
+  padding: 0.25rem 0.4rem;
   position: absolute;
-  top: -1.35em;
+  top: -1.6em;
   user-select: none;
   white-space: nowrap;
   pointer-events: none;
   transition: opacity 120ms ease;
+  z-index: 2;
 }
 
 .ProseMirror .collaboration-carets__caret:hover .collaboration-carets__label,
@@ -250,13 +259,8 @@ button:disabled {
   opacity: 1;
 }
 
-/* Keep label reachable for hover despite caret pointer-events: none — use selection title too */
 .ProseMirror .collaboration-carets__selection {
   pointer-events: none;
-}
-
-.ProseMirror .collaboration-carets__caret {
-  pointer-events: auto;
 }
 
 .ProseMirror .comment-anchor {

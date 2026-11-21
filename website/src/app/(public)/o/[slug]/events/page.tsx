@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PublicOrgChrome } from "@/components/public/PublicOrgChrome";
+import { CmsIcon } from "@/components/cloud/CmsIconPicker";
 import { cloudApi } from "@/lib/cloud/api";
 import { LoadingBlock } from "@/components/ui";
 import { Alert } from "@/components/ui/Alert";
@@ -52,7 +53,12 @@ export default function PublicEventsPage() {
         <ul className="mt-8 space-y-3">
           {events.map((e) => (
             <li key={String(e.id)} className="rounded-lg border border-nb-outline-variant/30 px-4 py-3">
-              <p className="font-semibold">{String(e.title || "Event")}</p>
+              <p className="flex items-center gap-2 font-semibold">
+                {typeof e.iconName === "string" && e.iconName ? (
+                  <CmsIcon name={e.iconName} size={16} />
+                ) : null}
+                {String(e.title || "Event")}
+              </p>
               <p className="text-sm text-nb-on-surface-variant">
                 {[e.date || e.day, e.time, e.location].filter(Boolean).map(String).join(" · ")}
               </p>

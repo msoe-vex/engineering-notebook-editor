@@ -50,11 +50,11 @@ MVP sections admins can edit (each public|hidden at section or page level as nee
 | **Branding** | Display name, logo, tagline, accent colors (optional) |
 | **Announcement** | Optional top banner (e.g. “Next meeting…”) + link |
 | **About** | Short blurb (`publicPage.about`; legacy `mission` still read) |
-| **Donors / sponsors** | Name, logo, URL, tier/order |
-| **Projects** | Title, season/year, summary, highlights[], media, optional “Source / CAD” URL |
-| **Events** | Recurring rows (day/time/title/location) + dated competitions/milestones |
-| **Members (public)** | Curated board/roster cards (name, role, major/class, photo) — **not** full ACL People dump |
-| **Contact / social** | Email, Discord, GitHub, other links |
+| **Donors / sponsors** | Name, logo, URL, tier/order, optional `iconName` |
+| **Projects** | Title, season/year, summary, highlights[], media, optional “Source / CAD” URL, optional `iconName` |
+| **Events** | Recurring rows (day/time/title/location) + dated competitions/milestones, optional `iconName` |
+| **Members (public)** | Active org members (name, `title`, photo from People) — not a separate CMS roster |
+| **Contact / social** | Label, URL, optional Lucide `iconName` |
 | **Media** | Photo/video gallery (reuse asset/GCS patterns) |
 | **Call to action** | Join / donate heading, body, and links |
 | **Footer** | Org copyright, parent org credit, trademark disclaimer (templated) |
@@ -75,9 +75,11 @@ MVP sections admins can edit (each public|hidden at section or page level as nee
 - [x] Home + Projects + Events + Members sections ship for MVP (donate may be CTA-only)
 - [x] Media uploads use existing asset/GCS patterns with size limits
 - [x] Public layout does **not** use notebook AppChrome (marketing shell)
-- [x] Public CMS (`/orgs/:orgId/public`) edits slug + copy link; section add/edit uses modals
-- [x] Public chrome shows org logo when `publicPage.logoAssetId` is set; nav includes **Home**
+- [x] Public CMS (`/orgs/:orgId/public`) edits slug + copy link; section add/edit uses modals; logo shows image preview (never raw asset ids)
+- [x] Public chrome shows org logo when `publicPage.logoAssetId` is set; nav includes **Home**; footer links to app home
 - [x] UI labels use **About** and **Join / Donate** (not Mission / CTA jargon)
+- [x] Public members = active org members (People titles/photos); CMS no longer edits a separate members collection
+- [x] Donors / projects / events / social support optional Lucide `iconName`
 
 ## Data and APIs
 
@@ -89,7 +91,7 @@ MVP sections admins can edit (each public|hidden at section or page level as nee
 - Full CMS / blog engine  
 - Replacing msoevex.com in v1  
 - Custom domains per org (later)  
-- Auto-publishing every ACL member onto the public Members page (curated / board first; alumni opt-in later)
+- Alumni on the public roster (active members only for now)
 
 ## Open questions / risks
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   DndContext,
   closestCenter,
@@ -13,41 +13,32 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Camera, GripVertical, Plus, UserRound } from "lucide-react";
-import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
+import { GripVertical, Plus, UserRound, X } from "lucide-react";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
 import { showNotification } from "@/components/overlays/Notification";
 import { ContributorsPageSkeleton } from "@/components/cloud/notebookPageSkeletons";
-import {
-  Button,
-  ContextMenu,
-  EmptyState,
-  TextField,
-  type MenuItem,
-} from "@/components/ui";
-import { Dialog } from "@/components/ui/Dialog";
-import { cloudApi, type MemberSummary, type NotebookMemberSummary } from "@/lib/cloud/api";
+import { Button, Dialog, EmptyState } from "@/components/ui";
+import { cloudApi, type MemberSummary } from "@/lib/cloud/api";
 import { useAppDndSensors } from "@/lib/dnd/dndSensors";
 
-function SortableMember({
-  member,
-  photoUrl,
-  onEdit,
-  onRemove,
-  onPhoto,
-  onContextMenu,
-  readOnly = false,
-}: {
-  member: NotebookMemberSummary;
+type ContributorRow = {
+  uid: string;
+  name: string;
+  title?: string;
   photoUrl?: string;
-  onEdit: () => void;
+};
+
+function SortableContributor({
+  row,
+  onRemove,
+  readOnly,
+}: {
+  row: ContributorRow;
   onRemove: () => void;
-  onPhoto: () => void;
-  onContextMenu?: (e: React.MouseEvent) => void;
   readOnly?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: member.id,
+    id: row.uid,
     disabled: readOnly,
   });
 
@@ -60,7 +51,6 @@ function SortableMember({
         opacity: isDragging ? 0.45 : 1,
       }}
       className="flex items-center gap-2 rounded-nb-xl border border-nb-outline-variant/25 bg-nb-surface px-2 py-2"
-      onContextMenu={onContextMenu}
     >
       {!readOnly && (
         <button
@@ -74,366 +64,256 @@ function SortableMember({
           <GripVertical size={16} />
         </button>
       )}
-      <button
-        type="button"
-        onClick={readOnly ? undefined : onPhoto}
-        disabled={readOnly}
-        className={`relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-nb-lg bg-nb-surface-low text-nb-on-surface-variant ${readOnly ? "cursor-default" : ""}`}
-        title={readOnly ? undefined : "Upload photo"}
-      >
-        {photoUrl ? (
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-nb-lg bg-nb-surface-low">
+        {row.photoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={photoUrl} alt="" className="h-full w-full object-cover" />
+          <img src={row.photoUrl} alt="" className="h-full w-full object-cover" />
         ) : (
-          <UserRound size={18} />
+          <UserRound size={18} className="text-nb-on-surface-variant" />
         )}
-        {!readOnly && (
-          <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-opacity hover:bg-black/35 hover:opacity-100 pointer-coarse:bg-black/35 pointer-coarse:opacity-100">
-            <Camera size={14} className="text-white" />
-          </span>
-        )}
-      </button>
+      </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate font-semibold text-nb-on-surface">{member.name}</div>
-        <div className="truncate text-nb-caption text-nb-on-surface-variant">
-          {member.role || "Member"}
-        </div>
+        <p className="truncate font-semibold text-nb-on-surface">{row.name}</p>
+        <p className="truncate text-nb-caption text-nb-on-surface-variant">
+          {row.title || "Member"}
+        </p>
       </div>
       {!readOnly && (
-        <div className="flex shrink-0 items-center gap-1">
-          <Button size="sm" variant="ghost" onClick={onEdit}>
-            Edit
-          </Button>
-          <Button size="sm" variant="link" className="text-nb-danger" onClick={onRemove}>
-            Remove
-          </Button>
-        </div>
+        <Button size="sm" variant="ghost" className="text-nb-danger" onClick={onRemove} title="Remove">
+          <X size={14} />
+        </Button>
       )}
     </div>
   );
 }
 
-export default function NotebookMembersPage() {
-  const { orgId, notebookId, isArchived, setError } = useNotebookWorkspace();
-  const [members, setMembers] = useState<NotebookMemberSummary[]>([]);
-  const [photos, setPhotos] = useState<Record<string, string>>({});
-  const [editor, setEditor] = useState<Partial<NotebookMemberSummary> & { id?: string } | null>(
-    null
-  );
-  const [deleteMember, setDeleteMember] = useState<NotebookMemberSummary | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [rosterLoaded, setRosterLoaded] = useState(false);
-  const [ctx, setCtx] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
-  const photoInputRef = useRef<HTMLInputElement>(null);
-  const photoTargetRef = useRef<string | null>(null);
+export default function NotebookContributorsPage() {
+  const {
+    orgId,
+    notebookId,
+    notebookSummary,
+    isArchived,
+    refresh,
+    setError,
+  } = useNotebookWorkspace();
   const sensors = useAppDndSensors();
-
-  function memberMenuItems(m: NotebookMemberSummary): MenuItem[] {
-    if (isArchived) return [];
-    return [
-      { id: "edit", label: "Edit", onSelect: () => setEditor({ ...m }) },
-      {
-        id: "photo",
-        label: "Upload photo",
-        icon: <Camera size={14} />,
-        onSelect: () => {
-          photoTargetRef.current = m.id;
-          photoInputRef.current?.click();
-        },
-      },
-      { id: "sep", label: "", separator: true },
-      {
-        id: "remove",
-        label: "Remove",
-        danger: true,
-        onSelect: () => setDeleteMember(m),
-      },
-    ];
-  }
-
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [orgPeople, setOrgPeople] = useState<MemberSummary[]>([]);
+  const [rows, setRows] = useState<ContributorRow[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
-  function load() {
-    setRosterLoaded(false);
-    void Promise.all([
-      cloudApi.listNotebookMembers(orgId, notebookId),
-      cloudApi.listMembers(orgId),
-    ])
-      .then(([roster, people]) => {
-        setMembers(roster);
-        setOrgPeople(people.filter((p) => p.status !== "alumni"));
-      })
-      .catch((err) => setError((err as Error).message))
-      .finally(() => setRosterLoaded(true));
-  }
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgId, notebookId]);
+  const contributorUids = useMemo(
+    () =>
+      ((notebookSummary as { contributorUids?: string[] } | null)?.contributorUids ||
+        rows.map((r) => r.uid)) as string[],
+    [notebookSummary, rows]
+  );
 
   useEffect(() => {
     let cancelled = false;
+    setLoaded(false);
     void (async () => {
-      const next: Record<string, string> = {};
-      await Promise.all(
-        members.map(async (m) => {
-          if (!m.imageAssetId) return;
-          try {
-            const { url } = await cloudApi.getAssetUrl(orgId, notebookId, m.imageAssetId);
-            next[m.id] = url;
-          } catch {
-            /* ignore */
+      try {
+        const people = await cloudApi.listMembers(orgId);
+        const active = people.filter((p) => p.status !== "alumni");
+        if (cancelled) return;
+        setOrgPeople(active);
+
+        const uids =
+          (notebookSummary as { contributorUids?: string[] } | null)?.contributorUids || [];
+        const photos: Record<string, string> = {};
+        await Promise.all(
+          active.map(async (p) => {
+            if (!p.imageAssetId) return;
+            try {
+              const { url } = await cloudApi.getOrgAssetUrl(orgId, p.imageAssetId);
+              photos[p.uid] = url;
+            } catch {
+              /* ignore */
+            }
+          })
+        );
+        if (cancelled) return;
+
+        if (uids.length) {
+          setRows(
+            uids
+              .map((uid) => {
+                const p = active.find((x) => x.uid === uid);
+                if (!p) return null;
+                return {
+                  uid,
+                  name: p.displayName || p.email || "Member",
+                  title: (p as MemberSummary & { title?: string }).title,
+                  photoUrl: photos[uid],
+                };
+              })
+              .filter(Boolean) as ContributorRow[]
+          );
+        } else {
+          // Seed from legacy roster API once.
+          const legacy = await cloudApi.listNotebookMembers(orgId, notebookId);
+          const mapped = legacy
+            .map((m) => {
+              const uid = m.orgMemberUid || m.id;
+              const p = active.find((x) => x.uid === uid);
+              if (!p) return null;
+              return {
+                uid,
+                name: p.displayName || p.email || m.name,
+                title: (p as MemberSummary & { title?: string }).title || m.role,
+                photoUrl: photos[uid],
+              };
+            })
+            .filter(Boolean) as ContributorRow[];
+          setRows(mapped);
+          if (mapped.length) {
+            await cloudApi.patchNotebook(orgId, notebookId, {
+              contributorUids: mapped.map((r) => r.uid),
+            });
+            refresh();
           }
-        })
-      );
-      if (!cancelled) setPhotos(next);
+        }
+      } catch (err) {
+        if (!cancelled) setError((err as Error).message);
+      } finally {
+        if (!cancelled) setLoaded(true);
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [members, orgId, notebookId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId, notebookId]);
 
-  const sorted = members.slice().sort((a, b) => a.order - b.order);
-
-  async function persistOrder(ordered: NotebookMemberSummary[]) {
-    setMembers(ordered.map((m, i) => ({ ...m, order: i })));
+  async function persist(next: ContributorRow[]) {
+    setRows(next);
+    setBusy(true);
     try {
-      await Promise.all(
-        ordered.map((m, i) =>
-          cloudApi.patchNotebookMember(orgId, notebookId, m.id, { order: i })
-        )
-      );
+      await cloudApi.patchNotebook(orgId, notebookId, {
+        contributorUids: next.map((r) => r.uid),
+      });
+      refresh();
     } catch (err) {
       setError((err as Error).message);
-      load();
+      showNotification((err as Error).message, "error");
+    } finally {
+      setBusy(false);
     }
   }
 
   function onDragEnd(event: DragEndEvent) {
     if (isArchived || !event.over) return;
-    const from = sorted.findIndex((m) => m.id === event.active.id);
-    const to = sorted.findIndex((m) => m.id === event.over?.id);
+    const from = rows.findIndex((r) => r.uid === event.active.id);
+    const to = rows.findIndex((r) => r.uid === event.over?.id);
     if (from < 0 || to < 0 || from === to) return;
-    void persistOrder(arrayMove(sorted, from, to));
+    void persist(arrayMove(rows, from, to));
   }
 
-  async function saveEditor() {
-    if (!editor?.name?.trim()) return;
-    setBusy(true);
-    try {
-      if (editor.id) {
-        await cloudApi.patchNotebookMember(orgId, notebookId, editor.id, {
-          name: editor.name.trim(),
-          role: editor.role || "Member",
-          orgMemberUid: editor.orgMemberUid || null,
-        } as Partial<NotebookMemberSummary> & { orgMemberUid?: string | null });
-      } else {
-        await cloudApi.createNotebookMember(orgId, notebookId, {
-          name: editor.name.trim(),
-          role: editor.role || "Member",
-          order: members.length,
-          orgMemberUid: editor.orgMemberUid,
-        });
-      }
-      setEditor(null);
-      load();
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
+  const available = orgPeople.filter((p) => !rows.some((r) => r.uid === p.uid));
 
-  async function uploadPhoto(memberId: string, file: File) {
-    setBusy(true);
-    try {
-      const { asset } = await cloudApi.createAsset(orgId, notebookId, {
-        contentType: file.type || "image/jpeg",
-        byteSize: file.size,
-      });
-      await cloudApi.uploadAssetContent(
-        orgId,
-        notebookId,
-        asset.id,
-        file,
-        file.type || "image/jpeg"
-      );
-      await cloudApi.patchNotebookMember(orgId, notebookId, memberId, {
-        imageAssetId: asset.id,
-      });
-      load();
-      showNotification("Photo uploaded", "success");
-    } catch (err) {
-      const message = (err as Error).message;
-      setError(message);
-      showNotification(message, "error");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (!rosterLoaded) {
-    return <ContributorsPageSkeleton />;
-  }
+  if (!loaded) return <ContributorsPageSkeleton />;
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="mx-auto flex max-w-2xl flex-col gap-6 p-4 md:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-nb-display font-bold tracking-tight">Contributors</h1>
+          <h1 className="text-nb-title font-semibold text-nb-on-surface">Contributors</h1>
           <p className="mt-1 text-nb-body text-nb-on-surface-variant">
-            Credits for this notebook (export / LaTeX). Separate from org access — manage who can
-            open the notebook under Settings.
+            Choose who appears in this notebook’s credits from organization members. Titles and
+            photos are edited under People.
           </p>
         </div>
         {!isArchived && (
-          <Button variant="primary" onClick={() => setEditor({ name: "", role: "Member" })}>
-            <Plus size={14} /> Add person
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={busy || !available.length}
+            onClick={() => setPickerOpen(true)}
+          >
+            <Plus size={14} /> Add
           </Button>
         )}
       </div>
 
-      {sorted.length > 0 ? (
+      {rows.length === 0 ? (
+        <EmptyState
+          title="No contributors yet"
+          description="Add organization members to the credits list."
+          action={
+            !isArchived ? (
+              <Button size="sm" variant="secondary" onClick={() => setPickerOpen(true)}>
+                <Plus size={14} /> Add contributor
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <SortableContext items={sorted.map((m) => m.id)} strategy={verticalListSortingStrategy}>
-            <div className="grid gap-2">
-              {sorted.map((m) => (
-                <SortableMember
-                  key={m.id}
-                  member={m}
-                  readOnly={isArchived}
-                  photoUrl={photos[m.id]}
-                  onEdit={() => setEditor({ ...m })}
-                  onRemove={() => setDeleteMember(m)}
-                  onPhoto={() => {
-                    photoTargetRef.current = m.id;
-                    photoInputRef.current?.click();
-                  }}
-                  onContextMenu={(e) => {
-                    if (isArchived) return;
-                    e.preventDefault();
-                    setCtx({
-                      x: e.clientX,
-                      y: e.clientY,
-                      items: memberMenuItems(m),
-                    });
-                  }}
+          <SortableContext items={rows.map((r) => r.uid)} strategy={verticalListSortingStrategy}>
+            <div className="flex flex-col gap-2">
+              {rows.map((row) => (
+                <SortableContributor
+                  key={row.uid}
+                  row={row}
+                  readOnly={isArchived || busy}
+                  onRemove={() => void persist(rows.filter((r) => r.uid !== row.uid))}
                 />
               ))}
             </div>
           </SortableContext>
         </DndContext>
-      ) : (
-        <EmptyState
-          title="No roster yet"
-          description="Add contributors who should appear in this notebook’s credits."
-          action={
-            !isArchived ? (
-              <Button variant="primary" onClick={() => setEditor({ name: "", role: "Member" })}>
-                Add person
-              </Button>
-            ) : undefined
-          }
-        />
       )}
 
-      <input
-        ref={photoInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          const id = photoTargetRef.current;
-          e.target.value = "";
-          photoTargetRef.current = null;
-          if (file && id) void uploadPhoto(id, file);
-        }}
-      />
-
       <Dialog
-        isOpen={Boolean(editor)}
-        onClose={() => setEditor(null)}
-        title={editor?.id ? "Edit roster person" : "Add roster person"}
-      >
-        <div className="flex flex-col gap-3">
-          <TextField
-            label="Name"
-            value={editor?.name || ""}
-            onChange={(e) => setEditor((prev) => (prev ? { ...prev, name: e.target.value } : prev))}
-          />
-          <TextField
-            label="Role"
-            value={editor?.role || ""}
-            onChange={(e) => setEditor((prev) => (prev ? { ...prev, role: e.target.value } : prev))}
-          />
-          <label className="flex flex-col gap-1 text-nb-label">
-            <span className="font-medium">Link to org member (optional)</span>
-            <select
-              className="rounded-nb-lg border border-nb-outline-variant/40 bg-nb-surface-low px-3 py-2"
-              value={editor?.orgMemberUid || ""}
-              onChange={(e) => {
-                const uid = e.target.value || undefined;
-                const person = orgPeople.find((p) => p.uid === uid);
-                setEditor((prev) =>
-                  prev
-                    ? {
-                        ...prev,
-                        orgMemberUid: uid,
-                        name: person?.displayName || person?.email || prev.name,
-                      }
-                    : prev
-                );
-              }}
-            >
-              <option value="">Not linked</option>
-              {orgPeople.map((p) => (
-                <option key={p.uid} value={p.uid}>
-                  {p.displayName || p.email || p.uid}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => setEditor(null)}>
-              Cancel
-            </Button>
-            <Button variant="primary" disabled={busy || !editor?.name?.trim()} onClick={() => void saveEditor()}>
-              Save
+        isOpen={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        title="Add contributors"
+        size="md"
+        footer={
+          <div className="flex justify-end">
+            <Button variant="ghost" onClick={() => setPickerOpen(false)}>
+              Done
             </Button>
           </div>
-        </div>
+        }
+      >
+        <ul className="max-h-80 space-y-1 overflow-y-auto">
+          {available.map((p) => (
+            <li key={p.uid}>
+              <button
+                type="button"
+                className="flex w-full items-center gap-3 rounded-nb-lg px-2 py-2 text-left hover:bg-nb-surface-low"
+                disabled={busy}
+                onClick={() => {
+                  void persist([
+                    ...rows,
+                    {
+                      uid: p.uid,
+                      name: p.displayName || p.email || "Member",
+                      title: (p as MemberSummary & { title?: string }).title,
+                    },
+                  ]);
+                }}
+              >
+                <UserRound size={16} className="text-nb-on-surface-variant" />
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {p.displayName || p.email || "Member"}
+                </span>
+                <span className="text-nb-caption text-nb-on-surface-variant">
+                  {(p as MemberSummary & { title?: string }).title || p.role}
+                </span>
+              </button>
+            </li>
+          ))}
+          {!available.length && (
+            <li className="py-6 text-center text-nb-caption text-nb-on-surface-variant">
+              Every org member is already on the credits list.
+            </li>
+          )}
+        </ul>
       </Dialog>
-
-      <ConfirmationDialog
-        isOpen={Boolean(deleteMember)}
-        title="Move to Trash?"
-        message={`Move ${deleteMember?.name} to Trash? You can restore them from Trash.`}
-        confirmLabel="Move to Trash"
-        variant="danger"
-        onCancel={() => setDeleteMember(null)}
-        onConfirm={() => {
-          const id = deleteMember?.id;
-          setDeleteMember(null);
-          if (!id) return;
-          void cloudApi
-            .deleteNotebookMember(orgId, notebookId, id)
-            .then(() => {
-              load();
-              showNotification("Contributor moved to Trash", "success");
-            })
-            .catch((err) => setError((err as Error).message));
-        }}
-      />
-
-      <ContextMenu
-        open={Boolean(ctx)}
-        x={ctx?.x ?? 0}
-        y={ctx?.y ?? 0}
-        items={ctx?.items ?? []}
-        onClose={() => setCtx(null)}
-      />
     </div>
   );
 }

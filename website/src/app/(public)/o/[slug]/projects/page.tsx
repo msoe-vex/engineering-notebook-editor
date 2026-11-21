@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PublicOrgChrome } from "@/components/public/PublicOrgChrome";
+import { CmsIcon } from "@/components/cloud/CmsIconPicker";
 import { cloudApi } from "@/lib/cloud/api";
 import { LoadingBlock } from "@/components/ui";
 import { Alert } from "@/components/ui/Alert";
@@ -52,9 +53,14 @@ export default function PublicProjectsPage() {
         <ul className="mt-8 space-y-6">
           {projects.map((p) => (
             <li key={String(p.id)} className="border-b border-nb-outline-variant/20 pb-6">
-              <h2 className="text-xl font-semibold">
-                {p.season ? `${String(p.season)} ` : ""}
-                {String(p.title || "Project")}
+              <h2 className="flex items-center gap-2 text-xl font-semibold">
+                {typeof p.iconName === "string" && p.iconName ? (
+                  <CmsIcon name={p.iconName} size={20} />
+                ) : null}
+                <span>
+                  {p.season ? `${String(p.season)} ` : ""}
+                  {String(p.title || "Project")}
+                </span>
               </h2>
               {p.summary ? <p className="mt-2 text-nb-on-surface-variant">{String(p.summary)}</p> : null}
               {Array.isArray(p.highlights) && (

@@ -637,6 +637,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       status?: "active" | "alumni";
       imageAssetId?: string | null;
       displayName?: string;
+      title?: string | null;
     };
     const path = memberPath(orgId, uid);
     const snap = await store().get(path);
@@ -675,6 +676,9 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     }
     if (body.displayName !== undefined) {
       patch.displayName = body.displayName.trim() || null;
+    }
+    if (body.title !== undefined) {
+      patch.title = body.title?.trim() || null;
     }
     if (Object.keys(patch).length === 0) {
       return reply.code(400).send({ error: "no fields to update" });
@@ -982,6 +986,17 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     ] as const) {
       if (body[key] !== undefined) patch[key] = body[key];
     }
+    if (body.contributorUids !== undefined) {
+      if (!Array.isArray(body.contributorUids)) {
+        return reply.code(400).send({ error: "contributorUids must be an array" });
+      }
+      const uids = body.contributorUids.map(String);
+      for (const uid of uids) {
+        const om = await store().get(memberPath(orgId, uid));
+        if (!om) return reply.code(400).send({ error: `unknown org member: ${uid}` });
+      }
+      patch.contributorUids = uids;
+    }
 
     // Public share link (admin+)
     if (
@@ -1234,7 +1249,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     return { ok: true, folders };
   });
 
-  // ── Notebook Members (contributor roster) ──────────────────────────────
+  // ── Notebook contributors (org member uids on notebook.contributorUids) ─
 
   app.get("/orgs/:orgId/notebooks/:notebookId/members", async (request, reply) => {
     const user = getUser(request);
@@ -1242,11 +1257,42 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const trashed = String((request.query as { trashed?: string }).trashed || "") === "1";
     const nb = await store().get(notebookPath(orgId, notebookId));
     if (!nb) return reply.code(404).send({ error: "not found" });
-    await requireNotebookAccess(user, orgId, withoutId(nb) as NotebookSummaryV5);
+    const nbData = withoutId(nb) as NotebookSummaryV5;
+    await requireNotebookAccess(user, orgId, nbData);
+
+    // Soft-trashed legacy roster docs only (new model has no trash).
+    if (trashed) {
+      const snap = await store().query(notebookMembersCollection(orgId, notebookId));
+      return snap
+        .map((d) => ({ id: d.id, ...withoutId(d) }) as NotebookMember & { id: string })
+        .filter((m) => Boolean(m.deletedAt));
+    }
+
+    const uids = nbData.contributorUids || [];
+    if (uids.length) {
+      const rows = await Promise.all(
+        uids.map(async (uid, order) => {
+          const omSnap = await store().get(memberPath(orgId, uid));
+          if (!omSnap) return null;
+          const om = withoutId(omSnap) as OrgMember;
+          return {
+            id: uid,
+            name: om.displayName || om.email || "Member",
+            role: om.title || "Member",
+            order,
+            imageAssetId: om.imageAssetId,
+            orgMemberUid: uid,
+          };
+        })
+      );
+      return rows.filter(Boolean);
+    }
+
+    // Legacy notebook members collection (pre–contributorUids).
     const snap = await store().query(notebookMembersCollection(orgId, notebookId));
     return snap
       .map((d) => ({ id: d.id, ...withoutId(d) }) as NotebookMember & { id: string })
-      .filter((m) => (trashed ? Boolean(m.deletedAt) : !m.deletedAt));
+      .filter((m) => !m.deletedAt);
   });
 
   app.post("/orgs/:orgId/notebooks/:notebookId/members", async (request, reply) => {
@@ -1840,11 +1886,23 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       await assertNotebookWritable(user, orgId, notebookId);
       const entrySnap = await store().get(entryPath(orgId, notebookId, entryId));
       if (!entrySnap) return reply.code(404).send({ error: "not found" });
-      const body = request.body as { body?: string; anchorQuote?: string; id?: string };
+      const body = request.body as {
+        body?: string;
+        anchorQuote?: string;
+        id?: string;
+        mentionedUids?: string[];
+      };
       const text = (body.body || "").trim();
       if (!text) return reply.code(400).send({ error: "body required" });
       const id = (body.id || "").trim() || randomUUID();
       const ts = nowIso();
+      const mentionedUids = Array.from(
+        new Set((body.mentionedUids || []).map(String).filter((uid) => uid && uid !== user.uid))
+      );
+      for (const uid of mentionedUids) {
+        const om = await store().get(memberPath(orgId, uid));
+        if (!om) return reply.code(400).send({ error: `unknown mention: ${uid}` });
+      }
       const comment: EntryComment = omitUndefined({
         id,
         entryId,
@@ -1853,6 +1911,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
         createdAt: ts,
         updatedAt: ts,
         anchorQuote: body.anchorQuote?.trim() || undefined,
+        mentionedUids: mentionedUids.length ? mentionedUids : undefined,
       }) as EntryComment;
       await store().set(entryCommentPath(orgId, notebookId, entryId, id), comment as unknown as Record<string, unknown>);
       publishNotebookEvent(orgId, notebookId, {
@@ -1862,6 +1921,34 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
         at: ts,
       });
       await recountEntryComments(orgId, notebookId, entryId);
+
+      if (mentionedUids.length) {
+        const site = (process.env.PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+        const entryPathUrl = `${site}/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}`;
+        const authorName =
+          (await store().get(userPath(user.uid)))?.displayName ||
+          user.email ||
+          "Someone";
+        for (const uid of mentionedUids) {
+          const om = withoutId((await store().get(memberPath(orgId, uid)))!) as OrgMember;
+          const profile = (await store().get(userPath(uid))) as
+            | { email?: string; displayName?: string }
+            | null;
+          const to = om.email || profile?.email;
+          if (!to) continue;
+          try {
+            await notifications.send({
+              to,
+              subject: "You were mentioned in a comment",
+              template: "comment_mention",
+              text: `${authorName} mentioned you on an entry: ${entryPathUrl}\n\n${text.slice(0, 500)}`,
+              data: { orgId, notebookId, entryId, commentId: id },
+            });
+          } catch (err) {
+            request.log.warn({ err, uid }, "comment mention notify failed");
+          }
+        }
+      }
       return comment;
     }
   );
@@ -2330,11 +2417,11 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
   });
 
   // ── Public page CMS (admin) ────────────────────────────────────────────
+  // Members are not CMS-editable — public roster comes from active org members.
   const publicCollections = {
     donors: publicDonorsCollection,
     projects: publicProjectsCollection,
     events: publicEventsCollection,
-    members: publicMembersCollection,
     social: publicSocialCollection,
   } as const;
 

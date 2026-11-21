@@ -20,6 +20,7 @@ Core sends **application** notifications (email first) through a **`Notification
 
 - Org **invite** email (optional branded) when an invite is created with an email address  
 - **Secondary email** verification messages (see [FR-auth](./FR-auth.md))  
+- **Comment @mention** (`comment_mention`) when a member is mentioned on an entry comment  
 - Optional: compile/judge **job completed** email when the user opts in (Account preferences — later)  
 - Password reset / primary email verification may stay on the IdP in v1; if product owns them, they use this port with one template source
 
@@ -28,6 +29,7 @@ Core sends **application** notifications (email first) through a **`Notification
 - [x] `NotificationPort` exists in Core; vendor SDK only inside an adapter
 - [x] Local Compose uses a non-sending or catcher adapter
 - [x] At least one product template ships (invite **or** secondary-email verify)
+- [x] Comment mention notifications go through `NotificationPort` (console adapter until email provider is configured)
 - [x] Failures are logged; user-facing flows degrade gracefully (invite still created if mail fails, with UI warning)
 - [x] Secrets (API keys) only via env — [env-vars](../../03-reference/env-vars.md)
 

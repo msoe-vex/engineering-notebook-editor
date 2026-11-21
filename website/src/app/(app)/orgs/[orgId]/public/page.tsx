@@ -4,11 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Camera, Copy, ExternalLink, Pencil, Plus, Trash2 } from "lucide-react";
 import { useOrgWorkspace } from "@/components/cloud/OrgWorkspaceContext";
+import { CmsIcon, CmsIconPicker } from "@/components/cloud/CmsIconPicker";
 import { showNotification } from "@/components/overlays/Notification";
 import { Alert, Button, Dialog, LoadingBlock, TextField } from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
 
-type SectionKey = "donors" | "projects" | "events" | "members" | "social";
+type SectionKey = "donors" | "projects" | "events" | "social";
 
 type CmsItem = Record<string, unknown> & { id: string };
 
@@ -23,23 +24,41 @@ const FIELD_LABELS: Record<string, string> = {
   kind: "Kind",
   location: "Location",
   date: "Date",
-  role: "Role",
-  classYear: "Class year",
-  orgMemberUid: "Org member uid",
   label: "Label",
 };
 
-const SECTIONS: { key: SectionKey; label: string; fields: string[]; imageField?: string }[] = [
-  { key: "donors", label: "Donors", fields: ["name", "url", "tier"], imageField: "imageAssetId" },
-  { key: "projects", label: "Projects", fields: ["title", "season", "summary", "externalUrl"] },
-  { key: "events", label: "Events", fields: ["title", "kind", "location", "date"] },
+const SECTIONS: {
+  key: SectionKey;
+  label: string;
+  fields: string[];
+  imageField?: string;
+  hasIcon?: boolean;
+}[] = [
   {
-    key: "members",
-    label: "Public members",
-    fields: ["name", "role", "classYear", "orgMemberUid"],
+    key: "donors",
+    label: "Donors",
+    fields: ["name", "url", "tier"],
     imageField: "imageAssetId",
+    hasIcon: true,
   },
-  { key: "social", label: "Social links", fields: ["label", "url"] },
+  {
+    key: "projects",
+    label: "Projects",
+    fields: ["title", "season", "summary", "externalUrl"],
+    hasIcon: true,
+  },
+  {
+    key: "events",
+    label: "Events",
+    fields: ["title", "kind", "location", "date"],
+    hasIcon: true,
+  },
+  {
+    key: "social",
+    label: "Social links",
+    fields: ["label", "url"],
+    hasIcon: true,
+  },
 ];
 
 function publicAbout(pp?: { about?: string; mission?: string } | null) {
@@ -60,6 +79,14 @@ async function copyText(text: string) {
   }
 }
 
+function itemPrimaryLabel(item: CmsItem, fields: string[]) {
+  for (const f of fields) {
+    const v = item[f];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return "Untitled item";
+}
+
 export default function OrgPublicCmsPage() {
   const { orgId, org, canManage, refresh, setError } = useOrgWorkspace();
   const [loading, setLoading] = useState(true);
@@ -74,11 +101,11 @@ export default function OrgPublicCmsPage() {
   const [ctaDonate, setCtaDonate] = useState("");
   const [visibility, setVisibility] = useState<"public" | "hidden">("hidden");
   const [logoAssetId, setLogoAssetId] = useState<string | undefined>();
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
   const [sections, setSections] = useState<Record<SectionKey, CmsItem[]>>({
     donors: [],
     projects: [],
     events: [],
-    members: [],
     social: [],
   });
   const [editor, setEditor] = useState<{
@@ -86,10 +113,25 @@ export default function OrgPublicCmsPage() {
     mode: "add" | "edit";
     id?: string;
     values: Record<string, string>;
+    iconName: string;
   } | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [photoTarget, setPhotoTarget] = useState<{ section: SectionKey; id: string } | null>(null);
+
+  const loadLogoPreview = useCallback(
+    (assetId?: string) => {
+      if (!assetId) {
+        setLogoPreviewUrl(null);
+        return;
+      }
+      void cloudApi
+        .getOrgAssetUrl(orgId, assetId)
+        .then(({ url }) => setLogoPreviewUrl(url))
+        .catch(() => setLogoPreviewUrl(null));
+    },
+    [orgId]
+  );
 
   const load = useCallback(() => {
     setLoading(true);
@@ -111,7 +153,9 @@ export default function OrgPublicCmsPage() {
         setSlug((o.slug || org?.slug || "").trim());
         setVisibility(pp?.visibility === "public" ? "public" : "hidden");
         setAbout(publicAbout(pp));
-        setLogoAssetId(pp?.logoAssetId);
+        const nextLogo = pp?.logoAssetId;
+        setLogoAssetId(nextLogo);
+        loadLogoPreview(nextLogo);
         setAnnouncement(pp?.announcement?.text || "");
         setAnnouncementHref(pp?.announcement?.href || "");
         setCtaTitle(pp?.cta?.title || "");
@@ -122,13 +166,12 @@ export default function OrgPublicCmsPage() {
           donors: (data.donors as CmsItem[]) || [],
           projects: (data.projects as CmsItem[]) || [],
           events: (data.events as CmsItem[]) || [],
-          members: (data.members as CmsItem[]) || [],
           social: (data.social as CmsItem[]) || [],
         });
       })
       .catch((err) => setError((err as Error).message))
       .finally(() => setLoading(false));
-  }, [orgId, org?.publicPage, org?.slug, setError]);
+  }, [orgId, org?.publicPage, org?.slug, setError, loadLogoPreview]);
 
   useEffect(() => {
     if (canManage) load();
@@ -173,6 +216,9 @@ export default function OrgPublicCmsPage() {
     const sec = SECTIONS.find((s) => s.key === editor.section);
     if (!sec) return;
     const body: Record<string, unknown> = { ...editor.values };
+    if (sec.hasIcon) {
+      body.iconName = editor.iconName.trim() || undefined;
+    }
     if (editor.mode === "add") {
       body.order = sections[editor.section].length;
     } else if (editor.id) {
@@ -245,6 +291,7 @@ export default function OrgPublicCmsPage() {
       });
       await cloudApi.uploadOrgAssetContent(orgId, asset.id, file, file.type || "image/jpeg");
       setLogoAssetId(asset.id);
+      loadLogoPreview(asset.id);
       await cloudApi.patchOrg(orgId, {
         publicPage: {
           visibility,
@@ -396,12 +443,26 @@ export default function OrgPublicCmsPage() {
             <option value="public">Public</option>
           </select>
         </label>
-        <div className="flex flex-wrap items-center gap-3">
-          <div>
-            <p className="text-nb-label font-medium">Logo</p>
-            <p className="text-nb-caption text-nb-on-surface-variant">
-              {logoAssetId ? `Asset ${logoAssetId}` : "No logo yet"}
-            </p>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-3">
+            {logoPreviewUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={logoPreviewUrl}
+                alt="Organization logo"
+                className="h-16 w-16 rounded-nb-lg object-cover ring-1 ring-nb-outline-variant/40"
+              />
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded-nb-lg bg-nb-surface-low text-nb-caption font-semibold text-nb-on-surface-variant ring-1 ring-nb-outline-variant/30">
+                No logo
+              </div>
+            )}
+            <div>
+              <p className="text-nb-label font-medium">Logo</p>
+              <p className="text-nb-caption text-nb-on-surface-variant">
+                {logoAssetId ? "Logo on file — shown on the public site header" : "No logo yet"}
+              </p>
+            </div>
           </div>
           <Button
             size="sm"
@@ -466,6 +527,18 @@ export default function OrgPublicCmsPage() {
         </Button>
       </section>
 
+      <section className="rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface-low/40 px-4 py-3">
+        <h3 className="text-nb-body font-semibold text-nb-on-surface">Public members</h3>
+        <p className="mt-1 text-nb-caption text-nb-on-surface-variant">
+          Every active org member appears on the public roster. Set each person’s credits title and
+          photo under{" "}
+          <Link href={`/orgs/${orgId}/people`} className="font-semibold text-nb-primary hover:underline">
+            People
+          </Link>
+          . Contributors for a notebook are chosen from the same member list.
+        </p>
+      </section>
+
       {SECTIONS.map((sec) => (
         <section key={sec.key} className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -479,6 +552,7 @@ export default function OrgPublicCmsPage() {
                   section: sec.key,
                   mode: "add",
                   values: Object.fromEntries(sec.fields.map((f) => [f, ""])),
+                  iconName: "",
                 })
               }
             >
@@ -488,22 +562,29 @@ export default function OrgPublicCmsPage() {
           <ul className="divide-y divide-nb-outline-variant/20 rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface">
             {sections[sec.key].map((item) => (
               <li key={item.id} className="flex items-start justify-between gap-3 px-4 py-3 text-nb-body">
-                <div className="min-w-0 space-y-0.5">
-                  {sec.fields.map((f) =>
-                    item[f] ? (
-                      <p key={f} className="truncate">
-                        <span className="text-nb-caption text-nb-on-surface-variant">
-                          {FIELD_LABELS[f] || f}:{" "}
-                        </span>
-                        {String(item[f])}
-                      </p>
-                    ) : null
-                  )}
-                  {sec.imageField && item[sec.imageField] ? (
-                    <p className="truncate text-nb-caption text-nb-on-surface-variant">
-                      image attached
-                    </p>
+                <div className="flex min-w-0 items-start gap-3">
+                  {sec.hasIcon && typeof item.iconName === "string" && item.iconName ? (
+                    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-nb-md bg-nb-surface-low text-nb-primary">
+                      <CmsIcon name={item.iconName} size={16} />
+                    </span>
                   ) : null}
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="truncate font-medium text-nb-on-surface">
+                      {itemPrimaryLabel(item, sec.fields)}
+                    </p>
+                    {sec.fields.slice(1).map((f) =>
+                      item[f] ? (
+                        <p key={f} className="truncate text-nb-caption text-nb-on-surface-variant">
+                          {FIELD_LABELS[f] || f}: {String(item[f])}
+                        </p>
+                      ) : null
+                    )}
+                    {sec.imageField && item[sec.imageField] ? (
+                      <p className="truncate text-nb-caption text-nb-on-surface-variant">
+                        Image attached
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="flex shrink-0 gap-1">
                   <Button
@@ -519,6 +600,7 @@ export default function OrgPublicCmsPage() {
                         values: Object.fromEntries(
                           sec.fields.map((f) => [f, item[f] != null ? String(item[f]) : ""])
                         ),
+                        iconName: typeof item.iconName === "string" ? item.iconName : "",
                       })
                     }
                   >
@@ -598,6 +680,14 @@ export default function OrgPublicCmsPage() {
                 }
               />
             ))}
+            {editorSec.hasIcon ? (
+              <CmsIconPicker
+                value={editor.iconName}
+                onChange={(iconName) =>
+                  setEditor((prev) => (prev ? { ...prev, iconName } : prev))
+                }
+              />
+            ) : null}
           </div>
         ) : null}
       </Dialog>

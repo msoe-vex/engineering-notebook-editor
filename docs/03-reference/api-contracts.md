@@ -102,10 +102,9 @@ Auth: `Authorization: Bearer <Firebase ID token | local uid>`
 
 ### Notebook roster (credits)
 
-- `GET/POST /orgs/:orgId/notebooks/:notebookId/members` — create may set `orgMemberUid` to link People row; `GET ?trashed=1` for soft-deleted only (default omits trashed)
-- `PATCH/DELETE /orgs/:orgId/notebooks/:notebookId/members/:memberId` — `DELETE` soft-deletes (`deletedAt`); PATCH may update `orgMemberUid`, display fields
-- `POST …/members/:memberId/restore` — clear `deletedAt`
-- `DELETE …/members/:memberId/permanent` — hard-delete roster doc
+- Preferred: `PATCH /orgs/:orgId/notebooks/:notebookId` with `{ contributorUids: string[] }` (org member uids only; order = credits order)
+- `GET /orgs/:orgId/notebooks/:notebookId/members` — resolves `contributorUids` to display rows (`name`/`role`/`imageAssetId` from org members); falls back to legacy roster docs; `?trashed=1` for soft-deleted legacy only
+- Legacy: `POST/PATCH/DELETE …/members/:memberId` (+ restore/permanent) still accepted for old docs
 
 ### Entries
 
@@ -119,7 +118,7 @@ Auth: `Authorization: Bearer <Firebase ID token | local uid>`
 - `POST .../entries/:entryId/restore` — clear `deletedAt`
 - `DELETE .../entries/:entryId/permanent` — hard-delete TipTap/Yjs + metadata (+ comments); SSE `entry.deleted`
 - `GET/PUT .../entries/:entryId/content` (TipTap JSON via GCS)
-- `GET/POST …/entries/:entryId/comments` — thread body in MetadataStore; TipTap `commentAnchor` mark holds `commentId` (Yjs)
+- `GET/POST …/entries/:entryId/comments` — thread body in MetadataStore; TipTap `commentAnchor` mark holds `commentId` (Yjs); POST may include `mentionedUids` (org members → `NotificationPort` `comment_mention`)
 - `PATCH/DELETE …/entries/:entryId/comments/:commentId` — PATCH `{ body?, resolved? }`; SSE `comment.upserted` / `comment.deleted`; denorm `openCommentCount` / `commentCount` on entry
 - `GET /orgs/:orgId/notebooks/:notebookId/events` — **SSE** metadata fanout (`text/event-stream`). Auth: `Authorization: Bearer …` (use `fetch`, not `EventSource`). Events: `entry.upserted`, `entry.deleted`, `notebook.updated`, `entries.changed`, `comment.upserted`, `comment.deleted`, `job.*`, `ping`. Website must not open Firestore listeners.
 

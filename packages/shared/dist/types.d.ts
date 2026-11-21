@@ -80,6 +80,11 @@ export type OrgMember = {
     role: OrgRole;
     email?: string;
     displayName?: string;
+    /**
+     * Credits / public-facing title (e.g. “Captain”, “Programmer”).
+     * Distinct from ACL `role` (owner/admin/member).
+     */
+    title?: string;
     /** Org member avatar (asset id). */
     imageAssetId?: string;
     /** Missing ⇒ active (back-compat). */
@@ -128,16 +133,17 @@ export type NotebookAccess = {
     userIds: string[];
 };
 export declare function defaultNotebookAccess(): NotebookAccess;
-/** Contributor on a notebook (credits/roster). May exist without an app account. */
+/**
+ * @deprecated Prefer `NotebookSummaryV5.contributorUids` (org member uids only).
+ * Legacy roster docs may still exist until purged.
+ */
 export type NotebookMember = {
     id: string;
     name: string;
     role: string;
     order: number;
     imageAssetId?: string;
-    /** Optional link to `organizations/{orgId}/members/{uid}` (credits ≠ ACL). */
     orgMemberUid?: string;
-    /** Soft-delete — hidden from credits until restored / purged. */
     deletedAt?: string | null;
 };
 export type ProjectPhase = {
@@ -204,6 +210,8 @@ export type EntryComment = {
     resolvedBy?: string | null;
     /** Optional quote snapshot at create time (not used for positioning). */
     anchorQuote?: string;
+    /** Org member uids @mentioned in the body (NotificationPort targets). */
+    mentionedUids?: string[];
 };
 export type NotebookSummaryV5 = {
     schemaVersion: typeof NOTEBOOK_SCHEMA_VERSION;
@@ -215,6 +223,11 @@ export type NotebookSummaryV5 = {
     folders: Record<string, NotebookFolder>;
     access?: NotebookAccess;
     phases?: Record<string, ProjectPhase>;
+    /**
+     * Ordered org member uids for notebook credits.
+     * Display name / title / photo come from `organizations/…/members/{uid}`.
+     */
+    contributorUids?: string[];
     lastCompiled?: string;
     updatedAt: string;
     createdAt?: string;
