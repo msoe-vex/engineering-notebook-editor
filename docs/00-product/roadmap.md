@@ -58,9 +58,10 @@ HTTP Core→worker wake is **retired**.
 
 ### Active plans (next) — pick up on `microservices`
 
-1. Manual smoke leftovers (mobile keyboard, share ACL, upload limits) — [smoke-tests](../04-guides/smoke-tests.md)  
-2. Older GitHub issues (tables, tagging, …) when prioritized  
-3. Stretch ports: GenAiCompletePort / second-cloud adapters only if needed — [platform-ports.md](../01-requirements/plans/platform-ports.md)  
+1. [UI standardization](../01-requirements/plans/ui-standardization.md) — kit, side rails, Settings IA, ImageField, quieter copy, drop `V5` type suffix  
+2. Manual smoke leftovers (mobile keyboard, share ACL, upload limits) — [smoke-tests](../04-guides/smoke-tests.md)  
+3. Older GitHub issues (tables, tagging, …) when prioritized  
+4. Stretch ports: GenAiCompletePort / second-cloud adapters only if needed — [platform-ports.md](../01-requirements/plans/platform-ports.md)  
 
 ### Recently shipped on `microservices`
 
