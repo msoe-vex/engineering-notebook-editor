@@ -159,7 +159,7 @@ On `notebooks/{notebookId}` (in addition to summary fields today):
 
 ```
 publicAccess?: "off" | "unlisted"   // default off; legacy "public" ≈ unlisted
-publicKey?: string        // per-org slug segment (unique within org)
+publicKey?: string        // unguessable per-org token (UUID when server-minted)
 publishedAt?, publishedBy?
 latestExportId?: string   // most recent compile version id
 publicExportId?: string   // PDF opened by the share link

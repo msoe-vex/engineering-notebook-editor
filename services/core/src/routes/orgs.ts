@@ -1040,7 +1040,8 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
         patch.publishedAt = null;
         patch.publishedBy = null;
       } else {
-        if (!key) key = notebookId.slice(0, 12);
+        // Unguessable share token (full UUID). Short prefixes are brute-forceable.
+        if (!key) key = randomUUID();
         if (key !== existing.publicKey) {
           const taken = await store().get(publicNotebookKeyPath(orgId, key));
           if (taken && (withoutId(taken) as { notebookId?: string }).notebookId !== notebookId) {
