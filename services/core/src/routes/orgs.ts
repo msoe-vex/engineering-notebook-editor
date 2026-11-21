@@ -55,6 +55,7 @@ import {
 } from "@engineering-notebook/shared";
 import { getMetadataStore, type MetadataBatchOp } from "../db/metadataStore.js";
 import {
+  deleteCompileExport,
   recordCompileExport,
   resolveExportPdfKey,
 } from "../compile/recordCompileExport.js";
@@ -1018,10 +1019,12 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       if (callerRole !== "owner" && callerRole !== "admin" && !isServiceAdmin(user)) {
         return reply.code(403).send({ error: "Only admins and owners can publish notebooks" });
       }
-      const access = body.publicAccess ?? existing.publicAccess ?? "off";
-      if (access !== "off" && access !== "unlisted" && access !== "public") {
+      // Link-share only: "public" is accepted as an alias of "unlisted".
+      const rawAccess = body.publicAccess ?? existing.publicAccess ?? "off";
+      if (rawAccess !== "off" && rawAccess !== "unlisted" && rawAccess !== "public") {
         return reply.code(400).send({ error: "invalid publicAccess" });
       }
+      const access = rawAccess === "public" ? "unlisted" : rawAccess;
       let key =
         (body.publicKey !== undefined ? String(body.publicKey) : existing.publicKey || "")
           .trim()
@@ -1034,6 +1037,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
         }
         patch.publicAccess = "off";
         patch.publicKey = null;
+        patch.publicExportId = null;
         patch.publishedAt = null;
         patch.publishedBy = null;
       } else {
@@ -1056,7 +1060,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
             updatedAt: nowIso(),
           } as Record<string, unknown>);
         }
-        patch.publicAccess = access;
+        patch.publicAccess = "unlisted";
         patch.publicKey = key;
         patch.publishedAt = existing.publishedAt || nowIso();
         patch.publishedBy = existing.publishedBy || user.uid;
@@ -2362,6 +2366,34 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     if (!resolved) return reply.code(404).send({ error: "export not found" });
     const url = await storage.getSignedUrl(resolved.key, "read");
     return { url, exportId: resolved.exportId, gcsPath: resolved.key };
+  });
+
+  app.delete("/orgs/:orgId/notebooks/:notebookId/exports/:exportId", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId, exportId } = request.params as {
+      orgId: string;
+      notebookId: string;
+      exportId: string;
+    };
+    await assertNotebookWritable(user, orgId, notebookId);
+    try {
+      const result = await deleteCompileExport({ orgId, notebookId, exportId, storage });
+      publishNotebookEvent(orgId, notebookId, {
+        type: "notebook.updated",
+        notebook: {
+          id: notebookId,
+          latestExportId: result.latestExportId,
+          publicExportId: result.publicExportId,
+          publicAccess: result.publicAccess,
+          updatedAt: new Date().toISOString(),
+        },
+        at: new Date().toISOString(),
+      });
+      return result;
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode || 500;
+      return reply.code(status).send({ error: (err as Error).message });
+    }
   });
 
   /**

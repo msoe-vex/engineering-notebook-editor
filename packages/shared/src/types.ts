@@ -339,7 +339,10 @@ export type NotebookSummaryV5 = {
   createdAt?: string;
   createdBy?: string;
   archivedAt?: string | null;
-  /** Public share: off (default) | unlisted | public */
+  /**
+   * Share link: `off` (default) or `unlisted` (anyone with the link → PDF).
+   * Legacy stored value `public` is treated as `unlisted`.
+   */
   publicAccess?: "off" | "unlisted" | "public";
   /** Per-org key for `/o/:orgSlug/n/:publicKey` */
   publicKey?: string;

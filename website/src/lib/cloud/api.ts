@@ -776,6 +776,15 @@ export const cloudApi = {
     coreFetch<{ url: string; exportId: string }>(
       `/orgs/${orgId}/notebooks/${notebookId}/exports/${exportId}/url`
     ),
+  deleteCompileExport: (orgId: string, notebookId: string, exportId: string) =>
+    coreFetch<{
+      ok: boolean;
+      latestExportId: string | null;
+      publicExportId: string | null;
+      publicAccess: "off" | "unlisted" | "public";
+    }>(`/orgs/${orgId}/notebooks/${notebookId}/exports/${exportId}`, {
+      method: "DELETE",
+    }),
 
   /**
    * Enqueue server XeLaTeX compile job.

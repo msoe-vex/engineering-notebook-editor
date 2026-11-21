@@ -52,7 +52,7 @@ export default function NotebookSetupPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showUnarchiveConfirm, setShowUnarchiveConfirm] = useState(false);
-  const [publicAccess, setPublicAccess] = useState<"off" | "unlisted" | "public">("off");
+  const [publicAccess, setPublicAccess] = useState<"off" | "unlisted">("off");
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -74,7 +74,7 @@ export default function NotebookSetupPage() {
     setUserIds(access?.userIds ?? []);
     setPublicAccess(
       notebookSummary?.publicAccess === "public" || notebookSummary?.publicAccess === "unlisted"
-        ? notebookSummary.publicAccess
+        ? "unlisted"
         : "off"
     );
   }, [notebookSummary]);
@@ -426,11 +426,11 @@ export default function NotebookSetupPage() {
             <div>
               <h2 className="text-nb-title font-semibold text-nb-on-surface">Public page</h2>
               <p className="mt-1 text-nb-body text-nb-on-surface-variant">
-                Public links serve the compiled PDF only. Prefer publishing a version from the{" "}
+                Share link opens the compiled PDF directly. Manage which PDF is shared on{" "}
                 <a className="font-semibold text-nb-primary underline" href={`/orgs/${orgId}/notebooks/${notebookId}/compile`}>
                   Compile
-                </a>{" "}
-                page (with previews). You can still set visibility here.
+                </a>
+                .
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -479,12 +479,11 @@ export default function NotebookSetupPage() {
               value={publicAccess}
               disabled={busy || isArchived}
               onChange={(e) =>
-                setPublicAccess(e.target.value as "off" | "unlisted" | "public")
+                setPublicAccess(e.target.value as "off" | "unlisted")
               }
             >
               <option value="off">Off</option>
-              <option value="unlisted">Unlisted (anyone with link)</option>
-              <option value="public">Public</option>
+              <option value="unlisted">Anyone with the link</option>
             </select>
           </label>
 

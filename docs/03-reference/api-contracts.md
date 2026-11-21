@@ -73,9 +73,9 @@ Auth: `Authorization: Bearer <Firebase ID token | local uid>`
 ### Public (no auth)
 
 - `GET /public/o/:slug` — org public page when `publicPage.visibility=public`; omits items with `public === false` and whole sections with `sections.<key> === false`
-- `GET /public/o/:slug/notebooks/:publicKey` — public notebook chrome + signed `pdfUrl` for `publicExportId` (fallback latest); PDF-only (no entries)
-- `GET /public/o/:slug/notebooks/:publicKey/entries/:entryId` — 404 (public notebooks are PDF-only)
-- `GET /public/o/:slug/notebooks/:publicKey/pdf` — signed URL for published/latest compile export
+- `GET /public/o/:slug/notebooks/:publicKey` — metadata + optional `pdfUrl` (website redirects `/o/…/n/…` straight to the PDF)
+- `GET /public/o/:slug/notebooks/:publicKey/entries/:entryId` — 404 (PDF-only)
+- `GET /public/o/:slug/notebooks/:publicKey/pdf` — signed URL for `publicExportId` (fallback latest)
 
 ### Org teams (ACL groups)
 
@@ -88,7 +88,7 @@ Auth: `Authorization: Bearer <Firebase ID token | local uid>`
 
 - `GET/POST /orgs/:orgId/notebooks`
 - `GET/PATCH/DELETE /orgs/:orgId/notebooks/:notebookId`  
-  PATCH fields include `name`, `title`, `subtitle`, `logoAssetId`, `folders`, `access`, `phases`, `lastCompiled`, `latestExportId`, `publicExportId`, `archivedAt`, `publicAccess` (`off|unlisted|public`), `publicKey`, `revokePublic`  
+  PATCH fields include `name`, `title`, `subtitle`, `logoAssetId`, `folders`, `access`, `phases`, `lastCompiled`, `latestExportId`, `publicExportId`, `archivedAt`, `publicAccess` (`off|unlisted`; legacy `public` → `unlisted`), `publicKey`, `revokePublic`  
   Public URL shape: `/o/:orgSlug/n/:publicKey`  
   DELETE cascades entries/assets/rubrics/judgments GCS blobs + subcollections
 - `POST /orgs/:orgId/notebooks/:notebookId/archive` — sets `archivedAt`, locks notebook into read-only mode (admins/owners only; blocks entry/folder/asset/contributor/rubric/judge/compile mutations with 403)
@@ -142,9 +142,10 @@ Over-limit bodies return **413**. Clients should preflight with `assertUploadSiz
 
 ### Exports (compiled PDF)
 
-- `GET /orgs/:orgId/notebooks/:notebookId/exports` — list compile PDF versions + `latestExportId` / `publicExportId`
-- `PUT /orgs/:orgId/notebooks/:notebookId/exports/:exportId/content` — PDF bytes; creates a versioned export (+ `latest.pdf` alias), sets `lastCompiled` / `latestExportId`; same **64 MiB** body limit as assets
-- `GET /orgs/:orgId/notebooks/:notebookId/exports/:exportId/url` — signed URL (`latest` resolves via `latestExportId`)
+- `GET /orgs/:orgId/notebooks/:notebookId/exports` — list retained compile PDFs (latest + shared) + `latestExportId` / `publicExportId`
+- `PUT /orgs/:orgId/notebooks/:notebookId/exports/:exportId/content` — PDF bytes; creates export, updates `latest`, prunes non-shared older versions; **64 MiB** limit
+- `GET /orgs/:orgId/notebooks/:notebookId/exports/:exportId/url` — signed URL (`latest` → `latestExportId`)
+- `DELETE /orgs/:orgId/notebooks/:notebookId/exports/:exportId` — delete a saved version (deleting the shared one turns the link off)
 
 ### Static assets
 

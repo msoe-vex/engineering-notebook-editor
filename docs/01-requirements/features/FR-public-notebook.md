@@ -6,57 +6,40 @@ Related: [FR-notebooks](./FR-notebooks.md), [FR-org-public-page](./FR-org-public
 
 ## Summary
 
-Allow publishing a **read-only public (or unlisted) link** to a notebook’s **compiled PDF** so outsiders (judges, mentors, alumni, recruiters) can view a fixed export without becoming org members. Default remains private. Multiple notebooks per org can be published under the same org slug. Compiles create versioned PDFs; admins choose which version is public.
+Allow sharing a **link that opens the notebook’s compiled PDF directly** (no HTML wrapper). Default remains private. Compiles keep at most the **latest** PDF and the **currently shared** PDF; older non-shared compiles are pruned. Admins can delete either saved version.
 
 ## Actors and permissions
 
-| Actor | Can publish / revoke | Can view via link |
+| Actor | Can publish / revoke | Can open link |
 | --- | --- | --- |
 | Org owner / admin | yes | yes |
-| Notebook editor (TBD exact role) | yes if granted | yes |
-| Anonymous / signed-out visitor | no | yes when link is public or they have the unlisted URL |
-| Org member without publish right | no | yes via normal ACL; public link optional |
+| Anonymous / signed-out visitor | no | yes when link sharing is on |
+| Org member without publish right | no | via normal ACL; share link optional |
 
 ## User-facing behavior
 
-- **Compile** page: list PDF versions with preview; publish selected version as `off` | `unlisted` | `public`
-- Notebook **Settings**: visibility shortcut + Copy link (publishing a specific version is on Compile)
-- Share URL under the org’s public slug:
-
-  **`/o/:orgSlug/n/:notebookKey`**
-
-  where `notebookKey` is a **per-org** public slug (preferred), or opaque token / id fallback.
-- Public view: **PDF only** (embed + download). No live TipTap entries, no collab, no Settings.
-- Revoke disables access; changing `notebookKey` invalidates old URLs
-- Unlisted: reachable by URL, `noindex`
+- **Compile** page: preview latest / shared PDFs; **Share this PDF** / **Turn off**; delete saved versions
+- Notebook **Settings**: Off | Anyone with the link (shortcut); prefer Compile for which PDF is bound
+- Share URL: **`/o/:orgSlug/n/:notebookKey`** → redirects to a signed PDF URL
+- Visibility is link-only (`unlisted`). Legacy `public` is accepted and stored as `unlisted`. There is no separate “listed on org site / SEO” mode for notebooks.
 
 ## Acceptance criteria
 
 - [x] Unpublished notebooks are not reachable via old links after revoke
-- [x] Public view never exposes org People invites, admin APIs, or other notebooks
-- [x] Restricted-mode notebooks still require an explicit publish action
-- [x] `notebookKey` unique within the org; org slug + key resolves to at most one notebook
-- [x] Who published is recorded on the notebook (`publishedAt` / `publishedBy`) for **admins only** (settings / GET notebook) — cleared on revoke
-- [x] Notebook Settings exposes **Copy public URL** when `publicAccess` ≠ `off` and the org has a slug
-- [x] Public page serves the compiled PDF for `publicExportId` (fallback: latest compile)
-- [x] Compile page lists versions with preview and can publish a selected version
-- [x] Public entry TipTap routes return not found (PDF-only)
+- [x] Share URL redirects to the PDF (no public TipTap / wrapper page)
+- [x] `notebookKey` unique within the org
+- [x] `publishedAt` / `publishedBy` recorded for admins; cleared on revoke
+- [x] At most latest + shared compile exports retained; others pruned on compile
+- [x] Saved versions can be deleted (deleting the shared one turns the link off)
 
 ## Data and APIs
 
-- Notebook fields: `publicAccess`, `publicKey`, `publishedAt`, `publishedBy`, `latestExportId`, `publicExportId` — [schema](../../03-reference/schema.md)
-- `compileExports/{exportId}` metadata + GCS `exports/{exportId}.pdf` (+ `latest.pdf` alias)
-- Public GET under `/o/:orgSlug/n/:notebookKey` — [api-contracts](../../03-reference/api-contracts.md)
+- Notebook: `publicAccess` (`off`|`unlisted`), `publicKey`, `latestExportId`, `publicExportId`, …
+- `compileExports/{id}` + GCS PDFs; `DELETE …/exports/:exportId`
+- See [schema](../../03-reference/schema.md), [api-contracts](../../03-reference/api-contracts.md)
 
 ## Non-goals
 
-- Public **write** collaboration
-- SEO indexing of unlisted links
-- Publishing a single entry without the notebook
-- Global short `/n/:token` URLs in MVP (optional later alias)
-- **Public judgments / publish-revoke history** — Judge grades stay behind notebook ACL; never on `/public/o/…`
-
-## Open questions / risks
-
-- Optional labels / notes per compile version
-- Auto-republish latest on each compile (currently sticky `publicExportId`)
+- Public write collaboration
+- Listing published notebooks on the org marketing page (could return later)
+- Keeping a full compile history

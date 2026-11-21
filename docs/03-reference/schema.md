@@ -157,21 +157,20 @@ Public URLs: `/o/:slug`, `/o/:slug/projects`, `/events`, `/members`.
 On `notebooks/{notebookId}` (in addition to summary fields today):
 
 ```
-publicAccess?: "off" | "unlisted" | "public"   // default off
+publicAccess?: "off" | "unlisted"   // default off; legacy "public" ≈ unlisted
 publicKey?: string        // per-org slug segment (unique within org)
-publicToken?: string      // opaque revoke/rotate secret (optional alternate key)
 publishedAt?, publishedBy?
 latestExportId?: string   // most recent compile version id
-publicExportId?: string   // PDF version served on the public link
+publicExportId?: string   // PDF opened by the share link
 ```
 
 | Lookup | Purpose |
 | --- | --- |
 | `organizations/{orgId}/publicNotebookKeys/{publicKey}` → `{ notebookId }` | Resolve `/o/:orgSlug/n/:publicKey` |
-| `…/notebooks/{notebookId}/compileExports/{exportId}` | Version metadata (`createdAt`, `byteSize`, `label?`) |
+| `…/notebooks/{notebookId}/compileExports/{exportId}` | Retained versions only (latest + shared) |
 | GCS `…/exports/{exportId}.pdf` (+ `latest.pdf` alias) | Compiled PDF bytes |
 
-URL: **`/o/:orgSlug/n/:publicKey`** — **PDF only** (no public TipTap entries). Multiple published notebooks per org = multiple keys.
+URL: **`/o/:orgSlug/n/:publicKey`** redirects to the signed PDF. At most two compile exports are kept.
 
 ### Org member alumni
 

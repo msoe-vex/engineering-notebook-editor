@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Copy, Download, ExternalLink, Loader2, Play, RefreshCcw } from "lucide-react";
+import { Copy, Download, ExternalLink, Loader2, Play, RefreshCcw, Trash2 } from "lucide-react";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
 import { CompilePageSkeleton } from "@/components/cloud/notebookPageSkeletons";
 import { Alert, Button, Skeleton } from "@/components/ui";
@@ -57,10 +57,11 @@ export function CloudNotebookCompiler() {
   const [exportsList, setExportsList] = useState<CompileExportSummary[]>([]);
   const [selectedExportId, setSelectedExportId] = useState<string>("latest");
   const [publicExportId, setPublicExportId] = useState<string | null>(null);
-  const [publicAccess, setPublicAccess] = useState<"off" | "unlisted" | "public">("off");
+  const [linkOn, setLinkOn] = useState(false);
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [orgSlug, setOrgSlug] = useState<string | null>(null);
   const [publishBusy, setPublishBusy] = useState(false);
+  const [latestExportId, setLatestExportId] = useState<string | null>(null);
   const jobIdRef = useRef<string | null>(null);
 
   const loadExports = useCallback(async (preferId?: string) => {
@@ -68,9 +69,8 @@ export function CloudNotebookCompiler() {
       const res = await cloudApi.listCompileExports(orgId, notebookId);
       setExportsList(res.exports || []);
       setPublicExportId(res.publicExportId || null);
-      setPublicAccess(
-        res.publicAccess === "public" || res.publicAccess === "unlisted" ? res.publicAccess : "off"
-      );
+      setLatestExportId(res.latestExportId || null);
+      setLinkOn(res.publicAccess === "public" || res.publicAccess === "unlisted");
       setPublicKey(res.publicKey || null);
       const list = res.exports || [];
       const prefer =
@@ -272,44 +272,69 @@ export function CloudNotebookCompiler() {
     }
   }
 
-  async function publishSelected(access: "off" | "unlisted" | "public") {
+  async function setLinkSharing(on: boolean) {
     if (!canManage || publishBusy) return;
     setPublishBusy(true);
     try {
       const exportId =
         selectedExportId === "latest"
-          ? notebookSummary?.latestExportId || exportsList[0]?.id
+          ? latestExportId || notebookSummary?.latestExportId || exportsList[0]?.id
           : selectedExportId;
       const updated = await cloudApi.patchNotebook(orgId, notebookId, {
-        publicAccess: access,
-        revokePublic: access === "off",
-        ...(access !== "off" && exportId ? { publicExportId: exportId } : {}),
+        publicAccess: on ? "unlisted" : "off",
+        revokePublic: !on,
+        ...(on && exportId ? { publicExportId: exportId } : {}),
       });
-      setPublicAccess(access);
+      setLinkOn(on);
       setPublicKey(updated.publicKey || null);
-      setPublicExportId(
-        access === "off" ? null : updated.publicExportId || exportId || null
-      );
+      setPublicExportId(on ? updated.publicExportId || exportId || null : null);
       if (notebookSummary) {
         setNotebookSummary({
           ...notebookSummary,
-          publicAccess: access,
+          publicAccess: on ? "unlisted" : "off",
           publicKey: updated.publicKey,
-          publicExportId: access === "off" ? undefined : updated.publicExportId || exportId,
+          publicExportId: on ? updated.publicExportId || exportId : undefined,
           publishedAt: updated.publishedAt,
           publishedBy: updated.publishedBy,
           latestExportId: updated.latestExportId ?? notebookSummary.latestExportId,
           updatedAt: updated.updatedAt || notebookSummary.updatedAt,
         });
       }
-      showNotification(
-        access === "off"
-          ? "Public link disabled"
-          : access === "unlisted"
-            ? "Unlisted PDF published"
-            : "Public PDF published",
-        "success"
-      );
+      showNotification(on ? "Share link enabled" : "Share link disabled", "success");
+      await loadExports(exportId);
+      refresh();
+    } catch (err) {
+      showNotification((err as Error).message, "error");
+    } finally {
+      setPublishBusy(false);
+    }
+  }
+
+  async function deleteSelectedVersion(exportId: string) {
+    if (!canManage || publishBusy || isArchived) return;
+    const ok = window.confirm(
+      publicExportId === exportId
+        ? "Delete this PDF? It is the shared link version — the share link will be turned off."
+        : "Delete this saved PDF version?"
+    );
+    if (!ok) return;
+    setPublishBusy(true);
+    try {
+      const result = await cloudApi.deleteCompileExport(orgId, notebookId, exportId);
+      setLinkOn(result.publicAccess === "unlisted" || result.publicAccess === "public");
+      setPublicExportId(result.publicExportId);
+      setLatestExportId(result.latestExportId);
+      if (notebookSummary) {
+        setNotebookSummary({
+          ...notebookSummary,
+          publicAccess: result.publicAccess === "public" ? "unlisted" : result.publicAccess,
+          publicExportId: result.publicExportId || undefined,
+          latestExportId: result.latestExportId || undefined,
+        });
+      }
+      showNotification("Version deleted", "success");
+      const next = await loadExports(result.latestExportId || undefined);
+      await loadPdf(next);
       refresh();
     } catch (err) {
       showNotification((err as Error).message, "error");
@@ -319,13 +344,13 @@ export function CloudNotebookCompiler() {
   }
 
   const isPublishedVersion =
-    publicAccess !== "off" &&
+    linkOn &&
     publicExportId &&
     (selectedExportId === publicExportId ||
-      (selectedExportId === "latest" && publicExportId === notebookSummary?.latestExportId));
+      (selectedExportId === "latest" && publicExportId === latestExportId));
 
   const publicPath =
-    orgSlug && publicKey && publicAccess !== "off" ? `/o/${orgSlug}/n/${publicKey}` : null;
+    orgSlug && publicKey && linkOn ? `/o/${orgSlug}/n/${publicKey}` : null;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-nb-surface">
@@ -347,7 +372,7 @@ export function CloudNotebookCompiler() {
           <p className="mt-0.5 hidden text-nb-caption text-nb-on-surface-variant sm:block">
             {isArchived
               ? "Archived notebook · Compilation is disabled for read-only notebooks."
-              : "Compile creates a PDF version. Publish a version for the public link (PDF only)."}
+              : "Keeps the latest compile plus the shared PDF. Share link opens the PDF directly."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -432,9 +457,9 @@ export function CloudNotebookCompiler() {
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <aside className="flex max-h-48 w-full shrink-0 flex-col border-b border-nb-outline-variant/25 md:max-h-none md:w-64 md:border-b-0 md:border-r">
           <div className="border-b border-nb-outline-variant/20 px-3 py-2">
-            <p className="text-nb-label font-semibold text-nb-on-surface">PDF versions</p>
+            <p className="text-nb-label font-semibold text-nb-on-surface">Saved PDFs</p>
             <p className="text-nb-caption text-nb-on-surface-variant">
-              Select a version to preview
+              Latest compile and shared link version only
             </p>
           </div>
           <ul className="min-h-0 flex-1 overflow-y-auto p-2">
@@ -445,12 +470,13 @@ export function CloudNotebookCompiler() {
             )}
             {exportsList.map((exp) => {
               const active = selectedExportId === exp.id;
-              const published = publicExportId === exp.id && publicAccess !== "off";
+              const published = publicExportId === exp.id && linkOn;
+              const isLatest = latestExportId === exp.id;
               return (
-                <li key={exp.id}>
+                <li key={exp.id} className="mb-1 flex items-stretch gap-1">
                   <button
                     type="button"
-                    className={`mb-1 w-full rounded-nb-md px-2 py-2 text-left text-sm transition-colors ${
+                    className={`min-w-0 flex-1 rounded-nb-md px-2 py-2 text-left text-sm transition-colors ${
                       active
                         ? "bg-nb-primary/15 font-semibold text-nb-on-surface"
                         : "text-nb-on-surface hover:bg-nb-surface-low"
@@ -459,53 +485,54 @@ export function CloudNotebookCompiler() {
                   >
                     <span className="block truncate">{formatExportLabel(exp)}</span>
                     <span className="mt-0.5 block text-[11px] font-normal text-nb-on-surface-variant">
-                      {published ? "Published · " : ""}
-                      {exp.byteSize
-                        ? `${Math.round(exp.byteSize / 1024)} KB`
-                        : exp.id.slice(0, 8)}
+                      {[published ? "Shared" : null, isLatest ? "Latest" : null]
+                        .filter(Boolean)
+                        .join(" · ") || "Saved"}
+                      {exp.byteSize ? ` · ${Math.round(exp.byteSize / 1024)} KB` : ""}
                     </span>
                   </button>
+                  {canManage && !isArchived && (
+                    <button
+                      type="button"
+                      className="shrink-0 rounded-nb-md px-2 text-nb-on-surface-variant hover:bg-nb-danger/10 hover:text-nb-danger"
+                      title="Delete version"
+                      disabled={publishBusy}
+                      onClick={() => void deleteSelectedVersion(exp.id)}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </li>
               );
             })}
           </ul>
           {canManage && (
             <div className="space-y-2 border-t border-nb-outline-variant/20 p-3">
-              <p className="text-nb-label font-semibold text-nb-on-surface">Public link</p>
+              <p className="text-nb-label font-semibold text-nb-on-surface">Share link</p>
               <p className="text-nb-caption text-nb-on-surface-variant">
-                Visitors only see the published PDF — not live entries.
+                Anyone with the link opens the PDF directly (no website wrapper).
               </p>
               {!orgSlug && (
                 <Alert variant="warning">
-                  Set an org slug in organization settings before publishing.
+                  Set an org slug in organization settings before sharing.
                 </Alert>
               )}
               <div className="flex flex-wrap gap-1.5">
                 <Button
                   size="sm"
-                  variant={isPublishedVersion && publicAccess === "public" ? "primary" : "secondary"}
-                  disabled={publishBusy || isArchived || !exportsList.length}
-                  onClick={() => void publishSelected("public")}
+                  variant={isPublishedVersion ? "primary" : "secondary"}
+                  disabled={publishBusy || isArchived || !exportsList.length || !orgSlug}
+                  onClick={() => void setLinkSharing(true)}
                 >
-                  Public
-                </Button>
-                <Button
-                  size="sm"
-                  variant={
-                    isPublishedVersion && publicAccess === "unlisted" ? "primary" : "secondary"
-                  }
-                  disabled={publishBusy || isArchived || !exportsList.length}
-                  onClick={() => void publishSelected("unlisted")}
-                >
-                  Unlisted
+                  {isPublishedVersion ? "Shared" : "Share this PDF"}
                 </Button>
                 <Button
                   size="sm"
                   variant="ghost"
-                  disabled={publishBusy || publicAccess === "off"}
-                  onClick={() => void publishSelected("off")}
+                  disabled={publishBusy || !linkOn}
+                  onClick={() => void setLinkSharing(false)}
                 >
-                  Off
+                  Turn off
                 </Button>
               </div>
               {publicPath && (
@@ -514,10 +541,12 @@ export function CloudNotebookCompiler() {
                     size="sm"
                     variant="secondary"
                     onClick={() => {
-                      void navigator.clipboard.writeText(`${window.location.origin}${publicPath}`).then(
-                        () => showNotification("Link copied", "success"),
-                        () => showNotification("Could not copy", "error")
-                      );
+                      void navigator.clipboard
+                        .writeText(`${window.location.origin}${publicPath}`)
+                        .then(
+                          () => showNotification("Link copied", "success"),
+                          () => showNotification("Could not copy", "error")
+                        );
                     }}
                   >
                     <Copy size={14} /> Copy link
@@ -528,7 +557,7 @@ export function CloudNotebookCompiler() {
                     rel="noreferrer"
                     className="inline-flex items-center gap-1 text-sm font-semibold text-nb-primary hover:underline"
                   >
-                    View <ExternalLink size={14} />
+                    Open PDF <ExternalLink size={14} />
                   </a>
                 </div>
               )}
