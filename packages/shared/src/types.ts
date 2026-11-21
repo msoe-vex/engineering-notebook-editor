@@ -236,7 +236,7 @@ export function defaultNotebookAccess(): NotebookAccess {
 }
 
 /**
- * @deprecated Prefer `NotebookSummaryV5.contributorUids` (org member uids only).
+ * @deprecated Prefer `NotebookSummary.contributorUids` (org member uids only).
  * Legacy roster docs may still exist until purged.
  */
 export type NotebookMember = {
@@ -266,7 +266,9 @@ export type ProjectPhase = {
  * - `date` + `order` → compile / calendar sequence (date primary; `order` is same-day tiebreaker, rearranged in calendar)
  * - `folderId` + `explorerOrder` → file-explorer tree (sibling position within a folder; unrelated to compile)
  */
-export type EntryMetadataV5 = {
+/** Current entry metadata (schema v5). Prefer this name over `EntryMetadataV5`. */
+export type EntryMetadata = {
+
   title: string;
   authors: string[];
   phase: string | null;
@@ -299,6 +301,9 @@ export type EntryMetadataV5 = {
   commentCount?: number;
 };
 
+/** @deprecated Use `EntryMetadata` — kept for call-site migration. */
+export type EntryMetadataV5 = EntryMetadata;
+
 /** Entry comment thread body (MetadataStore). Anchor lives in TipTap as `commentAnchor` mark. */
 export type EntryComment = {
   id: string;
@@ -315,7 +320,8 @@ export type EntryComment = {
   mentionedUids?: string[];
 };
 
-export type NotebookSummaryV5 = {
+/** Current notebook summary (schema v5). Prefer this name over `NotebookSummaryV5`. */
+export type NotebookSummary = {
   schemaVersion: typeof NOTEBOOK_SCHEMA_VERSION;
   orgId: string;
   name: string;
@@ -350,6 +356,9 @@ export type NotebookSummaryV5 = {
   publishedBy?: string;
 };
 
+/** @deprecated Use `NotebookSummary` — kept for call-site migration. */
+export type NotebookSummaryV5 = NotebookSummary;
+
 /** One compiled PDF version under a notebook. */
 export type CompileExport = {
   id: string;
@@ -374,7 +383,7 @@ export type AssetMetadata = {
 export type JudgmentStatus = "running" | "completed" | "failed";
 
 /** ZIP / export envelope (no TipTap bodies). */
-export type NotebookExportV5 = {
+export type NotebookExport = {
   schemaVersion: typeof NOTEBOOK_SCHEMA_VERSION;
   name: string;
   title?: string;
@@ -385,8 +394,11 @@ export type NotebookExportV5 = {
   phases?: Record<string, ProjectPhase>;
   members?: Record<string, Omit<NotebookMember, "id">>;
   lastCompiled?: string;
-  entries: Record<string, EntryMetadataV5>;
+  entries: Record<string, EntryMetadata>;
 };
+
+/** @deprecated Use `NotebookExport`. */
+export type NotebookExportV5 = NotebookExport;
 
 /** Legacy embedded team blob (ZIP/local import shim only). */
 export type LegacyTeamMemberV5 = {

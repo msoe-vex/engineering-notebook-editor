@@ -1,15 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, Check, Copy, ExternalLink, Trash2 } from "lucide-react";
+import { Check, Copy, ExternalLink, Trash2 } from "lucide-react";
 import { useOrgWorkspace } from "@/components/cloud/OrgWorkspaceContext";
 import { OrgCatalogManager } from "@/components/cloud/OrgCatalogManager";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import { showNotification } from "@/components/overlays/Notification";
-import { Button, TextField } from "@/components/ui";
+import {
+  Button,
+  Checkbox,
+  FormSection,
+  ImageField,
+  Select,
+  TabNav,
+  TextField,
+} from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
 import { orgRoleLabel } from "@/lib/cloud/roles";
+
+type SettingsTab = "general" | "public" | "social" | "danger";
 
 export default function OrgSettingsPage() {
   const router = useRouter();
@@ -24,6 +34,7 @@ export default function OrgSettingsPage() {
     setBusy,
   } = useOrgWorkspace();
 
+  const [tab, setTab] = useState<SettingsTab>("general");
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [publicVisibility, setPublicVisibility] = useState<"public" | "hidden">("hidden");
@@ -45,7 +56,6 @@ export default function OrgSettingsPage() {
   const [initialSnapshot, setInitialSnapshot] = useState("");
   const [saved, setSaved] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const loadLogoPreview = useCallback(
     (assetId?: string) => {
@@ -220,30 +230,24 @@ export default function OrgSettingsPage() {
     );
   }
 
-  return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-10">
-      <input
-        ref={logoInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          e.target.value = "";
-          if (file) void uploadLogo(file);
-        }}
-      />
+  const saveBar =
+    tab === "general" || tab === "public" ? (
+      <div className="flex items-center gap-3">
+        <Button variant="primary" disabled={busy || !isDirty} onClick={() => void save()}>
+          {busy ? "Saving…" : "Save changes"}
+        </Button>
+        {saved && !isDirty && (
+          <span className="flex items-center gap-1 text-nb-label font-medium text-nb-success">
+            <Check size={14} /> Saved
+          </span>
+        )}
+      </div>
+    ) : null;
 
+  return (
+    <div className="mx-auto flex max-w-2xl flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-nb-title font-bold tracking-tight text-nb-on-surface">
-            Organization settings
-          </h2>
-          <p className="mt-1 text-nb-body text-nb-on-surface-variant">
-            Name, public site chrome, and social links. Donors, projects, and events have their own
-            tabs.
-          </p>
-        </div>
+        <h2 className="text-nb-title font-bold tracking-tight text-nb-on-surface">Settings</h2>
         {isDirty && (
           <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-nb-caption font-semibold text-amber-700 dark:text-amber-400">
             Unsaved changes
@@ -251,113 +255,114 @@ export default function OrgSettingsPage() {
         )}
       </div>
 
-      <section className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <h3 className="text-nb-body font-semibold text-nb-on-surface">Public site</h3>
-          <div className="flex flex-wrap items-center gap-2">
-            {slugTrim ? (
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => {
-                  const url = `${window.location.origin}${publicPath}`;
-                  void navigator.clipboard.writeText(url).then(
-                    () => showNotification("Link copied", "success"),
-                    () => showNotification("Could not copy", "error")
-                  );
-                }}
-              >
-                <Copy size={14} /> Copy link
-              </Button>
-            ) : null}
-            {canView ? (
-              <a
-                href={publicPath}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-nb-primary hover:underline"
-              >
-                View public site <ExternalLink size={14} />
-              </a>
-            ) : (
-              <span className="text-sm text-nb-on-surface-variant">
-                {slugTrim ? "Visibility is hidden" : "Claim a slug below"}
-              </span>
-            )}
-          </div>
-        </div>
+      <TabNav
+        activeId={tab}
+        onSelect={(id) => setTab(id as SettingsTab)}
+        items={[
+          { id: "general", label: "General" },
+          { id: "public", label: "Public site" },
+          { id: "social", label: "Social" },
+          { id: "danger", label: "Danger" },
+        ]}
+      />
 
-        <TextField
-          label="Organization name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Organization name"
-        />
-        <TextField
-          label="Public slug"
-          value={slug}
-          onChange={(e) => setSlug(e.target.value)}
-          placeholder="raider-robotics"
-        />
-        <p className="text-nb-caption text-nb-on-surface-variant">
-          {slugTrim ? `Public site: /o/${slugTrim}` : "Claim a unique URL for the public org page"}
-        </p>
-        <label className="flex flex-col gap-1 text-nb-label">
-          <span className="font-medium">Visibility</span>
-          <select
-            className="rounded-nb-lg border border-nb-outline-variant/40 bg-nb-surface-low px-3 py-2"
+      {tab === "general" && (
+        <FormSection
+          title="Organization"
+          actions={
+            org?.role ? (
+              <span className="text-nb-caption text-nb-on-surface-variant">
+                Your role ·{" "}
+                <span className="font-semibold text-nb-on-surface">{orgRoleLabel(org.role)}</span>
+              </span>
+            ) : null
+          }
+        >
+          <TextField
+            label="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Organization name"
+          />
+          {saveBar}
+        </FormSection>
+      )}
+
+      {tab === "public" && (
+        <FormSection
+          title="Public site"
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              {slugTrim ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    const url = `${window.location.origin}${publicPath}`;
+                    void navigator.clipboard.writeText(url).then(
+                      () => showNotification("Link copied", "success"),
+                      () => showNotification("Could not copy", "error")
+                    );
+                  }}
+                >
+                  <Copy size={14} /> Copy link
+                </Button>
+              ) : null}
+              {canView ? (
+                <a
+                  href={publicPath}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-nb-primary hover:underline"
+                >
+                  View <ExternalLink size={14} />
+                </a>
+              ) : null}
+            </div>
+          }
+        >
+          <TextField
+            label="Slug"
+            value={slug}
+            onChange={(e) => setSlug(e.target.value)}
+            placeholder="raider-robotics"
+          />
+          <Select
+            label="Visibility"
             value={publicVisibility}
             onChange={(e) => setPublicVisibility(e.target.value as "public" | "hidden")}
           >
             <option value="hidden">Hidden</option>
             <option value="public">Public</option>
-          </select>
-        </label>
-
-        <div className="flex flex-wrap items-center gap-4">
-          {logoPreviewUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={logoPreviewUrl}
-              alt="Organization logo"
-              className="h-16 w-16 rounded-nb-lg object-cover ring-1 ring-nb-outline-variant/40"
-            />
-          ) : (
-            <div className="flex h-16 w-16 items-center justify-center rounded-nb-lg bg-nb-surface-low text-nb-caption font-semibold text-nb-on-surface-variant ring-1 ring-nb-outline-variant/30">
-              No logo
-            </div>
-          )}
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={busy}
-            onClick={() => logoInputRef.current?.click()}
-          >
-            <Camera size={14} /> {logoAssetId ? "Replace logo" : "Upload logo"}
-          </Button>
-        </div>
-
-        <TextField
-          label="Announcement"
-          value={announcement}
-          onChange={(e) => setAnnouncement(e.target.value)}
-          placeholder="Banner text"
-        />
-        <TextField
-          label="Announcement link"
-          value={announcementHref}
-          onChange={(e) => setAnnouncementHref(e.target.value)}
-          placeholder="https://…"
-        />
-        <TextField
-          label="About"
-          value={about}
-          onChange={(e) => setAbout(e.target.value)}
-          placeholder="Short about blurb for the public home"
-        />
-        <div className="rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface-low/40 p-4">
-          <h4 className="text-nb-label font-semibold text-nb-on-surface">Call to action</h4>
-          <div className="mt-3 grid gap-3">
+          </Select>
+          <ImageField
+            previewUrl={logoPreviewUrl}
+            busy={busy}
+            onUpload={(file) => void uploadLogo(file)}
+            uploadLabel="Upload logo"
+            replaceLabel="Replace logo"
+            emptyLabel="Logo"
+          />
+          <TextField
+            label="Announcement"
+            value={announcement}
+            onChange={(e) => setAnnouncement(e.target.value)}
+            placeholder="Banner text"
+          />
+          <TextField
+            label="Announcement link"
+            value={announcementHref}
+            onChange={(e) => setAnnouncementHref(e.target.value)}
+            placeholder="https://…"
+          />
+          <TextField
+            label="About"
+            value={about}
+            onChange={(e) => setAbout(e.target.value)}
+            placeholder="About blurb"
+          />
+          <div className="grid gap-3 rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface-low/40 p-4">
+            <p className="text-nb-label font-semibold text-nb-on-surface">Call to action</p>
             <TextField
               label="Heading"
               value={ctaTitle}
@@ -382,15 +387,7 @@ export default function OrgSettingsPage() {
               placeholder="https://…"
             />
           </div>
-        </div>
-
-        <div className="rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface-low/40 p-4">
-          <h4 className="text-nb-label font-semibold text-nb-on-surface">Public sections</h4>
-          <p className="mt-1 text-nb-caption text-nb-on-surface-variant">
-            Turn off a whole section on the public site. Individual items still have their own Public
-            toggles when the section is on.
-          </p>
-          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-2">
             {(
               [
                 ["About", sectionAbout, setSectionAbout],
@@ -398,78 +395,58 @@ export default function OrgSettingsPage() {
                 ["Projects", sectionProjects, setSectionProjects],
                 ["Events", sectionEvents, setSectionEvents],
                 ["Members", sectionMembers, setSectionMembers],
-                ["Social links", sectionSocial, setSectionSocial],
+                ["Social", sectionSocial, setSectionSocial],
               ] as const
             ).map(([label, on, setOn]) => (
-              <li key={label}>
-                <label className="flex cursor-pointer items-center gap-2 text-nb-body text-nb-on-surface">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-nb-outline-variant"
-                    checked={on}
-                    onChange={(e) => setOn(e.target.checked)}
-                  />
-                  {label}
-                </label>
-              </li>
+              <Checkbox
+                key={label}
+                label={label}
+                checked={on}
+                onChange={(e) => setOn(e.target.checked)}
+              />
             ))}
-          </ul>
-        </div>
-
-        {org?.role && (
-          <div className="flex items-center gap-2 text-nb-caption text-nb-on-surface-variant">
-            <span>Your role in this organization:</span>
-            <span className="font-semibold text-nb-on-surface">{orgRoleLabel(org.role)}</span>
           </div>
-        )}
-      </section>
+          {saveBar}
+        </FormSection>
+      )}
 
-      <div className="flex items-center gap-3">
-        <Button variant="primary" disabled={busy || !isDirty} onClick={() => void save()}>
-          {busy ? "Saving…" : "Save changes"}
-        </Button>
-        {saved && !isDirty && (
-          <span className="flex items-center gap-1 text-nb-label font-medium text-nb-success">
-            <Check size={14} /> Saved
-          </span>
-        )}
-      </div>
+      {tab === "social" && (
+        <FormSection title="Social links">
+          <OrgCatalogManager
+            orgId={orgId}
+            section="social-links"
+            canManage={canManage}
+            setError={setError}
+            embedded
+          />
+        </FormSection>
+      )}
 
-      <section className="flex flex-col gap-3">
-        <h3 className="text-nb-body font-semibold text-nb-on-surface">Social links</h3>
-        <OrgCatalogManager
-          orgId={orgId}
-          section="social-links"
-          canManage={canManage}
-          setError={setError}
-          embedded
-        />
-      </section>
-
-      <section className="flex flex-col gap-4 rounded-nb-xl border border-nb-danger/30 bg-nb-danger/5 p-5">
-        <div>
-          <h3 className="text-nb-title font-semibold text-nb-danger">Danger Zone</h3>
-          <p className="mt-1 text-nb-body text-nb-on-surface-variant">
-            Permanently delete this organization, including all notebooks, entries, assets, and
-            teams. This action cannot be undone.
-          </p>
-        </div>
-        {canDeleteOrg ? (
-          <Button
-            variant="danger"
-            disabled={busy}
-            onClick={() => setDeleteConfirmOpen(true)}
-            className="border-0 bg-nb-danger text-white hover:bg-nb-danger-dim"
-          >
-            <Trash2 size={16} className="mr-1.5" />
-            Delete this organization
-          </Button>
-        ) : (
-          <p className="text-nb-caption text-nb-on-surface-variant">
-            Only organization owners can delete this organization.
-          </p>
-        )}
-      </section>
+      {tab === "danger" && (
+        <section className="flex flex-col gap-4 rounded-nb-xl border border-nb-danger/30 bg-nb-danger/5 p-5">
+          <div>
+            <h3 className="text-nb-title font-semibold text-nb-danger">Danger zone</h3>
+            <p className="mt-1 text-nb-caption text-nb-on-surface-variant">
+              Permanently delete this organization and all of its data.
+            </p>
+          </div>
+          {canDeleteOrg ? (
+            <Button
+              variant="danger"
+              disabled={busy}
+              onClick={() => setDeleteConfirmOpen(true)}
+              className="border-0 bg-nb-danger text-white hover:bg-nb-danger-dim"
+            >
+              <Trash2 size={16} className="mr-1.5" />
+              Delete this organization
+            </Button>
+          ) : (
+            <p className="text-nb-caption text-nb-on-surface-variant">
+              Only organization owners can delete this organization.
+            </p>
+          )}
+        </section>
+      )}
 
       <ConfirmationDialog
         isOpen={deleteConfirmOpen}

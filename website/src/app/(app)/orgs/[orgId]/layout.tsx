@@ -2,6 +2,15 @@
 
 import { useParams, usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
+import {
+  BookOpen,
+  Calendar,
+  Handshake,
+  Rocket,
+  Settings,
+  Users,
+  UsersRound,
+} from "lucide-react";
 import { Button, EmptyState, LoadingBlock, TabNav } from "@/components/ui";
 import {
   OrgWorkspaceProvider,
@@ -97,18 +106,21 @@ function OrgChrome({ children }: { children: ReactNode }) {
             label: "Notebooks",
             href: `/orgs/${orgId}`,
             count: notebooks.length,
+            icon: <BookOpen size={14} />,
           },
           {
             id: "teams",
             label: "Teams",
             href: `/orgs/${orgId}/teams`,
             count: teams.length,
+            icon: <UsersRound size={14} />,
           },
           {
             id: "people",
             label: "People",
             href: `/orgs/${orgId}/people`,
             count: members.length + pendingInviteCount,
+            icon: <Users size={14} />,
           },
           ...(canManage
             ? [
@@ -116,21 +128,25 @@ function OrgChrome({ children }: { children: ReactNode }) {
                   id: "donors",
                   label: "Donors",
                   href: `/orgs/${orgId}/donors`,
+                  icon: <Handshake size={14} />,
                 },
                 {
                   id: "projects",
                   label: "Projects",
                   href: `/orgs/${orgId}/projects`,
+                  icon: <Rocket size={14} />,
                 },
                 {
                   id: "events",
                   label: "Events",
                   href: `/orgs/${orgId}/events`,
+                  icon: <Calendar size={14} />,
                 },
                 {
                   id: "settings",
                   label: "Settings",
                   href: `/orgs/${orgId}/settings`,
+                  icon: <Settings size={14} />,
                 },
               ]
             : []),

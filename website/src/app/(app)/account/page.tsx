@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import { Button, TextField } from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
 import { getFirebaseAuth, linkProvider, unlinkProvider } from "@/lib/cloud/firebase";
@@ -10,6 +11,7 @@ import { showNotification } from "@/components/overlays/Notification";
 type Secondary = { email: string; verified: boolean; verifiedAt?: string; addedAt?: string };
 
 export default function AccountProfilePage() {
+  const router = useRouter();
   const authUser = getFirebaseAuth().currentUser;
   const searchParams = useSearchParams();
   const [displayName, setDisplayName] = useState("");
@@ -21,6 +23,7 @@ export default function AccountProfilePage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [providers, setProviders] = useState<string[]>([]);
+  const [leaveHref, setLeaveHref] = useState<string | null>(null);
 
   function refreshProfile() {
     return cloudApi
@@ -88,11 +91,9 @@ export default function AccountProfilePage() {
       if (!href || href.startsWith("#") || target.target === "_blank") return;
 
       if (href !== window.location.pathname) {
-        const ok = window.confirm("You have unsaved changes in your profile. Are you sure you want to leave?");
-        if (!ok) {
-          e.preventDefault();
-          e.stopPropagation();
-        }
+        e.preventDefault();
+        e.stopPropagation();
+        setLeaveHref(href);
       }
     };
     document.addEventListener("click", handleClickCapture, true);
@@ -250,9 +251,6 @@ export default function AccountProfilePage() {
 
       <section className="space-y-3 border-t border-nb-outline-variant/20 pt-6">
         <h3 className="text-nb-body font-semibold text-nb-on-surface">Linked providers</h3>
-        <p className="text-nb-caption text-nb-on-surface-variant">
-          Google / GitHub linking requires providers enabled in Firebase (limited on Auth emulator).
-        </p>
         <ul className="space-y-2 text-nb-caption text-nb-on-surface-variant">
           {providers.length ? (
             providers.map((id) => (
@@ -282,6 +280,20 @@ export default function AccountProfilePage() {
           )}
         </div>
       </section>
+
+      <ConfirmationDialog
+        isOpen={Boolean(leaveHref)}
+        title="Leave without saving?"
+        message="You have unsaved changes. Leave this page anyway?"
+        variant="warning"
+        confirmLabel="Leave"
+        onConfirm={() => {
+          const href = leaveHref;
+          setLeaveHref(null);
+          if (href) router.push(href);
+        }}
+        onCancel={() => setLeaveHref(null)}
+      />
     </div>
   );
 }

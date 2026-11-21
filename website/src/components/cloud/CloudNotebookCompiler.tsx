@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Copy, Download, ExternalLink, Loader2, Play, RefreshCcw, Trash2 } from "lucide-react";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
 import { CompilePageSkeleton } from "@/components/cloud/notebookPageSkeletons";
+import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import { Alert, Button, Skeleton } from "@/components/ui";
 import { showNotification } from "@/components/overlays/Notification";
 import { cloudApi, type CompileExportSummary } from "@/lib/cloud/api";
@@ -62,6 +63,7 @@ export function CloudNotebookCompiler() {
   const [orgSlug, setOrgSlug] = useState<string | null>(null);
   const [publishBusy, setPublishBusy] = useState(false);
   const [latestExportId, setLatestExportId] = useState<string | null>(null);
+  const [deleteExportId, setDeleteExportId] = useState<string | null>(null);
   const jobIdRef = useRef<string | null>(null);
 
   const loadExports = useCallback(async (preferId?: string) => {
@@ -310,14 +312,10 @@ export function CloudNotebookCompiler() {
     }
   }
 
-  async function deleteSelectedVersion(exportId: string) {
-    if (!canManage || publishBusy || isArchived) return;
-    const ok = window.confirm(
-      publicExportId === exportId
-        ? "Delete this PDF? It is the shared link version — the share link will be turned off."
-        : "Delete this saved PDF version?"
-    );
-    if (!ok) return;
+  async function confirmDeleteVersion() {
+    const exportId = deleteExportId;
+    if (!exportId || !canManage || publishBusy || isArchived) return;
+    setDeleteExportId(null);
     setPublishBusy(true);
     try {
       const result = await cloudApi.deleteCompileExport(orgId, notebookId, exportId);
@@ -369,11 +367,6 @@ export function CloudNotebookCompiler() {
               </p>
             )}
           </div>
-          <p className="mt-0.5 hidden text-nb-caption text-nb-on-surface-variant sm:block">
-            {isArchived
-              ? "Archived notebook · Compilation is disabled for read-only notebooks."
-              : "Keeps the latest compile plus the shared PDF. Share link opens the PDF directly."}
-          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -457,10 +450,7 @@ export function CloudNotebookCompiler() {
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <aside className="flex max-h-48 w-full shrink-0 flex-col border-b border-nb-outline-variant/25 md:max-h-none md:w-64 md:border-b-0 md:border-r">
           <div className="border-b border-nb-outline-variant/20 px-3 py-2">
-            <p className="text-nb-label font-semibold text-nb-on-surface">Saved PDFs</p>
-            <p className="text-nb-caption text-nb-on-surface-variant">
-              Latest compile and shared link version only
-            </p>
+            <p className="text-nb-label font-semibold text-nb-on-surface">Versions</p>
           </div>
           <ul className="min-h-0 flex-1 overflow-y-auto p-2">
             {exportsList.length === 0 && (
@@ -497,7 +487,7 @@ export function CloudNotebookCompiler() {
                       className="shrink-0 rounded-nb-md px-2 text-nb-on-surface-variant hover:bg-nb-danger/10 hover:text-nb-danger"
                       title="Delete version"
                       disabled={publishBusy}
-                      onClick={() => void deleteSelectedVersion(exp.id)}
+                      onClick={() => setDeleteExportId(exp.id)}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -508,14 +498,9 @@ export function CloudNotebookCompiler() {
           </ul>
           {canManage && (
             <div className="space-y-2 border-t border-nb-outline-variant/20 p-3">
-              <p className="text-nb-label font-semibold text-nb-on-surface">Share link</p>
-              <p className="text-nb-caption text-nb-on-surface-variant">
-                Anyone with the link opens the PDF directly (no website wrapper).
-              </p>
+              <p className="text-nb-label font-semibold text-nb-on-surface">Share</p>
               {!orgSlug && (
-                <Alert variant="warning">
-                  Set an org slug in organization settings before sharing.
-                </Alert>
+                <Alert variant="warning">Set an org slug in settings first.</Alert>
               )}
               <div className="flex flex-wrap gap-1.5">
                 <Button
@@ -524,7 +509,7 @@ export function CloudNotebookCompiler() {
                   disabled={publishBusy || isArchived || !exportsList.length || !orgSlug}
                   onClick={() => void setLinkSharing(true)}
                 >
-                  {isPublishedVersion ? "Shared" : "Share this PDF"}
+                  {isPublishedVersion ? "Shared" : "Share"}
                 </Button>
                 <Button
                   size="sm"
@@ -584,6 +569,20 @@ export function CloudNotebookCompiler() {
           )}
         </div>
       </div>
+
+      <ConfirmationDialog
+        isOpen={Boolean(deleteExportId)}
+        title="Delete version?"
+        message={
+          deleteExportId && publicExportId === deleteExportId
+            ? "This PDF is shared. Deleting it turns the share link off."
+            : "Delete this saved PDF?"
+        }
+        variant="danger"
+        confirmLabel="Delete"
+        onConfirm={() => void confirmDeleteVersion()}
+        onCancel={() => setDeleteExportId(null)}
+      />
     </div>
   );
 }

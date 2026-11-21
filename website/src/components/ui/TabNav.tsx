@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { cn } from "./cn";
 
@@ -8,6 +9,7 @@ export type TabItem = {
   label: string;
   href?: string;
   count?: number;
+  icon?: ReactNode;
 };
 
 export function TabNav({
@@ -22,20 +24,21 @@ export function TabNav({
   className?: string;
 }) {
   return (
-    <div className={cn("mb-6 flex gap-1 border-b border-nb-outline-variant/30", className)}>
+    <div className={cn("mb-6 flex flex-wrap gap-1 border-b border-nb-outline-variant/30", className)}>
       {items.map((item) => {
         const active = activeId === item.id;
         const classNameInner = cn(
-          "relative px-4 py-2.5 text-nb-label font-semibold transition-colors",
+          "relative inline-flex items-center gap-1.5 px-4 py-2.5 text-nb-label font-semibold transition-colors",
           active
             ? "text-nb-primary"
             : "text-nb-on-surface-variant hover:text-nb-on-surface"
         );
         const content = (
           <>
+            {item.icon ? <span className="shrink-0 opacity-80">{item.icon}</span> : null}
             {item.label}
             {typeof item.count === "number" && (
-              <span className="ml-1.5 text-nb-caption opacity-50">{item.count}</span>
+              <span className="ml-0.5 text-nb-caption opacity-50">{item.count}</span>
             )}
             {active && (
               <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-nb-primary" />

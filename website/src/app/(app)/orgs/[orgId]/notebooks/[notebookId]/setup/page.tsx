@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Copy, ExternalLink, ImagePlus, Trash2 } from "lucide-react";
+import { Check, Copy, ExternalLink, Trash2 } from "lucide-react";
 import { AccessAllowlistPicker } from "@/components/cloud/AccessAllowlistPicker";
 import { NotebookPhasesEditor } from "@/components/cloud/NotebookPhasesEditor";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
 import { SettingsPageSkeleton } from "@/components/cloud/notebookPageSkeletons";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import { showNotification } from "@/components/overlays/Notification";
-import { Alert, Button, TextField } from "@/components/ui";
+import { Alert, Button, FormSection, ImageField, Select, TabNav, TextField } from "@/components/ui";
 import {
   cloudApi,
   type MemberSummary,
@@ -20,6 +20,8 @@ import {
   NOTEBOOK_SCHEMA_VERSION,
   type ProjectPhase,
 } from "@engineering-notebook/shared";
+
+type SetupTab = "general" | "access" | "share" | "danger";
 
 export default function NotebookSetupPage() {
   const {
@@ -52,8 +54,9 @@ export default function NotebookSetupPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showUnarchiveConfirm, setShowUnarchiveConfirm] = useState(false);
+  const [leaveHref, setLeaveHref] = useState<string | null>(null);
   const [publicAccess, setPublicAccess] = useState<"off" | "unlisted">("off");
-  const logoInputRef = useRef<HTMLInputElement>(null);
+  const [tab, setTab] = useState<SetupTab>("general");
 
   useEffect(() => {
     void cloudApi
@@ -138,11 +141,9 @@ export default function NotebookSetupPage() {
       if (!href || href.startsWith("#") || target.target === "_blank") return;
 
       if (href !== window.location.pathname) {
-        const ok = window.confirm("You have unsaved changes in notebook settings. Are you sure you want to leave?");
-        if (!ok) {
-          e.preventDefault();
-          e.stopPropagation();
-        }
+        e.preventDefault();
+        e.stopPropagation();
+        setLeaveHref(href);
       }
     };
     document.addEventListener("click", handleClickCapture, true);
@@ -261,15 +262,23 @@ export default function NotebookSetupPage() {
     return <SettingsPageSkeleton />;
   }
 
+  const saveBar = tab === "general" || tab === "access" ? (
+    <div className="flex items-center gap-3">
+      <Button variant="primary" disabled={busy || !isDirty || isArchived} onClick={() => void save()}>
+        {busy ? "Saving…" : "Save settings"}
+      </Button>
+      {saved && !isDirty && (
+        <span className="text-nb-label text-nb-success flex items-center gap-1 font-medium">
+          <Check size={14} /> Saved
+        </span>
+      )}
+    </div>
+  ) : null;
+
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-8">
+    <div className="mx-auto flex max-w-2xl flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-nb-display font-bold tracking-tight">Settings</h1>
-          <p className="mt-1 text-nb-body text-nb-on-surface-variant">
-            Notebook branding, design phases, and who can open this notebook.
-          </p>
-        </div>
+        <h1 className="text-nb-display font-bold tracking-tight">Settings</h1>
         {isDirty && (
           <span className="rounded-full bg-amber-500/10 border border-amber-500/30 px-3 py-1 text-nb-caption font-semibold text-amber-700 dark:text-amber-400">
             Unsaved changes
@@ -279,164 +288,135 @@ export default function NotebookSetupPage() {
 
       {isArchived && (
         <div className="rounded-nb-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs font-medium text-amber-900 dark:text-amber-200">
-          <strong>This notebook is archived and read-only.</strong> Settings and access permissions cannot be modified while archived.
+          This notebook is archived and read-only.
         </div>
       )}
 
-      <section className="flex flex-col gap-4">
-        <h2 className="text-nb-title font-semibold">Branding</h2>
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface-low">
-            {logoPreview ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={logoPreview} alt="Notebook logo" className="h-full w-full object-contain" />
-            ) : (
-              <ImagePlus size={22} className="text-nb-on-surface-variant/50" />
-            )}
-          </div>
-          <div className="flex flex-col gap-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={busy || isArchived}
-              onClick={() => logoInputRef.current?.click()}
-            >
-              Upload logo
-            </Button>
-            {logoAssetId && (
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={busy || isArchived}
-                onClick={() => {
-                  setLogoAssetId(undefined);
-                  setLogoPreview(null);
-                }}
-              >
-                Remove logo
-              </Button>
-            )}
-            <input
-              ref={logoInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                e.target.value = "";
-                if (file) void uploadLogo(file);
-              }}
+      <TabNav
+        activeId={tab}
+        onSelect={(id) => setTab(id as SetupTab)}
+        items={[
+          { id: "general", label: "General" },
+          { id: "access", label: "Access" },
+          ...(canManage
+            ? [
+                { id: "share", label: "Share link" },
+                { id: "danger", label: "Archive / Delete" },
+              ]
+            : []),
+        ]}
+      />
+
+      {tab === "general" && (
+        <>
+          <FormSection title="Branding">
+            <ImageField
+              size="lg"
+              previewUrl={logoPreview}
+              busy={busy}
+              disabled={isArchived}
+              onUpload={(file) => void uploadLogo(file)}
+              onRemove={
+                logoAssetId
+                  ? () => {
+                      setLogoAssetId(undefined);
+                      setLogoPreview(null);
+                    }
+                  : undefined
+              }
+              uploadLabel="Upload logo"
+              replaceLabel="Replace logo"
+              emptyLabel="Logo"
             />
-          </div>
-        </div>
-        <TextField
-          label="Display title"
-          value={title}
-          disabled={isArchived}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-        <TextField
-          label="Subtitle"
-          value={subtitle}
-          disabled={isArchived}
-          onChange={(e) => setSubtitle(e.target.value)}
-        />
-        <TextField
-          label="Internal name"
-          value={name}
-          disabled={isArchived}
-          onChange={(e) => setName(e.target.value)}
-        />
-      </section>
+            <TextField
+              label="Display title"
+              value={title}
+              disabled={isArchived}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+            <TextField
+              label="Subtitle"
+              value={subtitle}
+              disabled={isArchived}
+              onChange={(e) => setSubtitle(e.target.value)}
+            />
+            <TextField
+              label="Internal name"
+              value={name}
+              disabled={isArchived}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </FormSection>
 
-      <section className={isArchived ? "pointer-events-none opacity-60" : ""}>
-        <NotebookPhasesEditor value={phases} onChange={setPhases} />
-      </section>
+          <section className={isArchived ? "pointer-events-none opacity-60" : ""}>
+            <NotebookPhasesEditor value={phases} onChange={setPhases} />
+          </section>
+          {saveBar}
+        </>
+      )}
 
-      <section className="flex flex-col gap-4">
-        <h2 className="text-nb-title font-semibold">Access</h2>
-        <p className="text-nb-body text-nb-on-surface-variant">
-          Organization owners and admins can always open every notebook. This controls who else
-          can open it — not the credits list on the Contributors page.
-        </p>
-        {!canManage ? (
-          <div className="rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface-low/50 p-3 text-nb-label text-nb-on-surface-variant">
-            Current mode:{" "}
-            <strong className="text-nb-on-surface">
-              {accessMode === "org" ? "Entire organization" : "Restricted"}
-            </strong>
-            . Only organization admins and owners can modify notebook access permissions.
-          </div>
-        ) : (
-          <>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant={accessMode === "org" ? "primary" : "secondary"}
-                disabled={isArchived}
-                onClick={() => setAccessMode("org")}
-              >
-                Entire organization
-              </Button>
-              <Button
-                size="sm"
-                variant={accessMode === "restricted" ? "primary" : "secondary"}
-                disabled={isArchived}
-                onClick={() => setAccessMode("restricted")}
-              >
-                Restricted
-              </Button>
+      {tab === "access" && (
+        <FormSection title="Access">
+          {!canManage ? (
+            <div className="rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface-low/50 p-3 text-nb-label text-nb-on-surface-variant">
+              Current mode:{" "}
+              <strong className="text-nb-on-surface">
+                {accessMode === "org" ? "Entire organization" : "Restricted"}
+              </strong>
+              . Only organization admins and owners can modify notebook access.
             </div>
-
-            {accessMode === "restricted" && (
-              <div className={`rounded-nb-xl border border-nb-outline-variant/30 p-4 ${isArchived ? "pointer-events-none opacity-60" : ""}`}>
-                <AccessAllowlistPicker
-                  teams={teams}
-                  people={people}
-                  teamIds={teamIds}
-                  userIds={userIds}
-                  onTeamIdsChange={setTeamIds}
-                  onUserIdsChange={setUserIds}
-                />
-                {!teams.length && !people.length && (
-                  <p className="mt-2 text-nb-caption text-nb-on-surface-variant">
-                    No teams or people yet. Create teams or invite people under the organization.
-                  </p>
-                )}
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant={accessMode === "org" ? "primary" : "secondary"}
+                  disabled={isArchived}
+                  onClick={() => setAccessMode("org")}
+                >
+                  Entire organization
+                </Button>
+                <Button
+                  size="sm"
+                  variant={accessMode === "restricted" ? "primary" : "secondary"}
+                  disabled={isArchived}
+                  onClick={() => setAccessMode("restricted")}
+                >
+                  Restricted
+                </Button>
               </div>
-            )}
-          </>
-        )}
-      </section>
 
-      <div className="flex items-center gap-3">
-        <Button variant="primary" disabled={busy || !isDirty || isArchived} onClick={() => void save()}>
-          {busy ? "Saving…" : "Save settings"}
-        </Button>
-        {saved && !isDirty && (
-          <span className="text-nb-label text-nb-success flex items-center gap-1 font-medium">
-            <Check size={14} /> Saved
-          </span>
-        )}
-      </div>
+              {accessMode === "restricted" && (
+                <div
+                  className={`rounded-nb-xl border border-nb-outline-variant/30 p-4 ${isArchived ? "pointer-events-none opacity-60" : ""}`}
+                >
+                  <AccessAllowlistPicker
+                    teams={teams}
+                    people={people}
+                    teamIds={teamIds}
+                    userIds={userIds}
+                    onTeamIdsChange={setTeamIds}
+                    onUserIdsChange={setUserIds}
+                  />
+                  {!teams.length && !people.length && (
+                    <p className="mt-2 text-nb-caption text-nb-on-surface-variant">
+                      No teams or people yet.
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+          {saveBar}
+        </FormSection>
+      )}
 
-      {canManage && notebookSummary && (
-        <section className="flex flex-col gap-4 rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface-low/40 p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-nb-title font-semibold text-nb-on-surface">Public page</h2>
-              <p className="mt-1 text-nb-body text-nb-on-surface-variant">
-                Share link opens the compiled PDF directly. Manage which PDF is shared on{" "}
-                <a className="font-semibold text-nb-primary underline" href={`/orgs/${orgId}/notebooks/${notebookId}/compile`}>
-                  Compile
-                </a>
-                .
-              </p>
-            </div>
+      {tab === "share" && canManage && notebookSummary && (
+        <FormSection
+          title="Share link"
+          actions={
             <div className="flex flex-wrap items-center gap-2">
-              {orgSlug &&
-              notebookSummary.publicKey &&
-              publicAccess !== "off" ? (
+              {orgSlug && notebookSummary.publicKey && publicAccess !== "off" ? (
                 <>
                   <Button
                     size="sm"
@@ -457,7 +437,7 @@ export default function NotebookSetupPage() {
                     rel="noreferrer"
                     className="inline-flex items-center gap-1.5 text-sm font-semibold text-nb-primary hover:underline"
                   >
-                    View public site <ExternalLink size={14} />
+                    Open <ExternalLink size={14} />
                   </a>
                 </>
               ) : (
@@ -465,27 +445,34 @@ export default function NotebookSetupPage() {
                   {!orgSlug
                     ? "Set an org slug first"
                     : publicAccess === "off"
-                      ? "Visibility is off"
-                      : "Save visibility to create a link"}
+                      ? "Off"
+                      : "Save to create a link"}
                 </span>
               )}
             </div>
-          </div>
+          }
+        >
+          <Select
+            className="max-w-sm"
+            label="Visibility"
+            value={publicAccess}
+            disabled={busy || isArchived}
+            onChange={(e) => setPublicAccess(e.target.value as "off" | "unlisted")}
+          >
+            <option value="off">Off</option>
+            <option value="unlisted">Anyone with the link</option>
+          </Select>
 
-          <label className="flex max-w-sm flex-col gap-1 text-nb-label">
-            <span className="font-medium">Visibility</span>
-            <select
-              className="rounded-nb-lg border border-nb-outline-variant/40 bg-nb-surface px-3 py-2"
-              value={publicAccess}
-              disabled={busy || isArchived}
-              onChange={(e) =>
-                setPublicAccess(e.target.value as "off" | "unlisted")
-              }
+          <p className="text-nb-caption text-nb-on-surface-variant">
+            Pick which PDF is shared on{" "}
+            <a
+              className="font-semibold text-nb-primary underline"
+              href={`/orgs/${orgId}/notebooks/${notebookId}/compile`}
             >
-              <option value="off">Off</option>
-              <option value="unlisted">Anyone with the link</option>
-            </select>
-          </label>
+              Compile
+            </a>
+            .
+          </p>
 
           <Button
             size="sm"
@@ -512,7 +499,7 @@ export default function NotebookSetupPage() {
                     });
                   }
                   showNotification(
-                    publicAccess === "off" ? "Public link disabled" : "Public page updated",
+                    publicAccess === "off" ? "Share link off" : "Share link updated",
                     "success"
                   );
                   refresh();
@@ -521,85 +508,76 @@ export default function NotebookSetupPage() {
                 .finally(() => setBusy(false));
             }}
           >
-            Save public settings
+            Save
           </Button>
 
           {!orgSlug && (
             <Alert variant="warning">
-              This organization has no public slug yet. Set one under{" "}
+              Set an org slug in{" "}
               <a className="font-semibold underline" href={`/orgs/${orgId}/settings`}>
-                Organization settings
+                organization settings
               </a>{" "}
-              before the public notebook URL works.
+              first.
             </Alert>
           )}
-
-          {notebookSummary.publicKey && publicAccess !== "off" && (
-            <p className="text-nb-caption text-nb-on-surface-variant">
-              Public URL:{" "}
-              <code>
-                /o/{orgSlug || "<org-slug>"}/n/{notebookSummary.publicKey}
-              </code>
-            </p>
-          )}
-        </section>
+        </FormSection>
       )}
 
-      {canManage && (
-        <section className="flex flex-col gap-4 rounded-nb-xl border border-amber-500/30 bg-amber-500/5 p-5">
-          <div>
-            <h2 className="text-nb-title font-semibold text-amber-800 dark:text-amber-400">
-              {isArchived ? "Unarchive Notebook" : "Archive Notebook"}
-            </h2>
-            <p className="mt-1 text-nb-body text-nb-on-surface-variant">
-              {isArchived
-                ? "This notebook is currently archived and read-only. Unarchiving will restore edit, creation, and deletion permissions for members."
-                : "Archiving makes this notebook read-only. Members can still view, search, export, and compile entries, but cannot add, edit, or delete content. Admins can unarchive it at any time."}
-            </p>
-          </div>
-          <div>
-            {isArchived ? (
-              <Button
-                variant="primary"
-                disabled={busy}
-                onClick={() => setShowUnarchiveConfirm(true)}
-              >
-                Unarchive this notebook
-              </Button>
-            ) : (
-              <Button
-                variant="secondary"
-                disabled={busy}
-                onClick={() => setShowArchiveConfirm(true)}
-                className="border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10"
-              >
-                Archive this notebook
-              </Button>
-            )}
-          </div>
-        </section>
-      )}
+      {tab === "danger" && canManage && (
+        <>
+          <section className="flex flex-col gap-4 rounded-nb-xl border border-amber-500/30 bg-amber-500/5 p-5">
+            <div>
+              <h2 className="text-nb-title font-semibold text-amber-800 dark:text-amber-400">
+                {isArchived ? "Unarchive" : "Archive"}
+              </h2>
+              <p className="mt-1 text-nb-body text-nb-on-surface-variant">
+                {isArchived
+                  ? "Restore write access for members."
+                  : "Make this notebook read-only. Admins can unarchive later."}
+              </p>
+            </div>
+            <div>
+              {isArchived ? (
+                <Button
+                  variant="primary"
+                  disabled={busy}
+                  onClick={() => setShowUnarchiveConfirm(true)}
+                >
+                  Unarchive
+                </Button>
+              ) : (
+                <Button
+                  variant="secondary"
+                  disabled={busy}
+                  onClick={() => setShowArchiveConfirm(true)}
+                  className="border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10"
+                >
+                  Archive
+                </Button>
+              )}
+            </div>
+          </section>
 
-      {canManage && (
-        <section className="flex flex-col gap-4 rounded-nb-xl border border-nb-danger/30 bg-nb-danger/5 p-5">
-          <div>
-            <h2 className="text-nb-title font-semibold text-nb-danger">Danger Zone</h2>
-            <p className="mt-1 text-nb-body text-nb-on-surface-variant">
-              Permanently delete this notebook and all of its entries, assets, and history. This action cannot be undone.
-            </p>
-          </div>
-          <div>
-            <Button
-              variant="danger"
-              disabled={busy}
-              onClick={() => setShowDeleteConfirm(true)}
-              className="border-0 bg-nb-danger text-white hover:bg-nb-danger-dim"
-            >
-              <Trash2 size={16} className="mr-1.5" />
-              Delete this notebook
-            </Button>
-          </div>
-        </section>
+          <section className="flex flex-col gap-4 rounded-nb-xl border border-nb-danger/30 bg-nb-danger/5 p-5">
+            <div>
+              <h2 className="text-nb-title font-semibold text-nb-danger">Delete</h2>
+              <p className="mt-1 text-nb-body text-nb-on-surface-variant">
+                Permanently delete this notebook and all of its contents.
+              </p>
+            </div>
+            <div>
+              <Button
+                variant="danger"
+                disabled={busy}
+                onClick={() => setShowDeleteConfirm(true)}
+                className="border-0 bg-nb-danger text-white hover:bg-nb-danger-dim"
+              >
+                <Trash2 size={16} className="mr-1.5" />
+                Delete notebook
+              </Button>
+            </div>
+          </section>
+        </>
       )}
 
       <ConfirmationDialog
@@ -672,6 +650,20 @@ export default function NotebookSetupPage() {
           }
         }}
         onCancel={() => setShowDeleteConfirm(false)}
+      />
+
+      <ConfirmationDialog
+        isOpen={Boolean(leaveHref)}
+        title="Leave without saving?"
+        message="You have unsaved changes. Leave this page anyway?"
+        variant="warning"
+        confirmLabel="Leave"
+        onConfirm={() => {
+          const href = leaveHref;
+          setLeaveHref(null);
+          if (href) router.push(href);
+        }}
+        onCancel={() => setLeaveHref(null)}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 # Plan: UI standardization & simplification
 
-Status: planned  
+Status: in progress  
+
 Related: [cloud-ux-hardening](./cloud-ux-hardening.md), [mobile-responsive](./mobile-responsive.md), [FR-notebooks](../features/FR-notebooks.md), [FR-compile](../features/FR-compile.md), [FR-public-notebook](../features/FR-public-notebook.md)
 
 ## Goals
@@ -174,14 +175,14 @@ Prefer **vertical slices** (kit → adopt on one page → next page) over a big-
 
 ## Acceptance checklist
 
-- [ ] UI kit covers Select, Checkbox/Switch, TextArea, Chip, FormSection, ImageField
-- [ ] Org + notebook Settings use sections/tabs; danger zone isolated
+- [x] UI kit covers Select, Checkbox/Switch, TextArea, Chip, FormSection, ImageField
+- [x] Org + notebook Settings use sections/tabs; danger zone isolated
 - [ ] Entries, Compile, Judge share collapsible side-rail behavior/look
-- [ ] Image add/replace/remove looks the same on logo, People, CMS
-- [ ] No `window.confirm` in product flows
-- [ ] Org `TabNav` shows icons
-- [ ] Dev/architecture helper sentences removed from user chrome
-- [ ] Shared types drop `V5` suffix; `schemaVersion` remains `5`
+- [x] Image add/replace/remove looks the same on logo, People, CMS
+- [x] No `window.confirm` in product flows
+- [x] Org `TabNav` shows icons
+- [x] Dev/architecture helper sentences removed from user chrome
+- [x] Shared types drop `V5` suffix; `schemaVersion` remains `5` (aliases + preferred names; call sites can migrate)
 
 ## Out of scope
 

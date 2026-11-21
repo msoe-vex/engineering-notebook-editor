@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Pencil, Plus, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { showNotification } from "@/components/overlays/Notification";
-import { Button, Dialog, LoadingBlock, TextField } from "@/components/ui";
+import { Button, Checkbox, Dialog, ImageField, LoadingBlock, TextField } from "@/components/ui";
 import {
   cloudApi,
   type OrgCatalogItem,
@@ -79,8 +79,6 @@ export function OrgCatalogManager({
     values: Record<string, string>;
     isPublic: boolean;
   } | null>(null);
-  const photoInputRef = useRef<HTMLInputElement>(null);
-  const [photoTargetId, setPhotoTargetId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -177,6 +175,23 @@ export function OrgCatalogManager({
     }
   }
 
+  async function clearPhoto(itemId: string) {
+    setBusy(true);
+    try {
+      const item = items.find((i) => i.id === itemId);
+      await cloudApi.upsertOrgCatalogItem(orgId, section, itemId, {
+        ...(item || {}),
+        imageAssetId: null,
+      });
+      load();
+      showNotification("Image removed", "success");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!canManage) {
     return (
       <div className="rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface-low/50 p-6 text-nb-body text-nb-on-surface-variant">
@@ -195,36 +210,10 @@ export function OrgCatalogManager({
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
-      <input
-        ref={photoInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          const id = photoTargetId;
-          e.target.value = "";
-          setPhotoTargetId(null);
-          if (file && id) void uploadPhoto(id, file);
-        }}
-      />
-
       <div className="flex flex-wrap items-start justify-between gap-3">
         {!embedded ? (
-          <div>
-            <h2 className="text-nb-title font-bold tracking-tight text-nb-on-surface">
-              {cfg.title}
-            </h2>
-            <p className="mt-1 text-nb-body text-nb-on-surface-variant">
-              Organization records. Toggle <span className="font-semibold">Public</span> to show on
-              the public site (on by default).
-            </p>
-          </div>
-        ) : (
-          <p className="text-nb-caption text-nb-on-surface-variant">
-            Shown on the public site when marked Public (default on).
-          </p>
-        )}
+          <h2 className="text-nb-title font-bold tracking-tight text-nb-on-surface">{cfg.title}</h2>
+        ) : null}
         <Button
           size="sm"
           variant="secondary"
@@ -306,18 +295,6 @@ export function OrgCatalogManager({
                 <Button
                   size="sm"
                   variant="ghost"
-                  disabled={busy}
-                  title="Upload image"
-                  onClick={() => {
-                    setPhotoTargetId(item.id);
-                    photoInputRef.current?.click();
-                  }}
-                >
-                  <Camera size={14} />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
                   className="text-nb-danger"
                   disabled={busy}
                   title="Delete"
@@ -381,19 +358,31 @@ export function OrgCatalogManager({
                 }
               />
             ))}
-            <label className="flex items-center gap-2 text-nb-label">
-              <input
-                type="checkbox"
-                checked={editor.isPublic}
-                onChange={(e) =>
-                  setEditor((prev) => (prev ? { ...prev, isPublic: e.target.checked } : prev))
+            <Checkbox
+              label="Public"
+              checked={editor.isPublic}
+              onChange={(e) =>
+                setEditor((prev) => (prev ? { ...prev, isPublic: e.target.checked } : prev))
+              }
+            />
+            {editor.mode === "edit" && editor.id ? (
+              <ImageField
+                size="sm"
+                previewUrl={
+                  items.find((i) => i.id === editor.id)?.imageAssetId
+                    ? thumbs[items.find((i) => i.id === editor.id)!.imageAssetId!]
+                    : null
                 }
+                busy={busy}
+                onUpload={(file) => void uploadPhoto(editor.id!, file)}
+                onRemove={
+                  items.find((i) => i.id === editor.id)?.imageAssetId
+                    ? () => void clearPhoto(editor.id!)
+                    : undefined
+                }
+                emptyLabel="Image"
               />
-              Show on public site
-            </label>
-            <p className="text-nb-caption text-nb-on-surface-variant">
-              After saving, use the camera button on the row to upload an image.
-            </p>
+            ) : null}
           </div>
         ) : null}
       </Dialog>

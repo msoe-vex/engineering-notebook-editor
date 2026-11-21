@@ -11,6 +11,7 @@ import {
   Dialog,
   DropdownMenu,
   EmptyState,
+  Select,
   TextField,
   type MenuItem,
 } from "@/components/ui";
@@ -444,8 +445,9 @@ export default function OrgPeoplePage() {
                     >
                       {m.public === false ? "Private" : "Public"}
                     </button>
-                    <select
-                      className="rounded-nb-lg border border-nb-outline-variant/40 bg-nb-surface-low px-2 py-1.5 text-nb-label disabled:opacity-60"
+                    <Select
+                      containerClassName="w-auto min-w-[7.5rem]"
+                      className="px-2 py-1.5 text-nb-label"
                       value={m.role}
                       disabled={isTargetLastOwner}
                       title={isTargetLastOwner ? "Cannot demote the last owner" : undefined}
@@ -454,7 +456,7 @@ export default function OrgPeoplePage() {
                       <option value="member">Member</option>
                       <option value="admin">Admin</option>
                       {isOwner && <option value="owner">Owner</option>}
-                    </select>
+                    </Select>
                     <DropdownMenu items={memberMenuItems(m)} />
                   </>
                 )}
@@ -710,61 +712,42 @@ function InvitePeopleDialog({
   }
 
   return (
-    <Dialog isOpen={open} onClose={onClose} title="Create invite link / share code">
+    <Dialog isOpen={open} onClose={onClose} title="Invite">
       <div className="flex flex-col gap-4">
-        <p className="text-nb-body text-nb-on-surface-variant">
-          Generate an invite link & share code. Anyone who uses the link or enters the code will join this organization.
-        </p>
+        <Select
+          label="Role"
+          value={role}
+          onChange={(e) => setRole(e.target.value as OrgRole)}
+        >
+          <option value="member">Member</option>
+          <option value="admin">Admin</option>
+          {isOwner && <option value="owner">Owner</option>}
+        </Select>
 
-        <label className="block">
-          <span className="mb-1.5 block text-nb-caption font-medium text-nb-on-surface">
-            Role to grant
-          </span>
-          <select
-            className="w-full rounded-nb-lg border border-nb-outline-variant/40 bg-nb-surface px-3 py-2 text-nb-label outline-none focus:border-nb-primary"
-            value={role}
-            onChange={(e) => setRole(e.target.value as OrgRole)}
-          >
-            <option value="member">Member — view and edit allowed notebooks</option>
-            <option value="admin">Admin — manage members, teams, and notebooks</option>
-            {isOwner && <option value="owner">Owner — full organization control</option>}
-          </select>
-        </label>
+        <Select
+          label="Expires"
+          value={expiresInDays}
+          onChange={(e) => setExpiresInDays(Number(e.target.value))}
+        >
+          <option value={7}>7 days</option>
+          <option value={14}>14 days</option>
+          <option value={30}>30 days</option>
+          <option value={90}>90 days</option>
+        </Select>
 
-        <label className="block">
-          <span className="mb-1.5 block text-nb-caption font-medium text-nb-on-surface">
-            Expires after
-          </span>
-          <select
-            className="w-full rounded-nb-lg border border-nb-outline-variant/40 bg-nb-surface px-3 py-2 text-nb-label outline-none focus:border-nb-primary"
-            value={expiresInDays}
-            onChange={(e) => setExpiresInDays(Number(e.target.value))}
-          >
-            <option value={7}>7 days</option>
-            <option value={14}>14 days</option>
-            <option value={30}>30 days</option>
-            <option value={90}>90 days</option>
-          </select>
-        </label>
-
-        <div className="flex flex-col gap-1">
-          <TextField
-            label="Restrict to email (optional)"
-            type="email"
-            placeholder="e.g. teammate@example.com (or leave blank for open share link)"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                submit();
-              }
-            }}
-          />
-          <span className="text-nb-caption text-nb-on-surface-variant">
-            If left blank, anyone with the link or code can join. If specified, only someone signed in with that email can accept.
-          </span>
-        </div>
+        <TextField
+          label="Email (optional)"
+          type="email"
+          placeholder="teammate@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              submit();
+            }
+          }}
+        />
 
         <div className="flex justify-end gap-2 pt-2 border-t border-nb-outline-variant/15">
           <Button variant="secondary" onClick={onClose}>
