@@ -157,8 +157,8 @@ With the full stack up (`firebase gcs pubsub core collab compile judge website`)
 
 1. **Pub/Sub jobs** — Compile a notebook; Core publishes; compile worker pull completes; SSE shows progress. Repeat for Judge normalize/score.
 2. **Password reset** — Forgot password on auth chrome; check Auth emulator for the reset link.
-3. **Public org** — Set org slug + visibility public; open `/o/<slug>`; edit CMS at `/orgs/<id>/public`.
-4. **Public notebook** — Enable public/unlisted in notebook Settings; copy `/o/<slug>/n/<key>`; open entry (TipTap read-only); download last PDF if compiled.
+3. **Public org** — Set org slug + visibility public in **Org Settings**; open `/o/<slug>`; edit donors/projects/events tabs + Settings chrome (legacy `/orgs/<id>/public` redirects to Settings).
+4. **Notebook share link** — Compile a PDF; on Compile, **Share this PDF**; copy `/o/<slug>/n/<key>`; opening the link should show the PDF (website → Core proxy, not a raw GCS URL).
 5. **Alumni** — Mark a member alumni; confirm they get 403 on notebook writes.
 6. **Member photo** — People → upload photo; avatar shows; public Members card uses `imageAssetId` when curated.
 7. **Secondary email** — Account → add secondary; verify via console-logged link (`?verifyEmail=`); invite matching accepts verified secondary.

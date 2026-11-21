@@ -6,7 +6,7 @@ Robotics and engineering design teams (VEX, FIRST, and similar) need collaborati
 
 ## Product
 
-A **cloud-native engineering notebook**: organizations own notebooks; members edit entries in real time; compile to PDF; backup via ZIP. Longer term: optional **public notebook links** and **public org profiles** (projects, sponsors, events, media) separate from the signed-in org dashboard. See [roadmap.md](./roadmap.md).
+A **cloud-native engineering notebook**: organizations own notebooks; members edit entries in real time; compile to PDF; backup via ZIP. **PDF share links** and **public org profiles** (projects, sponsors, events, media) sit outside the signed-in org dashboard. See [roadmap.md](./roadmap.md).
 
 ## Users
 
@@ -22,7 +22,7 @@ See [personas.md](./personas.md). Primary: student / team members writing daily 
 ## In scope
 
 - Orgs, teams (ACL), notebooks, folders, entries, collab, schedule, compile, ZIP, GenAI/Judge, account prefs, admin
-- Planned: public notebook share links, public org page (vs dashboard), active vs alumni members
+- PDF share links; public org page (vs dashboard); active vs alumni members
 
 ## Non-goals (do not reintroduce)
 

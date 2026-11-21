@@ -36,25 +36,25 @@ Happy paths for the live App Router product. Feature detail: [01-requirements/fe
 1. People: **Active** members + invites (expiry, email match); **Alumni** section (planned)
 2. Teams: ACL groups for restricted notebooks
 
-## 7. Public sharing (planned)
+## 7. Public sharing
 
-1. Publish notebook public / unlisted link — [FR-public-notebook](../01-requirements/features/FR-public-notebook.md)
-2. Optional public org page (projects, sponsors, events, media) — [FR-org-public-page](../01-requirements/features/FR-org-public-page.md)
+1. Share notebook PDF link (anyone with link) — [FR-public-notebook](../01-requirements/features/FR-public-notebook.md)
+2. Public org page (projects, sponsors, events, media) — [FR-org-public-page](../01-requirements/features/FR-org-public-page.md)
 3. Roadmap: [roadmap.md](./roadmap.md)
 
 ## Route map (IA)
 
 ```
 /                         Organizations
-/orgs/:orgId              Dashboard: Notebooks + People / Teams (+ Public page editor, planned)
+/orgs/:orgId              Dashboard: Notebooks + People / Teams / Donors / Projects / Events / Settings
 /orgs/:orgId/notebooks/:notebookId
   ├── entries/:entryId    Collaborative editor
   ├── schedule            Calendar (alias /calendar)
-  ├── compile             BusyTeX PDF
-  ├── setup               Settings: branding, access, phases, logo, public link (planned)
+  ├── compile             PDF versions + share link
+  ├── setup               Settings: branding, access, phases, logo, share link
   └── members             Contributors credits (alias /contributors)
-/o/:orgSlug               Public org page (planned; visibility public|hidden)
-/p/:notebookSlug          Public notebook view (planned)
+/o/:orgSlug               Public org page (visibility public|hidden)
+/o/:orgSlug/n/:key        Shared notebook PDF (website → Core proxy)
 /account                  Profile
 /account/preferences      Theme, GenAI prefs
 /help · /about
