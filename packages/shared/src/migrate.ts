@@ -1,7 +1,7 @@
 import { NOTEBOOK_SCHEMA_VERSION, defaultNotebookAccess } from "./types.js";
 import type {
   EntryMetadata,
-  LegacyTeamMetadataV5,
+  LegacyTeamMetadata,
   NotebookAccess,
   NotebookExport,
   NotebookFolder,
@@ -32,7 +32,7 @@ type EntryMetadataV4 = {
 type NotebookMetadataV4 = {
   version: number;
   entries: Record<string, EntryMetadataV4>;
-  team?: LegacyTeamMetadataV5 & { logo?: string; logoOriginal?: string };
+  team?: LegacyTeamMetadata & { logo?: string; logoOriginal?: string };
   phases?: Record<string, ProjectPhase>;
   lastCompiled?: string;
   folders?: Record<string, NotebookFolder>;
@@ -74,7 +74,7 @@ export function migrateEntryV4ToV5(entry: EntryMetadataV4): EntryMetadata {
 }
 
 /** Lift legacy embedded team into notebook branding + member map (import shim). */
-export function liftLegacyTeam(team: LegacyTeamMetadataV5 | undefined): {
+export function liftLegacyTeam(team: LegacyTeamMetadata | undefined): {
   title?: string;
   subtitle?: string;
   logoAssetId?: string;
@@ -164,7 +164,7 @@ export function normalizeImportNotebook(
 } {
   const version = Number(raw.version ?? raw.schemaVersion ?? 4);
   if (version >= 5) {
-    const legacyTeam = raw.team as LegacyTeamMetadataV5 | undefined;
+    const legacyTeam = raw.team as LegacyTeamMetadata | undefined;
     const lifted = liftLegacyTeam(legacyTeam);
     const summary = raw as unknown as NotebookSummary;
     const members =

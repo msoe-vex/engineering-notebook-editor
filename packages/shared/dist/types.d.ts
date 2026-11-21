@@ -238,7 +238,7 @@ export type ProjectPhase = {
  * - `date` + `order` → compile / calendar sequence (date primary; `order` is same-day tiebreaker, rearranged in calendar)
  * - `folderId` + `explorerOrder` → file-explorer tree (sibling position within a folder; unrelated to compile)
  */
-/** Current entry metadata (schema v5). Prefer this name over `EntryMetadataV5`. */
+/** Current entry metadata (`schemaVersion` 5). */
 export type EntryMetadata = {
     title: string;
     authors: string[];
@@ -275,8 +275,6 @@ export type EntryMetadata = {
     /** Denormalized total comment threads (including resolved). */
     commentCount?: number;
 };
-/** @deprecated Use `EntryMetadata` — kept for call-site migration. */
-export type EntryMetadataV5 = EntryMetadata;
 /** Entry comment thread body (MetadataStore). Anchor lives in TipTap as `commentAnchor` mark. */
 export type EntryComment = {
     id: string;
@@ -292,7 +290,7 @@ export type EntryComment = {
     /** Org member uids @mentioned in the body (NotificationPort targets). */
     mentionedUids?: string[];
 };
-/** Current notebook summary (schema v5). Prefer this name over `NotebookSummaryV5`. */
+/** Current notebook summary (`schemaVersion` 5). */
 export type NotebookSummary = {
     schemaVersion: typeof NOTEBOOK_SCHEMA_VERSION;
     orgId: string;
@@ -327,8 +325,6 @@ export type NotebookSummary = {
     publishedAt?: string;
     publishedBy?: string;
 };
-/** @deprecated Use `NotebookSummary` — kept for call-site migration. */
-export type NotebookSummaryV5 = NotebookSummary;
 /** One compiled PDF version under a notebook. */
 export type CompileExport = {
     id: string;
@@ -363,17 +359,15 @@ export type NotebookExport = {
     lastCompiled?: string;
     entries: Record<string, EntryMetadata>;
 };
-/** @deprecated Use `NotebookExport`. */
-export type NotebookExportV5 = NotebookExport;
 /** Legacy embedded team blob (ZIP/local import shim only). */
-export type LegacyTeamMemberV5 = {
+export type LegacyTeamMember = {
     name: string;
     role: string;
     order: number;
     imageAssetId?: string;
     imageOriginalAssetId?: string;
 };
-export type LegacyTeamMetadataV5 = {
+export type LegacyTeamMetadata = {
     teamName: string;
     teamNumber: string;
     startDate?: string;
@@ -382,12 +376,8 @@ export type LegacyTeamMetadataV5 = {
     organization: string;
     logoAssetId?: string;
     logoOriginalAssetId?: string;
-    members: Record<string, LegacyTeamMemberV5>;
+    members: Record<string, LegacyTeamMember>;
 };
-/** @deprecated Use LegacyTeamMetadataV5 — kept for older import paths. */
-export type TeamMemberV5 = LegacyTeamMemberV5;
-/** @deprecated Use LegacyTeamMetadataV5 */
-export type TeamMetadataV5 = LegacyTeamMetadataV5;
 /** One performance level inside a rubric category (standardized matrix). */
 export type RubricLevel = {
     id: string;

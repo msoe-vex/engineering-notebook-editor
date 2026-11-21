@@ -41,7 +41,7 @@ Notebooks live under an org. **Settings** controls branding, phases, logo, and a
 
 ## Data and APIs
 
-- `NotebookSummaryV5`: folders, phases, access, `logoAssetId`, `lastCompiled`, `archivedAt`
+- `NotebookSummary`: folders, phases, access, `logoAssetId`, `lastCompiled`, `archivedAt`
 - `POST /orgs/:orgId/notebooks/:notebookId/archive` and `.../unarchive`
 - `notebooks/{id}/members/{memberId}` contributors roster
 - Folder helpers: `POST|PATCH|DELETE …/folders`

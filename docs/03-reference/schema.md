@@ -33,7 +33,7 @@ Clients never talk to Firestore/metadata store directly (`infra/firestore.rules`
 | `notebooks/{id}/judgments/{judgmentId}` | Judge grades | `rubricId`, `matrix`, `categories[]`, `totalPoints`, `totalMaxPoints`, `summary`, `status` (`running`\|`completed`\|`failed`), `jobId?`, … |
 | `notebooks/{id}/jobs/{jobId}` | Async jobs | `type` (`compile`\|`judge`\|…), `status`, `payload`, `result?`, … |
 
-### Notebook summary (`NotebookSummaryV5`)
+### Notebook summary (`NotebookSummary`)
 
 ```
 schemaVersion: 5
@@ -48,7 +48,7 @@ lastCompiled?
 createdAt?, createdBy?, updatedAt
 ```
 
-### Entry metadata (`EntryMetadataV5`) — Firestore only
+### Entry metadata (`EntryMetadata`) — Firestore only
 
 ```
 title, authors[], phase, date

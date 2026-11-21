@@ -1,4 +1,4 @@
-import type { EntryMetadata, LegacyTeamMetadataV5, NotebookAccess, NotebookExport, NotebookFolder, NotebookMember, NotebookSummary, ProjectPhase } from "./types.js";
+import type { EntryMetadata, LegacyTeamMetadata, NotebookAccess, NotebookExport, NotebookFolder, NotebookMember, NotebookSummary, ProjectPhase } from "./types.js";
 /** Minimal v4 shapes used only for import migrate-once. */
 type EntryMetadataV4 = {
     title: string;
@@ -24,7 +24,7 @@ type EntryMetadataV4 = {
 type NotebookMetadataV4 = {
     version: number;
     entries: Record<string, EntryMetadataV4>;
-    team?: LegacyTeamMetadataV5 & {
+    team?: LegacyTeamMetadata & {
         logo?: string;
         logoOriginal?: string;
     };
@@ -39,7 +39,7 @@ type NotebookMetadataV4 = {
 };
 export declare function migrateEntryV4ToV5(entry: EntryMetadataV4): EntryMetadata;
 /** Lift legacy embedded team into notebook branding + member map (import shim). */
-export declare function liftLegacyTeam(team: LegacyTeamMetadataV5 | undefined): {
+export declare function liftLegacyTeam(team: LegacyTeamMetadata | undefined): {
     title?: string;
     subtitle?: string;
     logoAssetId?: string;
