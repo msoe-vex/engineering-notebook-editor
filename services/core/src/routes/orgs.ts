@@ -1024,12 +1024,22 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
         return reply.code(400).send({ error: "invalid publicAccess" });
       }
       const access = rawAccess === "public" ? "unlisted" : rawAccess;
-      let key =
-        (body.publicKey !== undefined ? String(body.publicKey) : existing.publicKey || "")
+      const normalizePublicKey = (raw: string) =>
+        raw
           .trim()
           .toLowerCase()
           .replace(/[^a-z0-9-]+/g, "-")
-          .replace(/^-+|-+$/g, "") || "";
+          .replace(/^-+|-+$/g, "");
+      /** Full UUID (with hyphens) or 32-hex; legacy notebookId prefixes were ~12 chars. */
+      const isStrongPublicKey = (k: string) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k) ||
+        /^[0-9a-f]{32}$/i.test(k);
+      let key = "";
+      if (body.publicKey !== undefined) {
+        key = normalizePublicKey(String(body.publicKey));
+      } else if (existing.publicKey && isStrongPublicKey(existing.publicKey)) {
+        key = normalizePublicKey(existing.publicKey);
+      }
       if ((body as { revokePublic?: boolean }).revokePublic || access === "off") {
         if (existing.publicKey) {
           await safeDeletePath(publicNotebookKeyPath(orgId, existing.publicKey));
@@ -1040,7 +1050,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
         patch.publishedAt = null;
         patch.publishedBy = null;
       } else {
-        // Unguessable share token (full UUID). Short prefixes are brute-forceable.
+        // Unguessable share token (full UUID). Legacy short prefixes are reminted.
         if (!key) key = randomUUID();
         if (key !== existing.publicKey) {
           const taken = await store().get(publicNotebookKeyPath(orgId, key));

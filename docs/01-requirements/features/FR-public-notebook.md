@@ -28,7 +28,8 @@ Visitors never need GCS credentials: **`/o/:orgSlug/n/:notebookKey`** (website) 
 
 - [x] Unpublished notebooks are not reachable via old links after revoke
 - [x] Share URL serves the PDF via Core proxy (no public TipTap / wrapper page; no raw GCS redirect for visitors)
-- [x] `notebookKey` unique within the org and unguessable (full UUID when minted)
+- [x] `notebookKey` unique within the org and unguessable (full UUID when minted; legacy short keys reminted on next publish)
+- [x] One stable share URL per notebook; `publicExportId` selects which compile version the link serves (not a new key per version)
 - [x] `publishedAt` / `publishedBy` recorded for admins; cleared on revoke
 - [x] Up to 10 compile exports retained; compile refused at the limit until a version is deleted
 - [x] Saved versions can be deleted (deleting the shared one turns the link off)
