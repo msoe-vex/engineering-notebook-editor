@@ -49,6 +49,7 @@ import { setWorkspaceHeader } from "@/lib/cloud/workspaceHeaderStore";
 import { workspaceState } from "@/lib/cloud/workspaceState";
 import type { NotebookMetadata } from "@/lib/notebook/metadata";
 import { useNarrowViewport } from "@/hooks/useDevice";
+import { useNotebookJobToasts } from "@/hooks/useNotebookJobToasts";
 import { NotebookEntryList } from "./NotebookEntryList";
 import {
   NotebookSectionBottomTabs,
@@ -76,6 +77,9 @@ function entryFromApi(raw: Record<string, unknown>): EntryMeta {
     createdAt: raw.createdAt ? String(raw.createdAt) : undefined,
     updatedAt: raw.updatedAt ? String(raw.updatedAt) : undefined,
     deletedAt: raw.deletedAt ? String(raw.deletedAt) : raw.deletedAt === null ? null : undefined,
+    openCommentCount:
+      raw.openCommentCount !== undefined ? Number(raw.openCommentCount) : undefined,
+    commentCount: raw.commentCount !== undefined ? Number(raw.commentCount) : undefined,
   };
 }
 
@@ -274,6 +278,8 @@ export function NotebookShell({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [orgId, notebookId, reloadToken]);
+
+  useNotebookJobToasts(orgId, notebookId, initialLoaded && !notebookUnavailable);
 
   useEffect(() => {
     if (!initialLoaded || notebookUnavailable) return;

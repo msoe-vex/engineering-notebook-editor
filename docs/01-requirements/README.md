@@ -33,10 +33,12 @@ Also: [backlog.md](./backlog.md) · [roadmap](../00-product/roadmap.md).
 | [FR-orgs](./features/FR-orgs.md) | Organizations, people, invites, teams, alumni | current |
 | [FR-notebooks](./features/FR-notebooks.md) | Notebooks, Settings, Contributors, access | partial |
 | [FR-public-notebook](./features/FR-public-notebook.md) | Public notebook share link (judgments stay private) | partial |
+| [Public / collab / comments plan](./plans/public-collab-comments-polish.md) | CMS share UX, cursors, comments, compile SSE, trash | current (A–F) |
 | [FR-org-public-page](./features/FR-org-public-page.md) | Public organization profile page | partial |
+| [FR-comments](./features/FR-comments.md) | Entry comments (Yjs anchors + SSE threads) | partial |
 | [FR-entries-collab](./features/FR-entries-collab.md) | Entries & collaborative editing | partial |
 | [FR-explorer](./features/FR-explorer.md) | Explorer, folders, search | partial |
-| [FR-trash](./features/FR-trash.md) | Entry trash (soft-delete / restore / purge) | current |
+| [FR-trash](./features/FR-trash.md) | Trash (entries, rubrics, contributors, phases) | current |
 | [FR-schedule](./features/FR-schedule.md) | Schedule / calendar | partial |
 | [FR-compile](./features/FR-compile.md) | LaTeX preview & server compile jobs | partial |
 | [FR-zip](./features/FR-zip.md) | ZIP backup export/import | current |

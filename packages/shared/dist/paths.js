@@ -41,6 +41,12 @@ export function entryPath(orgId, notebookId, entryId) {
 export function entriesCollection(orgId, notebookId) {
     return `organizations/${orgId}/notebooks/${notebookId}/entries`;
 }
+export function entryCommentPath(orgId, notebookId, entryId, commentId) {
+    return `organizations/${orgId}/notebooks/${notebookId}/entries/${entryId}/comments/${commentId}`;
+}
+export function entryCommentsCollection(orgId, notebookId, entryId) {
+    return `organizations/${orgId}/notebooks/${notebookId}/entries/${entryId}/comments`;
+}
 export function assetPath(orgId, notebookId, assetId) {
     return `organizations/${orgId}/notebooks/${notebookId}/assets/${assetId}`;
 }

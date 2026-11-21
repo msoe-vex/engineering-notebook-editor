@@ -60,6 +60,10 @@ Compile and judge **never** talk to the object store SDK. Bytes flow through Cor
 
 **Exceptions (not product workers):** ops upload script `infra/scripts/upload-busytex-assets.ts` uses the GCS SDK directly to seed static BusyTeX/LaTeX keys. Website and Collab never open the blob store — Collab loads/flushes Yjs via Core `/internal/collab/*`.
 
+## Progress SSE
+
+Workers call Core progress endpoints; Core fans out `job.progress` with `status` (human message), `progress` (0–100), and optional **`stage`** / **`detail`** (compile uses `fetch` | `tex` | `xelatex` | `upload`). Website Compile UI shows stage + a short rolling log; durable loading toasts are notebook-scoped ([public-collab plan Epic B](../01-requirements/plans/public-collab-comments-polish.md)).
+
 ## Related
 
 - Env: [env-vars.md](../03-reference/env-vars.md)  

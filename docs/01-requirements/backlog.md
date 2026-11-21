@@ -4,6 +4,8 @@ Forward-looking work. Requirements index: [README.md](./README.md). Parity epics
 
 ## Active plans
 
+**[Public CMS, collab cursors, comments, jobs SSE, trash](./plans/public-collab-comments-polish.md)** — **Shipped (A–F)**; leftover polish (public comment decoration strip, api-contracts stage note detail, judge stage reuse).
+
 **[Platform ports](./plans/platform-ports.md)** — Epics A–D shipped (incl. StoragePort hardening/docs); stretch GenAiCompletePort / second-cloud adapters deferred — [ADR-009](../02-architecture/decisions/ADR-009-platform-ports.md).
 
 ## UX plans (largely shipped)

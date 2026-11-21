@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as Y from "yjs";
 import { HocuspocusProvider } from "@hocuspocus/provider";
+import { MessageSquare } from "lucide-react";
 import type { TiptapEditor } from "@/lib/types";
 import { cloudApi, collabWsUrl } from "@/lib/cloud/api";
 import { analyzeEntryContent } from "@/lib/cloud/entryQuality";
 import RichTextArea from "@/components/editor/RichTextArea";
 import { NotebookFormatToolbar, insertBlock } from "@/components/editor/NotebookFormatToolbar";
-import { Skeleton, SkeletonLines } from "@/components/ui";
+import { Button, Skeleton, SkeletonLines } from "@/components/ui";
 import type { TipTapNode } from "@/lib/notebook/metadata";
 import type { ProjectPhase } from "@engineering-notebook/shared";
 import { showNotification } from "@/components/overlays/Notification";
@@ -19,6 +20,7 @@ import {
   patchEditorChrome,
   type CollabConnectionStatus,
 } from "@/lib/cloud/editorChromeStore";
+import { EntryCommentsPanel } from "./EntryCommentsPanel";
 import { useNotebookWorkspace } from "./NotebookWorkspaceContext";
 
 function mapCollabStatus(raw: string): CollabConnectionStatus {
@@ -78,6 +80,8 @@ export function CollaborativeEntryEditor({
   editorRef.current = editor;
   const lastTipTapMirrorRef = useRef("");
 
+  const [localUser, setLocalUser] = useState<{ name: string; color: string } | null>(null);
+  const [commentsOpen, setCommentsOpen] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [textColorPos, setTextColorPos] = useState({ top: 0, left: 0 });
   const [highlightPos, setHighlightPos] = useState({ top: 0, left: 0 });
@@ -157,6 +161,7 @@ export function CollaborativeEntryEditor({
       });
 
       p.setAwarenessField("user", { name: localName, color: localColor });
+      if (!cancelled) setLocalUser({ name: localName, color: localColor });
 
       if (cancelled) {
         p.destroy();
@@ -406,59 +411,81 @@ export function CollaborativeEntryEditor({
   return (
     <div className="flex h-full min-h-0 flex-col text-nb-on-surface">
       {editor && !isArchived && (
-        <div className="z-20 shrink-0 border-b border-nb-outline-variant/20 bg-nb-surface">
-          <NotebookFormatToolbar
-            editor={editor}
-            activeMenu={activeMenu}
-            setActiveMenu={setActiveMenu}
-            textColorPos={textColorPos}
-            setTextColorPos={setTextColorPos}
-            highlightPos={highlightPos}
-            setHighlightPos={setHighlightPos}
-            headingPos={headingPos}
-            setHeadingPos={setHeadingPos}
-            gridPos={gridPos}
-            setGridPos={setGridPos}
-            showTableGrid={showTableGrid}
-            setShowTableGrid={setShowTableGrid}
-            insertImage={insertImage}
-            toggleLinkFn={toggleLinkFn}
-          />
+        <div className="z-20 flex shrink-0 items-stretch border-b border-nb-outline-variant/20 bg-nb-surface">
+          <div className="min-w-0 flex-1">
+            <NotebookFormatToolbar
+              editor={editor}
+              activeMenu={activeMenu}
+              setActiveMenu={setActiveMenu}
+              textColorPos={textColorPos}
+              setTextColorPos={setTextColorPos}
+              highlightPos={highlightPos}
+              setHighlightPos={setHighlightPos}
+              headingPos={headingPos}
+              setHeadingPos={setHeadingPos}
+              gridPos={gridPos}
+              setGridPos={setGridPos}
+              showTableGrid={showTableGrid}
+              setShowTableGrid={setShowTableGrid}
+              insertImage={insertImage}
+              toggleLinkFn={toggleLinkFn}
+            />
+          </div>
+          <div className="flex items-center border-l border-nb-outline-variant/20 px-2">
+            <Button
+              size="sm"
+              variant={commentsOpen ? "secondary" : "ghost"}
+              title="Comments"
+              onClick={() => setCommentsOpen((v) => !v)}
+            >
+              <MessageSquare size={14} />
+            </Button>
+          </div>
         </div>
       )}
-      <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar">
-        <RichTextArea
-          key={documentName}
-          filename={entryId}
+      <div className="flex min-h-0 flex-1">
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto custom-scrollbar">
+          <RichTextArea
+            key={documentName}
+            filename={entryId}
+            entryId={entryId}
+            editable={!isArchived}
+            collaborationDoc={ydoc}
+            collaborationProvider={provider}
+            collaborationUser={localUser || undefined}
+            onEditorInit={setEditor}
+            onImageUpload={(path, _base64) => {
+              void (async () => {
+                try {
+                  const dataUrl = workspaceState.assetCache.get(path);
+                  if (!dataUrl?.startsWith("data:")) return;
+                  const comma = dataUrl.indexOf(",");
+                  const header = dataUrl.slice(0, comma);
+                  const contentType =
+                    /data:([^;]+)/.exec(header)?.[1] || "application/octet-stream";
+                  const bin = atob(dataUrl.slice(comma + 1));
+                  const bytes = new Uint8Array(bin.length);
+                  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                  const assetId = await uploadImageBytes(bytes, contentType, dataUrl);
+                  remapatImageNode(path, assetId, dataUrl);
+                } catch (err) {
+                  const message =
+                    err instanceof Error ? err.message : "Image upload failed.";
+                  console.warn("Cloud asset upload failed for drag/drop image", err);
+                  showNotification(message, "error");
+                }
+              })();
+            }}
+            onToggleLink={(fn) => {
+              toggleLinkFn.current = fn;
+            }}
+          />
+        </div>
+        <EntryCommentsPanel
           entryId={entryId}
-          editable={!isArchived}
-          collaborationDoc={ydoc}
-          onEditorInit={setEditor}
-          onImageUpload={(path, _base64) => {
-            void (async () => {
-              try {
-                const dataUrl = workspaceState.assetCache.get(path);
-                if (!dataUrl?.startsWith("data:")) return;
-                const comma = dataUrl.indexOf(",");
-                const header = dataUrl.slice(0, comma);
-                const contentType =
-                  /data:([^;]+)/.exec(header)?.[1] || "application/octet-stream";
-                const bin = atob(dataUrl.slice(comma + 1));
-                const bytes = new Uint8Array(bin.length);
-                for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-                const assetId = await uploadImageBytes(bytes, contentType, dataUrl);
-                remapatImageNode(path, assetId, dataUrl);
-              } catch (err) {
-                const message =
-                  err instanceof Error ? err.message : "Image upload failed.";
-                console.warn("Cloud asset upload failed for drag/drop image", err);
-                showNotification(message, "error");
-              }
-            })();
-          }}
-          onToggleLink={(fn) => {
-            toggleLinkFn.current = fn;
-          }}
+          editor={editor}
+          open={commentsOpen}
+          onClose={() => setCommentsOpen(false)}
         />
       </div>
     </div>

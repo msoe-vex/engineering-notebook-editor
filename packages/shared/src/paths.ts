@@ -56,6 +56,23 @@ export function entriesCollection(orgId: string, notebookId: string): string {
   return `organizations/${orgId}/notebooks/${notebookId}/entries`;
 }
 
+export function entryCommentPath(
+  orgId: string,
+  notebookId: string,
+  entryId: string,
+  commentId: string
+): string {
+  return `organizations/${orgId}/notebooks/${notebookId}/entries/${entryId}/comments/${commentId}`;
+}
+
+export function entryCommentsCollection(
+  orgId: string,
+  notebookId: string,
+  entryId: string
+): string {
+  return `organizations/${orgId}/notebooks/${notebookId}/entries/${entryId}/comments`;
+}
+
 export function assetPath(orgId: string, notebookId: string, assetId: string): string {
   return `organizations/${orgId}/notebooks/${notebookId}/assets/${assetId}`;
 }

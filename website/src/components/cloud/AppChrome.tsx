@@ -637,6 +637,7 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
                         <span
                           key={peer.clientId}
                           title={peer.name}
+                          aria-label={peer.name}
                           className="inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-nb-surface text-[9px] font-bold text-white shadow-sm"
                           style={{ backgroundColor: peer.color }}
                         >

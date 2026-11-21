@@ -63,7 +63,7 @@ Auth: `Authorization: Bearer <Firebase ID token | local uid>`
 ### Organizations
 
 - `GET/POST /orgs`
-- `GET/PATCH/DELETE /orgs/:orgId` — PATCH may include `name`, `slug` (unique), `publicPage` (`visibility`, mission, announcement, cta)
+- `GET/PATCH/DELETE /orgs/:orgId` — PATCH may include `name`, `slug` (unique), `publicPage` (`visibility`, `about` / legacy `mission`, `logoAssetId`, announcement, cta)
 - `GET/POST /orgs/:orgId/members`, `PATCH/DELETE /orgs/:orgId/members/:uid` — PATCH `{ role?, status?: active|alumni, imageAssetId?, displayName? }`; alumni cannot mutate (403)
 - `GET /orgs/:orgId/public` — admin CMS dump; `PUT/DELETE /orgs/:orgId/public/:section/:itemId` (`donors|projects|events|members|social`)
 - `GET/POST /orgs/:orgId/invites`, `DELETE /orgs/:orgId/invites/:inviteId` — create may send email via `NotificationPort`; `status`: `pending`\|`accepted`\|`revoked` (DELETE soft-revokes pending invites)
@@ -102,8 +102,10 @@ Auth: `Authorization: Bearer <Firebase ID token | local uid>`
 
 ### Notebook roster (credits)
 
-- `GET/POST /orgs/:orgId/notebooks/:notebookId/members` — create may set `orgMemberUid` to link People row
-- `PATCH/DELETE /orgs/:orgId/notebooks/:notebookId/members/:memberId` — PATCH may update `orgMemberUid`, display fields
+- `GET/POST /orgs/:orgId/notebooks/:notebookId/members` — create may set `orgMemberUid` to link People row; `GET ?trashed=1` for soft-deleted only (default omits trashed)
+- `PATCH/DELETE /orgs/:orgId/notebooks/:notebookId/members/:memberId` — `DELETE` soft-deletes (`deletedAt`); PATCH may update `orgMemberUid`, display fields
+- `POST …/members/:memberId/restore` — clear `deletedAt`
+- `DELETE …/members/:memberId/permanent` — hard-delete roster doc
 
 ### Entries
 
@@ -115,9 +117,11 @@ Auth: `Authorization: Bearer <Firebase ID token | local uid>`
   - `day` → `order` (calendar/compile same-day tiebreaker)
 - `GET/PATCH/DELETE /orgs/:orgId/notebooks/:notebookId/entries/:entryId` — `DELETE` soft-deletes (`deletedAt`); SSE `entry.upserted`
 - `POST .../entries/:entryId/restore` — clear `deletedAt`
-- `DELETE .../entries/:entryId/permanent` — hard-delete TipTap/Yjs + metadata; SSE `entry.deleted`
+- `DELETE .../entries/:entryId/permanent` — hard-delete TipTap/Yjs + metadata (+ comments); SSE `entry.deleted`
 - `GET/PUT .../entries/:entryId/content` (TipTap JSON via GCS)
-- `GET /orgs/:orgId/notebooks/:notebookId/events` — **SSE** metadata fanout (`text/event-stream`). Auth: `Authorization: Bearer …` (use `fetch`, not `EventSource`). Events: `entry.upserted`, `entry.deleted`, `notebook.updated`, `entries.changed`, `ping`. Website must not open Firestore listeners.
+- `GET/POST …/entries/:entryId/comments` — thread body in MetadataStore; TipTap `commentAnchor` mark holds `commentId` (Yjs)
+- `PATCH/DELETE …/entries/:entryId/comments/:commentId` — PATCH `{ body?, resolved? }`; SSE `comment.upserted` / `comment.deleted`; denorm `openCommentCount` / `commentCount` on entry
+- `GET /orgs/:orgId/notebooks/:notebookId/events` — **SSE** metadata fanout (`text/event-stream`). Auth: `Authorization: Bearer …` (use `fetch`, not `EventSource`). Events: `entry.upserted`, `entry.deleted`, `notebook.updated`, `entries.changed`, `comment.upserted`, `comment.deleted`, `job.*`, `ping`. Website must not open Firestore listeners.
 
 Entry ordering axes: `date` + `order` (compile/calendar); `folderId` + `explorerOrder` (explorer).
 
@@ -170,7 +174,7 @@ Firestore: `organizations/{orgId}/notebooks/{notebookId}/jobs/{jobId}` (+ `jobLo
 
 Internal generic (header `x-internal-secret`):
 
-- `POST /internal/jobs/:jobId/progress` — `{ orgId, notebookId, status?, progress? }`
+- `POST /internal/jobs/:jobId/progress` — `{ orgId, notebookId, status?, progress?, stage?, detail? }`
 - `POST /internal/jobs/:jobId/complete` — `{ orgId, notebookId, result? }`
 - `POST /internal/jobs/:jobId/fail` — `{ orgId, notebookId, error? }`
 
@@ -180,9 +184,9 @@ Internal compile helpers:
 - `GET /internal/storage/object?orgId&notebookId&key=` — stream notebook-scoped GCS object (worker pull)
 - `GET /internal/compile/asset-ref?orgId&notebookId&assetId=` — resolve `{ contentType, gcsPath }` for TipTap-discovered ids
 - `PUT /internal/compile/export?orgId&notebookId&exportId=latest&jobId=` (also completes the job)
-- `POST /internal/compile/progress` | `/failed` — thin wrappers around job progress/fail
+- `POST /internal/compile/progress` | `/failed` — thin wrappers around job progress/fail; progress accepts `stage` (`fetch`|`tex`|`xelatex`|`upload`) and `detail`
 
-SSE: `job.progress` | `job.done` | `job.failed` (fields include `jobType`)
+SSE: `job.progress` | `job.done` | `job.failed` (fields include `jobType`; progress may include `stage`, `detail`)
 
 ### Judge / rubrics
 

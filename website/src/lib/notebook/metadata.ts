@@ -171,6 +171,8 @@ export interface ProjectPhase {
   iconName: string; // Lucide icon name
   color: string;    // Hex color
   order: number;
+  /** Soft-hide from pickers; entries may still reference the phase id. */
+  deletedAt?: string | null;
 }
 
 export interface NotebookMetadata {

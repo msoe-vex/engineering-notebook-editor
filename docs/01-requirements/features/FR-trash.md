@@ -5,7 +5,7 @@ Related: [FR-explorer](./FR-explorer.md), [schema](../../03-reference/schema.md)
 
 ## Summary
 
-Deleted entries and **rubrics** move to **Trash** (soft-delete) instead of being erased immediately. Users can restore or permanently purge. Folder delete still promotes children (folders are not trashed). Past **grades** (judge runs) are deleted permanently from the Judge tab (not trashed).
+Deleted entries, **rubrics**, **contributors**, and **phases** move to **Trash** (soft-delete) instead of being erased immediately. Users can restore or permanently purge. Folder delete still promotes children (folders are not trashed). Past **grades** (judge runs) are deleted permanently from the Judge tab (not trashed).
 
 ## Actors and permissions
 
@@ -15,11 +15,12 @@ Anyone with notebook access may trash, restore, and purge entries/rubrics (same 
 
 - Explorer / bulk delete → **Move to Trash** (sets `deletedAt`); toast links to Trash
 - Judge rubric context menu → **Move to Trash**
-- `/orgs/:orgId/notebooks/:notebookId/trash` — list trashed entries + rubrics; Restore; Delete forever; Empty trash
+- `/orgs/:orgId/notebooks/:notebookId/trash` — list trashed entries, rubrics, contributors, phases; Restore; Delete forever; Empty trash
 - Notebook section nav includes **Trash**
 - Opening a trashed entry URL shows restore / open Trash (editor disabled)
 - Trashed entries hidden from explorer, calendar/compile metadata, and ZIP export
-- Permanent purge removes TipTap/Yjs + Firestore metadata (entries) or rubric source + doc (rubrics)
+- Contributors: soft-delete from roster; phases: soft-hide (`deletedAt` on phase) from Settings editor / pickers
+- Permanent purge removes TipTap/Yjs + Firestore metadata (entries), rubric source + doc, contributor docs, or hard-removes phase keys
 
 ## Acceptance criteria
 
@@ -28,13 +29,17 @@ Anyone with notebook access may trash, restore, and purge entries/rubrics (same 
 - [ ] Restore → back in explorer / Judge (if that folder was deleted, Core has already rewritten `folderId` to the promote target / root)
 - [ ] Delete forever / Empty trash → entry/rubric gone; content not recoverable
 - [ ] ZIP export omits trashed entries
+- [x] Soft-deleted contributor disappears from credits UI; restore / purge from Trash
+- [x] Soft-deleted phase disappears from pickers; restore / purge from Trash (entries may still reference the id)
 
 ## Data and APIs
 
-- Entry / rubric field: `deletedAt?: string | null` (ISO)
+- Entry / rubric / contributor field: `deletedAt?: string | null` (ISO); phases carry optional `deletedAt` in the notebook `phases` map
 - `DELETE …/entries/:id` — soft-delete; `POST …/restore`; `DELETE …/permanent`
 - `DELETE …/rubrics/:id` — soft-delete; `POST …/restore`; `DELETE …/permanent`
 - `GET …/rubrics?trashed=1` — trashed rubrics only
+- `GET …/members?trashed=1`; `DELETE …/members/:id` soft; `POST …/restore`; `DELETE …/permanent`
+- Phases: soft-trash via `PATCH` notebook `phases` (set / clear `deletedAt`)
 
 ## Non-goals
 

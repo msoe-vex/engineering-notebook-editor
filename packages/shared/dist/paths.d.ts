@@ -13,6 +13,8 @@ export declare function notebookMemberPath(orgId: string, notebookId: string, me
 export declare function notebookMembersCollection(orgId: string, notebookId: string): string;
 export declare function entryPath(orgId: string, notebookId: string, entryId: string): string;
 export declare function entriesCollection(orgId: string, notebookId: string): string;
+export declare function entryCommentPath(orgId: string, notebookId: string, entryId: string, commentId: string): string;
+export declare function entryCommentsCollection(orgId: string, notebookId: string, entryId: string): string;
 export declare function assetPath(orgId: string, notebookId: string, assetId: string): string;
 export declare function assetsCollection(orgId: string, notebookId: string): string;
 /** Org-scoped assets (People avatars, public CMS media) — not notebook-scoped. */

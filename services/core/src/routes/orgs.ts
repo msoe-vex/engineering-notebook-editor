@@ -22,6 +22,8 @@ import {
   publicSocialCollection,
   entriesCollection,
   entryPath,
+  entryCommentPath,
+  entryCommentsCollection,
   assetsCollection,
   assetPath,
   orgAssetsCollection,
@@ -44,6 +46,7 @@ import {
   type Team,
   type TeamMembership,
   type EntryMetadataV5,
+  type EntryComment,
   type AssetMetadata,
   type Invite,
   type InviteStatus,
@@ -1236,11 +1239,14 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
   app.get("/orgs/:orgId/notebooks/:notebookId/members", async (request, reply) => {
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
+    const trashed = String((request.query as { trashed?: string }).trashed || "") === "1";
     const nb = await store().get(notebookPath(orgId, notebookId));
     if (!nb) return reply.code(404).send({ error: "not found" });
     await requireNotebookAccess(user, orgId, withoutId(nb) as NotebookSummaryV5);
     const snap = await store().query(notebookMembersCollection(orgId, notebookId));
-    return snap.map((d) => ({ id: d.id, ...withoutId(d) }));
+    return snap
+      .map((d) => ({ id: d.id, ...withoutId(d) }) as NotebookMember & { id: string })
+      .filter((m) => (trashed ? Boolean(m.deletedAt) : !m.deletedAt));
   });
 
   app.post("/orgs/:orgId/notebooks/:notebookId/members", async (request, reply) => {
@@ -1317,9 +1323,58 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const refPath = notebookMemberPath(orgId, notebookId, memberId);
     const snap = await store().get(refPath);
     if (!snap) return reply.code(404).send({ error: "not found" });
-    await store().delete(refPath);
-    return { ok: true };
+    const existing = withoutId(snap) as NotebookMember;
+    if (existing.deletedAt) {
+      return { ok: true, id: memberId, deletedAt: existing.deletedAt, alreadyTrashed: true };
+    }
+    const ts = nowIso();
+    await store().update(refPath, { deletedAt: ts });
+    return { ok: true, id: memberId, deletedAt: ts };
   });
+
+  app.post(
+    "/orgs/:orgId/notebooks/:notebookId/members/:memberId/restore",
+    async (request, reply) => {
+      const user = getUser(request);
+      const { orgId, notebookId, memberId } = request.params as {
+        orgId: string;
+        notebookId: string;
+        memberId: string;
+      };
+      const nb = await store().get(notebookPath(orgId, notebookId));
+      if (!nb) return reply.code(404).send({ error: "not found" });
+      const nbData = withoutId(nb) as NotebookSummaryV5;
+      await requireNotebookAccess(user, orgId, nbData);
+      assertNotebookNotArchived(nbData);
+      const refPath = notebookMemberPath(orgId, notebookId, memberId);
+      const snap = await store().get(refPath);
+      if (!snap) return reply.code(404).send({ error: "not found" });
+      await store().update(refPath, { deletedAt: null });
+      return { id: memberId, ...withoutId(snap), deletedAt: null };
+    }
+  );
+
+  app.delete(
+    "/orgs/:orgId/notebooks/:notebookId/members/:memberId/permanent",
+    async (request, reply) => {
+      const user = getUser(request);
+      const { orgId, notebookId, memberId } = request.params as {
+        orgId: string;
+        notebookId: string;
+        memberId: string;
+      };
+      const nb = await store().get(notebookPath(orgId, notebookId));
+      if (!nb) return reply.code(404).send({ error: "not found" });
+      const nbData = withoutId(nb) as NotebookSummaryV5;
+      await requireNotebookAccess(user, orgId, nbData);
+      assertNotebookNotArchived(nbData);
+      const refPath = notebookMemberPath(orgId, notebookId, memberId);
+      const snap = await store().get(refPath);
+      if (!snap) return reply.code(404).send({ error: "not found" });
+      await store().delete(refPath);
+      return { ok: true };
+    }
+  );
 
   app.get("/orgs/:orgId/notebooks/:notebookId/entries", async (request) => {
     const user = getUser(request);
@@ -1637,6 +1692,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     if (meta.assetIds?.length) {
       await syncAssetUsedBy(orgId, notebookId, entryId, meta.assetIds, []);
     }
+    await deleteCollectionDocs(entryCommentsCollection(orgId, notebookId, entryId));
     await store().delete(refPath);
     const ts = nowIso();
     publishNotebookEvent(orgId, notebookId, {
@@ -1718,6 +1774,167 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       if (!snap) return reply.code(404).send({ error: "not found" });
       const meta = withoutId(snap) as EntryMetadataV5;
       await permanentlyDeleteEntry(orgId, notebookId, entryId, meta);
+      return { ok: true };
+    }
+  );
+
+  async function recountEntryComments(orgId: string, notebookId: string, entryId: string) {
+    const rows = await store().query(entryCommentsCollection(orgId, notebookId, entryId));
+    let openCommentCount = 0;
+    for (const row of rows) {
+      const c = withoutId(row) as EntryComment;
+      if (!c.resolvedAt) openCommentCount += 1;
+    }
+    const commentCount = rows.length;
+    const refPath = entryPath(orgId, notebookId, entryId);
+    const snap = await store().get(refPath);
+    if (!snap) return;
+    const ts = nowIso();
+    await store().update(refPath, { openCommentCount, commentCount, updatedAt: ts });
+    const result = {
+      id: entryId,
+      ...(withoutId(snap) as EntryMetadataV5),
+      openCommentCount,
+      commentCount,
+      updatedAt: ts,
+    };
+    publishNotebookEvent(orgId, notebookId, {
+      type: "entry.upserted",
+      entryId,
+      entry: result as Record<string, unknown>,
+      at: ts,
+    });
+  }
+
+  app.get(
+    "/orgs/:orgId/notebooks/:notebookId/entries/:entryId/comments",
+    async (request, reply) => {
+      const user = getUser(request);
+      const { orgId, notebookId, entryId } = request.params as {
+        orgId: string;
+        notebookId: string;
+        entryId: string;
+      };
+      await assertNotebookAccess(user, orgId, notebookId);
+      const entrySnap = await store().get(entryPath(orgId, notebookId, entryId));
+      if (!entrySnap) return reply.code(404).send({ error: "not found" });
+      const rows = await store().query(entryCommentsCollection(orgId, notebookId, entryId));
+      return rows
+        .map((d) => {
+          const { id, ...rest } = d as EntryComment & { id: string };
+          return { id, ...rest };
+        })
+        .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+    }
+  );
+
+  app.post(
+    "/orgs/:orgId/notebooks/:notebookId/entries/:entryId/comments",
+    async (request, reply) => {
+      const user = getUser(request);
+      const { orgId, notebookId, entryId } = request.params as {
+        orgId: string;
+        notebookId: string;
+        entryId: string;
+      };
+      await assertNotebookWritable(user, orgId, notebookId);
+      const entrySnap = await store().get(entryPath(orgId, notebookId, entryId));
+      if (!entrySnap) return reply.code(404).send({ error: "not found" });
+      const body = request.body as { body?: string; anchorQuote?: string; id?: string };
+      const text = (body.body || "").trim();
+      if (!text) return reply.code(400).send({ error: "body required" });
+      const id = (body.id || "").trim() || randomUUID();
+      const ts = nowIso();
+      const comment: EntryComment = omitUndefined({
+        id,
+        entryId,
+        body: text,
+        createdBy: user.uid,
+        createdAt: ts,
+        updatedAt: ts,
+        anchorQuote: body.anchorQuote?.trim() || undefined,
+      }) as EntryComment;
+      await store().set(entryCommentPath(orgId, notebookId, entryId, id), comment as unknown as Record<string, unknown>);
+      publishNotebookEvent(orgId, notebookId, {
+        type: "comment.upserted",
+        entryId,
+        comment: comment as unknown as Record<string, unknown>,
+        at: ts,
+      });
+      await recountEntryComments(orgId, notebookId, entryId);
+      return comment;
+    }
+  );
+
+  app.patch(
+    "/orgs/:orgId/notebooks/:notebookId/entries/:entryId/comments/:commentId",
+    async (request, reply) => {
+      const user = getUser(request);
+      const { orgId, notebookId, entryId, commentId } = request.params as {
+        orgId: string;
+        notebookId: string;
+        entryId: string;
+        commentId: string;
+      };
+      await assertNotebookWritable(user, orgId, notebookId);
+      const path = entryCommentPath(orgId, notebookId, entryId, commentId);
+      const snap = await store().get(path);
+      if (!snap) return reply.code(404).send({ error: "not found" });
+      const existing = withoutId(snap) as EntryComment;
+      const body = request.body as {
+        body?: string;
+        resolved?: boolean;
+      };
+      const ts = nowIso();
+      const patch: Record<string, unknown> = { updatedAt: ts };
+      if (body.body !== undefined) {
+        const text = body.body.trim();
+        if (!text) return reply.code(400).send({ error: "body required" });
+        patch.body = text;
+      }
+      if (body.resolved === true) {
+        patch.resolvedAt = ts;
+        patch.resolvedBy = user.uid;
+      } else if (body.resolved === false) {
+        patch.resolvedAt = null;
+        patch.resolvedBy = null;
+      }
+      await store().update(path, omitUndefined(patch));
+      const comment = { ...existing, ...patch, id: commentId } as EntryComment;
+      publishNotebookEvent(orgId, notebookId, {
+        type: "comment.upserted",
+        entryId,
+        comment: comment as unknown as Record<string, unknown>,
+        at: ts,
+      });
+      await recountEntryComments(orgId, notebookId, entryId);
+      return comment;
+    }
+  );
+
+  app.delete(
+    "/orgs/:orgId/notebooks/:notebookId/entries/:entryId/comments/:commentId",
+    async (request, reply) => {
+      const user = getUser(request);
+      const { orgId, notebookId, entryId, commentId } = request.params as {
+        orgId: string;
+        notebookId: string;
+        entryId: string;
+        commentId: string;
+      };
+      await assertNotebookWritable(user, orgId, notebookId);
+      const path = entryCommentPath(orgId, notebookId, entryId, commentId);
+      const snap = await store().get(path);
+      if (!snap) return reply.code(404).send({ error: "not found" });
+      await store().delete(path);
+      const ts = nowIso();
+      publishNotebookEvent(orgId, notebookId, {
+        type: "comment.deleted",
+        entryId,
+        commentId,
+        at: ts,
+      });
+      await recountEntryComments(orgId, notebookId, entryId);
       return { ok: true };
     }
   );

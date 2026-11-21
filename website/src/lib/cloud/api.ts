@@ -53,7 +53,10 @@ export type OrgSummary = {
   publicPage?: {
     visibility?: "public" | "hidden";
     announcement?: { text: string; href?: string };
+    about?: string;
+    /** @deprecated Prefer `about`. */
     mission?: string;
+    logoAssetId?: string;
     cta?: { title?: string; body?: string; joinUrl?: string; donateUrl?: string };
   };
   createdAt?: string;
@@ -138,6 +141,7 @@ export type NotebookMemberSummary = {
   order: number;
   imageAssetId?: string;
   orgMemberUid?: string;
+  deletedAt?: string | null;
 };
 
 export const cloudApi = {
@@ -363,8 +367,12 @@ export const cloudApi = {
       folders: Record<string, { name: string; parentId: string | null; order: number }>;
     }>(`/orgs/${orgId}/notebooks/${notebookId}/folders/${folderId}`, { method: "DELETE" }),
 
-  listNotebookMembers: (orgId: string, notebookId: string) =>
-    coreFetch<NotebookMemberSummary[]>(`/orgs/${orgId}/notebooks/${notebookId}/members`),
+  listNotebookMembers: (orgId: string, notebookId: string, opts?: { trashed?: boolean }) => {
+    const q = opts?.trashed ? "?trashed=1" : "";
+    return coreFetch<NotebookMemberSummary[]>(
+      `/orgs/${orgId}/notebooks/${notebookId}/members${q}`
+    );
+  },
   createNotebookMember: (
     orgId: string,
     notebookId: string,
@@ -391,9 +399,20 @@ export const cloudApi = {
       { method: "PATCH", body: JSON.stringify(body) }
     ),
   deleteNotebookMember: (orgId: string, notebookId: string, memberId: string) =>
-    coreFetch<{ ok: boolean }>(`/orgs/${orgId}/notebooks/${notebookId}/members/${memberId}`, {
-      method: "DELETE",
-    }),
+    coreFetch<{ ok: boolean; deletedAt?: string }>(
+      `/orgs/${orgId}/notebooks/${notebookId}/members/${memberId}`,
+      { method: "DELETE" }
+    ),
+  restoreNotebookMember: (orgId: string, notebookId: string, memberId: string) =>
+    coreFetch<NotebookMemberSummary>(
+      `/orgs/${orgId}/notebooks/${notebookId}/members/${memberId}/restore`,
+      { method: "POST" }
+    ),
+  purgeNotebookMember: (orgId: string, notebookId: string, memberId: string) =>
+    coreFetch<{ ok: boolean }>(
+      `/orgs/${orgId}/notebooks/${notebookId}/members/${memberId}/permanent`,
+      { method: "DELETE" }
+    ),
 
   listEntries: (orgId: string, notebookId: string) =>
     coreFetch<{
@@ -499,6 +518,52 @@ export const cloudApi = {
   purgeEntry: (orgId: string, notebookId: string, entryId: string) =>
     coreFetch<{ ok: boolean }>(
       `/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}/permanent`,
+      { method: "DELETE" }
+    ),
+
+  listEntryComments: (orgId: string, notebookId: string, entryId: string) =>
+    coreFetch<
+      Array<{
+        id: string;
+        entryId: string;
+        body: string;
+        createdBy: string;
+        createdAt: string;
+        updatedAt?: string;
+        resolvedAt?: string | null;
+        resolvedBy?: string | null;
+        anchorQuote?: string;
+      }>
+    >(`/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}/comments`),
+  createEntryComment: (
+    orgId: string,
+    notebookId: string,
+    entryId: string,
+    body: { body: string; anchorQuote?: string; id?: string }
+  ) =>
+    coreFetch<{ id: string; body: string; createdAt: string }>(
+      `/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}/comments`,
+      { method: "POST", body: JSON.stringify(body) }
+    ),
+  patchEntryComment: (
+    orgId: string,
+    notebookId: string,
+    entryId: string,
+    commentId: string,
+    body: { body?: string; resolved?: boolean }
+  ) =>
+    coreFetch(
+      `/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}/comments/${commentId}`,
+      { method: "PATCH", body: JSON.stringify(body) }
+    ),
+  deleteEntryComment: (
+    orgId: string,
+    notebookId: string,
+    entryId: string,
+    commentId: string
+  ) =>
+    coreFetch<{ ok: boolean }>(
+      `/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}/comments/${commentId}`,
       { method: "DELETE" }
     ),
 

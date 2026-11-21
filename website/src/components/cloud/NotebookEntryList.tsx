@@ -73,6 +73,8 @@ type EntryFilters = {
   dateTo: string;
   /** null = all, entries = non-templates, templates = templates only */
   kind: "all" | "entries" | "templates";
+  /** Only entries with unresolved comment threads. */
+  hasOpenComments: boolean;
 };
 
 type EntrySortMode = "name" | "date" | "phase";
@@ -83,6 +85,7 @@ const EMPTY_FILTERS: EntryFilters = {
   dateFrom: "",
   dateTo: "",
   kind: "all",
+  hasOpenComments: false,
 };
 
 function explorerFilterStorageKey(notebookId: string) {
@@ -131,6 +134,9 @@ function entryMatchesFilters(
   if (filters.author) {
     const authors = e.authors || [];
     if (!authors.includes(filters.author)) return false;
+  }
+  if (filters.hasOpenComments) {
+    if (!(e.openCommentCount && e.openCommentCount > 0)) return false;
   }
   if (filters.dateFrom || filters.dateTo) {
     if (e.isTemplate) return false;
@@ -994,7 +1000,8 @@ export function NotebookEntryList({
       filters.author ||
       filters.dateFrom ||
       filters.dateTo ||
-      filters.kind !== "all"
+      filters.kind !== "all" ||
+      filters.hasOpenComments
   );
   const filtering = Boolean(q) || filtersActive;
 
@@ -2099,6 +2106,17 @@ export function NotebookEntryList({
                   <option key={name} value={name} />
                 ))}
               </datalist>
+            </label>
+
+            <label className="flex items-center gap-2 text-nb-label text-nb-on-surface">
+              <input
+                type="checkbox"
+                checked={filters.hasOpenComments}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, hasOpenComments: e.target.checked }))
+                }
+              />
+              Has open comments
             </label>
 
             <div className="grid grid-cols-2 gap-2">

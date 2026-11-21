@@ -8,8 +8,10 @@ Related: [FR-entries-collab](../01-requirements/features/FR-entries-collab.md), 
 | --- | --- | --- | --- |
 | Entry **body** (TipTap) | Hocuspocus / Yjs WSS | Collab | GCS (flush via Core) |
 | Entry / notebook **metadata** | Core SSE (`GET …/notebooks/:id/events`) | Core | Firestore |
+| Comment **anchors** | TipTap `commentAnchor` mark in Yjs | Collab | GCS (with body) |
+| Comment **threads** | Core REST + SSE `comment.upserted` / `comment.deleted` | Core | Firestore |
 
-Website does **not** open Firestore listeners. Collab does **not** own metadata fanout.
+Website does **not** open Firestore listeners. Collab does **not** own metadata fanout. Do **not** put entry/notebook metadata into Yjs.
 
 ## Document naming (body)
 

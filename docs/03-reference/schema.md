@@ -27,6 +27,7 @@ Clients never talk to Firestore/metadata store directly (`infra/firestore.rules`
 | `notebooks/{notebookId}` | Notebook summary | See below |
 | `notebooks/{id}/members/{memberId}` | **Credits roster** (may lack app account) | `name`, `role`, `order`, `imageAssetId?`, `orgMemberUid?` |
 | `notebooks/{id}/entries/{entryId}` | Entry **metadata only** | See below |
+| `…/entries/{entryId}/comments/{commentId}` | Comment **thread body** (anchor is TipTap mark) | `body`, `createdBy`, `createdAt`, `resolvedAt?`, `anchorQuote?` |
 | `notebooks/{id}/assets/{assetId}` | Notebook asset metadata | `contentType`, `byteSize`, `gcsPath`, `createdBy`, `usedBy[]` |
 | `notebooks/{id}/rubrics/{rubricId}` | Competition rubrics | `name`, `matrix?`, `status` (`uploaded`\|`normalizing`\|`ready`\|`failed`), `sourceGcsPath?`, `deletedAt?`, … |
 | `notebooks/{id}/judgments/{judgmentId}` | Judge grades | `rubricId`, `matrix`, `categories[]`, `totalPoints`, `totalMaxPoints`, `summary`, `status` (`running`\|`completed`\|`failed`), `jobId?`, … |
@@ -41,7 +42,7 @@ title?, subtitle?, logoAssetId?
 folders: Record<folderId, { name, parentId, order }>
   // folder.order = sibling position under parentId (explorer tree only)
 access?: { mode: "org" | "restricted", teamIds[], userIds[] }
-phases?: Record<phaseId, { name, description, iconName, color, order }>
+phases?: Record<phaseId, { name, description, iconName, color, order, deletedAt? }>
 lastCompiled?
 createdAt?, createdBy?, updatedAt
 ```
@@ -57,6 +58,8 @@ resources?, references?, assetIds?
 isValid?, validationErrors?
 tipTapGcsPath, tipTapRev, yjsGcsPath, yjsRev
 deletedAt?                // soft-delete (Trash); omit/null when live
+openCommentCount?         // denorm unresolved threads
+commentCount?             // denorm all threads
 createdAt, updatedAt
 ```
 
@@ -138,7 +141,7 @@ Implemented fields for [FR-org-public-page](../01-requirements/features/FR-org-p
 | --- | --- |
 | `organizations/{orgId}.slug` | Globally unique, URL-safe; admin-set if not taken; reserved list |
 | `orgSlugs/{slug}` → `{ orgId }` | Lookup / uniqueness (or equivalent unique index) |
-| `organizations/{orgId}.publicPage` | `{ visibility: "public" \| "hidden", announcement?, mission?, cta?, … }` |
+| `organizations/{orgId}.publicPage` | `{ visibility: "public" \| "hidden", announcement?, about?, logoAssetId?, cta?, … }` (`mission` legacy alias of `about`) |
 | `…/publicDonors/{id}` | name, logoAssetId?, url?, tier?, order |
 | `…/publicProjects/{id}` | title, season?, summary, highlights[], media[], externalUrl?, order, visibility |
 | `…/publicEvents/{id}` | kind: `recurring` \| `dated`; day/time or date; title; location; order |

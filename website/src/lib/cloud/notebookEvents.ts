@@ -32,6 +32,8 @@ export type NotebookRealtimeEvent =
       jobType: string;
       status: string;
       progress: number;
+      stage?: string;
+      detail?: string;
       at: string;
     }
   | {
@@ -46,6 +48,18 @@ export type NotebookRealtimeEvent =
       jobId: string;
       jobType: string;
       error: string;
+      at: string;
+    }
+  | {
+      type: "comment.upserted";
+      entryId: string;
+      comment: Record<string, unknown>;
+      at: string;
+    }
+  | {
+      type: "comment.deleted";
+      entryId: string;
+      commentId: string;
       at: string;
     }
   | {

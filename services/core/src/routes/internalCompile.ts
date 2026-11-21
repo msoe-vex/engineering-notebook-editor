@@ -340,6 +340,8 @@ export async function registerInternalCompileRoutes(
       jobId?: string;
       status?: string;
       progress?: number;
+      stage?: string;
+      detail?: string;
     };
     if (!body.orgId || !body.notebookId) {
       return reply.code(400).send({ error: "orgId and notebookId required" });
@@ -350,6 +352,8 @@ export async function registerInternalCompileRoutes(
       jobId: body.jobId || "unknown",
       statusMessage: body.status || "Working…",
       progress: Math.min(100, Math.max(0, Number(body.progress) || 0)),
+      stage: body.stage,
+      detail: body.detail,
     });
     return { ok: true };
   });

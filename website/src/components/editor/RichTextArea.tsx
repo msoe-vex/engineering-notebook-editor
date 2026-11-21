@@ -9,6 +9,7 @@ import type { TiptapEditor } from "@/lib/types";
 import { NodeSelection, Transaction, EditorState, Plugin } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
+import CollaborationCaret from "@tiptap/extension-collaboration-caret";
 import type { Doc as YDoc } from "yjs";
 import { workspaceState } from "@/lib/cloud/workspaceState";
 import { useCloudWorkspace } from "@/hooks/useCloudWorkspace";
@@ -21,6 +22,7 @@ import {
   IdRemapper,
   CustomHeading,
   NotebookDocAttrs,
+  CommentAnchor,
 } from "@/lib/editor/extensions";
 import { Color } from "@tiptap/extension-color";
 import { TextStyle } from "@tiptap/extension-text-style";
@@ -88,6 +90,9 @@ interface RichTextAreaProps {
   /** When set, TipTap syncs via Yjs (Hocuspocus) instead of local content/onChange. */
   collaborationDoc?: YDoc;
   collaborationField?: string;
+  /** Hocuspocus (or compatible) provider — required with CollaborationCaret. */
+  collaborationProvider?: { awareness: unknown } | null;
+  collaborationUser?: { name: string; color: string };
   editable?: boolean;
 }
 
@@ -101,6 +106,8 @@ const RichTextArea = ({
   entryId,
   collaborationDoc,
   collaborationField = "default",
+  collaborationProvider,
+  collaborationUser,
   editable = true,
 }: RichTextAreaProps) => {
   const { metadata } = useCloudWorkspace();
@@ -137,6 +144,7 @@ const RichTextArea = ({
     NotebookDocAttrs,
     NotebookListItem,
     Highlight.configure({ multicolor: true }),
+    CommentAnchor,
     CustomSuperscript,
     CustomSubscript,
     ImageWithCaption.configure({ inline: false, allowBase64: true, dbName }),
@@ -408,6 +416,34 @@ const RichTextArea = ({
             document: collaborationDoc,
             field: collaborationField,
           }),
+          ...(collaborationProvider
+            ? [
+                CollaborationCaret.configure({
+                  provider: collaborationProvider,
+                  user: collaborationUser || { name: "Editor", color: "#2563eb" },
+                  render: (user) => {
+                    const cursor = document.createElement("span");
+                    cursor.classList.add("collaboration-carets__caret");
+                    cursor.setAttribute("style", `border-color: ${user.color}`);
+                    cursor.setAttribute("title", String(user.name || "Editor"));
+
+                    const label = document.createElement("div");
+                    label.classList.add("collaboration-carets__label");
+                    label.setAttribute("style", `background-color: ${user.color}`);
+                    label.appendChild(document.createTextNode(String(user.name || "Editor")));
+                    cursor.appendChild(label);
+                    return cursor;
+                  },
+                  selectionRender: (user) => ({
+                    nodeName: "span",
+                    class: "collaboration-carets__selection",
+                    style: `background-color: ${user.color}33`,
+                    "data-user": String(user.name || ""),
+                    title: String(user.name || ""),
+                  }),
+                }),
+              ]
+            : []),
         ]
       : []),
   ];

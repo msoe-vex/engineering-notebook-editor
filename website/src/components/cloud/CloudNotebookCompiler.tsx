@@ -9,6 +9,7 @@ import { Alert, Button, Skeleton } from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
 import { compileCloudNotebook } from "@/lib/cloud/compileCloudNotebook";
 import { subscribeNotebookEvents } from "@/lib/cloud/notebookEvents";
+import { trackNotebookJobToast } from "@/hooks/useNotebookJobToasts";
 
 const LatexPreview = dynamic(() => import("@/components/editor/LatexPreview"), {
   ssr: false,
@@ -35,6 +36,8 @@ export function CloudNotebookCompiler() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState(0);
+  const [stage, setStage] = useState<string | null>(null);
+  const [stageLog, setStageLog] = useState<string[]>([]);
   const [log, setLog] = useState<string | null>(null);
   const [engine, setEngine] = useState<"server" | "busytex" | null>(null);
   const jobIdRef = useRef<string | null>(null);
@@ -120,6 +123,11 @@ export function CloudNotebookCompiler() {
             if (jobIdRef.current && event.jobId !== jobIdRef.current) return;
             setStatus(event.status || "Working…");
             setProgress(event.progress ?? 0);
+            if (event.stage) setStage(event.stage);
+            const line = [event.stage, event.detail || event.status].filter(Boolean).join(": ");
+            if (line) {
+              setStageLog((prev) => [...prev.slice(-8), line]);
+            }
             return;
           }
           if (event.type === "job.done") {
@@ -159,11 +167,19 @@ export function CloudNotebookCompiler() {
     setLog(null);
     setStatus("Starting…");
     setProgress(0);
+    setStage(null);
+    setStageLog([]);
     setError(null);
     setEngine(null);
     jobIdRef.current = null;
     try {
       const enqueued = await cloudApi.startCompile(orgId, notebookId);
+      trackNotebookJobToast({
+        jobId: enqueued.jobId,
+        label: "Compiling notebook…",
+        successLabel: "Compile finished",
+        kind: "compile",
+      });
       await runServerCompile(enqueued.jobId);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -260,6 +276,7 @@ export function CloudNotebookCompiler() {
         <div className="shrink-0 border-b border-nb-outline-variant/20 bg-nb-surface-low px-4 py-2">
           <div className="mb-1.5 flex justify-between text-nb-caption font-semibold text-nb-on-surface-variant">
             <span className="truncate pr-3">
+              {stage ? `[${stage}] ` : ""}
               {status}
               {engine === "server" ? " · server" : engine === "busytex" ? " · browser" : ""}
             </span>
@@ -271,6 +288,15 @@ export function CloudNotebookCompiler() {
               style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
             />
           </div>
+          {stageLog.length > 0 && (
+            <ul className="mt-2 max-h-24 space-y-0.5 overflow-y-auto text-[11px] text-nb-on-surface-variant/80">
+              {stageLog.map((line, i) => (
+                <li key={`${i}-${line}`} className="truncate font-mono">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 

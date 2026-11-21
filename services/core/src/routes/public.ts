@@ -102,12 +102,21 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
       })
     );
 
+    const logoUrl = await resolveOrgAssetUrl(org.publicPage?.logoAssetId);
+    const publicPage = org.publicPage
+      ? {
+          ...org.publicPage,
+          about: org.publicPage.about || org.publicPage.mission,
+        }
+      : undefined;
+
     return {
       org: {
         id: orgId,
         name: org.name,
         slug: org.slug,
-        publicPage: org.publicPage,
+        publicPage,
+        logoUrl,
       },
       donors: enrichedDonors,
       projects: projects.map((d) => {

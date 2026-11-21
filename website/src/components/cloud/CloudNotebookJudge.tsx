@@ -26,7 +26,7 @@ import {
   type RubricRecord,
 } from "@/lib/cloud/api";
 import { subscribeNotebookEvents } from "@/lib/cloud/notebookEvents";
-import toast from "react-hot-toast";
+import { trackNotebookJobToast } from "@/hooks/useNotebookJobToasts";
 
 type CtxState = { x: number; y: number; items: MenuItem[] } | null;
 
@@ -107,27 +107,22 @@ export function CloudNotebookJudge() {
       (event) => {
         const pending = extractJobRef.current;
         if (!pending) return;
-        if (event.type === "job.progress") {
-          return;
-        }
+        if (event.type === "job.progress") return;
         if (event.type === "job.done") {
           if (event.jobId !== pending.jobId) return;
           extractJobRef.current = null;
-          toast.dismiss(pending.toastId);
           const rubricId =
             (typeof event.result?.rubricId === "string" && event.result.rubricId) ||
             pending.rubricId;
+          // Toasts are owned by useNotebookJobToasts (NotebookShell).
           void refreshLists().then(() => {
             navigate({ kind: "rubric", id: rubricId });
-            showNotification(`Rubric “${pending.name}” is ready`, "success");
           });
           return;
         }
         if (event.type === "job.failed") {
           if (event.jobId !== pending.jobId) return;
           extractJobRef.current = null;
-          toast.dismiss(pending.toastId);
-          showNotification(event.error || "Rubric extract failed", "error");
           void refreshLists();
         }
       },
@@ -137,7 +132,12 @@ export function CloudNotebookJudge() {
   }, [orgId, notebookId, refreshLists, navigate]);
 
   function onExtractStarted(info: { jobId: string; rubricId: string; name: string }) {
-    const toastId = showNotification(`Extracting “${info.name}”…`, "loading") as string;
+    const toastId = trackNotebookJobToast({
+      jobId: info.jobId,
+      label: `Extracting “${info.name}”…`,
+      successLabel: `Rubric “${info.name}” is ready`,
+      kind: "judge-normalize",
+    });
     extractJobRef.current = { ...info, toastId };
   }
 
@@ -258,6 +258,12 @@ export function CloudNotebookJudge() {
       const { jobId, judgmentId } = await cloudApi.startJudge(orgId, notebookId, {
         rubricId,
         ...inference,
+      });
+      trackNotebookJobToast({
+        jobId,
+        label: "Running judge…",
+        successLabel: "Judge finished",
+        kind: "judge-score",
       });
       await waitForScoreJob(jobId, judgmentId);
     } catch (err) {

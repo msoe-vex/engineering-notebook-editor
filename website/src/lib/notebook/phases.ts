@@ -21,10 +21,22 @@ export interface PhaseInfo {
   text: string;
 }
 
-export function getPhases(customPhases?: Record<string, ProjectPhase> | Identified<ProjectPhase>[]): Identified<ProjectPhase>[] {
-  if (customPhases === undefined) return sortedPhases(DEFAULT_PHASES);
-  if (Array.isArray(customPhases)) return [...customPhases].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
-  return sortedPhases(customPhases);
+export function getPhases(
+  customPhases?: Record<string, ProjectPhase> | Identified<ProjectPhase>[],
+  opts?: { includeTrashed?: boolean }
+): Identified<ProjectPhase>[] {
+  const includeTrashed = Boolean(opts?.includeTrashed);
+  const filterActive = (rows: Identified<ProjectPhase>[]) =>
+    includeTrashed
+      ? rows
+      : rows.filter((p) => !(p as ProjectPhase & { deletedAt?: string | null }).deletedAt);
+  if (customPhases === undefined) return filterActive(sortedPhases(DEFAULT_PHASES));
+  if (Array.isArray(customPhases)) {
+    return filterActive([...customPhases]).sort(
+      (a, b) => a.order - b.order || a.id.localeCompare(b.id)
+    );
+  }
+  return filterActive(sortedPhases(customPhases));
 }
 
 export function getPhaseConfig(phases: Identified<ProjectPhase>[]): Record<string, PhaseInfo> {

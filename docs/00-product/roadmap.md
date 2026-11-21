@@ -59,8 +59,13 @@ HTTP Core→worker wake is **retired**.
 ### Active plans (next) — pick up on `microservices`
 
 1. Manual smoke leftovers (mobile keyboard, share ACL, upload limits) — [smoke-tests](../04-guides/smoke-tests.md)  
-2. Older GitHub issues (tables, comments, tagging, …) when prioritized  
+2. Older GitHub issues (tables, tagging, …) when prioritized  
 3. Stretch ports: GenAiCompletePort / second-cloud adapters only if needed — [platform-ports.md](../01-requirements/plans/platform-ports.md)  
+
+### Recently shipped on `microservices`
+
+1. [Public CMS / collab / comments / jobs SSE / trash](../01-requirements/plans/public-collab-comments-polish.md) — Epics A–F (polish leftovers in plan)  
+
 
 Handoff notes: [local-development.md](../04-guides/local-development.md#handoff--continue-later).
 

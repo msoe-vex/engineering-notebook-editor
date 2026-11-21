@@ -71,7 +71,9 @@ export async function runCompileJob(opts: {
   const { orgId, notebookId, jobId } = opts;
   const templateDir = resolveTemplateDir();
 
-  await reportCompileProgress(orgId, notebookId, jobId, "Fetching notebook metadata…", 12);
+  await reportCompileProgress(orgId, notebookId, jobId, "Fetching notebook metadata…", 12, {
+    stage: "fetch",
+  });
   const meta = await fetchCompileSnapshotMeta(orgId, notebookId);
   console.log(
     `[compile] meta: ${Object.keys(meta.entries).length} entries, ${Object.keys(meta.assets).length} asset refs`
@@ -79,23 +81,32 @@ export async function runCompileJob(opts: {
 
   const snapshot = await hydrateCompileSnapshot(meta, {
     onProgress: (message, progress) => {
-      void reportCompileProgress(orgId, notebookId, jobId, message, progress);
+      void reportCompileProgress(orgId, notebookId, jobId, message, progress, {
+        stage: "fetch",
+        detail: message,
+      });
     },
   });
   console.log(
     `[compile] hydrated: ${Object.keys(snapshot.entries).length} entries, ${Object.keys(snapshot.assets).length} assets downloaded`
   );
 
-  await reportCompileProgress(orgId, notebookId, jobId, "Building LaTeX workspace…", 40);
+  await reportCompileProgress(orgId, notebookId, jobId, "Building LaTeX workspace…", 40, {
+    stage: "tex",
+  });
   const workDir = process.env.WORK_DIR || path.join(os.tmpdir(), `nb-compile-${jobId}`);
   buildWorkspace({ workDir, templateDir, snapshot });
   console.log(`[compile] workspace=${workDir}`);
 
-  await reportCompileProgress(orgId, notebookId, jobId, "Running XeLaTeX…", 55);
+  await reportCompileProgress(orgId, notebookId, jobId, "Running XeLaTeX…", 55, {
+    stage: "xelatex",
+  });
   const pdf = runXeLatex(workDir);
   console.log(`[compile] pdf bytes=${pdf.byteLength}`);
 
-  await reportCompileProgress(orgId, notebookId, jobId, "Uploading PDF…", 90);
+  await reportCompileProgress(orgId, notebookId, jobId, "Uploading PDF…", 90, {
+    stage: "upload",
+  });
   const uploaded = await uploadCompileExport(orgId, notebookId, pdf, jobId);
   console.log(`[compile] uploaded lastCompiled=${uploaded.lastCompiled}`);
   return uploaded;

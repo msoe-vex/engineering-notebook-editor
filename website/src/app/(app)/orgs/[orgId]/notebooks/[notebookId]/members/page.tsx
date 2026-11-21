@@ -408,9 +408,9 @@ export default function NotebookMembersPage() {
 
       <ConfirmationDialog
         isOpen={Boolean(deleteMember)}
-        title="Remove from roster?"
-        message={`Remove ${deleteMember?.name} from this notebook’s credits?`}
-        confirmLabel="Remove"
+        title="Move to Trash?"
+        message={`Move ${deleteMember?.name} to Trash? You can restore them from Trash.`}
+        confirmLabel="Move to Trash"
         variant="danger"
         onCancel={() => setDeleteMember(null)}
         onConfirm={() => {
@@ -419,7 +419,10 @@ export default function NotebookMembersPage() {
           if (!id) return;
           void cloudApi
             .deleteNotebookMember(orgId, notebookId, id)
-            .then(load)
+            .then(() => {
+              load();
+              showNotification("Contributor moved to Trash", "success");
+            })
             .catch((err) => setError((err as Error).message));
         }}
       />

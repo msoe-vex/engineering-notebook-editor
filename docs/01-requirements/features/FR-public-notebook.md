@@ -36,6 +36,7 @@ Allow publishing a **read-only public (or unlisted) link** to a notebook so outs
 - [x] Restricted-mode notebooks still require an explicit publish action
 - [x] `notebookKey` unique within the org; org slug + key resolves to at most one notebook
 - [x] Who published is recorded on the notebook (`publishedAt` / `publishedBy`) for **admins only** (settings / GET notebook) — cleared on revoke
+- [x] Notebook Settings exposes **Copy public URL** when `publicAccess` ≠ `off` and the org has a slug
 
 ## Data and APIs
 

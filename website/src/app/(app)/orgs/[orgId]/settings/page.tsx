@@ -44,9 +44,16 @@ export default function OrgSettingsPage() {
     const vis = org?.publicPage?.visibility === "public" ? "public" : "hidden";
     setPublicVisibility(vis);
     setInitialVisibility(vis);
-    setMission(org?.publicPage?.mission || "");
-    setInitialMission(org?.publicPage?.mission || "");
-  }, [org?.name, org?.slug, org?.publicPage?.visibility, org?.publicPage?.mission]);
+    const about = org?.publicPage?.about || org?.publicPage?.mission || "";
+    setMission(about);
+    setInitialMission(about);
+  }, [
+    org?.name,
+    org?.slug,
+    org?.publicPage?.visibility,
+    org?.publicPage?.about,
+    org?.publicPage?.mission,
+  ]);
 
   const isDirty =
     (name.trim() !== initialName.trim() && name.trim().length > 0) ||
@@ -96,7 +103,8 @@ export default function OrgSettingsPage() {
         name: name.trim(),
         publicPage: {
           visibility: publicVisibility,
-          mission: mission.trim() || undefined,
+          about: mission.trim() || undefined,
+          logoAssetId: org?.publicPage?.logoAssetId,
           announcement: org?.publicPage?.announcement,
           cta: org?.publicPage?.cta,
         },
@@ -174,7 +182,7 @@ export default function OrgSettingsPage() {
           </select>
         </label>
         <TextField
-          label="Mission (public)"
+          label="About (public)"
           value={mission}
           onChange={(e) => setMission(e.target.value)}
           placeholder="Short about blurb for /o/slug"

@@ -31,6 +31,7 @@ Optional GenAI for **titles/captions** remains website-orchestrated (BYOK / Vert
 - [x] Judge LLM is BYOK or Vertex only (no local/Ollama)
 - [x] Worker pulls notebook via Core internal APIs
 - [x] Past grades listable via `GET …/judgments`
+- [x] Rubric extract / judge / compile loading toasts survive navigating away from the Judge or Compile tab (notebook-level SSE + session pending jobs)
 
 ## Data and APIs
 

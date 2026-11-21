@@ -3,12 +3,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RotateCcw, Trash2 } from "lucide-react";
+import type { ProjectPhase } from "@engineering-notebook/shared";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
 import { isEntryTrashed } from "@/components/cloud/notebook-types";
 import { Button, EmptyState } from "@/components/ui";
 import { showNotification } from "@/components/overlays/Notification";
-import { cloudApi, type RubricRecord } from "@/lib/cloud/api";
+import {
+  cloudApi,
+  type NotebookMemberSummary,
+  type RubricRecord,
+} from "@/lib/cloud/api";
 import { formatEntryListDate } from "@/lib/utils";
 
 export default function NotebookTrashPage() {
@@ -18,6 +23,7 @@ export default function NotebookTrashPage() {
     notebookId,
     entries,
     folders,
+    notebookSummary,
     isArchived,
     refresh,
     setEntries,
@@ -26,9 +32,12 @@ export default function NotebookTrashPage() {
   const basePath = `/orgs/${orgId}/notebooks/${notebookId}`;
   const [purgeId, setPurgeId] = useState<string | null>(null);
   const [purgeRubricId, setPurgeRubricId] = useState<string | null>(null);
+  const [purgeMemberId, setPurgeMemberId] = useState<string | null>(null);
+  const [purgePhaseId, setPurgePhaseId] = useState<string | null>(null);
   const [emptyOpen, setEmptyOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [trashedRubrics, setTrashedRubrics] = useState<RubricRecord[]>([]);
+  const [trashedMembers, setTrashedMembers] = useState<NotebookMemberSummary[]>([]);
 
   const trashed = useMemo(
     () =>
@@ -40,6 +49,15 @@ export default function NotebookTrashPage() {
     [entries]
   );
 
+  const trashedPhases = useMemo(() => {
+    const phases = (notebookSummary?.phases || {}) as Record<string, ProjectPhase>;
+    return Object.entries(phases)
+      .filter(([, p]) => Boolean(p.deletedAt))
+      .sort((a, b) =>
+        String(b[1].deletedAt || "").localeCompare(String(a[1].deletedAt || ""))
+      );
+  }, [notebookSummary?.phases]);
+
   const refreshRubrics = useCallback(() => {
     return cloudApi
       .listRubrics(orgId, notebookId, { trashed: true })
@@ -47,11 +65,20 @@ export default function NotebookTrashPage() {
       .catch((err) => setError((err as Error).message));
   }, [orgId, notebookId, setError]);
 
+  const refreshMembers = useCallback(() => {
+    return cloudApi
+      .listNotebookMembers(orgId, notebookId, { trashed: true })
+      .then(setTrashedMembers)
+      .catch((err) => setError((err as Error).message));
+  }, [orgId, notebookId, setError]);
+
   useEffect(() => {
     void refreshRubrics();
-  }, [refreshRubrics]);
+    void refreshMembers();
+  }, [refreshRubrics, refreshMembers]);
 
-  const totalCount = trashed.length + trashedRubrics.length;
+  const totalCount =
+    trashed.length + trashedRubrics.length + trashedMembers.length + trashedPhases.length;
 
   function folderLabel(folderId: string | null | undefined) {
     if (!folderId) return "Root";
@@ -128,29 +155,96 @@ export default function NotebookTrashPage() {
       .finally(() => setBusy(false));
   }
 
+  function restoreMember(id: string) {
+    setBusy(true);
+    void cloudApi
+      .restoreNotebookMember(orgId, notebookId, id)
+      .then(() => {
+        void refreshMembers();
+        showNotification("Contributor restored", "success");
+      })
+      .catch((err) => setError((err as Error).message))
+      .finally(() => setBusy(false));
+  }
+
+  function purgeMember(id: string) {
+    setBusy(true);
+    void cloudApi
+      .purgeNotebookMember(orgId, notebookId, id)
+      .then(() => {
+        void refreshMembers();
+        showNotification("Contributor permanently deleted", "success");
+      })
+      .catch((err) => setError((err as Error).message))
+      .finally(() => setBusy(false));
+  }
+
+  function restorePhase(id: string) {
+    const phases = { ...((notebookSummary?.phases || {}) as Record<string, ProjectPhase>) };
+    const cur = phases[id];
+    if (!cur) return;
+    setBusy(true);
+    phases[id] = { ...cur, deletedAt: null };
+    void cloudApi
+      .patchNotebook(orgId, notebookId, { phases })
+      .then(() => {
+        refresh();
+        showNotification("Phase restored", "success");
+      })
+      .catch((err) => setError((err as Error).message))
+      .finally(() => setBusy(false));
+  }
+
+  function purgePhase(id: string) {
+    const phases = { ...((notebookSummary?.phases || {}) as Record<string, ProjectPhase>) };
+    if (!(id in phases)) return;
+    setBusy(true);
+    delete phases[id];
+    void cloudApi
+      .patchNotebook(orgId, notebookId, { phases })
+      .then(() => {
+        refresh();
+        showNotification("Phase permanently deleted", "success");
+      })
+      .catch((err) => setError((err as Error).message))
+      .finally(() => setBusy(false));
+  }
+
   function emptyTrash() {
     const entryIds = trashed.map(([id]) => id);
     const rubricIds = trashedRubrics.map((r) => r.id);
-    if (!entryIds.length && !rubricIds.length) return;
+    const memberIds = trashedMembers.map((m) => m.id);
+    const phaseIds = trashedPhases.map(([id]) => id);
+    if (!entryIds.length && !rubricIds.length && !memberIds.length && !phaseIds.length) {
+      return;
+    }
     setBusy(true);
     setEntries?.((prev) => {
       const next = { ...prev };
       for (const id of entryIds) delete next[id];
       return next;
     });
+    const phases = { ...((notebookSummary?.phases || {}) as Record<string, ProjectPhase>) };
+    for (const id of phaseIds) delete phases[id];
     void Promise.all([
       ...entryIds.map((id) => cloudApi.purgeEntry(orgId, notebookId, id)),
       ...rubricIds.map((id) => cloudApi.purgeRubric(orgId, notebookId, id)),
+      ...memberIds.map((id) => cloudApi.purgeNotebookMember(orgId, notebookId, id)),
+      phaseIds.length
+        ? cloudApi.patchNotebook(orgId, notebookId, { phases })
+        : Promise.resolve(null),
     ])
       .then(() => {
         refresh();
         void refreshRubrics();
+        void refreshMembers();
         showNotification("Trash emptied", "success");
       })
       .catch((err) => {
         setError((err as Error).message);
         refresh();
         void refreshRubrics();
+        void refreshMembers();
       })
       .finally(() => setBusy(false));
   }
@@ -167,8 +261,8 @@ export default function NotebookTrashPage() {
         <div>
           <h1 className="text-nb-title font-semibold text-nb-on-surface">Trash</h1>
           <p className="mt-1 text-nb-body text-nb-on-surface-variant">
-            Deleted entries and rubrics stay here until you restore them or delete them
-            forever.
+            Deleted entries, rubrics, contributors, and phases stay here until you restore
+            them or delete them forever.
           </p>
         </div>
         {totalCount > 0 && !isArchived && (
@@ -273,11 +367,90 @@ export default function NotebookTrashPage() {
               </div>
             </li>
           ))}
+          {trashedMembers.map((m) => (
+            <li
+              key={`member-${m.id}`}
+              className="flex flex-wrap items-center gap-2 px-3 py-2.5 text-nb-body"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-medium text-nb-on-surface">
+                  {m.name || "Contributor"}
+                  <span className="ml-2 text-nb-caption font-normal text-nb-on-surface-variant">
+                    Contributor
+                  </span>
+                </div>
+                <div className="mt-0.5 text-nb-caption text-nb-on-surface-variant">
+                  {m.role || "—"}
+                  {m.deletedAt
+                    ? ` · Deleted ${formatEntryListDate(m.deletedAt.slice(0, 10))}`
+                    : null}
+                </div>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-1">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={busy || isArchived}
+                  onClick={() => restoreMember(m.id)}
+                >
+                  <RotateCcw size={14} /> Restore
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="text-nb-danger"
+                  disabled={busy || isArchived}
+                  onClick={() => setPurgeMemberId(m.id)}
+                >
+                  Delete forever
+                </Button>
+              </div>
+            </li>
+          ))}
+          {trashedPhases.map(([id, p]) => (
+            <li
+              key={`phase-${id}`}
+              className="flex flex-wrap items-center gap-2 px-3 py-2.5 text-nb-body"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-medium text-nb-on-surface">
+                  {p.name || "Phase"}
+                  <span className="ml-2 text-nb-caption font-normal text-nb-on-surface-variant">
+                    Phase
+                  </span>
+                </div>
+                <div className="mt-0.5 text-nb-caption text-nb-on-surface-variant">
+                  {p.deletedAt
+                    ? `Deleted ${formatEntryListDate(String(p.deletedAt).slice(0, 10))}`
+                    : null}
+                </div>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-1">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={busy || isArchived}
+                  onClick={() => restorePhase(id)}
+                >
+                  <RotateCcw size={14} /> Restore
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="text-nb-danger"
+                  disabled={busy || isArchived}
+                  onClick={() => setPurgePhaseId(id)}
+                >
+                  Delete forever
+                </Button>
+              </div>
+            </li>
+          ))}
         </ul>
       ) : (
         <EmptyState
           title="Trash is empty"
-          description="Entries and rubrics you delete appear here."
+          description="Entries, rubrics, contributors, and phases you delete appear here."
           action={
             <Button size="sm" variant="secondary" onClick={() => router.push(basePath)}>
               Back to entries
@@ -311,6 +484,34 @@ export default function NotebookTrashPage() {
           const id = purgeRubricId;
           setPurgeRubricId(null);
           if (id) purgeRubric(id);
+        }}
+      />
+
+      <ConfirmationDialog
+        isOpen={Boolean(purgeMemberId)}
+        title="Delete contributor forever?"
+        message="This permanently removes the contributor from the notebook roster."
+        confirmLabel="Delete forever"
+        variant="danger"
+        onCancel={() => setPurgeMemberId(null)}
+        onConfirm={() => {
+          const id = purgeMemberId;
+          setPurgeMemberId(null);
+          if (id) purgeMember(id);
+        }}
+      />
+
+      <ConfirmationDialog
+        isOpen={Boolean(purgePhaseId)}
+        title="Delete phase forever?"
+        message="Entries that still reference this phase will keep the id until you change them. This cannot be undone."
+        confirmLabel="Delete forever"
+        variant="danger"
+        onCancel={() => setPurgePhaseId(null)}
+        onConfirm={() => {
+          const id = purgePhaseId;
+          setPurgePhaseId(null);
+          if (id) purgePhase(id);
         }}
       />
 

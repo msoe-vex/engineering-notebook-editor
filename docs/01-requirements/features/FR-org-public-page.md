@@ -27,7 +27,7 @@ Public notebooks nest under the org slug ([FR-public-notebook](./FR-public-noteb
 
 | Path | Content |
 | --- | --- |
-| `/o/:slug` | Home: mission, announcement strip, donors teaser, featured projects, board teaser, CTA |
+| `/o/:slug` | Home: About, announcement strip, donors teaser, featured projects, board teaser, join/donate CTA |
 | `/o/:slug/projects` | Project / robot archive (season filters) |
 | `/o/:slug/events` | Recurring meetings + upcoming competitions |
 | `/o/:slug/members` | Public roster / board (+ alumni later) |
@@ -49,14 +49,14 @@ MVP sections admins can edit (each public|hidden at section or page level as nee
 | --- | --- |
 | **Branding** | Display name, logo, tagline, accent colors (optional) |
 | **Announcement** | Optional top banner (e.g. “Next meeting…”) + link |
-| **Mission / about** | Short blurb |
+| **About** | Short blurb (`publicPage.about`; legacy `mission` still read) |
 | **Donors / sponsors** | Name, logo, URL, tier/order |
 | **Projects** | Title, season/year, summary, highlights[], media, optional “Source / CAD” URL |
 | **Events** | Recurring rows (day/time/title/location) + dated competitions/milestones |
 | **Members (public)** | Curated board/roster cards (name, role, major/class, photo) — **not** full ACL People dump |
 | **Contact / social** | Email, Discord, GitHub, other links |
 | **Media** | Photo/video gallery (reuse asset/GCS patterns) |
-| **CTA** | Join / donate copy + links |
+| **Call to action** | Join / donate heading, body, and links |
 | **Footer** | Org copyright, parent org credit, trademark disclaimer (templated) |
 
 **Toggle:** whole page Public | Hidden. Unpublished projects/members can stay draft.
@@ -75,6 +75,9 @@ MVP sections admins can edit (each public|hidden at section or page level as nee
 - [x] Home + Projects + Events + Members sections ship for MVP (donate may be CTA-only)
 - [x] Media uploads use existing asset/GCS patterns with size limits
 - [x] Public layout does **not** use notebook AppChrome (marketing shell)
+- [x] Public CMS (`/orgs/:orgId/public`) edits slug + copy link; section add/edit uses modals
+- [x] Public chrome shows org logo when `publicPage.logoAssetId` is set; nav includes **Home**
+- [x] UI labels use **About** and **Join / Donate** (not Mission / CTA jargon)
 
 ## Data and APIs
 

@@ -47,7 +47,16 @@ export type OrgPublicPage = {
         text: string;
         href?: string;
     };
+    /**
+     * About blurb on the public home (UI label “About”).
+     * Legacy field name `mission` kept for stored docs; prefer writing `about`.
+     */
+    about?: string;
+    /** @deprecated Prefer `about` — still read for older documents. */
     mission?: string;
+    /** Org logo for public header (org-scoped asset id). */
+    logoAssetId?: string;
+    /** Call-to-action block: join / donate buttons on public home. */
     cta?: {
         title?: string;
         body?: string;
@@ -128,6 +137,8 @@ export type NotebookMember = {
     imageAssetId?: string;
     /** Optional link to `organizations/{orgId}/members/{uid}` (credits ≠ ACL). */
     orgMemberUid?: string;
+    /** Soft-delete — hidden from credits until restored / purged. */
+    deletedAt?: string | null;
 };
 export type ProjectPhase = {
     name: string;
@@ -135,6 +146,8 @@ export type ProjectPhase = {
     iconName: string;
     color: string;
     order: number;
+    /** Soft-hide from pickers; entries may still reference the phase id. */
+    deletedAt?: string | null;
 };
 /**
  * Entry metadata in Firestore.
@@ -174,6 +187,23 @@ export type EntryMetadataV5 = {
      * calendar, and compile until restored or permanently purged.
      */
     deletedAt?: string | null;
+    /** Denormalized open (unresolved) comment thread count for explorer filters. */
+    openCommentCount?: number;
+    /** Denormalized total comment threads (including resolved). */
+    commentCount?: number;
+};
+/** Entry comment thread body (MetadataStore). Anchor lives in TipTap as `commentAnchor` mark. */
+export type EntryComment = {
+    id: string;
+    entryId: string;
+    body: string;
+    createdBy: string;
+    createdAt: string;
+    updatedAt?: string;
+    resolvedAt?: string | null;
+    resolvedBy?: string | null;
+    /** Optional quote snapshot at create time (not used for positioning). */
+    anchorQuote?: string;
 };
 export type NotebookSummaryV5 = {
     schemaVersion: typeof NOTEBOOK_SCHEMA_VERSION;

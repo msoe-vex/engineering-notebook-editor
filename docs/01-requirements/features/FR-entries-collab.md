@@ -19,7 +19,8 @@ Anyone with notebook access may create/edit/delete entries (subject to future fi
 - Phone: date/phase/authors behind a disclosure; list drawer control in entry chrome
 - Entry meta (date/phase/authors) toggles via chevron; starts collapsed on phone, open on desktop
 - Saving indicator on metadata patches; optimistic sidebar updates; Core SSE keeps other sessions fresh
-- Presence via collab WebSocket: Live/Offline plus peer awareness avatars (initials)
+- Presence via collab WebSocket: Live/Offline plus peer awareness avatars (initials); remote TipTap carets + selection highlights with hover name labels
+- Entry **comments** — TipTap anchors + MetadataStore threads; see [FR-comments](./FR-comments.md)
 - Validation on content flush; metadata-field revalidation when notebook phases change (Core)
 - Toasts on asset upload failure and other transient outcomes
 - Images lazy-load near viewport (`IntersectionObserver`); `cloud:{assetId}` resolves via signed URL + session cache on first visible fetch

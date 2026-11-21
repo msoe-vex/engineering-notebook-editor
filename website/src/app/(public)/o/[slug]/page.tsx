@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { PublicOrgChrome } from "@/components/public/PublicOrgChrome";
 import { cloudApi } from "@/lib/cloud/api";
 import { LoadingBlock } from "@/components/ui";
 import { Alert } from "@/components/ui/Alert";
@@ -12,9 +13,11 @@ type PublicOrgPayload = {
     id: string;
     name: string;
     slug?: string;
+    logoUrl?: string;
     publicPage?: {
       visibility?: string;
       announcement?: { text: string; href?: string };
+      about?: string;
       mission?: string;
       cta?: { title?: string; body?: string; joinUrl?: string; donateUrl?: string };
     };
@@ -64,9 +67,10 @@ export default function PublicOrgHomePage() {
 
   const { org, donors, projects, events, members, social } = data;
   const page = org.publicPage;
+  const about = page?.about || page?.mission;
 
   return (
-    <div className="min-h-screen bg-nb-surface text-nb-on-surface">
+    <PublicOrgChrome slug={slug} orgName={org.name} logoUrl={org.logoUrl} active="home">
       {page?.announcement?.text && (
         <div className="border-b border-nb-outline-variant/30 bg-nb-surface-container px-4 py-2 text-center text-sm">
           {page.announcement.href ? (
@@ -78,22 +82,11 @@ export default function PublicOrgHomePage() {
           )}
         </div>
       )}
-      <header className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-6">
-        <div>
-          <p className="text-nb-label text-nb-on-surface-variant">Public org</p>
-          <h1 className="text-nb-display font-bold tracking-tight">{org.name}</h1>
-        </div>
-        <nav className="flex flex-wrap gap-4 text-sm font-semibold">
-          <Link href={`/o/${slug}/projects`}>Projects</Link>
-          <Link href={`/o/${slug}/events`}>Events</Link>
-          <Link href={`/o/${slug}/members`}>Members</Link>
-        </nav>
-      </header>
       <main className="mx-auto max-w-5xl space-y-12 px-6 pb-20">
-        {page?.mission && (
+        {about && (
           <section>
-            <h2 className="text-xl font-semibold">Our Mission</h2>
-            <p className="mt-2 text-nb-on-surface-variant">{page.mission}</p>
+            <h2 className="text-xl font-semibold">About</h2>
+            <p className="mt-2 text-nb-on-surface-variant">{about}</p>
           </section>
         )}
         {donors.length > 0 && (
@@ -196,6 +189,6 @@ export default function PublicOrgHomePage() {
           </section>
         )}
       </main>
-    </div>
+    </PublicOrgChrome>
   );
 }

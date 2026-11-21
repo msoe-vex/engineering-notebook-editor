@@ -19,6 +19,8 @@ export type EntryMeta = {
   updatedAt?: string;
   /** Soft-deleted (in Trash) when set. */
   deletedAt?: string | null;
+  openCommentCount?: number;
+  commentCount?: number;
 };
 
 export function isEntryTrashed(entry: { deletedAt?: string | null } | null | undefined): boolean {

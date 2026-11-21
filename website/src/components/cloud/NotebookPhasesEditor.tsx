@@ -390,16 +390,23 @@ export function NotebookPhasesEditor({
     if (draggingRef.current) return;
     const rows = Object.entries(value || {})
       .map(([id, p]) => ({ id, ...p }))
+      .filter((p) => !p.deletedAt)
       .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
     setPhases(rows);
   }, [value]);
 
-  function emit(next: PhaseRow[]) {
+  function emit(next: PhaseRow[], also?: Record<string, ProjectPhase>) {
     const densified = densify(next);
     setPhases(densified);
-    onChange(
-      Object.fromEntries(densified.map(({ id, ...rest }) => [id, rest satisfies ProjectPhase]))
+    const active = Object.fromEntries(
+      densified.map(({ id, ...rest }) => [id, { ...rest, deletedAt: null } satisfies ProjectPhase])
     );
+    // Preserve soft-trashed phases that are not in the active editor list.
+    const preserved: Record<string, ProjectPhase> = { ...(also || {}) };
+    for (const [id, p] of Object.entries(value || {})) {
+      if (p.deletedAt && !active[id] && !preserved[id]) preserved[id] = p;
+    }
+    onChange({ ...preserved, ...active });
   }
 
   function onDragStart(event: DragStartEvent) {
@@ -502,7 +509,21 @@ export function NotebookPhasesEditor({
                   onChange={(id, patch) =>
                     emit(phases.map((row) => (row.id === id ? { ...row, ...patch } : row)))
                   }
-                  onRemove={(id) => emit(phases.filter((row) => row.id !== id))}
+                  onRemove={(id) => {
+                    const doomed = phases.find((row) => row.id === id);
+                    const rest = phases.filter((row) => row.id !== id);
+                    if (!doomed) {
+                      emit(rest);
+                      return;
+                    }
+                    const { id: _id, ...phaseFields } = doomed;
+                    emit(rest, {
+                      [id]: {
+                        ...phaseFields,
+                        deletedAt: new Date().toISOString(),
+                      },
+                    });
+                  }}
                 />
               ))}
             </div>

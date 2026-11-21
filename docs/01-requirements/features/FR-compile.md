@@ -15,7 +15,7 @@ Notebook accessors.
 
 - Entry page: ViewToggle (editor / split / LaTeX) with live LaTeX source from the open doc
 - `/…/compile` — full-height `CloudNotebookCompiler` (compact chrome + edge-to-edge PDF preview)
-- Compile enqueues a notebook job (`type: compile`); progress via SSE `job.*`
+- Compile enqueues a notebook job (`type: compile`); progress via SSE `job.*` with optional `stage` / `detail`
 
 ## Acceptance criteria
 
@@ -24,12 +24,13 @@ Notebook accessors.
 - [x] Compile uses the single compressed image assets (no quality/original picker)
 - [x] Split / LaTeX modes update live from editor content + metadata
 - [x] No automatic BusyTeX fallback (optional `NEXT_PUBLIC_ALLOW_BUSYTEX_COMPILE` escape only)
+- [x] Compile UI shows staged SSE messages (`fetch` / `tex` / `xelatex` / `upload`) plus percent
 
 ## Data and APIs
 
 - `POST …/compile` or `POST …/jobs` `{ type: "compile" }`
 - `PUT|GET …/exports/:exportId/content|url` (use `latest`)
-- SSE `job.progress` | `job.done` | `job.failed`
+- SSE `job.progress` | `job.done` | `job.failed` — progress may include `stage`, `detail`
 
 ## Server compile (local + future Tasks)
 

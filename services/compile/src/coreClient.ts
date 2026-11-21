@@ -157,12 +157,21 @@ export async function reportCompileProgress(
   notebookId: string,
   jobId: string,
   status: string,
-  progress: number
+  progress: number,
+  opts?: { stage?: string; detail?: string }
 ): Promise<void> {
   const url = `${coreBase()}/internal/compile/progress`;
   await fetch(url, {
     method: "POST",
     headers: internalHeaders({ "content-type": "application/json" }),
-    body: JSON.stringify({ orgId, notebookId, jobId, status, progress }),
+    body: JSON.stringify({
+      orgId,
+      notebookId,
+      jobId,
+      status,
+      progress,
+      stage: opts?.stage,
+      detail: opts?.detail,
+    }),
   }).catch(() => undefined);
 }

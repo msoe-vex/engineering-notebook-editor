@@ -6,6 +6,7 @@ import {
   type NotebookJobStatus,
 } from "@engineering-notebook/shared";
 import { getMetadataStore } from "../db/metadataStore.js";
+import { omitUndefined } from "../db/sanitize.js";
 import { publishNotebookEvent } from "../realtime/notebookEvents.js";
 
 function nowIso() {
@@ -125,6 +126,8 @@ export async function updateJobProgress(input: {
   jobId: string;
   statusMessage?: string;
   progress?: number;
+  stage?: string;
+  detail?: string;
 }): Promise<NotebookJob | null> {
   const job = await getJob(input.orgId, input.notebookId, input.jobId);
   if (!job) return null;
@@ -135,12 +138,17 @@ export async function updateJobProgress(input: {
     job.status === "queued" ? "running" : job.status;
 
   const store = getMetadataStore();
-  await store.update(jobPath(input.orgId, input.notebookId, input.jobId), {
-    status: nextStatus,
-    progress,
-    statusMessage,
-    updatedAt: ts,
-  });
+  await store.update(
+    jobPath(input.orgId, input.notebookId, input.jobId),
+    omitUndefined({
+      status: nextStatus,
+      progress,
+      statusMessage,
+      stage: input.stage,
+      detail: input.detail,
+      updatedAt: ts,
+    }) as Record<string, unknown>
+  );
 
   if (nextStatus === "running") {
     await store.set(
@@ -162,6 +170,8 @@ export async function updateJobProgress(input: {
     jobType: job.type,
     status: statusMessage,
     progress,
+    stage: input.stage,
+    detail: input.detail,
     at: ts,
   });
 

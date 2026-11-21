@@ -2,15 +2,32 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Camera, ExternalLink, Plus, Trash2 } from "lucide-react";
+import { Camera, Copy, ExternalLink, Pencil, Plus, Trash2 } from "lucide-react";
 import { useOrgWorkspace } from "@/components/cloud/OrgWorkspaceContext";
 import { showNotification } from "@/components/overlays/Notification";
-import { Alert, Button, LoadingBlock, TextField } from "@/components/ui";
+import { Alert, Button, Dialog, LoadingBlock, TextField } from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
 
 type SectionKey = "donors" | "projects" | "events" | "members" | "social";
 
 type CmsItem = Record<string, unknown> & { id: string };
+
+const FIELD_LABELS: Record<string, string> = {
+  name: "Name",
+  url: "URL",
+  tier: "Tier",
+  title: "Title",
+  season: "Season",
+  summary: "Summary",
+  externalUrl: "External URL",
+  kind: "Kind",
+  location: "Location",
+  date: "Date",
+  role: "Role",
+  classYear: "Class year",
+  orgMemberUid: "Org member uid",
+  label: "Label",
+};
 
 const SECTIONS: { key: SectionKey; label: string; fields: string[]; imageField?: string }[] = [
   { key: "donors", label: "Donors", fields: ["name", "url", "tier"], imageField: "imageAssetId" },
@@ -25,18 +42,38 @@ const SECTIONS: { key: SectionKey; label: string; fields: string[]; imageField?:
   { key: "social", label: "Social links", fields: ["label", "url"] },
 ];
 
+function publicAbout(pp?: { about?: string; mission?: string } | null) {
+  return (pp?.about || pp?.mission || "").trim();
+}
+
+function absolutePublicUrl(path: string) {
+  if (typeof window === "undefined") return path;
+  return `${window.location.origin}${path}`;
+}
+
+async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    showNotification("Link copied", "success");
+  } catch {
+    showNotification("Could not copy", "error");
+  }
+}
+
 export default function OrgPublicCmsPage() {
   const { orgId, org, canManage, refresh, setError } = useOrgWorkspace();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [slug, setSlug] = useState("");
   const [announcement, setAnnouncement] = useState("");
   const [announcementHref, setAnnouncementHref] = useState("");
-  const [mission, setMission] = useState("");
+  const [about, setAbout] = useState("");
   const [ctaTitle, setCtaTitle] = useState("");
   const [ctaBody, setCtaBody] = useState("");
   const [ctaJoin, setCtaJoin] = useState("");
   const [ctaDonate, setCtaDonate] = useState("");
   const [visibility, setVisibility] = useState<"public" | "hidden">("hidden");
+  const [logoAssetId, setLogoAssetId] = useState<string | undefined>();
   const [sections, setSections] = useState<Record<SectionKey, CmsItem[]>>({
     donors: [],
     projects: [],
@@ -44,8 +81,14 @@ export default function OrgPublicCmsPage() {
     members: [],
     social: [],
   });
-  const [drafts, setDrafts] = useState<Partial<Record<SectionKey, Record<string, string>>>>({});
+  const [editor, setEditor] = useState<{
+    section: SectionKey;
+    mode: "add" | "edit";
+    id?: string;
+    values: Record<string, string>;
+  } | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [photoTarget, setPhotoTarget] = useState<{ section: SectionKey; id: string } | null>(null);
 
   const load = useCallback(() => {
@@ -54,16 +97,21 @@ export default function OrgPublicCmsPage() {
       .getOrgPublicCms(orgId)
       .then((data) => {
         const o = (data.org || {}) as {
+          slug?: string;
           publicPage?: {
             visibility?: string;
+            about?: string;
             mission?: string;
+            logoAssetId?: string;
             announcement?: { text?: string; href?: string };
             cta?: { title?: string; body?: string; joinUrl?: string; donateUrl?: string };
           };
         };
         const pp = o.publicPage || org?.publicPage;
+        setSlug((o.slug || org?.slug || "").trim());
         setVisibility(pp?.visibility === "public" ? "public" : "hidden");
-        setMission(pp?.mission || "");
+        setAbout(publicAbout(pp));
+        setLogoAssetId(pp?.logoAssetId);
         setAnnouncement(pp?.announcement?.text || "");
         setAnnouncementHref(pp?.announcement?.href || "");
         setCtaTitle(pp?.cta?.title || "");
@@ -80,19 +128,20 @@ export default function OrgPublicCmsPage() {
       })
       .catch((err) => setError((err as Error).message))
       .finally(() => setLoading(false));
-  }, [orgId, org?.publicPage, setError]);
+  }, [orgId, org?.publicPage, org?.slug, setError]);
 
   useEffect(() => {
     if (canManage) load();
   }, [canManage, load]);
 
-  async function savePageMeta() {
+  async function savePageMeta(includeSlug = true) {
     setBusy(true);
     try {
-      await cloudApi.patchOrg(orgId, {
+      const body: Parameters<typeof cloudApi.patchOrg>[1] = {
         publicPage: {
           visibility,
-          mission: mission.trim() || undefined,
+          about: about.trim() || undefined,
+          logoAssetId,
           announcement: announcement.trim()
             ? { text: announcement.trim(), href: announcementHref.trim() || undefined }
             : undefined,
@@ -103,7 +152,11 @@ export default function OrgPublicCmsPage() {
             donateUrl: ctaDonate.trim() || undefined,
           },
         },
-      });
+      };
+      if (includeSlug && slug.trim()) {
+        body.slug = slug.trim().toLowerCase();
+      }
+      await cloudApi.patchOrg(orgId, body);
       await refresh();
       showNotification("Public page updated", "success");
     } catch (err) {
@@ -115,17 +168,33 @@ export default function OrgPublicCmsPage() {
     }
   }
 
-  async function addItem(section: SectionKey) {
-    const draft = drafts[section] || {};
-    const body: Record<string, unknown> = { ...draft, order: sections[section].length };
+  async function saveItem() {
+    if (!editor) return;
+    const sec = SECTIONS.find((s) => s.key === editor.section);
+    if (!sec) return;
+    const body: Record<string, unknown> = { ...editor.values };
+    if (editor.mode === "add") {
+      body.order = sections[editor.section].length;
+    } else if (editor.id) {
+      const existing = sections[editor.section].find((i) => i.id === editor.id);
+      if (existing && sec.imageField && existing[sec.imageField]) {
+        body[sec.imageField] = existing[sec.imageField];
+      }
+    }
     setBusy(true);
     try {
-      await cloudApi.upsertPublicItem(orgId, section, "new", body);
-      setDrafts((d) => ({ ...d, [section]: {} }));
+      await cloudApi.upsertPublicItem(
+        orgId,
+        editor.section,
+        editor.mode === "add" ? "new" : editor.id || "new",
+        body
+      );
+      setEditor(null);
       load();
-      showNotification("Item added", "success");
+      showNotification(editor.mode === "add" ? "Item added" : "Item updated", "success");
     } catch (err) {
       setError((err as Error).message);
+      showNotification((err as Error).message, "error");
     } finally {
       setBusy(false);
     }
@@ -167,6 +236,41 @@ export default function OrgPublicCmsPage() {
     }
   }
 
+  async function uploadLogo(file: File) {
+    setBusy(true);
+    try {
+      const { asset } = await cloudApi.createOrgAsset(orgId, {
+        contentType: file.type || "image/jpeg",
+        byteSize: file.size,
+      });
+      await cloudApi.uploadOrgAssetContent(orgId, asset.id, file, file.type || "image/jpeg");
+      setLogoAssetId(asset.id);
+      await cloudApi.patchOrg(orgId, {
+        publicPage: {
+          visibility,
+          about: about.trim() || undefined,
+          logoAssetId: asset.id,
+          announcement: announcement.trim()
+            ? { text: announcement.trim(), href: announcementHref.trim() || undefined }
+            : undefined,
+          cta: {
+            title: ctaTitle.trim() || undefined,
+            body: ctaBody.trim() || undefined,
+            joinUrl: ctaJoin.trim() || undefined,
+            donateUrl: ctaDonate.trim() || undefined,
+          },
+        },
+      });
+      await refresh();
+      showNotification("Logo updated", "success");
+    } catch (err) {
+      setError((err as Error).message);
+      showNotification((err as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!canManage) {
     return (
       <div className="rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface-low/50 p-6 text-nb-body text-nb-on-surface-variant">
@@ -183,8 +287,10 @@ export default function OrgPublicCmsPage() {
     );
   }
 
-  const slug = org?.slug?.trim();
-  const canView = slug && visibility === "public";
+  const slugTrim = slug.trim().toLowerCase();
+  const canView = Boolean(slugTrim) && visibility === "public";
+  const publicPath = slugTrim ? `/o/${slugTrim}` : "";
+  const editorSec = editor ? SECTIONS.find((s) => s.key === editor.section) : null;
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-10">
@@ -201,40 +307,81 @@ export default function OrgPublicCmsPage() {
           if (file && target) void uploadItemPhoto(target.section, target.id, file);
         }}
       />
+      <input
+        ref={logoInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) void uploadLogo(file);
+        }}
+      />
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-nb-title font-bold tracking-tight text-nb-on-surface">Public page</h2>
           <p className="mt-1 text-nb-body text-nb-on-surface-variant">
-            Edit the marketing site at{" "}
-            {slug ? (
-              <code className="text-nb-caption">/o/{slug}</code>
-            ) : (
-              <span>a public slug (set one in Settings)</span>
-            )}
+            Edit the marketing site
+            {slugTrim ? (
+              <>
+                {" "}
+                at <code className="text-nb-caption">{publicPath}</code>
+              </>
+            ) : null}
             .
           </p>
         </div>
-        {canView ? (
-          <a
-            href={`/o/${slug}`}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-nb-primary hover:underline"
-          >
-            View public site <ExternalLink size={14} />
-          </a>
-        ) : (
-          <Link href={`/orgs/${orgId}/settings`} className="text-sm font-semibold text-nb-primary hover:underline">
-            {slug ? "Visibility is hidden — Settings" : "Claim a slug in Settings"}
-          </Link>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {slugTrim ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => void copyText(absolutePublicUrl(publicPath))}
+            >
+              <Copy size={14} /> Copy link
+            </Button>
+          ) : null}
+          {canView ? (
+            <a
+              href={publicPath}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-nb-primary hover:underline"
+            >
+              View public site <ExternalLink size={14} />
+            </a>
+          ) : (
+            <span className="text-sm text-nb-on-surface-variant">
+              {slugTrim ? "Visibility is hidden" : "Claim a slug below"}
+            </span>
+          )}
+        </div>
       </div>
 
-      {!slug && (
-        <Alert variant="warning">
-          Set a unique public slug under Settings before the public site can be opened.
-        </Alert>
-      )}
+      <section className="flex flex-col gap-4">
+        <h3 className="text-nb-body font-semibold text-nb-on-surface">Public URL</h3>
+        <TextField
+          label="Slug"
+          value={slug}
+          onChange={(e) => setSlug(e.target.value)}
+          placeholder="raider-robotics"
+        />
+        <p className="text-nb-caption text-nb-on-surface-variant">
+          {slugTrim
+            ? `Public site: /o/${slugTrim}`
+            : "Choose a unique URL segment for /o/your-slug"}
+        </p>
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={busy || !slugTrim}
+          onClick={() => void savePageMeta(true)}
+        >
+          Save URL
+        </Button>
+      </section>
 
       <section className="flex flex-col gap-4">
         <h3 className="text-nb-body font-semibold text-nb-on-surface">Home content</h3>
@@ -249,6 +396,22 @@ export default function OrgPublicCmsPage() {
             <option value="public">Public</option>
           </select>
         </label>
+        <div className="flex flex-wrap items-center gap-3">
+          <div>
+            <p className="text-nb-label font-medium">Logo</p>
+            <p className="text-nb-caption text-nb-on-surface-variant">
+              {logoAssetId ? `Asset ${logoAssetId}` : "No logo yet"}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={busy}
+            onClick={() => logoInputRef.current?.click()}
+          >
+            <Camera size={14} /> {logoAssetId ? "Replace logo" : "Upload logo"}
+          </Button>
+        </div>
         <TextField
           label="Announcement"
           value={announcement}
@@ -262,23 +425,66 @@ export default function OrgPublicCmsPage() {
           placeholder="https://…"
         />
         <TextField
-          label="Mission"
-          value={mission}
-          onChange={(e) => setMission(e.target.value)}
-          placeholder="About blurb"
+          label="About"
+          value={about}
+          onChange={(e) => setAbout(e.target.value)}
+          placeholder="Short about blurb for the public home"
         />
-        <TextField label="CTA title" value={ctaTitle} onChange={(e) => setCtaTitle(e.target.value)} />
-        <TextField label="CTA body" value={ctaBody} onChange={(e) => setCtaBody(e.target.value)} />
-        <TextField label="Join URL" value={ctaJoin} onChange={(e) => setCtaJoin(e.target.value)} />
-        <TextField label="Donate URL" value={ctaDonate} onChange={(e) => setCtaDonate(e.target.value)} />
-        <Button variant="primary" disabled={busy} onClick={() => void savePageMeta()}>
+        <div className="rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface-low/40 p-4">
+          <h4 className="text-nb-label font-semibold text-nb-on-surface">Call to action</h4>
+          <p className="mt-1 text-nb-caption text-nb-on-surface-variant">
+            Buttons for join / donate links on the public home.
+          </p>
+          <div className="mt-3 grid gap-3">
+            <TextField
+              label="Heading"
+              value={ctaTitle}
+              onChange={(e) => setCtaTitle(e.target.value)}
+              placeholder="Get involved"
+            />
+            <TextField
+              label="Supporting text"
+              value={ctaBody}
+              onChange={(e) => setCtaBody(e.target.value)}
+            />
+            <TextField
+              label="Join link"
+              value={ctaJoin}
+              onChange={(e) => setCtaJoin(e.target.value)}
+              placeholder="https://…"
+            />
+            <TextField
+              label="Donate link"
+              value={ctaDonate}
+              onChange={(e) => setCtaDonate(e.target.value)}
+              placeholder="https://…"
+            />
+          </div>
+        </div>
+        <Button variant="primary" disabled={busy} onClick={() => void savePageMeta(true)}>
           {busy ? "Saving…" : "Save home content"}
         </Button>
       </section>
 
       {SECTIONS.map((sec) => (
         <section key={sec.key} className="flex flex-col gap-3">
-          <h3 className="text-nb-body font-semibold text-nb-on-surface">{sec.label}</h3>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-nb-body font-semibold text-nb-on-surface">{sec.label}</h3>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy}
+              onClick={() =>
+                setEditor({
+                  section: sec.key,
+                  mode: "add",
+                  values: Object.fromEntries(sec.fields.map((f) => [f, ""])),
+                })
+              }
+            >
+              <Plus size={14} /> Add
+            </Button>
+          </div>
           <ul className="divide-y divide-nb-outline-variant/20 rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface">
             {sections[sec.key].map((item) => (
               <li key={item.id} className="flex items-start justify-between gap-3 px-4 py-3 text-nb-body">
@@ -286,18 +492,38 @@ export default function OrgPublicCmsPage() {
                   {sec.fields.map((f) =>
                     item[f] ? (
                       <p key={f} className="truncate">
-                        <span className="text-nb-caption text-nb-on-surface-variant">{f}: </span>
+                        <span className="text-nb-caption text-nb-on-surface-variant">
+                          {FIELD_LABELS[f] || f}:{" "}
+                        </span>
                         {String(item[f])}
                       </p>
                     ) : null
                   )}
                   {sec.imageField && item[sec.imageField] ? (
                     <p className="truncate text-nb-caption text-nb-on-surface-variant">
-                      image: {String(item[sec.imageField])}
+                      image attached
                     </p>
                   ) : null}
                 </div>
                 <div className="flex shrink-0 gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busy}
+                    title="Edit"
+                    onClick={() =>
+                      setEditor({
+                        section: sec.key,
+                        mode: "edit",
+                        id: item.id,
+                        values: Object.fromEntries(
+                          sec.fields.map((f) => [f, item[f] != null ? String(item[f]) : ""])
+                        ),
+                      })
+                    }
+                  >
+                    <Pencil size={14} />
+                  </Button>
                   {sec.imageField && (
                     <Button
                       size="sm"
@@ -331,31 +557,60 @@ export default function OrgPublicCmsPage() {
               </li>
             )}
           </ul>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {sec.fields.map((f) => (
+        </section>
+      ))}
+
+      <Dialog
+        isOpen={Boolean(editor && editorSec)}
+        onClose={() => !busy && setEditor(null)}
+        title={
+          editor && editorSec
+            ? editor.mode === "add"
+              ? `Add ${editorSec.label.replace(/s$/, "").toLowerCase()}`
+              : `Edit ${editorSec.label.replace(/s$/, "").toLowerCase()}`
+            : undefined
+        }
+        size="md"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" disabled={busy} onClick={() => setEditor(null)}>
+              Cancel
+            </Button>
+            <Button variant="primary" disabled={busy} onClick={() => void saveItem()}>
+              {busy ? "Saving…" : editor?.mode === "add" ? "Add" : "Save"}
+            </Button>
+          </div>
+        }
+      >
+        {editor && editorSec ? (
+          <div className="grid gap-3">
+            {editorSec.fields.map((f) => (
               <TextField
                 key={f}
-                label={f}
-                value={drafts[sec.key]?.[f] || ""}
+                label={FIELD_LABELS[f] || f}
+                value={editor.values[f] || ""}
                 onChange={(e) =>
-                  setDrafts((d) => ({
-                    ...d,
-                    [sec.key]: { ...(d[sec.key] || {}), [f]: e.target.value },
-                  }))
+                  setEditor((prev) =>
+                    prev
+                      ? { ...prev, values: { ...prev.values, [f]: e.target.value } }
+                      : prev
+                  )
                 }
               />
             ))}
           </div>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={busy}
-            onClick={() => void addItem(sec.key)}
-          >
-            <Plus size={14} /> Add {sec.label.replace(/s$/, "").toLowerCase()}
-          </Button>
-        </section>
-      ))}
+        ) : null}
+      </Dialog>
+
+      {!slugTrim && (
+        <Alert variant="warning">
+          Set a unique public slug above before the public site can be opened.{" "}
+          <Link href={`/orgs/${orgId}/settings`} className="font-semibold underline">
+            Settings
+          </Link>{" "}
+          also edits the same slug.
+        </Alert>
+      )}
     </div>
   );
 }
