@@ -54,7 +54,7 @@ export async function hydrateCompileSnapshot(
 ): Promise<CompileSnapshot> {
   const { orgId, notebookId } = meta;
   const entryIds = Object.keys(meta.entries);
-  opts?.onProgress?.(`Downloading ${entryIds.length} entries…`, 20);
+  opts?.onProgress?.("Loading entries…", 20);
 
   const tipTapByEntry: Record<string, unknown> = {};
   await mapPool(entryIds, DEFAULT_CONCURRENCY, async (entryId) => {
@@ -86,7 +86,7 @@ export async function hydrateCompileSnapshot(
   const assetMeta = { ...(meta.assets || {}) };
   const missing = [...needed].filter((id) => !assetMeta[id]);
   if (missing.length) {
-    opts?.onProgress?.(`Resolving ${missing.length} asset refs…`, 28);
+    opts?.onProgress?.("Gathering images…", 28);
     await mapPool(missing, DEFAULT_CONCURRENCY, async (assetId) => {
       try {
         assetMeta[assetId] = await fetchAssetRef(orgId, notebookId, assetId);
@@ -97,7 +97,7 @@ export async function hydrateCompileSnapshot(
   }
 
   const assetIds = [...needed].filter((id) => assetMeta[id]);
-  opts?.onProgress?.(`Downloading ${assetIds.length} assets…`, 32);
+  opts?.onProgress?.("Gathering images…", 32);
 
   const assets: CompileSnapshot["assets"] = {};
   await mapPool(assetIds, DEFAULT_CONCURRENCY, async (assetId) => {

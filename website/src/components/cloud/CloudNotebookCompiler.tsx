@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Copy, Download, ExternalLink, Loader2, Play, RefreshCcw, Trash2 } from "lucide-react";
+import { Copy, Download, ExternalLink, Link2, Loader2, Play, RefreshCcw, Trash2 } from "lucide-react";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
 import { NotebookSideRail } from "@/components/cloud/NotebookSideRail";
 import { CompilePageSkeleton } from "@/components/cloud/notebookPageSkeletons";
@@ -13,6 +13,7 @@ import { cloudApi, type CompileExportSummary } from "@/lib/cloud/api";
 import { compileCloudNotebook } from "@/lib/cloud/compileCloudNotebook";
 import { subscribeNotebookEvents } from "@/lib/cloud/notebookEvents";
 import { trackNotebookJobToast } from "@/hooks/useNotebookJobToasts";
+import { MAX_COMPILE_EXPORTS } from "@engineering-notebook/shared";
 
 const LatexPreview = dynamic(() => import("@/components/editor/LatexPreview"), {
   ssr: false,
@@ -52,10 +53,8 @@ export function CloudNotebookCompiler() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState(0);
-  const [stage, setStage] = useState<string | null>(null);
   const [stageLog, setStageLog] = useState<string[]>([]);
   const [log, setLog] = useState<string | null>(null);
-  const [engine, setEngine] = useState<"server" | "busytex" | null>(null);
   const [exportsList, setExportsList] = useState<CompileExportSummary[]>([]);
   const [selectedExportId, setSelectedExportId] = useState<string>("latest");
   const [publicExportId, setPublicExportId] = useState<string | null>(null);
@@ -120,8 +119,7 @@ export function CloudNotebookCompiler() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload on compile timestamp
-  }, [orgId, notebookId, notebookSummary?.lastCompiled]);
+  }, [orgId, notebookId, loadExports, loadPdf]);
 
   useEffect(() => {
     if (!pdfProbeDone) return;
@@ -138,8 +136,7 @@ export function CloudNotebookCompiler() {
         "Server compile unavailable. Start Compose `compile`, or set NEXT_PUBLIC_ALLOW_BUSYTEX_COMPILE=1 for a local escape hatch."
       );
     }
-    setEngine("busytex");
-    setStatus("Compiling in browser (BusyTeX escape hatch)…");
+    setStatus("Compiling in browser…");
     const result = await compileCloudNotebook({
       orgId,
       notebookId,
@@ -155,10 +152,13 @@ export function CloudNotebookCompiler() {
         if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
         return result.pdfUrl!;
       });
-      if (result.lastCompiled && notebookSummary) {
-        setNotebookSummary({ ...notebookSummary, lastCompiled: result.lastCompiled });
+      if (result.exportId && notebookSummary) {
+        setNotebookSummary({
+          ...notebookSummary,
+          latestExportId: result.exportId,
+        });
       }
-      await loadExports();
+      await loadExports(result.exportId);
       refresh();
     } else {
       setLog(result.log || "Compilation failed.");
@@ -167,9 +167,8 @@ export function CloudNotebookCompiler() {
   }
 
   async function runServerCompile(jobId: string) {
-    setEngine("server");
     jobIdRef.current = jobId;
-    setStatus("Queued on server…");
+    setStatus("Queued…");
     setProgress(5);
 
     await new Promise<void>((resolve, reject) => {
@@ -177,7 +176,7 @@ export function CloudNotebookCompiler() {
       const timeout = setTimeout(
         () => {
           ac.abort();
-          reject(new Error("Server compile timed out (10 minutes)."));
+          reject(new Error("Compile timed out (10 minutes)."));
         },
         10 * 60 * 1000
       );
@@ -189,12 +188,14 @@ export function CloudNotebookCompiler() {
           if (event.type === "job.progress") {
             if (event.jobType && event.jobType !== "compile") return;
             if (jobIdRef.current && event.jobId !== jobIdRef.current) return;
-            setStatus(event.status || "Working…");
+            const line = (event.detail || event.status || "Working…").trim();
+            setStatus(line);
             setProgress(event.progress ?? 0);
-            if (event.stage) setStage(event.stage);
-            const line = [event.stage, event.detail || event.status].filter(Boolean).join(": ");
             if (line) {
-              setStageLog((prev) => [...prev.slice(-8), line]);
+              setStageLog((prev) => {
+                if (prev[prev.length - 1] === line) return prev;
+                return [...prev.slice(-5), line];
+              });
             }
             return;
           }
@@ -203,17 +204,13 @@ export function CloudNotebookCompiler() {
             if (jobIdRef.current && event.jobId !== jobIdRef.current) return;
             clearTimeout(timeout);
             ac.abort();
-            const lastCompiled = String(
-              event.result?.lastCompiled || notebookSummary?.lastCompiled || new Date().toISOString()
-            );
             const exportId = event.result?.exportId
               ? String(event.result.exportId)
               : undefined;
-            if (notebookSummary) {
+            if (notebookSummary && exportId) {
               setNotebookSummary({
                 ...notebookSummary,
-                lastCompiled,
-                ...(exportId ? { latestExportId: exportId } : {}),
+                latestExportId: exportId,
               });
             }
             void loadExports(exportId).then(() => refresh());
@@ -225,7 +222,7 @@ export function CloudNotebookCompiler() {
             if (jobIdRef.current && event.jobId !== jobIdRef.current) return;
             clearTimeout(timeout);
             ac.abort();
-            reject(new Error(event.error || "Server compile failed"));
+            reject(new Error(event.error || "Compile failed"));
           }
         },
         ac.signal
@@ -235,14 +232,19 @@ export function CloudNotebookCompiler() {
 
   async function runCompile() {
     if (busy || isArchived) return;
+    if (exportsList.length >= MAX_COMPILE_EXPORTS) {
+      showNotification(
+        `Version limit reached (${MAX_COMPILE_EXPORTS}). Delete an older PDF before compiling again.`,
+        "error"
+      );
+      return;
+    }
     setBusy(true);
     setLog(null);
     setStatus("Starting…");
     setProgress(0);
-    setStage(null);
     setStageLog([]);
     setError(null);
-    setEngine(null);
     jobIdRef.current = null;
     try {
       const enqueued = await cloudApi.startCompile(orgId, notebookId);
@@ -351,6 +353,10 @@ export function CloudNotebookCompiler() {
   const publicPath =
     orgSlug && publicKey && linkOn ? `/o/${orgSlug}/n/${publicKey}` : null;
 
+  const atVersionLimit = exportsList.length >= MAX_COMPILE_EXPORTS;
+  const latestCreatedAt =
+    exportsList.find((e) => e.id === latestExportId)?.createdAt || exportsList[0]?.createdAt;
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-nb-surface">
       <header className="flex shrink-0 flex-col gap-2 border-b border-nb-outline-variant/25 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3 md:px-4">
@@ -362,20 +368,81 @@ export function CloudNotebookCompiler() {
                 (Read-only)
               </span>
             )}
-            {notebookSummary?.lastCompiled && (
+            {latestCreatedAt && (
               <p className="text-nb-caption text-nb-on-surface-variant">
-                Last {new Date(notebookSummary.lastCompiled).toLocaleString()}
+                Latest {new Date(latestCreatedAt).toLocaleString()}
               </p>
             )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {canManage && !isArchived && (
+            <>
+              <Button
+                size="sm"
+                variant={isPublishedVersion ? "primary" : "secondary"}
+                className="min-h-9"
+                disabled={publishBusy || !exportsList.length || !orgSlug}
+                title={!orgSlug ? "Set an org slug in settings first" : "Share the selected PDF"}
+                onClick={() => void setLinkSharing(true)}
+              >
+                <Link2 size={14} />
+                {isPublishedVersion ? "Shared" : "Share"}
+              </Button>
+              {linkOn && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="min-h-9"
+                    disabled={publishBusy}
+                    onClick={() => void setLinkSharing(false)}
+                  >
+                    Turn off
+                  </Button>
+                  {publicPath && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="min-h-9"
+                        onClick={() => {
+                          void navigator.clipboard
+                            .writeText(`${window.location.origin}${publicPath}`)
+                            .then(
+                              () => showNotification("Link copied", "success"),
+                              () => showNotification("Could not copy", "error")
+                            );
+                        }}
+                      >
+                        <Copy size={14} /> Copy
+                      </Button>
+                      <a
+                        href={publicPath}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex min-h-9 items-center gap-1 px-1 text-sm font-semibold text-nb-primary hover:underline"
+                      >
+                        Open <ExternalLink size={14} />
+                      </a>
+                    </>
+                  )}
+                </>
+              )}
+            </>
+          )}
           <Button
             variant="primary"
             size="sm"
             className="min-h-9 flex-1 sm:flex-none"
-            disabled={busy || isArchived}
-            title={isArchived ? "Archived notebooks cannot be compiled" : undefined}
+            disabled={busy || isArchived || atVersionLimit}
+            title={
+              isArchived
+                ? "Archived notebooks cannot be compiled"
+                : atVersionLimit
+                  ? `Delete a version first (${MAX_COMPILE_EXPORTS} max)`
+                  : undefined
+            }
             onClick={() => void runCompile()}
           >
             {busy ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
@@ -415,11 +482,7 @@ export function CloudNotebookCompiler() {
       {busy && (
         <div className="shrink-0 border-b border-nb-outline-variant/20 bg-nb-surface-low px-4 py-2">
           <div className="mb-1.5 flex justify-between text-nb-caption font-semibold text-nb-on-surface-variant">
-            <span className="truncate pr-3">
-              {stage ? `[${stage}] ` : ""}
-              {status}
-              {engine === "server" ? " · server" : engine === "busytex" ? " · browser" : ""}
-            </span>
+            <span className="truncate pr-3">{status || "Working…"}</span>
             <span className="shrink-0">{progress}%</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-nb-surface">
@@ -429,9 +492,9 @@ export function CloudNotebookCompiler() {
             />
           </div>
           {stageLog.length > 0 && (
-            <ul className="mt-2 max-h-24 space-y-0.5 overflow-y-auto text-[11px] text-nb-on-surface-variant/80">
+            <ul className="mt-2 max-h-20 space-y-0.5 overflow-y-auto text-[11px] text-nb-on-surface-variant/80">
               {stageLog.map((line, i) => (
-                <li key={`${i}-${line}`} className="truncate font-mono">
+                <li key={`${i}-${line}`} className="truncate">
                   {line}
                 </li>
               ))}
@@ -451,68 +514,19 @@ export function CloudNotebookCompiler() {
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <NotebookSideRail
           storageKey={`ene:rail:${notebookId}:compile`}
-          title="Versions"
+          title={`Versions · ${exportsList.length}/${MAX_COMPILE_EXPORTS}`}
           expandLabel="Expand versions"
           collapseLabel="Collapse versions"
-          footer={
-            canManage ? (
-              <div className="space-y-2 p-3">
-                <p className="text-nb-label font-semibold text-nb-on-surface">Share</p>
-                {!orgSlug && (
-                  <Alert variant="warning">Set an org slug in settings first.</Alert>
-                )}
-                <div className="flex flex-wrap gap-1.5">
-                  <Button
-                    size="sm"
-                    variant={isPublishedVersion ? "primary" : "secondary"}
-                    disabled={publishBusy || isArchived || !exportsList.length || !orgSlug}
-                    onClick={() => void setLinkSharing(true)}
-                  >
-                    {isPublishedVersion ? "Shared" : "Share"}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={publishBusy || !linkOn}
-                    onClick={() => void setLinkSharing(false)}
-                  >
-                    Turn off
-                  </Button>
-                </div>
-                {publicPath && (
-                  <div className="flex flex-wrap items-center gap-2 pt-1">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => {
-                        void navigator.clipboard
-                          .writeText(`${window.location.origin}${publicPath}`)
-                          .then(
-                            () => showNotification("Link copied", "success"),
-                            () => showNotification("Could not copy", "error")
-                          );
-                      }}
-                    >
-                      <Copy size={14} /> Copy link
-                    </Button>
-                    <a
-                      href={publicPath}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-sm font-semibold text-nb-primary hover:underline"
-                    >
-                      Open PDF <ExternalLink size={14} />
-                    </a>
-                  </div>
-                )}
-              </div>
-            ) : undefined
-          }
         >
-          <ul className="p-2">
+          <ul className="space-y-0.5 p-1.5">
             {exportsList.length === 0 && (
               <li className="px-2 py-3 text-nb-caption text-nb-on-surface-variant">
                 No versions yet — compile to create one.
+              </li>
+            )}
+            {atVersionLimit && (
+              <li className="mb-1 rounded px-2 py-1.5 text-[10px] font-medium text-amber-800 dark:text-amber-300">
+                Limit reached. Delete a version to compile again.
               </li>
             )}
             {exportsList.map((exp) => {
@@ -520,33 +534,34 @@ export function CloudNotebookCompiler() {
               const published = publicExportId === exp.id && linkOn;
               const isLatest = latestExportId === exp.id;
               return (
-                <li key={exp.id} className="mb-0.5 flex items-stretch gap-0.5">
+                <li key={exp.id} className="group flex items-center gap-0.5">
                   <button
                     type="button"
-                    className={`min-w-0 flex-1 rounded-nb-md px-2 py-1.5 text-left text-nb-label transition-colors ${
+                    className={`relative flex h-[26px] min-w-0 flex-1 items-center gap-1.5 rounded px-2 text-left text-nb-label transition-colors select-none ${
                       active
-                        ? "bg-nb-primary/15 font-semibold text-nb-primary"
+                        ? "bg-nb-primary/15 font-medium text-nb-primary"
                         : "text-nb-on-surface hover:bg-nb-surface/80"
                     }`}
                     onClick={() => setSelectedExportId(exp.id)}
                   >
-                    <span className="block truncate text-xs leading-none">
+                    <span className="min-w-0 flex-1 truncate text-xs leading-none">
                       {formatExportLabel(exp)}
                     </span>
-                    <span
-                      className={`mt-0.5 block text-[10px] font-normal leading-tight ${
-                        active ? "text-nb-primary/80" : "text-nb-on-surface-variant/70"
-                      }`}
-                    >
-                      {[published ? "Shared" : null, isLatest ? "Latest" : null]
-                        .filter(Boolean)
-                        .join(" · ") || "Saved"}
-                      {exp.byteSize ? ` · ${Math.round(exp.byteSize / 1024)} KB` : ""}
-                    </span>
+                    {(published || isLatest) && (
+                      <span
+                        className={`shrink-0 text-[10px] leading-none ${
+                          active ? "text-nb-primary/80" : "text-nb-on-surface-variant/70"
+                        }`}
+                      >
+                        {[published ? "Shared" : null, isLatest ? "Latest" : null]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    )}
                   </button>
                   {canManage && !isArchived && (
                     <IconButton
-                      className="h-8 w-8 shrink-0 self-center"
+                      className="h-7 w-7 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                       variant="danger"
                       title="Delete version"
                       aria-label="Delete version"

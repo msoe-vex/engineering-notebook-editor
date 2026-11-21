@@ -57,7 +57,6 @@ type NotebookMetadataV4 = {
   entries: Record<string, EntryMetadataV4>;
   team?: TeamMetadataV4;
   phases?: Record<string, ProjectPhase>;
-  lastCompiled?: string;
   folders?: Record<string, NotebookFolder>;
   title?: string;
   subtitle?: string;
@@ -148,7 +147,6 @@ export function migrateNotebookV4ToV5(
     folders: raw.folders ?? {},
     access: raw.access ?? defaultNotebookAccess(),
     phases: raw.phases ?? {},
-    lastCompiled: raw.lastCompiled,
     updatedAt: new Date().toISOString(),
   };
 
@@ -170,7 +168,6 @@ export function buildExportV5(
     access: summary.access ?? defaultNotebookAccess(),
     phases: summary.phases,
     members,
-    lastCompiled: summary.lastCompiled,
     entries,
   };
 }

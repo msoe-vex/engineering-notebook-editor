@@ -65,7 +65,6 @@ export function migrateNotebookV4ToV5(raw, orgId, name) {
         folders: raw.folders ?? {},
         access: raw.access ?? defaultNotebookAccess(),
         phases: raw.phases ?? {},
-        lastCompiled: raw.lastCompiled,
         updatedAt: new Date().toISOString(),
     };
     return { summary, entries, members };
@@ -81,7 +80,6 @@ export function buildExportV5(summary, entries, members) {
         access: summary.access ?? defaultNotebookAccess(),
         phases: summary.phases,
         members,
-        lastCompiled: summary.lastCompiled,
         entries,
     };
 }

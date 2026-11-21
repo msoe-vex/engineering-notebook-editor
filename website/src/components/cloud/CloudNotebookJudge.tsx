@@ -69,6 +69,7 @@ export function CloudNotebookJudge() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState(0);
+  const [stageLog, setStageLog] = useState<string[]>([]);
   const [ctx, setCtx] = useState<CtxState>(null);
   const [confirm, setConfirm] = useState<
     | { kind: "trash-rubric"; id: string; name: string }
@@ -179,6 +180,7 @@ export function CloudNotebookJudge() {
     jobIdRef.current = jobId;
     setStatus("Queued…");
     setProgress(5);
+    setStageLog(["Queued…"]);
 
     await new Promise<void>((resolve, reject) => {
       const ac = new AbortController();
@@ -205,8 +207,15 @@ export function CloudNotebookJudge() {
           if (event.type === "job.progress") {
             if (event.jobType && event.jobType !== "judge") return;
             if (jobIdRef.current && event.jobId !== jobIdRef.current) return;
-            setStatus(event.status || "Working…");
+            const line = (event.detail || event.status || "Working…").trim();
+            setStatus(line);
             setProgress(event.progress ?? 0);
+            if (line) {
+              setStageLog((prev) => {
+                if (prev[prev.length - 1] === line) return prev;
+                return [...prev.slice(-8), line];
+              });
+            }
             return;
           }
           if (event.type === "job.done") {
@@ -469,7 +478,7 @@ export function CloudNotebookJudge() {
       {busy && (
         <div className="shrink-0 border-b border-nb-outline-variant/20 bg-nb-surface-low px-4 py-2">
           <div className="mb-1.5 flex justify-between text-nb-caption font-semibold text-nb-on-surface-variant">
-            <span className="truncate pr-3">{status}</span>
+            <span className="truncate pr-3">{status || "Working…"}</span>
             <span>{progress}%</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-nb-surface">
@@ -478,6 +487,15 @@ export function CloudNotebookJudge() {
               style={{ width: `${Math.min(100, progress)}%` }}
             />
           </div>
+          {stageLog.length > 0 && (
+            <ul className="mt-2 max-h-24 space-y-0.5 overflow-y-auto text-[11px] text-nb-on-surface-variant/80">
+              {stageLog.map((line, i) => (
+                <li key={`${i}-${line}`} className="truncate">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
@@ -494,9 +512,9 @@ export function CloudNotebookJudge() {
               title="View all rubrics"
               aria-pressed={selection.kind === "home-rubrics"}
               onClick={() => navigate({ kind: "home-rubrics" })}
-              className={`-mx-1 flex w-[calc(100%+0.5rem)] min-w-0 items-center gap-1.5 rounded-nb-md px-1.5 py-1 text-left transition-colors ${
+              className={`-mx-1 flex h-[26px] w-[calc(100%+0.5rem)] min-w-0 items-center gap-1.5 rounded px-1.5 text-left transition-colors ${
                 selection.kind === "home-rubrics"
-                  ? "bg-nb-primary/15 text-nb-primary"
+                  ? "bg-nb-primary/15 font-medium text-nb-primary"
                   : "text-nb-on-surface hover:bg-nb-surface/80"
               }`}
             >
@@ -540,25 +558,24 @@ export function CloudNotebookJudge() {
                         type="button"
                         onClick={() => navigate({ kind: "rubric", id: r.id })}
                         onContextMenu={(e) => onRubricContextMenu(e, r)}
-                        className={`group flex w-full flex-col rounded px-2 py-1 text-left text-nb-label transition-colors select-none outline-none ${
+                        className={`flex h-[26px] w-full items-center gap-1.5 rounded px-2 text-left text-nb-label transition-colors select-none outline-none ${
                           active
                             ? "bg-nb-primary/15 font-medium text-nb-primary"
                             : "text-nb-on-surface hover:bg-nb-surface/80"
                         }`}
                       >
-                        <span className="truncate text-xs leading-none">
+                        <span className="min-w-0 flex-1 truncate text-xs leading-none">
                           {r.name || r.id}
                         </span>
                         {r.matrix ? (
                           <span
-                            className={`mt-0.5 truncate text-[10px] leading-tight ${
+                            className={`shrink-0 text-[10px] leading-none ${
                               active
                                 ? "text-nb-primary/80"
                                 : "text-nb-on-surface-variant/70"
                             }`}
                           >
-                            {r.matrix.categories.length} criteria · {r.matrix.totalMaxPoints}{" "}
-                            pts
+                            {r.matrix.categories.length} · {r.matrix.totalMaxPoints}pts
                           </span>
                         ) : null}
                       </button>
@@ -577,9 +594,9 @@ export function CloudNotebookJudge() {
                 title="View recent scores"
                 aria-pressed={selection.kind === "home-grades"}
                 onClick={() => navigate({ kind: "home-grades" })}
-                className={`flex min-w-0 flex-1 items-center gap-1.5 rounded-nb-md px-1.5 py-1 text-left transition-colors ${
+                className={`flex h-[26px] min-w-0 flex-1 items-center gap-1.5 rounded px-1.5 text-left transition-colors ${
                   selection.kind === "home-grades"
-                    ? "bg-nb-primary/15 text-nb-primary"
+                    ? "bg-nb-primary/15 font-medium text-nb-primary"
                     : "text-nb-on-surface hover:bg-nb-surface/80"
                 }`}
               >
@@ -623,28 +640,21 @@ export function CloudNotebookJudge() {
                         type="button"
                         onClick={() => navigate({ kind: "grade", id: g.id })}
                         onContextMenu={(e) => onGradeContextMenu(e, g)}
-                        className={`group flex w-full flex-col rounded px-2 py-1 text-left text-nb-label transition-colors select-none outline-none ${
+                        className={`flex h-[26px] w-full items-center gap-1.5 rounded px-2 text-left text-nb-label transition-colors select-none outline-none ${
                           active
                             ? "bg-nb-primary/15 font-medium text-nb-primary"
                             : "text-nb-on-surface hover:bg-nb-surface/80"
                         }`}
                       >
-                        <span className="flex items-center justify-between gap-2">
-                          <span className="truncate text-xs leading-none">
-                            {g.rubricName || "Grade"}
-                          </span>
-                          <span className="shrink-0 text-[10px] tabular-nums opacity-80">
-                            {score}
-                          </span>
+                        <span className="min-w-0 flex-1 truncate text-xs leading-none">
+                          {g.rubricName || "Grade"}
                         </span>
                         <span
-                          className={`mt-0.5 truncate text-[10px] leading-tight ${
-                            active
-                              ? "text-nb-primary/80"
-                              : "text-nb-on-surface-variant/70"
+                          className={`shrink-0 text-[10px] tabular-nums leading-none ${
+                            active ? "text-nb-primary/80" : "text-nb-on-surface-variant/70"
                           }`}
                         >
-                          {formatWhen(g.createdAt)}
+                          {score}
                           {g.status === "failed" ? " · Failed" : ""}
                         </span>
                       </button>

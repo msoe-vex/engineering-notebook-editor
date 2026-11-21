@@ -321,58 +321,61 @@ export async function registerInternalCompileRoutes(
       return reply.code(400).send({ error: "expected binary PDF body" });
     }
 
-    const recorded = await recordCompileExport({
-      orgId,
-      notebookId,
-      storage,
-      pdf,
-      exportId,
-    });
+    let recorded: Awaited<ReturnType<typeof recordCompileExport>>;
+    try {
+      recorded = await recordCompileExport({
+        orgId,
+        notebookId,
+        storage,
+        pdf,
+        exportId,
+      });
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode || 500;
+      const message = err instanceof Error ? err.message : String(err);
+      return reply.code(status).send({
+        error: message,
+        code: (err as { code?: string }).code,
+      });
+    }
     const key = gcsKeys.exportPdf(orgId, notebookId, recorded.exportId);
 
     publishNotebookEvent(orgId, notebookId, {
       type: "notebook.updated",
       notebook: {
         id: notebookId,
-        lastCompiled: recorded.lastCompiled,
         latestExportId: recorded.exportId,
-        updatedAt: recorded.lastCompiled,
+        updatedAt: recorded.createdAt,
       },
-      at: recorded.lastCompiled,
+      at: recorded.createdAt,
     });
+
+    const result = {
+      createdAt: recorded.createdAt,
+      exportId: recorded.exportId,
+      gcsPath: key,
+      byteSize: recorded.byteSize,
+    };
 
     const completed = await completeJob({
       orgId,
       notebookId,
       jobId,
-      result: {
-        lastCompiled: recorded.lastCompiled,
-        exportId: recorded.exportId,
-        gcsPath: key,
-        byteSize: recorded.byteSize,
-      },
+      result,
     });
     if (!completed) {
       publishNotebookEvent(orgId, notebookId, {
         type: "job.done",
         jobId,
         jobType: "compile",
-        result: {
-          lastCompiled: recorded.lastCompiled,
-          exportId: recorded.exportId,
-          gcsPath: key,
-          byteSize: recorded.byteSize,
-        },
-        at: recorded.lastCompiled,
+        result,
+        at: recorded.createdAt,
       });
     }
 
     return {
       ok: true,
-      exportId: recorded.exportId,
-      gcsPath: key,
-      lastCompiled: recorded.lastCompiled,
-      byteSize: recorded.byteSize,
+      ...result,
       jobId,
     };
   });

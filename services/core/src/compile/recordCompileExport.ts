@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  MAX_COMPILE_EXPORTS,
   compileExportPath,
   compileExportsCollection,
   gcsKeys,
@@ -13,13 +14,6 @@ import type { StoragePort } from "../storage/storagePort.js";
 
 function nowIso() {
   return new Date().toISOString();
-}
-
-function keepExportIds(nb: Partial<NotebookSummary> | null | undefined): Set<string> {
-  const keep = new Set<string>();
-  if (nb?.latestExportId) keep.add(nb.latestExportId);
-  if (nb?.publicExportId) keep.add(nb.publicExportId);
-  return keep;
 }
 
 /** Delete PDF bytes + metadata for one compile export id (not the `latest` alias key alone). */
@@ -43,28 +37,15 @@ export async function deleteCompileExportFiles(
   }
 }
 
-/**
- * Keep only latest + publicly published compile versions; drop the rest.
- */
-export async function pruneStaleCompileExports(
-  orgId: string,
-  notebookId: string,
-  storage: StoragePort
-): Promise<void> {
+export async function countCompileExports(orgId: string, notebookId: string): Promise<number> {
   const store = getMetadataStore();
-  const nb = await store.get(notebookPath(orgId, notebookId));
-  const keep = keepExportIds(nb as NotebookSummary | null);
   const rows = await store.query(compileExportsCollection(orgId, notebookId));
-  for (const row of rows) {
-    const id = String(row.id);
-    if (keep.has(id)) continue;
-    await deleteCompileExportFiles(orgId, notebookId, id, storage);
-  }
+  return rows.length;
 }
 
 /**
- * Persist a compiled PDF as a versioned export + keep `latest.pdf` for back-compat.
- * Prunes older non-public versions afterward.
+ * Persist a compiled PDF as a new versioned export + keep `latest.pdf` for serving.
+ * Refuses when the notebook already has {@link MAX_COMPILE_EXPORTS} versions.
  */
 export async function recordCompileExport(opts: {
   orgId: string;
@@ -76,11 +57,21 @@ export async function recordCompileExport(opts: {
   exportId?: string;
 }): Promise<{
   exportId: string;
-  lastCompiled: string;
+  createdAt: string;
   byteSize: number;
   exportMeta: CompileExport;
 }> {
   const { orgId, notebookId, storage, pdf, createdBy } = opts;
+  const existingCount = await countCompileExports(orgId, notebookId);
+  if (existingCount >= MAX_COMPILE_EXPORTS) {
+    throw Object.assign(
+      new Error(
+        `Version limit reached (${MAX_COMPILE_EXPORTS}). Delete an older PDF before compiling again.`
+      ),
+      { statusCode: 409, code: "compile_export_limit" }
+    );
+  }
+
   const exportId =
     opts.exportId && opts.exportId !== "latest" ? opts.exportId : randomUUID();
   const ts = nowIso();
@@ -104,19 +95,16 @@ export async function recordCompileExport(opts: {
     omitUndefined({ ...exportMeta }) as Record<string, unknown>
   );
   await store.update(notebookPath(orgId, notebookId), {
-    lastCompiled: ts,
     latestExportId: exportId,
     updatedAt: ts,
+    lastCompiled: null,
   });
 
-  await pruneStaleCompileExports(orgId, notebookId, storage);
-
-  return { exportId, lastCompiled: ts, byteSize, exportMeta };
+  return { exportId, createdAt: ts, byteSize, exportMeta };
 }
 
 /**
- * Delete a saved version. Refuses to delete when it would leave the notebook
- * without resolving rules — clears public link if the published PDF is removed.
+ * Delete a saved version. Clears the share link if the shared PDF is removed.
  */
 export async function deleteCompileExport(opts: {
   orgId: string;
@@ -163,26 +151,26 @@ export async function deleteCompileExport(opts: {
     patch.publicAccess = "off";
     patch.publishedAt = null;
     patch.publishedBy = null;
-    if (nb.publicKey) {
-      // keep publicKey so re-enable can reuse URL; access off is enough
-    }
   }
 
   if (isLatest) {
-    // Prefer remaining public version as the new "current", else clear.
-    const nextLatest =
-      publicExportId && publicExportId !== exportId
-        ? publicExportId
-        : null;
+    const rows = await store.query(compileExportsCollection(orgId, notebookId));
+    const remaining = rows
+      .map((r) => ({
+        id: String(r.id),
+        createdAt: String((r as { createdAt?: string }).createdAt || ""),
+      }))
+      .filter((r) => r.id !== exportId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const nextLatest = remaining[0]?.id || null;
     latestExportId = nextLatest;
     patch.latestExportId = nextLatest;
     if (nextLatest) {
-      // Refresh latest.pdf alias from remaining version when possible
-      const remaining = await storage.getObject(gcsKeys.exportPdf(orgId, notebookId, nextLatest));
-      if (remaining) {
+      const remainingPdf = await storage.getObject(gcsKeys.exportPdf(orgId, notebookId, nextLatest));
+      if (remainingPdf) {
         await storage.putObject(
           gcsKeys.exportPdf(orgId, notebookId, "latest"),
-          remaining,
+          remainingPdf,
           "application/pdf"
         );
       }
@@ -192,10 +180,10 @@ export async function deleteCompileExport(opts: {
       } catch {
         /* ok */
       }
-      patch.lastCompiled = null;
     }
   }
 
+  patch.lastCompiled = null;
   await store.update(nbPath, omitUndefined(patch));
   return { ok: true, latestExportId, publicExportId, publicAccess };
 }
@@ -217,7 +205,6 @@ export async function resolveExportPdfKey(
   const key = gcsKeys.exportPdf(orgId, notebookId, id);
   const exists = await storage.getObject(key);
   if (exists) return { key, exportId: id };
-  // Legacy: only `latest.pdf` on disk
   if (id !== "latest") {
     const legacy = gcsKeys.exportPdf(orgId, notebookId, "latest");
     const legacyObj = await storage.getObject(legacy);

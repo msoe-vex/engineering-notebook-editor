@@ -16,7 +16,7 @@ Manual acceptance checks aligned with [01-requirements](../01-requirements/).
 | Metadata SSE | Two browsers on same notebook: change title/phase in A → sidebar updates in B without hard refresh |
 | Phases → validity | Notebook with no phases → add a phase in Settings → entries without a phase show incomplete (explorer warning) |
 | Schedule | Drag entry to another day → persists; day cells same height in month view (cards scroll inside cell) |
-| Compile | Compile → PDF downloadable; `lastCompiled` set |
+| Compile | Compile → PDF downloadable; new version in exports list |
 | Split LaTeX | Entry **Split** / **LaTeX** updates while typing |
 | ZIP | Export → import → entries + images restored; toast on success/fail |
 | Prefs | Second browser: theme/authors apply; keys still local |

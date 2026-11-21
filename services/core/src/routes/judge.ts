@@ -875,6 +875,8 @@ export async function registerJudgeInternalRoutes(app: FastifyInstance, storage:
       jobId?: string;
       status?: string;
       progress?: number;
+      stage?: string;
+      detail?: string;
     };
     if (!body.orgId || !body.notebookId || !body.jobId) {
       return reply.code(400).send({ error: "orgId, notebookId, jobId required" });
@@ -885,6 +887,8 @@ export async function registerJudgeInternalRoutes(app: FastifyInstance, storage:
       jobId: body.jobId,
       statusMessage: body.status,
       progress: body.progress,
+      stage: body.stage,
+      detail: body.detail,
     });
     return { ok: true };
   });

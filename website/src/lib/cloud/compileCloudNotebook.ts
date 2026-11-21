@@ -136,7 +136,7 @@ export async function compileCloudNotebook(opts: {
   entries: Record<string, EntryMeta>;
   notebookSummary: NotebookSummary | null;
   onStatus?: CompileStatusCallback;
-}): Promise<CompileResult & { lastCompiled?: string }> {
+}): Promise<CompileResult & { exportId?: string; createdAt?: string }> {
   const { orgId, notebookId, entries, notebookSummary, onStatus } = opts;
   const TOTAL = 8;
 
@@ -260,5 +260,9 @@ export async function compileCloudNotebook(opts: {
 
   onStatus?.("Uploading PDF...", 8, TOTAL, 95);
   const uploaded = await cloudApi.uploadExportPdf(orgId, notebookId, "latest", result.pdf);
-  return { ...result, lastCompiled: uploaded.lastCompiled };
+  return {
+    ...result,
+    exportId: uploaded.exportId,
+    createdAt: uploaded.createdAt || new Date().toISOString(),
+  };
 }

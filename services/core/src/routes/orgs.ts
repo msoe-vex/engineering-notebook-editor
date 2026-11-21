@@ -991,7 +991,6 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       "folders",
       "access",
       "phases",
-      "lastCompiled",
       "latestExportId",
       "publicExportId",
       "archivedAt",
@@ -2327,29 +2326,38 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     } else {
       return reply.code(400).send({ error: "expected binary body stream" });
     }
-    const recorded = await recordCompileExport({
-      orgId,
-      notebookId,
-      storage,
-      pdf,
-      createdBy: user.uid,
-      exportId,
-    });
+    let recorded: Awaited<ReturnType<typeof recordCompileExport>>;
+    try {
+      recorded = await recordCompileExport({
+        orgId,
+        notebookId,
+        storage,
+        pdf,
+        createdBy: user.uid,
+        exportId,
+      });
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode || 500;
+      const message = err instanceof Error ? err.message : String(err);
+      return reply.code(status).send({
+        error: message,
+        code: (err as { code?: string }).code,
+      });
+    }
     publishNotebookEvent(orgId, notebookId, {
       type: "notebook.updated",
       notebook: {
         id: notebookId,
-        lastCompiled: recorded.lastCompiled,
         latestExportId: recorded.exportId,
-        updatedAt: recorded.lastCompiled,
+        updatedAt: recorded.createdAt,
       },
-      at: recorded.lastCompiled,
+      at: recorded.createdAt,
     });
     return {
       ok: true,
       exportId: recorded.exportId,
       gcsPath: gcsKeys.exportPdf(orgId, notebookId, recorded.exportId),
-      lastCompiled: recorded.lastCompiled,
+      createdAt: recorded.createdAt,
       byteSize: recorded.byteSize,
     };
   });

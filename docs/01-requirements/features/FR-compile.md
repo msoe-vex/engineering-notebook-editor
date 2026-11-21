@@ -5,32 +5,32 @@ Related: [api-contracts jobs](../../03-reference/api-contracts.md), [ADR-006](..
 
 ## Summary
 
-Per-entry LaTeX source preview and **server XeLaTeX jobs** produce the notebook PDF. Successful compile writes a versioned export (+ `latest.pdf` alias), sets `lastCompiled` / `latestExportId`, and **prunes** older exports that are neither latest nor the shared (`publicExportId`) PDF — [FR-public-notebook](./FR-public-notebook.md).
+Per-entry LaTeX source preview and **server XeLaTeX jobs** produce the notebook PDF. Successful compile always mints a **new version** (`latestExportId` + `latest.pdf` alias). Up to **`MAX_COMPILE_EXPORTS` (10)** versions are retained; at the limit, compile returns **409** until the user deletes an older PDF — [FR-public-notebook](./FR-public-notebook.md).
 
 ## Actors and permissions
 
-Notebook accessors. Share-link publish/revoke: org admin/owner.
+Notebook accessors. Share-link publish/revoke: org admin/owner (from the Compile page).
 
 ## User-facing behavior
 
 - Entry page: ViewToggle (editor / split / LaTeX) with live LaTeX source from the open doc
-- `/…/compile` — full-height `CloudNotebookCompiler` (version list + PDF preview; share link + delete)
-- Compile enqueues a notebook job (`type: compile`); progress via SSE `job.*` with optional `stage` / `detail`
+- `/…/compile` — full-height `CloudNotebookCompiler` (version list + PDF preview; share / copy / turn off; delete versions)
+- Compile enqueues a notebook job (`type: compile`); progress via SSE `job.*` with short user-facing `status` / `detail`
 
 ## Acceptance criteria
 
 - [ ] Compile produces downloadable PDF via server job
-- [x] `lastCompiled` / `latestExportId` and export URL available after success
-- [x] At most latest + shared PDF retained; non-shared older versions pruned
+- [x] Each successful compile creates a new export; `latestExportId` + export URL available after success
+- [x] At most 10 versions retained; further compiles blocked until a version is deleted
 - [x] Compile uses the single compressed image assets (no quality/original picker)
 - [x] Split / LaTeX modes update live from editor content + metadata
 - [x] No automatic BusyTeX fallback (optional `NEXT_PUBLIC_ALLOW_BUSYTEX_COMPILE` escape only)
-- [x] Compile UI shows staged SSE messages (`fetch` / `tex` / `xelatex` / `upload`) plus percent
+- [x] Compile UI shows quiet SSE progress (percent + short status lines)
 
 ## Data and APIs
 
 - `POST …/compile` or `POST …/jobs` `{ type: "compile" }`
-- `GET …/exports` — retained versions; `PUT|GET|DELETE …/exports/:exportId/…`
+- `GET …/exports` — retained versions (max 10); `PUT|GET|DELETE …/exports/:exportId/…`
 - SSE `job.progress` | `job.done` | `job.failed` — progress may include `stage`, `detail`
 
 ## Server compile (local + future Tasks)

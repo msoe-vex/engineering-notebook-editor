@@ -12,7 +12,6 @@ export type CompileSnapshotMeta = {
       string,
       { name: string; description?: string; iconName?: string; color?: string; order: number }
     >;
-    lastCompiled?: string;
   };
   members: Array<{
     id: string;
@@ -122,8 +121,8 @@ export async function uploadCompileExport(
   notebookId: string,
   pdf: Buffer,
   jobId?: string
-): Promise<{ lastCompiled: string }> {
-  const q = new URLSearchParams({ orgId, notebookId, exportId: "latest" });
+): Promise<{ createdAt: string; exportId?: string }> {
+  const q = new URLSearchParams({ orgId, notebookId });
   if (jobId) q.set("jobId", jobId);
   const url = `${coreBase()}/internal/compile/export?${q.toString()}`;
   const res = await fetch(url, {
@@ -133,9 +132,13 @@ export async function uploadCompileExport(
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`export upload ${res.status}: ${text}`);
+    throw new Error(text || `export upload ${res.status}`);
   }
-  return (await res.json()) as { lastCompiled: string };
+  const data = (await res.json()) as { createdAt?: string; exportId?: string };
+  return {
+    createdAt: data.createdAt || new Date().toISOString(),
+    exportId: data.exportId,
+  };
 }
 
 export async function reportCompileFailed(

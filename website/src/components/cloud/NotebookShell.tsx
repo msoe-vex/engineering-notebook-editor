@@ -255,7 +255,6 @@ export function NotebookShell({ children }: { children: ReactNode }) {
             access: nb.access,
             phases: nb.phases as NotebookSummary["phases"],
             contributorUids: nb.contributorUids,
-            lastCompiled: nb.lastCompiled,
             latestExportId: nb.latestExportId,
             publicExportId: nb.publicExportId,
             archivedAt: nb.archivedAt,
@@ -330,9 +329,6 @@ export function NotebookShell({ children }: { children: ReactNode }) {
           }
           if (nb.phases !== undefined) {
             next.phases = nb.phases as NotebookSummary["phases"];
-          }
-          if (nb.lastCompiled !== undefined) {
-            next.lastCompiled = nb.lastCompiled as string | undefined;
           }
           if (nb.latestExportId !== undefined) {
             next.latestExportId = nb.latestExportId as string | undefined;

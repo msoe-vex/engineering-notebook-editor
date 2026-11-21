@@ -88,7 +88,7 @@ Auth: `Authorization: Bearer <Firebase ID token | local uid>`
 
 - `GET/POST /orgs/:orgId/notebooks`
 - `GET/PATCH/DELETE /orgs/:orgId/notebooks/:notebookId`  
-  PATCH fields include `name`, `title`, `subtitle`, `logoAssetId`, `folders`, `access`, `phases`, `lastCompiled`, `latestExportId`, `publicExportId`, `archivedAt`, `publicAccess` (`off|unlisted`; legacy `public` → `unlisted`), `publicKey`, `revokePublic`  
+  PATCH fields include `name`, `title`, `subtitle`, `logoAssetId`, `folders`, `access`, `phases`, `latestExportId`, `publicExportId`, `archivedAt`, `publicAccess` (`off|unlisted`; legacy `public` → `unlisted`), `publicKey`, `revokePublic`  
   Public URL shape: `/o/:orgSlug/n/:publicKey`  
   DELETE cascades entries/assets/rubrics/judgments GCS blobs + subcollections
 - `POST /orgs/:orgId/notebooks/:notebookId/archive` — sets `archivedAt`, locks notebook into read-only mode (admins/owners only; blocks entry/folder/asset/contributor/rubric/judge/compile mutations with 403)
@@ -142,10 +142,10 @@ Over-limit bodies return **413**. Clients should preflight with `assertUploadSiz
 
 ### Exports (compiled PDF)
 
-- `GET /orgs/:orgId/notebooks/:notebookId/exports` — list retained compile PDFs (latest + shared) + `latestExportId` / `publicExportId`
-- `PUT /orgs/:orgId/notebooks/:notebookId/exports/:exportId/content` — PDF bytes; creates export, updates `latest`, prunes non-shared older versions; **64 MiB** limit
+- `GET /orgs/:orgId/notebooks/:notebookId/exports` — list retained compile PDFs (max 10) + `latestExportId` / `publicExportId`
+- `PUT /orgs/:orgId/notebooks/:notebookId/exports/:exportId/content` — PDF bytes; always mints a new version (or uses a non-`latest` id); updates `latest`; **409** at `MAX_COMPILE_EXPORTS` (10); **64 MiB** limit
 - `GET /orgs/:orgId/notebooks/:notebookId/exports/:exportId/url` — signed URL (`latest` → `latestExportId`)
-- `DELETE /orgs/:orgId/notebooks/:notebookId/exports/:exportId` — delete a saved version (deleting the shared one turns the link off)
+- `DELETE /orgs/:orgId/notebooks/:notebookId/exports/:exportId` — delete a saved version (deleting the shared one turns the link off; deleting latest promotes the next newest)
 
 ### Static assets
 

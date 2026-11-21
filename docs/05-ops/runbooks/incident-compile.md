@@ -15,6 +15,6 @@ Server compile job stuck or fails; missing TeX packages; export upload 403; blan
 ## Mitigations
 
 - Restart `compile` + Core; confirm `INTERNAL_SERVICE_SECRET` matches
-- Retry compile; check `lastCompiled` / export URL
+- Retry compile; check `latestExportId` / export URL / version list
 - Do **not** rely on BusyTeX for large notebooks; optional escape only with `NEXT_PUBLIC_ALLOW_BUSYTEX_COMPILE=1`
 - Related: [FR-compile](../../01-requirements/features/FR-compile.md), [ADR-006](../../02-architecture/decisions/ADR-006-compile-job.md)

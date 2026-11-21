@@ -117,7 +117,7 @@ sequenceDiagram
   Core-->>B: SSE job.progress
   Compile->>Core: PUT /internal/compile/export
   Core->>GCS: exports/latest.pdf
-  Core->>FS: job succeeded, lastCompiled
+  Core->>FS: job succeeded, new export + latestExportId
   Core-->>B: SSE job.done
 ```
 

@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Copy, ExternalLink, Trash2 } from "lucide-react";
+import { Check, Trash2 } from "lucide-react";
 import { AccessAllowlistPicker } from "@/components/cloud/AccessAllowlistPicker";
 import { NotebookPhasesEditor } from "@/components/cloud/NotebookPhasesEditor";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
 import { SettingsPageSkeleton } from "@/components/cloud/notebookPageSkeletons";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import { showNotification } from "@/components/overlays/Notification";
-import { Alert, Button, FormSection, ImageField, Select, TabNav, TextField } from "@/components/ui";
+import { Button, FormSection, ImageField, TabNav, TextField } from "@/components/ui";
 import {
   cloudApi,
   type MemberSummary,
@@ -21,7 +21,7 @@ import {
   type ProjectPhase,
 } from "@engineering-notebook/shared";
 
-type SetupTab = "general" | "access" | "share" | "danger";
+type SetupTab = "general" | "access" | "danger";
 
 export default function NotebookSetupPage() {
   const {
@@ -49,21 +49,13 @@ export default function NotebookSetupPage() {
   const [aclListsLoaded, setAclListsLoaded] = useState(false);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [orgSlug, setOrgSlug] = useState<string | null>(null);
   const router = useRouter();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showUnarchiveConfirm, setShowUnarchiveConfirm] = useState(false);
   const [leaveHref, setLeaveHref] = useState<string | null>(null);
-  const [publicAccess, setPublicAccess] = useState<"off" | "unlisted">("off");
   const [tab, setTab] = useState<SetupTab>("general");
 
-  useEffect(() => {
-    void cloudApi
-      .getOrg(orgId)
-      .then((o) => setOrgSlug(o.slug || null))
-      .catch(() => setOrgSlug(null));
-  }, [orgId]);
 
   useEffect(() => {
     setTitle(notebookSummary?.title || notebookSummary?.name || "");
@@ -75,11 +67,6 @@ export default function NotebookSetupPage() {
     setAccessMode(access?.mode === "restricted" ? "restricted" : "org");
     setTeamIds(access?.teamIds ?? []);
     setUserIds(access?.userIds ?? []);
-    setPublicAccess(
-      notebookSummary?.publicAccess === "public" || notebookSummary?.publicAccess === "unlisted"
-        ? "unlisted"
-        : "off"
-    );
   }, [notebookSummary]);
 
   const initialTitle = notebookSummary?.title || notebookSummary?.name || "";
@@ -262,28 +249,31 @@ export default function NotebookSetupPage() {
     return <SettingsPageSkeleton />;
   }
 
-  const saveBar = tab === "general" || tab === "access" ? (
-    <div className="flex items-center gap-3">
-      <Button variant="primary" disabled={busy || !isDirty || isArchived} onClick={() => void save()}>
-        {busy ? "Saving…" : "Save settings"}
-      </Button>
-      {saved && !isDirty && (
-        <span className="text-nb-label text-nb-success flex items-center gap-1 font-medium">
-          <Check size={14} /> Saved
-        </span>
-      )}
-    </div>
-  ) : null;
+  const showSave = tab === "general" || tab === "access";
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-nb-display font-bold tracking-tight">Settings</h1>
-        {isDirty && (
-          <span className="rounded-full bg-amber-500/10 border border-amber-500/30 px-3 py-1 text-nb-caption font-semibold text-amber-700 dark:text-amber-400">
-            Unsaved changes
-          </span>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          {isDirty && (
+            <span className="rounded-full bg-amber-500/10 border border-amber-500/30 px-3 py-1 text-nb-caption font-semibold text-amber-700 dark:text-amber-400">
+              Unsaved changes
+            </span>
+          )}
+          {showSave && (
+            <>
+              <Button variant="primary" disabled={busy || !isDirty || isArchived} onClick={() => void save()}>
+                {busy ? "Saving…" : "Save settings"}
+              </Button>
+              {saved && !isDirty && (
+                <span className="text-nb-label text-nb-success flex items-center gap-1 font-medium">
+                  <Check size={14} /> Saved
+                </span>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {isArchived && (
@@ -298,14 +288,11 @@ export default function NotebookSetupPage() {
         items={[
           { id: "general", label: "General" },
           { id: "access", label: "Access" },
-          ...(canManage
-            ? [
-                { id: "share", label: "Share link" },
-                { id: "danger", label: "Archive / Delete" },
-              ]
-            : []),
+          ...(canManage ? [{ id: "danger", label: "Archive / Delete" }] : []),
         ]}
       />
+
+      <div className="min-h-[28rem]">
 
       {tab === "general" && (
         <>
@@ -351,7 +338,6 @@ export default function NotebookSetupPage() {
           <section className={isArchived ? "pointer-events-none opacity-60" : ""}>
             <NotebookPhasesEditor value={phases} onChange={setPhases} />
           </section>
-          {saveBar}
         </>
       )}
 
@@ -406,119 +392,6 @@ export default function NotebookSetupPage() {
                 </div>
               )}
             </>
-          )}
-          {saveBar}
-        </FormSection>
-      )}
-
-      {tab === "share" && canManage && notebookSummary && (
-        <FormSection
-          title="Share link"
-          actions={
-            <div className="flex flex-wrap items-center gap-2">
-              {orgSlug && notebookSummary.publicKey && publicAccess !== "off" ? (
-                <>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => {
-                      const url = `${window.location.origin}/o/${orgSlug}/n/${notebookSummary.publicKey}`;
-                      void navigator.clipboard.writeText(url).then(
-                        () => showNotification("Link copied", "success"),
-                        () => showNotification("Could not copy", "error")
-                      );
-                    }}
-                  >
-                    <Copy size={14} /> Copy link
-                  </Button>
-                  <a
-                    href={`/o/${orgSlug}/n/${notebookSummary.publicKey}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-nb-primary hover:underline"
-                  >
-                    Open <ExternalLink size={14} />
-                  </a>
-                </>
-              ) : (
-                <span className="text-sm text-nb-on-surface-variant">
-                  {!orgSlug
-                    ? "Set an org slug first"
-                    : publicAccess === "off"
-                      ? "Off"
-                      : "Save to create a link"}
-                </span>
-              )}
-            </div>
-          }
-        >
-          <Select
-            className="max-w-sm"
-            label="Visibility"
-            value={publicAccess}
-            disabled={busy || isArchived}
-            onChange={(e) => setPublicAccess(e.target.value as "off" | "unlisted")}
-          >
-            <option value="off">Off</option>
-            <option value="unlisted">Anyone with the link</option>
-          </Select>
-
-          <p className="text-nb-caption text-nb-on-surface-variant">
-            Pick which PDF is shared on{" "}
-            <a
-              className="font-semibold text-nb-primary underline"
-              href={`/orgs/${orgId}/notebooks/${notebookId}/compile`}
-            >
-              Compile
-            </a>
-            .
-          </p>
-
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={busy || isArchived}
-            onClick={() => {
-              setBusy(true);
-              void cloudApi
-                .patchNotebook(orgId, notebookId, {
-                  publicAccess,
-                  revokePublic: publicAccess === "off",
-                })
-                .then((updated) => {
-                  if (notebookSummary) {
-                    setNotebookSummary({
-                      ...notebookSummary,
-                      publicAccess: updated.publicAccess ?? publicAccess,
-                      publicKey: updated.publicKey,
-                      publicExportId: updated.publicExportId,
-                      publishedAt: updated.publishedAt,
-                      publishedBy: updated.publishedBy,
-                      latestExportId: updated.latestExportId ?? notebookSummary.latestExportId,
-                      updatedAt: updated.updatedAt || notebookSummary.updatedAt,
-                    });
-                  }
-                  showNotification(
-                    publicAccess === "off" ? "Share link off" : "Share link updated",
-                    "success"
-                  );
-                  refresh();
-                })
-                .catch((err) => showNotification((err as Error).message, "error"))
-                .finally(() => setBusy(false));
-            }}
-          >
-            Save
-          </Button>
-
-          {!orgSlug && (
-            <Alert variant="warning">
-              Set an org slug in{" "}
-              <a className="font-semibold underline" href={`/orgs/${orgId}/settings`}>
-                organization settings
-              </a>{" "}
-              first.
-            </Alert>
           )}
         </FormSection>
       )}
@@ -579,6 +452,8 @@ export default function NotebookSetupPage() {
           </section>
         </>
       )}
+
+      </div>
 
       <ConfirmationDialog
         isOpen={showArchiveConfirm}

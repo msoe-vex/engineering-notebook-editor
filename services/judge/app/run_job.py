@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from app import core_client
 from app.graph import run_score_graph
@@ -11,6 +11,8 @@ from app.normalize import (
     normalize_rubric_text,
 )
 from app.tools import NotebookIndex
+
+ProgressFn = Callable[..., Awaitable[None]]
 
 
 def resolve_phase(payload: dict[str, Any]) -> str:
@@ -26,8 +28,9 @@ async def ensure_matrix(
     rubric_id: str,
     *,
     force: bool,
-    progress,
+    progress: ProgressFn,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    await progress("Loading rubric…", 12, stage="load", detail="Opening rubric")
     rubric = await core_client.fetch_rubric(org_id, notebook_id, rubric_id)
     matrix = rubric.get("matrix")
 
@@ -37,6 +40,7 @@ async def ensure_matrix(
         and (matrix.get("categories") or [])
         and rubric.get("status") == "ready"
     ):
+        await progress("Rubric ready", 28, stage="load", detail="Using saved matrix")
         return rubric, matrix
 
     if not rubric.get("sourceGcsPath"):
@@ -44,11 +48,22 @@ async def ensure_matrix(
             return rubric, matrix
         raise RuntimeError("Rubric has no source file and no matrix to score")
 
-    await progress("Extracting rubric text…", 15)
+    await progress(
+        "Reading rubric document…",
+        18,
+        stage="extract",
+        detail="Downloading source file",
+    )
     raw_bytes = await core_client.fetch_storage_object(
         org_id, notebook_id, rubric["sourceGcsPath"]
     )
     data = raw_bytes or b""
+    await progress(
+        "Reading rubric document…",
+        24,
+        stage="extract",
+        detail="Extracting text",
+    )
     raw_text = await extract_text_from_source(
         str(rubric.get("sourceContentType") or ""),
         data,
@@ -61,11 +76,23 @@ async def ensure_matrix(
         or not matrix_grounded_in_source(matrix or {}, raw_text)
     )
     if needs:
-        await progress("Normalizing rubric to matrix…", 30)
+        await progress(
+            "Building rubric matrix…",
+            35,
+            stage="normalize",
+            detail="Asking the model to structure criteria",
+        )
         await core_client.patch_rubric(
             org_id, notebook_id, rubric_id, {"status": "normalizing"}
         )
         matrix = await normalize_rubric_text(raw_text, str(rubric.get("name") or "Rubric"))
+        cats = len((matrix or {}).get("categories") or [])
+        await progress(
+            "Saving matrix…",
+            55,
+            stage="normalize",
+            detail=f"{cats} criteria ready" if cats else "Saving matrix",
+        )
         await core_client.patch_rubric(
             org_id,
             notebook_id,
@@ -94,15 +121,28 @@ async def run_judge_job(
     byok = payload.get("byok") if isinstance(payload.get("byok"), dict) else None
     set_llm_context(str(inference), byok)
 
-    async def progress(status: str, pct: int) -> None:
-        await core_client.report_progress(org_id, notebook_id, job_id, status, pct)
+    async def progress(
+        status: str,
+        pct: int,
+        *,
+        stage: str | None = None,
+        detail: str | None = None,
+    ) -> None:
+        await core_client.report_progress(
+            org_id,
+            notebook_id,
+            job_id,
+            status,
+            pct,
+            stage=stage,
+            detail=detail,
+        )
 
     phase = resolve_phase(payload)
 
     if phase == "normalize":
-        await progress("Loading rubric…", 10)
         await ensure_matrix(org_id, notebook_id, rubric_id, force=True, progress=progress)
-        await progress("Saving matrix…", 95)
+        await progress("Finishing…", 95, stage="save", detail="Marking rubric ready")
         await core_client.complete_normalize(org_id, notebook_id, job_id, rubric_id)
         return
 
@@ -110,16 +150,27 @@ async def run_judge_job(
     if not judgment_id:
         raise RuntimeError("payload.judgmentId required for score phase")
 
-    await progress("Loading rubric…", 10)
     _, matrix = await ensure_matrix(
         org_id, notebook_id, rubric_id, force=False, progress=progress
     )
     if not (matrix.get("categories") or []):
         raise RuntimeError("Rubric matrix is empty — extract or edit the rubric first")
 
-    await progress("Loading notebook…", 35)
+    await progress(
+        "Loading notebook…",
+        40,
+        stage="notebook",
+        detail="Fetching entries for scoring",
+    )
     snap = await core_client.fetch_snapshot(org_id, notebook_id)
     index = NotebookIndex.from_snapshot(snap)
+    entry_count = len(index.entries)
+    await progress(
+        "Loading notebook…",
+        48,
+        stage="notebook",
+        detail=f"{entry_count} entries loaded" if entry_count else "No entries yet",
+    )
 
     if not index.entries:
         results = [
@@ -149,10 +200,22 @@ async def run_judge_job(
             ),
         }
     else:
-        await progress("Gathering evidence (LangGraph tools)…", 45)
+        cats = matrix.get("categories") or []
+        await progress(
+            "Scoring notebook…",
+            55,
+            stage="score",
+            detail=f"Evaluating {len(cats)} criteria",
+        )
         scored = await run_score_graph(matrix=matrix, index=index)
+        await progress(
+            "Scoring notebook…",
+            88,
+            stage="score",
+            detail=f"{scored.get('totalPoints', 0)} / {scored.get('totalMaxPoints', 0)} points",
+        )
 
-    await progress("Saving results…", 95)
+    await progress("Saving results…", 95, stage="save", detail="Writing grade")
     await core_client.complete_judgment(
         org_id,
         notebook_id,

@@ -186,7 +186,7 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
         subtitle: nb.subtitle,
         publicAccess: nb.publicAccess,
         publicKey: nb.publicKey,
-        lastCompiled: nb.lastCompiled,
+        latestExportId: nb.latestExportId,
         publicExportId: resolved?.exportId || nb.publicExportId || null,
       },
       pdfUrl,
@@ -230,7 +230,7 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
       const url = await storage.getSignedUrl(resolved.key, "read");
       return {
         url,
-        lastCompiled: nb.lastCompiled,
+        latestExportId: nb.latestExportId,
         exportId: resolved.exportId,
       };
     }

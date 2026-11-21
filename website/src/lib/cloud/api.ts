@@ -144,7 +144,6 @@ export type CloudNotebookSummary = {
   access?: NotebookAccess;
   phases?: Record<string, unknown>;
   contributorUids?: string[];
-  lastCompiled?: string;
   latestExportId?: string;
   publicExportId?: string;
   updatedAt?: string;
@@ -276,7 +275,7 @@ export const cloudApi = {
       `${coreBase()}/public/o/${encodeURIComponent(slug)}/notebooks/${encodeURIComponent(publicKey)}/pdf?json=1`
     ).then(async (r) => {
       if (!r.ok) throw new Error(await r.text());
-      return r.json() as Promise<{ url: string; lastCompiled?: string; exportId?: string }>;
+      return r.json() as Promise<{ url: string; latestExportId?: string; exportId?: string }>;
     }),
 
   listMembers: (orgId: string) => coreFetch<MemberSummary[]>(`/orgs/${orgId}/members`),
@@ -761,7 +760,7 @@ export const cloudApi = {
     return res.json() as Promise<{
       ok: boolean;
       exportId: string;
-      lastCompiled: string;
+      createdAt?: string;
       byteSize: number;
     }>;
   },

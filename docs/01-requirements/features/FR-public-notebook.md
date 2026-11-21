@@ -6,7 +6,7 @@ Related: [FR-notebooks](./FR-notebooks.md), [FR-compile](./FR-compile.md), [FR-o
 
 ## Summary
 
-Share a **stable link** that serves the notebook’s **compiled PDF** (no HTML wrapper, no live TipTap). Default remains private. Compiles keep at most the **latest** PDF and the **currently shared** PDF; older non-shared compiles are pruned. Admins can delete either saved version.
+Share a **stable link** that serves the notebook’s **compiled PDF** (no HTML wrapper, no live TipTap). Default remains private. Compiles keep up to **10** versioned PDFs; at the limit, delete a version before compiling again. Share / revoke and version delete live on the **Compile** page.
 
 Visitors never need GCS credentials: **`/o/:orgSlug/n/:notebookKey`** (website) proxies bytes from Core `GET /public/o/…/pdf`, which reads storage server-side.
 
@@ -20,8 +20,7 @@ Visitors never need GCS credentials: **`/o/:orgSlug/n/:notebookKey`** (website) 
 
 ## User-facing behavior
 
-- **Compile** page: preview latest / shared PDFs; **Share this PDF** / **Turn off**; delete saved versions
-- Notebook **Settings**: Off | Anyone with the link (shortcut); prefer Compile for which PDF is bound
+- **Compile** page: preview versions; **Share** / **Turn off** / copy link; delete saved versions (max 10)
 - Share URL: **`/o/:orgSlug/n/:notebookKey`** → PDF stream (website → Core → storage)
 - Visibility is link-only (`publicAccess: "unlisted"`). Legacy `"public"` is accepted and stored as `"unlisted"`. No separate listed/SEO mode for notebooks.
 
@@ -31,7 +30,7 @@ Visitors never need GCS credentials: **`/o/:orgSlug/n/:notebookKey`** (website) 
 - [x] Share URL serves the PDF via Core proxy (no public TipTap / wrapper page; no raw GCS redirect for visitors)
 - [x] `notebookKey` unique within the org
 - [x] `publishedAt` / `publishedBy` recorded for admins; cleared on revoke
-- [x] At most latest + shared compile exports retained; others pruned on compile
+- [x] Up to 10 compile exports retained; compile refused at the limit until a version is deleted
 - [x] Saved versions can be deleted (deleting the shared one turns the link off)
 - [x] Core `GET …/pdf` streams bytes by default; `?json=1` returns a storage/signed `{ url }` for tooling only
 
@@ -45,5 +44,5 @@ Visitors never need GCS credentials: **`/o/:orgSlug/n/:notebookKey`** (website) 
 
 - Public write collaboration
 - Listing published notebooks on the org marketing page (could return later)
-- Keeping a full compile history
+- Unlimited compile history (hard cap: 10 versions)
 - Handing visitors raw bucket / signed GCS URLs as the share target

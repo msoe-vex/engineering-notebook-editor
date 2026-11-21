@@ -44,7 +44,8 @@ folders: Record<folderId, { name, parentId, order }>
 access?: { mode: "org" | "restricted", teamIds[], userIds[] }
 phases?: Record<phaseId, { name, description, iconName, color, order, deletedAt? }>
 contributorUids?: string[]   // ordered org member uids for credits
-lastCompiled?
+latestExportId?              // most recent compile export id
+publicExportId?              // export id served by the share link
 createdAt?, createdBy?, updatedAt
 ```
 
@@ -167,10 +168,10 @@ publicExportId?: string   // PDF opened by the share link
 | Lookup | Purpose |
 | --- | --- |
 | `organizations/{orgId}/publicNotebookKeys/{publicKey}` → `{ notebookId }` | Resolve `/o/:orgSlug/n/:publicKey` |
-| `…/notebooks/{notebookId}/compileExports/{exportId}` | Retained versions only (latest + shared) |
+| `…/notebooks/{notebookId}/compileExports/{exportId}` | Retained versions (max 10) |
 | GCS `…/exports/{exportId}.pdf` (+ `latest.pdf` alias) | Compiled PDF bytes |
 
-URL: **`/o/:orgSlug/n/:publicKey`** serves the PDF via website → Core proxy (not a raw GCS URL). At most two compile exports are kept.
+URL: **`/o/:orgSlug/n/:publicKey`** serves the PDF via website → Core proxy (not a raw GCS URL). At most **10** compile exports are kept (`MAX_COMPILE_EXPORTS`).
 
 ### Org member alumni
 

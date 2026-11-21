@@ -333,7 +333,6 @@ export type NotebookSummary = {
    * Display name / title / photo come from `organizations/…/members/{uid}`.
    */
   contributorUids?: string[];
-  lastCompiled?: string;
   /** Most recent compile export id (PDF version). */
   latestExportId?: string;
   /** Compile export id served on the public notebook link (PDF-only). */
@@ -387,7 +386,6 @@ export type NotebookExport = {
   access?: NotebookAccess;
   phases?: Record<string, ProjectPhase>;
   members?: Record<string, Omit<NotebookMember, "id">>;
-  lastCompiled?: string;
   entries: Record<string, EntryMetadata>;
 };
 

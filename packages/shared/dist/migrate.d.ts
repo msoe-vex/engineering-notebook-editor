@@ -46,7 +46,6 @@ type NotebookMetadataV4 = {
     entries: Record<string, EntryMetadataV4>;
     team?: TeamMetadataV4;
     phases?: Record<string, ProjectPhase>;
-    lastCompiled?: string;
     folders?: Record<string, NotebookFolder>;
     title?: string;
     subtitle?: string;

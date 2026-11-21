@@ -67,12 +67,12 @@ export async function runCompileJob(opts: {
   orgId: string;
   notebookId: string;
   jobId: string;
-}): Promise<{ lastCompiled: string }> {
+}): Promise<{ createdAt: string; exportId?: string }> {
   const { orgId, notebookId, jobId } = opts;
   const templateDir = resolveTemplateDir();
 
-  await reportCompileProgress(orgId, notebookId, jobId, "Fetching notebook metadata…", 12, {
-    stage: "fetch",
+  await reportCompileProgress(orgId, notebookId, jobId, "Loading notebook…", 12, {
+    stage: "prepare",
   });
   const meta = await fetchCompileSnapshotMeta(orgId, notebookId);
   console.log(
@@ -82,8 +82,7 @@ export async function runCompileJob(opts: {
   const snapshot = await hydrateCompileSnapshot(meta, {
     onProgress: (message, progress) => {
       void reportCompileProgress(orgId, notebookId, jobId, message, progress, {
-        stage: "fetch",
-        detail: message,
+        stage: "prepare",
       });
     },
   });
@@ -91,24 +90,24 @@ export async function runCompileJob(opts: {
     `[compile] hydrated: ${Object.keys(snapshot.entries).length} entries, ${Object.keys(snapshot.assets).length} assets downloaded`
   );
 
-  await reportCompileProgress(orgId, notebookId, jobId, "Building LaTeX workspace…", 40, {
-    stage: "tex",
+  await reportCompileProgress(orgId, notebookId, jobId, "Preparing pages…", 40, {
+    stage: "prepare",
   });
   const workDir = process.env.WORK_DIR || path.join(os.tmpdir(), `nb-compile-${jobId}`);
   buildWorkspace({ workDir, templateDir, snapshot });
   console.log(`[compile] workspace=${workDir}`);
 
-  await reportCompileProgress(orgId, notebookId, jobId, "Running XeLaTeX…", 55, {
-    stage: "xelatex",
+  await reportCompileProgress(orgId, notebookId, jobId, "Building PDF…", 55, {
+    stage: "build",
   });
   const pdf = runXeLatex(workDir);
   console.log(`[compile] pdf bytes=${pdf.byteLength}`);
 
-  await reportCompileProgress(orgId, notebookId, jobId, "Uploading PDF…", 90, {
-    stage: "upload",
+  await reportCompileProgress(orgId, notebookId, jobId, "Saving version…", 90, {
+    stage: "save",
   });
   const uploaded = await uploadCompileExport(orgId, notebookId, pdf, jobId);
-  console.log(`[compile] uploaded lastCompiled=${uploaded.lastCompiled}`);
+  console.log(`[compile] uploaded createdAt=${uploaded.createdAt}`);
   return uploaded;
 }
 
@@ -116,10 +115,10 @@ export async function runCompileJobSafe(opts: {
   orgId: string;
   notebookId: string;
   jobId: string;
-}): Promise<{ ok: true; lastCompiled: string } | { ok: false; error: string }> {
+}): Promise<{ ok: true; createdAt: string } | { ok: false; error: string }> {
   try {
     const uploaded = await runCompileJob(opts);
-    return { ok: true, lastCompiled: uploaded.lastCompiled };
+    return { ok: true, createdAt: uploaded.createdAt };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[compile] failed: ${message}`);

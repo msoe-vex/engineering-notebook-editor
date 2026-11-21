@@ -68,20 +68,32 @@ async def fetch_storage_object(org_id: str, notebook_id: str, key: str) -> bytes
 
 
 async def report_progress(
-    org_id: str, notebook_id: str, job_id: str, status: str, progress: int
+    org_id: str,
+    notebook_id: str,
+    job_id: str,
+    status: str,
+    progress: int,
+    *,
+    stage: str | None = None,
+    detail: str | None = None,
 ) -> None:
     try:
+        body: dict[str, Any] = {
+            "orgId": org_id,
+            "notebookId": notebook_id,
+            "jobId": job_id,
+            "status": status,
+            "progress": progress,
+        }
+        if stage:
+            body["stage"] = stage
+        if detail:
+            body["detail"] = detail
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             await client.post(
                 f"{core_base()}/internal/judge/progress",
                 headers=_headers({"content-type": "application/json"}),
-                json={
-                    "orgId": org_id,
-                    "notebookId": notebook_id,
-                    "jobId": job_id,
-                    "status": status,
-                    "progress": progress,
-                },
+                json=body,
             )
     except Exception:
         pass

@@ -24,10 +24,6 @@ function OrgChrome({ children }: { children: ReactNode }) {
   const {
     orgId,
     org,
-    notebooks,
-    teams,
-    members,
-    pendingInviteCount,
     error,
     initialLoaded,
     orgUnavailable,
@@ -105,21 +101,18 @@ function OrgChrome({ children }: { children: ReactNode }) {
             id: "notebooks",
             label: "Notebooks",
             href: `/orgs/${orgId}`,
-            count: notebooks.length,
             icon: <BookOpen size={14} />,
           },
           {
             id: "teams",
             label: "Teams",
             href: `/orgs/${orgId}/teams`,
-            count: teams.length,
             icon: <UsersRound size={14} />,
           },
           {
             id: "people",
             label: "People",
             href: `/orgs/${orgId}/people`,
-            count: members.length + pendingInviteCount,
             icon: <Users size={14} />,
           },
           ...(canManage

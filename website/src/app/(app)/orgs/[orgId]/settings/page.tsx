@@ -230,29 +230,31 @@ export default function OrgSettingsPage() {
     );
   }
 
-  const saveBar =
-    tab === "general" || tab === "public" ? (
-      <div className="flex items-center gap-3">
-        <Button variant="primary" disabled={busy || !isDirty} onClick={() => void save()}>
-          {busy ? "Saving…" : "Save changes"}
-        </Button>
-        {saved && !isDirty && (
-          <span className="flex items-center gap-1 text-nb-label font-medium text-nb-success">
-            <Check size={14} /> Saved
-          </span>
-        )}
-      </div>
-    ) : null;
+  const showSave = tab === "general" || tab === "public";
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-nb-title font-bold tracking-tight text-nb-on-surface">Settings</h2>
-        {isDirty && (
-          <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-nb-caption font-semibold text-amber-700 dark:text-amber-400">
-            Unsaved changes
-          </span>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          {isDirty && (
+            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-nb-caption font-semibold text-amber-700 dark:text-amber-400">
+              Unsaved changes
+            </span>
+          )}
+          {showSave && (
+            <>
+              <Button variant="primary" disabled={busy || !isDirty} onClick={() => void save()}>
+                {busy ? "Saving…" : "Save changes"}
+              </Button>
+              {saved && !isDirty && (
+                <span className="flex items-center gap-1 text-nb-label font-medium text-nb-success">
+                  <Check size={14} /> Saved
+                </span>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       <TabNav
@@ -266,6 +268,7 @@ export default function OrgSettingsPage() {
         ]}
       />
 
+      <div className="min-h-[28rem]">
       {tab === "general" && (
         <FormSection
           title="Organization"
@@ -284,7 +287,6 @@ export default function OrgSettingsPage() {
             onChange={(e) => setName(e.target.value)}
             placeholder="Organization name"
           />
-          {saveBar}
         </FormSection>
       )}
 
@@ -406,7 +408,6 @@ export default function OrgSettingsPage() {
               />
             ))}
           </div>
-          {saveBar}
         </FormSection>
       )}
 
@@ -447,6 +448,7 @@ export default function OrgSettingsPage() {
           )}
         </section>
       )}
+      </div>
 
       <ConfirmationDialog
         isOpen={deleteConfirmOpen}
