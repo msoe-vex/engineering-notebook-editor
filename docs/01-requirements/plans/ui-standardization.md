@@ -183,7 +183,7 @@ Prefer **vertical slices** (kit → adopt on one page → next page) over a big-
 - [x] No `window.confirm` in product flows
 - [x] Org `TabNav` shows icons
 - [x] Dev/architecture helper sentences removed from user chrome
-- [x] Shared types drop `V5` suffix; `schemaVersion` remains `5` (no `*V5` type aliases; legacy ZIP team shim is `LegacyTeamMetadata`)
+- [x] Shared types drop `V5` suffix; `schemaVersion` remains `5` (v4 import still lifts embedded `team` inside `migrate.ts` only)
 
 ## Out of scope
 

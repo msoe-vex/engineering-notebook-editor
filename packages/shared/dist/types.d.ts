@@ -359,25 +359,6 @@ export type NotebookExport = {
     lastCompiled?: string;
     entries: Record<string, EntryMetadata>;
 };
-/** Legacy embedded team blob (ZIP/local import shim only). */
-export type LegacyTeamMember = {
-    name: string;
-    role: string;
-    order: number;
-    imageAssetId?: string;
-    imageOriginalAssetId?: string;
-};
-export type LegacyTeamMetadata = {
-    teamName: string;
-    teamNumber: string;
-    startDate?: string;
-    endDate?: string;
-    autoCalculateDates?: boolean;
-    organization: string;
-    logoAssetId?: string;
-    logoOriginalAssetId?: string;
-    members: Record<string, LegacyTeamMember>;
-};
 /** One performance level inside a rubric category (standardized matrix). */
 export type RubricLevel = {
     id: string;

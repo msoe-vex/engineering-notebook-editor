@@ -28,8 +28,8 @@ export function migrateEntryV4ToV5(entry) {
         validationErrors: rest.validationErrors,
     };
 }
-/** Lift legacy embedded team into notebook branding + member map (import shim). */
-export function liftLegacyTeam(team) {
+/** Map v4 embedded `team` into notebook branding + member map. */
+function liftTeamFromV4(team) {
     if (!team)
         return { members: {} };
     const members = {};
@@ -53,7 +53,7 @@ export function migrateNotebookV4ToV5(raw, orgId, name) {
     for (const [id, entry] of Object.entries(raw.entries ?? {})) {
         entries[id] = migrateEntryV4ToV5(entry);
     }
-    const lifted = liftLegacyTeam(raw.team);
+    const lifted = liftTeamFromV4(raw.team);
     const members = raw.members ?? lifted.members;
     const summary = {
         schemaVersion: NOTEBOOK_SCHEMA_VERSION,
@@ -85,30 +85,23 @@ export function buildExportV5(summary, entries, members) {
         entries,
     };
 }
-/** Accept v4 or v5 index JSON and always return current export metadata + entries. */
+/** Accept v4 or current index JSON and return current export metadata + entries. */
 export function normalizeImportNotebook(raw, orgId, fallbackName) {
     const version = Number(raw.version ?? raw.schemaVersion ?? 4);
     if (version >= 5) {
-        const legacyTeam = raw.team;
-        const lifted = liftLegacyTeam(legacyTeam);
         const summary = raw;
-        const members = raw.members ?? lifted.members;
         return {
             summary: {
                 ...summary,
                 schemaVersion: NOTEBOOK_SCHEMA_VERSION,
                 orgId: summary.orgId || orgId,
                 name: summary.name || fallbackName,
-                title: summary.title ?? lifted.title,
-                subtitle: summary.subtitle ?? lifted.subtitle,
-                logoAssetId: summary.logoAssetId ?? lifted.logoAssetId,
                 folders: summary.folders ?? {},
                 access: summary.access ?? defaultNotebookAccess(),
-                // Drop legacy embedded team from live summary
                 phases: summary.phases ?? {},
             },
             entries: raw.entries ?? {},
-            members,
+            members: raw.members ?? {},
         };
     }
     return migrateNotebookV4ToV5(raw, orgId, fallbackName);

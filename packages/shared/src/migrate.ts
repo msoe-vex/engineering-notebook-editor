@@ -1,7 +1,6 @@
 import { NOTEBOOK_SCHEMA_VERSION, defaultNotebookAccess } from "./types.js";
 import type {
   EntryMetadata,
-  LegacyTeamMetadata,
   NotebookAccess,
   NotebookExport,
   NotebookFolder,
@@ -29,10 +28,34 @@ type EntryMetadataV4 = {
   folderId?: string | null;
 };
 
+/** Embedded team blob that existed on v4 notebook index JSON. */
+type TeamMetadataV4 = {
+  teamName: string;
+  teamNumber: string;
+  startDate?: string;
+  endDate?: string;
+  autoCalculateDates?: boolean;
+  organization: string;
+  logoAssetId?: string;
+  logoOriginalAssetId?: string;
+  logo?: string;
+  logoOriginal?: string;
+  members: Record<
+    string,
+    {
+      name: string;
+      role: string;
+      order: number;
+      imageAssetId?: string;
+      imageOriginalAssetId?: string;
+    }
+  >;
+};
+
 type NotebookMetadataV4 = {
   version: number;
   entries: Record<string, EntryMetadataV4>;
-  team?: LegacyTeamMetadata & { logo?: string; logoOriginal?: string };
+  team?: TeamMetadataV4;
   phases?: Record<string, ProjectPhase>;
   lastCompiled?: string;
   folders?: Record<string, NotebookFolder>;
@@ -73,8 +96,8 @@ export function migrateEntryV4ToV5(entry: EntryMetadataV4): EntryMetadata {
   };
 }
 
-/** Lift legacy embedded team into notebook branding + member map (import shim). */
-export function liftLegacyTeam(team: LegacyTeamMetadata | undefined): {
+/** Map v4 embedded `team` into notebook branding + member map. */
+function liftTeamFromV4(team: TeamMetadataV4 | undefined): {
   title?: string;
   subtitle?: string;
   logoAssetId?: string;
@@ -112,7 +135,7 @@ export function migrateNotebookV4ToV5(
     entries[id] = migrateEntryV4ToV5(entry);
   }
 
-  const lifted = liftLegacyTeam(raw.team);
+  const lifted = liftTeamFromV4(raw.team);
   const members = raw.members ?? lifted.members;
 
   const summary: NotebookSummary = {
@@ -152,7 +175,7 @@ export function buildExportV5(
   };
 }
 
-/** Accept v4 or v5 index JSON and always return current export metadata + entries. */
+/** Accept v4 or current index JSON and return current export metadata + entries. */
 export function normalizeImportNotebook(
   raw: Record<string, unknown>,
   orgId: string,
@@ -164,27 +187,19 @@ export function normalizeImportNotebook(
 } {
   const version = Number(raw.version ?? raw.schemaVersion ?? 4);
   if (version >= 5) {
-    const legacyTeam = raw.team as LegacyTeamMetadata | undefined;
-    const lifted = liftLegacyTeam(legacyTeam);
     const summary = raw as unknown as NotebookSummary;
-    const members =
-      (raw.members as Record<string, Omit<NotebookMember, "id">> | undefined) ?? lifted.members;
     return {
       summary: {
         ...summary,
         schemaVersion: NOTEBOOK_SCHEMA_VERSION,
         orgId: summary.orgId || orgId,
         name: summary.name || fallbackName,
-        title: summary.title ?? lifted.title,
-        subtitle: summary.subtitle ?? lifted.subtitle,
-        logoAssetId: summary.logoAssetId ?? lifted.logoAssetId,
         folders: summary.folders ?? {},
         access: summary.access ?? defaultNotebookAccess(),
-        // Drop legacy embedded team from live summary
         phases: summary.phases ?? {},
       },
       entries: (raw.entries as Record<string, EntryMetadata>) ?? {},
-      members,
+      members: (raw.members as Record<string, Omit<NotebookMember, "id">> | undefined) ?? {},
     };
   }
   return migrateNotebookV4ToV5(raw as unknown as NotebookMetadataV4, orgId, fallbackName);

@@ -1,4 +1,4 @@
-import type { EntryMetadata, LegacyTeamMetadata, NotebookAccess, NotebookExport, NotebookFolder, NotebookMember, NotebookSummary, ProjectPhase } from "./types.js";
+import type { EntryMetadata, NotebookAccess, NotebookExport, NotebookFolder, NotebookMember, NotebookSummary, ProjectPhase } from "./types.js";
 /** Minimal v4 shapes used only for import migrate-once. */
 type EntryMetadataV4 = {
     title: string;
@@ -21,13 +21,30 @@ type EntryMetadataV4 = {
     validationErrors?: string[];
     folderId?: string | null;
 };
+/** Embedded team blob that existed on v4 notebook index JSON. */
+type TeamMetadataV4 = {
+    teamName: string;
+    teamNumber: string;
+    startDate?: string;
+    endDate?: string;
+    autoCalculateDates?: boolean;
+    organization: string;
+    logoAssetId?: string;
+    logoOriginalAssetId?: string;
+    logo?: string;
+    logoOriginal?: string;
+    members: Record<string, {
+        name: string;
+        role: string;
+        order: number;
+        imageAssetId?: string;
+        imageOriginalAssetId?: string;
+    }>;
+};
 type NotebookMetadataV4 = {
     version: number;
     entries: Record<string, EntryMetadataV4>;
-    team?: LegacyTeamMetadata & {
-        logo?: string;
-        logoOriginal?: string;
-    };
+    team?: TeamMetadataV4;
     phases?: Record<string, ProjectPhase>;
     lastCompiled?: string;
     folders?: Record<string, NotebookFolder>;
@@ -38,20 +55,13 @@ type NotebookMetadataV4 = {
     members?: Record<string, Omit<NotebookMember, "id">>;
 };
 export declare function migrateEntryV4ToV5(entry: EntryMetadataV4): EntryMetadata;
-/** Lift legacy embedded team into notebook branding + member map (import shim). */
-export declare function liftLegacyTeam(team: LegacyTeamMetadata | undefined): {
-    title?: string;
-    subtitle?: string;
-    logoAssetId?: string;
-    members: Record<string, Omit<NotebookMember, "id">>;
-};
 export declare function migrateNotebookV4ToV5(raw: NotebookMetadataV4, orgId: string, name: string): {
     summary: NotebookSummary;
     entries: Record<string, EntryMetadata>;
     members: Record<string, Omit<NotebookMember, "id">>;
 };
 export declare function buildExportV5(summary: NotebookSummary, entries: Record<string, EntryMetadata>, members?: Record<string, Omit<NotebookMember, "id">>): NotebookExport;
-/** Accept v4 or v5 index JSON and always return current export metadata + entries. */
+/** Accept v4 or current index JSON and return current export metadata + entries. */
 export declare function normalizeImportNotebook(raw: Record<string, unknown>, orgId: string, fallbackName: string): {
     summary: NotebookSummary;
     entries: Record<string, EntryMetadata>;
