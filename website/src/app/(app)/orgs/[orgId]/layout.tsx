@@ -28,17 +28,21 @@ function OrgChrome({ children }: { children: ReactNode }) {
     setError,
   } = useOrgWorkspace();
 
-  const activeTab = pathname.includes("/settings")
+  const activeTab = pathname.includes("/settings") || pathname.includes("/public")
     ? "settings"
-    : pathname.includes("/public")
-      ? "public"
-      : pathname.includes("/teams")
-        ? "teams"
-        : pathname.includes("/people") ||
-            pathname.includes("/members") ||
-            pathname.includes("/invites")
-          ? "people"
-          : "notebooks";
+    : pathname.includes("/donors")
+      ? "donors"
+      : pathname.includes("/projects")
+        ? "projects"
+        : pathname.includes("/events")
+          ? "events"
+          : pathname.includes("/teams")
+            ? "teams"
+            : pathname.includes("/people") ||
+                pathname.includes("/members") ||
+                pathname.includes("/invites")
+              ? "people"
+              : "notebooks";
 
   if (!initialLoaded) {
     return (
@@ -109,9 +113,19 @@ function OrgChrome({ children }: { children: ReactNode }) {
           ...(canManage
             ? [
                 {
-                  id: "public",
-                  label: "Public page",
-                  href: `/orgs/${orgId}/public`,
+                  id: "donors",
+                  label: "Donors",
+                  href: `/orgs/${orgId}/donors`,
+                },
+                {
+                  id: "projects",
+                  label: "Projects",
+                  href: `/orgs/${orgId}/projects`,
+                },
+                {
+                  id: "events",
+                  label: "Events",
+                  href: `/orgs/${orgId}/events`,
                 },
                 {
                   id: "settings",

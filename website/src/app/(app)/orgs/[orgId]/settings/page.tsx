@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Trash2 } from "lucide-react";
+import { Camera, Check, Copy, ExternalLink, Trash2 } from "lucide-react";
 import { useOrgWorkspace } from "@/components/cloud/OrgWorkspaceContext";
+import { OrgCatalogManager } from "@/components/cloud/OrgCatalogManager";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import { showNotification } from "@/components/overlays/Notification";
 import { Button, TextField } from "@/components/ui";
@@ -26,40 +27,112 @@ export default function OrgSettingsPage() {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [publicVisibility, setPublicVisibility] = useState<"public" | "hidden">("hidden");
-  const [mission, setMission] = useState("");
-  const [initialName, setInitialName] = useState("");
-  const [initialSlug, setInitialSlug] = useState("");
-  const [initialVisibility, setInitialVisibility] = useState<"public" | "hidden">("hidden");
-  const [initialMission, setInitialMission] = useState("");
+  const [about, setAbout] = useState("");
+  const [announcement, setAnnouncement] = useState("");
+  const [announcementHref, setAnnouncementHref] = useState("");
+  const [ctaTitle, setCtaTitle] = useState("");
+  const [ctaBody, setCtaBody] = useState("");
+  const [ctaJoin, setCtaJoin] = useState("");
+  const [ctaDonate, setCtaDonate] = useState("");
+  const [logoAssetId, setLogoAssetId] = useState<string | undefined>();
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+  const [sectionAbout, setSectionAbout] = useState(true);
+  const [sectionDonors, setSectionDonors] = useState(true);
+  const [sectionProjects, setSectionProjects] = useState(true);
+  const [sectionEvents, setSectionEvents] = useState(true);
+  const [sectionMembers, setSectionMembers] = useState(true);
+  const [sectionSocial, setSectionSocial] = useState(true);
+  const [initialSnapshot, setInitialSnapshot] = useState("");
   const [saved, setSaved] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  const loadLogoPreview = useCallback(
+    (assetId?: string) => {
+      if (!assetId) {
+        setLogoPreviewUrl(null);
+        return;
+      }
+      void cloudApi
+        .getOrgAssetUrl(orgId, assetId)
+        .then(({ url }) => setLogoPreviewUrl(url))
+        .catch(() => setLogoPreviewUrl(null));
+    },
+    [orgId]
+  );
 
   useEffect(() => {
-    if (org?.name) {
-      setName(org.name);
-      setInitialName(org.name);
-    }
-    setSlug(org?.slug || "");
-    setInitialSlug(org?.slug || "");
-    const vis = org?.publicPage?.visibility === "public" ? "public" : "hidden";
+    if (!org) return;
+    setName(org.name || "");
+    setSlug(org.slug || "");
+    const vis = org.publicPage?.visibility === "public" ? "public" : "hidden";
     setPublicVisibility(vis);
-    setInitialVisibility(vis);
-    const about = org?.publicPage?.about || org?.publicPage?.mission || "";
-    setMission(about);
-    setInitialMission(about);
-  }, [
-    org?.name,
-    org?.slug,
-    org?.publicPage?.visibility,
-    org?.publicPage?.about,
-    org?.publicPage?.mission,
-  ]);
+    const aboutText = org.publicPage?.about || org.publicPage?.mission || "";
+    setAbout(aboutText);
+    setAnnouncement(org.publicPage?.announcement?.text || "");
+    setAnnouncementHref(org.publicPage?.announcement?.href || "");
+    setCtaTitle(org.publicPage?.cta?.title || "");
+    setCtaBody(org.publicPage?.cta?.body || "");
+    setCtaJoin(org.publicPage?.cta?.joinUrl || "");
+    setCtaDonate(org.publicPage?.cta?.donateUrl || "");
+    setLogoAssetId(org.publicPage?.logoAssetId);
+    loadLogoPreview(org.publicPage?.logoAssetId);
+    const secs = org.publicPage?.sections;
+    const aboutOn = secs?.about !== false;
+    const donorsOn = secs?.donors !== false;
+    const projectsOn = secs?.projects !== false;
+    const eventsOn = secs?.events !== false;
+    const membersOn = secs?.members !== false;
+    const socialOn = secs?.social !== false;
+    setSectionAbout(aboutOn);
+    setSectionDonors(donorsOn);
+    setSectionProjects(projectsOn);
+    setSectionEvents(eventsOn);
+    setSectionMembers(membersOn);
+    setSectionSocial(socialOn);
+    setInitialSnapshot(
+      JSON.stringify({
+        name: org.name || "",
+        slug: org.slug || "",
+        vis,
+        about: aboutText,
+        announcement: org.publicPage?.announcement?.text || "",
+        announcementHref: org.publicPage?.announcement?.href || "",
+        ctaTitle: org.publicPage?.cta?.title || "",
+        ctaBody: org.publicPage?.cta?.body || "",
+        ctaJoin: org.publicPage?.cta?.joinUrl || "",
+        ctaDonate: org.publicPage?.cta?.donateUrl || "",
+        logoAssetId: org.publicPage?.logoAssetId || "",
+        sectionAbout: aboutOn,
+        sectionDonors: donorsOn,
+        sectionProjects: projectsOn,
+        sectionEvents: eventsOn,
+        sectionMembers: membersOn,
+        sectionSocial: socialOn,
+      })
+    );
+  }, [org, loadLogoPreview]);
 
-  const isDirty =
-    (name.trim() !== initialName.trim() && name.trim().length > 0) ||
-    slug.trim() !== initialSlug.trim() ||
-    publicVisibility !== initialVisibility ||
-    mission.trim() !== initialMission.trim();
+  const currentSnapshot = JSON.stringify({
+    name: name.trim(),
+    slug: slug.trim().toLowerCase(),
+    vis: publicVisibility,
+    about: about.trim(),
+    announcement: announcement.trim(),
+    announcementHref: announcementHref.trim(),
+    ctaTitle: ctaTitle.trim(),
+    ctaBody: ctaBody.trim(),
+    ctaJoin: ctaJoin.trim(),
+    ctaDonate: ctaDonate.trim(),
+    logoAssetId: logoAssetId || "",
+    sectionAbout,
+    sectionDonors,
+    sectionProjects,
+    sectionEvents,
+    sectionMembers,
+    sectionSocial,
+  });
+  const isDirty = currentSnapshot !== initialSnapshot && name.trim().length > 0;
 
   useEffect(() => {
     if (!isDirty) return;
@@ -68,29 +141,7 @@ export default function OrgSettingsPage() {
       e.returnValue = "";
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
-
-    const handleClickCapture = (e: MouseEvent) => {
-      const target = (e.target as HTMLElement).closest("a");
-      if (!target) return;
-      const href = target.getAttribute("href");
-      if (!href || href.startsWith("#") || target.target === "_blank") return;
-
-      if (href !== window.location.pathname) {
-        const ok = window.confirm(
-          "You have unsaved changes in organization settings. Are you sure you want to leave?"
-        );
-        if (!ok) {
-          e.preventDefault();
-          e.stopPropagation();
-        }
-      }
-    };
-    document.addEventListener("click", handleClickCapture, true);
-
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      document.removeEventListener("click", handleClickCapture, true);
-    };
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isDirty]);
 
   async function save() {
@@ -103,18 +154,30 @@ export default function OrgSettingsPage() {
         name: name.trim(),
         publicPage: {
           visibility: publicVisibility,
-          about: mission.trim() || undefined,
-          logoAssetId: org?.publicPage?.logoAssetId,
-          announcement: org?.publicPage?.announcement,
-          cta: org?.publicPage?.cta,
+          about: about.trim() || undefined,
+          logoAssetId,
+          announcement: announcement.trim()
+            ? { text: announcement.trim(), href: announcementHref.trim() || undefined }
+            : undefined,
+          cta: {
+            title: ctaTitle.trim() || undefined,
+            body: ctaBody.trim() || undefined,
+            joinUrl: ctaJoin.trim() || undefined,
+            donateUrl: ctaDonate.trim() || undefined,
+          },
+          sections: {
+            about: sectionAbout,
+            donors: sectionDonors,
+            projects: sectionProjects,
+            events: sectionEvents,
+            members: sectionMembers,
+            social: sectionSocial,
+          },
         },
       };
       if (slug.trim()) body.slug = slug.trim().toLowerCase();
       await cloudApi.patchOrg(orgId, body);
-      setInitialName(name.trim());
-      setInitialSlug(slug.trim().toLowerCase());
-      setInitialVisibility(publicVisibility);
-      setInitialMission(mission.trim());
+      setInitialSnapshot(currentSnapshot);
       setSaved(true);
       refresh();
       showNotification("Organization updated", "success");
@@ -127,6 +190,28 @@ export default function OrgSettingsPage() {
     }
   }
 
+  async function uploadLogo(file: File) {
+    setBusy(true);
+    try {
+      const { asset } = await cloudApi.createOrgAsset(orgId, {
+        contentType: file.type || "image/jpeg",
+        byteSize: file.size,
+      });
+      await cloudApi.uploadOrgAssetContent(orgId, asset.id, file, file.type || "image/jpeg");
+      setLogoAssetId(asset.id);
+      loadLogoPreview(asset.id);
+      showNotification("Logo uploaded — save settings to apply", "success");
+    } catch (err) {
+      showNotification((err as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const slugTrim = slug.trim().toLowerCase();
+  const canView = Boolean(slugTrim) && publicVisibility === "public";
+  const publicPath = slugTrim ? `/o/${slugTrim}` : "";
+
   if (!canManage) {
     return (
       <div className="rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface-low/50 p-6 text-nb-body text-nb-on-surface-variant">
@@ -136,23 +221,72 @@ export default function OrgSettingsPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-8">
+    <div className="mx-auto flex max-w-2xl flex-col gap-10">
+      <input
+        ref={logoInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) void uploadLogo(file);
+        }}
+      />
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-nb-title font-bold tracking-tight text-nb-on-surface">Organization settings</h2>
+          <h2 className="text-nb-title font-bold tracking-tight text-nb-on-surface">
+            Organization settings
+          </h2>
           <p className="mt-1 text-nb-body text-nb-on-surface-variant">
-            Manage your organization name and general preferences.
+            Name, public site chrome, and social links. Donors, projects, and events have their own
+            tabs.
           </p>
         </div>
         {isDirty && (
-          <span className="rounded-full bg-amber-500/10 border border-amber-500/30 px-3 py-1 text-nb-caption font-semibold text-amber-700 dark:text-amber-400">
+          <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-nb-caption font-semibold text-amber-700 dark:text-amber-400">
             Unsaved changes
           </span>
         )}
       </div>
 
       <section className="flex flex-col gap-4">
-        <h3 className="text-nb-body font-semibold text-nb-on-surface">General</h3>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h3 className="text-nb-body font-semibold text-nb-on-surface">Public site</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            {slugTrim ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  const url = `${window.location.origin}${publicPath}`;
+                  void navigator.clipboard.writeText(url).then(
+                    () => showNotification("Link copied", "success"),
+                    () => showNotification("Could not copy", "error")
+                  );
+                }}
+              >
+                <Copy size={14} /> Copy link
+              </Button>
+            ) : null}
+            {canView ? (
+              <a
+                href={publicPath}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-nb-primary hover:underline"
+              >
+                View public site <ExternalLink size={14} />
+              </a>
+            ) : (
+              <span className="text-sm text-nb-on-surface-variant">
+                {slugTrim ? "Visibility is hidden" : "Claim a slug below"}
+              </span>
+            )}
+          </div>
+        </div>
+
         <TextField
           label="Organization name"
           value={name}
@@ -166,12 +300,10 @@ export default function OrgSettingsPage() {
           placeholder="raider-robotics"
         />
         <p className="text-nb-caption text-nb-on-surface-variant">
-          {slug.trim()
-            ? `Public site: /o/${slug.trim().toLowerCase()}`
-            : "Claim a unique URL for the public org page"}
+          {slugTrim ? `Public site: /o/${slugTrim}` : "Claim a unique URL for the public org page"}
         </p>
         <label className="flex flex-col gap-1 text-nb-label">
-          <span className="font-medium">Public page visibility</span>
+          <span className="font-medium">Visibility</span>
           <select
             className="rounded-nb-lg border border-nb-outline-variant/40 bg-nb-surface-low px-3 py-2"
             value={publicVisibility}
@@ -181,26 +313,107 @@ export default function OrgSettingsPage() {
             <option value="public">Public</option>
           </select>
         </label>
-        <TextField
-          label="About (public)"
-          value={mission}
-          onChange={(e) => setMission(e.target.value)}
-          placeholder="Short about blurb for /o/slug"
-        />
-        <div className="flex flex-wrap gap-4 text-sm font-semibold">
-          <a href={`/orgs/${orgId}/public`} className="text-nb-primary hover:underline">
-            Edit public page content →
-          </a>
-          {slug.trim() && publicVisibility === "public" && (
-            <a
-              className="text-nb-primary hover:underline"
-              href={`/o/${slug.trim().toLowerCase()}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              View public site ↗
-            </a>
+
+        <div className="flex flex-wrap items-center gap-4">
+          {logoPreviewUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoPreviewUrl}
+              alt="Organization logo"
+              className="h-16 w-16 rounded-nb-lg object-cover ring-1 ring-nb-outline-variant/40"
+            />
+          ) : (
+            <div className="flex h-16 w-16 items-center justify-center rounded-nb-lg bg-nb-surface-low text-nb-caption font-semibold text-nb-on-surface-variant ring-1 ring-nb-outline-variant/30">
+              No logo
+            </div>
           )}
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={busy}
+            onClick={() => logoInputRef.current?.click()}
+          >
+            <Camera size={14} /> {logoAssetId ? "Replace logo" : "Upload logo"}
+          </Button>
+        </div>
+
+        <TextField
+          label="Announcement"
+          value={announcement}
+          onChange={(e) => setAnnouncement(e.target.value)}
+          placeholder="Banner text"
+        />
+        <TextField
+          label="Announcement link"
+          value={announcementHref}
+          onChange={(e) => setAnnouncementHref(e.target.value)}
+          placeholder="https://…"
+        />
+        <TextField
+          label="About"
+          value={about}
+          onChange={(e) => setAbout(e.target.value)}
+          placeholder="Short about blurb for the public home"
+        />
+        <div className="rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface-low/40 p-4">
+          <h4 className="text-nb-label font-semibold text-nb-on-surface">Call to action</h4>
+          <div className="mt-3 grid gap-3">
+            <TextField
+              label="Heading"
+              value={ctaTitle}
+              onChange={(e) => setCtaTitle(e.target.value)}
+              placeholder="Get involved"
+            />
+            <TextField
+              label="Supporting text"
+              value={ctaBody}
+              onChange={(e) => setCtaBody(e.target.value)}
+            />
+            <TextField
+              label="Join link"
+              value={ctaJoin}
+              onChange={(e) => setCtaJoin(e.target.value)}
+              placeholder="https://…"
+            />
+            <TextField
+              label="Donate link"
+              value={ctaDonate}
+              onChange={(e) => setCtaDonate(e.target.value)}
+              placeholder="https://…"
+            />
+          </div>
+        </div>
+
+        <div className="rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface-low/40 p-4">
+          <h4 className="text-nb-label font-semibold text-nb-on-surface">Public sections</h4>
+          <p className="mt-1 text-nb-caption text-nb-on-surface-variant">
+            Turn off a whole section on the public site. Individual items still have their own Public
+            toggles when the section is on.
+          </p>
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+            {(
+              [
+                ["About", sectionAbout, setSectionAbout],
+                ["Donors", sectionDonors, setSectionDonors],
+                ["Projects", sectionProjects, setSectionProjects],
+                ["Events", sectionEvents, setSectionEvents],
+                ["Members", sectionMembers, setSectionMembers],
+                ["Social links", sectionSocial, setSectionSocial],
+              ] as const
+            ).map(([label, on, setOn]) => (
+              <li key={label}>
+                <label className="flex cursor-pointer items-center gap-2 text-nb-body text-nb-on-surface">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-nb-outline-variant"
+                    checked={on}
+                    onChange={(e) => setOn(e.target.checked)}
+                  />
+                  {label}
+                </label>
+              </li>
+            ))}
+          </ul>
         </div>
 
         {org?.role && (
@@ -212,40 +425,45 @@ export default function OrgSettingsPage() {
       </section>
 
       <div className="flex items-center gap-3">
-        <Button
-          variant="primary"
-          disabled={busy || !isDirty}
-          onClick={() => void save()}
-        >
+        <Button variant="primary" disabled={busy || !isDirty} onClick={() => void save()}>
           {busy ? "Saving…" : "Save changes"}
         </Button>
         {saved && !isDirty && (
-          <span className="text-nb-label text-nb-success flex items-center gap-1 font-medium">
+          <span className="flex items-center gap-1 text-nb-label font-medium text-nb-success">
             <Check size={14} /> Saved
           </span>
         )}
       </div>
 
+      <section className="flex flex-col gap-3">
+        <h3 className="text-nb-body font-semibold text-nb-on-surface">Social links</h3>
+        <OrgCatalogManager
+          orgId={orgId}
+          section="social-links"
+          canManage={canManage}
+          setError={setError}
+          embedded
+        />
+      </section>
+
       <section className="flex flex-col gap-4 rounded-nb-xl border border-nb-danger/30 bg-nb-danger/5 p-5">
         <div>
           <h3 className="text-nb-title font-semibold text-nb-danger">Danger Zone</h3>
           <p className="mt-1 text-nb-body text-nb-on-surface-variant">
-            Permanently delete this organization, including all notebooks, entries, assets, and teams. This action cannot be undone.
+            Permanently delete this organization, including all notebooks, entries, assets, and
+            teams. This action cannot be undone.
           </p>
         </div>
-
         {canDeleteOrg ? (
-          <div>
-            <Button
-              variant="danger"
-              disabled={busy}
-              onClick={() => setDeleteConfirmOpen(true)}
-              className="border-0 bg-nb-danger text-white hover:bg-nb-danger-dim"
-            >
-              <Trash2 size={16} className="mr-1.5" />
-              Delete this organization
-            </Button>
-          </div>
+          <Button
+            variant="danger"
+            disabled={busy}
+            onClick={() => setDeleteConfirmOpen(true)}
+            className="border-0 bg-nb-danger text-white hover:bg-nb-danger-dim"
+          >
+            <Trash2 size={16} className="mr-1.5" />
+            Delete this organization
+          </Button>
         ) : (
           <p className="text-nb-caption text-nb-on-surface-variant">
             Only organization owners can delete this organization.
@@ -280,4 +498,3 @@ export default function OrgSettingsPage() {
     </div>
   );
 }
-

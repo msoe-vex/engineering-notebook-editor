@@ -427,6 +427,23 @@ export default function OrgPeoplePage() {
                           .catch((err) => setError((err as Error).message));
                       }}
                     />
+                    <button
+                      type="button"
+                      className={`rounded-nb-lg border px-2 py-1.5 text-nb-caption font-semibold ${
+                        m.public === false
+                          ? "border-nb-outline-variant/40 text-nb-on-surface-variant"
+                          : "border-nb-primary/40 bg-nb-primary/10 text-nb-primary"
+                      }`}
+                      title="Show on public roster"
+                      onClick={() => {
+                        void cloudApi
+                          .patchMember(orgId, m.uid, { public: m.public === false })
+                          .then(refresh)
+                          .catch((err) => setError((err as Error).message));
+                      }}
+                    >
+                      {m.public === false ? "Private" : "Public"}
+                    </button>
                     <select
                       className="rounded-nb-lg border border-nb-outline-variant/40 bg-nb-surface-low px-2 py-1.5 text-nb-label disabled:opacity-60"
                       value={m.role}

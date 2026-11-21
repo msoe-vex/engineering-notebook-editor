@@ -44,6 +44,16 @@ export type UserProfile = {
   updatedAt: string;
 };
 
+/** Which public-site sections are enabled. Missing keys default to true. */
+export type OrgPublicSections = {
+  about?: boolean;
+  donors?: boolean;
+  projects?: boolean;
+  events?: boolean;
+  members?: boolean;
+  social?: boolean;
+};
+
 export type OrgPublicPage = {
   visibility: "public" | "hidden";
   announcement?: { text: string; href?: string };
@@ -58,7 +68,22 @@ export type OrgPublicPage = {
   logoAssetId?: string;
   /** Call-to-action block: join / donate buttons on public home. */
   cta?: { title?: string; body?: string; joinUrl?: string; donateUrl?: string };
+  /**
+   * Section-level gates for the public site. Omit or true ⇒ section may appear
+   * (still filtered by per-item `public`). False hides the whole section.
+   */
+  sections?: OrgPublicSections;
 };
+
+export type OrgPublicSectionKey = keyof OrgPublicSections;
+
+/** Section enabled on the public site? Default true. */
+export function isPublicSection(
+  page: OrgPublicPage | null | undefined,
+  key: OrgPublicSectionKey
+): boolean {
+  return page?.sections?.[key] !== false;
+}
 
 export type Organization = {
   id: string;
@@ -85,10 +110,79 @@ export type OrgMember = {
   title?: string;
   /** Org member avatar (asset id). */
   imageAssetId?: string;
+  /**
+   * Show on the public org roster. Missing or true ⇒ public; false ⇒ org-only.
+   */
+  public?: boolean;
   /** Missing ⇒ active (back-compat). */
   status?: OrgMemberStatus;
   alumniAt?: string;
   joinedAt: string;
+};
+
+/** Whether a catalog/member record appears on the public site. Default true. */
+export function isPublicRecord(doc: { public?: boolean } | null | undefined): boolean {
+  return doc?.public !== false;
+}
+
+/**
+ * Record is visible publicly when the section is on and the item is public.
+ * Default both true.
+ */
+export function isListedOnPublicSite(
+  page: OrgPublicPage | null | undefined,
+  section: OrgPublicSectionKey,
+  doc: { public?: boolean } | null | undefined
+): boolean {
+  return isPublicSection(page, section) && isPublicRecord(doc);
+}
+
+export type OrgDonor = {
+  id: string;
+  name: string;
+  url?: string;
+  tier?: string;
+  imageAssetId?: string;
+  order?: number;
+  public?: boolean;
+  updatedAt?: string;
+};
+
+export type OrgProject = {
+  id: string;
+  title: string;
+  season?: string;
+  summary?: string;
+  highlights?: string[];
+  externalUrl?: string;
+  imageAssetId?: string;
+  order?: number;
+  public?: boolean;
+  updatedAt?: string;
+};
+
+export type OrgEvent = {
+  id: string;
+  title: string;
+  kind?: string;
+  location?: string;
+  date?: string;
+  day?: string;
+  time?: string;
+  imageAssetId?: string;
+  order?: number;
+  public?: boolean;
+  updatedAt?: string;
+};
+
+export type OrgSocialLink = {
+  id: string;
+  label: string;
+  url: string;
+  imageAssetId?: string;
+  order?: number;
+  public?: boolean;
+  updatedAt?: string;
 };
 
 /** Invite lifecycle. Legacy docs without `status` derive from `acceptedAt`. */

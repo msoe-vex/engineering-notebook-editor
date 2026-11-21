@@ -58,6 +58,15 @@ export type OrgSummary = {
     mission?: string;
     logoAssetId?: string;
     cta?: { title?: string; body?: string; joinUrl?: string; donateUrl?: string };
+    /** Section gates; omit/true = on. */
+    sections?: {
+      about?: boolean;
+      donors?: boolean;
+      projects?: boolean;
+      events?: boolean;
+      members?: boolean;
+      social?: boolean;
+    };
   };
   createdAt?: string;
   updatedAt?: string;
@@ -73,9 +82,19 @@ export type MemberSummary = {
   /** Credits / public title (not ACL role). */
   title?: string;
   imageAssetId?: string;
+  /** Show on public roster; omit/true = public. */
+  public?: boolean;
   status?: "active" | "alumni";
   alumniAt?: string;
   joinedAt?: string;
+};
+
+export type OrgCatalogSection = "donors" | "projects" | "events" | "social-links";
+export type OrgCatalogItem = Record<string, unknown> & {
+  id: string;
+  public?: boolean;
+  imageAssetId?: string;
+  order?: number;
 };
 export type InviteSummary = {
   id: string;
@@ -206,14 +225,20 @@ export const cloudApi = {
   deleteOrg: (orgId: string) =>
     coreFetch<{ ok: boolean }>(`/orgs/${orgId}`, { method: "DELETE" }),
 
-  getOrgPublicCms: (orgId: string) => coreFetch<Record<string, unknown>>(`/orgs/${orgId}/public`),
-  upsertPublicItem: (orgId: string, section: string, itemId: string, body: Record<string, unknown>) =>
-    coreFetch(`/orgs/${orgId}/public/${section}/${itemId}`, {
+  listOrgCatalog: (orgId: string, section: OrgCatalogSection) =>
+    coreFetch<OrgCatalogItem[]>(`/orgs/${orgId}/${section}`),
+  upsertOrgCatalogItem: (
+    orgId: string,
+    section: OrgCatalogSection,
+    itemId: string,
+    body: Record<string, unknown>
+  ) =>
+    coreFetch<OrgCatalogItem>(`/orgs/${orgId}/${section}/${itemId}`, {
       method: "PUT",
       body: JSON.stringify(body),
     }),
-  deletePublicItem: (orgId: string, section: string, itemId: string) =>
-    coreFetch<{ ok: boolean }>(`/orgs/${orgId}/public/${section}/${itemId}`, { method: "DELETE" }),
+  deleteOrgCatalogItem: (orgId: string, section: OrgCatalogSection, itemId: string) =>
+    coreFetch<{ ok: boolean }>(`/orgs/${orgId}/${section}/${itemId}`, { method: "DELETE" }),
 
   getPublicOrg: (slug: string) =>
     fetch(`${coreBase()}/public/o/${encodeURIComponent(slug)}`).then(async (r) => {
@@ -257,6 +282,7 @@ export const cloudApi = {
       imageAssetId?: string | null;
       displayName?: string;
       title?: string | null;
+      public?: boolean;
     }
   ) =>
     coreFetch<MemberSummary>(`/orgs/${orgId}/members/${uid}`, {

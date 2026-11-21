@@ -15,11 +15,11 @@ import {
   publicNotebookKeysCollection,
   userPath,
   invitePath,
-  publicDonorsCollection,
-  publicProjectsCollection,
-  publicEventsCollection,
+  donorsCollection,
+  projectsCollection,
+  eventsCollection,
+  socialLinksCollection,
   publicMembersCollection,
-  publicSocialCollection,
   entriesCollection,
   entryPath,
   entryCommentPath,
@@ -426,13 +426,13 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     }
     await deleteCollectionDocs(membersCollection(orgId));
 
-    // Public CMS sections + lookup keys
+    // Org catalogs + legacy publicMembers + notebook public keys
     for (const coll of [
-      publicDonorsCollection(orgId),
-      publicProjectsCollection(orgId),
-      publicEventsCollection(orgId),
+      donorsCollection(orgId),
+      projectsCollection(orgId),
+      eventsCollection(orgId),
+      socialLinksCollection(orgId),
       publicMembersCollection(orgId),
-      publicSocialCollection(orgId),
       publicNotebookKeysCollection(orgId),
     ]) {
       await deleteCollectionDocs(coll);
@@ -638,6 +638,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       imageAssetId?: string | null;
       displayName?: string;
       title?: string | null;
+      public?: boolean | null;
     };
     const path = memberPath(orgId, uid);
     const snap = await store().get(path);
@@ -679,6 +680,9 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     }
     if (body.title !== undefined) {
       patch.title = body.title?.trim() || null;
+    }
+    if (body.public !== undefined) {
+      patch.public = body.public === false ? false : true;
     }
     if (Object.keys(patch).length === 0) {
       return reply.code(400).send({ error: "no fields to update" });
@@ -2416,59 +2420,53 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     });
   });
 
-  // ── Public page CMS (admin) ────────────────────────────────────────────
-  // Members are not CMS-editable — public roster comes from active org members.
-  const publicCollections = {
-    donors: publicDonorsCollection,
-    projects: publicProjectsCollection,
-    events: publicEventsCollection,
-    social: publicSocialCollection,
+  // ── Org catalogs (donors / projects / events / social-links) ───────────
+  const catalogCollections = {
+    donors: donorsCollection,
+    projects: projectsCollection,
+    events: eventsCollection,
+    "social-links": socialLinksCollection,
   } as const;
 
-  app.get("/orgs/:orgId/public", async (request, reply) => {
-    const user = getUser(request);
-    const { orgId } = request.params as { orgId: string };
-    await requireOrgMember(user, orgId, "admin");
-    const orgSnap = await store().get(orgPath(orgId));
-    if (!orgSnap) return reply.code(404).send({ error: "not found" });
-    const orgData = withoutId(orgSnap) as Organization;
-    const org = { ...orgData, id: orgSnap.id };
-    const sections: Record<string, unknown[]> = {};
-    for (const [key, coll] of Object.entries(publicCollections)) {
+  type CatalogSection = keyof typeof catalogCollections;
+
+  function normalizeCatalogBody(body: Record<string, unknown>) {
+    const next = { ...body };
+    if (next.public === undefined) next.public = true;
+    else next.public = next.public === false ? false : true;
+    return next;
+  }
+
+  for (const section of Object.keys(catalogCollections) as CatalogSection[]) {
+    const coll = catalogCollections[section];
+
+    app.get(`/orgs/:orgId/${section}`, async (request, reply) => {
+      const user = getUser(request);
+      const { orgId } = request.params as { orgId: string };
+      await requireOrgMember(user, orgId, "admin");
       const snap = await store().query(coll(orgId));
-      sections[key] = snap.map((d) => ({ ...withoutId(d), id: d.id }));
-    }
-    return { org, ...sections };
-  });
+      return snap
+        .map((d) => ({ ...withoutId(d), id: d.id }))
+        .sort((a, b) => Number((a as { order?: number }).order ?? 0) - Number((b as { order?: number }).order ?? 0));
+    });
 
-  app.put("/orgs/:orgId/public/:section/:itemId", async (request, reply) => {
-    const user = getUser(request);
-    const { orgId, section, itemId } = request.params as {
-      orgId: string;
-      section: string;
-      itemId: string;
-    };
-    await requireOrgMember(user, orgId, "admin");
-    const coll = publicCollections[section as keyof typeof publicCollections];
-    if (!coll) return reply.code(400).send({ error: "invalid section" });
-    const body = (request.body || {}) as Record<string, unknown>;
-    const id = itemId === "new" ? randomUUID() : itemId;
-    const doc = omitUndefined({ ...body, id, updatedAt: nowIso() });
-    await store().set(`${coll(orgId)}/${id}`, doc as Record<string, unknown>, { merge: true });
-    return { id, ...doc };
-  });
+    app.put(`/orgs/:orgId/${section}/:itemId`, async (request, reply) => {
+      const user = getUser(request);
+      const { orgId, itemId } = request.params as { orgId: string; itemId: string };
+      await requireOrgMember(user, orgId, "admin");
+      const body = normalizeCatalogBody((request.body || {}) as Record<string, unknown>);
+      const id = itemId === "new" ? randomUUID() : itemId;
+      const doc = omitUndefined({ ...body, id, updatedAt: nowIso() });
+      await store().set(`${coll(orgId)}/${id}`, doc as Record<string, unknown>, { merge: true });
+      return { id, ...doc };
+    });
 
-  app.delete("/orgs/:orgId/public/:section/:itemId", async (request, reply) => {
-    const user = getUser(request);
-    const { orgId, section, itemId } = request.params as {
-      orgId: string;
-      section: string;
-      itemId: string;
-    };
-    await requireOrgMember(user, orgId, "admin");
-    const coll = publicCollections[section as keyof typeof publicCollections];
-    if (!coll) return reply.code(400).send({ error: "invalid section" });
-    await store().delete(`${coll(orgId)}/${itemId}`);
-    return { ok: true };
-  });
+    app.delete(`/orgs/:orgId/${section}/:itemId`, async (request, reply) => {
+      const user = getUser(request);
+      const { orgId, itemId } = request.params as { orgId: string; itemId: string };
+      await requireOrgMember(user, orgId, "admin");
+      await store().delete(`${coll(orgId)}/${itemId}`);
+      return { ok: true };
+    });
+  }
 }

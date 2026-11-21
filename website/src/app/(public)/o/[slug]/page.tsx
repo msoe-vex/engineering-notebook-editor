@@ -20,6 +20,14 @@ type PublicOrgPayload = {
       about?: string;
       mission?: string;
       cta?: { title?: string; body?: string; joinUrl?: string; donateUrl?: string };
+      sections?: {
+        about?: boolean;
+        donors?: boolean;
+        projects?: boolean;
+        events?: boolean;
+        members?: boolean;
+        social?: boolean;
+      };
     };
   };
   donors: Array<{
@@ -99,9 +107,20 @@ export default function PublicOrgHomePage() {
   const { org, donors, projects, events, members, social } = data;
   const page = org.publicPage;
   const about = page?.about || page?.mission;
+  const navSections = {
+    projects: page?.sections?.projects !== false,
+    events: page?.sections?.events !== false,
+    members: page?.sections?.members !== false,
+  };
 
   return (
-    <PublicOrgChrome slug={slug} orgName={org.name} logoUrl={org.logoUrl} active="home">
+    <PublicOrgChrome
+      slug={slug}
+      orgName={org.name}
+      logoUrl={org.logoUrl}
+      active="home"
+      sections={navSections}
+    >
       {page?.announcement?.text && (
         <div className="border-b border-nb-outline-variant/30 bg-nb-surface-container px-4 py-2 text-center text-sm">
           {page.announcement.href ? (
@@ -169,9 +188,11 @@ export default function PublicOrgHomePage() {
                 </li>
               ))}
             </ul>
-            <Link href={`/o/${slug}/projects`} className="mt-3 inline-block text-sm text-nb-primary">
-              View all projects →
-            </Link>
+            {navSections.projects && (
+              <Link href={`/o/${slug}/projects`} className="mt-3 inline-block text-sm text-nb-primary">
+                View all projects →
+              </Link>
+            )}
           </section>
         )}
         {members.length > 0 && (
@@ -197,9 +218,11 @@ export default function PublicOrgHomePage() {
                 </li>
               ))}
             </ul>
-            <Link href={`/o/${slug}/members`} className="mt-3 inline-block text-sm text-nb-primary">
-              Full roster →
-            </Link>
+            {navSections.members && (
+              <Link href={`/o/${slug}/members`} className="mt-3 inline-block text-sm text-nb-primary">
+                Full roster →
+              </Link>
+            )}
           </section>
         )}
         {events.length > 0 && (
@@ -228,9 +251,11 @@ export default function PublicOrgHomePage() {
                 </li>
               ))}
             </ul>
-            <Link href={`/o/${slug}/events`} className="mt-3 inline-block text-sm text-nb-primary">
-              Events →
-            </Link>
+            {navSections.events && (
+              <Link href={`/o/${slug}/events`} className="mt-3 inline-block text-sm text-nb-primary">
+                Events →
+              </Link>
+            )}
           </section>
         )}
         {(page?.cta || social.length > 0) && (

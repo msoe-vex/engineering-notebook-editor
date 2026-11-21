@@ -142,24 +142,46 @@ export function publicNotebookKeysCollection(orgId: string): string {
   return `organizations/${orgId}/publicNotebookKeys`;
 }
 
+/** First-class org catalogs (optional `public?: boolean`, default true). */
+export function donorsCollection(orgId: string): string {
+  return `organizations/${orgId}/donors`;
+}
+
+export function projectsCollection(orgId: string): string {
+  return `organizations/${orgId}/projects`;
+}
+
+export function eventsCollection(orgId: string): string {
+  return `organizations/${orgId}/events`;
+}
+
+export function socialLinksCollection(orgId: string): string {
+  return `organizations/${orgId}/socialLinks`;
+}
+
+/** @deprecated Use donorsCollection — legacy CMS path. */
 export function publicDonorsCollection(orgId: string): string {
-  return `organizations/${orgId}/publicDonors`;
+  return donorsCollection(orgId);
 }
 
+/** @deprecated Use projectsCollection */
 export function publicProjectsCollection(orgId: string): string {
-  return `organizations/${orgId}/publicProjects`;
+  return projectsCollection(orgId);
 }
 
+/** @deprecated Use eventsCollection */
 export function publicEventsCollection(orgId: string): string {
-  return `organizations/${orgId}/publicEvents`;
+  return eventsCollection(orgId);
 }
 
+/** @deprecated Removed — public roster uses members/{uid}.public */
 export function publicMembersCollection(orgId: string): string {
   return `organizations/${orgId}/publicMembers`;
 }
 
+/** @deprecated Use socialLinksCollection */
 export function publicSocialCollection(orgId: string): string {
-  return `organizations/${orgId}/publicSocial`;
+  return socialLinksCollection(orgId);
 }
 
 /** GCS object key builders (mirror Firestore nesting). */

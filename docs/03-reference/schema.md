@@ -20,7 +20,7 @@ Clients never talk to Firestore/metadata store directly (`infra/firestore.rules`
 
 | Path | Role | Key fields |
 | --- | --- | --- |
-| `members/{uid}` | Org ACL + public credits | `role`, `title?` (public/credits title), `email?`, `displayName?`, `imageAssetId?` (org asset), `status?` (`active`\|`alumni`), `joinedAt` |
+| `members/{uid}` | Org ACL + public credits | `role`, `title?`, `public?` (default true), `email?`, `displayName?`, `imageAssetId?`, `status?` (`active`\|`alumni`), `joinedAt` |
 | `assets/{assetId}` | Org-scoped media | `contentType`, `byteSize`, `gcsPath`, `createdBy`, `usedBy[]` — GCS `organizations/{orgId}/assets/{id}/compressed` |
 | `teams/{teamId}` | Org ACL groups (not notebook branding) | `name`, `createdBy`, timestamps |
 | `teams/{teamId}/members/{uid}` | Team membership | `joinedAt` |
@@ -142,12 +142,12 @@ Implemented fields for [FR-org-public-page](../01-requirements/features/FR-org-p
 | --- | --- |
 | `organizations/{orgId}.slug` | Globally unique, URL-safe; admin-set if not taken; reserved list |
 | `orgSlugs/{slug}` → `{ orgId }` | Lookup / uniqueness (or equivalent unique index) |
-| `organizations/{orgId}.publicPage` | `{ visibility: "public" \| "hidden", announcement?, about?, logoAssetId?, cta?, … }` (`mission` legacy alias of `about`) |
-| `…/publicDonors/{id}` | name, imageAssetId?, url?, tier?, order |
-| `…/publicProjects/{id}` | title, season?, summary, highlights[], media[], externalUrl?, imageAssetId?, order, visibility |
-| `…/publicEvents/{id}` | kind: `recurring` \| `dated`; day/time or date; title; location; imageAssetId?; order |
-| Public members | Org `members/{uid}` including alumni (name/`title`/photo/`status`) — not a CMS collection |
-| `…/publicSocial/{id}` | label, url, imageAssetId?, order |
+| `organizations/{orgId}.publicPage` | `{ visibility, announcement?, about?, logoAssetId?, cta?, sections?: { about?, donors?, projects?, events?, members?, social? } }` — section keys omit/true = on; `mission` legacy alias of `about` |
+| `…/donors/{id}` | name, imageAssetId?, url?, tier?, order, `public?` (default true) |
+| `…/projects/{id}` | title, season?, summary, highlights[], externalUrl?, imageAssetId?, order, `public?` |
+| `…/events/{id}` | kind?, day/time or date; title; location; imageAssetId?; order; `public?` |
+| Public members | Org `members/{uid}` where `public !== false` (incl. alumni) |
+| `…/socialLinks/{id}` | label, url, imageAssetId?, order, `public?` |
 | `…/publicMedia/{id}` | assetId, caption?, order |
 
 Public URLs: `/o/:slug`, `/o/:slug/projects`, `/events`, `/members`.

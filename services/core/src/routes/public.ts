@@ -9,12 +9,14 @@ import {
   memberPath,
   membersCollection,
   orgAssetPath,
-  publicDonorsCollection,
-  publicProjectsCollection,
-  publicEventsCollection,
-  publicSocialCollection,
+  donorsCollection,
+  projectsCollection,
+  eventsCollection,
+  socialLinksCollection,
   publicNotebookKeyPath,
   gcsKeys,
+  isPublicRecord,
+  isPublicSection,
   type Organization,
   type OrgMember,
   type NotebookSummaryV5,
@@ -59,54 +61,67 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
     }
     const orgId = org.id;
     const [donors, projects, events, orgMembers, social] = await Promise.all([
-      store().query(publicDonorsCollection(orgId)),
-      store().query(publicProjectsCollection(orgId)),
-      store().query(publicEventsCollection(orgId)),
+      store().query(donorsCollection(orgId)),
+      store().query(projectsCollection(orgId)),
+      store().query(eventsCollection(orgId)),
       store().query(membersCollection(orgId)),
-      store().query(publicSocialCollection(orgId)),
+      store().query(socialLinksCollection(orgId)),
     ]);
 
-    // All active org members are public (no separate CMS members collection).
-    const enrichedMembers = await Promise.all(
-      orgMembers
-        .map((d) => {
-          const { id, ...rest } = d;
-          return { ...(rest as OrgMember), uid: String(id) };
-        })
-        .map(async (m) => {
-          const imageUrl = await resolveOrgAssetUrl(orgId, m.imageAssetId);
-          return {
-            id: m.uid,
-            name: m.displayName || m.email || "Member",
-            role: m.title || undefined,
-            title: m.title,
-            status: m.status || "active",
-            imageAssetId: m.imageAssetId,
-            imageUrl,
-          };
-        })
-    );
+    const page = org.publicPage;
 
-    const enrichedDonors = await Promise.all(
-      donors.map(async (d) => {
-        const { id, ...data } = d as {
-          id: string;
-          imageAssetId?: string;
-          name?: string;
-          url?: string;
-          tier?: string;
-          iconName?: string;
-        };
-        const imageUrl = await resolveOrgAssetUrl(orgId, data.imageAssetId);
-        return { id, ...data, imageUrl };
-      })
-    );
+    const enrichedMembers = isPublicSection(page, "members")
+      ? await Promise.all(
+          orgMembers
+            .map((d) => {
+              const { id, ...rest } = d;
+              return { ...(rest as OrgMember), uid: String(id) };
+            })
+            .filter((m) => isPublicRecord(m))
+            .map(async (m) => {
+              const imageUrl = await resolveOrgAssetUrl(orgId, m.imageAssetId);
+              return {
+                id: m.uid,
+                name: m.displayName || m.email || "Member",
+                role: m.title || undefined,
+                title: m.title,
+                status: m.status || "active",
+                imageAssetId: m.imageAssetId,
+                imageUrl,
+              };
+            })
+        )
+      : [];
 
-    const logoUrl = await resolveOrgAssetUrl(orgId, org.publicPage?.logoAssetId);
-    const publicPage = org.publicPage
+    async function enrichCatalog(
+      sectionOn: boolean,
+      rows: Array<Record<string, unknown> & { id: string }>
+    ) {
+      if (!sectionOn) return [];
+      return Promise.all(
+        rows
+          .filter((d) => isPublicRecord(d as { public?: boolean }))
+          .map(async (d) => {
+            const { id, ...data } = d as {
+              id: string;
+              imageAssetId?: string;
+              public?: boolean;
+            };
+            const imageUrl = await resolveOrgAssetUrl(orgId, data.imageAssetId);
+            return { id, ...data, imageUrl };
+          })
+      );
+    }
+
+    const logoUrl = await resolveOrgAssetUrl(orgId, page?.logoAssetId);
+    const aboutText = isPublicSection(page, "about")
+      ? page?.about || page?.mission
+      : undefined;
+    const publicPage = page
       ? {
-          ...org.publicPage,
-          about: org.publicPage.about || org.publicPage.mission,
+          ...page,
+          about: aboutText,
+          mission: aboutText ? page.mission : undefined,
         }
       : undefined;
 
@@ -118,28 +133,22 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
         publicPage,
         logoUrl,
       },
-      donors: enrichedDonors,
-      projects: await Promise.all(
-        projects.map(async (d) => {
-          const { id, ...data } = d as { id: string; imageAssetId?: string };
-          const imageUrl = await resolveOrgAssetUrl(orgId, data.imageAssetId);
-          return { id, ...data, imageUrl };
-        })
+      donors: await enrichCatalog(
+        isPublicSection(page, "donors"),
+        donors as Array<Record<string, unknown> & { id: string }>
       ),
-      events: await Promise.all(
-        events.map(async (d) => {
-          const { id, ...data } = d as { id: string; imageAssetId?: string };
-          const imageUrl = await resolveOrgAssetUrl(orgId, data.imageAssetId);
-          return { id, ...data, imageUrl };
-        })
+      projects: await enrichCatalog(
+        isPublicSection(page, "projects"),
+        projects as Array<Record<string, unknown> & { id: string }>
+      ),
+      events: await enrichCatalog(
+        isPublicSection(page, "events"),
+        events as Array<Record<string, unknown> & { id: string }>
       ),
       members: enrichedMembers,
-      social: await Promise.all(
-        social.map(async (d) => {
-          const { id, ...data } = d as { id: string; imageAssetId?: string };
-          const imageUrl = await resolveOrgAssetUrl(orgId, data.imageAssetId);
-          return { id, ...data, imageUrl };
-        })
+      social: await enrichCatalog(
+        isPublicSection(page, "social"),
+        social as Array<Record<string, unknown> & { id: string }>
       ),
     };
   });
@@ -254,7 +263,6 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
         publicAccess: nb.publicAccess,
         publicKey: nb.publicKey,
         lastCompiled: nb.lastCompiled,
-        // publishedAt / publishedBy / judgments intentionally omitted (admin-only)
       },
       entries: liveEntries,
       contributors,
@@ -308,7 +316,6 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
     };
   });
 
-  /** Last compiled PDF when available (no live compile for anonymous). */
   app.get("/public/o/:slug/notebooks/:publicKey/pdf", async (request, reply) => {
     const { slug, publicKey } = request.params as { slug: string; publicKey: string };
     const org = await resolveOrgBySlug(slug.toLowerCase());

@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { PublicOrgChrome } from "@/components/public/PublicOrgChrome";
+import { PublicOrgChrome, type PublicNavSections } from "@/components/public/PublicOrgChrome";
 import { cloudApi } from "@/lib/cloud/api";
 import { LoadingBlock } from "@/components/ui";
 import { Alert } from "@/components/ui/Alert";
@@ -12,32 +12,52 @@ export default function PublicMembersPage() {
   const [members, setMembers] = useState<Array<Record<string, unknown>>>([]);
   const [name, setName] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | undefined>();
+  const [sections, setSections] = useState<PublicNavSections | undefined>();
+  const [sectionOff, setSectionOff] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     void cloudApi
       .getPublicOrg(slug)
       .then(
         (d: {
-          org?: { name?: string; logoUrl?: string };
+          org?: {
+            name?: string;
+            logoUrl?: string;
+            publicPage?: { sections?: { projects?: boolean; events?: boolean; members?: boolean } };
+          };
           members?: Array<Record<string, unknown>>;
         }) => {
+          const secs = d.org?.publicPage?.sections;
+          const nav = {
+            projects: secs?.projects !== false,
+            events: secs?.events !== false,
+            members: secs?.members !== false,
+          };
           setName(d.org?.name || slug);
           setLogoUrl(d.org?.logoUrl);
-          setMembers(d.members || []);
+          setSections(nav);
+          if (!nav.members) {
+            setSectionOff(true);
+            setMembers([]);
+          } else {
+            setMembers(d.members || []);
+          }
+          setReady(true);
         }
       )
       .catch((e) => setError((e as Error).message));
   }, [slug]);
 
-  if (error) {
+  if (error || sectionOff) {
     return (
       <div className="mx-auto max-w-3xl px-6 py-16">
-        <Alert variant="error">{error}</Alert>
+        <Alert variant="error">{error || "Not found"}</Alert>
       </div>
     );
   }
-  if (!name) {
+  if (!ready) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <LoadingBlock />
@@ -46,7 +66,13 @@ export default function PublicMembersPage() {
   }
 
   return (
-    <PublicOrgChrome slug={slug} orgName={name} logoUrl={logoUrl} active="members">
+    <PublicOrgChrome
+      slug={slug}
+      orgName={name}
+      logoUrl={logoUrl}
+      active="members"
+      sections={sections}
+    >
       <main className="mx-auto max-w-5xl px-6 pb-16">
         <h1 className="text-3xl font-bold">Members</h1>
         <ul className="mt-8 grid gap-4 sm:grid-cols-2 md:grid-cols-3">

@@ -3,19 +3,32 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+export type PublicNavSections = {
+  projects?: boolean;
+  events?: boolean;
+  members?: boolean;
+};
+
 export function PublicOrgChrome({
   slug,
   orgName,
   logoUrl,
   children,
   active,
+  sections,
 }: {
   slug: string;
   orgName: string;
   logoUrl?: string | null;
   children: ReactNode;
   active?: "home" | "projects" | "events" | "members";
+  /** Section nav visibility; omit/true = show. */
+  sections?: PublicNavSections;
 }) {
+  const showProjects = sections?.projects !== false;
+  const showEvents = sections?.events !== false;
+  const showMembers = sections?.members !== false;
+
   const linkClass = (key: typeof active) =>
     `text-sm font-semibold transition-colors ${
       active === key ? "text-nb-primary" : "text-nb-on-surface hover:text-nb-primary"
@@ -46,15 +59,21 @@ export function PublicOrgChrome({
           <Link href={`/o/${slug}`} className={linkClass("home")}>
             Home
           </Link>
-          <Link href={`/o/${slug}/projects`} className={linkClass("projects")}>
-            Projects
-          </Link>
-          <Link href={`/o/${slug}/events`} className={linkClass("events")}>
-            Events
-          </Link>
-          <Link href={`/o/${slug}/members`} className={linkClass("members")}>
-            Members
-          </Link>
+          {showProjects && (
+            <Link href={`/o/${slug}/projects`} className={linkClass("projects")}>
+              Projects
+            </Link>
+          )}
+          {showEvents && (
+            <Link href={`/o/${slug}/events`} className={linkClass("events")}>
+              Events
+            </Link>
+          )}
+          {showMembers && (
+            <Link href={`/o/${slug}/members`} className={linkClass("members")}>
+              Members
+            </Link>
+          )}
         </nav>
       </header>
       <div className="flex-1">{children}</div>

@@ -63,16 +63,16 @@ Auth: `Authorization: Bearer <Firebase ID token | local uid>`
 ### Organizations
 
 - `GET/POST /orgs`
-- `GET/PATCH/DELETE /orgs/:orgId` — PATCH may include `name`, `slug` (unique), `publicPage` (`visibility`, `about` / legacy `mission`, `logoAssetId`, announcement, cta)
-- `GET/POST /orgs/:orgId/members`, `PATCH/DELETE /orgs/:orgId/members/:uid` — PATCH `{ role?, status?: active|alumni, imageAssetId?, displayName? }`; alumni cannot mutate (403)
-- `GET /orgs/:orgId/public` — admin CMS dump; `PUT/DELETE /orgs/:orgId/public/:section/:itemId` (`donors|projects|events|members|social`)
+- `GET/PATCH/DELETE /orgs/:orgId` — PATCH may include `name`, `slug` (unique), `publicPage` (`visibility`, `about` / legacy `mission`, `logoAssetId`, announcement, cta, `sections`)
+- `GET/POST /orgs/:orgId/members`, `PATCH/DELETE /orgs/:orgId/members/:uid` — PATCH `{ role?, status?: active|alumni, imageAssetId?, displayName?, title?, public? }`; alumni cannot mutate (403)
+- `GET/PUT/DELETE /orgs/:orgId/donors|projects|events|social-links[/:itemId]` — org catalogs; each item has `public?: boolean` (default true). Site chrome + section gates via `PATCH /orgs/:orgId`.
 - `GET/POST /orgs/:orgId/invites`, `DELETE /orgs/:orgId/invites/:inviteId` — create may send email via `NotificationPort`; `status`: `pending`\|`accepted`\|`revoked` (DELETE soft-revokes pending invites)
 - `POST /invites/:inviteId/accept` — rejects expired/revoked/accepted invites; optional email match when invite has an email  
   Create sets `expiresAt` (default 14 days, `INVITE_TTL_DAYS` / body `expiresInDays`)
 
 ### Public (no auth)
 
-- `GET /public/o/:slug` — org public page when `publicPage.visibility=public`
+- `GET /public/o/:slug` — org public page when `publicPage.visibility=public`; omits items with `public === false` and whole sections with `sections.<key> === false`
 - `GET /public/o/:slug/notebooks/:publicKey` — read-only notebook summary + entries + contributors
 - `GET /public/o/:slug/notebooks/:publicKey/entries/:entryId` — entry meta + TipTap JSON
 - `GET /public/o/:slug/notebooks/:publicKey/pdf` — signed URL for last compiled export (`latest`) when present

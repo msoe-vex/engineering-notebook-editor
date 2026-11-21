@@ -1,64 +1,88 @@
 # Plan: Public content information architecture
 
-Status: proposed  
-Related: [FR-org-public-page](../features/FR-org-public-page.md), [FR-public-notebook](../features/FR-public-notebook.md)
+Status: done  
+Related: [FR-org-public-page](../features/FR-org-public-page.md), [FR-public-notebook](../features/FR-public-notebook.md), [schema](../../03-reference/schema.md)
 
 ## Problem
 
-Today the **Public page** CMS tab owns donors, projects, events, social, about, logo, announcement, and visibility. That mixes **site chrome** (slug/logo/about) with **content catalogs** (donors/projects/events). Content editors expect those catalogs to feel like first-class org data; marketing toggles belong elsewhere.
+Today the **Public page** CMS tab owns donors, projects, events, social, about, logo, announcement, and visibility. Collections are prefixed `public*` (`publicDonors`, …), which encodes “website-only” into the data model. Content should be first-class org records that *can* be shown publicly.
 
-## Options
+## Recommendation (Option C + schema rename)
 
-### A — Keep one Public CMS tab (status quo)
+**UI:** Content tabs own Donors / Projects / Events; **Org Settings** owns site chrome (slug, whole-site visibility, logo, announcement, about, social, CTA). Drop the dedicated Public CMS tab.
 
-Everything edited under `/orgs/:orgId/public`.
+**Schema:** Drop the `public*` collection prefix. Store catalogs as normal org subcollections with a per-record **`public` boolean (default `true`)**.
 
-- Pros: one place; matches current APIs  
-- Cons: crowded; content feels like “website-only” rather than org records
+### Target paths
 
-### B — Content tabs + thin Public tab
+| Today | Target |
+| --- | --- |
+| `organizations/{orgId}/publicDonors/{id}` | `organizations/{orgId}/donors/{id}` |
+| `…/publicProjects/{id}` | `…/projects/{id}` |
+| `…/publicEvents/{id}` | `…/events/{id}` |
+| `…/publicSocial/{id}` | `…/socialLinks/{id}` (or keep under Settings-only docs) |
+| `…/publicMembers/{id}` | **Remove** — use `members/{uid}` |
 
-Top-level **Donors / Projects / Events** tabs manage records. **Public page** tab only chooses which sections appear, section order, and home teasers.
+### Per-record field
 
-- Pros: clear content ownership; public tab stays small  
-- Cons: still a dedicated Public tab; two hops for “make this project public”
+```
+public?: boolean   // omit or true ⇒ shown on public site; false ⇒ org-only
+```
 
-### C — Content tabs own visibility; Settings owns site chrome (**recommended**)
+Default **on** (public). Missing field = public for back-compat after migrate.
+
+Same flag on **`OrgMember`**: `public?: boolean` (default true) so People can hide someone from the public roster without alumni/ACL changes. Alumni remains a separate cosmetic `status`.
+
+### Site-level
+
+`organizations/{orgId}.publicPage`:
+
+- `visibility: "public" | "hidden"` — whole site gate  
+- `slug`, `logoAssetId`, `announcement`, `about`, `cta`  
+- `sections?: { about?, donors?, projects?, events?, members?, social? }` — whole-section gates (omit/true = on)  
+- Social links: `socialLinks/{id}` with per-item `public`
+
+Anonymous `GET /public/o/:slug` returns only records with `public !== false`, only when site visibility is public, and only for sections that are on.
+
+### API sketch
+
+- Admin: `GET/PUT/DELETE /orgs/:orgId/donors/:id` (same for projects, events, socialLinks)  
+- Deprecate `/orgs/:orgId/public/:section/:itemId`  
+- Public read unchanged URL; filter by `public`
+
+### Migration (no prod back-compat required per product stance)
+
+1. Copy `publicDonors` → `donors` (set `public: true`), same for projects/events/social  
+2. Switch Core + website path helpers  
+3. Delete old collections / path helpers / CMS members section  
+4. Add `public` toggle on People + catalog UIs (default on)
+
+## UI ownership
 
 | Surface | Owns |
 | --- | --- |
-| **Org Settings** | Slug, whole-site visibility, logo, announcement, about, social links, CTA |
-| **Donors / Projects / Events** tabs | CRUD + per-item `visibility` (`listed` / `hidden`) + images |
-| **People** | Public roster (already); no CMS members |
-| Drop `/public` CMS tab | Preview/copy link live on Settings |
+| **Org Settings** | Slug, site visibility, section toggles, logo, announcement, about, social, CTA, Copy link / View |
+| **Donors / Projects / Events** tabs | CRUD, images, order, per-item `public` |
+| **People** | Roster; per-member `public` (+ title/photo); alumni cosmetic |
+| **Notebook Setup → Public page** | Notebook `publicAccess` + Copy link / View (already aligned) |
 
-- Pros: same pattern as notebook public settings; no duplicate “website vs app” content; alumni/credits already on People  
-- Cons: nav grows by ~3 tabs; needs section empty states on `/o/:slug` when nothing is listed
+## Why not keep `public*` names?
 
-### D — No public chrome in Settings; every surface self-publishes
-
-Even slug/logo live next to content. Too scattered for share URL and branding.
-
-## Recommendation
-
-Ship **Option C**.
-
-1. Move slug / visibility / logo / announcement / about / social / CTA into **Org Settings** (extend current settings block; keep Copy link / View site actions there).  
-2. Add org nav tabs **Donors**, **Projects**, **Events** that reuse today’s CMS item editors + image upload + a simple Listed/Hidden control per item.  
-3. Remove the dedicated Public CMS route (redirect `/public` → Settings or Donors).  
-4. Public GET `/public/o/:slug` only returns listed items; home teasers = first N listed.  
-5. Align notebook **Setup → Public page** with the same Visibility + Copy link + View pattern (already in progress).
+- Prefix implies a parallel CMS universe instead of org data  
+- Bool on the real record matches how notebooks already do `publicAccess`  
+- One mental model: “this donor exists; is it on the website?”
 
 ## Implementation slices
 
-1. Settings: absorb home chrome fields from Public CMS; Copy link / View  
-2. New pages under `/orgs/:orgId/{donors,projects,events}` (shared item editor component)  
-3. Schema: `visibility?: "listed" | "hidden"` on public* collections (default listed)  
-4. Delete/redirect Public CMS tab; update FR-org-public-page  
-5. Docs + nav counts
+1. [x] Shared paths/types: `donorsCollection`, …; `public?: boolean` on catalogs + `OrgMember`  
+2. [x] Core routes + public GET filter (item + section); redirect legacy `/public` CMS  
+3. [x] Settings: site chrome + `publicPage.sections` toggles  
+4. [x] Org nav tabs for Donors / Projects / Events with per-item `public`  
+5. [x] People: `public` toggle; FR + schema docs  
 
 ## Non-goals
 
 - Custom domains  
 - Per-section accent themes  
-- Auto-syncing projects from notebooks (optional later)
+- Auto-syncing projects from notebooks (optional later)  
+- Keeping `publicMembers` as a separate curated board

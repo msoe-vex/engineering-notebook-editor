@@ -59,7 +59,7 @@ MVP sections admins can edit (each public|hidden at section or page level as nee
 | **Call to action** | Join / donate heading, body, and links |
 | **Footer** | Org copyright, parent org credit, trademark disclaimer (templated) |
 
-**Toggle:** whole page Public | Hidden. Unpublished projects/members can stay draft.
+**Toggles:** whole page Public | Hidden; per-section on/off via `publicPage.sections` (About, Donors, Projects, Events, Members, Social); per-item `public` on catalog rows and members (default on).
 
 ## Relationship to vex-website / msoevex.com
 
@@ -75,11 +75,14 @@ MVP sections admins can edit (each public|hidden at section or page level as nee
 - [x] Home + Projects + Events + Members sections ship for MVP (donate may be CTA-only)
 - [x] Media uploads use existing asset/GCS patterns with size limits
 - [x] Public layout does **not** use notebook AppChrome (marketing shell)
-- [x] Public CMS (`/orgs/:orgId/public`) edits slug + copy link; section add/edit uses modals; logo shows image preview (never raw asset ids)
-- [x] Public chrome shows org logo when `publicPage.logoAssetId` is set; nav includes **Home**; footer links to app home
+- [x] Site chrome (slug, visibility, section toggles, logo, announcement, about, social, CTA) lives in **Org Settings**; Copy link / View there
+- [x] **Donors / Projects / Events** are org tabs (first-class collections); per-item `public` default on
+- [x] Public chrome shows org logo when `publicPage.logoAssetId` is set; nav includes **Home**; footer links to app home; nav hides disabled sections
 - [x] UI labels use **About** and **Join / Donate** (not Mission / CTA jargon)
-- [x] Public members = org members including alumni (People titles/photos); CMS no longer edits a separate members collection
-- [x] Donors / projects / events / social support optional uploaded images (`imageAssetId`)
+- [x] Public members = org members with `public !== false` (People titles/photos/`public` toggle)
+- [x] Catalog items support optional uploaded images (`imageAssetId`)
+- [x] Legacy `/orgs/:orgId/public` redirects to Settings
+- [x] Entire sections can be turned off via Settings without deleting content
 
 ## Data and APIs
 

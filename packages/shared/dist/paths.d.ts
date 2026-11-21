@@ -33,10 +33,20 @@ export declare function invitePath(inviteId: string): string;
 export declare function orgSlugPath(slug: string): string;
 export declare function publicNotebookKeyPath(orgId: string, publicKey: string): string;
 export declare function publicNotebookKeysCollection(orgId: string): string;
+/** First-class org catalogs (optional `public?: boolean`, default true). */
+export declare function donorsCollection(orgId: string): string;
+export declare function projectsCollection(orgId: string): string;
+export declare function eventsCollection(orgId: string): string;
+export declare function socialLinksCollection(orgId: string): string;
+/** @deprecated Use donorsCollection — legacy CMS path. */
 export declare function publicDonorsCollection(orgId: string): string;
+/** @deprecated Use projectsCollection */
 export declare function publicProjectsCollection(orgId: string): string;
+/** @deprecated Use eventsCollection */
 export declare function publicEventsCollection(orgId: string): string;
+/** @deprecated Removed — public roster uses members/{uid}.public */
 export declare function publicMembersCollection(orgId: string): string;
+/** @deprecated Use socialLinksCollection */
 export declare function publicSocialCollection(orgId: string): string;
 /** GCS object key builders (mirror Firestore nesting). */
 export declare const gcsKeys: {
