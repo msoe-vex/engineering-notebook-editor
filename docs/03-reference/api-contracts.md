@@ -142,10 +142,19 @@ Over-limit bodies return **413**. Clients should preflight with `assertUploadSiz
 
 ### Exports (compiled PDF)
 
-- `GET /orgs/:orgId/notebooks/:notebookId/exports` — list retained compile PDFs (max 10) + `latestExportId` / `publicExportId`
+- `GET /orgs/:orgId/notebooks/:notebookId/exports` — list retained compile PDFs (max 10) + `latestExportId`
 - `PUT /orgs/:orgId/notebooks/:notebookId/exports/:exportId/content` — PDF bytes; always mints a new version (or uses a non-`latest` id); updates `latest`; **409** at `MAX_COMPILE_EXPORTS` (10); **64 MiB** limit
+- `PATCH /orgs/:orgId/notebooks/:notebookId/exports/:exportId` — `{ label }` rename a version
 - `GET /orgs/:orgId/notebooks/:notebookId/exports/:exportId/url` — signed URL (`latest` → `latestExportId`)
-- `DELETE /orgs/:orgId/notebooks/:notebookId/exports/:exportId` — delete a saved version (deleting the shared one turns the link off; deleting latest promotes the next newest)
+- `DELETE /orgs/:orgId/notebooks/:notebookId/exports/:exportId` — delete a saved version (share links retarget to next latest or revoke; deleting latest promotes the next newest)
+
+### Share links (public PDF URLs)
+
+- `GET /orgs/:orgId/notebooks/:notebookId/share-links` — active links (`?includeRevoked=1` for history); migrates legacy `publicKey` once
+- `POST /orgs/:orgId/notebooks/:notebookId/share-links` — `{ name, exportId }` → new UUID `key` (admin+)
+- `PATCH /orgs/:orgId/notebooks/:notebookId/share-links/:linkId` — `{ name?, exportId? }` (admin+)
+- `DELETE /orgs/:orgId/notebooks/:notebookId/share-links/:linkId` — revoke (removes public key lookup) (admin+)
+- Public URL shape: `/o/:orgSlug/n/:key`
 
 ### Static assets
 

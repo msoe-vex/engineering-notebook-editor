@@ -153,25 +153,28 @@ Implemented fields for [FR-org-public-page](../01-requirements/features/FR-org-p
 
 Public URLs: `/o/:slug`, `/o/:slug/projects`, `/events`, `/members`.
 
-### Public notebook
+### Public notebook share links
 
-On `notebooks/{notebookId}` (in addition to summary fields today):
+Preferred model: explicit `shareLinks/{linkId}` under the notebook:
 
 ```
-publicAccess?: "off" | "unlisted"   // default off; legacy "public" ≈ unlisted
-publicKey?: string        // unguessable per-org token (UUID when server-minted)
-publishedAt?, publishedBy?
-latestExportId?: string   // most recent compile version id
-publicExportId?: string   // PDF opened by the share link
+id, key            // unguessable UUID in the public URL
+name               // user-facing label
+exportId           // compile export this link serves
+createdAt, createdBy?, updatedAt?
+revokedAt?         // set when revoked; public lookup removed
 ```
 
 | Lookup | Purpose |
 | --- | --- |
-| `organizations/{orgId}/publicNotebookKeys/{publicKey}` → `{ notebookId }` | Resolve `/o/:orgSlug/n/:publicKey` |
-| `…/notebooks/{notebookId}/compileExports/{exportId}` | Retained versions (max 10) |
+| `organizations/{orgId}/publicNotebookKeys/{key}` → `{ notebookId, linkId }` | Resolve `/o/:orgSlug/n/:key` |
+| `…/notebooks/{notebookId}/shareLinks/{linkId}` | Share link metadata |
+| `…/notebooks/{notebookId}/compileExports/{exportId}` | Retained versions (max 10; optional `label`) |
 | GCS `…/exports/{exportId}.pdf` (+ `latest.pdf` alias) | Compiled PDF bytes |
 
-URL: **`/o/:orgSlug/n/:publicKey`** serves the PDF via website → Core proxy (not a raw GCS URL). At most **10** compile exports are kept (`MAX_COMPILE_EXPORTS`).
+Legacy notebook fields `publicAccess` / `publicKey` / `publicExportId` may still exist; Core migrates them into one share link named “Share” on first share-links read.
+
+URL: **`/o/:orgSlug/n/:key`** serves that link’s PDF via website → Core proxy. At most **10** compile exports (`MAX_COMPILE_EXPORTS`).
 
 ### Org member alumni
 

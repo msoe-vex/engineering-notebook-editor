@@ -51,6 +51,7 @@ import {
   type Invite,
   type InviteStatus,
   type NotebookFolder,
+  compileExportPath,
   compileExportsCollection,
 } from "@engineering-notebook/shared";
 import { getMetadataStore, type MetadataBatchOp } from "../db/metadataStore.js";
@@ -59,6 +60,12 @@ import {
   recordCompileExport,
   resolveExportPdfKey,
 } from "../compile/recordCompileExport.js";
+import {
+  createShareLink,
+  listShareLinks,
+  revokeShareLink,
+  updateShareLink,
+} from "../compile/shareLinks.js";
 import { omitUndefined } from "../db/sanitize.js";
 import {
   requireOrgMember,
@@ -2523,6 +2530,135 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       message: result.error,
       detail: result.detail,
     });
+  });
+
+  // ── Compile export labels ───────────────────────────────────────────────
+
+  app.patch("/orgs/:orgId/notebooks/:notebookId/exports/:exportId", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId, exportId } = request.params as {
+      orgId: string;
+      notebookId: string;
+      exportId: string;
+    };
+    await assertNotebookWritable(user, orgId, notebookId);
+    if (!exportId || exportId === "latest") {
+      return reply.code(400).send({ error: "cannot rename latest alias" });
+    }
+    const body = request.body as { label?: string | null };
+    const refPath = compileExportPath(orgId, notebookId, exportId);
+    const snap = await store().get(refPath);
+    if (!snap) return reply.code(404).send({ error: "export not found" });
+    const label =
+      body.label === null || body.label === undefined
+        ? null
+        : String(body.label).trim().slice(0, 80) || null;
+    await store().update(refPath, omitUndefined({ label, updatedAt: nowIso() }));
+    const { id: _id, ...rest } = { ...withoutId(snap), id: exportId, label: label || undefined };
+    void _id;
+    return { id: exportId, ...rest, label: label || undefined };
+  });
+
+  // ── Explicit PDF share links ────────────────────────────────────────────
+
+  app.get("/orgs/:orgId/notebooks/:notebookId/share-links", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
+    await assertNotebookAccess(user, orgId, notebookId);
+    const includeRevoked =
+      String((request.query as { includeRevoked?: string }).includeRevoked || "") === "1";
+    const links = await listShareLinks(orgId, notebookId, { includeRevoked });
+    return { links };
+  });
+
+  app.post("/orgs/:orgId/notebooks/:notebookId/share-links", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
+    const nbSnap = await store().get(notebookPath(orgId, notebookId));
+    if (!nbSnap) return reply.code(404).send({ error: "not found" });
+    const callerRole = await requireNotebookAccess(
+      user,
+      orgId,
+      withoutId(nbSnap) as NotebookSummary
+    );
+    if (callerRole !== "owner" && callerRole !== "admin" && !isServiceAdmin(user)) {
+      return reply.code(403).send({ error: "Only admins and owners can create share links" });
+    }
+    await assertNotebookNotArchived(nbSnap as NotebookSummary);
+    const body = request.body as { name?: string; exportId?: string };
+    try {
+      const link = await createShareLink({
+        orgId,
+        notebookId,
+        name: String(body.name || "Share link"),
+        exportId: String(body.exportId || ""),
+        createdBy: user.uid,
+      });
+      return reply.code(201).send(link);
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode || 500;
+      return reply.code(status).send({ error: (err as Error).message });
+    }
+  });
+
+  app.patch("/orgs/:orgId/notebooks/:notebookId/share-links/:linkId", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId, linkId } = request.params as {
+      orgId: string;
+      notebookId: string;
+      linkId: string;
+    };
+    const nbSnap = await store().get(notebookPath(orgId, notebookId));
+    if (!nbSnap) return reply.code(404).send({ error: "not found" });
+    const callerRole = await requireNotebookAccess(
+      user,
+      orgId,
+      withoutId(nbSnap) as NotebookSummary
+    );
+    if (callerRole !== "owner" && callerRole !== "admin" && !isServiceAdmin(user)) {
+      return reply.code(403).send({ error: "Only admins and owners can edit share links" });
+    }
+    await assertNotebookNotArchived(nbSnap as NotebookSummary);
+    const body = request.body as { name?: string; exportId?: string };
+    try {
+      const link = await updateShareLink({
+        orgId,
+        notebookId,
+        linkId,
+        name: body.name,
+        exportId: body.exportId,
+      });
+      return link;
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode || 500;
+      return reply.code(status).send({ error: (err as Error).message });
+    }
+  });
+
+  app.delete("/orgs/:orgId/notebooks/:notebookId/share-links/:linkId", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId, linkId } = request.params as {
+      orgId: string;
+      notebookId: string;
+      linkId: string;
+    };
+    const nbSnap = await store().get(notebookPath(orgId, notebookId));
+    if (!nbSnap) return reply.code(404).send({ error: "not found" });
+    const callerRole = await requireNotebookAccess(
+      user,
+      orgId,
+      withoutId(nbSnap) as NotebookSummary
+    );
+    if (callerRole !== "owner" && callerRole !== "admin" && !isServiceAdmin(user)) {
+      return reply.code(403).send({ error: "Only admins and owners can revoke share links" });
+    }
+    try {
+      const link = await revokeShareLink({ orgId, notebookId, linkId });
+      return { ok: true, link };
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode || 500;
+      return reply.code(status).send({ error: (err as Error).message });
+    }
   });
 
   // ── Org catalogs (donors / projects / events / social-links) ───────────

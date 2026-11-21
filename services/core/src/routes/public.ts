@@ -9,7 +9,6 @@ import {
   projectsCollection,
   eventsCollection,
   socialLinksCollection,
-  publicNotebookKeyPath,
   isPublicRecord,
   isPublicSection,
   type Organization,
@@ -18,6 +17,7 @@ import {
   type AssetMetadata,
 } from "@engineering-notebook/shared";
 import { resolveExportPdfKey } from "../compile/recordCompileExport.js";
+import { resolvePublicShareLink } from "../compile/shareLinks.js";
 import { getMetadataStore } from "../db/metadataStore.js";
 import type { StoragePort } from "../storage/storagePort.js";
 
@@ -152,22 +152,15 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
     const { slug, publicKey } = request.params as { slug: string; publicKey: string };
     const org = await resolveOrgBySlug(slug.toLowerCase());
     if (!org) return reply.code(404).send({ error: "not found" });
-    const key = publicKey.trim().toLowerCase();
-    const keySnap = await store().get(publicNotebookKeyPath(org.id, key));
-    if (!keySnap) return reply.code(404).send({ error: "not found" });
-    const notebookId = keySnap.notebookId as string | undefined;
-    if (!notebookId) return reply.code(404).send({ error: "not found" });
+    const resolvedLink = await resolvePublicShareLink(org.id, publicKey);
+    if (!resolvedLink) return reply.code(404).send({ error: "not found" });
+    const { notebookId, link } = resolvedLink;
     const nbSnap = await store().get(notebookPath(org.id, notebookId));
     if (!nbSnap) return reply.code(404).send({ error: "not found" });
     const { id: _nbId, ...nbRest } = nbSnap;
     const nb = { id: notebookId, ...(nbRest as NotebookSummary) };
-    if (nb.publicAccess !== "public" && nb.publicAccess !== "unlisted") {
-      return reply.code(404).send({ error: "not found" });
-    }
-    if (nb.publicKey !== key) return reply.code(404).send({ error: "not found" });
 
-    const exportId = nb.publicExportId || nb.latestExportId || "latest";
-    const resolved = await resolveExportPdfKey(org.id, notebookId, exportId, storage);
+    const resolved = await resolveExportPdfKey(org.id, notebookId, link.exportId, storage);
     let pdfUrl: string | undefined;
     if (resolved) {
       try {
@@ -184,13 +177,14 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
         name: nb.name,
         title: nb.title,
         subtitle: nb.subtitle,
-        publicAccess: nb.publicAccess,
-        publicKey: nb.publicKey,
+        publicAccess: "unlisted" as const,
+        publicKey: link.key,
         latestExportId: nb.latestExportId,
-        publicExportId: resolved?.exportId || nb.publicExportId || null,
+        publicExportId: resolved?.exportId || link.exportId,
       },
+      shareLink: { id: link.id, name: link.name, exportId: link.exportId },
       pdfUrl,
-      noindex: nb.publicAccess === "unlisted",
+      noindex: true,
     };
   });
 
@@ -211,19 +205,13 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
       (request.query as { json?: string }).json === "true";
     const org = await resolveOrgBySlug(slug.toLowerCase());
     if (!org) return reply.code(404).send({ error: "not found" });
-    const key = publicKey.trim().toLowerCase();
-    const keySnap = await store().get(publicNotebookKeyPath(org.id, key));
-    if (!keySnap) return reply.code(404).send({ error: "not found" });
-    const notebookId = keySnap.notebookId as string | undefined;
-    if (!notebookId) return reply.code(404).send({ error: "not found" });
+    const resolvedLink = await resolvePublicShareLink(org.id, publicKey);
+    if (!resolvedLink) return reply.code(404).send({ error: "not found" });
+    const { notebookId, link } = resolvedLink;
     const nbSnap = await store().get(notebookPath(org.id, notebookId));
     if (!nbSnap) return reply.code(404).send({ error: "not found" });
     const nb = nbSnap as NotebookSummary;
-    if (nb.publicAccess !== "public" && nb.publicAccess !== "unlisted") {
-      return reply.code(404).send({ error: "not found" });
-    }
-    const exportId = nb.publicExportId || nb.latestExportId || "latest";
-    const resolved = await resolveExportPdfKey(org.id, notebookId, exportId, storage);
+    const resolved = await resolveExportPdfKey(org.id, notebookId, link.exportId, storage);
     if (!resolved) return reply.code(404).send({ error: "no compiled pdf" });
 
     if (wantJson) {
@@ -232,6 +220,7 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
         url,
         latestExportId: nb.latestExportId,
         exportId: resolved.exportId,
+        shareLinkId: link.id,
       };
     }
 

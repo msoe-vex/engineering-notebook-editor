@@ -14,7 +14,7 @@ Notebook accessors. Share-link publish/revoke: org admin/owner (from the Compile
 ## User-facing behavior
 
 - Entry page: ViewToggle (editor / split / LaTeX) with live LaTeX source from the open doc
-- `/…/compile` — full-height `CloudNotebookCompiler` (version list + PDF preview; share / copy / turn off; delete versions)
+- `/…/compile` — full-height `CloudNotebookCompiler` (named versions + share-links manager + PDF preview)
 - Compile enqueues a notebook job (`type: compile`); progress via SSE `job.*` with short user-facing `status` / `detail`
 
 ## Acceptance criteria

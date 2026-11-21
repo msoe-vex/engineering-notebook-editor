@@ -84,6 +84,12 @@ export function compileExportPath(orgId, notebookId, exportId) {
 export function compileExportsCollection(orgId, notebookId) {
     return `organizations/${orgId}/notebooks/${notebookId}/compileExports`;
 }
+export function notebookShareLinkPath(orgId, notebookId, linkId) {
+    return `organizations/${orgId}/notebooks/${notebookId}/shareLinks/${linkId}`;
+}
+export function notebookShareLinksCollection(orgId, notebookId) {
+    return `organizations/${orgId}/notebooks/${notebookId}/shareLinks`;
+}
 /** Single-flight lock per (type, resourceKey) under a notebook. */
 export function jobLockPath(orgId, notebookId, type, resourceKey) {
     const safe = `${type}__${resourceKey}`.replace(/[^a-zA-Z0-9._-]/g, "_");

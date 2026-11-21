@@ -165,6 +165,17 @@ export type CompileExportSummary = {
   label?: string;
 };
 
+export type NotebookShareLinkSummary = {
+  id: string;
+  key: string;
+  name: string;
+  exportId: string;
+  createdAt?: string;
+  createdBy?: string;
+  updatedAt?: string;
+  revokedAt?: string | null;
+};
+
 export type NotebookMemberSummary = {
   id: string;
   name: string;
@@ -785,6 +796,47 @@ export const cloudApi = {
     }>(`/orgs/${orgId}/notebooks/${notebookId}/exports/${exportId}`, {
       method: "DELETE",
     }),
+  patchCompileExport: (
+    orgId: string,
+    notebookId: string,
+    exportId: string,
+    body: { label?: string | null }
+  ) =>
+    coreFetch<CompileExportSummary>(
+      `/orgs/${orgId}/notebooks/${notebookId}/exports/${exportId}`,
+      { method: "PATCH", body: JSON.stringify(body) }
+    ),
+
+  listShareLinks: (orgId: string, notebookId: string, opts?: { includeRevoked?: boolean }) => {
+    const q = opts?.includeRevoked ? "?includeRevoked=1" : "";
+    return coreFetch<{ links: NotebookShareLinkSummary[] }>(
+      `/orgs/${orgId}/notebooks/${notebookId}/share-links${q}`
+    );
+  },
+  createShareLink: (
+    orgId: string,
+    notebookId: string,
+    body: { name: string; exportId: string }
+  ) =>
+    coreFetch<NotebookShareLinkSummary>(`/orgs/${orgId}/notebooks/${notebookId}/share-links`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  patchShareLink: (
+    orgId: string,
+    notebookId: string,
+    linkId: string,
+    body: { name?: string; exportId?: string }
+  ) =>
+    coreFetch<NotebookShareLinkSummary>(
+      `/orgs/${orgId}/notebooks/${notebookId}/share-links/${linkId}`,
+      { method: "PATCH", body: JSON.stringify(body) }
+    ),
+  revokeShareLink: (orgId: string, notebookId: string, linkId: string) =>
+    coreFetch<{ ok: boolean; link: NotebookShareLinkSummary }>(
+      `/orgs/${orgId}/notebooks/${notebookId}/share-links/${linkId}`,
+      { method: "DELETE" }
+    ),
 
   /**
    * Enqueue server XeLaTeX compile job.

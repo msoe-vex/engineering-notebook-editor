@@ -1,44 +1,47 @@
-# FR-public-notebook: Notebook share link (PDF)
+# FR-public-notebook: Notebook share links (PDF)
 
-Status: done  
+Status: partial  
 
 Related: [FR-notebooks](./FR-notebooks.md), [FR-compile](./FR-compile.md), [FR-org-public-page](./FR-org-public-page.md), [roadmap](../../00-product/roadmap.md), [tenancy-acl](../../02-architecture/tenancy-acl.md), [schema](../../03-reference/schema.md), [api-contracts](../../03-reference/api-contracts.md)
 
 ## Summary
 
-Share a **stable link** that serves the notebook’s **compiled PDF** (no HTML wrapper, no live TipTap). Default remains private. Compiles keep up to **10** versioned PDFs; at the limit, delete a version before compiling again. Share / revoke and version delete live on the **Compile** page.
+Admins create **explicit share links** that each serve one **named compile version** as a PDF (no HTML wrapper, no live TipTap). Links are created, rebound to a different version, or revoked independently — not a single opaque “turn sharing on” toggle.
 
-Visitors never need GCS credentials: **`/o/:orgSlug/n/:notebookKey`** (website) proxies bytes from Core `GET /public/o/…/pdf`, which reads storage server-side.
+Visitors never need GCS credentials: **`/o/:orgSlug/n/:key`** (website) proxies bytes from Core `GET /public/o/…/pdf`.
 
 ## Actors and permissions
 
-| Actor | Can publish / revoke | Can open link |
+| Actor | Can create / edit / revoke links | Can open link |
 | --- | --- | --- |
 | Org owner / admin | yes | yes |
-| Anonymous / signed-out visitor | no | yes when link sharing is on |
+| Anonymous / signed-out visitor | no | yes when the link is active |
 | Org member without publish right | no | via normal ACL; share link optional |
 
 ## User-facing behavior
 
-- **Compile** page: preview versions; **Share** / **Turn off** / copy link; delete saved versions (max 10)
-- Share URL: **`/o/:orgSlug/n/:notebookKey`** → PDF stream (website → Core → storage)
-- Visibility is link-only (`publicAccess: "unlisted"`). Legacy `"public"` is accepted and stored as `"unlisted"`. No separate listed/SEO mode for notebooks.
+- **Compile → Versions**: rename versions; delete (max 10)
+- **Compile → Links**: create named share links bound to a version; copy / open; change version; revoke
+- Share URL: **`/o/:orgSlug/n/:key`** → PDF for that link’s `exportId`
+- Keys are unguessable UUIDs (separate from notebook id). Revoking deletes the public key lookup (404).
 
 ## Acceptance criteria
 
-- [x] Unpublished notebooks are not reachable via old links after revoke
+- [x] Unpublished / revoked links are not reachable
 - [x] Share URL serves the PDF via Core proxy (no public TipTap / wrapper page; no raw GCS redirect for visitors)
-- [x] `notebookKey` unique within the org and unguessable (full UUID when minted; legacy short keys reminted on next publish)
-- [x] One stable share URL per notebook; `publicExportId` selects which compile version the link serves (not a new key per version)
-- [x] `publishedAt` / `publishedBy` recorded for admins; cleared on revoke
-- [x] Up to 10 compile exports retained; compile refused at the limit until a version is deleted
-- [x] Saved versions can be deleted (deleting the shared one turns the link off)
+- [x] `key` unique within the org and unguessable (full UUID when minted)
+- [x] Multiple active share links per notebook; each points at a chosen compile export
+- [x] Compile versions can be named (`label`)
+- [x] Deleting a version retargets links to the next latest export, or revokes them if none remain
+- [x] Legacy single `publicKey` / `publicExportId` migrates to one share link named “Share”
 - [x] Core `GET …/pdf` streams bytes by default; `?json=1` returns a storage/signed `{ url }` for tooling only
 
 ## Data and APIs
 
-- Notebook: `publicAccess` (`off`|`unlisted`), `publicKey`, `latestExportId`, `publicExportId`, `publishedAt`, `publishedBy`
-- `compileExports/{id}` metadata + object-store PDFs; `DELETE …/exports/:exportId`
+- `shareLinks/{linkId}`: `key`, `name`, `exportId`, `createdAt`, `revokedAt?`
+- Org lookup: `publicNotebookKeys/{key}` → `{ notebookId, linkId }`
+- `compileExports/{id}` (+ optional `label`); `PATCH …/exports/:exportId` `{ label }`
+- `GET/POST …/share-links`, `PATCH/DELETE …/share-links/:linkId`
 - Public: website route proxies Core stream — [api-contracts](../../03-reference/api-contracts.md)
 
 ## Non-goals
@@ -47,3 +50,4 @@ Visitors never need GCS credentials: **`/o/:orgSlug/n/:notebookKey`** (website) 
 - Listing published notebooks on the org marketing page (could return later)
 - Unlimited compile history (hard cap: 10 versions)
 - Handing visitors raw bucket / signed GCS URLs as the share target
+- Password / expiry on share links (could return later)

@@ -185,6 +185,15 @@ export async function deleteCompileExport(opts: {
 
   patch.lastCompiled = null;
   await store.update(nbPath, omitUndefined(patch));
+
+  const { retargetShareLinksAfterExportDelete } = await import("./shareLinks.js");
+  await retargetShareLinksAfterExportDelete({
+    orgId,
+    notebookId,
+    deletedExportId: exportId,
+    nextExportId: latestExportId,
+  });
+
   return { ok: true, latestExportId, publicExportId, publicAccess };
 }
 

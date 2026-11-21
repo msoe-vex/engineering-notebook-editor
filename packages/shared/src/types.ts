@@ -358,7 +358,27 @@ export type CompileExport = {
   createdAt: string;
   createdBy?: string;
   byteSize: number;
+  /** Optional user-facing name (e.g. "Submit v3"). */
   label?: string;
+};
+
+/**
+ * Explicit public PDF share link. URL: `/o/:orgSlug/n/:key`.
+ * Independent of notebook id; points at one compile export version.
+ */
+export type NotebookShareLink = {
+  id: string;
+  /** Unguessable token in the public URL (UUID). */
+  key: string;
+  /** User-facing name (e.g. "Judges", "Draft"). */
+  name: string;
+  /** Compile export id this link serves. */
+  exportId: string;
+  createdAt: string;
+  createdBy?: string;
+  updatedAt?: string;
+  /** Set when revoked; omitted/null while active. */
+  revokedAt?: string | null;
 };
 
 export type AssetMetadata = {

@@ -122,6 +122,14 @@ export function compileExportsCollection(orgId: string, notebookId: string): str
   return `organizations/${orgId}/notebooks/${notebookId}/compileExports`;
 }
 
+export function notebookShareLinkPath(orgId: string, notebookId: string, linkId: string): string {
+  return `organizations/${orgId}/notebooks/${notebookId}/shareLinks/${linkId}`;
+}
+
+export function notebookShareLinksCollection(orgId: string, notebookId: string): string {
+  return `organizations/${orgId}/notebooks/${notebookId}/shareLinks`;
+}
+
 /** Single-flight lock per (type, resourceKey) under a notebook. */
 export function jobLockPath(
   orgId: string,

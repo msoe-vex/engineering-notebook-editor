@@ -28,6 +28,8 @@ export declare function jobPath(orgId: string, notebookId: string, jobId: string
 export declare function jobsCollection(orgId: string, notebookId: string): string;
 export declare function compileExportPath(orgId: string, notebookId: string, exportId: string): string;
 export declare function compileExportsCollection(orgId: string, notebookId: string): string;
+export declare function notebookShareLinkPath(orgId: string, notebookId: string, linkId: string): string;
+export declare function notebookShareLinksCollection(orgId: string, notebookId: string): string;
 /** Single-flight lock per (type, resourceKey) under a notebook. */
 export declare function jobLockPath(orgId: string, notebookId: string, type: string, resourceKey: string): string;
 export declare function invitePath(inviteId: string): string;
