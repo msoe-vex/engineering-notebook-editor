@@ -4,11 +4,13 @@ import {
   assetsCollection,
   entriesCollection,
   gcsKeys,
+  memberPath,
   notebookMembersCollection,
   notebookPath,
   orgAssetPath,
   type EntryMetadataV5,
   type NotebookSummaryV5,
+  type OrgMember,
 } from "@engineering-notebook/shared";
 import { getMetadataStore } from "../db/metadataStore.js";
 import { completeJob, failJob, updateJobProgress } from "../jobs/jobStore.js";
@@ -126,18 +128,64 @@ export async function registerInternalCompileRoutes(
       };
     }
 
-    const memberRows = await store().query(notebookMembersCollection(orgId, notebookId));
-    const members = memberRows.map((row) => {
-      const { id, ...data } = row as {
+    const uids = notebook.contributorUids || [];
+    let members: Array<{
+      id: string;
+      name?: string;
+      role?: string;
+      order?: number;
+      imageAssetId?: string;
+    }>;
+    if (uids.length) {
+      members = (
+        await Promise.all(
+          uids.map(async (uid, order) => {
+            const omSnap = await store().get(memberPath(orgId, uid));
+            if (!omSnap) return null;
+            const { id: _id, ...rest } = omSnap;
+            const om = rest as OrgMember;
+            if (om.imageAssetId) neededAssets.add(om.imageAssetId);
+            return {
+              id: uid,
+              name: om.displayName || om.email || "Member",
+              role: om.title || "Member",
+              order,
+              imageAssetId: om.imageAssetId,
+            };
+          })
+        )
+      ).filter(Boolean) as Array<{
         id: string;
         name?: string;
         role?: string;
         order?: number;
         imageAssetId?: string;
-      };
-      if (data.imageAssetId) neededAssets.add(data.imageAssetId);
-      return { id, ...data };
-    });
+      }>;
+    } else {
+      // Legacy notebook members collection (pre–contributorUids).
+      const memberRows = await store().query(notebookMembersCollection(orgId, notebookId));
+      members = memberRows
+        .map((row) => {
+          const { id, ...data } = row as {
+            id: string;
+            name?: string;
+            role?: string;
+            order?: number;
+            imageAssetId?: string;
+            deletedAt?: string | null;
+          };
+          if (data.deletedAt) return null;
+          if (data.imageAssetId) neededAssets.add(data.imageAssetId);
+          return { id, ...data };
+        })
+        .filter(Boolean) as Array<{
+        id: string;
+        name?: string;
+        role?: string;
+        order?: number;
+        imageAssetId?: string;
+      }>;
+    }
 
     try {
       const assetRows = await store().query(assetsCollection(orgId, notebookId));

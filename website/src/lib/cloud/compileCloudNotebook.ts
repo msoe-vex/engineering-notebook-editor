@@ -174,10 +174,21 @@ export async function compileCloudNotebook(opts: {
   const pathByAssetId = new Map<string, string>();
   for (const assetId of neededAssets) {
     try {
-      const { url, asset } = await cloudApi.getAssetUrl(orgId, notebookId, assetId);
+      // Contributor photos live on org assets; entry images on notebook assets.
+      let url: string;
+      let contentType: string | undefined;
+      try {
+        const notebookAsset = await cloudApi.getAssetUrl(orgId, notebookId, assetId);
+        url = notebookAsset.url;
+        contentType = notebookAsset.asset.contentType;
+      } catch {
+        const orgAsset = await cloudApi.getOrgAssetUrl(orgId, assetId);
+        url = orgAsset.url;
+        contentType = orgAsset.asset.contentType;
+      }
       const res = await fetch(url);
       if (!res.ok) continue;
-      const ct = asset.contentType || res.headers.get("content-type");
+      const ct = contentType || res.headers.get("content-type");
       const vfsPath = cloudAssetVfsPath(assetId, ct);
       const bytes = new Uint8Array(await res.arrayBuffer());
       files.push({ path: vfsPath, content: bytes });
