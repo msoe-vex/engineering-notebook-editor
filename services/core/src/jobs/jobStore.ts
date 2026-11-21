@@ -5,7 +5,6 @@ import {
   type NotebookJob,
   type NotebookJobStatus,
 } from "@engineering-notebook/shared";
-import { getFirestore } from "../db/firestore.js";
 import { getMetadataStore } from "../db/metadataStore.js";
 import { publishNotebookEvent } from "../realtime/notebookEvents.js";
 
@@ -68,22 +67,20 @@ export async function createJob(input: {
     orgId: input.orgId,
     notebookId: input.notebookId,
   };
-  // Atomic job + lock still uses Firestore batch (MetadataStore has no multi-doc txn yet).
-  const db = getFirestore();
-  const jobRef = db.doc(jobPath(input.orgId, input.notebookId, input.jobId));
-  const lockRef = db.doc(
-    jobLockPath(input.orgId, input.notebookId, input.type, input.resourceKey)
-  );
-  const batch = db.batch();
-  batch.set(jobRef, job);
-  batch.set(lockRef, {
-    jobId: input.jobId,
-    type: input.type,
-    resourceKey: input.resourceKey,
-    status: "queued",
-    updatedAt: ts,
-  });
-  await batch.commit();
+  await getMetadataStore().batch([
+    { op: "set", path: jobPath(input.orgId, input.notebookId, input.jobId), data: job as unknown as Record<string, unknown> },
+    {
+      op: "set",
+      path: jobLockPath(input.orgId, input.notebookId, input.type, input.resourceKey),
+      data: {
+        jobId: input.jobId,
+        type: input.type,
+        resourceKey: input.resourceKey,
+        status: "queued",
+        updatedAt: ts,
+      },
+    },
+  ]);
 
   publishNotebookEvent(input.orgId, input.notebookId, {
     type: "job.progress",
@@ -289,11 +286,9 @@ export async function listRecentJobs(
   notebookId: string,
   limit = 20
 ): Promise<NotebookJob[]> {
-  // Ordered query remains on Firestore until MetadataStore gains query support.
-  const snap = await getFirestore()
-    .collection(jobsCollection(orgId, notebookId))
-    .orderBy("createdAt", "desc")
-    .limit(limit)
-    .get();
-  return snap.docs.map((d) => d.data() as NotebookJob);
+  const rows = await getMetadataStore().query(jobsCollection(orgId, notebookId), {
+    orderBy: { field: "createdAt", direction: "desc" },
+    limit,
+  });
+  return rows as unknown as NotebookJob[];
 }

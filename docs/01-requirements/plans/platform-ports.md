@@ -1,6 +1,6 @@
 # Plan: Platform ports (metadata, storage, identity, notifications)
 
-**Status:** planned  
+**Status:** Epics A–D shipped (stretch GenAi / second-cloud adapters deferred)  
 **Created:** 2026-11-17  
 **Audience:** engineering + product  
 **Related:** [ADR-009](../../02-architecture/decisions/ADR-009-platform-ports.md), [FR-auth](../features/FR-auth.md), [FR-notifications](../features/FR-notifications.md), [backlog](../backlog.md), [roadmap](../../00-product/roadmap.md)
@@ -32,12 +32,12 @@ When an item ships, update the linked FR/ADR and check it off here.
 
 | Port | Status today | Target |
 | --- | --- | --- |
-| `AuthPort` / **IdentityPort** | Thin `verifySession` only (`services/core/src/auth/`) | Verify + claims enrichment; Collab uses same path (or Core-only ACL) |
-| `StoragePort` | GCS + memory | Keep; document key layout; no SDK leakage outside adapter |
-| `JobDispatchPort` | HTTP | Unchanged here — see [ADR-008](../../02-architecture/decisions/ADR-008-job-dispatch-evolution.md) |
-| **MetadataStore** (new) | Missing — Firestore everywhere | Documents/collections/batches via store API; Firestore = first adapter |
-| **NotificationPort** (new) | Missing | `sendEmail` (and later templates/channels); Resend/SES/SMTP adapters |
-| **GenAiCompletePort** (stretch) | Vertex hardcoded | Optional follow-on; not blocking auth/email |
+| `AuthPort` / **IdentityPort** | Session verify + Collab authorize via Core | ✅ shipped for current product |
+| `StoragePort` | GCS + memory | ✅ Key layout documented; SDK confined to GCS adapter |
+| `JobDispatchPort` | Pub/Sub | Unchanged here — see [ADR-008](../../02-architecture/decisions/ADR-008-job-dispatch-evolution.md) |
+| **MetadataStore** | Firestore adapter; Core business routes | ✅ Epic A done (transactions still TBD) |
+| **NotificationPort** | console / Resend / none | ✅ Epic D core path; optional job-ready email open |
+| **GenAiCompletePort** (stretch) | Vertex hardcoded | Optional follow-on |
 
 Website: no direct Firestore/GCS; may keep a **client Identity adapter** (Firebase JS today) that only handles sign-in UI and token acquisition.
 
@@ -47,23 +47,25 @@ Website: no direct Firestore/GCS; may keep a **client Identity adapter** (Fireba
 
 **P0 for portability**
 
-- [x] Define `MetadataStore` (`get`/`set`/`update`/`delete`; query/batch/transaction still TBD) with document IDs matching logical paths in [`packages/shared` paths](../../../packages/shared/src/paths.ts)
+- [x] Define `MetadataStore` (`get`/`set`/`update`/`delete`/`query`/`batch`; transaction still TBD) with document IDs matching logical paths in [`packages/shared` paths](../../../packages/shared/src/paths.ts)
 - [x] Firestore adapter implements the port (`services/core/src/db/metadataStore.ts`)
-- [x] Migrate routes incrementally — `users`, `rbac`, `jobStore` get/update (create batch + list query still Firestore)
-- [ ] Continue: `orgs` helpers, rubrics/judgments metadata; confine remaining `getFirestore()` to adapter + batch/query helpers
+- [x] Migrate routes — `users`, `rbac`, `jobStore`, `orgs`, `judge` (rubrics/judgments), `public`, `admin`, `internalCompile`, collab yjs/flush
+- [x] Confine remaining `getFirestore()` to the Firestore adapter (`metadataStore.ts` + `firestore.ts` init)
 - [x] Collab membership reads go through Core internal ACL (`POST /internal/collab/authorize`)
 
-**Done when:** Core business routes import `MetadataStore`, not `firebase-admin/firestore` types.
+**Done when:** Core business routes import `MetadataStore`, not `firebase-admin/firestore` types. ✅
 
 ## Epic B — StoragePort hardening
 
-**P1**
+**P1** — **done (2026-11)** (docs + audit; no second-cloud adapter)
 
-- [ ] Confirm all blob IO (assets, TipTap, Yjs, exports) goes through `StoragePort`
-- [ ] Document object-key contract in [schema](../../03-reference/schema.md) / async-jobs as adapter-agnostic
-- [ ] Workers receive bytes via Core internal APIs only (already the direction)
+- [x] Confirm all blob IO (assets, TipTap, Yjs, exports) goes through `StoragePort`
+  - Core product routes use injected `StoragePort` only; `@google-cloud/storage` stays in `services/core/src/storage/gcsStorage.ts`
+  - Collab / compile / judge use Core internal APIs (no storage SDK)
+- [x] Document object-key contract in [schema](../../03-reference/schema.md) / [async-jobs](../../02-architecture/async-jobs.md) as adapter-agnostic (`gcsKeys` in `packages/shared`)
+- [x] Workers receive bytes via Core internal APIs only — see async-jobs “Blob IO”; exception: ops BusyTeX upload script
 
-**Done when:** swapping in an S3 adapter would not require route rewrites—only factory wiring + env.
+**Done when:** swapping in an S3 adapter would not require route rewrites—only factory wiring + env. ✅ (field names like `gcsPath` remain historical strings; rename optional later)
 
 ## Epic C — Identity (password reset, verification, multi-email / social)
 
@@ -97,11 +99,9 @@ See [FR-auth](../features/FR-auth.md).
 
 ## Suggested delivery order
 
-1. ~~Epic C product + Epic D + Epic A hot paths~~ **done (2026-11)**  
-2. **Next:** Epic A remainder (orgs/rubrics/judgments + query/batch)  
-3. **Epic B:** storage review / docs  
-4. Stretch: `GenAiCompletePort`; second-cloud adapters only when a real migration is scheduled  
-5. Product UX plans in parallel: [cloud-ux-hardening](./cloud-ux-hardening.md), [mobile-responsive](./mobile-responsive.md), [explorer-search](./explorer-search-context-menus.md)
+1. ~~Epic C product + Epic D + Epic A + Epic B~~ **done (2026-11)**  
+2. Stretch: `GenAiCompletePort`; second-cloud adapters only when a real migration is scheduled  
+3. UX plans largely shipped: [cloud-ux-hardening](./cloud-ux-hardening.md), [mobile-responsive](./mobile-responsive.md), [explorer-search](./explorer-search-context-menus.md)
 
 ---
 

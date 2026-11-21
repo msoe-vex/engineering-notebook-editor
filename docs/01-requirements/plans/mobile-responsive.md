@@ -1,6 +1,6 @@
 # Plan: Mobile-responsive shell
 
-**Status:** active  
+**Status:** mostly done (manual smoke + soft-keyboard device check remain)  
 **Created:** 2026-10-17  
 **Audience:** engineering + product  
 **Related:** [backlog](../backlog.md), [NFR-responsive](../quality/NFR-responsive.md), [NFR-accessibility](../quality/NFR-accessibility.md), [cloud-ux-hardening](./cloud-ux-hardening.md) (Epic G chrome), FR-explorer / FR-entries-collab / FR-schedule / FR-compile / FR-notebooks / FR-orgs / FR-account / FR-help
@@ -142,7 +142,7 @@ Top-right chrome was dense; section tabs were folded into AppChrome. On narrow s
 - [x] &lt; `md`: explorer is an **overlay drawer** (or full-screen list), not a persistent split pane.
 - [x] Opening an entry closes the drawer; explicit control to reopen (list icon in entry chrome or bottom-tab “Entries” focusing list).
 - [x] Preserve collapsed preference for tablet/desktop `Panel` layout.
-- [ ] Touch-friendly row height; context menus position within viewport.
+- [x] Touch-friendly row height; context menus position within viewport.
 
 ### Acceptance
 
@@ -164,7 +164,7 @@ Entry header (title + date/phase/authors) + format toolbar + body; split LaTeX; 
 - [x] Format toolbar: horizontal scroll with sticky top; larger tap targets on narrow viewports.
 - [x] Confirm body `overflow-y-auto` chain still works with bottom tab bar inset.
 - [x] Entry header meta toggles via chevron only (no auto-collapse on scroll).
-- [ ] Soft keyboard: avoid focused inputs jumping under chrome (visual viewport / `scrollIntoView` smoke).
+- [~] Soft keyboard: cheap `scroll-margin` under `pointer: coarse` + ContextMenu `visualViewport` clamp shipped; **manual smoke** on real iOS/Android chrome still required.
 
 ### Acceptance
 
@@ -205,7 +205,7 @@ List pages and account shell may assume wide cards / side nav.
 - [x] Org people / teams / invites: stacked layouts via existing page shells.
 - [x] AccountShell: side nav becomes horizontal tabs on phone; tighter padding.
 - [x] Help: existing drawer + scroll panes; About remains full-page scroll.
-- [ ] Admin: readable tables or card list; no requirement for complex admin workflows on phone beyond “view + basic actions.”
+- [x] Admin: readable card list on phone with ≥44px tap targets; desktop keeps compact rows.
 
 ### Acceptance
 
@@ -218,14 +218,14 @@ List pages and account shell may assume wide cards / side nav.
 ### Work
 
 - [x] `env(safe-area-inset-*)` on notebook bottom tabs.
-- [ ] Prefer `pointer: coarse` tweaks where hover-only UI exists.
+- [x] Prefer `pointer: coarse` tweaks where hover-only UI exists (explorer row menus/dates, folder quick actions, org chevrons, phase remove).
 - [x] Focus order with bottom tabs + drawer; `aria-current` on section tabs.
-- [ ] Cross-check [NFR-accessibility](../quality/NFR-accessibility.md) gaps that mobile surfaces.
+- [x] Cross-check [NFR-accessibility](../quality/NFR-accessibility.md) gaps that mobile surfaces (documented remaining gaps).
 
 ### Acceptance
 
 - [x] Notched-device smoke (simulator): tabs and CTAs clear the home indicator.
-- [ ] Keyboard still usable when bottom tabs present.
+- [ ] Keyboard still usable when bottom tabs present *(manual smoke)*.
 
 ---
 

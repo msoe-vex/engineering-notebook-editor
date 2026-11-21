@@ -1,6 +1,5 @@
 import type { FastifyInstance } from "fastify";
 import { userPath, type UserGrants, type UserProfile } from "@engineering-notebook/shared";
-import { getFirestore } from "../db/firestore.js";
 import { getMetadataStore } from "../db/metadataStore.js";
 import { omitUndefined } from "../db/sanitize.js";
 import { requireServiceAdmin } from "../rbac.js";
@@ -21,8 +20,11 @@ export async function registerAdminRoutes(app: FastifyInstance) {
 
   app.get("/api/admin/users", async (request) => {
     requireServiceAdmin(getUser(request));
-    const snap = await getFirestore().collection("users").limit(200).get();
-    return snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
+    const rows = await getMetadataStore().query("users", { limit: 200 });
+    return rows.map((d) => {
+      const { id, ...rest } = d;
+      return { uid: id, ...rest };
+    });
   });
 
   app.get("/api/admin/users/:uid", async (request, reply) => {
@@ -62,7 +64,6 @@ export async function registerAdminRoutes(app: FastifyInstance) {
 
   app.get("/api/admin/orgs", async (request) => {
     requireServiceAdmin(getUser(request));
-    const snap = await getFirestore().collection("organizations").get();
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    return getMetadataStore().query("organizations");
   });
 }

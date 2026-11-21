@@ -77,9 +77,11 @@ export type InviteSummary = {
   orgId: string;
   email?: string;
   role: string;
+  status?: "pending" | "accepted" | "revoked";
   createdAt?: string;
   acceptedAt?: string;
   expiresAt?: string;
+  revokedAt?: string;
   acceptPath?: string;
 };
 export type AssetSummary = {
@@ -415,6 +417,31 @@ export const cloudApi = {
         }
       >;
     }>(`/orgs/${orgId}/notebooks/${notebookId}/entries`),
+
+  /** Server search: metadata always; set includeBody to scan TipTap text (capped). */
+  searchEntries: (
+    orgId: string,
+    notebookId: string,
+    q: string,
+    opts?: { includeBody?: boolean }
+  ) => {
+    const params = new URLSearchParams({ q });
+    if (opts?.includeBody) params.set("includeBody", "1");
+    return coreFetch<{
+      q: string;
+      includeBody: boolean;
+      hits: Array<{
+        id: string;
+        title?: string;
+        authors?: string[];
+        phase?: string;
+        date?: string;
+        match: "meta" | "body" | "both";
+        excerpt?: string;
+      }>;
+    }>(`/orgs/${orgId}/notebooks/${notebookId}/entries/search?${params.toString()}`);
+  },
+
   /** Sibling reindex: explorer → explorerOrder; day → order (same-date tiebreaker). */
   reorderEntries: (
     orgId: string,

@@ -39,13 +39,23 @@ export function ContextMenu({
     const el = menuRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
+    // Prefer visualViewport so menus stay on-screen under mobile chrome / keyboard.
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    const viewTop = vv?.offsetTop ?? 0;
+    const viewLeft = vv?.offsetLeft ?? 0;
+    const viewBottom = viewTop + (vv?.height ?? window.innerHeight);
+    const viewRight = viewLeft + (vv?.width ?? window.innerWidth);
     let top = y;
     let left = x;
-    if (top + rect.height > window.innerHeight - MENU_PAD) {
-      top = Math.max(MENU_PAD, window.innerHeight - rect.height - MENU_PAD);
+    if (top + rect.height > viewBottom - MENU_PAD) {
+      top = Math.max(viewTop + MENU_PAD, viewBottom - rect.height - MENU_PAD);
+    } else {
+      top = Math.max(viewTop + MENU_PAD, top);
     }
-    if (left + rect.width > window.innerWidth - MENU_PAD) {
-      left = Math.max(MENU_PAD, window.innerWidth - rect.width - MENU_PAD);
+    if (left + rect.width > viewRight - MENU_PAD) {
+      left = Math.max(viewLeft + MENU_PAD, viewRight - rect.width - MENU_PAD);
+    } else {
+      left = Math.max(viewLeft + MENU_PAD, left);
     }
     setPos({ top, left });
   }, [open, x, y, items]);

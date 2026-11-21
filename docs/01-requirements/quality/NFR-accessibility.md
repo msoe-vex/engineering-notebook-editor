@@ -20,3 +20,6 @@ Shared `IconButton` / dialogs; AppChrome nav labels; not fully audited.
 ## Gaps
 
 - Formal a11y audit and automated axe CI not yet required
+- Mobile soft-keyboard vs bottom notebook tabs: cheap `scroll-margin` under `pointer: coarse` shipped; confirm on real iOS Safari / Chrome Android that focused title/body stay visible
+- Keyboard-only use of notebook bottom tabs + explorer drawer: tab order exists (`aria-current` on sections); full screen-reader path not audited
+- Some decorative hover cues (e.g. contributor photo overlay) remain hover-first; primary actions use always-visible overflow / context menus

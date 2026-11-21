@@ -121,7 +121,9 @@ function entryMatchesFilters(
   e: EntryMeta,
   q: string,
   filters: EntryFilters,
-  phaseNames: Record<string, string>
+  phaseNames: Record<string, string>,
+  bodyHitIds?: Set<string> | null,
+  entryId?: string
 ): boolean {
   if (filters.kind === "entries" && e.isTemplate) return false;
   if (filters.kind === "templates" && !e.isTemplate) return false;
@@ -138,6 +140,7 @@ function entryMatchesFilters(
     if (filters.dateTo && d > filters.dateTo) return false;
   }
   if (!q) return true;
+  if (entryId && bodyHitIds?.has(entryId)) return true;
   const haystacks = [
     e.title || "",
     (e.authors || []).join(" "),
@@ -302,7 +305,7 @@ function EntryRowShell({
         ...rowStyle,
         paddingLeft: `${Math.max(6, indent * 18 + 8)}px`,
       }}
-      className={`group relative flex h-[26px] items-center gap-1.5 rounded pr-1.5 text-nb-label transition-colors select-none outline-none focus:outline-none ${
+      className={`group relative flex h-[26px] items-center gap-1.5 rounded pr-1.5 text-nb-label transition-colors select-none outline-none focus:outline-none pointer-coarse:h-11 ${
         renaming ? "cursor-default" : "cursor-pointer"
       } ${
         isOver
@@ -427,7 +430,7 @@ function EntryRowShell({
         {!renaming && (
           <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-1">
             {entry.date && !entry.isTemplate && (
-              <span className="hidden text-[10px] tabular-nums text-nb-on-surface-variant/60 group-hover:inline-block">
+              <span className="hidden text-[10px] tabular-nums text-nb-on-surface-variant/60 group-hover:inline-block pointer-coarse:inline-block">
                 {formatEntryListDate(entry.date)}
               </span>
             )}
@@ -437,7 +440,7 @@ function EntryRowShell({
 
       {!renaming && (
         <div
-          className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+          className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100"
           onClick={(e) => e.stopPropagation()}
         >
           {menu}
@@ -573,7 +576,7 @@ function FolderRowShell({
         ...rowStyle,
         paddingLeft: `${Math.max(6, depth * 18 + 6)}px`,
       }}
-      className={`group relative flex h-[26px] items-center gap-1 rounded pr-1 text-nb-label text-nb-on-surface hover:bg-nb-surface/80 select-none transition-colors ${
+      className={`group relative flex h-[26px] items-center gap-1 rounded pr-1 text-nb-label text-nb-on-surface hover:bg-nb-surface/80 select-none transition-colors pointer-coarse:h-11 ${
         renaming ? "cursor-default" : "cursor-pointer"
       } ${isOver ? "bg-nb-primary/20 ring-1 ring-nb-primary/60 font-medium" : ""}`}
       onClick={
@@ -630,13 +633,13 @@ function FolderRowShell({
 
       {!renaming && (
         <div
-          className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+          className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100"
           onClick={(e) => e.stopPropagation()}
         >
           {onNewEntry && (
             <button
               type="button"
-              className="rounded p-0.5 text-nb-on-surface-variant hover:bg-nb-surface hover:text-nb-on-surface"
+              className="rounded p-0.5 text-nb-on-surface-variant hover:bg-nb-surface hover:text-nb-on-surface pointer-coarse:min-h-9 pointer-coarse:min-w-9 pointer-coarse:p-2"
               title="New entry in folder"
               aria-label="New entry in folder"
               onClick={onNewEntry}
@@ -647,7 +650,7 @@ function FolderRowShell({
           {onNewSubfolder && (
             <button
               type="button"
-              className="rounded p-0.5 text-nb-on-surface-variant hover:bg-nb-surface hover:text-nb-on-surface"
+              className="rounded p-0.5 text-nb-on-surface-variant hover:bg-nb-surface hover:text-nb-on-surface pointer-coarse:min-h-9 pointer-coarse:min-w-9 pointer-coarse:p-2"
               title="New subfolder"
               aria-label="New subfolder"
               onClick={onNewSubfolder}
@@ -930,6 +933,8 @@ export function NotebookEntryList({
   const router = useRouter();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
+  /** Entry ids that matched TipTap body via Core search (merged into local filter). */
+  const [bodyHitIds, setBodyHitIds] = useState<Set<string>>(() => new Set());
   const [filtersOpen, setFiltersOpen] = useState(
     () => loadExplorerFilters(notebookId).filtersOpen
   );
@@ -993,6 +998,35 @@ export function NotebookEntryList({
   );
   const filtering = Boolean(q) || filtersActive;
 
+  useEffect(() => {
+    const raw = query.trim();
+    if (raw.length < 2) {
+      setBodyHitIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    const handle = window.setTimeout(() => {
+      void cloudApi
+        .searchEntries(orgId, notebookId, raw, { includeBody: true })
+        .then((res) => {
+          if (cancelled) return;
+          const ids = new Set(
+            res.hits
+              .filter((h) => h.match === "body" || h.match === "both")
+              .map((h) => h.id)
+          );
+          setBodyHitIds(ids);
+        })
+        .catch(() => {
+          if (!cancelled) setBodyHitIds(new Set());
+        });
+    }, 350);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [query, orgId, notebookId]);
+
   const phaseList = useMemo(() => {
     const raw = (notebookSummary?.phases || {}) as Record<
       string,
@@ -1042,7 +1076,7 @@ export function NotebookEntryList({
       for (const [id, e] of Object.entries(entries)) {
         if (isEntryTrashed(e)) continue;
         if (e.isTemplate) templates.push([id, e]);
-        if (!entryMatchesFilters(e, q, filters, phaseNames)) continue;
+        if (!entryMatchesFilters(e, q, filters, phaseNames, bodyHitIds, id)) continue;
         flatMatches.push([id, e]);
         const fid = e.folderId;
         if (fid && folders[fid]) {
@@ -1057,7 +1091,7 @@ export function NotebookEntryList({
       sortEntries(templates, mode, phaseNames);
       sortEntries(flatMatches, mode, phaseNames);
       return { folderList, byFolder, childrenByParent, unfiled, templates, flatMatches };
-    }, [entries, folders, q, filters, phaseNames, sortMode]);
+    }, [entries, folders, q, filters, phaseNames, sortMode, bodyHitIds]);
 
   const entryCount = Object.values(entries).filter((e) => !isEntryTrashed(e)).length;
   const trashCount = Object.values(entries).filter((e) => isEntryTrashed(e)).length;

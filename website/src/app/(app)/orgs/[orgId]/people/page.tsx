@@ -37,7 +37,9 @@ export default function OrgPeoplePage() {
   const currentUid = getFirebaseAuth().currentUser?.uid || getDevToken()?.split("|")[0];
   const isOwner = org?.role === "owner";
   const ownerCount = members.filter((m) => m.role === "owner").length;
-  const pending = invites.filter((i) => !i.acceptedAt);
+  const pending = invites.filter(
+    (i) => (i.status ?? (i.acceptedAt ? "accepted" : "pending")) === "pending"
+  );
   const activeMembers = members.filter((m) => m.status !== "alumni");
   const alumniMembers = members.filter((m) => m.status === "alumni");
 

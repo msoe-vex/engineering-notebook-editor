@@ -1,6 +1,6 @@
 # Plan: Cloud UX hardening & legacy parity
 
-**Status:** active  
+**Status:** mostly done (manual smoke leftovers; optional later items remain)  
 **Created:** 2026-10-17  
 **Audience:** engineering + product  
 **Related:** [backlog](../backlog.md), [FR index](../README.md), legacy archive [`website/archive/legacy/`](../../../website/archive/legacy/)
@@ -119,7 +119,7 @@ Calendar already shows phase color + icon. Explorer uses a **color dot** + gener
 - [x] Explorer rows: use phase icon + color as the entry glyph when a phase is set; keep a distinct glyph for templates (Epic H) and unphased entries.
 - [x] Entry header phase control: icon+color in closed state and in options (`PhasePicker`).
 - [x] Filters / chips: phase filter still uses `PhaseChip`.
-- [ ] Audit other surfaces (compile list, search results if any) for the same helper (`getPhaseConfig`).
+- [x] Audit other surfaces (compile list, search results if any) for the same helper (`getPhaseConfig`). Compile has no entry list; explorer search/filter rows + notebook overview already use phase icons.
 
 ### Acceptance
 
@@ -139,8 +139,8 @@ Cloud entry page toggles Edit **or** LaTeX full-bleed. LaTeX is generated on dem
 - [x] Reuse `ViewToggle` on the entry page: editor / split / latex.
 - [x] Split: resizable panels (`PanelGroup`); collapse/expand by mode.
 - [x] Live LaTeX source in split/latex modes from current metadata + editor JSON via `onDocChange` (collab editor stays mounted in latex-only so WS + `docJson` keep updating).
-- [ ] Debounce heavy work if needed; do not block typing.
-- [ ] Amend [FR-compile](../features/FR-compile.md) acceptance: split + live source preview on entry page.
+- [x] Debounce heavy work if needed; do not block typing *(live preview via `onDocChange`; no typing block observed)*.
+- [x] Amend [FR-compile](../features/FR-compile.md) acceptance: split + live source preview on entry page.
 
 ### Acceptance
 
@@ -363,3 +363,5 @@ Backend already supports org-open vs restricted + `access.userIds` / `access.tea
 ## Tracking
 
 Work this list top-down. Prefer small PRs per epic (A alone is fine as a hotfix). Check boxes in this file as epics land; then fold lasting acceptance criteria into the FR docs and leave this plan as historical or mark **Status: done**.
+
+**Closeout note (2026-11):** Epics A–L product work is in tree. Remaining open boxes are optional-later or **manual smoke** (Core 413 after restart, restricted share ACL, explorer DnD vs calendar order, selected resource toolbar). Next engineering focus is MetadataStore depth ([platform-ports](./platform-ports.md)), not more UX chrome.

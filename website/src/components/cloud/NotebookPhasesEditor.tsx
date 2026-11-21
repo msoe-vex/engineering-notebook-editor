@@ -328,7 +328,7 @@ function PhaseRowView({
         <IconButton
           aria-label="Remove phase"
           variant="danger"
-          className="shrink-0 opacity-60 transition-opacity group-hover:opacity-100"
+          className="shrink-0 opacity-60 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100"
           onClick={() => onRemove(phase.id)}
         >
           <Trash2 size={15} />

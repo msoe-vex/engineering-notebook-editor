@@ -27,4 +27,6 @@ Related: [plan: mobile-responsive](../plans/mobile-responsive.md), [NFR-accessib
 
 ## Gaps
 
-Soft-keyboard chrome, admin table density, coarse-pointer DnD polish — see [plans/mobile-responsive.md](../plans/mobile-responsive.md) M3/M5/M6 leftovers. Backlog: [backlog.md](../backlog.md).
+- Soft-keyboard vs bottom tabs: `scroll-margin` + ContextMenu `visualViewport` clamp shipped; **manual device smoke** still required
+- Coarse-pointer DnD feel (drag handles / long-press) not specially tuned
+- See [plans/mobile-responsive.md](../plans/mobile-responsive.md) for remaining smoke checkboxes. Backlog: [backlog.md](../backlog.md).

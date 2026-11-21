@@ -66,8 +66,8 @@ Auth: `Authorization: Bearer <Firebase ID token | local uid>`
 - `GET/PATCH/DELETE /orgs/:orgId` — PATCH may include `name`, `slug` (unique), `publicPage` (`visibility`, mission, announcement, cta)
 - `GET/POST /orgs/:orgId/members`, `PATCH/DELETE /orgs/:orgId/members/:uid` — PATCH `{ role?, status?: active|alumni, imageAssetId?, displayName? }`; alumni cannot mutate (403)
 - `GET /orgs/:orgId/public` — admin CMS dump; `PUT/DELETE /orgs/:orgId/public/:section/:itemId` (`donors|projects|events|members|social`)
-- `GET/POST /orgs/:orgId/invites`, `DELETE /orgs/:orgId/invites/:inviteId` — create may send email via `NotificationPort`
-- `POST /invites/:inviteId/accept` — rejects expired invites; optional email match when both invite + user have email  
+- `GET/POST /orgs/:orgId/invites`, `DELETE /orgs/:orgId/invites/:inviteId` — create may send email via `NotificationPort`; `status`: `pending`\|`accepted`\|`revoked` (DELETE soft-revokes pending invites)
+- `POST /invites/:inviteId/accept` — rejects expired/revoked/accepted invites; optional email match when invite has an email  
   Create sets `expiresAt` (default 14 days, `INVITE_TTL_DAYS` / body `expiresInDays`)
 
 ### Public (no auth)
@@ -108,6 +108,7 @@ Auth: `Authorization: Bearer <Firebase ID token | local uid>`
 ### Entries
 
 - `GET/POST /orgs/:orgId/notebooks/:notebookId/entries`
+- `GET …/entries/search?q=` — metadata search (title/authors/phase/date); `includeBody=1` also scans TipTap text (capped)
 - `POST /orgs/:orgId/notebooks/:notebookId/entries/reorder`  
   `{ mode: "explorer" | "day", orderedIds[], folderId?, date? }`  
   - `explorer` → `explorerOrder` (file tree)  

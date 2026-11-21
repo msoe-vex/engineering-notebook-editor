@@ -13,7 +13,8 @@ Clients never talk to Firestore/metadata store directly (`infra/firestore.rules`
 | --- | --- |
 | `users/{uid}` | `email?`, `displayName?`, `platformRole?` (`service_admin`), `grants?` (`{ platformAi?: boolean }`), `preferences?` (non-secret: theme, authors, genai provider/models — never API keys), `createdAt`, `updatedAt` |
 | `organizations/{orgId}` | `name`, `createdBy`, `createdAt`, `updatedAt` |
-| `invites/{inviteId}` | `orgId`, `email`, `role`, `createdBy`, `createdAt`, `expiresAt`, `acceptedAt?` |
+| `invites/{inviteId}` | `orgId`, `email`, `role`, `status?` (`pending`\|`accepted`\|`revoked`), `createdBy`, `createdAt`, `expiresAt`, `acceptedAt?`, `revokedAt?` |
+| `system/metrics` | Platform request counters (persisted by Core) | `totalRequests`, `status2xx/4xx/5xx`, `totalLatencyMs`, `persistedAt` |
 
 ### Under `organizations/{orgId}`
 
@@ -72,14 +73,21 @@ Compile sort: `date` ascending → `order` ascending → `id`. Folder nesting ne
 
 Core: `POST …/entries/reorder` with `mode: "explorer" | "day"` reindexes only the listed siblings.
 
-Bodies are **never** in Firestore. GCS:
+Bodies are **never** in Firestore. Blobs live behind Core `StoragePort` (GCS adapter today).
 
-| Blob | Key pattern |
+### Object-key contract (adapter-agnostic)
+
+Keys are plain strings built by [`gcsKeys`](../../packages/shared/src/paths.ts) in `packages/shared` (historical name; not an SDK type). Metadata fields `tipTapGcsPath` / `yjsGcsPath` / `gcsPath` / `sourceGcsPath` store those same keys. Routes and workers must not import a vendor storage SDK — only `StoragePort` (or Core `/internal/storage/object` for workers).
+
+| Blob | Key pattern (`gcsKeys.*`) |
 | --- | --- |
 | TipTap JSON | `organizations/{orgId}/notebooks/{notebookId}/entries/{entryId}.json` |
 | Yjs binary | `…/yjs/{entryId}.ydoc` |
-| Asset bytes | `…/assets/{assetId}/compressed` (and optionally `original`) |
-| Export PDF | `…/exports/{exportId}.pdf` — **helper exists; no write path yet** |
+| Notebook asset | `…/assets/{assetId}/compressed` (and optionally `original`) |
+| Org asset | `organizations/{orgId}/assets/{assetId}/compressed` |
+| Export PDF | `…/exports/{exportId}.pdf` (compile worker writes `latest` via Core) |
+| Rubric source | `…/rubrics/{rubricId}/source{ext}` |
+| Static BusyTeX / LaTeX | `static/busytex/{appVersion}/…`, `static/latex-template/{appVersion}/…` |
 
 Collab room name: `org:{orgId}:notebook:{notebookId}:entry:{entryId}`.
 
@@ -110,13 +118,13 @@ See [backlog.md](../01-requirements/backlog.md).
 | Data | Where |
 | --- | --- |
 | BYOK / GenAI API keys | localStorage or ephemeral request body |
-| TipTap / Yjs / images / PDFs / BusyTeX WASM | GCS |
+| TipTap / Yjs / images / PDFs / BusyTeX WASM | Object store via `StoragePort` (GCS adapter) |
 | Service credentials | Secret Manager / env |
 | Full entry bodies inside judgments | Rationale + entry id cites only |
 
 ## Cascade deletes
 
-Notebook (and org) delete removes Firestore children (entries, assets, rubrics, judgments, jobs, roster) **and** related GCS objects (TipTap, Yjs, assets, exports, rubric sources).
+Notebook (and org) delete removes Firestore children (entries, assets, rubrics, judgments, jobs, roster) **and** related storage objects (TipTap, Yjs, assets, exports, rubric sources) via `StoragePort`.
 
 ---
 

@@ -22,8 +22,8 @@ Core already has thin ports for **auth verify** (`AuthPort`), **blobs** (`Storag
 
 - Plan: [platform-ports.md](../../01-requirements/plans/platform-ports.md)  
 - Requirements: [FR-auth](../../01-requirements/features/FR-auth.md), [FR-notifications](../../01-requirements/features/FR-notifications.md)  
-- **Shipped (2026-11):** MetadataStore on users/rbac/jobStore reads-updates; Collab `/internal/collab/authorize`; NotificationPort console + Resend; secondary emails. Remaining: org route migration, query/batch on MetadataStore, StoragePort audit.  
-- A future AWS/Mongo/Cognito (or similar) migration is an **adapter + ops** project, not a product rewrite — *after* MetadataStore covers remaining routes.  
+- **Shipped (2026-11):** MetadataStore `get/set/update/delete/query/batch` covering Core business routes (orgs, judge, public, admin, compile snapshot, collab flush); Collab `/internal/collab/authorize`; NotificationPort console + Resend; secondary emails; **StoragePort hardening** (product blob IO via port only; object-key contract in schema/async-jobs; workers via Core `/internal/storage/object`). Remaining stretch: optional GenAiCompletePort; second-cloud adapters only when a real migration is scheduled.  
+- A future AWS/Mongo/Cognito (or similar) migration is an **adapter + ops** project, not a product rewrite.  
 - Collab must not be a second source of truth for identity/membership (authorize via Core).
 
 ## Alternatives considered

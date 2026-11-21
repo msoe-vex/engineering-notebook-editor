@@ -88,7 +88,7 @@ function SortableMember({
           <UserRound size={18} />
         )}
         {!readOnly && (
-          <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-opacity hover:bg-black/35 hover:opacity-100">
+          <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-opacity hover:bg-black/35 hover:opacity-100 pointer-coarse:bg-black/35 pointer-coarse:opacity-100">
             <Camera size={14} className="text-white" />
           </span>
         )}

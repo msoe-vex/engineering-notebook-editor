@@ -126,7 +126,9 @@ export function OrgWorkspaceProvider({
       teams,
       members,
       invites,
-      pendingInviteCount: invites.filter((i) => !i.acceptedAt).length,
+      pendingInviteCount: invites.filter(
+        (i) => (i.status ?? (i.acceptedAt ? "accepted" : "pending")) === "pending"
+      ).length,
       error,
       busy,
       initialLoaded,

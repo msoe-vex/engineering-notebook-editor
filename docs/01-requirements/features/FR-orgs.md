@@ -34,7 +34,8 @@ Organizations are the tenancy root. Admins manage members, email invites (with e
 - [x] Create org makes creator owner member
 - [x] Multiple owners supported; last remaining owner cannot be removed or demoted
 - [x] Share codes work without email restriction, or with email restriction if specified
-- [x] Invite accept joins org; second accept fails; expired invite fails; existing higher roles are preserved
+- [x] Invite accept joins org; second accept fails; expired/revoked invite fails; existing higher roles are preserved
+- [x] Invite `status` (`pending` \| `accepted` \| `revoked`); revoke soft-sets `revoked` instead of hard-delete
 - [x] Team membership can grant notebook access in restricted mode
 - [x] Alumni are listed separately from active members in People UI
 - [x] Alumni cannot mutate notebooks or org ACL (exact read policy documented when shipped)

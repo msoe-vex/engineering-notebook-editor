@@ -150,7 +150,7 @@ export default function OrgNotebooksPage() {
               </div>
               <ArrowRight
                 size={16}
-                className="shrink-0 text-nb-on-surface-variant opacity-0 transition-opacity group-hover:opacity-100"
+                className="shrink-0 text-nb-on-surface-variant opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100"
               />
             </Link>
             <DropdownMenu items={notebookMenuItems(nb)} />

@@ -4,13 +4,15 @@ Forward-looking work. Requirements index: [README.md](./README.md). Parity epics
 
 ## Active plans
 
-**[Cloud UX hardening & legacy parity](./plans/cloud-ux-hardening.md)** — P0 image upload `bodyLimit`, toasts, phase icons, split/live LaTeX, metadata save + sync, validation revalidation, editor chrome, unified templates, calendar day height, skeletons, share dialog.
+**[Platform ports](./plans/platform-ports.md)** — Epics A–D shipped (incl. StoragePort hardening/docs); stretch GenAiCompletePort / second-cloud adapters deferred — [ADR-009](../02-architecture/decisions/ADR-009-platform-ports.md).
 
-**[Mobile-responsive shell](./plans/mobile-responsive.md)** — Phone/tablet layouts; notebook section nav; explorer drawer; [NFR-responsive](./quality/NFR-responsive.md).
+## UX plans (largely shipped)
 
-**[Explorer search & context menus](./plans/explorer-search-context-menus.md)** — Sidebar search/filter; shared `ContextMenu`.
+**[Cloud UX hardening & legacy parity](./plans/cloud-ux-hardening.md)** — Mostly done; manual smoke leftovers only.
 
-**[Platform ports](./plans/platform-ports.md)** — MetadataStore depth, identity, notifications — [ADR-009](../02-architecture/decisions/ADR-009-platform-ports.md).
+**[Mobile-responsive shell](./plans/mobile-responsive.md)** — Mostly done; phone/tablet shell + drawer + bottom tabs shipped; device smoke remains.
+
+**[Explorer search & context menus](./plans/explorer-search-context-menus.md)** — Done; Epic F server search stays deferred (see Product polish).
 
 ## Done (architecture hygiene)
 
@@ -28,11 +30,11 @@ Forward-looking work. Requirements index: [README.md](./README.md). Parity epics
 
 ## Product polish
 
-- [ ] **Server-side entry search**
-- [ ] **Invite `status`** — optional `pending | accepted | revoked`
+- [x] **Server-side entry search** — `GET …/entries/search?q=` (+ optional `includeBody=1`); explorer merges body hits
+- [x] **Invite `status`** — `pending | accepted | revoked` (revoke soft-deletes; accept sets accepted)
 - [ ] **`gcsPathOriginal`** — only if print-quality need appears
-- [ ] **Metrics persistence**
-- [ ] **Collab presence avatars**
+- [x] **Metrics persistence** — Core counters in MetadataStore `system/metrics` (periodic + signal flush)
+- [x] **Collab presence avatars** — Hocuspocus awareness initials (cloud UX)
 
 ## Public / people polish
 
@@ -51,8 +53,9 @@ Forward-looking work. Requirements index: [README.md](./README.md). Parity epics
 - [x] `AuthPort` + `StoragePort` + `JobDispatchPort` (pubsub) + `NotificationPort` (console / Resend)
 - [x] Password reset + social sign-in hooks
 - [x] **Multi-email** (verified secondaries) + Resend adapter
-- [x] **`MetadataStore`** migrate users/rbac (+ more)
+- [x] **`MetadataStore`** migrate Core business routes
 - [x] Collab shares Core identity / ACL (no divergent Admin Auth path)
+- [x] **StoragePort hardening** — product blobs via port; object-key contract; workers via Core internal APIs
 
 ## Non-goals
 

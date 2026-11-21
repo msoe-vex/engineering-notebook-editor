@@ -1,7 +1,7 @@
 # Architecture overview
 
 **Live storage (current adapters):** Firestore + GCS on GCP. **Realtime:** Hocuspocus/Yjs.  
-**Ports:** `AuthPort`, `StoragePort`, `JobDispatchPort` (Pub/Sub-only), `NotificationPort` (console/Resend), `MetadataStore` (users, rbac, job get/update; more routes still migrating) — [ADR-009](./decisions/ADR-009-platform-ports.md). Collab auth/ACL via Core `/internal/collab/authorize`.  
+**Ports:** `AuthPort`, `StoragePort` (GCS adapter; object keys via `gcsKeys`), `JobDispatchPort` (Pub/Sub-only), `NotificationPort` (console/Resend), `MetadataStore` (Core business routes) — [ADR-009](./decisions/ADR-009-platform-ports.md). Collab auth/ACL via Core `/internal/collab/authorize`; workers read/write blobs via Core `/internal/storage/object` (never the storage SDK).  
 
 **Async jobs:** Core durable jobs + `compile` / `judge` pull workers via Pub/Sub — [ADR-006](./decisions/ADR-006-compile-job.md), [ADR-008](./decisions/ADR-008-job-dispatch-evolution.md), [async-jobs.md](./async-jobs.md).  
 **Not used for sync:** GitHub, local FS as live backends (ZIP backup only; LWW — [ADR-001](./decisions/ADR-001-gcp-only-sync.md), [ADR-002](./decisions/ADR-002-zip-lww-backup.md)). One adapter set per deployment (no dual-write).

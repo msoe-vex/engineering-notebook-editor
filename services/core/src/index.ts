@@ -5,7 +5,11 @@ import { FirebaseAuthAdapter } from "./auth/firebaseAuthAdapter.js";
 import { initFirestore } from "./db/firestore.js";
 import { createStorage } from "./storage/gcsStorage.js";
 import { createAuthGuard } from "./http/authPlugin.js";
-import { observeRequest, setActiveCollaborationConnections } from "./metrics/store.js";
+import {
+  observeRequest,
+  setActiveCollaborationConnections,
+  startMetricsPersistence,
+} from "./metrics/store.js";
 import { registerOrgRoutes } from "./routes/orgs.js";
 import { registerAdminRoutes } from "./routes/admin.js";
 import { registerUserRoutes } from "./routes/users.js";
@@ -187,10 +191,10 @@ app.get("/internal/collab/yjs", async (request, reply) => {
     return reply.code(400).send({ error: "orgId, notebookId, entryId required" });
   }
   const { entryPath, gcsKeys } = await import("@engineering-notebook/shared");
-  const { getFirestore } = await import("./db/firestore.js");
-  const snap = await getFirestore().doc(entryPath(q.orgId, q.notebookId, q.entryId)).get();
-  if (!snap.exists) return reply.code(404).send({ error: "entry not found" });
-  const meta = snap.data() as { yjsGcsPath?: string };
+  const { getMetadataStore } = await import("./db/metadataStore.js");
+  const snap = await getMetadataStore().get(entryPath(q.orgId, q.notebookId, q.entryId));
+  if (!snap) return reply.code(404).send({ error: "entry not found" });
+  const meta = snap as { yjsGcsPath?: string };
   const key = meta.yjsGcsPath || gcsKeys.yjs(q.orgId, q.notebookId, q.entryId);
   const buf = await storage.getObject(key);
   if (!buf) return reply.code(404).send({ error: "yjs not found" });
@@ -210,11 +214,11 @@ app.post("/internal/collab/flush", async (request, reply) => {
     meta?: Record<string, unknown>;
   };
   const { entryPath, gcsKeys } = await import("@engineering-notebook/shared");
-  const { getFirestore } = await import("./db/firestore.js");
-  const ref = getFirestore().doc(entryPath(body.orgId, body.notebookId, body.entryId));
-  const snap = await ref.get();
-  if (!snap.exists) return reply.code(404).send({ error: "entry not found" });
-  const existing = snap.data() as { tipTapRev?: number; yjsRev?: number };
+  const { getMetadataStore } = await import("./db/metadataStore.js");
+  const entryDocPath = entryPath(body.orgId, body.notebookId, body.entryId);
+  const snap = await getMetadataStore().get(entryDocPath);
+  if (!snap) return reply.code(404).send({ error: "entry not found" });
+  const existing = snap as { tipTapRev?: number; yjsRev?: number };
   const tipTapKey = gcsKeys.tipTap(body.orgId, body.notebookId, body.entryId);
   const yjsKey = gcsKeys.yjs(body.orgId, body.notebookId, body.entryId);
   const tipTapRev = (existing.tipTapRev ?? 0) + 1;
@@ -244,9 +248,11 @@ app.post("/internal/collab/flush", async (request, reply) => {
     yjsRev,
     updatedAt: new Date().toISOString(),
   };
-  await ref.update(patch);
+  await getMetadataStore().update(entryDocPath, patch);
   return { ok: true, tipTapRev, yjsRev };
 });
+
+startMetricsPersistence();
 
 const port = Number(process.env.PORT || 8080);
 await app.listen({ port, host: "0.0.0.0" });

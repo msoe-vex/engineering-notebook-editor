@@ -133,6 +133,16 @@ button:disabled {
   cursor: default;
 }
 
+/* Soft keyboard / bottom tabs: keep focused fields clear of chrome on coarse pointers. */
+@media (pointer: coarse) {
+  input:focus,
+  textarea:focus,
+  [contenteditable="true"]:focus {
+    scroll-margin-bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
+    scroll-margin-top: calc(3.5rem + env(safe-area-inset-top, 0px));
+  }
+}
+
 /* Fix for react-pdf selection being opaque */
 .react-pdf__Page__textContent ::selection {
   background-color: rgba(217, 40, 47, 0.2) !important;

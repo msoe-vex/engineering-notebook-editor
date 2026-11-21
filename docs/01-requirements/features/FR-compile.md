@@ -22,7 +22,7 @@ Notebook accessors.
 - [ ] Compile produces downloadable PDF via server job
 - [ ] `lastCompiled` and export URL available after success
 - [x] Compile uses the single compressed image assets (no quality/original picker)
-- [ ] Split / LaTeX modes update live from editor content + metadata
+- [x] Split / LaTeX modes update live from editor content + metadata
 - [x] No automatic BusyTeX fallback (optional `NEXT_PUBLIC_ALLOW_BUSYTEX_COMPILE` escape only)
 
 ## Data and APIs

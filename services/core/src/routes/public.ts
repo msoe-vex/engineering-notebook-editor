@@ -21,23 +21,23 @@ import {
   type EntryMetadataV5,
   type AssetMetadata,
 } from "@engineering-notebook/shared";
-import { getFirestore } from "../db/firestore.js";
+import { getMetadataStore } from "../db/metadataStore.js";
 import type { StoragePort } from "../storage/storagePort.js";
 
 async function resolveOrgBySlug(slug: string) {
-  const db = getFirestore();
-  const lookup = await db.doc(orgSlugPath(slug)).get();
-  if (!lookup.exists) return null;
-  const orgId = (lookup.data() as { orgId?: string }).orgId;
+  const store = getMetadataStore();
+  const lookup = await store.get(orgSlugPath(slug));
+  if (!lookup) return null;
+  const orgId = lookup.orgId as string | undefined;
   if (!orgId) return null;
-  const orgSnap = await db.doc(orgPath(orgId)).get();
-  if (!orgSnap.exists) return null;
-  const org = { ...(orgSnap.data() as Organization), id: orgSnap.id };
-  return org;
+  const orgSnap = await store.get(orgPath(orgId));
+  if (!orgSnap) return null;
+  const { id: _id, ...rest } = orgSnap;
+  return { ...(rest as Organization), id: orgId };
 }
 
 export async function registerPublicRoutes(app: FastifyInstance, storage: StoragePort) {
-  const db = () => getFirestore();
+  const store = () => getMetadataStore();
 
   app.get("/public/o/:slug", async (request, reply) => {
     const { slug } = request.params as { slug: string };
@@ -48,27 +48,28 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
     }
     const orgId = org.id;
     const [donors, projects, events, members, social] = await Promise.all([
-      db().collection(publicDonorsCollection(orgId)).get(),
-      db().collection(publicProjectsCollection(orgId)).get(),
-      db().collection(publicEventsCollection(orgId)).get(),
-      db().collection(publicMembersCollection(orgId)).get(),
-      db().collection(publicSocialCollection(orgId)).get(),
+      store().query(publicDonorsCollection(orgId)),
+      store().query(publicProjectsCollection(orgId)),
+      store().query(publicEventsCollection(orgId)),
+      store().query(publicMembersCollection(orgId)),
+      store().query(publicSocialCollection(orgId)),
     ]);
 
     async function resolveOrgAssetUrl(imageAssetId?: string) {
       if (!imageAssetId) return undefined;
-      const assetSnap = await db().doc(orgAssetPath(orgId, imageAssetId)).get();
-      if (!assetSnap.exists) return undefined;
+      const assetSnap = await store().get(orgAssetPath(orgId, imageAssetId));
+      if (!assetSnap) return undefined;
       try {
-        return await storage.getSignedUrl((assetSnap.data() as AssetMetadata).gcsPath, "read");
+        return await storage.getSignedUrl((assetSnap as AssetMetadata).gcsPath, "read");
       } catch {
         return undefined;
       }
     }
 
     const enrichedMembers = await Promise.all(
-      members.docs.map(async (d) => {
-        const data = d.data() as {
+      members.map(async (d) => {
+        const { id, ...data } = d as {
+          id: string;
           imageAssetId?: string;
           orgMemberUid?: string;
           name?: string;
@@ -77,21 +78,27 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
         };
         let imageAssetId = data.imageAssetId;
         if (!imageAssetId && data.orgMemberUid) {
-          const om = await db().doc(memberPath(orgId, data.orgMemberUid)).get();
-          if (om.exists) {
-            imageAssetId = (om.data() as OrgMember).imageAssetId;
+          const om = await store().get(memberPath(orgId, data.orgMemberUid));
+          if (om) {
+            imageAssetId = (om as OrgMember).imageAssetId;
           }
         }
         const imageUrl = await resolveOrgAssetUrl(imageAssetId);
-        return { id: d.id, ...data, imageAssetId, imageUrl };
+        return { id, ...data, imageAssetId, imageUrl };
       })
     );
 
     const enrichedDonors = await Promise.all(
-      donors.docs.map(async (d) => {
-        const data = d.data() as { imageAssetId?: string; name?: string; url?: string; tier?: string };
+      donors.map(async (d) => {
+        const { id, ...data } = d as {
+          id: string;
+          imageAssetId?: string;
+          name?: string;
+          url?: string;
+          tier?: string;
+        };
         const imageUrl = await resolveOrgAssetUrl(data.imageAssetId);
-        return { id: d.id, ...data, imageUrl };
+        return { id, ...data, imageUrl };
       })
     );
 
@@ -103,10 +110,19 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
         publicPage: org.publicPage,
       },
       donors: enrichedDonors,
-      projects: projects.docs.map((d) => ({ id: d.id, ...d.data() })),
-      events: events.docs.map((d) => ({ id: d.id, ...d.data() })),
+      projects: projects.map((d) => {
+        const { id, ...rest } = d;
+        return { id, ...rest };
+      }),
+      events: events.map((d) => {
+        const { id, ...rest } = d;
+        return { id, ...rest };
+      }),
       members: enrichedMembers,
-      social: social.docs.map((d) => ({ id: d.id, ...d.data() })),
+      social: social.map((d) => {
+        const { id, ...rest } = d;
+        return { id, ...rest };
+      }),
     };
   });
 
@@ -115,24 +131,28 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
     const org = await resolveOrgBySlug(slug.toLowerCase());
     if (!org) return reply.code(404).send({ error: "not found" });
     const key = publicKey.trim().toLowerCase();
-    const keySnap = await db().doc(publicNotebookKeyPath(org.id, key)).get();
-    if (!keySnap.exists) return reply.code(404).send({ error: "not found" });
-    const notebookId = (keySnap.data() as { notebookId?: string }).notebookId;
+    const keySnap = await store().get(publicNotebookKeyPath(org.id, key));
+    if (!keySnap) return reply.code(404).send({ error: "not found" });
+    const notebookId = keySnap.notebookId as string | undefined;
     if (!notebookId) return reply.code(404).send({ error: "not found" });
-    const nbSnap = await db().doc(notebookPath(org.id, notebookId)).get();
-    if (!nbSnap.exists) return reply.code(404).send({ error: "not found" });
-    const nb = { id: nbSnap.id, ...(nbSnap.data() as NotebookSummaryV5) };
+    const nbSnap = await store().get(notebookPath(org.id, notebookId));
+    if (!nbSnap) return reply.code(404).send({ error: "not found" });
+    const { id: _nbId, ...nbRest } = nbSnap;
+    const nb = { id: notebookId, ...(nbRest as NotebookSummaryV5) };
     if (nb.publicAccess !== "public" && nb.publicAccess !== "unlisted") {
       return reply.code(404).send({ error: "not found" });
     }
     if (nb.publicKey !== key) return reply.code(404).send({ error: "not found" });
 
     const [entries, contributors] = await Promise.all([
-      db().collection(entriesCollection(org.id, notebookId)).get(),
-      db().collection(notebookMembersCollection(org.id, notebookId)).get(),
+      store().query(entriesCollection(org.id, notebookId)),
+      store().query(notebookMembersCollection(org.id, notebookId)),
     ]);
-    const liveEntries = entries.docs
-      .map((d) => ({ id: d.id, ...(d.data() as EntryMetadataV5) }))
+    const liveEntries = entries
+      .map((d) => {
+        const { id, ...rest } = d;
+        return { id, ...(rest as EntryMetadataV5) };
+      })
       .filter((e) => !e.deletedAt)
       .map((e) => ({
         id: e.id,
@@ -161,12 +181,20 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
         // publishedAt / publishedBy / judgments intentionally omitted (admin-only)
       },
       entries: liveEntries,
-      contributors: contributors.docs.map((d) => ({
-        id: d.id,
-        name: (d.data() as { name?: string }).name,
-        role: (d.data() as { role?: string }).role,
-        order: (d.data() as { order?: number }).order,
-      })),
+      contributors: contributors.map((d) => {
+        const { id, ...data } = d as {
+          id: string;
+          name?: string;
+          role?: string;
+          order?: number;
+        };
+        return {
+          id,
+          name: data.name,
+          role: data.role,
+          order: data.order,
+        };
+      }),
       noindex: nb.publicAccess === "unlisted",
     };
   });
@@ -180,19 +208,20 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
     const org = await resolveOrgBySlug(slug.toLowerCase());
     if (!org) return reply.code(404).send({ error: "not found" });
     const key = publicKey.trim().toLowerCase();
-    const keySnap = await db().doc(publicNotebookKeyPath(org.id, key)).get();
-    if (!keySnap.exists) return reply.code(404).send({ error: "not found" });
-    const notebookId = (keySnap.data() as { notebookId?: string }).notebookId;
+    const keySnap = await store().get(publicNotebookKeyPath(org.id, key));
+    if (!keySnap) return reply.code(404).send({ error: "not found" });
+    const notebookId = keySnap.notebookId as string | undefined;
     if (!notebookId) return reply.code(404).send({ error: "not found" });
-    const nbSnap = await db().doc(notebookPath(org.id, notebookId)).get();
-    if (!nbSnap.exists) return reply.code(404).send({ error: "not found" });
-    const nb = nbSnap.data() as NotebookSummaryV5;
+    const nbSnap = await store().get(notebookPath(org.id, notebookId));
+    if (!nbSnap) return reply.code(404).send({ error: "not found" });
+    const nb = nbSnap as NotebookSummaryV5;
     if (nb.publicAccess !== "public" && nb.publicAccess !== "unlisted") {
       return reply.code(404).send({ error: "not found" });
     }
-    const entrySnap = await db().doc(entryPath(org.id, notebookId, entryId)).get();
-    if (!entrySnap.exists) return reply.code(404).send({ error: "not found" });
-    const entry = entrySnap.data() as EntryMetadataV5;
+    const entrySnap = await store().get(entryPath(org.id, notebookId, entryId));
+    if (!entrySnap) return reply.code(404).send({ error: "not found" });
+    const { id: entryDocId, ...entryRest } = entrySnap;
+    const entry = entryRest as EntryMetadataV5;
     if (entry.deletedAt) return reply.code(404).send({ error: "not found" });
     const tipTapKey = entry.tipTapGcsPath || gcsKeys.tipTap(org.id, notebookId, entryId);
     const buf = await storage.getObject(tipTapKey);
@@ -206,7 +235,7 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
     }
     return {
       entry: {
-        id: entrySnap.id,
+        id: entryDocId,
         title: entry.title,
         authors: entry.authors,
         phase: entry.phase,
@@ -222,13 +251,13 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
     const org = await resolveOrgBySlug(slug.toLowerCase());
     if (!org) return reply.code(404).send({ error: "not found" });
     const key = publicKey.trim().toLowerCase();
-    const keySnap = await db().doc(publicNotebookKeyPath(org.id, key)).get();
-    if (!keySnap.exists) return reply.code(404).send({ error: "not found" });
-    const notebookId = (keySnap.data() as { notebookId?: string }).notebookId;
+    const keySnap = await store().get(publicNotebookKeyPath(org.id, key));
+    if (!keySnap) return reply.code(404).send({ error: "not found" });
+    const notebookId = keySnap.notebookId as string | undefined;
     if (!notebookId) return reply.code(404).send({ error: "not found" });
-    const nbSnap = await db().doc(notebookPath(org.id, notebookId)).get();
-    if (!nbSnap.exists) return reply.code(404).send({ error: "not found" });
-    const nb = nbSnap.data() as NotebookSummaryV5;
+    const nbSnap = await store().get(notebookPath(org.id, notebookId));
+    if (!nbSnap) return reply.code(404).send({ error: "not found" });
+    const nb = nbSnap as NotebookSummaryV5;
     if (nb.publicAccess !== "public" && nb.publicAccess !== "unlisted") {
       return reply.code(404).send({ error: "not found" });
     }

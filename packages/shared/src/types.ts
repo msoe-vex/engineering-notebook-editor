@@ -77,15 +77,21 @@ export type OrgMember = {
   joinedAt: string;
 };
 
+/** Invite lifecycle. Legacy docs without `status` derive from `acceptedAt`. */
+export type InviteStatus = "pending" | "accepted" | "revoked";
+
 export type Invite = {
   id: string;
   orgId: string;
   email?: string;
   role: OrgRole;
+  /** Defaults to pending when omitted (older documents). */
+  status?: InviteStatus;
   createdBy: string;
   createdAt: string;
   expiresAt?: string;
   acceptedAt?: string;
+  revokedAt?: string;
 };
 
 /** Named group of Users inside an org (ACL grouping only — no number/logo). */

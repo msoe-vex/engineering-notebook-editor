@@ -1,6 +1,6 @@
 # Plan: Explorer search/filters & standardized context menus
 
-**Status:** mostly done (Epic F server search deferred)  
+**Status:** done (Epic F server search deferred)  
 **Created:** 2026-10-17  
 **Audience:** engineering + product  
 **Related:** [FR-explorer](../features/FR-explorer.md), [FR-orgs](../features/FR-orgs.md), [FR-notebooks](../features/FR-notebooks.md), [backlog](../backlog.md), [cloud UX plan](./cloud-ux-hardening.md)
@@ -158,10 +158,8 @@ Client-side title/author/date filters miss body content and don’t scale for hu
 
 ### Work
 
-- [ ] Design Core search endpoint (title + optional body excerpt); wire explorer query when length ≥ N.
-- [ ] Keep local filters as progressive enhancement / offline of metadata.
-
-Only schedule if product elevates the backlog item **Server-side entry search**.
+- [x] Core `GET …/entries/search?q=` (metadata) + optional `includeBody=1` (TipTap scan, capped); `cloudApi.searchEntries`.
+- [x] Explorer merges server body hits when query length ≥ 2 (local metadata filters remain).
 
 ---
 

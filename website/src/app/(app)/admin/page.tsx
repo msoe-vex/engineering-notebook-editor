@@ -73,11 +73,11 @@ export default function AdminPage() {
         Users
       </h2>
       {users.length > 0 ? (
-        <ul className="mt-3 divide-y divide-nb-outline-variant/20 overflow-hidden rounded-2xl border border-nb-outline-variant/30 bg-nb-surface">
+        <ul className="mt-3 space-y-3 md:space-y-0 md:divide-y md:divide-nb-outline-variant/20 md:overflow-hidden md:rounded-2xl md:border md:border-nb-outline-variant/30 md:bg-nb-surface">
           {users.map((u) => (
             <li
               key={u.uid}
-              className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm"
+              className="flex flex-col gap-3 rounded-2xl border border-nb-outline-variant/30 bg-nb-surface px-4 py-3 text-sm md:flex-row md:flex-wrap md:items-center md:justify-between md:rounded-none md:border-0 md:bg-transparent"
             >
               <div className="min-w-0">
                 <div className="truncate font-medium text-nb-on-surface">{u.email || u.uid}</div>
@@ -86,10 +86,11 @@ export default function AdminPage() {
                   {u.grants?.platformAi ? "on" : "off"}
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
                 <Button
                   size="sm"
                   variant="secondary"
+                  className="min-h-11 w-full justify-center sm:min-h-9 sm:w-auto"
                   onClick={() => {
                     void cloudApi
                       .patchAdminUser(u.uid, {
@@ -103,6 +104,7 @@ export default function AdminPage() {
                 <Button
                   size="sm"
                   variant="secondary"
+                  className="min-h-11 w-full justify-center sm:min-h-9 sm:w-auto"
                   onClick={() => {
                     void cloudApi
                       .patchAdminUser(u.uid, {

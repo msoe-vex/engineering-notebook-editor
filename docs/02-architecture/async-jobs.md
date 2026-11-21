@@ -44,8 +44,25 @@ Compose: `pubsub` emulator + `pubsub-init`. Env: `JOB_DISPATCH=pubsub`, `PUBSUB_
 
 `JOB_DISPATCH=none` disables wake (tests). HTTP Core→worker wake is **retired**.
 
+## Blob IO (workers → Core only)
+
+Compile and judge **never** talk to the object store SDK. Bytes flow through Core internal APIs; Core uses `StoragePort` (GCS adapter).
+
+| Direction | API |
+| --- | --- |
+| TipTap / assets / rubric source **read** | `GET /internal/storage/object?orgId&notebookId&key=` (key from snapshot / `gcsKeys`) |
+| Compile snapshot (paths only) | `GET /internal/compile/snapshot` |
+| Asset path resolve | `GET /internal/compile/asset-ref` |
+| Export PDF **write** | `PUT /internal/compile/export` |
+| Judge rubric meta / progress / complete | `/internal/judge/*` |
+
+**Allowed keys** for `/internal/storage/object`: under `organizations/{orgId}/notebooks/{notebookId}/` **or** org assets `organizations/{orgId}/assets/`. Object-key layout: [schema.md](../03-reference/schema.md#object-key-contract-adapter-agnostic).
+
+**Exceptions (not product workers):** ops upload script `infra/scripts/upload-busytex-assets.ts` uses the GCS SDK directly to seed static BusyTeX/LaTeX keys. Website and Collab never open the blob store — Collab loads/flushes Yjs via Core `/internal/collab/*`.
+
 ## Related
 
 - Env: [env-vars.md](../03-reference/env-vars.md)  
 - Local: [local-development.md](../04-guides/local-development.md)  
+- Ports: [ADR-009](./decisions/ADR-009-platform-ports.md), [platform-ports Epic B](../01-requirements/plans/platform-ports.md)  
 - Issue [#93](https://github.com/msoe-vex/engineering-notebook-editor/issues/93)

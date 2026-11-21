@@ -17,10 +17,10 @@ Product context: [00-product/](../00-product/). Contracts: [03-reference/](../03
 
 | Plan | Status |
 | --- | --- |
-| [Cloud UX hardening & legacy parity](./plans/cloud-ux-hardening.md) | active |
-| [Mobile-responsive shell](./plans/mobile-responsive.md) | active |
-| [Explorer search & context menus](./plans/explorer-search-context-menus.md) | mostly done (F deferred) |
-| [Platform ports (metadata, identity, notifications)](./plans/platform-ports.md) | planned |
+| [Platform ports (metadata, identity, notifications)](./plans/platform-ports.md) | Epics A–D done; stretch GenAi / second-cloud deferred |
+| [Cloud UX hardening & legacy parity](./plans/cloud-ux-hardening.md) | mostly done (manual smoke leftovers) |
+| [Mobile-responsive shell](./plans/mobile-responsive.md) | mostly done (device smoke leftovers) |
+| [Explorer search & context menus](./plans/explorer-search-context-menus.md) | done (Epic F server search deferred) |
 
 Also: [backlog.md](./backlog.md) · [roadmap](../00-product/roadmap.md).
 

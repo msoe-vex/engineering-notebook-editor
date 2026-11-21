@@ -15,14 +15,14 @@ GitHub issues: [msoe-vex/engineering-notebook-editor/issues](https://github.com/
 | --- | --- | --- |
 | Cloud tenancy (orgs, notebooks, invites, teams, multi-owner, alumni) | Done | [FR-orgs](../01-requirements/features/FR-orgs.md) |
 | Collaborative entries (Yjs / Hocuspocus) | Partial | Core path + Collab via Core ACL; polish in [FR-entries-collab](../01-requirements/features/FR-entries-collab.md) |
-| Explorer / chrome / share / archive | Partial | UX plans active; archive + share dialog shipped |
+| Explorer / chrome / share / archive | Done / polish | UX plans largely shipped; archive + share dialog; mobile leftovers = manual smoke |
 | Entry trash | Done | [FR-trash](../01-requirements/features/FR-trash.md) |
 | **Async compile + judge + Pub/Sub wake** | Done | Local Compose + prod deploy script/docs ([ADR-008](../02-architecture/decisions/ADR-008-job-dispatch-evolution.md)); live GCP smoke still optional |
 | GenAI in Core + website orchestration | Done / evolving | [ADR-004](../02-architecture/decisions/ADR-004-agents-genai-gateway.md), [ADR-005](../02-architecture/decisions/ADR-005-genai-in-core.md) |
 | Account Profile / Preferences | Done | [FR-account](../01-requirements/features/FR-account.md); secondary emails + provider link |
 | Auth / notifications | Done (ports slice) | Reset + social hooks; secondary emails; `NotificationPort` console + Resend — [FR-auth](../01-requirements/features/FR-auth.md), [FR-notifications](../01-requirements/features/FR-notifications.md) |
 | Public org page + notebooks | Done (MVP) | Slug `/o/:slug`, CMS admin UI, TipTap public entries, copy URL, last PDF; org assets + People photos |
-| Platform ports | Partial → deepening | `AuthPort`, `StoragePort`, `JobDispatchPort`, `NotificationPort`; MetadataStore on users/rbac; Collab `/internal/collab/authorize` — [ADR-009](../02-architecture/decisions/ADR-009-platform-ports.md) |
+| Platform ports | Done (stretch left) | `AuthPort`, `StoragePort`, `JobDispatchPort`, `NotificationPort`, `MetadataStore`; Epic B storage hardening/docs shipped; stretch = GenAiCompletePort / second-cloud adapters — [ADR-009](../02-architecture/decisions/ADR-009-platform-ports.md) |
 
 Open bugs / older requests: tables [#87](https://github.com/msoe-vex/engineering-notebook-editor/issues/87), descriptions [#81](https://github.com/msoe-vex/engineering-notebook-editor/issues/81), comments [#79](https://github.com/msoe-vex/engineering-notebook-editor/issues/79), tagging [#64](https://github.com/msoe-vex/engineering-notebook-editor/issues/64), LuaLaTeX [#67](https://github.com/msoe-vex/engineering-notebook-editor/issues/67), explorer dual modes [#69](https://github.com/msoe-vex/engineering-notebook-editor/issues/69), AI judge UX [#68](https://github.com/msoe-vex/engineering-notebook-editor/issues/68).
 
@@ -38,9 +38,9 @@ HTTP Core→worker wake is **retired**.
 
 ## Platform: ports & identity
 
-**Current:** Ports above; MetadataStore used for users + rbac (+ Collab ACL via Core).
+**Current:** Ports above including MetadataStore on Core business routes; StoragePort is the only product blob API (GCS adapter); workers fetch/put bytes via Core internal APIs — [platform-ports.md](../01-requirements/plans/platform-ports.md) Epics A–D.
 
-**Next:** Incremental MetadataStore migration (org helpers, `jobStore`, …); optional AWS/Mongo adapters remain non-goals — [platform-ports.md](../01-requirements/plans/platform-ports.md).
+**Next:** Optional GenAiCompletePort; AWS/Mongo/S3 adapters remain non-goals until a real migration.
 
 ---
 
@@ -50,12 +50,17 @@ HTTP Core→worker wake is **retired**.
 
 - Doc/contract sync; org assets + People photos; public CMS + delete cascade; public notebook UX; prod Pub/Sub deploy wiring; MetadataStore users/rbac + Collab ACL; secondary emails + Resend
 
+### UX plans (largely shipped)
+
+1. [Cloud UX hardening](../01-requirements/plans/cloud-ux-hardening.md) — **mostly done** (manual smoke leftovers)  
+2. [Mobile-responsive shell](../01-requirements/plans/mobile-responsive.md) — **mostly done** (device smoke + soft-keyboard check)  
+3. [Explorer search & context menus](../01-requirements/plans/explorer-search-context-menus.md) — **done** (Epic F server search deferred)
+
 ### Active plans (next) — pick up on `microservices`
 
-1. [Cloud UX hardening](../01-requirements/plans/cloud-ux-hardening.md)  
-2. [Mobile-responsive shell](../01-requirements/plans/mobile-responsive.md)  
-3. [Explorer search & context menus](../01-requirements/plans/explorer-search-context-menus.md)  
-4. MetadataStore depth (orgs / rubrics/judgments / query) — [platform-ports.md](../01-requirements/plans/platform-ports.md)  
+1. Manual smoke leftovers (mobile keyboard, share ACL, upload limits) — [smoke-tests](../04-guides/smoke-tests.md)  
+2. Older GitHub issues (tables, comments, tagging, …) when prioritized  
+3. Stretch ports: GenAiCompletePort / second-cloud adapters only if needed — [platform-ports.md](../01-requirements/plans/platform-ports.md)  
 
 Handoff notes: [local-development.md](../04-guides/local-development.md#handoff--continue-later).
 
