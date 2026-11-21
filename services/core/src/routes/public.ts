@@ -158,7 +158,7 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
         publicAccess: nb.publicAccess,
         publicKey: nb.publicKey,
         lastCompiled: nb.lastCompiled,
-        // publishedAt / publishedBy / audits intentionally omitted (admin-only)
+        // publishedAt / publishedBy / judgments intentionally omitted (admin-only)
       },
       entries: liveEntries,
       contributors: contributors.docs.map((d) => ({

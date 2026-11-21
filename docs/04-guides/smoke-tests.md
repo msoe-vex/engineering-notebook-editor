@@ -20,7 +20,7 @@ Manual acceptance checks aligned with [01-requirements](../01-requirements/).
 | Split LaTeX | Entry **Split** / **LaTeX** updates while typing |
 | ZIP | Export → import → entries + images restored; toast on success/fail |
 | Prefs | Second browser: theme/authors apply; keys still local |
-| Audit | Run audit with notebook access; history lists scorecard |
+| Judge | Normalize rubric + run score with notebook access; past grades list |
 | Restricted | Share / Settings: restrict notebook → user without grant cannot open |
 | Delete | Delete notebook → GCS tipTap/assets/exports gone |
 

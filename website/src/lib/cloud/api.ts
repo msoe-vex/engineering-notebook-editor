@@ -704,40 +704,6 @@ export const cloudApi = {
       body: JSON.stringify(body),
     }),
 
-  startAudit: (
-    orgId: string,
-    notebookId: string,
-    body: { rubric?: string; provider?: "byok" | "vertex" | "local"; status?: "running" }
-  ) =>
-    coreFetch<AuditRecord>(`/orgs/${orgId}/notebooks/${notebookId}/audits`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-
-  patchAudit: (
-    orgId: string,
-    notebookId: string,
-    auditId: string,
-    body: Partial<{
-      status: "running" | "completed" | "failed";
-      scores: Record<string, number>;
-      advice: Array<{ entryId: string | null; message: string }>;
-      summary: string;
-      steps: Array<{ at: string; message: string; entryId?: string | null }>;
-      error: string | null;
-    }>
-  ) =>
-    coreFetch<AuditRecord>(`/orgs/${orgId}/notebooks/${notebookId}/audits/${auditId}`, {
-      method: "PATCH",
-      body: JSON.stringify(body),
-    }),
-
-  getAudit: (orgId: string, notebookId: string, auditId: string) =>
-    coreFetch<AuditRecord>(`/orgs/${orgId}/notebooks/${notebookId}/audits/${auditId}`),
-
-  listAudits: (orgId: string, notebookId: string) =>
-    coreFetch<AuditRecord[]>(`/orgs/${orgId}/notebooks/${notebookId}/audits`),
-
   listRubrics: (orgId: string, notebookId: string, opts?: { trashed?: boolean }) =>
     coreFetch<RubricRecord[]>(
       `/orgs/${orgId}/notebooks/${notebookId}/rubrics${opts?.trashed ? "?trashed=1" : ""}`
@@ -994,21 +960,6 @@ export type JudgmentRecord = {
   }>;
   error?: string;
   createdAt?: string;
-};
-
-export type AuditRecord = {
-  id: string;
-  rubric?: string;
-  provider?: string;
-  status?: string;
-  summary?: string;
-  scores?: Record<string, number>;
-  advice?: Array<{ entryId: string | null; message: string }>;
-  steps?: Array<{ at: string; message: string; entryId?: string | null }>;
-  error?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  createdBy?: string;
 };
 
 export function collabWsUrl(): string {

@@ -3,7 +3,7 @@
 | Persona | Goals | Typical roles in product |
 | --- | --- | --- |
 | **Student / writer** | Write dated design entries, images, compile PDF | Org `member`; notebook access |
-| **Team lead / mentor** | Review schedule, phases, roster credits, audits | Org `admin` or notebook-restricted grant |
+| **Team lead / mentor** | Review schedule, phases, roster credits, Judge grades | Org `admin` or notebook-restricted grant |
 | **Org admin** | Invite people, manage teams ACL, create notebooks; publish public page / notebook links | Org `owner` / `admin` |
 | **Alumni** | Stay listed for history; no active write access (planned) | Org member `status: alumni` |
 | **Public visitor** | View published notebooks / public org page without joining (planned) | Anonymous or signed-out |

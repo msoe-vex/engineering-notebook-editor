@@ -50,7 +50,7 @@ Website: no direct Firestore/GCS; may keep a **client Identity adapter** (Fireba
 - [x] Define `MetadataStore` (`get`/`set`/`update`/`delete`; query/batch/transaction still TBD) with document IDs matching logical paths in [`packages/shared` paths](../../../packages/shared/src/paths.ts)
 - [x] Firestore adapter implements the port (`services/core/src/db/metadataStore.ts`)
 - [x] Migrate routes incrementally — `users`, `rbac`, `jobStore` get/update (create batch + list query still Firestore)
-- [ ] Continue: `orgs` helpers, audits, judge metadata; confine remaining `getFirestore()` to adapter + batch/query helpers
+- [ ] Continue: `orgs` helpers, rubrics/judgments metadata; confine remaining `getFirestore()` to adapter + batch/query helpers
 - [x] Collab membership reads go through Core internal ACL (`POST /internal/collab/authorize`)
 
 **Done when:** Core business routes import `MetadataStore`, not `firebase-admin/firestore` types.
@@ -98,8 +98,8 @@ See [FR-auth](../features/FR-auth.md).
 ## Suggested delivery order
 
 1. ~~Epic C product + Epic D + Epic A hot paths~~ **done (2026-11)**  
-2. **Next:** Epic A remainder (orgs/audits/judge + query/batch)  
-3. **Epic B:** storage audit / docs  
+2. **Next:** Epic A remainder (orgs/rubrics/judgments + query/batch)  
+3. **Epic B:** storage review / docs  
 4. Stretch: `GenAiCompletePort`; second-cloud adapters only when a real migration is scheduled  
 5. Product UX plans in parallel: [cloud-ux-hardening](./cloud-ux-hardening.md), [mobile-responsive](./mobile-responsive.md), [explorer-search](./explorer-search-context-menus.md)
 

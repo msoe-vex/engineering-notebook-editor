@@ -7,7 +7,7 @@ import {
   notebookPath,
   rubricPath,
   rubricsCollection,
-  type JudgeResult,
+  type Judgment,
   type NotebookRubric,
   type NotebookSummaryV5,
   type RubricMatrix,
@@ -592,7 +592,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
 
     const judgmentId = randomUUID();
     const ts = nowIso();
-    const placeholder: JudgeResult = {
+    const placeholder: Judgment = {
       id: judgmentId,
       orgId,
       notebookId,
@@ -786,7 +786,7 @@ export async function registerJudgeInternalRoutes(app: FastifyInstance, storage:
       notebookId?: string;
       judgmentId?: string;
       jobId?: string;
-      result?: Omit<JudgeResult, "id" | "orgId" | "notebookId" | "createdBy" | "createdAt">;
+      result?: Omit<Judgment, "id" | "orgId" | "notebookId" | "createdBy" | "createdAt">;
     };
     if (!body.orgId || !body.notebookId || !body.judgmentId || !body.result) {
       return reply.code(400).send({ error: "orgId, notebookId, judgmentId, result required" });
@@ -794,9 +794,9 @@ export async function registerJudgeInternalRoutes(app: FastifyInstance, storage:
     const ref = db().doc(judgmentPath(body.orgId, body.notebookId, body.judgmentId));
     const existing = await ref.get();
     if (!existing.exists) return reply.code(404).send({ error: "judgment not found" });
-    const prev = existing.data() as JudgeResult;
+    const prev = existing.data() as Judgment;
     const ts = nowIso();
-    const merged: JudgeResult = {
+    const merged: Judgment = {
       ...prev,
       ...body.result,
       id: body.judgmentId,
@@ -806,7 +806,7 @@ export async function registerJudgeInternalRoutes(app: FastifyInstance, storage:
       jobId: body.jobId || prev.jobId,
       updatedAt: ts,
     };
-    await ref.set(omitUndefined(merged) as JudgeResult);
+    await ref.set(omitUndefined(merged) as Judgment);
 
     if (body.jobId) {
       await completeJob({

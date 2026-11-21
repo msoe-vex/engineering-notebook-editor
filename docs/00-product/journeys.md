@@ -26,10 +26,10 @@ Happy paths for the live App Router product. Feature detail: [01-requirements/fe
 1. Per-entry LaTeX preview or notebook **Compile** → PDF — [FR-compile](../01-requirements/features/FR-compile.md)
 2. Overflow **Export ZIP** / **Import ZIP** — [FR-zip](../01-requirements/features/FR-zip.md)
 
-## 5. GenAI and audit
+## 5. GenAI and Judge
 
 1. Account **Profile** / **Preferences**: theme, authors, GenAI (BYOK key local) — [FR-account](../01-requirements/features/FR-account.md)
-2. Generate entry title / image captions; run rubric audit — [FR-genai-audit](../01-requirements/features/FR-genai-audit.md)
+2. Generate entry title / image captions; run notebook Judge — [FR-genai-judge](../01-requirements/features/FR-genai-judge.md)
 
 ## 6. Org people
 

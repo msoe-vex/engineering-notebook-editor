@@ -7,7 +7,7 @@ Sequence diagrams: [diagrams.md — compile job](../diagrams.md#sequence-async-c
 
 ## Context
 
-Full-notebook PDF compile is too heavy for Core request timeouts and for in-browser BusyTeX at scale (hundreds of pages/assets). Other work (asset post-process, server-side audits) will need the same durable enqueue → worker → progress pattern. Core already fans out notebook SSE.
+Full-notebook PDF compile is too heavy for Core request timeouts and for in-browser BusyTeX at scale (hundreds of pages/assets). Other work (asset post-process, notebook Judge) needs the same durable enqueue → worker → progress pattern. Core already fans out notebook SSE.
 
 ## Decision
 
@@ -20,7 +20,7 @@ Full-notebook PDF compile is too heavy for Core request timeouts and for in-brow
 7. **Snapshot is metadata-only** — TipTap GCS keys + asset paths; worker pulls bytes via `/internal/storage/object` (avoids multi‑MiB JSON / Core body limits as asset counts grow).
 8. **BusyTeX** is **not** a production fallback. Optional local escape only when `NEXT_PUBLIC_ALLOW_BUSYTEX_COMPILE=1`. Default local = Compose `compile` for parity with prod.
 
-Job types: `compile` (shipped), `judge` (shipped — Python LangGraph worker via `services/judge`, [ADR-007](./ADR-007-python-langgraph-judge.md)). Reserved: `asset.process`, `audit.run` (legacy browser audits may remain until fully replaced).
+Job types: `compile` (shipped), `judge` (shipped — Python LangGraph worker via `services/judge`, [ADR-007](./ADR-007-python-langgraph-judge.md)). Reserved: `asset.process`.
 
 ## Consequences
 

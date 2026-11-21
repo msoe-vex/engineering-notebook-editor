@@ -27,7 +27,9 @@ Clients never talk to Firestore/metadata store directly (`infra/firestore.rules`
 | `notebooks/{id}/members/{memberId}` | **Credits roster** (may lack app account) | `name`, `role`, `order`, `imageAssetId?`, `orgMemberUid?` |
 | `notebooks/{id}/entries/{entryId}` | Entry **metadata only** | See below |
 | `notebooks/{id}/assets/{assetId}` | Notebook asset metadata | `contentType`, `byteSize`, `gcsPath`, `createdBy`, `usedBy[]` |
-| `notebooks/{id}/audits/{auditId}` | Rubric audit runs | `status` (`running`\|`completed`\|`failed`), `provider`, `scores`, `advice[]`, `steps?`, `summary?`, `error?`, … |
+| `notebooks/{id}/rubrics/{rubricId}` | Competition rubrics | `name`, `matrix?`, `status` (`uploaded`\|`normalizing`\|`ready`\|`failed`), `sourceGcsPath?`, `deletedAt?`, … |
+| `notebooks/{id}/judgments/{judgmentId}` | Judge grades | `rubricId`, `matrix`, `categories[]`, `totalPoints`, `totalMaxPoints`, `summary`, `status` (`running`\|`completed`\|`failed`), `jobId?`, … |
+| `notebooks/{id}/jobs/{jobId}` | Async jobs | `type` (`compile`\|`judge`\|…), `status`, `payload`, `result?`, … |
 
 ### Notebook summary (`NotebookSummaryV5`)
 
@@ -110,11 +112,11 @@ See [backlog.md](../01-requirements/backlog.md).
 | BYOK / GenAI API keys | localStorage or ephemeral request body |
 | TipTap / Yjs / images / PDFs / BusyTeX WASM | GCS |
 | Service credentials | Secret Manager / env |
-| Full entry bodies inside audits | Scorecards + advice only |
+| Full entry bodies inside judgments | Rationale + entry id cites only |
 
 ## Cascade deletes
 
-Notebook (and org) delete removes Firestore children (entries, assets, audits, roster) **and** related GCS objects (TipTap, Yjs, assets, exports).
+Notebook (and org) delete removes Firestore children (entries, assets, rubrics, judgments, jobs, roster) **and** related GCS objects (TipTap, Yjs, assets, exports, rubric sources).
 
 ---
 

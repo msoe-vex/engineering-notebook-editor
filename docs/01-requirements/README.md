@@ -32,7 +32,7 @@ Also: [backlog.md](./backlog.md) · [roadmap](../00-product/roadmap.md).
 | [FR-notifications](./features/FR-notifications.md) | Transactional email & notifications (console; Resend remaining) | partial |
 | [FR-orgs](./features/FR-orgs.md) | Organizations, people, invites, teams, alumni | current |
 | [FR-notebooks](./features/FR-notebooks.md) | Notebooks, Settings, Contributors, access | partial |
-| [FR-public-notebook](./features/FR-public-notebook.md) | Public notebook share link (audits stay private) | partial |
+| [FR-public-notebook](./features/FR-public-notebook.md) | Public notebook share link (judgments stay private) | partial |
 | [FR-org-public-page](./features/FR-org-public-page.md) | Public organization profile page | partial |
 | [FR-entries-collab](./features/FR-entries-collab.md) | Entries & collaborative editing | partial |
 | [FR-explorer](./features/FR-explorer.md) | Explorer, folders, search | partial |
@@ -40,7 +40,7 @@ Also: [backlog.md](./backlog.md) · [roadmap](../00-product/roadmap.md).
 | [FR-schedule](./features/FR-schedule.md) | Schedule / calendar | partial |
 | [FR-compile](./features/FR-compile.md) | LaTeX preview & server compile jobs | partial |
 | [FR-zip](./features/FR-zip.md) | ZIP backup export/import | current |
-| [FR-genai-audit](./features/FR-genai-audit.md) | GenAI & rubric audit | current |
+| [FR-genai-judge](./features/FR-genai-judge.md) | GenAI titles & notebook Judge | current |
 | [FR-account](./features/FR-account.md) | Account preferences | current |
 | [FR-admin](./features/FR-admin.md) | Platform admin | current |
 | [FR-help](./features/FR-help.md) | Help & About | current |

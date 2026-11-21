@@ -210,33 +210,8 @@ export type AssetMetadata = {
   usedBy: string[];
 };
 
-export type AuditStatus = "running" | "completed" | "failed";
-
-export type AuditProvider = "byok" | "vertex" | "local";
-
-export type AuditStep = {
-  at: string;
-  message: string;
-  entryId?: string | null;
-};
-
-/** Rubric audit run (browser-orchestrated; Core persists progress). */
-export type RubricScorecard = {
-  id: string;
-  orgId: string;
-  notebookId: string;
-  rubric: string;
-  provider: AuditProvider;
-  status: AuditStatus;
-  scores: Record<string, number>;
-  advice: Array<{ entryId: string | null; message: string }>;
-  summary?: string;
-  steps?: AuditStep[];
-  error?: string;
-  createdBy: string;
-  createdAt: string;
-  updatedAt?: string;
-};
+/** Run lifecycle for judge grades (and similar async product runs). */
+export type JudgmentStatus = "running" | "completed" | "failed";
 
 /** ZIP / export envelope (no TipTap bodies). */
 export type NotebookExportV5 = {
@@ -345,8 +320,8 @@ export type JudgeCategoryResult = {
   entryIds: string[];
 };
 
-/** Server judge run result (job type `judge`). */
-export type JudgeResult = {
+/** Server judge grade / past run (job type `judge`, Firestore `judgments/{id}`). */
+export type Judgment = {
   id: string;
   orgId: string;
   notebookId: string;
@@ -359,7 +334,7 @@ export type JudgeResult = {
   totalPoints: number;
   totalMaxPoints: number;
   summary: string;
-  status: AuditStatus;
+  status: JudgmentStatus;
   error?: string;
   createdBy: string;
   createdAt: string;
@@ -370,7 +345,7 @@ export type JudgeResult = {
  * Async notebook job types.
  * `judge` payload.phase: `"normalize"` (rubric extract only) | `"score"` (notebook judgment).
  */
-export type NotebookJobType = "compile" | "judge" | "asset.process" | "audit.run";
+export type NotebookJobType = "compile" | "judge" | "asset.process";
 
 export type NotebookJobStatus =
   | "queued"

@@ -23,7 +23,7 @@ Anyone with notebook access may create/edit/delete entries (subject to future fi
 - Validation on content flush; metadata-field revalidation when notebook phases change (Core)
 - Toasts on asset upload failure and other transient outcomes
 - Images lazy-load near viewport (`IntersectionObserver`); `cloud:{assetId}` resolves via signed URL + session cache on first visible fetch
-- Title GenAI when GenAI enabled — see [FR-genai-audit](./FR-genai-audit.md)
+- Title GenAI when GenAI enabled — see [FR-genai-judge](./FR-genai-judge.md)
 
 ## Acceptance criteria
 

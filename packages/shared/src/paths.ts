@@ -73,14 +73,6 @@ export function orgAssetsCollection(orgId: string): string {
   return `organizations/${orgId}/assets`;
 }
 
-export function auditPath(orgId: string, notebookId: string, auditId: string): string {
-  return `organizations/${orgId}/notebooks/${notebookId}/audits/${auditId}`;
-}
-
-export function auditsCollection(orgId: string, notebookId: string): string {
-  return `organizations/${orgId}/notebooks/${notebookId}/audits`;
-}
-
 export function rubricPath(orgId: string, notebookId: string, rubricId: string): string {
   return `organizations/${orgId}/notebooks/${notebookId}/rubrics/${rubricId}`;
 }

@@ -7,7 +7,7 @@ Related: [ADR-003](../../02-architecture/decisions/ADR-003-byok-keys-local.md), 
 
 - BYOK / GenAI API keys must not be stored in Firestore (or any server preference document).
 - TipTap bodies, Yjs, images, PDFs stay in GCS—not Firestore docs.
-- Audit scorecards store summaries/advice, not full entry bodies.
+- Judgments store summaries and rationales with entry id cites, not full entry bodies.
 
 ## Current implementation
 

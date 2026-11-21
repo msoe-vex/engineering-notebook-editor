@@ -174,4 +174,4 @@ cd packages/shared && npm run build
 cd ../../infra && docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build firebase gcs pubsub core collab compile judge website
 ```
 
-Next product work (not blocked on ports): cloud UX hardening → mobile → explorer search. Ports remainder: MetadataStore org/audit migration.
+Next product work (not blocked on ports): cloud UX hardening → mobile → explorer search. Ports remainder: MetadataStore org/rubrics/judgments migration.

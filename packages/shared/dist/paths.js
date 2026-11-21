@@ -54,12 +54,6 @@ export function orgAssetPath(orgId, assetId) {
 export function orgAssetsCollection(orgId) {
     return `organizations/${orgId}/assets`;
 }
-export function auditPath(orgId, notebookId, auditId) {
-    return `organizations/${orgId}/notebooks/${notebookId}/audits/${auditId}`;
-}
-export function auditsCollection(orgId, notebookId) {
-    return `organizations/${orgId}/notebooks/${notebookId}/audits`;
-}
 export function rubricPath(orgId, notebookId, rubricId) {
     return `organizations/${orgId}/notebooks/${notebookId}/rubrics/${rubricId}`;
 }

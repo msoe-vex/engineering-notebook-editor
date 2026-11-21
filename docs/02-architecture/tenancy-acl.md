@@ -12,7 +12,7 @@ organizations/{orgId}
     members/{uid}        ← ACL groups
   notebooks/{notebookId}
     members/{memberId}   ← credits roster (not ACL)
-    entries|assets|audits
+    entries|assets|rubrics|judgments
 invites/{inviteId}       ← top-level, points at orgId
 ```
 
@@ -23,7 +23,7 @@ invites/{inviteId}       ← top-level, points at orgId
 | Org-open (default) | Any org member |
 | Restricted | Explicit user uids and/or org team ids on notebook `access` |
 
-Core `canAccessNotebook` gates list/get and Agents audit routes.
+Core `canAccessNotebook` gates list/get and Judge / rubrics / judgments routes.
 
 ## Distinction
 

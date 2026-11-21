@@ -10,7 +10,6 @@ import { registerOrgRoutes } from "./routes/orgs.js";
 import { registerAdminRoutes } from "./routes/admin.js";
 import { registerUserRoutes } from "./routes/users.js";
 import { registerStaticAssetRoutes } from "./routes/staticAssets.js";
-import { registerAuditRoutes } from "./routes/audits.js";
 import { registerAiRoutes, registerInternalAiRoutes } from "./routes/ai.js";
 import { registerInternalCompileRoutes } from "./routes/internalCompile.js";
 import { registerInternalJobRoutes } from "./routes/internalJobs.js";
@@ -112,7 +111,6 @@ app.register(async (scoped) => {
   scoped.addHook("preHandler", requireAuth);
   await registerUserRoutes(scoped);
   await registerOrgRoutes(scoped, storage);
-  await registerAuditRoutes(scoped);
   await registerJudgeUserRoutes(scoped, storage);
   await registerAiRoutes(scoped);
   await registerAdminRoutes(scoped);

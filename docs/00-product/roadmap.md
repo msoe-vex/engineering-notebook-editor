@@ -55,13 +55,13 @@ HTTP Core→worker wake is **retired**.
 1. [Cloud UX hardening](../01-requirements/plans/cloud-ux-hardening.md)  
 2. [Mobile-responsive shell](../01-requirements/plans/mobile-responsive.md)  
 3. [Explorer search & context menus](../01-requirements/plans/explorer-search-context-menus.md)  
-4. MetadataStore depth (orgs / audits / query) — [platform-ports.md](../01-requirements/plans/platform-ports.md)  
+4. MetadataStore depth (orgs / rubrics/judgments / query) — [platform-ports.md](../01-requirements/plans/platform-ports.md)  
 
 Handoff notes: [local-development.md](../04-guides/local-development.md#handoff--continue-later).
 
 ### Explicitly out of scope for public surfaces
 
-- **Rubric / notebook audits are not public** — remain org/notebook ACL only. Publish/revoke is recorded on the notebook (`publishedAt` / `publishedBy`) for admins; no public audit trail.
+- **Rubrics / judgments are not public** — remain org/notebook ACL only. Publish/revoke is recorded on the notebook (`publishedAt` / `publishedBy`) for admins; no public judgment trail.
 
 ---
 
@@ -70,7 +70,7 @@ Handoff notes: [local-development.md](../04-guides/local-development.md#handoff-
 - Replacing GitHub as code host  
 - Merging vex-website into this repo in the first pass  
 - Public crawl of private notebooks without explicit publish  
-- Public exposure of audits / judge scorecards  
+- Public exposure of judgments / rubric grades  
 - Billing / paid org pages  
 - Restoring HTTP job wake or preferring Cloud Tasks over Pub/Sub  
 - Dual-writing two clouds or replacing the IdP wholesale (ADR-009)

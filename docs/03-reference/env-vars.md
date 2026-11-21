@@ -6,7 +6,7 @@ See [`website/.env.example`](../../website/.env.example).
 
 | Variable | Purpose |
 | --- | --- |
-| `NEXT_PUBLIC_CORE_API_URL` | Core REST base (orgs, entries, `/ai/complete`, audits) |
+| `NEXT_PUBLIC_CORE_API_URL` | Core REST base (orgs, entries, `/ai/complete`, rubrics/judgments) |
 | `NEXT_PUBLIC_COLLAB_WS_URL` | Hocuspocus WebSocket |
 | `NEXT_PUBLIC_ASSETS_BASE_URL` | Static / legacy BusyTeX proxy base (often Core) |
 | `NEXT_PUBLIC_ALLOW_BUSYTEX_COMPILE` | `1` / `true` → optional browser compile escape hatch (default off) |

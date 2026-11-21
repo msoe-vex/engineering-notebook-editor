@@ -33,7 +33,7 @@ Full index (by audience): **[docs/README.md](docs/README.md)** · Agent steerage
 
 ```
 website/           # Next.js — cloud UI at /  (+ archive/legacy/ for old shell)
-services/core/     # Auth, orgs, notebooks, entries, assets, audits, Vertex /ai/complete, BusyTeX
+services/core/     # Auth, orgs, notebooks, entries, assets, rubrics/judgments, Vertex /ai/complete, BusyTeX
 services/collab/   # Hocuspocus / Yjs
 packages/shared/   # v5 types, nested paths, ZIP migrate
 infra/             # compose, emulators, Cloud Run, BusyTeX upload

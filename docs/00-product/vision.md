@@ -21,7 +21,7 @@ See [personas.md](./personas.md). Primary: student / team members writing daily 
 
 ## In scope
 
-- Orgs, teams (ACL), notebooks, folders, entries, collab, schedule, compile, ZIP, GenAI/audit, account prefs, admin
+- Orgs, teams (ACL), notebooks, folders, entries, collab, schedule, compile, ZIP, GenAI/Judge, account prefs, admin
 - Planned: public notebook share links, public org page (vs dashboard), active vs alumni members
 
 ## Non-goals (do not reintroduce)

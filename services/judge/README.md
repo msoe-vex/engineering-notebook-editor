@@ -35,4 +35,4 @@ Core: `JUDGE_SERVICE_URL=http://judge:8091`.
 
 `gather_evidence` → `score_categories` → `summarize` (LangGraph). Evidence gathering calls search/read tools per criterion before batched scoring.
 
-See [FR-genai-audit](../../docs/01-requirements/features/FR-genai-audit.md) and [ADR-006](../../docs/02-architecture/decisions/ADR-006-compile-job.md).
+See [FR-genai-judge](../../docs/01-requirements/features/FR-genai-judge.md) and [ADR-006](../../docs/02-architecture/decisions/ADR-006-compile-job.md).

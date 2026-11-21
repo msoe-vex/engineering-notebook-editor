@@ -25,5 +25,8 @@
 | **Invite** | Pending org membership (`expiresAt`, email, role) |
 | **Collab document** | Hocuspocus name `org:{orgId}:notebook:{notebookId}:entry:{entryId}` |
 | **BYOK** | Bring-your-own-key GenAI; key stays in browser localStorage |
+| **Rubric** | Competition criteria × levels matrix (`RubricMatrix`) stored under a notebook |
+| **Judge** | Server job (`type: judge`) that normalizes a rubric or scores a notebook |
+| **Judgment** | One past grade for a rubric run (`…/judgments/{id}`) |
 | **LWW** | Last-write-wins ZIP import (backup, not sync) |
 | **service_admin** | Platform role for `/admin` and elevated ops |

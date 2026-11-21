@@ -31,7 +31,7 @@ Notebooks live under an org. **Settings** controls branding, phases, logo, and a
 
 ## Acceptance criteria
 
-- [ ] Delete notebook cascades entries, assets, audits, GCS blobs
+- [ ] Delete notebook cascades entries, assets, rubrics, judgments, GCS blobs
 - [ ] Restricted access hides notebook from unauthorized org members
 - [ ] Logo and phases persist and round-trip in ZIP where supported
 - [ ] UI copy distinguishes Org people vs Notebook contributors

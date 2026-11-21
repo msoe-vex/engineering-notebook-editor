@@ -48,7 +48,7 @@ Allow publishing a **read-only public (or unlisted) link** to a notebook so outs
 - SEO indexing of unlisted links
 - Publishing a single entry without the notebook (follow-up)
 - Global short `/n/:token` URLs in MVP (optional later alias)
-- **Public audits / judge scorecards / publish-revoke history** — rubric audits and any audit trail stay behind notebook ACL; never on `/public/o/…`
+- **Public judgments / publish-revoke history** — Judge grades stay behind notebook ACL; never on `/public/o/…`
 
 ## Open questions / risks
 

@@ -5,7 +5,7 @@ Date: 2026-10
 
 ## Context
 
-GenAI (titles, captions, rubric audit) needs provider API keys for BYOK users. Storing keys in Firestore would expand blast radius and compliance burden.
+GenAI (titles, captions, notebook Judge) needs provider API keys for BYOK users. Storing keys in Firestore would expand blast radius and compliance burden.
 
 ## Decision
 
@@ -17,7 +17,7 @@ GenAI (titles, captions, rubric audit) needs provider API keys for BYOK users. S
 
 - Account hydrate restores theme/provider without keys; user re-enters keys per browser if needed
 - Privacy NFR: [NFR-privacy](../../01-requirements/quality/NFR-privacy.md)
-- Feature: [FR-account](../../01-requirements/features/FR-account.md), [FR-genai-audit](../../01-requirements/features/FR-genai-audit.md)
+- Feature: [FR-account](../../01-requirements/features/FR-account.md), [FR-genai-judge](../../01-requirements/features/FR-genai-judge.md)
 
 ## Alternatives considered
 

@@ -1,21 +1,21 @@
 # Service contracts
 
-Local testing: [local-development](../04-guides/local-development.md). Architecture: [overview](../02-architecture/overview.md). Schema: [schema.md](./schema.md). Requirements: [01-requirements](../01-requirements/). GenAI: [ADR-004](../02-architecture/decisions/ADR-004-agents-genai-gateway.md), [ADR-005](../02-architecture/decisions/ADR-005-genai-in-core.md).
+Local testing: [local-development](../04-guides/local-development.md). Architecture: [overview](../02-architecture/overview.md). Schema: [schema.md](./schema.md). Requirements: [01-requirements](../01-requirements/). Titles GenAI: [ADR-004](../02-architecture/decisions/ADR-004-agents-genai-gateway.md), [ADR-005](../02-architecture/decisions/ADR-005-genai-in-core.md). Notebook Judge: [ADR-007](../02-architecture/decisions/ADR-007-python-langgraph-judge.md).
 
 ## Client topology (who calls what)
 
 ```
 Browser (website)
   ├─ Firebase Auth
-  ├─ Core REST ……………………… domain API (orgs, entries, assets, AI, audits)
+  ├─ Core REST ……………………… domain API (orgs, entries, assets, AI, rubrics/judgments)
   ├─ Collab WSS ………………… realtime Yjs
-  ├─ local GenAI URL ……… Ollama / LM Studio (loopback only)
+  ├─ local GenAI URL ……… Ollama / LM Studio (titles/captions only)
   └─ Next.js /api/* ………… optional same-origin BFF only (see below) — not a second domain API
 ```
 
 **BFF (Backend for Frontend):** a small HTTP route that runs **in the Next.js website process** so the browser can call same-origin `/api/...` instead of a cross-origin service. It forwards the request (often with the user’s `Authorization` header) to Core or an external provider. BFFs are **not** where business logic or ACL should live long-term; prefer the browser → Core directly when CORS and cookies allow.
 
-Core path style: **no `/v1/` prefix** (`/orgs/...`, `/ai/...`, `/health`, `/internal/...`). Agents’ `/v1/...` is legacy.
+Core path style: **no `/v1/` prefix** (`/orgs/...`, `/ai/...`, `/health`, `/internal/...`).
 
 ## Website Next.js routes (`website/src/app/api`)
 
@@ -23,7 +23,6 @@ Core path style: **no `/v1/` prefix** (`/orgs/...`, `/ai/...`, `/health`, `/inte
 | --- | --- | --- |
 | `POST /api/genai` | BYOK text generate (key in body) | **Keep as BYOK CORS BFF** (browser → Next → provider). Not Vertex; not Core. |
 | `POST /api/genai/models` | BYOK list models | **Keep** alongside `/api/genai` for the same reason. |
-| `POST /api/agents/audit` | Proxy to Agents `/v1/.../audit` | **Delete**. Browser judge + Core audits. |
 
 Nothing else under `website/src/app/api` today. Page routes and Server Components are UI, not this table.
 
@@ -37,7 +36,8 @@ Firestore / GCS nest under organizations:
 - `organizations/{orgId}/notebooks/{notebookId}/members/{memberId}` (roster credits)
 - `organizations/{orgId}/notebooks/{notebookId}/entries/{entryId}` (metadata + GCS pointers only)
 - `organizations/{orgId}/notebooks/{notebookId}/assets/{assetId}`
-- `organizations/{orgId}/notebooks/{notebookId}/audits/{auditId}`
+- `organizations/{orgId}/notebooks/{notebookId}/rubrics/{rubricId}`
+- `organizations/{orgId}/notebooks/{notebookId}/judgments/{judgmentId}`
 - Top-level: `users/{uid}`, `invites/{inviteId}`
 
 HTTP uses short `/orgs/...` routes that map to the nested collections.
@@ -90,7 +90,7 @@ Auth: `Authorization: Bearer <Firebase ID token | local uid>`
 - `GET/PATCH/DELETE /orgs/:orgId/notebooks/:notebookId`  
   PATCH fields include `name`, `title`, `subtitle`, `logoAssetId`, `folders`, `access`, `phases`, `lastCompiled`, `archivedAt`, `publicAccess` (`off|unlisted|public`), `publicKey`, `revokePublic`  
   Public URL shape: `/o/:orgSlug/n/:publicKey`  
-  DELETE cascades entries/assets/audits GCS blobs + subcollections
+  DELETE cascades entries/assets/rubrics/judgments GCS blobs + subcollections
 - `POST /orgs/:orgId/notebooks/:notebookId/archive` — sets `archivedAt`, locks notebook into read-only mode (admins/owners only; blocks entry/folder/asset/contributor/rubric/judge/compile mutations with 403)
 - `POST /orgs/:orgId/notebooks/:notebookId/unarchive` — clears `archivedAt`, restores write permissions (admins/owners only)
 
@@ -211,11 +211,11 @@ Normalized shape: `RubricMatrix` — criteria rows × level columns (label, poin
   - Debounced flush → Core `/internal/collab/flush` (Yjs body)
   - Website mirrors TipTap JSON with `PUT …/entries/:id/content` after the provider is synced (keeps compile / `GET …/content` current)
 
-## GenAI on Core ([ADR-005](../02-architecture/decisions/ADR-005-genai-in-core.md)) — shipped
+## GenAI titles / captions ([ADR-004](../02-architecture/decisions/ADR-004-agents-genai-gateway.md), [ADR-005](../02-architecture/decisions/ADR-005-genai-in-core.md))
 
-Website **orchestrates** titles and the rubric judge loop. Core **Vertex-infers**, **serves notebook reads for tools**, and **stores audit runs** (including progress).
+Website orchestrates **titles and captions only**. Notebook **Judge** is a separate server job — see **Judge / rubrics** above ([ADR-007](../02-architecture/decisions/ADR-007-python-langgraph-judge.md)).
 
-### Inference
+### Inference (titles/captions)
 
 | Provider | Hop |
 | --- | --- |
@@ -226,36 +226,8 @@ Website **orchestrates** titles and the rubric judge loop. Core **Vertex-infers*
 - `POST /ai/complete` — **Vertex only**; one model turn per request. Reject BYOK/local here.
 - BYOK model list stays on `POST /api/ai/models` (alias `/api/genai/models`, or browser-direct if the provider allows).
 
-### Audits (notebook-scoped) — multi-request progress
-
-Core does **not** run the judge. The website drives many short requests; Core holds run state so the UI (or another tab) can poll.
-
-- `POST /orgs/:orgId/notebooks/:notebookId/audits` — start run `{ status: "running", rubric?, provider? }` → `{ id, ... }`
-- `PATCH /orgs/:orgId/notebooks/:notebookId/audits/:auditId` — progress updates, e.g. `{ status?, steps?, summary?, scores?, advice?, error? }`  
-  Typical: append tool-trace / partial summary while running; final body sets `status: "completed"` or `"failed"`
-- `GET /orgs/:orgId/notebooks/:notebookId/audits/:auditId` — poll one run
-- `GET /orgs/:orgId/notebooks/:notebookId/audits` — list (newest first)
-
-All require notebook ACL.
-
-### Judge tools (reads)
-
-Prefer existing entry APIs; add thin helpers only if needed:
-
-| Tool intent | Prefer |
-| --- | --- |
-| List entries | `GET .../entries` |
-| Entry metadata | `GET .../entries/:entryId` |
-| Entry body | `GET .../entries/:entryId/content` (truncate client-side if huge) |
-| Keyword search | `GET .../entries?q=` or `GET .../ai/search?q=` |
-
-### Website client flow (target)
-
-1. `POST …/audits` → `running`.  
-2. Loop: inference (local / `/api/genai` / `/ai/complete`) → tool GETs on Core → optional `PATCH …/audits/:id` with progress.  
-3. Final `PATCH` → `completed` + scorecard (or `failed`).  
-4. UI may also keep local step state; poll `GET` if needed.
+Judge worker inference uses Core `/internal/ai/complete` (Vertex + BYOK dispatch), not the browser audit loop. The old `/audits` collection and browser-orchestrated scorecards are **removed**.
 
 ## Agents — removed
 
-Former `services/agents` deleted. Audits + Vertex live on Core; judge runs in the website.
+Former `services/agents` deleted. Vertex proxy lives on Core; notebook Judge lives in `services/judge`.

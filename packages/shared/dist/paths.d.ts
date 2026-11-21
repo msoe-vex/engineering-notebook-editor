@@ -18,8 +18,6 @@ export declare function assetsCollection(orgId: string, notebookId: string): str
 /** Org-scoped assets (People avatars, public CMS media) — not notebook-scoped. */
 export declare function orgAssetPath(orgId: string, assetId: string): string;
 export declare function orgAssetsCollection(orgId: string): string;
-export declare function auditPath(orgId: string, notebookId: string, auditId: string): string;
-export declare function auditsCollection(orgId: string, notebookId: string): string;
 export declare function rubricPath(orgId: string, notebookId: string, rubricId: string): string;
 export declare function rubricsCollection(orgId: string, notebookId: string): string;
 export declare function judgmentPath(orgId: string, notebookId: string, judgmentId: string): string;

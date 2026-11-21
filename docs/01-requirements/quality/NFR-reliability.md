@@ -5,7 +5,7 @@ Related: [FR-notebooks](../features/FR-notebooks.md), [FR-entries-collab](../fea
 
 ## Requirement
 
-- Notebook/org delete removes Firestore children **and** related GCS objects (TipTap, Yjs, assets, exports, audits).
+- Notebook/org delete removes Firestore children **and** related GCS objects (TipTap, Yjs, assets, exports, rubric sources).
 - Entry **Trash** soft-deletes keep TipTap/Yjs until permanent purge; notebook cascade delete still hard-deletes all entries.
 - Image insert uses server-returned asset id; `assetIds` / `usedBy` stay consistent.
 - Collab flush eventually persists Yjs; website mirrors TipTap JSON after sync. Clients tolerate brief TipTap lag behind Yjs.
