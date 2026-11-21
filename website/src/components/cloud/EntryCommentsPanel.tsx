@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BubbleMenu } from "@tiptap/react/menus";
 import { Check, MessageSquare, MessageSquarePlus, Trash2 } from "lucide-react";
 import type { TiptapEditor } from "@/lib/types";
@@ -24,6 +24,10 @@ type CommentRow = {
   mentionedUids?: string[];
 };
 
+function mentionLabel(p: MemberSummary) {
+  return (p.displayName || p.email || "Member").trim();
+}
+
 function ComposeCommentDialog({
   open,
   onClose,
@@ -41,13 +45,74 @@ function ComposeCommentDialog({
 }) {
   const [text, setText] = useState("");
   const [mentioned, setMentioned] = useState<string[]>([]);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionStart, setMentionStart] = useState<number | null>(null);
+  const [highlight, setHighlight] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (open) {
       setText("");
       setMentioned([]);
+      setMentionQuery(null);
+      setMentionStart(null);
+      setHighlight(0);
     }
   }, [open]);
+
+  const suggestions = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    return people
+      .filter((p) => {
+        const name = (p.displayName || "").toLowerCase();
+        const email = (p.email || "").toLowerCase();
+        return !q || name.includes(q) || email.includes(q);
+      })
+      .slice(0, 8);
+  }, [mentionQuery, people]);
+
+  function syncMentionState(value: string, caret: number) {
+    const before = value.slice(0, caret);
+    const match = /(?:^|[\s([{])@([^\s@]*)$/.exec(before);
+    if (!match) {
+      setMentionQuery(null);
+      setMentionStart(null);
+      return;
+    }
+    setMentionStart(caret - match[1].length - 1);
+    setMentionQuery(match[1]);
+    setHighlight(0);
+  }
+
+  function insertMention(p: MemberSummary) {
+    if (mentionStart == null || !textareaRef.current) return;
+    const el = textareaRef.current;
+    const caret = el.selectionStart;
+    const label = mentionLabel(p);
+    const before = text.slice(0, mentionStart);
+    const after = text.slice(caret);
+    const next = `${before}@${label} ${after}`;
+    setText(next);
+    setMentioned((prev) => (prev.includes(p.uid) ? prev : [...prev, p.uid]));
+    setMentionQuery(null);
+    setMentionStart(null);
+    requestAnimationFrame(() => {
+      const pos = before.length + label.length + 2;
+      el.focus();
+      el.setSelectionRange(pos, pos);
+    });
+  }
+
+  function resolveMentionsFromText(body: string): string[] {
+    const ids = new Set(mentioned);
+    for (const p of people) {
+      const label = mentionLabel(p);
+      if (label && body.includes(`@${label}`)) ids.add(p.uid);
+      if (p.email && body.includes(`@${p.email}`)) ids.add(p.uid);
+    }
+    return [...ids];
+  }
 
   return (
     <Dialog
@@ -63,7 +128,7 @@ function ComposeCommentDialog({
           <Button
             variant="primary"
             disabled={busy || !text.trim()}
-            onClick={() => void onSubmit(text.trim(), mentioned)}
+            onClick={() => void onSubmit(text.trim(), resolveMentionsFromText(text))}
           >
             {busy ? "Saving…" : "Comment"}
           </Button>
@@ -77,48 +142,89 @@ function ComposeCommentDialog({
           </p>
         ) : (
           <p className="text-nb-caption text-nb-on-surface-variant">
-            Comment on the current selection (or the entry if nothing is selected).
+            Comment on the current selection (or the entry if nothing is selected). Type @ to
+            mention someone.
           </p>
         )}
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium text-nb-on-surface-variant">Comment</span>
-          <textarea
-            className="min-h-[6rem] w-full rounded-xl border border-nb-outline-variant/40 bg-nb-surface-low px-3 py-2.5 text-sm text-nb-on-surface outline-none transition-colors focus:border-nb-primary"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Write a note… Use mentions below to notify members."
-          />
-        </label>
-        <div>
-          <p className="mb-1.5 text-nb-label font-medium">Mention members</p>
-          <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto">
-            {people.map((p) => {
-              const label = p.displayName || p.email || "Member";
-              const on = mentioned.includes(p.uid);
-              return (
-                <button
-                  key={p.uid}
-                  type="button"
-                  className={`rounded-nb-md border px-2 py-1 text-nb-caption font-medium ${
-                    on
-                      ? "border-nb-primary bg-nb-primary/10 text-nb-primary"
-                      : "border-nb-outline-variant/40 text-nb-on-surface-variant hover:border-nb-primary/50"
-                  }`}
-                  onClick={() =>
-                    setMentioned((prev) =>
-                      on ? prev.filter((id) => id !== p.uid) : [...prev, p.uid]
-                    )
-                  }
-                >
-                  @{label}
-                </button>
-              );
-            })}
-            {!people.length && (
-              <span className="text-nb-caption text-nb-on-surface-variant">No org members</span>
-            )}
-          </div>
+        <div className="relative">
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-nb-on-surface-variant">
+              Comment
+            </span>
+            <textarea
+              ref={textareaRef}
+              className="min-h-[6rem] w-full rounded-xl border border-nb-outline-variant/40 bg-nb-surface-low px-3 py-2.5 text-sm text-nb-on-surface outline-none transition-colors focus:border-nb-primary"
+              value={text}
+              onChange={(e) => {
+                const value = e.target.value;
+                setText(value);
+                syncMentionState(value, e.target.selectionStart);
+              }}
+              onKeyUp={(e) => syncMentionState(text, e.currentTarget.selectionStart)}
+              onClick={(e) => syncMentionState(text, e.currentTarget.selectionStart)}
+              onKeyDown={(e) => {
+                if (mentionQuery === null || !suggestions.length) return;
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setHighlight((h) => (h + 1) % suggestions.length);
+                } else if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setHighlight((h) => (h - 1 + suggestions.length) % suggestions.length);
+                } else if (e.key === "Enter" || e.key === "Tab") {
+                  e.preventDefault();
+                  insertMention(suggestions[highlight] || suggestions[0]);
+                } else if (e.key === "Escape") {
+                  setMentionQuery(null);
+                  setMentionStart(null);
+                }
+              }}
+              placeholder="Write a note… Type @ to mention a member"
+            />
+          </label>
+          {mentionQuery !== null && (
+            <div className="absolute right-0 left-0 z-20 mt-1 max-h-48 overflow-auto rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface shadow-nb-md">
+              {suggestions.length ? (
+                <ul className="py-1">
+                  {suggestions.map((p, i) => (
+                    <li key={p.uid}>
+                      <button
+                        type="button"
+                        className={`flex w-full flex-col px-3 py-2 text-left text-nb-label ${
+                          i === highlight ? "bg-nb-primary/10" : "hover:bg-nb-surface-low"
+                        }`}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => insertMention(p)}
+                      >
+                        <span className="font-semibold text-nb-on-surface">
+                          @{mentionLabel(p)}
+                        </span>
+                        {p.email && p.displayName ? (
+                          <span className="text-nb-caption text-nb-on-surface-variant">
+                            {p.email}
+                          </span>
+                        ) : null}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="px-3 py-2 text-nb-caption text-nb-on-surface-variant">No matches</p>
+              )}
+            </div>
+          )}
         </div>
+        {mentioned.length > 0 && (
+          <p className="text-nb-caption text-nb-on-surface-variant">
+            Will notify:{" "}
+            {mentioned
+              .map((uid) => {
+                const p = people.find((x) => x.uid === uid);
+                return p ? `@${mentionLabel(p)}` : null;
+              })
+              .filter(Boolean)
+              .join(", ")}
+          </p>
+        )}
       </div>
     </Dialog>
   );
@@ -144,6 +250,8 @@ export function EntryCommentsPanel({
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeQuote, setComposeQuote] = useState<string | undefined>();
   const [people, setPeople] = useState<MemberSummary[]>([]);
+  const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
+  const commentRefs = useRef<Record<string, HTMLLIElement | null>>({});
 
   const load = useCallback(() => {
     void cloudApi
@@ -163,6 +271,12 @@ export function EntryCommentsPanel({
     if (!open) return;
     load();
   }, [open, load]);
+
+  useEffect(() => {
+    if (!open || !activeCommentId) return;
+    const el = commentRefs.current[activeCommentId];
+    el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [open, activeCommentId, comments]);
 
   useEffect(() => {
     if (!open) return;
@@ -187,6 +301,43 @@ export function EntryCommentsPanel({
     );
     return () => ac.abort();
   }, [open, orgId, notebookId, entryId]);
+
+  const openCommentFromAnchor = useCallback(
+    (commentId: string) => {
+      setActiveCommentId(commentId);
+      setShowResolved(true);
+      onRequestOpen?.();
+      if (editor) {
+        let found = false;
+        editor.state.doc.descendants((node, pos) => {
+          if (found || !node.isText || !node.marks) return;
+          const mark = node.marks.find(
+            (m) => m.type.name === "commentAnchor" && m.attrs.commentId === commentId
+          );
+          if (!mark) return;
+          found = true;
+          editor.chain().focus().setTextSelection({ from: pos, to: pos + node.nodeSize }).run();
+        });
+      }
+    },
+    [editor, onRequestOpen]
+  );
+
+  useEffect(() => {
+    if (!editor) return;
+    const dom = editor.view.dom;
+    const onClick = (ev: MouseEvent) => {
+      const target = ev.target as HTMLElement | null;
+      const anchor = target?.closest?.("[data-comment-id]") as HTMLElement | null;
+      if (!anchor) return;
+      const commentId = anchor.getAttribute("data-comment-id");
+      if (!commentId) return;
+      ev.preventDefault();
+      openCommentFromAnchor(commentId);
+    };
+    dom.addEventListener("click", onClick);
+    return () => dom.removeEventListener("click", onClick);
+  }, [editor, openCommentFromAnchor]);
 
   function openComposeFromSelection() {
     let quote: string | undefined;
@@ -217,6 +368,7 @@ export function EntryCommentsPanel({
         mentionedUids,
       });
       setComposeOpen(false);
+      setActiveCommentId(id);
       showNotification("Comment added", "success");
       load();
     } catch (err) {
@@ -227,6 +379,7 @@ export function EntryCommentsPanel({
   }
 
   function focusComment(commentId: string) {
+    setActiveCommentId(commentId);
     if (!editor) return;
     let found = false;
     editor.state.doc.descendants((node, pos) => {
@@ -242,7 +395,7 @@ export function EntryCommentsPanel({
 
   const nameByUid = useMemo(() => {
     const map = new Map<string, string>();
-    for (const p of people) map.set(p.uid, p.displayName || p.email || "Member");
+    for (const p of people) map.set(p.uid, mentionLabel(p));
     return map;
   }, [people]);
 
@@ -317,10 +470,15 @@ export function EntryCommentsPanel({
             {visible.map((c) => (
               <li
                 key={c.id}
+                ref={(el) => {
+                  commentRefs.current[c.id] = el;
+                }}
                 className={`rounded-nb-lg border px-3 py-2 text-nb-body ${
-                  c.resolvedAt
-                    ? "border-nb-outline-variant/20 bg-nb-surface-low/40 opacity-70"
-                    : "border-nb-outline-variant/30 bg-nb-surface-low/60"
+                  activeCommentId === c.id
+                    ? "border-nb-primary ring-1 ring-nb-primary/30"
+                    : c.resolvedAt
+                      ? "border-nb-outline-variant/20 bg-nb-surface-low/40 opacity-70"
+                      : "border-nb-outline-variant/30 bg-nb-surface-low/60"
                 }`}
               >
                 <button type="button" className="w-full text-left" onClick={() => focusComment(c.id)}>

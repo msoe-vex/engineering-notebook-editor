@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
-import { Edit2, Plus, Search, Trash2, User, Users, X } from "lucide-react";
+import { useEffect, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { Edit2, Plus, Trash2, Users } from "lucide-react";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import TextPromptDialog from "@/components/dialogs/TextPromptDialog";
 import { useOrgWorkspace } from "@/components/cloud/OrgWorkspaceContext";
+import { OrgPeopleSearchPanel } from "@/components/cloud/OrgPeopleSearchPanel";
 import {
   Button,
   ContextMenu,
@@ -13,7 +14,7 @@ import {
   ListRow,
   type MenuItem,
 } from "@/components/ui";
-import { cloudApi, type MemberSummary, type TeamSummary } from "@/lib/cloud/api";
+import { cloudApi, type TeamSummary } from "@/lib/cloud/api";
 
 export default function OrgTeamsPage() {
   const { orgId, teams, members, canManage, busy, setBusy, refresh, setError } =
@@ -151,15 +152,22 @@ export default function OrgTeamsPage() {
               </button>
               <DropdownMenu items={teamMenuItems(team)} />
               {open && (
-                <TeamPeoplePanel
-                  canManage={canManage}
-                  members={members}
-                  onTeam={onTeam}
-                  query={memberQuery}
-                  onQueryChange={setMemberQuery}
-                  onAdd={(uid) => addMember(team.id, uid)}
-                  onRemove={(uid) => removeMember(team.id, uid)}
-                />
+                <div className="mt-3 w-full basis-full border-t border-nb-outline-variant/20 pt-3">
+                  <OrgPeopleSearchPanel
+                    canManage={canManage}
+                    members={members}
+                    selected={onTeam}
+                    query={memberQuery}
+                    onQueryChange={setMemberQuery}
+                    onAdd={(uid) => addMember(team.id, uid)}
+                    onRemove={(uid) => removeMember(team.id, uid)}
+                    emptySelectedHint={
+                      canManage
+                        ? "No one on this team yet — search above to add people."
+                        : "No one on this team yet."
+                    }
+                  />
+                </div>
               )}
             </ListRow>
           );
@@ -244,135 +252,3 @@ export default function OrgTeamsPage() {
   );
 }
 
-function TeamPeoplePanel({
-  canManage,
-  members,
-  onTeam,
-  query,
-  onQueryChange,
-  onAdd,
-  onRemove,
-}: {
-  canManage: boolean;
-  members: MemberSummary[];
-  onTeam: MemberSummary[];
-  query: string;
-  onQueryChange: (q: string) => void;
-  onAdd: (uid: string) => void;
-  onRemove: (uid: string) => void;
-}) {
-  const q = query.trim().toLowerCase();
-  const onTeamIds = useMemo(() => new Set(onTeam.map((m) => m.uid)), [onTeam]);
-
-  const suggestions = useMemo(() => {
-    if (!q) return [] as MemberSummary[];
-    return members.filter(
-      (m) =>
-        !onTeamIds.has(m.uid) &&
-        ((m.displayName || "").toLowerCase().includes(q) ||
-          (m.email || "").toLowerCase().includes(q) ||
-          m.uid.toLowerCase().includes(q))
-    );
-  }, [q, members, onTeamIds]);
-
-  return (
-    <div className="mt-3 basis-full w-full space-y-3 border-t border-nb-outline-variant/20 pt-3">
-      {canManage && (
-        <div className="relative">
-          <Search
-            size={14}
-            className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-nb-on-surface-variant/60"
-          />
-          <input
-            value={query}
-            onChange={(e) => onQueryChange(e.target.value)}
-            placeholder={
-              members.length ? "Search people (by name or email) to add…" : "Add people to the organization first"
-            }
-            disabled={!members.length}
-            className="w-full rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface py-2 pr-3 pl-8 text-nb-label outline-none focus:border-nb-primary disabled:opacity-50"
-            aria-label="Search people to add to team"
-          />
-          {q ? (
-            <div className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface shadow-nb-md">
-              {suggestions.length > 0 ? (
-                <ul className="py-1">
-                  {suggestions.map((m) => (
-                    <li key={m.uid}>
-                      <button
-                        type="button"
-                        className="flex w-full items-center justify-between px-3 py-2 text-left text-nb-label hover:bg-nb-surface-low"
-                        onClick={() => onAdd(m.uid)}
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <User size={14} className="text-nb-on-surface-variant shrink-0" />
-                          <div className="truncate">
-                            {m.displayName ? (
-                              <>
-                                <span className="font-semibold text-nb-on-surface">{m.displayName}</span>
-                                {m.email && (
-                                  <span className="ml-1.5 text-nb-caption text-nb-on-surface-variant">
-                                    ({m.email})
-                                  </span>
-                                )}
-                              </>
-                            ) : (
-                              <span className="text-nb-on-surface">{m.email || m.uid}</span>
-                            )}
-                          </div>
-                        </div>
-                        <span className="text-nb-caption text-nb-on-surface-variant shrink-0">Add</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="px-3 py-2 text-nb-caption text-nb-on-surface-variant">No matches</p>
-              )}
-            </div>
-          ) : null}
-        </div>
-      )}
-
-      {onTeam.length > 0 ? (
-        <div className="max-h-56 overflow-y-auto rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface divide-y divide-nb-outline-variant/15">
-          {onTeam.map((m) => (
-            <div
-              key={m.uid}
-              className="flex items-center justify-between gap-3 px-3.5 py-2 text-nb-body"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-nb-primary/10 text-nb-primary">
-                  <User size={14} />
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate font-medium text-nb-on-surface text-nb-label">
-                    {m.displayName || m.email || m.uid}
-                  </p>
-                  {m.displayName && m.email && (
-                    <p className="truncate text-nb-caption text-nb-on-surface-variant">{m.email}</p>
-                  )}
-                </div>
-              </div>
-              {canManage && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 w-7 p-0 text-nb-on-surface-variant hover:text-nb-danger"
-                  onClick={() => onRemove(m.uid)}
-                  title={`Remove ${m.displayName || m.email || m.uid} from team`}
-                >
-                  <X size={14} />
-                </Button>
-              )}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-nb-caption text-nb-on-surface-variant">
-          {canManage ? "No one on this team yet — search above to add people." : "No one on this team yet."}
-        </p>
-      )}
-    </div>
-  );
-}

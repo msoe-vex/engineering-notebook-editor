@@ -13,11 +13,12 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Plus, UserRound, X } from "lucide-react";
+import { GripVertical, UserRound, X } from "lucide-react";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
+import { OrgPeopleSearchPanel } from "@/components/cloud/OrgPeopleSearchPanel";
 import { showNotification } from "@/components/overlays/Notification";
 import { ContributorsPageSkeleton } from "@/components/cloud/notebookPageSkeletons";
-import { Button, Dialog, EmptyState } from "@/components/ui";
+import { Button, EmptyState } from "@/components/ui";
 import { cloudApi, type MemberSummary } from "@/lib/cloud/api";
 import { useAppDndSensors } from "@/lib/dnd/dndSensors";
 
@@ -87,6 +88,15 @@ function SortableContributor({
   );
 }
 
+function rowFromMember(p: MemberSummary, photoUrl?: string): ContributorRow {
+  return {
+    uid: p.uid,
+    name: p.displayName || p.email || "Member",
+    title: (p as MemberSummary & { title?: string }).title,
+    photoUrl,
+  };
+}
+
 export default function NotebookContributorsPage() {
   const {
     orgId,
@@ -101,14 +111,8 @@ export default function NotebookContributorsPage() {
   const [busy, setBusy] = useState(false);
   const [orgPeople, setOrgPeople] = useState<MemberSummary[]>([]);
   const [rows, setRows] = useState<ContributorRow[]>([]);
-  const [pickerOpen, setPickerOpen] = useState(false);
-
-  const contributorUids = useMemo(
-    () =>
-      ((notebookSummary as { contributorUids?: string[] } | null)?.contributorUids ||
-        rows.map((r) => r.uid)) as string[],
-    [notebookSummary, rows]
-  );
+  const [memberQuery, setMemberQuery] = useState("");
+  const [photos, setPhotos] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -119,21 +123,23 @@ export default function NotebookContributorsPage() {
         if (cancelled) return;
         setOrgPeople(people);
 
-        const uids =
-          (notebookSummary as { contributorUids?: string[] } | null)?.contributorUids || [];
-        const photos: Record<string, string> = {};
+        const nextPhotos: Record<string, string> = {};
         await Promise.all(
           people.map(async (p) => {
             if (!p.imageAssetId) return;
             try {
               const { url } = await cloudApi.getOrgAssetUrl(orgId, p.imageAssetId);
-              photos[p.uid] = url;
+              nextPhotos[p.uid] = url;
             } catch {
               /* ignore */
             }
           })
         );
         if (cancelled) return;
+        setPhotos(nextPhotos);
+
+        const uids =
+          (notebookSummary as { contributorUids?: string[] } | null)?.contributorUids || [];
 
         if (uids.length) {
           setRows(
@@ -141,17 +147,11 @@ export default function NotebookContributorsPage() {
               .map((uid) => {
                 const p = people.find((x) => x.uid === uid);
                 if (!p) return null;
-                return {
-                  uid,
-                  name: p.displayName || p.email || "Member",
-                  title: (p as MemberSummary & { title?: string }).title,
-                  photoUrl: photos[uid],
-                };
+                return rowFromMember(p, nextPhotos[uid]);
               })
               .filter(Boolean) as ContributorRow[]
           );
         } else {
-          // Seed from legacy roster API once.
           const legacy = await cloudApi.listNotebookMembers(orgId, notebookId);
           const mapped = legacy
             .map((m) => {
@@ -159,10 +159,9 @@ export default function NotebookContributorsPage() {
               const p = people.find((x) => x.uid === uid);
               if (!p) return null;
               return {
-                uid,
-                name: p.displayName || p.email || m.name,
-                title: (p as MemberSummary & { title?: string }).title || m.role,
-                photoUrl: photos[uid],
+                ...rowFromMember(p, nextPhotos[uid]),
+                title:
+                  (p as MemberSummary & { title?: string }).title || m.role || undefined,
               };
             })
             .filter(Boolean) as ContributorRow[];
@@ -210,42 +209,50 @@ export default function NotebookContributorsPage() {
     void persist(arrayMove(rows, from, to));
   }
 
-  const available = orgPeople.filter((p) => !rows.some((r) => r.uid === p.uid));
+  const selectedMembers = useMemo(() => {
+    return rows
+      .map((r) => orgPeople.find((p) => p.uid === r.uid))
+      .filter(Boolean) as MemberSummary[];
+  }, [rows, orgPeople]);
 
   if (!loaded) return <ContributorsPageSkeleton />;
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 p-4 md:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-nb-title font-semibold text-nb-on-surface">Contributors</h1>
-          <p className="mt-1 text-nb-body text-nb-on-surface-variant">
-            Choose who appears in this notebook’s credits from organization members. Titles and
-            photos are edited under People.
-          </p>
-        </div>
-        {!isArchived && (
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={busy || !available.length}
-            onClick={() => setPickerOpen(true)}
-          >
-            <Plus size={14} /> Add
-          </Button>
-        )}
+      <div>
+        <h1 className="text-nb-title font-semibold text-nb-on-surface">Contributors</h1>
+        <p className="mt-1 text-nb-body text-nb-on-surface-variant">
+          Choose who appears in this notebook’s credits from organization members. Titles and
+          photos are edited under People. Drag to reorder.
+        </p>
       </div>
+
+      {!isArchived && (
+        <OrgPeopleSearchPanel
+          canManage={!busy}
+          members={orgPeople}
+          selected={selectedMembers}
+          query={memberQuery}
+          onQueryChange={setMemberQuery}
+          onAdd={(uid) => {
+            if (rows.some((r) => r.uid === uid)) return;
+            const p = orgPeople.find((x) => x.uid === uid);
+            if (!p) return;
+            setMemberQuery("");
+            void persist([...rows, rowFromMember(p, photos[uid])]);
+          }}
+          onRemove={(uid) => void persist(rows.filter((r) => r.uid !== uid))}
+          showSelectedList={false}
+        />
+      )}
 
       {rows.length === 0 ? (
         <EmptyState
           title="No contributors yet"
-          description="Add organization members to the credits list."
-          action={
-            !isArchived ? (
-              <Button size="sm" variant="secondary" onClick={() => setPickerOpen(true)}>
-                <Plus size={14} /> Add contributor
-              </Button>
-            ) : undefined
+          description={
+            isArchived
+              ? "This archived notebook has no credits list."
+              : "Search people above to add them to the credits list."
           }
         />
       ) : (
@@ -264,60 +271,6 @@ export default function NotebookContributorsPage() {
           </SortableContext>
         </DndContext>
       )}
-
-      <Dialog
-        isOpen={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        title="Add contributors"
-        size="md"
-        footer={
-          <div className="flex justify-end">
-            <Button variant="ghost" onClick={() => setPickerOpen(false)}>
-              Done
-            </Button>
-          </div>
-        }
-      >
-        <ul className="max-h-80 space-y-1 overflow-y-auto">
-          {available.map((p) => (
-            <li key={p.uid}>
-              <button
-                type="button"
-                className="flex w-full items-center gap-3 rounded-nb-lg px-2 py-2 text-left hover:bg-nb-surface-low"
-                disabled={busy}
-                onClick={() => {
-                  void persist([
-                    ...rows,
-                    {
-                      uid: p.uid,
-                      name: p.displayName || p.email || "Member",
-                      title: (p as MemberSummary & { title?: string }).title,
-                    },
-                  ]);
-                }}
-              >
-                <UserRound size={16} className="text-nb-on-surface-variant" />
-                <span className="min-w-0 flex-1 truncate font-medium">
-                  {p.displayName || p.email || "Member"}
-                </span>
-                <span className="text-nb-caption text-nb-on-surface-variant">
-                  {[
-                    (p as MemberSummary & { title?: string }).title || p.role,
-                    p.status === "alumni" ? "Alumni" : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </span>
-              </button>
-            </li>
-          ))}
-          {!available.length && (
-            <li className="py-6 text-center text-nb-caption text-nb-on-surface-variant">
-              Every org member is already on the credits list.
-            </li>
-          )}
-        </ul>
-      </Dialog>
     </div>
   );
 }

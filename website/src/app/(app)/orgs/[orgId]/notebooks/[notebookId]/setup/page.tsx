@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Copy, ImagePlus, Trash2 } from "lucide-react";
+import { Check, Copy, ExternalLink, ImagePlus, Trash2 } from "lucide-react";
 import { AccessAllowlistPicker } from "@/components/cloud/AccessAllowlistPicker";
 import { NotebookPhasesEditor } from "@/components/cloud/NotebookPhasesEditor";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
@@ -52,6 +52,7 @@ export default function NotebookSetupPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showUnarchiveConfirm, setShowUnarchiveConfirm] = useState(false);
+  const [publicAccess, setPublicAccess] = useState<"off" | "unlisted" | "public">("off");
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -71,6 +72,11 @@ export default function NotebookSetupPage() {
     setAccessMode(access?.mode === "restricted" ? "restricted" : "org");
     setTeamIds(access?.teamIds ?? []);
     setUserIds(access?.userIds ?? []);
+    setPublicAccess(
+      notebookSummary?.publicAccess === "public" || notebookSummary?.publicAccess === "unlisted"
+        ? notebookSummary.publicAccess
+        : "off"
+    );
   }, [notebookSummary]);
 
   const initialTitle = notebookSummary?.title || notebookSummary?.name || "";
@@ -414,53 +420,97 @@ export default function NotebookSetupPage() {
         )}
       </div>
 
-      {canManage && (
+      {canManage && notebookSummary && (
         <section className="flex flex-col gap-4 rounded-nb-xl border border-nb-outline-variant/30 bg-nb-surface-low/40 p-5">
-          <div>
-            <h2 className="text-nb-title font-semibold text-nb-on-surface">Public link</h2>
-            <p className="mt-1 text-nb-body text-nb-on-surface-variant">
-              Share a read-only notebook at{" "}
-              <code className="text-nb-caption">/o/&lt;org-slug&gt;/n/&lt;key&gt;</code>. Org must have a
-              public slug set in organization settings.
-            </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-nb-title font-semibold text-nb-on-surface">Public page</h2>
+              <p className="mt-1 text-nb-body text-nb-on-surface-variant">
+                Share a read-only notebook at{" "}
+                <code className="text-nb-caption">/o/&lt;org-slug&gt;/n/&lt;key&gt;</code>. Same
+                visibility pattern as the organization public site.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {orgSlug &&
+              notebookSummary.publicKey &&
+              publicAccess !== "off" ? (
+                <>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      const url = `${window.location.origin}/o/${orgSlug}/n/${notebookSummary.publicKey}`;
+                      void navigator.clipboard.writeText(url).then(
+                        () => showNotification("Link copied", "success"),
+                        () => showNotification("Could not copy", "error")
+                      );
+                    }}
+                  >
+                    <Copy size={14} /> Copy link
+                  </Button>
+                  <a
+                    href={`/o/${orgSlug}/n/${notebookSummary.publicKey}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-nb-primary hover:underline"
+                  >
+                    View public site <ExternalLink size={14} />
+                  </a>
+                </>
+              ) : (
+                <span className="text-sm text-nb-on-surface-variant">
+                  {!orgSlug
+                    ? "Set an org slug first"
+                    : publicAccess === "off"
+                      ? "Visibility is off"
+                      : "Save visibility to create a link"}
+                </span>
+              )}
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+
+          <label className="flex max-w-sm flex-col gap-1 text-nb-label">
+            <span className="font-medium">Visibility</span>
             <select
-              className="rounded-nb-lg border border-nb-outline-variant/40 bg-nb-surface px-3 py-2 text-nb-label"
-              defaultValue={notebookSummary.publicAccess || "off"}
-              id="public-access-select"
+              className="rounded-nb-lg border border-nb-outline-variant/40 bg-nb-surface px-3 py-2"
+              value={publicAccess}
               disabled={busy || isArchived}
+              onChange={(e) =>
+                setPublicAccess(e.target.value as "off" | "unlisted" | "public")
+              }
             >
               <option value="off">Off</option>
               <option value="unlisted">Unlisted (anyone with link)</option>
               <option value="public">Public</option>
             </select>
-            <Button
-              variant="secondary"
-              disabled={busy || isArchived}
-              onClick={() => {
-                const sel = document.getElementById("public-access-select") as HTMLSelectElement | null;
-                const access = (sel?.value || "off") as "off" | "unlisted" | "public";
-                setBusy(true);
-                void cloudApi
-                  .patchNotebook(orgId, notebookId, {
-                    publicAccess: access,
-                    revokePublic: access === "off",
-                  })
-                  .then(() => {
-                    showNotification(
-                      access === "off" ? "Public link disabled" : "Public link updated",
-                      "success"
-                    );
-                    refresh();
-                  })
-                  .catch((err) => showNotification((err as Error).message, "error"))
-                  .finally(() => setBusy(false));
-              }}
-            >
-              Update public link
-            </Button>
-          </div>
+          </label>
+
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={busy || isArchived}
+            onClick={() => {
+              setBusy(true);
+              void cloudApi
+                .patchNotebook(orgId, notebookId, {
+                  publicAccess,
+                  revokePublic: publicAccess === "off",
+                })
+                .then(() => {
+                  showNotification(
+                    publicAccess === "off" ? "Public link disabled" : "Public page updated",
+                    "success"
+                  );
+                  refresh();
+                })
+                .catch((err) => showNotification((err as Error).message, "error"))
+                .finally(() => setBusy(false));
+            }}
+          >
+            Save public settings
+          </Button>
+
           {!orgSlug && (
             <Alert variant="warning">
               This organization has no public slug yet. Set one under{" "}
@@ -470,56 +520,15 @@ export default function NotebookSetupPage() {
               before the public notebook URL works.
             </Alert>
           )}
-          {notebookSummary.publicKey &&
-            notebookSummary.publicAccess &&
-            notebookSummary.publicAccess !== "off" && (
-              <div className="flex flex-col gap-2">
-                <p className="text-nb-caption text-nb-on-surface-variant">
-                  Path:{" "}
-                  <code>
-                    /o/{orgSlug || "<org-slug>"}/n/{notebookSummary.publicKey}
-                  </code>
-                </p>
-                {(notebookSummary.publishedAt || notebookSummary.publishedBy) && (
-                  <p className="text-nb-caption text-nb-on-surface-variant">
-                    Published
-                    {notebookSummary.publishedAt
-                      ? ` ${new Date(notebookSummary.publishedAt).toLocaleString()}`
-                      : ""}
-                    {notebookSummary.publishedBy ? ` by ${notebookSummary.publishedBy}` : ""}
-                    {" "}
-                    (admin only — not shown on the public page)
-                  </p>
-                )}
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={!orgSlug}
-                    onClick={() => {
-                      if (!orgSlug || typeof window === "undefined") return;
-                      const url = `${window.location.origin}/o/${orgSlug}/n/${notebookSummary.publicKey}`;
-                      void navigator.clipboard.writeText(url).then(
-                        () => showNotification("Public URL copied", "success"),
-                        () => showNotification("Could not copy", "error")
-                      );
-                    }}
-                  >
-                    <Copy size={14} /> Copy public URL
-                  </Button>
-                  {orgSlug && (
-                    <a
-                      className="inline-flex items-center text-sm font-semibold text-nb-primary hover:underline"
-                      href={`/o/${orgSlug}/n/${notebookSummary.publicKey}`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open public view ↗
-                    </a>
-                  )}
-                </div>
-              </div>
-            )}
+
+          {notebookSummary.publicKey && publicAccess !== "off" && (
+            <p className="text-nb-caption text-nb-on-surface-variant">
+              Public URL:{" "}
+              <code>
+                /o/{orgSlug || "<org-slug>"}/n/{notebookSummary.publicKey}
+              </code>
+            </p>
+          )}
         </section>
       )}
 
