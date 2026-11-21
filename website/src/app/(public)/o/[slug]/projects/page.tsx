@@ -3,7 +3,6 @@
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PublicOrgChrome } from "@/components/public/PublicOrgChrome";
-import { CmsIcon } from "@/components/cloud/CmsIconPicker";
 import { cloudApi } from "@/lib/cloud/api";
 import { LoadingBlock } from "@/components/ui";
 import { Alert } from "@/components/ui/Alert";
@@ -52,34 +51,41 @@ export default function PublicProjectsPage() {
         <h1 className="text-3xl font-bold">Projects & Robot Builds</h1>
         <ul className="mt-8 space-y-6">
           {projects.map((p) => (
-            <li key={String(p.id)} className="border-b border-nb-outline-variant/20 pb-6">
-              <h2 className="flex items-center gap-2 text-xl font-semibold">
-                {typeof p.iconName === "string" && p.iconName ? (
-                  <CmsIcon name={p.iconName} size={20} />
-                ) : null}
-                <span>
+            <li key={String(p.id)} className="flex gap-4 border-b border-nb-outline-variant/20 pb-6">
+              {typeof p.imageUrl === "string" && p.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={p.imageUrl}
+                  alt=""
+                  className="h-20 w-20 shrink-0 rounded-nb-lg object-cover"
+                />
+              ) : null}
+              <div className="min-w-0">
+                <h2 className="text-xl font-semibold">
                   {p.season ? `${String(p.season)} ` : ""}
                   {String(p.title || "Project")}
-                </span>
-              </h2>
-              {p.summary ? <p className="mt-2 text-nb-on-surface-variant">{String(p.summary)}</p> : null}
-              {Array.isArray(p.highlights) && (
-                <ul className="mt-2 list-disc pl-5 text-sm">
-                  {(p.highlights as string[]).map((h) => (
-                    <li key={h}>{h}</li>
-                  ))}
-                </ul>
-              )}
-              {p.externalUrl ? (
-                <a
-                  href={String(p.externalUrl)}
-                  className="mt-2 inline-block text-sm text-nb-primary"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Source / CAD ↗
-                </a>
-              ) : null}
+                </h2>
+                {p.summary ? (
+                  <p className="mt-2 text-nb-on-surface-variant">{String(p.summary)}</p>
+                ) : null}
+                {Array.isArray(p.highlights) && (
+                  <ul className="mt-2 list-disc pl-5 text-sm">
+                    {(p.highlights as string[]).map((h) => (
+                      <li key={h}>{h}</li>
+                    ))}
+                  </ul>
+                )}
+                {p.externalUrl ? (
+                  <a
+                    href={String(p.externalUrl)}
+                    className="mt-2 inline-block text-sm text-nb-primary"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Source / CAD ↗
+                  </a>
+                ) : null}
+              </div>
             </li>
           ))}
         </ul>

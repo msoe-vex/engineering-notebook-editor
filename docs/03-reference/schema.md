@@ -143,11 +143,11 @@ Implemented fields for [FR-org-public-page](../01-requirements/features/FR-org-p
 | `organizations/{orgId}.slug` | Globally unique, URL-safe; admin-set if not taken; reserved list |
 | `orgSlugs/{slug}` → `{ orgId }` | Lookup / uniqueness (or equivalent unique index) |
 | `organizations/{orgId}.publicPage` | `{ visibility: "public" \| "hidden", announcement?, about?, logoAssetId?, cta?, … }` (`mission` legacy alias of `about`) |
-| `…/publicDonors/{id}` | name, imageAssetId?, url?, tier?, iconName?, order |
-| `…/publicProjects/{id}` | title, season?, summary, highlights[], media[], externalUrl?, iconName?, order, visibility |
-| `…/publicEvents/{id}` | kind: `recurring` \| `dated`; day/time or date; title; location; iconName?; order |
-| Public members | Active org `members/{uid}` (name/`title`/photo) — not a CMS collection |
-| `…/publicSocial/{id}` | label, url, iconName?, order |
+| `…/publicDonors/{id}` | name, imageAssetId?, url?, tier?, order |
+| `…/publicProjects/{id}` | title, season?, summary, highlights[], media[], externalUrl?, imageAssetId?, order, visibility |
+| `…/publicEvents/{id}` | kind: `recurring` \| `dated`; day/time or date; title; location; imageAssetId?; order |
+| Public members | Org `members/{uid}` including alumni (name/`title`/photo/`status`) — not a CMS collection |
+| `…/publicSocial/{id}` | label, url, imageAssetId?, order |
 | `…/publicMedia/{id}` | assetId, caption?, order |
 
 Public URLs: `/o/:slug`, `/o/:slug/projects`, `/events`, `/members`.

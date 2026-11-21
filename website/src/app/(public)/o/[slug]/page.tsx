@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PublicOrgChrome } from "@/components/public/PublicOrgChrome";
-import { CmsIcon } from "@/components/cloud/CmsIconPicker";
 import { cloudApi } from "@/lib/cloud/api";
 import { LoadingBlock } from "@/components/ui";
 import { Alert } from "@/components/ui/Alert";
@@ -27,7 +26,6 @@ type PublicOrgPayload = {
     id: string;
     name?: string;
     url?: string;
-    iconName?: string;
     imageUrl?: string;
   }>;
   projects: Array<{
@@ -35,7 +33,7 @@ type PublicOrgPayload = {
     title?: string;
     summary?: string;
     season?: string;
-    iconName?: string;
+    imageUrl?: string;
   }>;
   events: Array<{
     id: string;
@@ -44,16 +42,17 @@ type PublicOrgPayload = {
     day?: string;
     time?: string;
     date?: string;
-    iconName?: string;
+    imageUrl?: string;
   }>;
   members: Array<{
     id: string;
     name?: string;
     role?: string;
     title?: string;
+    status?: string;
     imageUrl?: string;
   }>;
-  social: Array<{ id: string; label?: string; url?: string; iconName?: string }>;
+  social: Array<{ id: string; label?: string; url?: string; imageUrl?: string }>;
 };
 
 export default function PublicOrgHomePage() {
@@ -133,8 +132,6 @@ export default function PublicOrgHomePage() {
                   {d.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={d.imageUrl} alt="" className="h-8 w-8 rounded object-cover" />
-                  ) : d.iconName ? (
-                    <CmsIcon name={d.iconName} size={18} />
                   ) : null}
                   {d.url ? (
                     <a href={d.url} target="_blank" rel="noreferrer" className="hover:text-nb-primary">
@@ -153,11 +150,14 @@ export default function PublicOrgHomePage() {
             <h2 className="text-xl font-semibold">Recent Projects</h2>
             <ul className="mt-4 space-y-4">
               {projects.slice(0, 6).map((p) => (
-                <li key={p.id} className="flex items-start gap-2">
-                  {p.iconName ? (
-                    <span className="mt-0.5 text-nb-primary">
-                      <CmsIcon name={p.iconName} size={18} />
-                    </span>
+                <li key={p.id} className="flex items-start gap-3">
+                  {p.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={p.imageUrl}
+                      alt=""
+                      className="h-12 w-12 shrink-0 rounded-nb-md object-cover"
+                    />
                   ) : null}
                   <div>
                     <p className="font-semibold">
@@ -190,7 +190,9 @@ export default function PublicOrgHomePage() {
                   ) : null}
                   <p className="font-semibold">{m.name || "Member"}</p>
                   <p className="text-sm text-nb-on-surface-variant">
-                    {m.title || m.role || ""}
+                    {[m.title || m.role, m.status === "alumni" ? "Alumni" : null]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </p>
                 </li>
               ))}
@@ -205,11 +207,14 @@ export default function PublicOrgHomePage() {
             <h2 className="text-xl font-semibold">Upcoming</h2>
             <ul className="mt-4 space-y-2 text-sm">
               {events.slice(0, 5).map((e) => (
-                <li key={e.id} className="flex items-start gap-2">
-                  {e.iconName ? (
-                    <span className="mt-0.5 text-nb-primary">
-                      <CmsIcon name={e.iconName} size={16} />
-                    </span>
+                <li key={e.id} className="flex items-start gap-3">
+                  {e.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={e.imageUrl}
+                      alt=""
+                      className="h-10 w-10 shrink-0 rounded-nb-md object-cover"
+                    />
                   ) : null}
                   <div>
                     <span className="font-medium">{e.title || "Event"}</span>
@@ -249,7 +254,10 @@ export default function PublicOrgHomePage() {
                   href={s.url}
                   className="inline-flex items-center gap-1.5 text-nb-primary hover:underline"
                 >
-                  {s.iconName ? <CmsIcon name={s.iconName} size={14} /> : null}
+                  {s.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={s.imageUrl} alt="" className="h-5 w-5 rounded object-cover" />
+                  ) : null}
                   {s.label || "Link"}
                 </a>
               ))}

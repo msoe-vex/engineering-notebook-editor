@@ -61,7 +61,10 @@ export default function PublicMembersPage() {
               <div className="min-w-0">
                 <p className="font-semibold">{String(m.name || "Member")}</p>
                 <p className="text-sm text-nb-on-surface-variant">
-                  {String(m.title || m.role || "")}
+                  {[m.title || m.role, m.status === "alumni" ? "Alumni" : null]
+                    .filter(Boolean)
+                    .map(String)
+                    .join(" · ")}
                 </p>
               </div>
             </li>

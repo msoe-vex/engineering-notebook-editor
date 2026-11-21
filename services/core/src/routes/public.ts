@@ -73,7 +73,6 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
           const { id, ...rest } = d;
           return { ...(rest as OrgMember), uid: String(id) };
         })
-        .filter((m) => (m.status || "active") !== "alumni")
         .map(async (m) => {
           const imageUrl = await resolveOrgAssetUrl(orgId, m.imageAssetId);
           return {
@@ -81,6 +80,7 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
             name: m.displayName || m.email || "Member",
             role: m.title || undefined,
             title: m.title,
+            status: m.status || "active",
             imageAssetId: m.imageAssetId,
             imageUrl,
           };
@@ -119,19 +119,28 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
         logoUrl,
       },
       donors: enrichedDonors,
-      projects: projects.map((d) => {
-        const { id, ...rest } = d;
-        return { id, ...rest };
-      }),
-      events: events.map((d) => {
-        const { id, ...rest } = d;
-        return { id, ...rest };
-      }),
+      projects: await Promise.all(
+        projects.map(async (d) => {
+          const { id, ...data } = d as { id: string; imageAssetId?: string };
+          const imageUrl = await resolveOrgAssetUrl(orgId, data.imageAssetId);
+          return { id, ...data, imageUrl };
+        })
+      ),
+      events: await Promise.all(
+        events.map(async (d) => {
+          const { id, ...data } = d as { id: string; imageAssetId?: string };
+          const imageUrl = await resolveOrgAssetUrl(orgId, data.imageAssetId);
+          return { id, ...data, imageUrl };
+        })
+      ),
       members: enrichedMembers,
-      social: social.map((d) => {
-        const { id, ...rest } = d;
-        return { id, ...rest };
-      }),
+      social: await Promise.all(
+        social.map(async (d) => {
+          const { id, ...data } = d as { id: string; imageAssetId?: string };
+          const imageUrl = await resolveOrgAssetUrl(orgId, data.imageAssetId);
+          return { id, ...data, imageUrl };
+        })
+      ),
     };
   });
 

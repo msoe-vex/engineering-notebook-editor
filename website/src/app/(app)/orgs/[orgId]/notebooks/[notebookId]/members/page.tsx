@@ -116,15 +116,14 @@ export default function NotebookContributorsPage() {
     void (async () => {
       try {
         const people = await cloudApi.listMembers(orgId);
-        const active = people.filter((p) => p.status !== "alumni");
         if (cancelled) return;
-        setOrgPeople(active);
+        setOrgPeople(people);
 
         const uids =
           (notebookSummary as { contributorUids?: string[] } | null)?.contributorUids || [];
         const photos: Record<string, string> = {};
         await Promise.all(
-          active.map(async (p) => {
+          people.map(async (p) => {
             if (!p.imageAssetId) return;
             try {
               const { url } = await cloudApi.getOrgAssetUrl(orgId, p.imageAssetId);
@@ -140,7 +139,7 @@ export default function NotebookContributorsPage() {
           setRows(
             uids
               .map((uid) => {
-                const p = active.find((x) => x.uid === uid);
+                const p = people.find((x) => x.uid === uid);
                 if (!p) return null;
                 return {
                   uid,
@@ -157,7 +156,7 @@ export default function NotebookContributorsPage() {
           const mapped = legacy
             .map((m) => {
               const uid = m.orgMemberUid || m.id;
-              const p = active.find((x) => x.uid === uid);
+              const p = people.find((x) => x.uid === uid);
               if (!p) return null;
               return {
                 uid,
@@ -302,7 +301,12 @@ export default function NotebookContributorsPage() {
                   {p.displayName || p.email || "Member"}
                 </span>
                 <span className="text-nb-caption text-nb-on-surface-variant">
-                  {(p as MemberSummary & { title?: string }).title || p.role}
+                  {[
+                    (p as MemberSummary & { title?: string }).title || p.role,
+                    p.status === "alumni" ? "Alumni" : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </span>
               </button>
             </li>

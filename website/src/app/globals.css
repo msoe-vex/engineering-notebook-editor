@@ -219,16 +219,16 @@ button:disabled {
 
 /* Remote collab carets / selections (TipTap CollaborationCaret) */
 .ProseMirror .collaboration-carets__caret {
-  border-left: 2px solid;
-  border-right: 2px solid;
+  border-left: 1px solid;
+  border-right: 0;
   margin-left: -1px;
-  margin-right: -1px;
+  margin-right: 0;
   position: relative;
   word-break: normal;
   pointer-events: auto;
 }
 
-/* Wide invisible hit target so hover isn’t a 1px sliver */
+/* Wide invisible hit target — caret stays thin; hover area is larger */
 .ProseMirror .collaboration-carets__caret::before {
   content: "";
   position: absolute;
@@ -263,11 +263,19 @@ button:disabled {
   pointer-events: none;
 }
 
+/* Commented ranges — clear highlight in the editor body */
 .ProseMirror .comment-anchor {
-  border-bottom: 2px solid color-mix(out srgb, var(--color-nb-primary) 70%, transparent);
-  background: color-mix(out srgb, var(--color-nb-primary) 12%, transparent);
-  border-radius: 0.1rem;
+  background: color-mix(in srgb, #fbbf24 35%, transparent);
+  border-bottom: 2px solid color-mix(in srgb, #d97706 85%, transparent);
+  border-radius: 0.15rem;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
   cursor: pointer;
+  padding-block: 0.05em;
+}
+
+.ProseMirror .comment-anchor:hover {
+  background: color-mix(in srgb, #fbbf24 50%, transparent);
 }
 
 .ProseMirror p {

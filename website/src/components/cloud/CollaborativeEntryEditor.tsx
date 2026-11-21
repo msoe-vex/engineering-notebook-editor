@@ -82,7 +82,6 @@ export function CollaborativeEntryEditor({
 
   const [localUser, setLocalUser] = useState<{ name: string; color: string } | null>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
-  const [composeRequest, setComposeRequest] = useState(0);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [textColorPos, setTextColorPos] = useState({ top: 0, left: 0 });
   const [highlightPos, setHighlightPos] = useState({ top: 0, left: 0 });
@@ -432,27 +431,14 @@ export function CollaborativeEntryEditor({
               toggleLinkFn={toggleLinkFn}
             />
           </div>
-          <div className="flex items-center gap-1 border-l border-nb-outline-variant/20 px-2">
-            <Button
-              size="sm"
-              variant="ghost"
-              title="Add comment"
-              disabled={isArchived}
-              onClick={() => {
-                setCommentsOpen(true);
-                setComposeRequest((n) => n + 1);
-              }}
-            >
-              <MessageSquare size={14} className="opacity-80" />
-              <span className="sr-only">Add comment</span>
-            </Button>
+          <div className="flex items-center border-l border-nb-outline-variant/20 px-2">
             <Button
               size="sm"
               variant={commentsOpen ? "secondary" : "ghost"}
-              title="Comments panel"
+              title="Comments"
               onClick={() => setCommentsOpen((v) => !v)}
             >
-              Comments
+              <MessageSquare size={14} />
             </Button>
           </div>
         </div>
@@ -500,8 +486,6 @@ export function CollaborativeEntryEditor({
           editor={editor}
           open={commentsOpen}
           onClose={() => setCommentsOpen(false)}
-          composeRequest={composeRequest}
-          onComposeHandled={() => undefined}
           onRequestOpen={() => setCommentsOpen(true)}
         />
       </div>

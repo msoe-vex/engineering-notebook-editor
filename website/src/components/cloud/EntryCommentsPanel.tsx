@@ -129,17 +129,12 @@ export function EntryCommentsPanel({
   editor,
   open,
   onClose,
-  composeRequest,
-  onComposeHandled,
   onRequestOpen,
 }: {
   entryId: string;
   editor: TiptapEditor | null;
   open: boolean;
   onClose: () => void;
-  /** Bump from parent (toolbar) to open compose modal. */
-  composeRequest?: number;
-  onComposeHandled?: () => void;
   onRequestOpen?: () => void;
 }) {
   const { orgId, notebookId, isArchived } = useNotebookWorkspace();
@@ -160,7 +155,7 @@ export function EntryCommentsPanel({
   useEffect(() => {
     void cloudApi
       .listMembers(orgId)
-      .then((rows) => setPeople(rows.filter((p) => p.status !== "alumni")))
+      .then((rows) => setPeople(rows))
       .catch(() => undefined);
   }, [orgId]);
 
@@ -168,14 +163,6 @@ export function EntryCommentsPanel({
     if (!open) return;
     load();
   }, [open, load]);
-
-  useEffect(() => {
-    if (composeRequest && composeRequest > 0) {
-      openComposeFromSelection();
-      onComposeHandled?.();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [composeRequest]);
 
   useEffect(() => {
     if (!open) return;
