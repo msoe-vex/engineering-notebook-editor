@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ChevronRight, Gavel, LayoutGrid, Loader2, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
+import { NotebookSideRail } from "@/components/cloud/NotebookSideRail";
 import { JudgeHomeView } from "@/components/cloud/judge/JudgeHomeView";
 import {
   pathForJudgeSelection,
@@ -458,11 +459,11 @@ export function CloudNotebookJudge() {
             </span>
           )}
         </div>
-        <p className="mt-0.5 text-nb-caption text-nb-on-surface-variant">
-          {isArchived
-            ? "Rubrics and past grades are read-only while this notebook is archived."
-            : "Manage rubrics, then score the notebook — extract and judge are separate steps"}
-        </p>
+        {isArchived ? (
+          <p className="mt-0.5 text-nb-caption text-nb-on-surface-variant">
+            Read-only while archived.
+          </p>
+        ) : null}
       </header>
 
       {busy && (
@@ -481,14 +482,19 @@ export function CloudNotebookJudge() {
       )}
 
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <aside className="flex max-h-[40vh] w-full shrink-0 flex-col border-b border-nb-outline-variant/30 bg-nb-surface-low md:max-h-none md:w-72 md:border-b-0 md:border-r">
-          <div className="flex items-center gap-0.5 border-b border-nb-outline-variant/20 px-1.5 py-1.5">
+        <NotebookSideRail
+          storageKey={`ene:rail:${notebookId}:judge`}
+          widthClassName="md:w-72"
+          mobileMaxHeightClassName="max-h-[40vh]"
+          expandLabel="Expand judge sidebar"
+          collapseLabel="Collapse judge sidebar"
+          title={
             <button
               type="button"
               title="View all rubrics"
               aria-pressed={selection.kind === "home-rubrics"}
               onClick={() => navigate({ kind: "home-rubrics" })}
-              className={`flex min-w-0 flex-1 items-center gap-1.5 rounded-nb-md px-1.5 py-1 text-left transition-colors ${
+              className={`-mx-1 flex w-[calc(100%+0.5rem)] min-w-0 items-center gap-1.5 rounded-nb-md px-1.5 py-1 text-left transition-colors ${
                 selection.kind === "home-rubrics"
                   ? "bg-nb-primary/15 text-nb-primary"
                   : "text-nb-on-surface hover:bg-nb-surface/80"
@@ -505,7 +511,9 @@ export function CloudNotebookJudge() {
                 }`}
               />
             </button>
-            {!isArchived && (
+          }
+          headerActions={
+            !isArchived ? (
               <IconButton
                 aria-label="New rubric"
                 title="New rubric"
@@ -514,12 +522,13 @@ export function CloudNotebookJudge() {
               >
                 <Plus size={16} />
               </IconButton>
-            )}
-          </div>
-          <div className="min-h-0 flex-1 overflow-auto px-1.5 py-1.5">
+            ) : undefined
+          }
+        >
+          <div className="px-1.5 py-1.5">
             {rubrics.length === 0 ? (
               <p className="px-1.5 py-2 text-nb-caption text-nb-on-surface-variant">
-                No rubrics yet. Create one to extract a PDF or build a custom matrix.
+                No rubrics yet.
               </p>
             ) : (
               <ul className="mb-2 flex flex-col gap-0.5">
@@ -598,7 +607,7 @@ export function CloudNotebookJudge() {
             </div>
             {grades.length === 0 ? (
               <p className="px-1.5 py-1 text-nb-caption text-nb-on-surface-variant">
-                No grades yet. Select a ready rubric and run judge.
+                No grades yet.
               </p>
             ) : (
               <ul className="flex flex-col gap-0.5">
@@ -645,7 +654,7 @@ export function CloudNotebookJudge() {
               </ul>
             )}
           </div>
-        </aside>
+        </NotebookSideRail>
 
         <main className="min-h-0 min-w-0 flex-1 overflow-auto p-4 md:p-6">
           {!listsReady ? (

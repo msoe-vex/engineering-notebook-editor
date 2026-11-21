@@ -51,6 +51,7 @@ import type { NotebookMetadata } from "@/lib/notebook/metadata";
 import { useNarrowViewport } from "@/hooks/useDevice";
 import { useNotebookJobToasts } from "@/hooks/useNotebookJobToasts";
 import { NotebookEntryList } from "./NotebookEntryList";
+import { usePersistedCollapsed } from "./NotebookSideRail";
 import {
   NotebookSectionBottomTabs,
   NotebookSectionStrip,
@@ -183,7 +184,10 @@ export function NotebookShell({ children }: { children: ReactNode }) {
   }, []);
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [prompt, setPrompt] = useState<PromptState>(null);
-  const [listCollapsed, setListCollapsed] = useState(false);
+  const [listCollapsed, setListCollapsed] = usePersistedCollapsed(
+    `ene:rail:${notebookId}:entries`,
+    false
+  );
   const [mobileExplorerOpen, setMobileExplorerOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);

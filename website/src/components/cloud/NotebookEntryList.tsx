@@ -37,7 +37,6 @@ import {
   FolderPlus,
   GripVertical,
   LayoutTemplate,
-  PanelLeft,
   PanelLeftClose,
   Plus,
   Search,
@@ -61,6 +60,7 @@ import { readDefaultAuthors } from "@/lib/notebook/metadata";
 import type { ProjectPhase } from "@/lib/notebook/metadata";
 import { getPhaseConfig, getPhases } from "@/lib/notebook/phases";
 import { formatEntryListDate, getLocalDateString } from "@/lib/utils";
+import { NotebookSideRailCollapsedStrip } from "./NotebookSideRail";
 import { PhaseChip } from "./PhaseChip";
 import { PhasePicker } from "./PhasePicker";
 import { useNotebookWorkspace } from "./NotebookWorkspaceContext";
@@ -1992,11 +1992,11 @@ export function NotebookEntryList({
 
   if (collapsed) {
     return (
-      <div className="flex w-10 shrink-0 flex-col items-center border-r border-nb-outline-variant/30 bg-nb-surface-low py-2">
-        <IconButton aria-label="Expand entry list" onClick={onToggleCollapsed}>
-          <PanelLeft size={16} />
-        </IconButton>
-      </div>
+      <NotebookSideRailCollapsedStrip
+        className="max-md:flex"
+        label="Expand entry list"
+        onExpand={onToggleCollapsed}
+      />
     );
   }
 

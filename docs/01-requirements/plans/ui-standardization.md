@@ -1,6 +1,7 @@
 # Plan: UI standardization & simplification
 
-Status: in progress  
+Status: done  
+
 
 Related: [cloud-ux-hardening](./cloud-ux-hardening.md), [mobile-responsive](./mobile-responsive.md), [FR-notebooks](../features/FR-notebooks.md), [FR-compile](../features/FR-compile.md), [FR-public-notebook](../features/FR-public-notebook.md)
 
@@ -177,7 +178,7 @@ Prefer **vertical slices** (kit → adopt on one page → next page) over a big-
 
 - [x] UI kit covers Select, Checkbox/Switch, TextArea, Chip, FormSection, ImageField
 - [x] Org + notebook Settings use sections/tabs; danger zone isolated
-- [ ] Entries, Compile, Judge share collapsible side-rail behavior/look
+- [x] Entries, Compile, Judge share collapsible side-rail behavior/look
 - [x] Image add/replace/remove looks the same on logo, People, CMS
 - [x] No `window.confirm` in product flows
 - [x] Org `TabNav` shows icons

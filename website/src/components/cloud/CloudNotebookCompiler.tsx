@@ -4,9 +4,10 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Copy, Download, ExternalLink, Loader2, Play, RefreshCcw, Trash2 } from "lucide-react";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
+import { NotebookSideRail } from "@/components/cloud/NotebookSideRail";
 import { CompilePageSkeleton } from "@/components/cloud/notebookPageSkeletons";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
-import { Alert, Button, Skeleton } from "@/components/ui";
+import { Alert, Button, IconButton, Skeleton } from "@/components/ui";
 import { showNotification } from "@/components/overlays/Notification";
 import { cloudApi, type CompileExportSummary } from "@/lib/cloud/api";
 import { compileCloudNotebook } from "@/lib/cloud/compileCloudNotebook";
@@ -448,11 +449,67 @@ export function CloudNotebookCompiler() {
       )}
 
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <aside className="flex max-h-48 w-full shrink-0 flex-col border-b border-nb-outline-variant/25 md:max-h-none md:w-64 md:border-b-0 md:border-r">
-          <div className="border-b border-nb-outline-variant/20 px-3 py-2">
-            <p className="text-nb-label font-semibold text-nb-on-surface">Versions</p>
-          </div>
-          <ul className="min-h-0 flex-1 overflow-y-auto p-2">
+        <NotebookSideRail
+          storageKey={`ene:rail:${notebookId}:compile`}
+          title="Versions"
+          expandLabel="Expand versions"
+          collapseLabel="Collapse versions"
+          footer={
+            canManage ? (
+              <div className="space-y-2 p-3">
+                <p className="text-nb-label font-semibold text-nb-on-surface">Share</p>
+                {!orgSlug && (
+                  <Alert variant="warning">Set an org slug in settings first.</Alert>
+                )}
+                <div className="flex flex-wrap gap-1.5">
+                  <Button
+                    size="sm"
+                    variant={isPublishedVersion ? "primary" : "secondary"}
+                    disabled={publishBusy || isArchived || !exportsList.length || !orgSlug}
+                    onClick={() => void setLinkSharing(true)}
+                  >
+                    {isPublishedVersion ? "Shared" : "Share"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={publishBusy || !linkOn}
+                    onClick={() => void setLinkSharing(false)}
+                  >
+                    Turn off
+                  </Button>
+                </div>
+                {publicPath && (
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        void navigator.clipboard
+                          .writeText(`${window.location.origin}${publicPath}`)
+                          .then(
+                            () => showNotification("Link copied", "success"),
+                            () => showNotification("Could not copy", "error")
+                          );
+                      }}
+                    >
+                      <Copy size={14} /> Copy link
+                    </Button>
+                    <a
+                      href={publicPath}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-sm font-semibold text-nb-primary hover:underline"
+                    >
+                      Open PDF <ExternalLink size={14} />
+                    </a>
+                  </div>
+                )}
+              </div>
+            ) : undefined
+          }
+        >
+          <ul className="p-2">
             {exportsList.length === 0 && (
               <li className="px-2 py-3 text-nb-caption text-nb-on-surface-variant">
                 No versions yet — compile to create one.
@@ -463,18 +520,24 @@ export function CloudNotebookCompiler() {
               const published = publicExportId === exp.id && linkOn;
               const isLatest = latestExportId === exp.id;
               return (
-                <li key={exp.id} className="mb-1 flex items-stretch gap-1">
+                <li key={exp.id} className="mb-0.5 flex items-stretch gap-0.5">
                   <button
                     type="button"
-                    className={`min-w-0 flex-1 rounded-nb-md px-2 py-2 text-left text-sm transition-colors ${
+                    className={`min-w-0 flex-1 rounded-nb-md px-2 py-1.5 text-left text-nb-label transition-colors ${
                       active
-                        ? "bg-nb-primary/15 font-semibold text-nb-on-surface"
-                        : "text-nb-on-surface hover:bg-nb-surface-low"
+                        ? "bg-nb-primary/15 font-semibold text-nb-primary"
+                        : "text-nb-on-surface hover:bg-nb-surface/80"
                     }`}
                     onClick={() => setSelectedExportId(exp.id)}
                   >
-                    <span className="block truncate">{formatExportLabel(exp)}</span>
-                    <span className="mt-0.5 block text-[11px] font-normal text-nb-on-surface-variant">
+                    <span className="block truncate text-xs leading-none">
+                      {formatExportLabel(exp)}
+                    </span>
+                    <span
+                      className={`mt-0.5 block text-[10px] font-normal leading-tight ${
+                        active ? "text-nb-primary/80" : "text-nb-on-surface-variant/70"
+                      }`}
+                    >
                       {[published ? "Shared" : null, isLatest ? "Latest" : null]
                         .filter(Boolean)
                         .join(" · ") || "Saved"}
@@ -482,73 +545,22 @@ export function CloudNotebookCompiler() {
                     </span>
                   </button>
                   {canManage && !isArchived && (
-                    <button
-                      type="button"
-                      className="shrink-0 rounded-nb-md px-2 text-nb-on-surface-variant hover:bg-nb-danger/10 hover:text-nb-danger"
+                    <IconButton
+                      className="h-8 w-8 shrink-0 self-center"
+                      variant="danger"
                       title="Delete version"
+                      aria-label="Delete version"
                       disabled={publishBusy}
                       onClick={() => setDeleteExportId(exp.id)}
                     >
                       <Trash2 size={14} />
-                    </button>
+                    </IconButton>
                   )}
                 </li>
               );
             })}
           </ul>
-          {canManage && (
-            <div className="space-y-2 border-t border-nb-outline-variant/20 p-3">
-              <p className="text-nb-label font-semibold text-nb-on-surface">Share</p>
-              {!orgSlug && (
-                <Alert variant="warning">Set an org slug in settings first.</Alert>
-              )}
-              <div className="flex flex-wrap gap-1.5">
-                <Button
-                  size="sm"
-                  variant={isPublishedVersion ? "primary" : "secondary"}
-                  disabled={publishBusy || isArchived || !exportsList.length || !orgSlug}
-                  onClick={() => void setLinkSharing(true)}
-                >
-                  {isPublishedVersion ? "Shared" : "Share"}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={publishBusy || !linkOn}
-                  onClick={() => void setLinkSharing(false)}
-                >
-                  Turn off
-                </Button>
-              </div>
-              {publicPath && (
-                <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => {
-                      void navigator.clipboard
-                        .writeText(`${window.location.origin}${publicPath}`)
-                        .then(
-                          () => showNotification("Link copied", "success"),
-                          () => showNotification("Could not copy", "error")
-                        );
-                    }}
-                  >
-                    <Copy size={14} /> Copy link
-                  </Button>
-                  <a
-                    href={publicPath}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-sm font-semibold text-nb-primary hover:underline"
-                  >
-                    Open PDF <ExternalLink size={14} />
-                  </a>
-                </div>
-              )}
-            </div>
-          )}
-        </aside>
+        </NotebookSideRail>
 
         <div className="relative min-h-0 flex-1 overflow-hidden">
           {pdfUrl ? (
