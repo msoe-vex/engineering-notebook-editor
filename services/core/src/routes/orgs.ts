@@ -40,12 +40,12 @@ import {
   type Organization,
   type OrgMember,
   type OrgRole,
-  type NotebookSummaryV5,
+  type NotebookSummary,
   type NotebookAccess,
   type NotebookMember,
   type Team,
   type TeamMembership,
-  type EntryMetadataV5,
+  type EntryMetadata,
   type EntryComment,
   type AssetMetadata,
   type Invite,
@@ -133,7 +133,7 @@ async function safeDeletePath(path: string) {
 async function revalidateNotebookEntryMetadata(
   orgId: string,
   notebookId: string,
-  phases: NotebookSummaryV5["phases"] | undefined
+  phases: NotebookSummary["phases"] | undefined
 ) {
   const store = getMetadataStore();
   const docs = await store.query(entriesCollection(orgId, notebookId));
@@ -146,10 +146,10 @@ async function revalidateNotebookEntryMetadata(
     await store.batch(ops);
     ops = [];
   };
-  const changed: Array<{ id: string; entry: EntryMetadataV5 }> = [];
+  const changed: Array<{ id: string; entry: EntryMetadata }> = [];
   for (const doc of docs) {
     const id = String(doc.id);
-    const entry = withoutId(doc) as unknown as EntryMetadataV5;
+    const entry = withoutId(doc) as unknown as EntryMetadata;
     const metaErrors = validateEntryMetadataFields(entry, phaseMap);
     const { validationErrors, isValid } = mergeMetadataValidationErrors(
       entry.validationErrors,
@@ -209,7 +209,7 @@ async function purgeNotebookStorage(
   const entries = await store.query(entriesCollection(orgId, notebookId));
   for (const doc of entries) {
     const id = String(doc.id);
-    const meta = withoutId(doc) as unknown as EntryMetadataV5;
+    const meta = withoutId(doc) as unknown as EntryMetadata;
     await safeDeleteObject(storage, meta.tipTapGcsPath || gcsKeys.tipTap(orgId, notebookId, id));
     await safeDeleteObject(storage, meta.yjsGcsPath || gcsKeys.yjs(orgId, notebookId, id));
   }
@@ -271,7 +271,7 @@ async function assertNotebookAccess(
     (err as Error & { statusCode: number }).statusCode = 404;
     throw err;
   }
-  const notebook = data as unknown as NotebookSummaryV5;
+  const notebook = data as unknown as NotebookSummary;
   await requireNotebookAccess(user, orgId, notebook, {
     write: opts?.write === true,
   });
@@ -876,7 +876,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const rows = await store().query(notebooksCollection(orgId));
     const out = [];
     for (const d of rows) {
-      const data = withoutId(d) as unknown as NotebookSummaryV5;
+      const data = withoutId(d) as unknown as NotebookSummary;
       if (await canAccessNotebook(user, orgId, data, role)) {
         out.push({ id: String(d.id), ...data });
       }
@@ -898,7 +898,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const name = body.name?.trim() || "Untitled Notebook";
     const id = randomUUID();
     const ts = nowIso();
-    const summary: NotebookSummaryV5 & { id: string } = {
+    const summary: NotebookSummary & { id: string } = {
       id,
       schemaVersion: NOTEBOOK_SCHEMA_VERSION,
       orgId,
@@ -922,7 +922,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
     const snap = await store().get(notebookPath(orgId, notebookId));
     if (!snap) return reply.code(404).send({ error: "not found" });
-    const data = withoutId(snap) as NotebookSummaryV5;
+    const data = withoutId(snap) as NotebookSummary;
     await requireNotebookAccess(user, orgId, data);
     return { id: snap.id, ...data };
   });
@@ -973,9 +973,9 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const refPath = notebookPath(orgId, notebookId);
     const snap = await store().get(refPath);
     if (!snap) return reply.code(404).send({ error: "not found" });
-    const existing = withoutId(snap) as NotebookSummaryV5;
+    const existing = withoutId(snap) as NotebookSummary;
     const callerRole = await requireNotebookAccess(user, orgId, existing);
-    const body = request.body as Partial<NotebookSummaryV5>;
+    const body = request.body as Partial<NotebookSummary>;
     if (body.access !== undefined && callerRole !== "owner" && callerRole !== "admin" && !isServiceAdmin(user)) {
       return reply.code(403).send({ error: "Only admins and owners can modify notebook access" });
     }
@@ -1094,7 +1094,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const refPath = notebookPath(orgId, notebookId);
     const snap = await store().get(refPath);
     if (!snap) return reply.code(404).send({ error: "not found" });
-    const existing = withoutId(snap) as NotebookSummaryV5;
+    const existing = withoutId(snap) as NotebookSummary;
     const callerRole = await requireNotebookAccess(user, orgId, existing);
     if (callerRole !== "owner" && callerRole !== "admin" && !isServiceAdmin(user)) {
       return reply.code(403).send({ error: "Only admins and owners can archive notebooks" });
@@ -1117,7 +1117,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const refPath = notebookPath(orgId, notebookId);
     const snap = await store().get(refPath);
     if (!snap) return reply.code(404).send({ error: "not found" });
-    const existing = withoutId(snap) as NotebookSummaryV5;
+    const existing = withoutId(snap) as NotebookSummary;
     const callerRole = await requireNotebookAccess(user, orgId, existing);
     if (callerRole !== "owner" && callerRole !== "admin" && !isServiceAdmin(user)) {
       return reply.code(403).send({ error: "Only admins and owners can unarchive notebooks" });
@@ -1157,7 +1157,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const refPath = notebookPath(orgId, notebookId);
     const snap = await store().get(refPath);
     if (!snap) return reply.code(404).send({ error: "not found" });
-    const nb = withoutId(snap) as NotebookSummaryV5;
+    const nb = withoutId(snap) as NotebookSummary;
     await requireNotebookAccess(user, orgId, nb);
     assertNotebookNotArchived(nb);
     const id = randomUUID();
@@ -1188,7 +1188,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const refPath = notebookPath(orgId, notebookId);
     const snap = await store().get(refPath);
     if (!snap) return reply.code(404).send({ error: "not found" });
-    const nb = withoutId(snap) as NotebookSummaryV5;
+    const nb = withoutId(snap) as NotebookSummary;
     await requireNotebookAccess(user, orgId, nb);
     assertNotebookNotArchived(nb);
     const existing = nb.folders?.[folderId];
@@ -1219,7 +1219,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const refPath = notebookPath(orgId, notebookId);
     const snap = await store().get(refPath);
     if (!snap) return reply.code(404).send({ error: "not found" });
-    const nb = withoutId(snap) as NotebookSummaryV5;
+    const nb = withoutId(snap) as NotebookSummary;
     await requireNotebookAccess(user, orgId, nb);
     assertNotebookNotArchived(nb);
     const existingFolder = nb.folders?.[folderId];
@@ -1235,7 +1235,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     let entriesMoved = false;
     for (const doc of entries) {
       const id = String(doc.id);
-      const meta = withoutId(doc) as unknown as EntryMetadataV5;
+      const meta = withoutId(doc) as unknown as EntryMetadata;
       if (meta.folderId === folderId) {
         batchOps.push({
           op: "update",
@@ -1278,7 +1278,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const trashed = String((request.query as { trashed?: string }).trashed || "") === "1";
     const nb = await store().get(notebookPath(orgId, notebookId));
     if (!nb) return reply.code(404).send({ error: "not found" });
-    const nbData = withoutId(nb) as NotebookSummaryV5;
+    const nbData = withoutId(nb) as NotebookSummary;
     await requireNotebookAccess(user, orgId, nbData);
 
     // Soft-trashed legacy roster docs only (new model has no trash).
@@ -1321,7 +1321,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
     const nb = await store().get(notebookPath(orgId, notebookId));
     if (!nb) return reply.code(404).send({ error: "not found" });
-    const nbData = withoutId(nb) as NotebookSummaryV5;
+    const nbData = withoutId(nb) as NotebookSummary;
     await requireNotebookAccess(user, orgId, nbData);
     assertNotebookNotArchived(nbData);
     const body = request.body as Partial<NotebookMember> & { id?: string };
@@ -1349,7 +1349,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     };
     const nb = await store().get(notebookPath(orgId, notebookId));
     if (!nb) return reply.code(404).send({ error: "not found" });
-    const nbData = withoutId(nb) as NotebookSummaryV5;
+    const nbData = withoutId(nb) as NotebookSummary;
     await requireNotebookAccess(user, orgId, nbData);
     assertNotebookNotArchived(nbData);
     const refPath = notebookMemberPath(orgId, notebookId, memberId);
@@ -1384,7 +1384,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     };
     const nb = await store().get(notebookPath(orgId, notebookId));
     if (!nb) return reply.code(404).send({ error: "not found" });
-    const nbData = withoutId(nb) as NotebookSummaryV5;
+    const nbData = withoutId(nb) as NotebookSummary;
     await requireNotebookAccess(user, orgId, nbData);
     assertNotebookNotArchived(nbData);
     const refPath = notebookMemberPath(orgId, notebookId, memberId);
@@ -1410,7 +1410,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       };
       const nb = await store().get(notebookPath(orgId, notebookId));
       if (!nb) return reply.code(404).send({ error: "not found" });
-      const nbData = withoutId(nb) as NotebookSummaryV5;
+      const nbData = withoutId(nb) as NotebookSummary;
       await requireNotebookAccess(user, orgId, nbData);
       assertNotebookNotArchived(nbData);
       const refPath = notebookMemberPath(orgId, notebookId, memberId);
@@ -1432,7 +1432,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       };
       const nb = await store().get(notebookPath(orgId, notebookId));
       if (!nb) return reply.code(404).send({ error: "not found" });
-      const nbData = withoutId(nb) as NotebookSummaryV5;
+      const nbData = withoutId(nb) as NotebookSummary;
       await requireNotebookAccess(user, orgId, nbData);
       assertNotebookNotArchived(nbData);
       const refPath = notebookMemberPath(orgId, notebookId, memberId);
@@ -1448,9 +1448,9 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
     await assertNotebookAccess(user, orgId, notebookId);
     const snap = await store().query(entriesCollection(orgId, notebookId));
-    const entries: Record<string, EntryMetadataV5> = {};
+    const entries: Record<string, EntryMetadata> = {};
     for (const doc of snap) {
-      entries[String(doc.id)] = withoutId(doc) as unknown as EntryMetadataV5;
+      entries[String(doc.id)] = withoutId(doc) as unknown as EntryMetadata;
     }
     return { entries };
   });
@@ -1501,7 +1501,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const BODY_SCAN_LIMIT = 80;
     for (const doc of snap) {
       const id = String(doc.id);
-      const meta = withoutId(doc) as unknown as EntryMetadataV5;
+      const meta = withoutId(doc) as unknown as EntryMetadata;
       if (meta.deletedAt) continue;
       const metaBlob = [
         meta.title || "",
@@ -1613,7 +1613,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
     await assertNotebookWritable(user, orgId, notebookId);
-    const body = (request.body ?? {}) as Partial<EntryMetadataV5> & { id?: string };
+    const body = (request.body ?? {}) as Partial<EntryMetadata> & { id?: string };
     const id = body.id || randomUUID();
     const ts = nowIso();
     const tipTapGcsPath = gcsKeys.tipTap(orgId, notebookId, id);
@@ -1633,7 +1633,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       tipTapRev: 0,
       yjsGcsPath,
       yjsRev: 0,
-    }) as EntryMetadataV5;
+    }) as EntryMetadata;
     await store().set(entryPath(orgId, notebookId, id), entry as Record<string, unknown>);
     await storage.putObject(
       tipTapGcsPath,
@@ -1671,7 +1671,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       entryId: string;
     };
     await assertNotebookWritable(user, orgId, notebookId);
-    const body = request.body as Partial<EntryMetadataV5>;
+    const body = request.body as Partial<EntryMetadata>;
     const refPath = entryPath(orgId, notebookId, entryId);
     const snap = await store().get(refPath);
     if (!snap) return reply.code(404).send({ error: "not found" });
@@ -1694,7 +1694,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       "yjsGcsPath",
       "yjsRev",
     ] as const;
-    const existing = withoutId(snap) as EntryMetadataV5;
+    const existing = withoutId(snap) as EntryMetadata;
     const patch: Record<string, unknown> = { updatedAt: nowIso() };
     for (const key of allowed) {
       if (body[key] !== undefined) patch[key] = body[key];
@@ -1709,9 +1709,9 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     if (metaTouched) {
       const nbSnap = await store().get(notebookPath(orgId, notebookId));
       const phases = nbSnap
-        ? (withoutId(nbSnap) as unknown as NotebookSummaryV5).phases
+        ? (withoutId(nbSnap) as unknown as NotebookSummary).phases
         : undefined;
-      const merged = { ...existing, ...patch } as EntryMetadataV5;
+      const merged = { ...existing, ...patch } as EntryMetadata;
       const metaErrors = validateEntryMetadataFields(merged, (phases || {}) as Record<string, unknown>);
       const { validationErrors, isValid } = mergeMetadataValidationErrors(
         // Prefer incoming content validation if this patch also sets it; else existing.
@@ -1736,7 +1736,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const fresh = await store().get(refPath);
     const result = {
       id: entryId,
-      ...(withoutId(fresh || {}) as unknown as EntryMetadataV5),
+      ...(withoutId(fresh || {}) as unknown as EntryMetadata),
     };
     publishNotebookEvent(orgId, notebookId, {
       type: "entry.upserted",
@@ -1751,7 +1751,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     orgId: string,
     notebookId: string,
     entryId: string,
-    meta: EntryMetadataV5
+    meta: EntryMetadata
   ) {
     const refPath = entryPath(orgId, notebookId, entryId);
     await safeDeleteObject(storage, meta.tipTapGcsPath || gcsKeys.tipTap(orgId, notebookId, entryId));
@@ -1782,7 +1782,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const refPath = entryPath(orgId, notebookId, entryId);
     const snap = await store().get(refPath);
     if (!snap) return reply.code(404).send({ error: "not found" });
-    const meta = withoutId(snap) as EntryMetadataV5;
+    const meta = withoutId(snap) as EntryMetadata;
     if (meta.deletedAt) {
       return { ok: true, id: entryId, deletedAt: meta.deletedAt, alreadyTrashed: true };
     }
@@ -1809,7 +1809,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const refPath = entryPath(orgId, notebookId, entryId);
     const snap = await store().get(refPath);
     if (!snap) return reply.code(404).send({ error: "not found" });
-    const meta = withoutId(snap) as EntryMetadataV5;
+    const meta = withoutId(snap) as EntryMetadata;
     if (!meta.deletedAt) {
       return { ok: true, id: entryId, ...(meta as object), alreadyRestored: true };
     }
@@ -1839,7 +1839,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       const refPath = entryPath(orgId, notebookId, entryId);
       const snap = await store().get(refPath);
       if (!snap) return reply.code(404).send({ error: "not found" });
-      const meta = withoutId(snap) as EntryMetadataV5;
+      const meta = withoutId(snap) as EntryMetadata;
       await permanentlyDeleteEntry(orgId, notebookId, entryId, meta);
       return { ok: true };
     }
@@ -1860,7 +1860,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     await store().update(refPath, { openCommentCount, commentCount, updatedAt: ts });
     const result = {
       id: entryId,
-      ...(withoutId(snap) as EntryMetadataV5),
+      ...(withoutId(snap) as EntryMetadata),
       openCommentCount,
       commentCount,
       updatedAt: ts,
@@ -2057,7 +2057,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     await assertNotebookAccess(user, orgId, notebookId);
     const snap = await store().get(entryPath(orgId, notebookId, entryId));
     if (!snap) return reply.code(404).send({ error: "not found" });
-    const meta = withoutId(snap) as EntryMetadataV5;
+    const meta = withoutId(snap) as EntryMetadata;
     const key = meta.tipTapGcsPath || gcsKeys.tipTap(orgId, notebookId, entryId);
     const buf = await storage.getObject(key);
     if (!buf) return reply.code(404).send({ error: "content not found" });
@@ -2075,7 +2075,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const refPath = entryPath(orgId, notebookId, entryId);
     const snap = await store().get(refPath);
     if (!snap) return reply.code(404).send({ error: "not found" });
-    const meta = withoutId(snap) as EntryMetadataV5;
+    const meta = withoutId(snap) as EntryMetadata;
     const key = meta.tipTapGcsPath || gcsKeys.tipTap(orgId, notebookId, entryId);
     const tipTapRev = (meta.tipTapRev ?? 0) + 1;
     await storage.putObject(key, JSON.stringify(request.body), "application/json");

@@ -3,8 +3,8 @@ import {
   NOTEBOOK_SCHEMA_VERSION,
   buildExportV5,
   normalizeImportNotebook,
-  type EntryMetadataV5,
-  type NotebookSummaryV5,
+  type EntryMetadata,
+  type NotebookSummary,
 } from "@engineering-notebook/shared";
 
 export type ZipAssetBlob = {
@@ -13,8 +13,8 @@ export type ZipAssetBlob = {
 };
 
 export async function exportNotebookZipV5(args: {
-  summary: NotebookSummaryV5;
-  entries: Record<string, EntryMetadataV5>;
+  summary: NotebookSummary;
+  entries: Record<string, EntryMetadata>;
   tipTapByEntryId: Record<string, unknown>;
   assets?: Record<string, ZipAssetBlob | Uint8Array>;
   members?: Parameters<typeof buildExportV5>[2];
@@ -60,8 +60,8 @@ export async function importNotebookZip(
   orgId: string,
   fallbackName: string
 ): Promise<{
-  summary: NotebookSummaryV5;
-  entries: Record<string, EntryMetadataV5>;
+  summary: NotebookSummary;
+  entries: Record<string, EntryMetadata>;
   tipTapByEntryId: Record<string, unknown>;
   members: Record<
     string,

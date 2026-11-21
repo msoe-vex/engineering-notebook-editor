@@ -1,4 +1,4 @@
-import type { NotebookSummaryV5 } from "@engineering-notebook/shared";
+import type { NotebookSummary } from "@engineering-notebook/shared";
 import type { AssetSummary } from "@/lib/cloud/api";
 
 export type EntryMeta = {
@@ -31,7 +31,7 @@ export type NotebookWorkspaceState = {
   orgId: string;
   notebookId: string;
   notebookName: string;
-  notebookSummary: NotebookSummaryV5 | null;
+  notebookSummary: NotebookSummary | null;
   /** True after the first notebook load attempt finishes (success or failure). */
   initialLoaded: boolean;
   /** Notebook/org failed to load (missing or forbidden) — show empty state, not the editor. */
@@ -50,7 +50,7 @@ export type NotebookWorkspaceState = {
   >;
   setError: (message: string | null) => void;
   setBusy: (busy: boolean) => void;
-  setNotebookSummary: (summary: NotebookSummaryV5 | null) => void;
+  setNotebookSummary: (summary: NotebookSummary | null) => void;
   showConfirm: (
     title: string,
     message: string,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { Camera, Check, Copy, KeyRound, Mail, Shield, Trash2, UserPlus, Users } from "lucide-react";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import { useOrgWorkspace } from "@/components/cloud/OrgWorkspaceContext";
@@ -11,6 +11,7 @@ import {
   Dialog,
   DropdownMenu,
   EmptyState,
+  ImageField,
   Select,
   TextField,
   type MenuItem,
@@ -32,8 +33,7 @@ export default function OrgPeoplePage() {
   const [ctx, setCtx] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const [photos, setPhotos] = useState<Record<string, string>>({});
   const [photoBusy, setPhotoBusy] = useState<string | null>(null);
-  const photoInputRef = useRef<HTMLInputElement>(null);
-  const [photoTargetUid, setPhotoTargetUid] = useState<string | null>(null);
+  const [photoMember, setPhotoMember] = useState<MemberSummary | null>(null);
 
   const currentUid = getFirebaseAuth().currentUser?.uid || getDevToken()?.split("|")[0];
   const isOwner = org?.role === "owner";
@@ -119,6 +119,12 @@ export default function OrgPeoplePage() {
       cancelled = true;
     };
   }, [members, orgId]);
+
+  useEffect(() => {
+    if (!photoMember) return;
+    const latest = members.find((m) => m.uid === photoMember.uid);
+    if (latest && latest !== photoMember) setPhotoMember(latest);
+  }, [members, photoMember]);
 
   function checkAndSetRole(uid: string, targetRole: string) {
     const isSelf = uid === currentUid;
@@ -255,20 +261,10 @@ export default function OrgPeoplePage() {
 
     items.push({
       id: "photo",
-      label: m.imageAssetId ? "Replace photo" : "Upload photo",
+      label: "Photo",
       icon: <Camera size={14} />,
-      onSelect: () => {
-        setPhotoTargetUid(m.uid);
-        photoInputRef.current?.click();
-      },
+      onSelect: () => setPhotoMember(m),
     });
-    if (m.imageAssetId) {
-      items.push({
-        id: "photo-clear",
-        label: "Clear photo",
-        onSelect: () => void clearMemberPhoto(m.uid),
-      });
-    }
 
     items.push({ id: "sep", separator: true });
 
@@ -332,19 +328,6 @@ export default function OrgPeoplePage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <input
-        ref={photoInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          const uid = photoTargetUid;
-          e.target.value = "";
-          setPhotoTargetUid(null);
-          if (file && uid) void uploadMemberPhoto(uid, file);
-        }}
-      />
       <section className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -673,6 +656,28 @@ export default function OrgPeoplePage() {
           }
         }}
       />
+
+      <Dialog
+        isOpen={Boolean(photoMember)}
+        onClose={() => !photoBusy && setPhotoMember(null)}
+        title="Photo"
+        size="sm"
+      >
+        {photoMember ? (
+          <ImageField
+            size="lg"
+            previewUrl={photos[photoMember.uid] || null}
+            busy={photoBusy === photoMember.uid}
+            onUpload={(file) => void uploadMemberPhoto(photoMember.uid, file)}
+            onRemove={
+              photoMember.imageAssetId || photos[photoMember.uid]
+                ? () => void clearMemberPhoto(photoMember.uid)
+                : undefined
+            }
+            emptyLabel="Photo"
+          />
+        ) : null}
+      </Dialog>
 
       <ContextMenu
         open={Boolean(ctx)}

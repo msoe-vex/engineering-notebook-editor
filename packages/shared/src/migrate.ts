@@ -1,12 +1,12 @@
 import { NOTEBOOK_SCHEMA_VERSION, defaultNotebookAccess } from "./types.js";
 import type {
-  EntryMetadataV5,
+  EntryMetadata,
   LegacyTeamMetadataV5,
   NotebookAccess,
-  NotebookExportV5,
+  NotebookExport,
   NotebookFolder,
   NotebookMember,
-  NotebookSummaryV5,
+  NotebookSummary,
   ProjectPhase,
 } from "./types.js";
 
@@ -51,7 +51,7 @@ function assetPathsToIds(paths: string[] | undefined): string[] | undefined {
   });
 }
 
-export function migrateEntryV4ToV5(entry: EntryMetadataV4): EntryMetadataV5 {
+export function migrateEntryV4ToV5(entry: EntryMetadataV4): EntryMetadata {
   const { filename: _filename, assets, ...rest } = entry;
   return {
     title: rest.title,
@@ -103,11 +103,11 @@ export function migrateNotebookV4ToV5(
   orgId: string,
   name: string
 ): {
-  summary: NotebookSummaryV5;
-  entries: Record<string, EntryMetadataV5>;
+  summary: NotebookSummary;
+  entries: Record<string, EntryMetadata>;
   members: Record<string, Omit<NotebookMember, "id">>;
 } {
-  const entries: Record<string, EntryMetadataV5> = {};
+  const entries: Record<string, EntryMetadata> = {};
   for (const [id, entry] of Object.entries(raw.entries ?? {})) {
     entries[id] = migrateEntryV4ToV5(entry);
   }
@@ -115,7 +115,7 @@ export function migrateNotebookV4ToV5(
   const lifted = liftLegacyTeam(raw.team);
   const members = raw.members ?? lifted.members;
 
-  const summary: NotebookSummaryV5 = {
+  const summary: NotebookSummary = {
     schemaVersion: NOTEBOOK_SCHEMA_VERSION,
     orgId,
     name,
@@ -133,10 +133,10 @@ export function migrateNotebookV4ToV5(
 }
 
 export function buildExportV5(
-  summary: NotebookSummaryV5,
-  entries: Record<string, EntryMetadataV5>,
+  summary: NotebookSummary,
+  entries: Record<string, EntryMetadata>,
   members?: Record<string, Omit<NotebookMember, "id">>
-): NotebookExportV5 {
+): NotebookExport {
   return {
     schemaVersion: NOTEBOOK_SCHEMA_VERSION,
     name: summary.name,
@@ -158,15 +158,15 @@ export function normalizeImportNotebook(
   orgId: string,
   fallbackName: string
 ): {
-  summary: NotebookSummaryV5;
-  entries: Record<string, EntryMetadataV5>;
+  summary: NotebookSummary;
+  entries: Record<string, EntryMetadata>;
   members: Record<string, Omit<NotebookMember, "id">>;
 } {
   const version = Number(raw.version ?? raw.schemaVersion ?? 4);
   if (version >= 5) {
     const legacyTeam = raw.team as LegacyTeamMetadataV5 | undefined;
     const lifted = liftLegacyTeam(legacyTeam);
-    const summary = raw as unknown as NotebookSummaryV5;
+    const summary = raw as unknown as NotebookSummary;
     const members =
       (raw.members as Record<string, Omit<NotebookMember, "id">> | undefined) ?? lifted.members;
     return {
@@ -183,7 +183,7 @@ export function normalizeImportNotebook(
         // Drop legacy embedded team from live summary
         phases: summary.phases ?? {},
       },
-      entries: (raw.entries as Record<string, EntryMetadataV5>) ?? {},
+      entries: (raw.entries as Record<string, EntryMetadata>) ?? {},
       members,
     };
   }

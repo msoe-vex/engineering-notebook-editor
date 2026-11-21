@@ -19,8 +19,8 @@ import {
 import { saveAs } from "file-saver";
 import {
   NOTEBOOK_SCHEMA_VERSION,
-  type EntryMetadataV5,
-  type NotebookSummaryV5,
+  type EntryMetadata,
+  type NotebookSummary,
 } from "@engineering-notebook/shared";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import TextPromptDialog from "@/components/dialogs/TextPromptDialog";
@@ -164,7 +164,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
   const [orgName, setOrgName] = useState("");
   const [userRole, setUserRole] = useState<string | null>(null);
   const canManage = isOrgAdminRole(userRole);
-  const [notebookSummary, setNotebookSummary] = useState<NotebookSummaryV5 | null>(null);
+  const [notebookSummary, setNotebookSummary] = useState<NotebookSummary | null>(null);
   const isArchived = Boolean(notebookSummary?.archivedAt);
   const [folders, setFolders] = useState<
     Record<string, { name: string; parentId: string | null; order: number }>
@@ -253,7 +253,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
             logoAssetId: nb.logoAssetId,
             folders: nb.folders ?? {},
             access: nb.access,
-            phases: nb.phases as NotebookSummaryV5["phases"],
+            phases: nb.phases as NotebookSummary["phases"],
             contributorUids: nb.contributorUids,
             lastCompiled: nb.lastCompiled,
             latestExportId: nb.latestExportId,
@@ -323,13 +323,13 @@ export function NotebookShell({ children }: { children: ReactNode }) {
             next.logoAssetId = nb.logoAssetId as string | undefined;
           }
           if (nb.folders !== undefined) {
-            next.folders = nb.folders as NotebookSummaryV5["folders"];
+            next.folders = nb.folders as NotebookSummary["folders"];
           }
           if (nb.access !== undefined) {
-            next.access = nb.access as NotebookSummaryV5["access"];
+            next.access = nb.access as NotebookSummary["access"];
           }
           if (nb.phases !== undefined) {
-            next.phases = nb.phases as NotebookSummaryV5["phases"];
+            next.phases = nb.phases as NotebookSummary["phases"];
           }
           if (nb.lastCompiled !== undefined) {
             next.lastCompiled = nb.lastCompiled as string | undefined;
@@ -347,7 +347,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
             next.archivedAt = nb.archivedAt as string | null | undefined;
           }
           if (nb.publicAccess !== undefined) {
-            next.publicAccess = nb.publicAccess as NotebookSummaryV5["publicAccess"];
+            next.publicAccess = nb.publicAccess as NotebookSummary["publicAccess"];
           }
           if (nb.publicKey !== undefined) {
             next.publicKey =
@@ -451,7 +451,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const tipTapByEntryId: Record<string, unknown> = {};
-      const entryMeta: Record<string, EntryMetadataV5> = {};
+      const entryMeta: Record<string, EntryMetadata> = {};
       const assetIds = new Set<string>();
 
       for (const [id, meta] of Object.entries(entries)) {
@@ -497,7 +497,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
         if (m.imageAssetId) assetIds.add(m.imageAssetId);
       }
 
-      const summary: NotebookSummaryV5 = {
+      const summary: NotebookSummary = {
         ...(notebookSummary ?? {
           schemaVersion: NOTEBOOK_SCHEMA_VERSION,
           orgId,

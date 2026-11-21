@@ -8,8 +8,8 @@ import {
   notebookMembersCollection,
   notebookPath,
   orgAssetPath,
-  type EntryMetadataV5,
-  type NotebookSummaryV5,
+  type EntryMetadata,
+  type NotebookSummary,
   type OrgMember,
 } from "@engineering-notebook/shared";
 import { recordCompileExport } from "../compile/recordCompileExport.js";
@@ -110,7 +110,7 @@ export async function registerInternalCompileRoutes(
     const nb = await store().get(notebookPath(orgId, notebookId));
     if (!nb) return reply.code(404).send({ error: "notebook not found" });
     const { id: _nbId, ...nbRest } = nb;
-    const notebook = { id: notebookId, ...(nbRest as NotebookSummaryV5) };
+    const notebook = { id: notebookId, ...(nbRest as NotebookSummary) };
 
     const entryRows = await store().query(entriesCollection(orgId, notebookId));
     const entries: Record<string, Record<string, unknown>> = {};
@@ -120,7 +120,7 @@ export async function registerInternalCompileRoutes(
     for (const row of entryRows) {
       const entryId = String(row.id);
       const { id: _id, ...rest } = row;
-      const meta = rest as EntryMetadataV5;
+      const meta = rest as EntryMetadata;
       const tipTapGcsPath = meta.tipTapGcsPath || gcsKeys.tipTap(orgId, notebookId, entryId);
       for (const aid of meta.assetIds || []) neededAssets.add(aid);
       entries[entryId] = {

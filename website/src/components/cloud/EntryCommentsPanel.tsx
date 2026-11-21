@@ -5,7 +5,7 @@ import { BubbleMenu } from "@tiptap/react/menus";
 import { Check, MessageSquare, MessageSquarePlus, Trash2 } from "lucide-react";
 import type { TiptapEditor } from "@/lib/types";
 import { showNotification } from "@/components/overlays/Notification";
-import { Button, Dialog } from "@/components/ui";
+import { Button, Checkbox, Dialog } from "@/components/ui";
 import { cloudApi, type MemberSummary } from "@/lib/cloud/api";
 import {
   subscribeNotebookEvents,
@@ -457,14 +457,11 @@ export function EntryCommentsPanel({
             </div>
           </div>
           <div className="flex items-center gap-2 border-b border-nb-outline-variant/20 px-3 py-2">
-            <label className="flex items-center gap-1.5 text-nb-caption text-nb-on-surface-variant">
-              <input
-                type="checkbox"
-                checked={showResolved}
-                onChange={(e) => setShowResolved(e.target.checked)}
-              />
-              Show resolved
-            </label>
+            <Checkbox
+              label="Show resolved"
+              checked={showResolved}
+              onChange={(e) => setShowResolved(e.target.checked)}
+            />
           </div>
           <ul className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
             {visible.map((c) => (

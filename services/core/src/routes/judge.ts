@@ -9,7 +9,7 @@ import {
   rubricsCollection,
   type Judgment,
   type NotebookRubric,
-  type NotebookSummaryV5,
+  type NotebookSummary,
   type RubricMatrix,
 } from "@engineering-notebook/shared";
 import { getMetadataStore } from "../db/metadataStore.js";
@@ -39,7 +39,7 @@ async function assertNotebookAccess(
     (err as Error & { statusCode: number }).statusCode = 404;
     throw err;
   }
-  await requireNotebookAccess(user, orgId, data as unknown as NotebookSummaryV5);
+  await requireNotebookAccess(user, orgId, data as unknown as NotebookSummary);
 }
 
 async function assertNotebookWritable(
@@ -53,7 +53,7 @@ async function assertNotebookWritable(
     (err as Error & { statusCode: number }).statusCode = 404;
     throw err;
   }
-  const notebook = data as unknown as NotebookSummaryV5;
+  const notebook = data as unknown as NotebookSummary;
   await requireNotebookAccess(user, orgId, notebook);
   assertNotebookNotArchived(notebook);
 }

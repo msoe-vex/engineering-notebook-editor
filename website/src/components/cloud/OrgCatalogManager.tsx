@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
+import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import { showNotification } from "@/components/overlays/Notification";
 import { Button, Checkbox, Dialog, ImageField, LoadingBlock, TextField } from "@/components/ui";
 import {
@@ -79,6 +80,7 @@ export function OrgCatalogManager({
     values: Record<string, string>;
     isPublic: boolean;
   } | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -298,14 +300,7 @@ export function OrgCatalogManager({
                   className="text-nb-danger"
                   disabled={busy}
                   title="Delete"
-                  onClick={() => {
-                    setBusy(true);
-                    void cloudApi
-                      .deleteOrgCatalogItem(orgId, section, item.id)
-                      .then(load)
-                      .catch((err) => showNotification((err as Error).message, "error"))
-                      .finally(() => setBusy(false));
-                  }}
+                  onClick={() => setDeleteId(item.id)}
                 >
                   <Trash2 size={14} />
                 </Button>
@@ -386,6 +381,31 @@ export function OrgCatalogManager({
           </div>
         ) : null}
       </Dialog>
+
+      <ConfirmationDialog
+        isOpen={Boolean(deleteId)}
+        title={`Delete ${cfg.singular}?`}
+        message={`Delete “${
+          (() => {
+            const row = deleteId ? items.find((i) => i.id === deleteId) : undefined;
+            return row ? primaryLabel(row, cfg.fields) : cfg.singular;
+          })()
+        }”? This cannot be undone.`}
+        confirmLabel="Delete"
+        variant="danger"
+        onCancel={() => setDeleteId(null)}
+        onConfirm={() => {
+          const id = deleteId;
+          setDeleteId(null);
+          if (!id) return;
+          setBusy(true);
+          void cloudApi
+            .deleteOrgCatalogItem(orgId, section, id)
+            .then(load)
+            .catch((err) => showNotification((err as Error).message, "error"))
+            .finally(() => setBusy(false));
+        }}
+      />
     </div>
   );
 }

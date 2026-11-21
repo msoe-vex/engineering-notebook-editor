@@ -14,7 +14,7 @@ import {
   isPublicSection,
   type Organization,
   type OrgMember,
-  type NotebookSummaryV5,
+  type NotebookSummary,
   type AssetMetadata,
 } from "@engineering-notebook/shared";
 import { resolveExportPdfKey } from "../compile/recordCompileExport.js";
@@ -160,7 +160,7 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
     const nbSnap = await store().get(notebookPath(org.id, notebookId));
     if (!nbSnap) return reply.code(404).send({ error: "not found" });
     const { id: _nbId, ...nbRest } = nbSnap;
-    const nb = { id: notebookId, ...(nbRest as NotebookSummaryV5) };
+    const nb = { id: notebookId, ...(nbRest as NotebookSummary) };
     if (nb.publicAccess !== "public" && nb.publicAccess !== "unlisted") {
       return reply.code(404).send({ error: "not found" });
     }
@@ -218,7 +218,7 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
     if (!notebookId) return reply.code(404).send({ error: "not found" });
     const nbSnap = await store().get(notebookPath(org.id, notebookId));
     if (!nbSnap) return reply.code(404).send({ error: "not found" });
-    const nb = nbSnap as NotebookSummaryV5;
+    const nb = nbSnap as NotebookSummary;
     if (nb.publicAccess !== "public" && nb.publicAccess !== "unlisted") {
       return reply.code(404).send({ error: "not found" });
     }

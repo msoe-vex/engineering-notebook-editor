@@ -23,7 +23,7 @@ import {
   type TeamMetadata,
   type TipTapNode,
 } from "@/lib/notebook/metadata";
-import type { NotebookSummaryV5 } from "@engineering-notebook/shared";
+import type { NotebookSummary } from "@engineering-notebook/shared";
 
 /** graphicx needs a real extension; cloud asset ids are bare UUIDs. */
 function extFromContentType(ct?: string | null): string {
@@ -134,7 +134,7 @@ export async function compileCloudNotebook(opts: {
   orgId: string;
   notebookId: string;
   entries: Record<string, EntryMeta>;
-  notebookSummary: NotebookSummaryV5 | null;
+  notebookSummary: NotebookSummary | null;
   onStatus?: CompileStatusCallback;
 }): Promise<CompileResult & { lastCompiled?: string }> {
   const { orgId, notebookId, entries, notebookSummary, onStatus } = opts;

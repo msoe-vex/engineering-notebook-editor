@@ -8,7 +8,7 @@ import {
   cloudApi,
   type MemberSummary,
   type NotebookAccess,
-  type NotebookSummary,
+  type CloudNotebookSummary,
   type TeamSummary,
 } from "@/lib/cloud/api";
 import { AccessAllowlistPicker } from "./AccessAllowlistPicker";
@@ -19,7 +19,7 @@ export type CreateNotebookDialogProps = {
   orgId: string;
   teams?: TeamSummary[];
   members?: MemberSummary[];
-  onCreated?: (notebook: NotebookSummary) => void;
+  onCreated?: (notebook: CloudNotebookSummary) => void;
 };
 
 /**

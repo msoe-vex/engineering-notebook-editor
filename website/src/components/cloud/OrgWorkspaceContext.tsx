@@ -13,7 +13,7 @@ import {
   cloudApi,
   type InviteSummary,
   type MemberSummary,
-  type NotebookSummary,
+  type CloudNotebookSummary,
   type OrgSummary,
   type TeamSummary,
 } from "@/lib/cloud/api";
@@ -24,7 +24,7 @@ import { isOrgAdminRole } from "@/lib/cloud/roles";
 type OrgWorkspaceState = {
   orgId: string;
   org: OrgSummary | null;
-  notebooks: NotebookSummary[];
+  notebooks: CloudNotebookSummary[];
   teams: TeamSummary[];
   members: MemberSummary[];
   invites: InviteSummary[];
@@ -52,7 +52,7 @@ export function OrgWorkspaceProvider({
   children: ReactNode;
 }) {
   const [org, setOrg] = useState<OrgSummary | null>(null);
-  const [notebooks, setNotebooks] = useState<NotebookSummary[]>([]);
+  const [notebooks, setNotebooks] = useState<CloudNotebookSummary[]>([]);
   const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [members, setMembers] = useState<MemberSummary[]>([]);
   const [invites, setInvites] = useState<InviteSummary[]>([]);

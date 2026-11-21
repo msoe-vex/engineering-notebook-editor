@@ -2,7 +2,7 @@ import {
   memberPath,
   teamMemberPath,
   type NotebookAccess,
-  type NotebookSummaryV5,
+  type NotebookSummary,
   type OrgRole,
   type PlatformRole,
 } from "@engineering-notebook/shared";
@@ -85,7 +85,7 @@ function normalizeAccess(access: NotebookAccess | undefined): NotebookAccess {
 export async function canAccessNotebook(
   user: SessionUser,
   orgId: string,
-  notebook: Pick<NotebookSummaryV5, "access"> | { access?: NotebookAccess },
+  notebook: Pick<NotebookSummary, "access"> | { access?: NotebookAccess },
   orgRole?: OrgRole | null
 ): Promise<boolean> {
   if (isServiceAdmin(user)) return true;
@@ -109,7 +109,7 @@ export async function canAccessNotebook(
 export async function requireNotebookAccess(
   user: SessionUser,
   orgId: string,
-  notebook: Pick<NotebookSummaryV5, "access"> | { access?: NotebookAccess },
+  notebook: Pick<NotebookSummary, "access"> | { access?: NotebookAccess },
   opts?: { write?: boolean }
 ): Promise<OrgRole> {
   const role = await requireOrgMember(user, orgId, "member", {

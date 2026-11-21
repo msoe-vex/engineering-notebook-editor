@@ -134,7 +134,7 @@ export type NotebookAccess = {
   userIds: string[];
 };
 
-export type NotebookSummary = {
+export type CloudNotebookSummary = {
   id: string;
   name: string;
   title?: string;
@@ -348,30 +348,30 @@ export const cloudApi = {
       method: "DELETE",
     }),
 
-  listNotebooks: (orgId: string) => coreFetch<NotebookSummary[]>(`/orgs/${orgId}/notebooks`),
+  listNotebooks: (orgId: string) => coreFetch<CloudNotebookSummary[]>(`/orgs/${orgId}/notebooks`),
   createNotebook: (
     orgId: string,
     body: string | { name?: string; title?: string; subtitle?: string; access?: NotebookAccess }
   ) =>
-    coreFetch<NotebookSummary>(`/orgs/${orgId}/notebooks`, {
+    coreFetch<CloudNotebookSummary>(`/orgs/${orgId}/notebooks`, {
       method: "POST",
       body: JSON.stringify(typeof body === "string" ? { name: body } : body),
     }),
   getNotebook: (orgId: string, notebookId: string) =>
-    coreFetch<NotebookSummary>(`/orgs/${orgId}/notebooks/${notebookId}`),
+    coreFetch<CloudNotebookSummary>(`/orgs/${orgId}/notebooks/${notebookId}`),
   patchNotebook: (orgId: string, notebookId: string, body: unknown) =>
-    coreFetch<NotebookSummary>(`/orgs/${orgId}/notebooks/${notebookId}`, {
+    coreFetch<CloudNotebookSummary>(`/orgs/${orgId}/notebooks/${notebookId}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
   deleteNotebook: (orgId: string, notebookId: string) =>
     coreFetch<{ ok: boolean }>(`/orgs/${orgId}/notebooks/${notebookId}`, { method: "DELETE" }),
   archiveNotebook: (orgId: string, notebookId: string) =>
-    coreFetch<NotebookSummary>(`/orgs/${orgId}/notebooks/${notebookId}/archive`, {
+    coreFetch<CloudNotebookSummary>(`/orgs/${orgId}/notebooks/${notebookId}/archive`, {
       method: "POST",
     }),
   unarchiveNotebook: (orgId: string, notebookId: string) =>
-    coreFetch<NotebookSummary>(`/orgs/${orgId}/notebooks/${notebookId}/unarchive`, {
+    coreFetch<CloudNotebookSummary>(`/orgs/${orgId}/notebooks/${notebookId}/unarchive`, {
       method: "POST",
     }),
 

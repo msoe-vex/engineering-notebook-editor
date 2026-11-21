@@ -18,21 +18,21 @@ import {
   Skeleton,
   type MenuItem,
 } from "@/components/ui";
-import { cloudApi, type NotebookSummary } from "@/lib/cloud/api";
+import { cloudApi, type CloudNotebookSummary } from "@/lib/cloud/api";
 
 export default function OrgNotebooksPage() {
   const router = useRouter();
   const { orgId, notebooks, teams, members, busy, canManage, setBusy, refresh, setError, initialLoaded } =
     useOrgWorkspace();
   const [createOpen, setCreateOpen] = useState(false);
-  const [shareNb, setShareNb] = useState<NotebookSummary | null>(null);
+  const [shareNb, setShareNb] = useState<CloudNotebookSummary | null>(null);
   const [renameNb, setRenameNb] = useState<{ id: string; name: string } | null>(null);
   const [deleteNb, setDeleteNb] = useState<{ id: string; name: string } | null>(null);
-  const [archiveNb, setArchiveNb] = useState<NotebookSummary | null>(null);
-  const [unarchiveNb, setUnarchiveNb] = useState<NotebookSummary | null>(null);
+  const [archiveNb, setArchiveNb] = useState<CloudNotebookSummary | null>(null);
+  const [unarchiveNb, setUnarchiveNb] = useState<CloudNotebookSummary | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
 
-  function notebookMenuItems(nb: NotebookSummary): MenuItem[] {
+  function notebookMenuItems(nb: CloudNotebookSummary): MenuItem[] {
     return [
       {
         id: "open",
@@ -85,7 +85,7 @@ export default function OrgNotebooksPage() {
 
   function onNotebookContextMenu(
     e: ReactMouseEvent,
-    nb: NotebookSummary
+    nb: CloudNotebookSummary
   ) {
     e.preventDefault();
     setCtx({ x: e.clientX, y: e.clientY, items: notebookMenuItems(nb) });

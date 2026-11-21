@@ -5,7 +5,7 @@ import {
   gcsKeys,
   notebookPath,
   type CompileExport,
-  type NotebookSummaryV5,
+  type NotebookSummary,
 } from "@engineering-notebook/shared";
 import { getMetadataStore } from "../db/metadataStore.js";
 import { omitUndefined } from "../db/sanitize.js";
@@ -15,7 +15,7 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function keepExportIds(nb: Partial<NotebookSummaryV5> | null | undefined): Set<string> {
+function keepExportIds(nb: Partial<NotebookSummary> | null | undefined): Set<string> {
   const keep = new Set<string>();
   if (nb?.latestExportId) keep.add(nb.latestExportId);
   if (nb?.publicExportId) keep.add(nb.publicExportId);
@@ -53,7 +53,7 @@ export async function pruneStaleCompileExports(
 ): Promise<void> {
   const store = getMetadataStore();
   const nb = await store.get(notebookPath(orgId, notebookId));
-  const keep = keepExportIds(nb as NotebookSummaryV5 | null);
+  const keep = keepExportIds(nb as NotebookSummary | null);
   const rows = await store.query(compileExportsCollection(orgId, notebookId));
   for (const row of rows) {
     const id = String(row.id);
@@ -141,7 +141,7 @@ export async function deleteCompileExport(opts: {
   if (!nbSnap) {
     throw Object.assign(new Error("notebook not found"), { statusCode: 404 });
   }
-  const nb = nbSnap as NotebookSummaryV5;
+  const nb = nbSnap as NotebookSummary;
   const meta = await store.get(compileExportPath(orgId, notebookId, exportId));
   const isLatest = nb.latestExportId === exportId;
   const isPublic = nb.publicExportId === exportId;

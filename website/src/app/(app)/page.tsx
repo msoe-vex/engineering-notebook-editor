@@ -18,12 +18,12 @@ import {
   Skeleton,
   type MenuItem,
 } from "@/components/ui";
-import { cloudApi, type NotebookSummary, type OrgSummary } from "@/lib/cloud/api";
+import { cloudApi, type CloudNotebookSummary, type OrgSummary } from "@/lib/cloud/api";
 import { isOrgAdminRole, orgRoleLabel } from "@/lib/cloud/roles";
 import { getDevToken, getFirebaseAuth } from "@/lib/cloud/firebase";
 import { GITHUB_ISSUES_URL } from "@/lib/constants";
 
-type RecentNotebook = NotebookSummary & { orgId: string; orgName: string };
+type RecentNotebook = CloudNotebookSummary & { orgId: string; orgName: string };
 
 function HomeInner() {
   const router = useRouter();

@@ -46,10 +46,12 @@ import {
 } from "lucide-react";
 import {
   Button,
+  Checkbox,
   ContextMenu,
   Dialog,
   DropdownMenu,
   IconButton,
+  Select,
   ValidationIssuesTooltip,
   type MenuItem,
 } from "@/components/ui";
@@ -2038,39 +2040,31 @@ export function NotebookEntryList({
         <div className="shrink-0 border-b border-nb-outline-variant/30 bg-nb-surface/50 shadow-[inset_0_-1px_0_0_rgb(0_0_0/0.04)]">
           <div className="custom-scrollbar max-h-52 space-y-3 overflow-y-auto px-2.5 py-3 text-nb-caption">
             <div className="grid grid-cols-2 gap-2">
-              <label className="block">
-                <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-nb-on-surface-variant/70">
-                  Sort by
-                </span>
-                <select
-                  value={sortMode}
-                  onChange={(e) => setSortMode(e.target.value as EntrySortMode)}
-                  className="h-9 w-full rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface px-2 text-nb-label outline-none focus:border-nb-primary"
-                >
-                  <option value="name">Name</option>
-                  <option value="date">Date</option>
-                  <option value="phase">Phase</option>
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-nb-on-surface-variant/70">
-                  Show
-                </span>
-                <select
-                  value={filters.kind}
-                  onChange={(e) =>
-                    setFilters((f) => ({
-                      ...f,
-                      kind: e.target.value as EntryFilters["kind"],
-                    }))
-                  }
-                  className="h-9 w-full rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface px-2 text-nb-label outline-none focus:border-nb-primary"
-                >
-                  <option value="all">All</option>
-                  <option value="entries">Entries</option>
-                  <option value="templates">Templates</option>
-                </select>
-              </label>
+              <Select
+                label="Sort by"
+                value={sortMode}
+                onChange={(e) => setSortMode(e.target.value as EntrySortMode)}
+                className="h-9 rounded-nb-lg bg-nb-surface px-2 py-0 text-nb-label"
+              >
+                <option value="name">Name</option>
+                <option value="date">Date</option>
+                <option value="phase">Phase</option>
+              </Select>
+              <Select
+                label="Show"
+                value={filters.kind}
+                onChange={(e) =>
+                  setFilters((f) => ({
+                    ...f,
+                    kind: e.target.value as EntryFilters["kind"],
+                  }))
+                }
+                className="h-9 rounded-nb-lg bg-nb-surface px-2 py-0 text-nb-label"
+              >
+                <option value="all">All</option>
+                <option value="entries">Entries</option>
+                <option value="templates">Templates</option>
+              </Select>
             </div>
 
             <label className="block">
@@ -2108,16 +2102,14 @@ export function NotebookEntryList({
               </datalist>
             </label>
 
-            <label className="flex items-center gap-2 text-nb-label text-nb-on-surface">
-              <input
-                type="checkbox"
-                checked={filters.hasOpenComments}
-                onChange={(e) =>
-                  setFilters((f) => ({ ...f, hasOpenComments: e.target.checked }))
-                }
-              />
-              Has open comments
-            </label>
+            <Checkbox
+              className="text-nb-label"
+              label="Has open comments"
+              checked={filters.hasOpenComments}
+              onChange={(e) =>
+                setFilters((f) => ({ ...f, hasOpenComments: e.target.checked }))
+              }
+            />
 
             <div className="grid grid-cols-2 gap-2">
               <label className="block">
@@ -2228,19 +2220,17 @@ export function NotebookEntryList({
               <X size={10} />
             </button>
           )}
-          <label className="ml-auto flex items-center gap-1.5 text-[10px] font-semibold text-nb-on-surface-variant">
-            Sort
-            <select
-              value={sortMode}
-              onChange={(e) => setSortMode(e.target.value as EntrySortMode)}
-              className="rounded-nb border border-nb-outline-variant/30 bg-nb-surface px-1.5 py-0.5 text-[10px] font-semibold text-nb-on-surface outline-none"
-              aria-label="Sort matches"
-            >
-              <option value="name">Name</option>
-              <option value="date">Date</option>
-              <option value="phase">Phase</option>
-            </select>
-          </label>
+          <Select
+            containerClassName="ml-auto w-auto"
+            className="rounded-nb px-1.5 py-0.5 text-[10px] font-semibold"
+            aria-label="Sort matches"
+            value={sortMode}
+            onChange={(e) => setSortMode(e.target.value as EntrySortMode)}
+          >
+            <option value="name">Name</option>
+            <option value="date">Date</option>
+            <option value="phase">Phase</option>
+          </Select>
           <button
             type="button"
             className="text-[10px] font-semibold text-nb-primary hover:underline"
