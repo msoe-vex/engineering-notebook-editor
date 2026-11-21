@@ -250,10 +250,17 @@ export function NotebookShell({ children }: { children: ReactNode }) {
             folders: nb.folders ?? {},
             access: nb.access,
             phases: nb.phases as NotebookSummaryV5["phases"],
+            contributorUids: nb.contributorUids,
             lastCompiled: nb.lastCompiled,
+            latestExportId: nb.latestExportId,
+            publicExportId: nb.publicExportId,
             archivedAt: nb.archivedAt,
             createdAt: nb.createdAt,
             updatedAt: nb.updatedAt ?? new Date().toISOString(),
+            publicAccess: nb.publicAccess,
+            publicKey: nb.publicKey,
+            publishedAt: nb.publishedAt,
+            publishedBy: nb.publishedBy,
           });
           setNotebookUnavailable(false);
           setErrorState(null);
@@ -323,8 +330,35 @@ export function NotebookShell({ children }: { children: ReactNode }) {
           if (nb.lastCompiled !== undefined) {
             next.lastCompiled = nb.lastCompiled as string | undefined;
           }
+          if (nb.latestExportId !== undefined) {
+            next.latestExportId = nb.latestExportId as string | undefined;
+          }
+          if (nb.publicExportId !== undefined) {
+            next.publicExportId =
+              nb.publicExportId === null
+                ? undefined
+                : (nb.publicExportId as string | undefined);
+          }
           if (nb.archivedAt !== undefined) {
             next.archivedAt = nb.archivedAt as string | null | undefined;
+          }
+          if (nb.publicAccess !== undefined) {
+            next.publicAccess = nb.publicAccess as NotebookSummaryV5["publicAccess"];
+          }
+          if (nb.publicKey !== undefined) {
+            next.publicKey =
+              nb.publicKey === null ? undefined : (nb.publicKey as string | undefined);
+          }
+          if (nb.publishedAt !== undefined) {
+            next.publishedAt =
+              nb.publishedAt === null ? undefined : (nb.publishedAt as string | undefined);
+          }
+          if (nb.publishedBy !== undefined) {
+            next.publishedBy =
+              nb.publishedBy === null ? undefined : (nb.publishedBy as string | undefined);
+          }
+          if (nb.contributorUids !== undefined) {
+            next.contributorUids = nb.contributorUids as string[] | undefined;
           }
           next.updatedAt = String(nb.updatedAt ?? prev.updatedAt);
           return next;

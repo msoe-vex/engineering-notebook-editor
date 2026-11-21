@@ -51,8 +51,13 @@ import {
   type Invite,
   type InviteStatus,
   type NotebookFolder,
+  compileExportsCollection,
 } from "@engineering-notebook/shared";
 import { getMetadataStore, type MetadataBatchOp } from "../db/metadataStore.js";
+import {
+  recordCompileExport,
+  resolveExportPdfKey,
+} from "../compile/recordCompileExport.js";
 import { omitUndefined } from "../db/sanitize.js";
 import {
   requireOrgMember,
@@ -986,6 +991,8 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       "access",
       "phases",
       "lastCompiled",
+      "latestExportId",
+      "publicExportId",
       "archivedAt",
     ] as const) {
       if (body[key] !== undefined) patch[key] = body[key];
@@ -1053,6 +1060,12 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
         patch.publicKey = key;
         patch.publishedAt = existing.publishedAt || nowIso();
         patch.publishedBy = existing.publishedBy || user.uid;
+        // Bind public PDF to an explicit export, else latest compile.
+        if (body.publicExportId !== undefined) {
+          patch.publicExportId = body.publicExportId || null;
+        } else if (!existing.publicExportId && existing.latestExportId) {
+          patch.publicExportId = existing.latestExportId;
+        }
       }
     }
 
@@ -2260,7 +2273,34 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     return { ok: true };
   });
 
-  // ── Compiled PDF exports ─────────────────────────────────────────────────
+  // ── Compiled PDF exports (versioned) ─────────────────────────────────────
+
+  app.get("/orgs/:orgId/notebooks/:notebookId/exports", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
+    await assertNotebookAccess(user, orgId, notebookId);
+    const rows = await store().query(compileExportsCollection(orgId, notebookId));
+    const exports = rows
+      .map((d) => {
+        const { id, ...rest } = d;
+        return { id: String(id), ...(rest as Record<string, unknown>) } as {
+          id: string;
+          createdAt?: string;
+          createdBy?: string;
+          byteSize?: number;
+          label?: string;
+        };
+      })
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+    const nb = await store().get(notebookPath(orgId, notebookId));
+    return {
+      exports,
+      latestExportId: nb?.latestExportId ?? null,
+      publicExportId: nb?.publicExportId ?? null,
+      publicAccess: nb?.publicAccess ?? "off",
+      publicKey: nb?.publicKey ?? null,
+    };
+  });
 
   app.put("/orgs/:orgId/notebooks/:notebookId/exports/:exportId/content", async (request, reply) => {
     const user = getUser(request);
@@ -2270,29 +2310,44 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       exportId: string;
     };
     await assertNotebookAccess(user, orgId, notebookId);
-    const key = gcsKeys.exportPdf(orgId, notebookId, exportId);
     const body = request.body as NodeJS.ReadableStream | Uint8Array | Buffer | undefined;
-    let byteSize: number;
+    let pdf: Buffer;
     if (body && typeof (body as NodeJS.ReadableStream).pipe === "function") {
-      const result = await storage.putObjectStream(
-        key,
-        body as import("node:stream").Readable,
-        "application/pdf"
-      );
-      byteSize = result.byteSize;
+      const chunks: Buffer[] = [];
+      for await (const chunk of body as AsyncIterable<Buffer | Uint8Array | string>) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      pdf = Buffer.concat(chunks);
     } else if (body instanceof Uint8Array || Buffer.isBuffer(body)) {
-      const data = Buffer.from(body);
-      await storage.putObject(key, data, "application/pdf");
-      byteSize = data.byteLength;
+      pdf = Buffer.from(body);
     } else {
       return reply.code(400).send({ error: "expected binary body stream" });
     }
-    const ts = nowIso();
-    await store().update(notebookPath(orgId, notebookId), {
-      lastCompiled: ts,
-      updatedAt: ts,
-    } as Record<string, unknown>);
-    return { ok: true, exportId, gcsPath: key, lastCompiled: ts, byteSize };
+    const recorded = await recordCompileExport({
+      orgId,
+      notebookId,
+      storage,
+      pdf,
+      createdBy: user.uid,
+      exportId,
+    });
+    publishNotebookEvent(orgId, notebookId, {
+      type: "notebook.updated",
+      notebook: {
+        id: notebookId,
+        lastCompiled: recorded.lastCompiled,
+        latestExportId: recorded.exportId,
+        updatedAt: recorded.lastCompiled,
+      },
+      at: recorded.lastCompiled,
+    });
+    return {
+      ok: true,
+      exportId: recorded.exportId,
+      gcsPath: gcsKeys.exportPdf(orgId, notebookId, recorded.exportId),
+      lastCompiled: recorded.lastCompiled,
+      byteSize: recorded.byteSize,
+    };
   });
 
   app.get("/orgs/:orgId/notebooks/:notebookId/exports/:exportId/url", async (request, reply) => {
@@ -2303,11 +2358,10 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       exportId: string;
     };
     await assertNotebookAccess(user, orgId, notebookId);
-    const key = gcsKeys.exportPdf(orgId, notebookId, exportId);
-    const exists = await storage.getObject(key);
-    if (!exists) return reply.code(404).send({ error: "export not found" });
-    const url = await storage.getSignedUrl(key, "read");
-    return { url, exportId, gcsPath: key };
+    const resolved = await resolveExportPdfKey(orgId, notebookId, exportId, storage);
+    if (!resolved) return reply.code(404).send({ error: "export not found" });
+    const url = await storage.getSignedUrl(resolved.key, "read");
+    return { url, exportId: resolved.exportId, gcsPath: resolved.key };
   });
 
   /**

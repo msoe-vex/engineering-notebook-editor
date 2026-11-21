@@ -426,9 +426,11 @@ export default function NotebookSetupPage() {
             <div>
               <h2 className="text-nb-title font-semibold text-nb-on-surface">Public page</h2>
               <p className="mt-1 text-nb-body text-nb-on-surface-variant">
-                Share a read-only notebook at{" "}
-                <code className="text-nb-caption">/o/&lt;org-slug&gt;/n/&lt;key&gt;</code>. Same
-                visibility pattern as the organization public site.
+                Public links serve the compiled PDF only. Prefer publishing a version from the{" "}
+                <a className="font-semibold text-nb-primary underline" href={`/orgs/${orgId}/notebooks/${notebookId}/compile`}>
+                  Compile
+                </a>{" "}
+                page (with previews). You can still set visibility here.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -497,7 +499,19 @@ export default function NotebookSetupPage() {
                   publicAccess,
                   revokePublic: publicAccess === "off",
                 })
-                .then(() => {
+                .then((updated) => {
+                  if (notebookSummary) {
+                    setNotebookSummary({
+                      ...notebookSummary,
+                      publicAccess: updated.publicAccess ?? publicAccess,
+                      publicKey: updated.publicKey,
+                      publicExportId: updated.publicExportId,
+                      publishedAt: updated.publishedAt,
+                      publishedBy: updated.publishedBy,
+                      latestExportId: updated.latestExportId ?? notebookSummary.latestExportId,
+                      updatedAt: updated.updatedAt || notebookSummary.updatedAt,
+                    });
+                  }
                   showNotification(
                     publicAccess === "off" ? "Public link disabled" : "Public page updated",
                     "success"

@@ -3,10 +3,6 @@ import {
   orgPath,
   orgSlugPath,
   notebookPath,
-  entriesCollection,
-  entryPath,
-  notebookMembersCollection,
-  memberPath,
   membersCollection,
   orgAssetPath,
   donorsCollection,
@@ -14,15 +10,14 @@ import {
   eventsCollection,
   socialLinksCollection,
   publicNotebookKeyPath,
-  gcsKeys,
   isPublicRecord,
   isPublicSection,
   type Organization,
   type OrgMember,
   type NotebookSummaryV5,
-  type EntryMetadataV5,
   type AssetMetadata,
 } from "@engineering-notebook/shared";
+import { resolveExportPdfKey } from "../compile/recordCompileExport.js";
 import { getMetadataStore } from "../db/metadataStore.js";
 import type { StoragePort } from "../storage/storagePort.js";
 
@@ -171,83 +166,15 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
     }
     if (nb.publicKey !== key) return reply.code(404).send({ error: "not found" });
 
-    const [entries, legacyContributors] = await Promise.all([
-      store().query(entriesCollection(org.id, notebookId)),
-      store().query(notebookMembersCollection(org.id, notebookId)),
-    ]);
-    const liveEntries = entries
-      .map((d) => {
-        const { id, ...rest } = d;
-        return { id, ...(rest as EntryMetadataV5) };
-      })
-      .filter((e) => !e.deletedAt)
-      .map((e) => ({
-        id: e.id,
-        title: e.title,
-        authors: e.authors,
-        phase: e.phase,
-        date: e.date,
-        folderId: e.folderId,
-        explorerOrder: e.explorerOrder,
-        order: e.order,
-      }));
-
-    const uids = nb.contributorUids || [];
-    let contributors: Array<{
-      id: string;
-      name?: string;
-      role?: string;
-      order?: number;
-      imageUrl?: string;
-    }>;
-    if (uids.length) {
-      contributors = (
-        await Promise.all(
-          uids.map(async (uid, order) => {
-            const omSnap = await store().get(memberPath(org.id, uid));
-            if (!omSnap) return null;
-            const { id: _id, ...rest } = omSnap;
-            const om = rest as OrgMember;
-            const imageUrl = await resolveOrgAssetUrl(org.id, om.imageAssetId);
-            return {
-              id: uid,
-              name: om.displayName || om.email || "Member",
-              role: om.title || undefined,
-              order,
-              imageUrl,
-            };
-          })
-        )
-      ).filter(Boolean) as Array<{
-        id: string;
-        name?: string;
-        role?: string;
-        order?: number;
-        imageUrl?: string;
-      }>;
-    } else {
-      contributors = await Promise.all(
-        legacyContributors
-          .map((d) => {
-            const { id, ...data } = d as {
-              id: string;
-              name?: string;
-              role?: string;
-              order?: number;
-              deletedAt?: string | null;
-              imageAssetId?: string;
-            };
-            return { id, ...data };
-          })
-          .filter((m) => !m.deletedAt)
-          .map(async (m) => ({
-            id: m.id,
-            name: m.name || "Contributor",
-            role: m.role,
-            order: m.order,
-            imageUrl: await resolveOrgAssetUrl(org.id, m.imageAssetId),
-          }))
-      );
+    const exportId = nb.publicExportId || nb.latestExportId || "latest";
+    const resolved = await resolveExportPdfKey(org.id, notebookId, exportId, storage);
+    let pdfUrl: string | undefined;
+    if (resolved) {
+      try {
+        pdfUrl = await storage.getSignedUrl(resolved.key, "read");
+      } catch {
+        pdfUrl = undefined;
+      }
     }
 
     return {
@@ -257,63 +184,19 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
         name: nb.name,
         title: nb.title,
         subtitle: nb.subtitle,
-        logoAssetId: nb.logoAssetId,
-        folders: nb.folders,
-        phases: nb.phases,
         publicAccess: nb.publicAccess,
         publicKey: nb.publicKey,
         lastCompiled: nb.lastCompiled,
+        publicExportId: resolved?.exportId || nb.publicExportId || null,
       },
-      entries: liveEntries,
-      contributors,
+      pdfUrl,
       noindex: nb.publicAccess === "unlisted",
     };
   });
 
-  app.get("/public/o/:slug/notebooks/:publicKey/entries/:entryId", async (request, reply) => {
-    const { slug, publicKey, entryId } = request.params as {
-      slug: string;
-      publicKey: string;
-      entryId: string;
-    };
-    const org = await resolveOrgBySlug(slug.toLowerCase());
-    if (!org) return reply.code(404).send({ error: "not found" });
-    const key = publicKey.trim().toLowerCase();
-    const keySnap = await store().get(publicNotebookKeyPath(org.id, key));
-    if (!keySnap) return reply.code(404).send({ error: "not found" });
-    const notebookId = keySnap.notebookId as string | undefined;
-    if (!notebookId) return reply.code(404).send({ error: "not found" });
-    const nbSnap = await store().get(notebookPath(org.id, notebookId));
-    if (!nbSnap) return reply.code(404).send({ error: "not found" });
-    const nb = nbSnap as NotebookSummaryV5;
-    if (nb.publicAccess !== "public" && nb.publicAccess !== "unlisted") {
-      return reply.code(404).send({ error: "not found" });
-    }
-    const entrySnap = await store().get(entryPath(org.id, notebookId, entryId));
-    if (!entrySnap) return reply.code(404).send({ error: "not found" });
-    const { id: entryDocId, ...entryRest } = entrySnap;
-    const entry = entryRest as EntryMetadataV5;
-    if (entry.deletedAt) return reply.code(404).send({ error: "not found" });
-    const tipTapKey = entry.tipTapGcsPath || gcsKeys.tipTap(org.id, notebookId, entryId);
-    const buf = await storage.getObject(tipTapKey);
-    let tipTapJson: unknown = null;
-    if (buf) {
-      try {
-        tipTapJson = JSON.parse(buf.toString("utf8"));
-      } catch {
-        tipTapJson = null;
-      }
-    }
-    return {
-      entry: {
-        id: entryDocId,
-        title: entry.title,
-        authors: entry.authors,
-        phase: entry.phase,
-        date: entry.date,
-      },
-      tipTapJson,
-    };
+  /** Entry TipTap public reads removed — public notebooks are PDF-only. */
+  app.get("/public/o/:slug/notebooks/:publicKey/entries/:entryId", async (_request, reply) => {
+    return reply.code(404).send({ error: "not found" });
   });
 
   app.get("/public/o/:slug/notebooks/:publicKey/pdf", async (request, reply) => {
@@ -331,13 +214,14 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
     if (nb.publicAccess !== "public" && nb.publicAccess !== "unlisted") {
       return reply.code(404).send({ error: "not found" });
     }
-    if (!nb.lastCompiled) {
-      return reply.code(404).send({ error: "no compiled pdf" });
-    }
-    const exportKey = gcsKeys.exportPdf(org.id, notebookId, "latest");
-    const exists = await storage.getObject(exportKey);
-    if (!exists) return reply.code(404).send({ error: "no compiled pdf" });
-    const url = await storage.getSignedUrl(exportKey, "read");
-    return { url, lastCompiled: nb.lastCompiled };
+    const exportId = nb.publicExportId || nb.latestExportId || "latest";
+    const resolved = await resolveExportPdfKey(org.id, notebookId, exportId, storage);
+    if (!resolved) return reply.code(404).send({ error: "no compiled pdf" });
+    const url = await storage.getSignedUrl(resolved.key, "read");
+    return {
+      url,
+      lastCompiled: nb.lastCompiled,
+      exportId: resolved.exportId,
+    };
   });
 }

@@ -15,9 +15,9 @@ type PublicNotebookPayload = {
     subtitle?: string;
     publicAccess?: string;
     lastCompiled?: string;
+    publicExportId?: string | null;
   };
-  entries: Array<{ id: string; title?: string; date?: string; phase?: string }>;
-  contributors: Array<{ id: string; name?: string; role?: string }>;
+  pdfUrl?: string;
   noindex?: boolean;
 };
 
@@ -27,7 +27,7 @@ export default function PublicNotebookPage() {
   const publicKey = String(params.publicKey || "");
   const [data, setData] = useState<PublicNotebookPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -48,24 +48,20 @@ export default function PublicNotebookPage() {
       .then((d) => {
         const payload = d as PublicNotebookPayload;
         setData(payload);
+        if (payload.pdfUrl) {
+          setPdfUrl(payload.pdfUrl);
+        } else {
+          void cloudApi
+            .getPublicNotebookPdf(slug, publicKey)
+            .then((r) => setPdfUrl(r.url))
+            .catch(() => setPdfUrl(null));
+        }
         if (payload.noindex === false && typeof document !== "undefined") {
           document.querySelectorAll('meta[data-ene-public-nb="1"]').forEach((n) => n.remove());
         }
       })
       .catch((e) => setError((e as Error).message || "Not found"));
   }, [slug, publicKey]);
-
-  async function downloadPdf() {
-    setPdfBusy(true);
-    try {
-      const { url } = await cloudApi.getPublicNotebookPdf(slug, publicKey);
-      window.open(url, "_blank", "noopener,noreferrer");
-    } catch {
-      setError("No compiled PDF available yet.");
-    } finally {
-      setPdfBusy(false);
-    }
-  }
 
   if (error) {
     return (
@@ -83,65 +79,49 @@ export default function PublicNotebookPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-10">
-      <Link href={`/o/${slug}`} className="text-sm text-nb-primary">
-        ← {data.org.name}
-      </Link>
-      <h1 className="mt-4 text-3xl font-bold">{data.notebook.title || data.notebook.name}</h1>
-      {data.notebook.subtitle && (
-        <p className="mt-2 text-nb-on-surface-variant">{data.notebook.subtitle}</p>
-      )}
-      {data.noindex && (
-        <p className="mt-2 text-xs text-nb-on-surface-variant">Unlisted link — not for search engines.</p>
-      )}
-
-      {data.notebook.lastCompiled && (
-        <button
-          type="button"
-          disabled={pdfBusy}
-          onClick={() => void downloadPdf()}
-          className="mt-4 rounded-lg border border-nb-outline-variant/40 px-3 py-1.5 text-sm font-semibold text-nb-primary hover:bg-nb-surface-low disabled:opacity-60"
-        >
-          {pdfBusy ? "Opening…" : "Download last PDF"}
-        </button>
-      )}
-
-      <section className="mt-10">
-        <h2 className="text-lg font-semibold">Entries</h2>
-        <ul className="mt-4 space-y-2">
-          {data.entries.map((e) => (
-            <li key={e.id}>
-              <Link
-                href={`/o/${slug}/n/${publicKey}/entries/${e.id}`}
-                className="font-medium text-nb-primary hover:underline"
-              >
-                {e.title || e.id}
-              </Link>
-              <span className="text-sm text-nb-on-surface-variant">
-                {" "}
-                {[e.date, e.phase].filter(Boolean).join(" · ")}
-              </span>
-            </li>
-          ))}
-        </ul>
-        {data.entries.length === 0 && (
-          <p className="mt-4 text-nb-on-surface-variant">No entries.</p>
+    <div className="flex min-h-screen flex-col bg-nb-surface text-nb-on-surface">
+      <header className="mx-auto flex w-full max-w-5xl flex-wrap items-end justify-between gap-3 px-6 py-6">
+        <div className="min-w-0">
+          <Link href={`/o/${slug}`} className="text-sm font-semibold text-nb-primary hover:underline">
+            ← {data.org.name}
+          </Link>
+          <h1 className="mt-2 truncate text-3xl font-bold tracking-tight">
+            {data.notebook.title || data.notebook.name}
+          </h1>
+          {data.notebook.subtitle && (
+            <p className="mt-1 text-nb-on-surface-variant">{data.notebook.subtitle}</p>
+          )}
+          {data.noindex && (
+            <p className="mt-2 text-xs text-nb-on-surface-variant">
+              Unlisted link — not for search engines.
+            </p>
+          )}
+        </div>
+        {pdfUrl && (
+          <a
+            href={pdfUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="shrink-0 text-sm font-semibold text-nb-primary hover:underline"
+          >
+            Download PDF
+          </a>
         )}
-      </section>
+      </header>
 
-      {data.contributors.length > 0 && (
-        <section className="mt-10">
-          <h2 className="text-lg font-semibold">Contributors</h2>
-          <ul className="mt-3 flex flex-wrap gap-3 text-sm">
-            {data.contributors.map((c) => (
-              <li key={c.id} className="rounded-full border border-nb-outline-variant/30 px-3 py-1">
-                {c.name}
-                {c.role ? ` · ${c.role}` : ""}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <main className="mx-auto min-h-0 w-full max-w-5xl flex-1 px-6 pb-10">
+        {pdfUrl ? (
+          <iframe
+            title="Compiled notebook PDF"
+            src={pdfUrl}
+            className="h-[min(80vh,900px)] w-full rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface-low"
+          />
+        ) : (
+          <Alert variant="warning">
+            No compiled PDF is published for this notebook yet.
+          </Alert>
+        )}
+      </main>
     </div>
   );
 }

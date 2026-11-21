@@ -305,6 +305,10 @@ export type NotebookSummaryV5 = {
      */
     contributorUids?: string[];
     lastCompiled?: string;
+    /** Most recent compile export id (PDF version). */
+    latestExportId?: string;
+    /** Compile export id served on the public notebook link (PDF-only). */
+    publicExportId?: string;
     updatedAt: string;
     createdAt?: string;
     createdBy?: string;
@@ -315,6 +319,14 @@ export type NotebookSummaryV5 = {
     publicKey?: string;
     publishedAt?: string;
     publishedBy?: string;
+};
+/** One compiled PDF version under a notebook. */
+export type CompileExport = {
+    id: string;
+    createdAt: string;
+    createdBy?: string;
+    byteSize: number;
+    label?: string;
 };
 export type AssetMetadata = {
     id: string;

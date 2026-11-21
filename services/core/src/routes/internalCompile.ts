@@ -12,6 +12,7 @@ import {
   type NotebookSummaryV5,
   type OrgMember,
 } from "@engineering-notebook/shared";
+import { recordCompileExport } from "../compile/recordCompileExport.js";
 import { getMetadataStore } from "../db/metadataStore.js";
 import { completeJob, failJob, updateJobProgress } from "../jobs/jobStore.js";
 import { publishNotebookEvent } from "../realtime/notebookEvents.js";
@@ -306,50 +307,74 @@ export async function registerInternalCompileRoutes(
     const nb = await store().get(nbPath);
     if (!nb) return reply.code(404).send({ error: "notebook not found" });
 
-    const key = gcsKeys.exportPdf(orgId, notebookId, exportId);
     const body = request.body as NodeJS.ReadableStream | Uint8Array | Buffer | undefined;
-    let byteSize: number;
+    let pdf: Buffer;
     if (body && typeof (body as NodeJS.ReadableStream).pipe === "function") {
-      const result = await storage.putObjectStream(
-        key,
-        body as import("node:stream").Readable,
-        "application/pdf"
-      );
-      byteSize = result.byteSize;
+      const chunks: Buffer[] = [];
+      for await (const chunk of body as AsyncIterable<Buffer | Uint8Array | string>) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      pdf = Buffer.concat(chunks);
     } else if (body instanceof Uint8Array || Buffer.isBuffer(body)) {
-      const data = Buffer.from(body);
-      await storage.putObject(key, data, "application/pdf");
-      byteSize = data.byteLength;
+      pdf = Buffer.from(body);
     } else {
       return reply.code(400).send({ error: "expected binary PDF body" });
     }
 
-    const ts = nowIso();
-    await store().update(nbPath, { lastCompiled: ts, updatedAt: ts });
+    const recorded = await recordCompileExport({
+      orgId,
+      notebookId,
+      storage,
+      pdf,
+      exportId,
+    });
+    const key = gcsKeys.exportPdf(orgId, notebookId, recorded.exportId);
 
     publishNotebookEvent(orgId, notebookId, {
       type: "notebook.updated",
-      notebook: { id: notebookId, lastCompiled: ts, updatedAt: ts },
-      at: ts,
+      notebook: {
+        id: notebookId,
+        lastCompiled: recorded.lastCompiled,
+        latestExportId: recorded.exportId,
+        updatedAt: recorded.lastCompiled,
+      },
+      at: recorded.lastCompiled,
     });
 
     const completed = await completeJob({
       orgId,
       notebookId,
       jobId,
-      result: { lastCompiled: ts, exportId, gcsPath: key, byteSize },
+      result: {
+        lastCompiled: recorded.lastCompiled,
+        exportId: recorded.exportId,
+        gcsPath: key,
+        byteSize: recorded.byteSize,
+      },
     });
     if (!completed) {
       publishNotebookEvent(orgId, notebookId, {
         type: "job.done",
         jobId,
         jobType: "compile",
-        result: { lastCompiled: ts, exportId, gcsPath: key, byteSize },
-        at: ts,
+        result: {
+          lastCompiled: recorded.lastCompiled,
+          exportId: recorded.exportId,
+          gcsPath: key,
+          byteSize: recorded.byteSize,
+        },
+        at: recorded.lastCompiled,
       });
     }
 
-    return { ok: true, exportId, gcsPath: key, lastCompiled: ts, byteSize, jobId };
+    return {
+      ok: true,
+      exportId: recorded.exportId,
+      gcsPath: key,
+      lastCompiled: recorded.lastCompiled,
+      byteSize: recorded.byteSize,
+      jobId,
+    };
   });
 
   app.post("/internal/compile/failed", async (request, reply) => {

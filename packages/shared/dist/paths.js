@@ -78,6 +78,12 @@ export function jobPath(orgId, notebookId, jobId) {
 export function jobsCollection(orgId, notebookId) {
     return `organizations/${orgId}/notebooks/${notebookId}/jobs`;
 }
+export function compileExportPath(orgId, notebookId, exportId) {
+    return `organizations/${orgId}/notebooks/${notebookId}/compileExports/${exportId}`;
+}
+export function compileExportsCollection(orgId, notebookId) {
+    return `organizations/${orgId}/notebooks/${notebookId}/compileExports`;
+}
 /** Single-flight lock per (type, resourceKey) under a notebook. */
 export function jobLockPath(orgId, notebookId, type, resourceKey) {
     const safe = `${type}__${resourceKey}`.replace(/[^a-zA-Z0-9._-]/g, "_");

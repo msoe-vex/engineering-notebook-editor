@@ -161,13 +161,17 @@ publicAccess?: "off" | "unlisted" | "public"   // default off
 publicKey?: string        // per-org slug segment (unique within org)
 publicToken?: string      // opaque revoke/rotate secret (optional alternate key)
 publishedAt?, publishedBy?
+latestExportId?: string   // most recent compile version id
+publicExportId?: string   // PDF version served on the public link
 ```
 
 | Lookup | Purpose |
 | --- | --- |
 | `organizations/{orgId}/publicNotebookKeys/{publicKey}` → `{ notebookId }` | Resolve `/o/:orgSlug/n/:publicKey` |
+| `…/notebooks/{notebookId}/compileExports/{exportId}` | Version metadata (`createdAt`, `byteSize`, `label?`) |
+| GCS `…/exports/{exportId}.pdf` (+ `latest.pdf` alias) | Compiled PDF bytes |
 
-URL: **`/o/:orgSlug/n/:publicKey`** (token/id allowed as `publicKey` value if desired). Multiple published notebooks per org = multiple keys.
+URL: **`/o/:orgSlug/n/:publicKey`** — **PDF only** (no public TipTap entries). Multiple published notebooks per org = multiple keys.
 
 ### Org member alumni
 

@@ -143,7 +143,10 @@ export type NotebookSummary = {
   folders?: Record<string, { name: string; parentId: string | null; order: number }>;
   access?: NotebookAccess;
   phases?: Record<string, unknown>;
+  contributorUids?: string[];
   lastCompiled?: string;
+  latestExportId?: string;
+  publicExportId?: string;
   updatedAt?: string;
   createdAt?: string;
   createdBy?: string;
@@ -153,6 +156,14 @@ export type NotebookSummary = {
   publicKey?: string;
   publishedAt?: string;
   publishedBy?: string;
+};
+
+export type CompileExportSummary = {
+  id: string;
+  createdAt?: string;
+  createdBy?: string;
+  byteSize?: number;
+  label?: string;
 };
 
 export type NotebookMemberSummary = {
@@ -753,6 +764,14 @@ export const cloudApi = {
       byteSize: number;
     }>;
   },
+  listCompileExports: (orgId: string, notebookId: string) =>
+    coreFetch<{
+      exports: CompileExportSummary[];
+      latestExportId?: string | null;
+      publicExportId?: string | null;
+      publicAccess?: "off" | "unlisted" | "public";
+      publicKey?: string | null;
+    }>(`/orgs/${orgId}/notebooks/${notebookId}/exports`),
   getExportPdfUrl: (orgId: string, notebookId: string, exportId = "latest") =>
     coreFetch<{ url: string; exportId: string }>(
       `/orgs/${orgId}/notebooks/${notebookId}/exports/${exportId}/url`

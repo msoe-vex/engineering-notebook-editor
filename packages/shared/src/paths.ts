@@ -114,6 +114,14 @@ export function jobsCollection(orgId: string, notebookId: string): string {
   return `organizations/${orgId}/notebooks/${notebookId}/jobs`;
 }
 
+export function compileExportPath(orgId: string, notebookId: string, exportId: string): string {
+  return `organizations/${orgId}/notebooks/${notebookId}/compileExports/${exportId}`;
+}
+
+export function compileExportsCollection(orgId: string, notebookId: string): string {
+  return `organizations/${orgId}/notebooks/${notebookId}/compileExports`;
+}
+
 /** Single-flight lock per (type, resourceKey) under a notebook. */
 export function jobLockPath(
   orgId: string,
