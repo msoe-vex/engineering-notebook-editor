@@ -127,7 +127,7 @@ Auth/Firestore talk to the emulators automatically (`FIRESTORE_EMULATOR_HOST` / 
 
 Project id: `demo-engineering-notebook`.
 
-Compose named volumes persist Auth/Firestore (`firebase_emulator_data`) and object blobs (`gcs_data`). Core writes Yjs/assets to fake-gcs (not in-process memory). `docker compose down -v` wipes that data.
+Compose volumes persist object blobs (`gcs_data`). Auth/Firestore emulator data imports from and exports to `infra/emulator-data/` on the host (git-ignored, running with host UID/GID so files remain owned by your user). Core writes Yjs/assets to fake-gcs (not in-process memory). `docker compose down -v` wipes Docker volume data.
 
 ## Reloading
 

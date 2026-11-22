@@ -7,6 +7,7 @@ import { FileText, Plus } from "lucide-react";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
 import { Button, EmptyState, ListRow } from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
+import { readDefaultAuthors } from "@/lib/notebook/metadata";
 import type { ProjectPhase } from "@/lib/notebook/metadata";
 import { getPhaseConfig, getPhases } from "@/lib/notebook/phases";
 import { formatEntryListDate, getLocalDateString } from "@/lib/utils";
@@ -37,12 +38,14 @@ export default function NotebookOverviewPage() {
     .slice(0, 8);
 
   function createEntry() {
+    const authors = readDefaultAuthors();
     showPrompt("New entry", "Untitled entry", (title) => {
       void cloudApi
         .createEntry(orgId, notebookId, {
           title,
           order: Object.keys(entries).length,
           date: getLocalDateString(),
+          authors: authors.length ? authors : undefined,
         })
         .then((created) => {
           refresh();

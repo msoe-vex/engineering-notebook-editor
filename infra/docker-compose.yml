@@ -2,10 +2,11 @@ services:
   firebase:
     build:
       context: ./firebase
+    user: "${UID:-1000}:${GID:-1000}"
     working_dir: /app
     volumes:
       - ./:/app
-      - firebase_emulator_data:/data/emulator
+      - ./emulator-data:/data/emulator
     command:
       - bash
       - -lc
@@ -272,5 +273,4 @@ services:
       start_period: 40s
 
 volumes:
-  firebase_emulator_data:
   gcs_data:
