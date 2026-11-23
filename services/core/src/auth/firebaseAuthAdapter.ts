@@ -1,6 +1,8 @@
 import type { AuthPort, SessionUser } from "./authPort.js";
 import { getMetadataStore } from "../db/metadataStore.js";
 import { userPath } from "@engineering-notebook/shared";
+import { initializeApp, getApps } from "firebase-admin/app";
+import { getAuth, type Auth } from "firebase-admin/auth";
 
 function useFallbackAuth(): boolean {
   if (process.env.AUTH_FALLBACK === "true") return true;
@@ -13,28 +15,27 @@ function useFallbackAuth(): boolean {
  * Firebase Admin ID-token verification with local fallback for docker-compose.
  */
 export class FirebaseAuthAdapter implements AuthPort {
-  private adminReady: Promise<typeof import("firebase-admin") | null> | null = null;
+  private authReady: Promise<Auth | null> | null = null;
 
-  private async getAdmin() {
+  private async getAuthInstance(): Promise<Auth | null> {
     if (useFallbackAuth() && !process.env.FIREBASE_AUTH_EMULATOR_HOST) {
       return null;
     }
-    if (!this.adminReady) {
-      this.adminReady = (async () => {
+    if (!this.authReady) {
+      this.authReady = (async () => {
         try {
-          const admin = await import("firebase-admin");
-          if (!admin.apps.length) {
-            admin.initializeApp({
+          if (!getApps().length) {
+            initializeApp({
               projectId: process.env.FIREBASE_PROJECT_ID || "demo-engineering-notebook",
             });
           }
-          return admin;
+          return getAuth();
         } catch {
           return null;
         }
       })();
     }
-    return this.adminReady;
+    return this.authReady;
   }
 
   async verifySession(token: string): Promise<SessionUser> {
@@ -47,16 +48,16 @@ export class FirebaseAuthAdapter implements AuthPort {
 
     let emailVerified = false;
 
-    const admin = await this.getAdmin();
-    if (admin && !useFallbackAuth()) {
-      const decoded = await admin.auth().verifyIdToken(trimmed);
+    const auth = await this.getAuthInstance();
+    if (auth && !useFallbackAuth()) {
+      const decoded = await auth.verifyIdToken(trimmed);
       uid = decoded.uid;
       email = decoded.email;
       displayName = typeof decoded.name === "string" ? decoded.name : undefined;
       emailVerified = Boolean(decoded.email_verified);
-    } else if (admin && process.env.FIREBASE_AUTH_EMULATOR_HOST) {
+    } else if (auth && process.env.FIREBASE_AUTH_EMULATOR_HOST) {
       try {
-        const decoded = await admin.auth().verifyIdToken(trimmed);
+        const decoded = await auth.verifyIdToken(trimmed);
         uid = decoded.uid;
         email = decoded.email;
         displayName = typeof decoded.name === "string" ? decoded.name : undefined;

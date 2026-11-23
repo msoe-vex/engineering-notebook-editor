@@ -8,15 +8,15 @@
   },
   "dependencies": {
     "@engineering-notebook/shared": "file:../../packages/shared",
-    "@fastify/cors": "^11.1.0",
-    "@google-cloud/pubsub": "^4.11.0",
-    "@google-cloud/storage": "^7.16.0",
-    "fastify": "^5.6.1",
-    "firebase-admin": "^13.4.0",
-    "google-auth-library": "^10.1.0",
-    "tsx": "^4.20.5"
+    "@fastify/cors": "^11.4.3",
+    "@google-cloud/pubsub": "^6.4.1",
+    "@google-cloud/storage": "^9.0.0",
+    "fastify": "^5.12.8",
+    "firebase-admin": "^14.5.1",
+    "google-auth-library": "^11.3.4",
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
-    "@types/node": "^22.15.21"
+    "@types/node": "^26.6.6"
   }
 }

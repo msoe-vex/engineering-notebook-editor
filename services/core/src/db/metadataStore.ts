@@ -35,7 +35,7 @@ export interface MetadataStore {
   batch(ops: MetadataBatchOp[]): Promise<void>;
 }
 
-import type { Query } from "firebase-admin/firestore";
+import type { Query, QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { getFirestore } from "./firestore.js";
 
 const FIRESTORE_BATCH_LIMIT = 450;
@@ -73,7 +73,7 @@ export class FirestoreMetadataStore implements MetadataStore {
       ref = ref.limit(opts.limit);
     }
     const snap = await ref.get();
-    return snap.docs.map((d) => ({ id: d.id, ...(d.data() as MetadataDoc) }));
+    return snap.docs.map((d: QueryDocumentSnapshot) => ({ id: d.id, ...(d.data() as MetadataDoc) }));
   }
 
   async batch(ops: MetadataBatchOp[]): Promise<void> {

@@ -1,4 +1,5 @@
-import type { Firestore } from "firebase-admin/firestore";
+import { initializeApp, getApps } from "firebase-admin/app";
+import { getFirestore as getAdminFirestore, type Firestore } from "firebase-admin/firestore";
 
 let db: Firestore | null = null;
 let initPromise: Promise<Firestore> | null = null;
@@ -15,13 +16,12 @@ export async function initFirestore(): Promise<Firestore> {
   if (!initPromise) {
     initPromise = (async () => {
       // FIRESTORE_EMULATOR_HOST / FIREBASE_AUTH_EMULATOR_HOST are auto-detected by the Admin SDK.
-      const admin = await import("firebase-admin");
-      if (!admin.apps.length) {
-        admin.initializeApp({
+      if (!getApps().length) {
+        initializeApp({
           projectId: process.env.FIREBASE_PROJECT_ID || "demo-engineering-notebook",
         });
       }
-      db = admin.firestore();
+      db = getAdminFirestore();
       // Optional fields (email, isTemplate, …) must not be written as undefined.
       db.settings({ ignoreUndefinedProperties: true });
       return db;

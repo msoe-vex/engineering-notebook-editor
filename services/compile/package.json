@@ -7,10 +7,10 @@
     "compile": "tsx src/index.ts"
   },
   "dependencies": {
-    "@google-cloud/pubsub": "^4.11.0",
-    "tsx": "^4.20.5"
+    "@google-cloud/pubsub": "^6.4.1",
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
-    "@types/node": "^22.15.21"
+    "@types/node": "^26.6.6"
   }
 }
