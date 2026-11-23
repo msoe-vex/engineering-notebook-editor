@@ -51,7 +51,7 @@ function formatExportLabel(exp: CompileExportSummary) {
   return exp.id.slice(0, 8);
 }
 
-type RailTab = "versions" | "links";
+type RailTab = "preview" | "saved" | "links";
 
 export function CloudNotebookCompiler() {
   const {
@@ -64,6 +64,7 @@ export function CloudNotebookCompiler() {
     setNotebookSummary,
     isArchived,
     canManage,
+    showPrompt,
   } = useNotebookWorkspace();
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfProbeDone, setPdfProbeDone] = useState(false);
@@ -77,7 +78,7 @@ export function CloudNotebookCompiler() {
   const [selectedExportId, setSelectedExportId] = useState<string>("latest");
   const [latestExportId, setLatestExportId] = useState<string | null>(null);
   const [orgSlug, setOrgSlug] = useState<string | null>(null);
-  const [railTab, setRailTab] = useState<RailTab>("versions");
+  const [railTab, setRailTab] = useState<RailTab>("preview");
   const [publishBusy, setPublishBusy] = useState(false);
   const [deleteExportId, setDeleteExportId] = useState<string | null>(null);
   const [revokeLinkId, setRevokeLinkId] = useState<string | null>(null);
@@ -86,6 +87,7 @@ export function CloudNotebookCompiler() {
   const [newLinkName, setNewLinkName] = useState("");
   const [newLinkExportId, setNewLinkExportId] = useState("");
   const [showCreateLink, setShowCreateLink] = useState(false);
+  const [savingVersion, setSavingVersion] = useState(false);
   const jobIdRef = useRef<string | null>(null);
 
   const loadExports = useCallback(
@@ -122,8 +124,12 @@ export function CloudNotebookCompiler() {
   const loadPdf = useCallback(
     async (exportId: string) => {
       try {
-        const r = await cloudApi.getExportPdfUrl(orgId, notebookId, exportId);
-        setPdfUrl(r.url);
+        const blob = await cloudApi.downloadExportPdfBlob(orgId, notebookId, exportId);
+        const objectUrl = URL.createObjectURL(blob);
+        setPdfUrl((prev) => {
+          if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+          return objectUrl;
+        });
       } catch {
         setPdfUrl(null);
       }
@@ -189,13 +195,15 @@ export function CloudNotebookCompiler() {
         if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
         return result.pdfUrl!;
       });
-      if (result.exportId && notebookSummary) {
+      if (result.exportId && result.exportId !== "latest" && notebookSummary) {
         setNotebookSummary({
           ...notebookSummary,
           latestExportId: result.exportId,
         });
       }
-      await loadExports(result.exportId);
+      setSelectedExportId(result.exportId || "latest");
+      await loadExports(result.exportId || "latest");
+      await loadPdf(result.exportId || "latest");
       refresh();
     } else {
       setLog(result.log || "Compilation failed.");
@@ -244,13 +252,17 @@ export function CloudNotebookCompiler() {
             const exportId = event.result?.exportId
               ? String(event.result.exportId)
               : undefined;
-            if (notebookSummary && exportId) {
+            if (notebookSummary && exportId && exportId !== "latest") {
               setNotebookSummary({
                 ...notebookSummary,
                 latestExportId: exportId,
               });
             }
-            void loadExports(exportId).then(() => refresh());
+            setSelectedExportId(exportId || "latest");
+            void loadExports(exportId || "latest").then(() => {
+              void loadPdf(exportId || "latest");
+              refresh();
+            });
             resolve();
             return;
           }
@@ -269,13 +281,6 @@ export function CloudNotebookCompiler() {
 
   async function runCompile() {
     if (busy || isArchived) return;
-    if (exportsList.length >= MAX_COMPILE_EXPORTS) {
-      showNotification(
-        `Version limit reached (${MAX_COMPILE_EXPORTS}). Delete an older PDF before compiling again.`,
-        "error"
-      );
-      return;
-    }
     setBusy(true);
     setLog(null);
     setStatus("Starting…");
@@ -312,6 +317,44 @@ export function CloudNotebookCompiler() {
       setProgress(0);
       jobIdRef.current = null;
     }
+  }
+
+  async function handleSaveVersion() {
+    if (savingVersion || isArchived) return;
+    if (exportsList.length >= MAX_COMPILE_EXPORTS) {
+      showNotification(
+        `Version limit reached (${MAX_COMPILE_EXPORTS}). Delete an older version to save a new one.`,
+        "error"
+      );
+      return;
+    }
+    const defaultLabel = new Date().toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    showPrompt("Save version label (optional)", defaultLabel, (label) => {
+      setSavingVersion(true);
+      const chosen = label?.trim() || defaultLabel;
+      void cloudApi
+        .saveCompileExport(orgId, notebookId, { label: chosen })
+        .then(async (res) => {
+          showNotification("Saved version created", "success");
+          setRailTab("saved");
+          setSelectedExportId(res.export.id);
+          await loadExports(res.export.id);
+          await loadPdf(res.export.id);
+          refresh();
+        })
+        .catch((err) => {
+          showNotification((err as Error).message, "error");
+        })
+        .finally(() => {
+          setSavingVersion(false);
+        });
+    });
   }
 
   async function saveExportLabel(exportId: string, label: string) {
@@ -454,19 +497,30 @@ export function CloudNotebookCompiler() {
             variant="primary"
             size="sm"
             className="min-h-9 flex-1 sm:flex-none"
-            disabled={busy || isArchived || atVersionLimit}
-            title={
-              isArchived
-                ? "Archived notebooks cannot be compiled"
-                : atVersionLimit
-                  ? `Delete a version first (${MAX_COMPILE_EXPORTS} max)`
-                  : undefined
-            }
+            disabled={busy || isArchived}
+            title={isArchived ? "Archived notebooks cannot be compiled" : undefined}
             onClick={() => void runCompile()}
           >
             {busy ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
             {busy ? "Compiling…" : "Compile"}
           </Button>
+          {pdfUrl && (
+            <Button
+              variant="secondary"
+              size="sm"
+              className="min-h-9"
+              disabled={savingVersion || isArchived || atVersionLimit}
+              title={
+                atVersionLimit
+                  ? `Version limit reached (${MAX_COMPILE_EXPORTS}). Delete an older version to save.`
+                  : "Save current compile as a permanent version"
+              }
+              onClick={() => void handleSaveVersion()}
+            >
+              {savingVersion ? <Loader2 size={14} className="animate-spin" /> : null}
+              Save version
+            </Button>
+          )}
           {pdfUrl && (
             <Button
               variant="secondary"
@@ -536,111 +590,220 @@ export function CloudNotebookCompiler() {
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <NotebookSideRail
           storageKey={`ene:rail:${notebookId}:compile`}
-          title={railTab === "versions" ? "Versions" : "Share links"}
+          widthClassName="md:w-72"
+          title={
+            <div className="flex w-full items-center gap-0.5 rounded-nb-lg bg-nb-surface/60 p-0.5 ring-1 ring-nb-outline-variant/30">
+              {(
+                [
+                  { id: "preview", label: "Preview", count: undefined },
+                  { id: "saved", label: "Saved", count: exportsList.length },
+                  { id: "links", label: "Links", count: shareLinks.length },
+                ] as const
+              ).map((tab) => {
+                const active = railTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => {
+                      setRailTab(tab.id);
+                      if (tab.id === "preview") {
+                        setSelectedExportId("latest");
+                        void loadPdf("latest");
+                      } else if (
+                        tab.id === "saved" &&
+                        exportsList.length &&
+                        selectedExportId === "latest"
+                      ) {
+                        const target = latestExportId || exportsList[0].id;
+                        setSelectedExportId(target);
+                        void loadPdf(target);
+                      }
+                    }}
+                    className={`flex flex-1 items-center justify-center gap-1 rounded-md py-1 text-[11px] font-semibold transition-all select-none ${
+                      active
+                        ? "bg-nb-surface text-nb-primary shadow-xs ring-1 ring-nb-outline-variant/30"
+                        : "text-nb-on-surface-variant hover:text-nb-on-surface"
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    {typeof tab.count === "number" && tab.count > 0 && (
+                      <span
+                        className={`rounded-full px-1 text-[9px] font-bold leading-tight ${
+                          active
+                            ? "bg-nb-primary/10 text-nb-primary"
+                            : "bg-nb-outline-variant/30 text-nb-on-surface-variant"
+                        }`}
+                      >
+                        {tab.count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          }
           expandLabel="Expand panel"
           collapseLabel="Collapse panel"
         >
-          <div className="border-b border-nb-outline-variant/20 px-1.5 pt-1">
-            <TabNav
-              className="mb-0 gap-0 border-b-0"
-              activeId={railTab}
-              onSelect={(id) => setRailTab(id as RailTab)}
-              items={[
-                { id: "versions", label: "Versions", count: exportsList.length },
-                { id: "links", label: "Links", count: shareLinks.length },
-              ]}
-            />
-          </div>
+          {railTab === "preview" && (
+            <div className="space-y-2.5 p-2">
+              <div className="rounded-nb-lg border border-nb-outline-variant/30 bg-nb-surface p-2.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-nb-on-surface">Working Draft</span>
+                  <span className="inline-flex items-center rounded-full bg-nb-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-nb-primary">
+                    Live
+                  </span>
+                </div>
+                <p className="text-[11px] text-nb-on-surface-variant leading-snug">
+                  Compile and preview your notebook without consuming version slots.
+                </p>
+                <div className="flex flex-col gap-1.5 pt-0.5">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="w-full justify-center text-xs h-8"
+                    disabled={busy || isArchived}
+                    onClick={() => void runCompile()}
+                  >
+                    {busy ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
+                    {busy ? "Compiling…" : "Compile preview"}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="w-full justify-center text-xs h-8"
+                    disabled={!pdfUrl || savingVersion || isArchived || atVersionLimit}
+                    title={
+                      atVersionLimit
+                        ? `Version limit reached (${MAX_COMPILE_EXPORTS}). Delete an older version to save.`
+                        : !pdfUrl
+                          ? "Compile a preview first before saving a version"
+                          : "Save current compile as a permanent version"
+                    }
+                    onClick={() => void handleSaveVersion()}
+                  >
+                    {savingVersion ? <Loader2 size={13} className="animate-spin" /> : null}
+                    Save as version
+                  </Button>
+                </div>
+              </div>
 
-          {railTab === "versions" ? (
-            <ul className="space-y-0.5 p-1.5">
-              {exportsList.length === 0 && (
-                <li className="px-2 py-3 text-nb-caption text-nb-on-surface-variant">
-                  No versions yet — compile to create one.
-                </li>
+              {pdfUrl && (
+                <div className="rounded-nb-lg border border-nb-outline-variant/20 bg-nb-surface/40 p-2 text-[11px] text-nb-on-surface-variant space-y-0.5">
+                  <div className="font-semibold text-nb-on-surface text-[11px]">Preview Status</div>
+                  <div>Showing latest compiled draft.</div>
+                </div>
               )}
+            </div>
+          )}
+
+          {railTab === "saved" && (
+            <div className="p-1.5 space-y-1.5">
+              <div className="flex items-center justify-between px-2 py-0.5 text-[10px] text-nb-on-surface-variant font-medium">
+                <span>Permanent snapshots</span>
+                <span className={atVersionLimit ? "font-semibold text-amber-700 dark:text-amber-400" : ""}>
+                  {exportsList.length} / {MAX_COMPILE_EXPORTS}
+                </span>
+              </div>
               {atVersionLimit && (
-                <li className="mb-1 rounded px-2 py-1.5 text-[10px] font-medium text-amber-800 dark:text-amber-300">
-                  Limit reached ({MAX_COMPILE_EXPORTS}). Delete a version to compile again.
-                </li>
+                <div className="rounded-nb-md border border-amber-600/30 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-800 dark:text-amber-300">
+                  Limit reached ({MAX_COMPILE_EXPORTS}). Delete an older version to save new snapshots.
+                </div>
               )}
-              {exportsList.map((exp) => {
-                const active = selectedExportId === exp.id;
-                const isLatest = latestExportId === exp.id;
-                const renaming = renamingExportId === exp.id;
-                return (
-                  <li key={exp.id} className="group flex items-center gap-0.5">
-                    {renaming ? (
-                      <form
-                        className="flex min-w-0 flex-1 items-center gap-1 px-1"
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          void saveExportLabel(exp.id, renameValue);
-                        }}
-                      >
-                        <input
-                          autoFocus
-                          value={renameValue}
-                          onChange={(e) => setRenameValue(e.target.value)}
-                          onBlur={() => void saveExportLabel(exp.id, renameValue)}
-                          className="h-[26px] min-w-0 flex-1 rounded bg-nb-surface px-1.5 text-xs text-nb-on-surface outline-none ring-1 ring-nb-primary/40"
-                        />
-                      </form>
-                    ) : (
-                      <button
-                        type="button"
-                        className={`relative flex h-[26px] min-w-0 flex-1 items-center gap-1.5 rounded px-2 text-left text-nb-label transition-colors select-none ${
-                          active
-                            ? "bg-nb-primary/15 font-medium text-nb-primary"
-                            : "text-nb-on-surface hover:bg-nb-surface/80"
-                        }`}
-                        onClick={() => setSelectedExportId(exp.id)}
-                      >
-                        <span className="min-w-0 flex-1 truncate text-xs leading-none">
-                          {formatExportLabel(exp)}
-                        </span>
-                        {isLatest && (
-                          <span
-                            className={`shrink-0 text-[10px] leading-none ${
-                              active ? "text-nb-primary/80" : "text-nb-on-surface-variant/70"
-                            }`}
+              {exportsList.length === 0 ? (
+                <div className="px-2 py-4 text-center text-[11px] text-nb-on-surface-variant">
+                  <p>No saved versions yet.</p>
+                  <p className="mt-1 text-[10px] text-nb-on-surface-variant/70">
+                    Switch to the Preview tab and click &quot;Save as version&quot; to preserve a milestone.
+                  </p>
+                </div>
+              ) : (
+                <ul className="space-y-0.5">
+                  {exportsList.map((exp) => {
+                    const active = selectedExportId === exp.id;
+                    const isLatest = latestExportId === exp.id;
+                    const renaming = renamingExportId === exp.id;
+                    return (
+                      <li key={exp.id} className="group flex items-center gap-0.5">
+                        {renaming ? (
+                          <form
+                            className="flex min-w-0 flex-1 items-center gap-1 px-1"
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              void saveExportLabel(exp.id, renameValue);
+                            }}
                           >
-                            Latest
-                          </span>
+                            <input
+                              autoFocus
+                              value={renameValue}
+                              onChange={(e) => setRenameValue(e.target.value)}
+                              onBlur={() => void saveExportLabel(exp.id, renameValue)}
+                              className="h-[26px] min-w-0 flex-1 rounded-nb bg-nb-surface px-1.5 text-xs text-nb-on-surface outline-none ring-1 ring-nb-primary/40"
+                            />
+                          </form>
+                        ) : (
+                          <button
+                            type="button"
+                            className={`relative flex h-[28px] min-w-0 flex-1 items-center gap-1.5 rounded-nb px-2 text-left text-xs transition-colors select-none ${
+                              active
+                                ? "bg-nb-primary/15 font-medium text-nb-primary"
+                                : "text-nb-on-surface hover:bg-nb-surface/80"
+                            }`}
+                            onClick={() => {
+                              setSelectedExportId(exp.id);
+                              void loadPdf(exp.id);
+                            }}
+                          >
+                            <span className="min-w-0 flex-1 truncate text-xs leading-none">
+                              {formatExportLabel(exp)}
+                            </span>
+                            {isLatest && (
+                              <span
+                                className={`shrink-0 text-[9px] font-semibold leading-none ${
+                                  active ? "text-nb-primary/80" : "text-nb-on-surface-variant/70"
+                                }`}
+                              >
+                                Latest
+                              </span>
+                            )}
+                          </button>
                         )}
-                      </button>
-                    )}
-                    {canManage && !isArchived && !renaming && (
-                      <>
-                        <IconButton
-                          className="h-7 w-7 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-                          title="Rename version"
-                          aria-label="Rename version"
-                          disabled={publishBusy}
-                          onClick={() => {
-                            setRenamingExportId(exp.id);
-                            setRenameValue(exp.label || formatExportLabel(exp));
-                          }}
-                        >
-                          <Pencil size={14} />
-                        </IconButton>
-                        <IconButton
-                          className="h-7 w-7 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-                          variant="danger"
-                          title="Delete version"
-                          aria-label="Delete version"
-                          disabled={publishBusy}
-                          onClick={() => setDeleteExportId(exp.id)}
-                        >
-                          <Trash2 size={14} />
-                        </IconButton>
-                      </>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
+                        {canManage && !isArchived && !renaming && (
+                          <>
+                            <IconButton
+                              className="h-6 w-6 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                              title="Rename version"
+                              aria-label="Rename version"
+                              disabled={publishBusy}
+                              onClick={() => {
+                                setRenamingExportId(exp.id);
+                                setRenameValue(exp.label || formatExportLabel(exp));
+                              }}
+                            >
+                              <Pencil size={12} />
+                            </IconButton>
+                            <IconButton
+                              className="h-6 w-6 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                              variant="danger"
+                              title="Delete version"
+                              aria-label="Delete version"
+                              disabled={publishBusy}
+                              onClick={() => setDeleteExportId(exp.id)}
+                            >
+                              <Trash2 size={12} />
+                            </IconButton>
+                          </>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {railTab === "links" && (
             <div className="space-y-2 p-1.5">
               {!orgSlug && (
                 <Alert variant="warning">Set an org slug in organization settings first.</Alert>

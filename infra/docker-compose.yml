@@ -2,18 +2,17 @@ services:
   firebase:
     build:
       context: ./firebase
-    user: "${UID:-1000}:${GID:-1000}"
     working_dir: /app
     volumes:
       - ./:/app
-      - ./emulator-data:/data/emulator
+      - ./emulator-data:/data
     command:
       - bash
       - -lc
       - |
-        mkdir -p /data/emulator
+        mkdir -p /data/export
         firebase emulators:start --project demo-engineering-notebook --only auth,firestore \
-          --import=/data/emulator --export-on-exit=/data/emulator
+          --import=/data/export --export-on-exit=/data/export
     ports:
       - "9099:9099"
       - "8081:8081"

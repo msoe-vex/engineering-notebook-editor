@@ -12,7 +12,7 @@ import {
   type NotebookSummary,
   type OrgMember,
 } from "@engineering-notebook/shared";
-import { recordCompileExport } from "../compile/recordCompileExport.js";
+import { recordCompileExport, recordCompilePreview } from "../compile/recordCompileExport.js";
 import { getMetadataStore } from "../db/metadataStore.js";
 import { completeJob, failJob, updateJobProgress } from "../jobs/jobStore.js";
 import { publishNotebookEvent } from "../realtime/notebookEvents.js";
@@ -321,14 +321,13 @@ export async function registerInternalCompileRoutes(
       return reply.code(400).send({ error: "expected binary PDF body" });
     }
 
-    let recorded: Awaited<ReturnType<typeof recordCompileExport>>;
+    let recorded: Awaited<ReturnType<typeof recordCompilePreview>>;
     try {
-      recorded = await recordCompileExport({
+      recorded = await recordCompilePreview({
         orgId,
         notebookId,
         storage,
         pdf,
-        exportId,
       });
     } catch (err) {
       const status = (err as { statusCode?: number }).statusCode || 500;
@@ -344,7 +343,6 @@ export async function registerInternalCompileRoutes(
       type: "notebook.updated",
       notebook: {
         id: notebookId,
-        latestExportId: recorded.exportId,
         updatedAt: recorded.createdAt,
       },
       at: recorded.createdAt,

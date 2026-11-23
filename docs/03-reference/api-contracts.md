@@ -143,9 +143,10 @@ Over-limit bodies return **413**. Clients should preflight with `assertUploadSiz
 ### Exports (compiled PDF)
 
 - `GET /orgs/:orgId/notebooks/:notebookId/exports` — list retained compile PDFs (max 10) + `latestExportId`
-- `PUT /orgs/:orgId/notebooks/:notebookId/exports/:exportId/content` — PDF bytes; always mints a new version (or uses a non-`latest` id); updates `latest`; **409** at `MAX_COMPILE_EXPORTS` (10); **64 MiB** limit
+- `PUT /orgs/:orgId/notebooks/:notebookId/exports/:exportId/content` — PDF bytes for preview; writes unversioned preview (`latest.pdf`) without consuming a version slot; updates `lastPreviewAt`; **64 MiB** limit
+- `POST /orgs/:orgId/notebooks/:notebookId/exports/save` — `{ label? }` snapshot current preview into a permanent saved version; **409** at `MAX_COMPILE_EXPORTS` (10)
 - `PATCH /orgs/:orgId/notebooks/:notebookId/exports/:exportId` — `{ label }` rename a version
-- `GET /orgs/:orgId/notebooks/:notebookId/exports/:exportId/url` — signed URL (`latest` → `latestExportId`)
+- `GET /orgs/:orgId/notebooks/:notebookId/exports/:exportId/url` — signed URL (`latest` → preview or `latestExportId`)
 - `DELETE /orgs/:orgId/notebooks/:notebookId/exports/:exportId` — delete a saved version (share links retarget to next latest or revoke; deleting latest promotes the next newest)
 
 ### Share links (public PDF URLs)

@@ -44,6 +44,109 @@ export async function countCompileExports(orgId: string, notebookId: string): Pr
 }
 
 /**
+ * Persist a compiled PDF to the working preview key (`latest.pdf` / `preview.pdf`)
+ * without creating a permanent version in Firestore or consuming a version slot.
+ */
+export async function recordCompilePreview(opts: {
+  orgId: string;
+  notebookId: string;
+  storage: StoragePort;
+  pdf: Buffer;
+  createdBy?: string;
+}): Promise<{
+  exportId: string;
+  createdAt: string;
+  byteSize: number;
+}> {
+  const { orgId, notebookId, storage, pdf } = opts;
+  const ts = nowIso();
+  const byteSize = pdf.byteLength;
+  const latestKey = gcsKeys.exportPdf(orgId, notebookId, "latest");
+  await storage.putObject(latestKey, pdf, "application/pdf");
+
+  const store = getMetadataStore();
+  await store.update(notebookPath(orgId, notebookId), {
+    lastPreviewAt: ts,
+    updatedAt: ts,
+    lastCompiled: null,
+  });
+
+  return { exportId: "latest", createdAt: ts, byteSize };
+}
+
+/**
+ * Snapshot the current working preview PDF into a permanent saved version.
+ * Checks {@link MAX_COMPILE_EXPORTS}.
+ */
+export async function saveCurrentPreviewAsVersion(opts: {
+  orgId: string;
+  notebookId: string;
+  storage: StoragePort;
+  createdBy?: string;
+  label?: string | null;
+}): Promise<{
+  exportId: string;
+  createdAt: string;
+  byteSize: number;
+  exportMeta: CompileExport;
+}> {
+  const { orgId, notebookId, storage, createdBy, label } = opts;
+  const existingCount = await countCompileExports(orgId, notebookId);
+  if (existingCount >= MAX_COMPILE_EXPORTS) {
+    throw Object.assign(
+      new Error(
+        `Version limit reached (${MAX_COMPILE_EXPORTS}). Delete an older version before saving a new one.`
+      ),
+      { statusCode: 409, code: "compile_export_limit" }
+    );
+  }
+
+  const latestKey = gcsKeys.exportPdf(orgId, notebookId, "latest");
+  const pdf = await storage.getObject(latestKey);
+  if (!pdf) {
+    throw Object.assign(
+      new Error("No compiled preview found to save. Compile the notebook first."),
+      { statusCode: 404, code: "no_preview_found" }
+    );
+  }
+
+  const exportId = randomUUID();
+  const ts = nowIso();
+  const byteSize = pdf.byteLength;
+  const versionKey = gcsKeys.exportPdf(orgId, notebookId, exportId);
+
+  await storage.putObject(versionKey, pdf, "application/pdf");
+
+  const exportMeta: CompileExport = omitUndefined({
+    id: exportId,
+    createdAt: ts,
+    createdBy,
+    byteSize,
+    label:
+      label?.trim() ||
+      new Date().toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+  }) as CompileExport;
+
+  const store = getMetadataStore();
+  await store.set(
+    compileExportPath(orgId, notebookId, exportId),
+    omitUndefined({ ...exportMeta }) as Record<string, unknown>
+  );
+  await store.update(notebookPath(orgId, notebookId), {
+    latestExportId: exportId,
+    updatedAt: ts,
+  });
+
+  return { exportId, createdAt: ts, byteSize, exportMeta };
+}
+
+/**
  * Persist a compiled PDF as a new versioned export + keep `latest.pdf` for serving.
  * Refuses when the notebook already has {@link MAX_COMPILE_EXPORTS} versions.
  */
@@ -207,9 +310,14 @@ export async function resolveExportPdfKey(
   const store = getMetadataStore();
   let id = exportId;
   if (id === "latest") {
+    // Check dedicated working preview ("latest") first so new preview compiles are served
+    const latestKey = gcsKeys.exportPdf(orgId, notebookId, "latest");
+    const latestObj = await storage.getObject(latestKey);
+    if (latestObj) return { key: latestKey, exportId: "latest" };
+
     const nb = await store.get(notebookPath(orgId, notebookId));
-    const latest = nb?.latestExportId as string | undefined;
-    if (latest) id = latest;
+    const latestSavedId = nb?.latestExportId as string | undefined;
+    if (latestSavedId) id = latestSavedId;
   }
   const key = gcsKeys.exportPdf(orgId, notebookId, id);
   const exists = await storage.getObject(key);

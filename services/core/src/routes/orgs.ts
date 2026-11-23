@@ -58,6 +58,8 @@ import { getMetadataStore, type MetadataBatchOp } from "../db/metadataStore.js";
 import {
   deleteCompileExport,
   recordCompileExport,
+  recordCompilePreview,
+  saveCurrentPreviewAsVersion,
   resolveExportPdfKey,
 } from "../compile/recordCompileExport.js";
 import {
@@ -108,6 +110,36 @@ function normalizeOrgSlug(raw: string): string | null {
     .slice(0, 64);
   if (!slug || slug.length < 2) return null;
   return slug;
+}
+
+/** Generate a unique slug from an organization name with automatic collision resolution. */
+async function generateUniqueOrgSlug(
+  name: string,
+  store: ReturnType<typeof getMetadataStore>
+): Promise<string> {
+  let base = normalizeOrgSlug(name);
+  if (!base || RESERVED_SLUGS.has(base)) {
+    base = base ? `org-${base}` : "org";
+  }
+  // Try base first
+  let candidate = base.slice(0, 64);
+  const existing = await store.get(orgSlugPath(candidate));
+  if (!existing && !RESERVED_SLUGS.has(candidate)) {
+    return candidate;
+  }
+  // Collision loop with increasing -2, -3 suffix
+  let suffix = 2;
+  while (suffix < 10000) {
+    const suffixStr = `-${suffix}`;
+    const truncatedBase = base.slice(0, 64 - suffixStr.length).replace(/-+$/, "");
+    candidate = `${truncatedBase}${suffixStr}`;
+    const taken = await store.get(orgSlugPath(candidate));
+    if (!taken && !RESERVED_SLUGS.has(candidate)) {
+      return candidate;
+    }
+    suffix++;
+  }
+  return `${base.slice(0, 50)}-${randomUUID().slice(0, 8)}`;
 }
 
 function nowIso() {
@@ -338,9 +370,11 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
 
     const id = randomUUID();
     const ts = nowIso();
+    const slug = await generateUniqueOrgSlug(name, store());
     const org: Organization = {
       id,
       name,
+      slug,
       createdBy: user.uid,
       createdAt: ts,
       updatedAt: ts,
@@ -353,6 +387,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       joinedAt: ts,
     }) as OrgMember;
     await store().set(orgPath(id), org as unknown as Record<string, unknown>);
+    await store().set(orgSlugPath(slug), { orgId: id, updatedAt: ts });
     await store().set(memberPath(id, user.uid), member as unknown as Record<string, unknown>);
     return org;
   });
@@ -1289,6 +1324,28 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
 
   // ── Notebook contributors (org member uids on notebook.contributorUids) ─
 
+  async function ensureNotebookContributor(orgId: string, notebookId: string, uid: string) {
+    if (!uid) return;
+    try {
+      const nbRef = notebookPath(orgId, notebookId);
+      const nb = (await store().get(nbRef)) as NotebookSummary | null;
+      if (!nb) return;
+      const existingUids = Array.isArray(nb.contributorUids) ? [...nb.contributorUids] : [];
+      if (!existingUids.includes(uid)) {
+        existingUids.push(uid);
+        const ts = nowIso();
+        await store().update(nbRef, { contributorUids: existingUids, updatedAt: ts });
+        publishNotebookEvent(orgId, notebookId, {
+          type: "notebook.updated",
+          notebook: { id: notebookId, contributorUids: existingUids, updatedAt: ts },
+          at: ts,
+        });
+      }
+    } catch (err) {
+      app.log.warn({ err, orgId, notebookId, uid }, "failed to auto-add notebook contributor");
+    }
+  }
+
   app.get("/orgs/:orgId/notebooks/:notebookId/members", async (request, reply) => {
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
@@ -1664,6 +1721,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       entry: result as Record<string, unknown>,
       at: ts,
     });
+    void ensureNotebookContributor(orgId, notebookId, user.uid);
     return result;
   });
 
@@ -1761,6 +1819,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       entry: result as Record<string, unknown>,
       at: String(result.updatedAt || patch.updatedAt),
     });
+    void ensureNotebookContributor(orgId, notebookId, user.uid);
     return result;
   });
 
@@ -2097,6 +2156,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const tipTapRev = (meta.tipTapRev ?? 0) + 1;
     await storage.putObject(key, JSON.stringify(request.body), "application/json");
     await store().update(refPath, { tipTapGcsPath: key, tipTapRev, updatedAt: nowIso() });
+    void ensureNotebookContributor(orgId, notebookId, user.uid);
     return { ok: true, tipTapRev, tipTapGcsPath: key };
   });
 
@@ -2344,15 +2404,14 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     } else {
       return reply.code(400).send({ error: "expected binary body stream" });
     }
-    let recorded: Awaited<ReturnType<typeof recordCompileExport>>;
+    let recorded: Awaited<ReturnType<typeof recordCompilePreview>>;
     try {
-      recorded = await recordCompileExport({
+      recorded = await recordCompilePreview({
         orgId,
         notebookId,
         storage,
         pdf,
         createdBy: user.uid,
-        exportId,
       });
     } catch (err) {
       const status = (err as { statusCode?: number }).statusCode || 500;
@@ -2366,7 +2425,6 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       type: "notebook.updated",
       notebook: {
         id: notebookId,
-        latestExportId: recorded.exportId,
         updatedAt: recorded.createdAt,
       },
       at: recorded.createdAt,
@@ -2378,6 +2436,71 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       createdAt: recorded.createdAt,
       byteSize: recorded.byteSize,
     };
+  });
+
+  app.post("/orgs/:orgId/notebooks/:notebookId/exports/save", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId } = request.params as {
+      orgId: string;
+      notebookId: string;
+    };
+    await assertNotebookWritable(user, orgId, notebookId);
+    const body = (request.body as { label?: string | null } | undefined) ?? {};
+    try {
+      const saved = await saveCurrentPreviewAsVersion({
+        orgId,
+        notebookId,
+        storage,
+        createdBy: user.uid,
+        label: body.label,
+      });
+      publishNotebookEvent(orgId, notebookId, {
+        type: "notebook.updated",
+        notebook: {
+          id: notebookId,
+          latestExportId: saved.exportId,
+          updatedAt: saved.createdAt,
+        },
+        at: saved.createdAt,
+      });
+      return {
+        ok: true,
+        export: saved.exportMeta,
+      };
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode || 500;
+      const message = err instanceof Error ? err.message : String(err);
+      return reply.code(status).send({
+        error: message,
+        code: (err as { code?: string }).code,
+      });
+    }
+  });
+
+  app.get("/orgs/:orgId/notebooks/:notebookId/exports/:exportId/pdf", async (request, reply) => {
+    const user = getUser(request);
+    const { orgId, notebookId, exportId } = request.params as {
+      orgId: string;
+      notebookId: string;
+      exportId: string;
+    };
+    await assertNotebookAccess(user, orgId, notebookId);
+    const resolved = await resolveExportPdfKey(orgId, notebookId, exportId, storage);
+    if (!resolved) return reply.code(404).send({ error: "export not found" });
+
+    const bytes = await storage.getObject(resolved.key);
+    if (!bytes) return reply.code(404).send({ error: "export bytes not found" });
+
+    const nbSnap = await store().get(notebookPath(orgId, notebookId));
+    const nb = nbSnap as NotebookSummary | null;
+    const filename = `${(nb?.title || nb?.name || "notebook").replace(/[^\w.-]+/g, "_")}.pdf`;
+
+    return reply
+      .header("Content-Type", "application/pdf")
+      .header("Content-Disposition", `inline; filename="${filename}"`)
+      .header("Cache-Control", "private, no-cache")
+      .header("Content-Length", String(bytes.byteLength))
+      .send(bytes);
   });
 
   app.get("/orgs/:orgId/notebooks/:notebookId/exports/:exportId/url", async (request, reply) => {

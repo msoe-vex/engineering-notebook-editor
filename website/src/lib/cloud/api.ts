@@ -787,6 +787,16 @@ export const cloudApi = {
     coreFetch<{ url: string; exportId: string }>(
       `/orgs/${orgId}/notebooks/${notebookId}/exports/${exportId}/url`
     ),
+  downloadExportPdfBlob: async (orgId: string, notebookId: string, exportId = "latest"): Promise<Blob> => {
+    const res = await fetch(
+      `${coreBase()}/orgs/${orgId}/notebooks/${notebookId}/exports/${exportId}/pdf`,
+      {
+        headers: await authHeaders(false),
+      }
+    );
+    if (!res.ok) throw new Error(`Failed to load PDF (${res.status})`);
+    return await res.blob();
+  },
   deleteCompileExport: (orgId: string, notebookId: string, exportId: string) =>
     coreFetch<{
       ok: boolean;
@@ -796,6 +806,15 @@ export const cloudApi = {
     }>(`/orgs/${orgId}/notebooks/${notebookId}/exports/${exportId}`, {
       method: "DELETE",
     }),
+  saveCompileExport: (
+    orgId: string,
+    notebookId: string,
+    body?: { label?: string | null }
+  ) =>
+    coreFetch<{ ok: boolean; export: CompileExportSummary }>(
+      `/orgs/${orgId}/notebooks/${notebookId}/exports/save`,
+      { method: "POST", body: JSON.stringify(body || {}) }
+    ),
   patchCompileExport: (
     orgId: string,
     notebookId: string,
