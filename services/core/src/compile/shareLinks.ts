@@ -94,6 +94,7 @@ export async function createShareLink(opts: {
   notebookId: string;
   name: string;
   exportId: string;
+  visibility?: "unlisted" | "public";
   createdBy?: string;
 }): Promise<NotebookShareLink> {
   const store = getMetadataStore();
@@ -105,6 +106,7 @@ export async function createShareLink(opts: {
     throw Object.assign(new Error("exportId required"), { statusCode: 400 });
   }
 
+  const visibility = opts.visibility === "public" ? "public" : "unlisted";
   const key = randomUUID();
   const linkId = randomUUID();
   const ts = nowIso();
@@ -113,6 +115,7 @@ export async function createShareLink(opts: {
     key,
     name,
     exportId,
+    visibility,
     createdAt: ts,
     createdBy: opts.createdBy,
     updatedAt: ts,
@@ -125,12 +128,13 @@ export async function createShareLink(opts: {
   await store.set(publicNotebookKeyPath(opts.orgId, key), {
     notebookId: opts.notebookId,
     linkId,
+    visibility,
     updatedAt: ts,
   } as Record<string, unknown>);
 
   // Keep legacy notebook fields roughly in sync for older clients.
   await store.update(notebookPath(opts.orgId, opts.notebookId), {
-    publicAccess: "unlisted",
+    publicAccess: visibility,
     publicKey: key,
     publicExportId: exportId,
     publishedAt: ts,
@@ -147,6 +151,7 @@ export async function updateShareLink(opts: {
   linkId: string;
   name?: string;
   exportId?: string;
+  visibility?: "unlisted" | "public";
 }): Promise<NotebookShareLink> {
   const store = getMetadataStore();
   const path = notebookShareLinkPath(opts.orgId, opts.notebookId, opts.linkId);
@@ -178,6 +183,13 @@ export async function updateShareLink(opts: {
       throw Object.assign(new Error("exportId required"), { statusCode: 400 });
     }
     patch.exportId = exportId;
+  }
+  if (opts.visibility !== undefined) {
+    patch.visibility = opts.visibility === "public" ? "public" : "unlisted";
+    await store.update(publicNotebookKeyPath(opts.orgId, existing.key), {
+      visibility: patch.visibility,
+      updatedAt: ts,
+    });
   }
 
   await store.update(path, omitUndefined(patch));

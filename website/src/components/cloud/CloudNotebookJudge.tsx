@@ -27,7 +27,7 @@ import {
   type RubricRecord,
 } from "@/lib/cloud/api";
 import { subscribeNotebookEvents } from "@/lib/cloud/notebookEvents";
-import { trackNotebookJobToast } from "@/hooks/useNotebookJobToasts";
+import { trackNotebookJobToast, dismissNotebookJobToast } from "@/hooks/useNotebookJobToasts";
 
 type CtxState = { x: number; y: number; items: MenuItem[] } | null;
 
@@ -277,6 +277,7 @@ export function CloudNotebookJudge() {
       });
       await waitForScoreJob(jobId, judgmentId);
     } catch (err) {
+      dismissNotebookJobToast({ kind: "judge-score", error: (err as Error).message });
       setError((err as Error).message);
     } finally {
       setBusy(false);

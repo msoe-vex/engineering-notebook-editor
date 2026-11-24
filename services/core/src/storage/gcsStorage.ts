@@ -53,7 +53,16 @@ export async function createStorage(): Promise<StoragePort> {
 
   const storage = new Storage({
     projectId,
-    ...(apiEndpoint ? { apiEndpoint } : {}),
+    ...(apiEndpoint
+      ? {
+          apiEndpoint,
+          // In @google-cloud/storage v9+, custom endpoints attempt ADC lookup by default unless auth is bypassed.
+          authClient: {
+            request: (opts: { adapter?: (o: unknown) => Promise<unknown> }) =>
+              opts.adapter ? opts.adapter(opts) : Promise.resolve({ data: {} }),
+          } as unknown as import("google-auth-library").GoogleAuth,
+        }
+      : {}),
   });
 
   const bucket = storage.bucket(bucketName);

@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import toast from "react-hot-toast";
 import { showNotification } from "@/components/overlays/Notification";
+import { cloudApi } from "@/lib/cloud/api";
 import {
   subscribeNotebookEvents,
   type NotebookRealtimeEvent,
@@ -59,6 +60,36 @@ export function trackNotebookJobToast(info: {
   return toastId;
 }
 
+/** Explicitly dismiss a job toast by jobId or kind when handled locally or on error. */
+export function dismissNotebookJobToast(opts: {
+  jobId?: string;
+  kind?: PendingJobToast["kind"];
+  error?: string;
+  success?: string;
+}) {
+  const rows = loadPending();
+  const targets = rows.filter((r) => {
+    if (opts.jobId && r.jobId === opts.jobId) return true;
+    if (opts.kind && r.kind === opts.kind) return true;
+    return false;
+  });
+  if (!targets.length) {
+    if (opts.error) showNotification(opts.error, "error");
+    else if (opts.success) showNotification(opts.success, "success");
+    return;
+  }
+  for (const t of targets) {
+    toast.dismiss(t.toastId);
+    toast.remove(t.toastId);
+  }
+  savePending(rows.filter((r) => !targets.includes(r)));
+  if (opts.error) {
+    showNotification(opts.error, "error");
+  } else if (opts.success) {
+    showNotification(opts.success, "success");
+  }
+}
+
 function successMessage(row: PendingJobToast, event: NotebookRealtimeEvent): string {
   if (row.successLabel) return row.successLabel;
   if (row.kind === "judge-normalize") return "Rubric ready";
@@ -82,14 +113,33 @@ export function useNotebookJobToasts(orgId: string, notebookId: string, enabled:
       rehydratedRef.current = true;
       const rows = loadPending();
       if (rows.length) {
-        const next = rows.map((row) => {
-          toast.dismiss(row.toastId);
-          return {
-            ...row,
-            toastId: showNotification(row.label, "loading") as string,
-          };
+        // Query Core with auth for each saved job to avoid resurrecting finished/failed jobs
+        void Promise.all(
+          rows.map(async (row) => {
+            try {
+              const res = await cloudApi.getJob(orgId, notebookId, row.jobId);
+              const status = res?.job?.status as string | undefined;
+              if (status === "succeeded" || status === "failed") {
+                toast.dismiss(row.toastId);
+                toast.remove(row.toastId);
+                return null;
+              }
+            } catch {
+              // If 404 or access error, drop dead toast
+              toast.dismiss(row.toastId);
+              toast.remove(row.toastId);
+              return null;
+            }
+            toast.dismiss(row.toastId);
+            return {
+              ...row,
+              toastId: showNotification(row.label, "loading") as string,
+            };
+          })
+        ).then((updated) => {
+          const active = updated.filter((r): r is PendingJobToast => r !== null);
+          savePending(active);
         });
-        savePending(next);
       }
     }
 

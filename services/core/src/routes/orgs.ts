@@ -2708,13 +2708,14 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       return reply.code(403).send({ error: "Only admins and owners can create share links" });
     }
     await assertNotebookNotArchived(nbSnap as NotebookSummary);
-    const body = request.body as { name?: string; exportId?: string };
+    const body = request.body as { name?: string; exportId?: string; visibility?: "unlisted" | "public" };
     try {
       const link = await createShareLink({
         orgId,
         notebookId,
         name: String(body.name || "Share link"),
         exportId: String(body.exportId || ""),
+        visibility: body.visibility,
         createdBy: user.uid,
       });
       return reply.code(201).send(link);
@@ -2742,7 +2743,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       return reply.code(403).send({ error: "Only admins and owners can edit share links" });
     }
     await assertNotebookNotArchived(nbSnap as NotebookSummary);
-    const body = request.body as { name?: string; exportId?: string };
+    const body = request.body as { name?: string; exportId?: string; visibility?: "unlisted" | "public" };
     try {
       const link = await updateShareLink({
         orgId,
@@ -2750,6 +2751,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
         linkId,
         name: body.name,
         exportId: body.exportId,
+        visibility: body.visibility,
       });
       return link;
     } catch (err) {

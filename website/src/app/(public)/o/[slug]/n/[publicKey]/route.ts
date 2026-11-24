@@ -16,7 +16,7 @@ export async function GET(
   context: { params: Promise<{ slug: string; publicKey: string }> }
 ) {
   const { slug, publicKey } = await context.params;
-  const upstream = `${coreBase()}/public/o/${encodeURIComponent(slug)}/notebooks/${encodeURIComponent(publicKey)}/pdf`;
+  const upstream = `${coreBase()}/public/o/${encodeURIComponent(slug)}/publications/${encodeURIComponent(publicKey)}/pdf`;
 
   let res: Response;
   try {

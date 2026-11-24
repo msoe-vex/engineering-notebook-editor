@@ -170,6 +170,7 @@ export type NotebookShareLinkSummary = {
   key: string;
   name: string;
   exportId: string;
+  visibility?: "public" | "unlisted";
   createdAt?: string;
   createdBy?: string;
   updatedAt?: string;
@@ -266,27 +267,39 @@ export const cloudApi = {
       if (!r.ok) throw new Error(await r.text());
       return r.json();
     }),
-  getPublicNotebook: (slug: string, publicKey: string) =>
-    fetch(
-      `${coreBase()}/public/o/${encodeURIComponent(slug)}/notebooks/${encodeURIComponent(publicKey)}`
-    ).then(async (r) => {
+  getPublicPublications: (slug: string) =>
+    fetch(`${coreBase()}/public/o/${encodeURIComponent(slug)}/publications`).then(async (r) => {
       if (!r.ok) throw new Error(await r.text());
-      return r.json();
+      return r.json() as Promise<{
+        publications: Array<{
+          title: string;
+          subtitle?: string;
+          publication: string;
+          url: string;
+          updatedAt?: string;
+        }>;
+      }>;
     }),
-  getPublicEntry: (slug: string, publicKey: string, entryId: string) =>
+  getPublicPublication: (slug: string, key: string) =>
+    fetch(`${coreBase()}/public/o/${encodeURIComponent(slug)}/publications/${encodeURIComponent(key)}`).then(
+      async (r) => {
+        if (!r.ok) throw new Error(await r.text());
+        return r.json() as Promise<{
+          org: { name: string; slug: string };
+          notebook: { title: string; subtitle?: string };
+          publication: { name: string; visibility: "unlisted" | "public" };
+          url: string;
+          noindex: boolean;
+        }>;
+      }
+    ),
+  /** JSON helper (`?json=1`); prefer the direct PDF proxy stream for browsers. */
+  getPublicPublicationPdfUrl: (slug: string, key: string) =>
     fetch(
-      `${coreBase()}/public/o/${encodeURIComponent(slug)}/notebooks/${encodeURIComponent(publicKey)}/entries/${encodeURIComponent(entryId)}`
+      `${coreBase()}/public/o/${encodeURIComponent(slug)}/publications/${encodeURIComponent(key)}/pdf?json=1`
     ).then(async (r) => {
       if (!r.ok) throw new Error(await r.text());
-      return r.json();
-    }),
-  /** JSON helper (`?json=1`); prefer the website `/o/.../n/...` proxy for browsers. */
-  getPublicNotebookPdf: (slug: string, publicKey: string) =>
-    fetch(
-      `${coreBase()}/public/o/${encodeURIComponent(slug)}/notebooks/${encodeURIComponent(publicKey)}/pdf?json=1`
-    ).then(async (r) => {
-      if (!r.ok) throw new Error(await r.text());
-      return r.json() as Promise<{ url: string; latestExportId?: string; exportId?: string }>;
+      return r.json() as Promise<{ url: string }>;
     }),
 
   listMembers: (orgId: string) => coreFetch<MemberSummary[]>(`/orgs/${orgId}/members`),
@@ -835,7 +848,7 @@ export const cloudApi = {
   createShareLink: (
     orgId: string,
     notebookId: string,
-    body: { name: string; exportId: string }
+    body: { name: string; exportId: string; visibility?: "public" | "unlisted" }
   ) =>
     coreFetch<NotebookShareLinkSummary>(`/orgs/${orgId}/notebooks/${notebookId}/share-links`, {
       method: "POST",
@@ -845,7 +858,7 @@ export const cloudApi = {
     orgId: string,
     notebookId: string,
     linkId: string,
-    body: { name?: string; exportId?: string }
+    body: { name?: string; exportId?: string; visibility?: "public" | "unlisted" }
   ) =>
     coreFetch<NotebookShareLinkSummary>(
       `/orgs/${orgId}/notebooks/${notebookId}/share-links/${linkId}`,

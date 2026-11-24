@@ -72,10 +72,18 @@ Auth: `Authorization: Bearer <Firebase ID token | local uid>`
 
 ### Public (no auth)
 
-- `GET /public/o/:slug` — org public page when `publicPage.visibility=public`; omits items with `public === false` and whole sections with `sections.<key> === false`
-- `GET /public/o/:slug/notebooks/:publicKey` — metadata (+ optional storage `pdfUrl`)
-- `GET /public/o/:slug/notebooks/:publicKey/entries/:entryId` — 404 (PDF-only)
-- `GET /public/o/:slug/notebooks/:publicKey/pdf` — streams PDF bytes through Core (default); `?json=1` returns `{ url }` storage/signed URL. Website `/o/…/n/…` proxies this stream.
+Headless CMS endpoints for public organization data and published PDF documents. Accessible when `org.publicPage.visibility === "public"`.
+
+- `GET /public/o/:slug` — full org public page bundle (profile, logoUrl, donors, projects, events, members, social, publications); omits items with `public === false` and whole sections with `sections.<key> === false`
+- `GET /public/o/:slug/projects` — list public projects (`public !== false`)
+- `GET /public/o/:slug/donors` — list public donors/sponsors (`public !== false`)
+- `GET /public/o/:slug/events` — list public events (`public !== false`)
+- `GET /public/o/:slug/members` — list public members (`public !== false`)
+- `GET /public/o/:slug/social` — list public social links (`public !== false`)
+- `GET /public/o/:slug/publications` — list published PDF documents explicitly marked `visibility: "public"`. Returns publication name, notebook title, and direct PDF url. **Unlisted** publications (which require the direct unguessable key) and **private** notebooks are excluded from this catalog. No internal IDs leaked.
+- `GET /public/o/:slug/publications/:key` — metadata for an individual public or unlisted publication (returns org name/slug, notebook title/subtitle, publication name, visibility, and canonical PDF `url`). Zero internal database IDs leaked.
+- `GET /public/o/:slug/publications/:key/pdf` — streams compiled PDF bytes for this publication through Core (default); `?json=1` returns `{ url }` storage/signed URL.
+- `GET /public/o/:slug/assets/:assetId` — streams public org assets (images, logos) with caching headers, decoupled from GCS credentials.
 
 ### Org teams (ACL groups)
 

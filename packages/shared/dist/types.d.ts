@@ -49,6 +49,7 @@ export type OrgPublicSections = {
     events?: boolean;
     members?: boolean;
     social?: boolean;
+    publications?: boolean;
 };
 export type OrgPublicPage = {
     visibility: "public" | "hidden";
@@ -345,6 +346,12 @@ export type NotebookShareLink = {
     name: string;
     /** Compile export id this link serves. */
     exportId: string;
+    /**
+     * Visibility on public listings:
+     * - "unlisted" (default): Accessible to anyone with the link, but not listed in public catalog/notebooks query.
+     * - "public": Listed in the organization's public notebooks query / catalog.
+     */
+    visibility?: "unlisted" | "public";
     createdAt: string;
     createdBy?: string;
     updatedAt?: string;

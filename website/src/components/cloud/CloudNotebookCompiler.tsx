@@ -27,7 +27,7 @@ import {
 } from "@/lib/cloud/api";
 import { compileCloudNotebook } from "@/lib/cloud/compileCloudNotebook";
 import { subscribeNotebookEvents } from "@/lib/cloud/notebookEvents";
-import { trackNotebookJobToast } from "@/hooks/useNotebookJobToasts";
+import { trackNotebookJobToast, dismissNotebookJobToast } from "@/hooks/useNotebookJobToasts";
 import { MAX_COMPILE_EXPORTS } from "@engineering-notebook/shared";
 
 const LatexPreview = dynamic(() => import("@/components/editor/LatexPreview"), {
@@ -86,6 +86,7 @@ export function CloudNotebookCompiler() {
   const [renameValue, setRenameValue] = useState("");
   const [newLinkName, setNewLinkName] = useState("");
   const [newLinkExportId, setNewLinkExportId] = useState("");
+  const [newLinkVisibility, setNewLinkVisibility] = useState<"unlisted" | "public">("unlisted");
   const [showCreateLink, setShowCreateLink] = useState(false);
   const [savingVersion, setSavingVersion] = useState(false);
   const jobIdRef = useRef<string | null>(null);
@@ -299,6 +300,7 @@ export function CloudNotebookCompiler() {
       await runServerCompile(enqueued.jobId);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      dismissNotebookJobToast({ kind: "compile", error: message });
       if (allowBusyTex && /compile_service_unavailable|503|not configured/i.test(message)) {
         try {
           await runBusyTexEscape();
@@ -392,8 +394,10 @@ export function CloudNotebookCompiler() {
       await cloudApi.createShareLink(orgId, notebookId, {
         name: newLinkName.trim() || "Share link",
         exportId,
+        visibility: newLinkVisibility,
       });
       setNewLinkName("");
+      setNewLinkVisibility("unlisted");
       setShowCreateLink(false);
       await loadShareLinks();
       showNotification("Share link created", "success");
@@ -405,11 +409,14 @@ export function CloudNotebookCompiler() {
     }
   }
 
-  async function rebindLink(linkId: string, exportId: string) {
+  async function rebindLink(
+    linkId: string,
+    patch: { exportId?: string; visibility?: "unlisted" | "public" }
+  ) {
     if (!canManage || publishBusy || isArchived) return;
     setPublishBusy(true);
     try {
-      await cloudApi.patchShareLink(orgId, notebookId, linkId, { exportId });
+      await cloudApi.patchShareLink(orgId, notebookId, linkId, patch);
       await loadShareLinks();
       showNotification("Link updated", "success");
     } catch (err) {
@@ -590,7 +597,7 @@ export function CloudNotebookCompiler() {
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <NotebookSideRail
           storageKey={`ene:rail:${notebookId}:compile`}
-          widthClassName="md:w-72"
+          widthClassName="md:w-80"
           title={
             <div className="flex w-full items-center gap-0.5 rounded-nb-lg bg-nb-surface/60 p-0.5 ring-1 ring-nb-outline-variant/30">
               {(
@@ -809,85 +816,129 @@ export function CloudNotebookCompiler() {
                 <Alert variant="warning">Set an org slug in organization settings first.</Alert>
               )}
               {shareLinks.length === 0 && !showCreateLink && (
-                <p className="px-2 py-3 text-nb-caption text-nb-on-surface-variant">
-                  No share links yet. Create one to hand out a public PDF URL.
-                </p>
+                <div className="rounded-xl border border-dashed border-nb-outline-variant/40 p-4 text-center">
+                  <p className="text-xs font-medium text-nb-on-surface">No share links created</p>
+                  <p className="mt-1 text-[11px] text-nb-on-surface-variant">
+                    Create a link to generate a direct or public PDF link for visitors and judges.
+                  </p>
+                </div>
               )}
-              <ul className="space-y-1">
+              <ul className="space-y-3">
                 {shareLinks.map((link) => {
                   const path = sharePath(link.key);
+                  const isPublic = link.visibility === "public";
                   return (
                     <li
                       key={link.id}
-                      className="rounded border border-nb-outline-variant/25 bg-nb-surface-low/40 p-2"
+                      className="rounded-xl border border-nb-outline-variant/30 bg-nb-surface shadow-xs transition-shadow hover:shadow-sm"
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="truncate text-xs font-semibold text-nb-on-surface">
-                            {link.name}
-                          </p>
-                          <p className="truncate text-[10px] text-nb-on-surface-variant">
-                            {exportLabelById[link.exportId] || link.exportId.slice(0, 8)}
-                          </p>
+                      <div className="border-b border-nb-outline-variant/20 p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`inline-block h-2 w-2 rounded-full ${
+                                  isPublic ? "bg-emerald-500" : "bg-sky-500"
+                                }`}
+                              />
+                              <p className="truncate text-sm font-semibold text-nb-on-surface">
+                                {link.name}
+                              </p>
+                            </div>
+                            <p className="mt-1 truncate text-xs text-nb-on-surface-variant">
+                              Serving:{" "}
+                              <span className="font-medium text-nb-on-surface">
+                                {exportLabelById[link.exportId] || link.exportId.slice(0, 8)}
+                              </span>
+                            </p>
+                          </div>
+                          {canManage && !isArchived && (
+                            <IconButton
+                              className="h-7 w-7 shrink-0 text-nb-on-surface-variant hover:text-red-500"
+                              variant="ghost"
+                              title="Revoke link"
+                              aria-label="Revoke link"
+                              disabled={publishBusy}
+                              onClick={() => setRevokeLinkId(link.id)}
+                            >
+                              <Trash2 size={14} />
+                            </IconButton>
+                          )}
                         </div>
-                        {canManage && !isArchived && (
-                          <IconButton
-                            className="h-7 w-7 shrink-0"
-                            variant="danger"
-                            title="Revoke link"
-                            aria-label="Revoke link"
-                            disabled={publishBusy}
-                            onClick={() => setRevokeLinkId(link.id)}
-                          >
-                            <Trash2 size={14} />
-                          </IconButton>
+                      </div>
+
+                      <div className="space-y-2.5 p-3">
+                        {canManage && !isArchived && exportsList.length > 0 && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-nb-on-surface-variant">
+                                Target Version
+                              </label>
+                              <select
+                                className="h-8 w-full rounded-lg border border-nb-outline-variant/30 bg-nb-surface-low px-2 text-xs font-medium text-nb-on-surface focus:border-nb-primary focus:outline-none"
+                                value={link.exportId}
+                                disabled={publishBusy}
+                                onChange={(e) =>
+                                  void rebindLink(link.id, { exportId: e.target.value })
+                                }
+                              >
+                                {exportsList.map((exp) => (
+                                  <option key={exp.id} value={exp.id}>
+                                    {formatExportLabel(exp)}
+                                    {exp.id === latestExportId ? " (latest)" : ""}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-nb-on-surface-variant">
+                                Access Level
+                              </label>
+                              <select
+                                className="h-8 w-full rounded-lg border border-nb-outline-variant/30 bg-nb-surface-low px-2 text-xs font-medium text-nb-on-surface focus:border-nb-primary focus:outline-none"
+                                value={isPublic ? "public" : "unlisted"}
+                                disabled={publishBusy}
+                                onChange={(e) =>
+                                  void rebindLink(link.id, {
+                                    visibility: e.target.value as "public" | "unlisted",
+                                  })
+                                }
+                              >
+                                <option value="unlisted">Unlisted</option>
+                                <option value="public">Public</option>
+                              </select>
+                            </div>
+                          </div>
+                        )}
+
+                        {path && (
+                          <div className="flex items-center gap-2 pt-1">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="h-8 flex-1 text-xs"
+                              onClick={() => {
+                                void navigator.clipboard
+                                  .writeText(`${window.location.origin}${path}`)
+                                  .then(
+                                    () => showNotification("Direct PDF link copied", "success"),
+                                    () => showNotification("Could not copy link", "error")
+                                  );
+                              }}
+                            >
+                              <Copy size={13} className="mr-1" /> Copy Link
+                            </Button>
+                            <a
+                              href={path}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-nb-outline-variant/30 px-3 text-xs font-semibold text-nb-primary hover:bg-nb-surface-low"
+                            >
+                              Open <ExternalLink size={13} />
+                            </a>
+                          </div>
                         )}
                       </div>
-                      {canManage && !isArchived && exportsList.length > 0 && (
-                        <label className="mt-1.5 block text-[10px] font-medium text-nb-on-surface-variant">
-                          Version
-                          <select
-                            className="mt-0.5 h-8 w-full rounded border border-nb-outline-variant/30 bg-nb-surface px-1.5 text-xs text-nb-on-surface"
-                            value={link.exportId}
-                            disabled={publishBusy}
-                            onChange={(e) => void rebindLink(link.id, e.target.value)}
-                          >
-                            {exportsList.map((exp) => (
-                              <option key={exp.id} value={exp.id}>
-                                {formatExportLabel(exp)}
-                                {exp.id === latestExportId ? " (latest)" : ""}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      )}
-                      {path && (
-                        <div className="mt-1.5 flex flex-wrap gap-1">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="min-h-8"
-                            onClick={() => {
-                              void navigator.clipboard
-                                .writeText(`${window.location.origin}${path}`)
-                                .then(
-                                  () => showNotification("Link copied", "success"),
-                                  () => showNotification("Could not copy", "error")
-                                );
-                            }}
-                          >
-                            <Copy size={12} /> Copy
-                          </Button>
-                          <a
-                            href={path}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex min-h-8 items-center gap-1 px-1 text-xs font-semibold text-nb-primary hover:underline"
-                          >
-                            Open <ExternalLink size={12} />
-                          </a>
-                        </div>
-                      )}
                     </li>
                   );
                 })}
@@ -895,17 +946,20 @@ export function CloudNotebookCompiler() {
 
               {canManage && !isArchived && (
                 showCreateLink ? (
-                  <div className="space-y-2 rounded border border-nb-outline-variant/25 p-2">
+                  <div className="space-y-3 rounded-xl border border-nb-primary/40 bg-nb-surface p-3.5 shadow-sm">
+                    <p className="text-xs font-bold text-nb-on-surface">Create New Share Link</p>
                     <TextField
-                      label="Name"
+                      label="Link Name"
                       value={newLinkName}
                       onChange={(e) => setNewLinkName(e.target.value)}
-                      placeholder="Judges, Draft…"
+                      placeholder="e.g. State Championship, Judges…"
                     />
-                    <label className="block text-nb-caption font-medium text-nb-on-surface-variant">
-                      Version
+                    <div>
+                      <label className="mb-1 block text-nb-caption font-medium text-nb-on-surface-variant">
+                        Version
+                      </label>
                       <select
-                        className="mt-1 h-9 w-full rounded border border-nb-outline-variant/30 bg-nb-surface px-2 text-sm text-nb-on-surface"
+                        className="h-9 w-full rounded-lg border border-nb-outline-variant/30 bg-nb-surface px-2.5 text-sm text-nb-on-surface focus:border-nb-primary focus:outline-none"
                         value={newLinkExportId}
                         onChange={(e) => setNewLinkExportId(e.target.value)}
                       >
@@ -916,15 +970,31 @@ export function CloudNotebookCompiler() {
                           </option>
                         ))}
                       </select>
-                    </label>
-                    <div className="flex gap-1.5">
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-nb-caption font-medium text-nb-on-surface-variant">
+                        Visibility
+                      </label>
+                      <select
+                        className="h-9 w-full rounded-lg border border-nb-outline-variant/30 bg-nb-surface px-2.5 text-sm text-nb-on-surface focus:border-nb-primary focus:outline-none"
+                        value={newLinkVisibility}
+                        onChange={(e) =>
+                          setNewLinkVisibility(e.target.value as "unlisted" | "public")
+                        }
+                      >
+                        <option value="unlisted">Unlisted (anyone with direct link)</option>
+                        <option value="public">Public (catalog & public notebooks query)</option>
+                      </select>
+                    </div>
+                    <div className="flex gap-2 pt-1">
                       <Button
                         size="sm"
                         variant="primary"
+                        className="flex-1"
                         disabled={publishBusy || !exportsList.length || !orgSlug}
                         onClick={() => void createLink()}
                       >
-                        <Link2 size={14} /> Create
+                        <Link2 size={14} className="mr-1" /> Create Link
                       </Button>
                       <Button
                         size="sm"
@@ -940,7 +1010,7 @@ export function CloudNotebookCompiler() {
                   <Button
                     size="sm"
                     variant="secondary"
-                    className="w-full"
+                    className="w-full py-2 font-semibold"
                     disabled={!exportsList.length || !orgSlug}
                     onClick={() => {
                       setNewLinkExportId(
@@ -951,7 +1021,7 @@ export function CloudNotebookCompiler() {
                       setShowCreateLink(true);
                     }}
                   >
-                    <Plus size={14} /> New share link
+                    <Plus size={14} className="mr-1" /> New share link
                   </Button>
                 )
               )}

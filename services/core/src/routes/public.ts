@@ -3,6 +3,8 @@ import {
   orgPath,
   orgSlugPath,
   notebookPath,
+  notebooksCollection,
+  notebookShareLinksCollection,
   membersCollection,
   orgAssetPath,
   donorsCollection,
@@ -14,6 +16,7 @@ import {
   type Organization,
   type OrgMember,
   type NotebookSummary,
+  type NotebookShareLink,
   type AssetMetadata,
 } from "@engineering-notebook/shared";
 import { resolveExportPdfKey } from "../compile/recordCompileExport.js";
@@ -36,17 +39,108 @@ async function resolveOrgBySlug(slug: string) {
 export async function registerPublicRoutes(app: FastifyInstance, storage: StoragePort) {
   const store = () => getMetadataStore();
 
-  async function resolveOrgAssetUrl(orgId: string, imageAssetId?: string) {
+  async function resolveOrgAssetUrl(slug: string, orgId: string, imageAssetId?: string) {
     if (!imageAssetId) return undefined;
     const assetSnap = await store().get(orgAssetPath(orgId, imageAssetId));
     if (!assetSnap) return undefined;
-    try {
-      return await storage.getSignedUrl((assetSnap as AssetMetadata).gcsPath, "read");
-    } catch {
-      return undefined;
-    }
+    return `/public/o/${slug}/assets/${imageAssetId}`;
   }
 
+  async function getEnrichedMembers(slug: string, orgId: string, isSectionEnabled: boolean) {
+    if (!isSectionEnabled) return [];
+    const orgMembers = await store().query(membersCollection(orgId));
+    return Promise.all(
+      orgMembers
+        .map((d) => {
+          const { id, ...rest } = d;
+          return { ...(rest as OrgMember), uid: String(id) };
+        })
+        .filter((m) => isPublicRecord(m))
+        .map(async (m) => {
+          const imageUrl = await resolveOrgAssetUrl(slug, orgId, m.imageAssetId);
+          return {
+            id: m.uid,
+            name: m.displayName || m.email || "Member",
+            role: m.title || undefined,
+            title: m.title,
+            status: m.status || "active",
+            imageAssetId: m.imageAssetId,
+            imageUrl,
+          };
+        })
+    );
+  }
+
+  async function getEnrichedCatalog(
+    slug: string,
+    orgId: string,
+    sectionOn: boolean,
+    collectionPath: string
+  ) {
+    if (!sectionOn) return [];
+    const rows = await store().query(collectionPath);
+    return Promise.all(
+      rows
+        .filter((d) => isPublicRecord(d as { public?: boolean }))
+        .map(async (d) => {
+          const { id, ...data } = d as {
+            id: string;
+            imageAssetId?: string;
+            public?: boolean;
+          };
+          const imageUrl = await resolveOrgAssetUrl(slug, orgId, data.imageAssetId);
+          return { id, ...data, imageUrl };
+        })
+    );
+  }
+
+  /**
+   * Helper to fetch all PDF publications explicitly marked "public".
+   * Note: "unlisted" links are accessible via `/public/o/:slug/publications/:key` but excluded from this listing.
+   * Private notebooks are excluded entirely.
+   */
+  async function getPublicPublications(slug: string, orgId: string, isSectionEnabled: boolean) {
+    if (!isSectionEnabled) return [];
+    const nbRows = await store().query(notebooksCollection(orgId));
+
+    const publicList: Array<{
+      title: string;
+      subtitle?: string;
+      publication: string;
+      url: string;
+      updatedAt?: string;
+    }> = [];
+
+    for (const nbRow of nbRows) {
+      const nb = nbRow as NotebookSummary & { id: string };
+      if (nb.archivedAt) continue;
+
+      const linksRows = await store().query(notebookShareLinksCollection(orgId, nb.id));
+      const activeLinks = linksRows
+        .map((d) => {
+          const { id, ...rest } = d;
+          return { id: String(id), ...(rest as Omit<NotebookShareLink, "id">) } as NotebookShareLink;
+        })
+        .filter((l) => !l.revokedAt);
+
+      for (const link of activeLinks) {
+        // Distinguish public vs unlisted: only include links marked "public"
+        if (link.visibility === "public") {
+          publicList.push({
+            title: nb.title || nb.name,
+            subtitle: nb.subtitle,
+            publication: link.name,
+            url: `/public/o/${slug}/publications/${link.key}/pdf`,
+            updatedAt: link.updatedAt || nb.updatedAt,
+          });
+        }
+      }
+    }
+
+    return publicList;
+  }
+
+  // ── 1. Comprehensive Org Public Page Bundle ───────────────────────────
   app.get("/public/o/:slug", async (request, reply) => {
     const { slug } = request.params as { slug: string };
     const org = await resolveOrgBySlug(slug.toLowerCase());
@@ -55,60 +149,18 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
       return reply.code(404).send({ error: "not found" });
     }
     const orgId = org.id;
-    const [donors, projects, events, orgMembers, social] = await Promise.all([
-      store().query(donorsCollection(orgId)),
-      store().query(projectsCollection(orgId)),
-      store().query(eventsCollection(orgId)),
-      store().query(membersCollection(orgId)),
-      store().query(socialLinksCollection(orgId)),
-    ]);
-
     const page = org.publicPage;
 
-    const enrichedMembers = isPublicSection(page, "members")
-      ? await Promise.all(
-          orgMembers
-            .map((d) => {
-              const { id, ...rest } = d;
-              return { ...(rest as OrgMember), uid: String(id) };
-            })
-            .filter((m) => isPublicRecord(m))
-            .map(async (m) => {
-              const imageUrl = await resolveOrgAssetUrl(orgId, m.imageAssetId);
-              return {
-                id: m.uid,
-                name: m.displayName || m.email || "Member",
-                role: m.title || undefined,
-                title: m.title,
-                status: m.status || "active",
-                imageAssetId: m.imageAssetId,
-                imageUrl,
-              };
-            })
-        )
-      : [];
+    const [donors, projects, events, members, social, publications, logoUrl] = await Promise.all([
+      getEnrichedCatalog(slug, orgId, isPublicSection(page, "donors"), donorsCollection(orgId)),
+      getEnrichedCatalog(slug, orgId, isPublicSection(page, "projects"), projectsCollection(orgId)),
+      getEnrichedCatalog(slug, orgId, isPublicSection(page, "events"), eventsCollection(orgId)),
+      getEnrichedMembers(slug, orgId, isPublicSection(page, "members")),
+      getEnrichedCatalog(slug, orgId, isPublicSection(page, "social"), socialLinksCollection(orgId)),
+      getPublicPublications(slug, orgId, isPublicSection(page, "publications")),
+      resolveOrgAssetUrl(slug, orgId, page?.logoAssetId),
+    ]);
 
-    async function enrichCatalog(
-      sectionOn: boolean,
-      rows: Array<Record<string, unknown> & { id: string }>
-    ) {
-      if (!sectionOn) return [];
-      return Promise.all(
-        rows
-          .filter((d) => isPublicRecord(d as { public?: boolean }))
-          .map(async (d) => {
-            const { id, ...data } = d as {
-              id: string;
-              imageAssetId?: string;
-              public?: boolean;
-            };
-            const imageUrl = await resolveOrgAssetUrl(orgId, data.imageAssetId);
-            return { id, ...data, imageUrl };
-          })
-      );
-    }
-
-    const logoUrl = await resolveOrgAssetUrl(orgId, page?.logoAssetId);
     const aboutText = isPublicSection(page, "about")
       ? page?.about || page?.mission
       : undefined;
@@ -122,37 +174,139 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
 
     return {
       org: {
-        id: orgId,
         name: org.name,
         slug: org.slug,
         publicPage,
         logoUrl,
       },
-      donors: await enrichCatalog(
-        isPublicSection(page, "donors"),
-        donors as Array<Record<string, unknown> & { id: string }>
-      ),
-      projects: await enrichCatalog(
-        isPublicSection(page, "projects"),
-        projects as Array<Record<string, unknown> & { id: string }>
-      ),
-      events: await enrichCatalog(
-        isPublicSection(page, "events"),
-        events as Array<Record<string, unknown> & { id: string }>
-      ),
-      members: enrichedMembers,
-      social: await enrichCatalog(
-        isPublicSection(page, "social"),
-        social as Array<Record<string, unknown> & { id: string }>
-      ),
+      donors,
+      projects,
+      events,
+      members,
+      social,
+      publications,
     };
   });
 
-  app.get("/public/o/:slug/notebooks/:publicKey", async (request, reply) => {
-    const { slug, publicKey } = request.params as { slug: string; publicKey: string };
+  // ── 2. Granular Modular Public Endpoints ──────────────────────────────
+  app.get("/public/o/:slug/projects", async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+    const org = await resolveOrgBySlug(slug.toLowerCase());
+    if (!org || org.publicPage?.visibility !== "public") {
+      return reply.code(404).send({ error: "not found" });
+    }
+    const projects = await getEnrichedCatalog(
+      slug,
+      org.id,
+      isPublicSection(org.publicPage, "projects"),
+      projectsCollection(org.id)
+    );
+    return { projects };
+  });
+
+  app.get("/public/o/:slug/donors", async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+    const org = await resolveOrgBySlug(slug.toLowerCase());
+    if (!org || org.publicPage?.visibility !== "public") {
+      return reply.code(404).send({ error: "not found" });
+    }
+    const donors = await getEnrichedCatalog(
+      slug,
+      org.id,
+      isPublicSection(org.publicPage, "donors"),
+      donorsCollection(org.id)
+    );
+    return { donors };
+  });
+
+  app.get("/public/o/:slug/events", async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+    const org = await resolveOrgBySlug(slug.toLowerCase());
+    if (!org || org.publicPage?.visibility !== "public") {
+      return reply.code(404).send({ error: "not found" });
+    }
+    const events = await getEnrichedCatalog(
+      slug,
+      org.id,
+      isPublicSection(org.publicPage, "events"),
+      eventsCollection(org.id)
+    );
+    return { events };
+  });
+
+  app.get("/public/o/:slug/members", async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+    const org = await resolveOrgBySlug(slug.toLowerCase());
+    if (!org || org.publicPage?.visibility !== "public") {
+      return reply.code(404).send({ error: "not found" });
+    }
+    const members = await getEnrichedMembers(
+      slug,
+      org.id,
+      isPublicSection(org.publicPage, "members")
+    );
+    return { members };
+  });
+
+  app.get("/public/o/:slug/social", async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+    const org = await resolveOrgBySlug(slug.toLowerCase());
+    if (!org || org.publicPage?.visibility !== "public") {
+      return reply.code(404).send({ error: "not found" });
+    }
+    const social = await getEnrichedCatalog(
+      slug,
+      org.id,
+      isPublicSection(org.publicPage, "social"),
+      socialLinksCollection(org.id)
+    );
+    return { social };
+  });
+
+  /**
+   * List public publications only.
+   * Unlisted publications (which require knowing the unguessable key) and private notebooks are excluded.
+   */
+  app.get("/public/o/:slug/publications", async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+    const org = await resolveOrgBySlug(slug.toLowerCase());
+    if (!org || org.publicPage?.visibility !== "public") {
+      return reply.code(404).send({ error: "not found" });
+    }
+    const publications = await getPublicPublications(
+      slug,
+      org.id,
+      isPublicSection(org.publicPage, "publications")
+    );
+    return { publications };
+  });
+
+  // ── 3. Public Asset Streaming (Decoupled from GCS) ─────────────────────
+  app.get("/public/o/:slug/assets/:assetId", async (request, reply) => {
+    const { slug, assetId } = request.params as { slug: string; assetId: string };
     const org = await resolveOrgBySlug(slug.toLowerCase());
     if (!org) return reply.code(404).send({ error: "not found" });
-    const resolvedLink = await resolvePublicShareLink(org.id, publicKey);
+
+    const assetSnap = await store().get(orgAssetPath(org.id, assetId));
+    if (!assetSnap) return reply.code(404).send({ error: "asset not found" });
+    const asset = assetSnap as AssetMetadata;
+
+    const bytes = await storage.getObject(asset.gcsPath);
+    if (!bytes) return reply.code(404).send({ error: "asset file not found" });
+
+    return reply
+      .header("Content-Type", asset.contentType || "application/octet-stream")
+      .header("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800")
+      .header("Content-Length", String(bytes.byteLength))
+      .send(bytes);
+  });
+
+  // ── 4. Individual Publication (Public or Unlisted) ──────────────────────
+  app.get("/public/o/:slug/publications/:key", async (request, reply) => {
+    const { slug, key } = request.params as { slug: string; key: string };
+    const org = await resolveOrgBySlug(slug.toLowerCase());
+    if (!org) return reply.code(404).send({ error: "not found" });
+    const resolvedLink = await resolvePublicShareLink(org.id, key);
     if (!resolvedLink) return reply.code(404).send({ error: "not found" });
     const { notebookId, link } = resolvedLink;
     const nbSnap = await store().get(notebookPath(org.id, notebookId));
@@ -161,51 +315,40 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
     const nb = { id: notebookId, ...(nbRest as NotebookSummary) };
 
     const resolved = await resolveExportPdfKey(org.id, notebookId, link.exportId, storage);
-    let pdfUrl: string | undefined;
+    let url: string | undefined;
     if (resolved) {
-      try {
-        pdfUrl = await storage.getSignedUrl(resolved.key, "read");
-      } catch {
-        pdfUrl = undefined;
-      }
+      url = `/public/o/${slug}/publications/${link.key}/pdf`;
     }
 
+    const visibility = link.visibility || "unlisted";
+
     return {
-      org: { id: org.id, name: org.name, slug: org.slug },
+      org: { name: org.name, slug: org.slug },
       notebook: {
-        id: nb.id,
-        name: nb.name,
-        title: nb.title,
+        title: nb.title || nb.name,
         subtitle: nb.subtitle,
-        publicAccess: "unlisted" as const,
-        publicKey: link.key,
-        latestExportId: nb.latestExportId,
-        publicExportId: resolved?.exportId || link.exportId,
       },
-      shareLink: { id: link.id, name: link.name, exportId: link.exportId },
-      pdfUrl,
-      noindex: true,
+      publication: {
+        name: link.name,
+        visibility,
+      },
+      url,
+      noindex: visibility === "unlisted",
     };
   });
 
-  /** Entry TipTap public reads removed — public notebooks are PDF-only. */
-  app.get("/public/o/:slug/notebooks/:publicKey/entries/:entryId", async (_request, reply) => {
-    return reply.code(404).send({ error: "not found" });
-  });
-
   /**
-   * Public PDF. Default: stream bytes through Core (works with memory/fake-GCS and
-   * avoids handing visitors raw bucket URLs). Pass `?json=1` for `{ url }` (signed/
-   * storage URL) when a caller explicitly wants a redirect target.
+   * Public Publication PDF stream. Streams PDF bytes through Core.
+   * Pass `?json=1` for `{ url }` (signed/storage URL) when a caller explicitly wants a redirect target.
    */
-  app.get("/public/o/:slug/notebooks/:publicKey/pdf", async (request, reply) => {
-    const { slug, publicKey } = request.params as { slug: string; publicKey: string };
+  app.get("/public/o/:slug/publications/:key/pdf", async (request, reply) => {
+    const { slug, key } = request.params as { slug: string; key: string };
     const wantJson =
       (request.query as { json?: string }).json === "1" ||
       (request.query as { json?: string }).json === "true";
     const org = await resolveOrgBySlug(slug.toLowerCase());
     if (!org) return reply.code(404).send({ error: "not found" });
-    const resolvedLink = await resolvePublicShareLink(org.id, publicKey);
+    const resolvedLink = await resolvePublicShareLink(org.id, key);
     if (!resolvedLink) return reply.code(404).send({ error: "not found" });
     const { notebookId, link } = resolvedLink;
     const nbSnap = await store().get(notebookPath(org.id, notebookId));
@@ -215,13 +358,8 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
     if (!resolved) return reply.code(404).send({ error: "no compiled pdf" });
 
     if (wantJson) {
-      const url = await storage.getSignedUrl(resolved.key, "read");
-      return {
-        url,
-        latestExportId: nb.latestExportId,
-        exportId: resolved.exportId,
-        shareLinkId: link.id,
-      };
+      const signedUrl = await storage.getSignedUrl(resolved.key, "read");
+      return { url: signedUrl };
     }
 
     const bytes = await storage.getObject(resolved.key);
@@ -230,7 +368,7 @@ export async function registerPublicRoutes(app: FastifyInstance, storage: Storag
     return reply
       .header("Content-Type", "application/pdf")
       .header("Content-Disposition", `inline; filename="${filename}"`)
-      .header("Cache-Control", "private, max-age=60")
+      .header("Cache-Control", "public, max-age=60")
       .header("Content-Length", String(bytes.byteLength))
       .send(bytes);
   });
