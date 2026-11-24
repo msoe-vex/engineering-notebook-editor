@@ -64,6 +64,20 @@ export async function registerAdminRoutes(app: FastifyInstance) {
 
   app.get("/api/admin/orgs", async (request) => {
     requireServiceAdmin(getUser(request));
-    return getMetadataStore().query("organizations");
+    const orgRows = await getMetadataStore().query("organizations", { limit: 100 });
+    return Promise.all(
+      orgRows.map(async (row) => {
+        const orgId = String(row.id);
+        const [membersCount, notebooksCount] = await Promise.all([
+          getMetadataStore().count?.(`organizations/${orgId}/members`) ?? 0,
+          getMetadataStore().count?.(`organizations/${orgId}/notebooks`) ?? 0,
+        ]).catch(() => [0, 0]);
+        return {
+          ...row,
+          membersCount,
+          notebooksCount,
+        };
+      })
+    );
   });
 }

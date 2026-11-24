@@ -751,9 +751,30 @@ export const cloudApi = {
 
   adminUsers: () =>
     coreFetch<
-      Array<{ uid: string; email?: string; platformRole?: string; grants?: { platformAi?: boolean } }>
+      Array<{
+        uid: string;
+        email?: string;
+        displayName?: string;
+        platformRole?: string;
+        grants?: { platformAi?: boolean };
+        createdAt?: string;
+        updatedAt?: string;
+      }>
     >("/api/admin/users"),
   adminMetrics: () => coreFetch<Record<string, number>>("/api/admin/metrics"),
+  adminOrgs: () =>
+    coreFetch<
+      Array<{
+        id: string;
+        name: string;
+        slug?: string;
+        createdAt?: string;
+        createdBy?: string;
+        membersCount?: number;
+        notebooksCount?: number;
+        publicPage?: { visibility?: string };
+      }>
+    >("/api/admin/orgs"),
   patchAdminUser: (uid: string, body: unknown) =>
     coreFetch(`/api/admin/users/${uid}`, { method: "PATCH", body: JSON.stringify(body) }),
   async uploadExportPdf(
