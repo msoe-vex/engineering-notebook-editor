@@ -42,6 +42,12 @@ const nextConfig: NextConfig = {
       { source: "/cloud", destination: "/", permanent: false },
       { source: "/cloud/:path*", destination: "/:path*", permanent: false },
       { source: "/workspace/:path*", destination: "/", permanent: false },
+      // Backward compatibility: seamlessly redirect plural /orgs URLs to singular /org
+      { source: "/orgs", destination: "/org", permanent: false },
+      { source: "/orgs/:orgId/notebooks/:notebookId/entries/:entryId", destination: "/org/:orgId/notebook/:notebookId/entry/:entryId", permanent: false },
+      { source: "/orgs/:orgId/notebooks/:notebookId/:path*", destination: "/org/:orgId/notebook/:notebookId/:path*", permanent: false },
+      { source: "/orgs/:orgId/notebooks", destination: "/org/:orgId/notebook", permanent: false },
+      { source: "/orgs/:orgId/:path*", destination: "/org/:orgId/:path*", permanent: false },
     ];
   },
   async rewrites() {

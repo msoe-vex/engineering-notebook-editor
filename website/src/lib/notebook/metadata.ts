@@ -116,7 +116,7 @@ export interface EntryMetadata {
   createdAt: string;
   updatedAt: string;
   date: string; // YYYY-MM-DD
-  filename: string; // Path to the entry file (e.g. "data/entries/uuid.json")
+  filename: string; // Path to the entry file (e.g. "data/entry/uuid.json")
   order: number;
   isTemplate?: boolean; // When true, excluded from LaTeX entries.tex compilation and export
   resources?: Record<string, { title: string, caption: string, type: string }>; // block uuid -> metadata

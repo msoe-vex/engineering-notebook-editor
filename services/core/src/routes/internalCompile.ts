@@ -34,7 +34,7 @@ function nowIso() {
 }
 
 function notebookKeyPrefix(orgId: string, notebookId: string) {
-  return `organizations/${orgId}/notebooks/${notebookId}/`;
+  return `organizations/${orgId}/notebook/${notebookId}/`;
 }
 
 function orgAssetsKeyPrefix(orgId: string) {

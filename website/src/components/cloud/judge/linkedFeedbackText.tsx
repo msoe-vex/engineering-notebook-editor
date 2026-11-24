@@ -37,7 +37,7 @@ function useResolveNotebookRef(basePath: string) {
       return {
         kind: "entry",
         label: entryDisplayName(entries, id),
-        href: `${basePath}/entries/${id}`,
+        href: `${basePath}/entry/${id}`,
       };
     }
     const asset = assetById.get(id);
@@ -49,7 +49,7 @@ function useResolveNotebookRef(basePath: string) {
         return {
           kind: "asset",
           label: `${assetLabel(asset.contentType)} in ${entryDisplayName(entries, hostEntry[0])}`,
-          href: `${basePath}/entries/${hostEntry[0]}`,
+          href: `${basePath}/entry/${hostEntry[0]}`,
         };
       }
       return {

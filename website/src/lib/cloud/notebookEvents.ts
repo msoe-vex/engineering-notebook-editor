@@ -113,7 +113,7 @@ export function subscribeNotebookEvents(
       };
       if (token) headers.authorization = `Bearer ${token}`;
       const res = await fetch(
-        `${coreBase()}/orgs/${orgId}/notebooks/${notebookId}/events`,
+        `${coreBase()}/org/${orgId}/notebook/${notebookId}/events`,
         { headers, signal }
       );
       if (!res.ok || !res.body) {

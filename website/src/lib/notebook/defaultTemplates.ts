@@ -76,7 +76,7 @@ export async function fetchDefaultNotebook(): Promise<DefaultNotebook> {
       };
       cleanedEntries[id] = cleanMeta;
 
-      const entryRes = await fetch(`${BASE_URL}/entries/${id}.json`);
+      const entryRes = await fetch(`${BASE_URL}/entry/${id}.json`);
       if (entryRes.ok) {
         const contentJson = await entryRes.text();
         entryContents.push({ filename, contentJson });

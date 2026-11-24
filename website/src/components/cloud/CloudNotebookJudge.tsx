@@ -49,7 +49,7 @@ export function CloudNotebookJudge() {
   const router = useRouter();
   const pathname = usePathname() || "";
   const { orgId, notebookId, setError, isArchived } = useNotebookWorkspace();
-  const basePath = `/orgs/${orgId}/notebooks/${notebookId}`;
+  const basePath = `/org/${orgId}/notebook/${notebookId}`;
   const selection = useMemo(
     () => selectionFromJudgePath(pathname, basePath),
     [pathname, basePath]

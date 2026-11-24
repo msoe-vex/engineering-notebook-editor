@@ -304,7 +304,7 @@ function EntryRowShell({
   const router = useRouter();
   const phaseList = useMemo(() => (phases ? getPhases(phases) : []), [phases]);
   const phaseCfg = useMemo(() => (entry.phase ? getPhaseConfig(phaseList)[entry.phase] : null), [phaseList, entry.phase]);
-  const href = `${basePath}/entries/${id}`;
+  const href = `${basePath}/entry/${id}`;
 
   return (
     <div
@@ -1386,7 +1386,7 @@ export function NotebookEntryList({
         }
         if (renameAfter) setRenaming({ kind: "entry", id: created.id });
         refresh();
-        router.push(`${basePath}/entries/${created.id}`);
+        router.push(`${basePath}/entry/${created.id}`);
       } catch (err) {
         setError((err as Error).message);
       }
@@ -1606,7 +1606,7 @@ export function NotebookEntryList({
         {
           id: "open",
           label: "Open",
-          onSelect: () => router.push(`${basePath}/entries/${id}`),
+          onSelect: () => router.push(`${basePath}/entry/${id}`),
         },
       ];
     }
@@ -1614,7 +1614,7 @@ export function NotebookEntryList({
       {
         id: "open",
         label: "Open",
-        onSelect: () => router.push(`${basePath}/entries/${id}`),
+        onSelect: () => router.push(`${basePath}/entry/${id}`),
       },
       {
         id: "rename",

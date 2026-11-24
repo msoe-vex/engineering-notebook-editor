@@ -486,7 +486,7 @@ export default function CalendarView({ onClose }: { onClose?: () => void }) {
     isArchived,
   } = useNotebookWorkspace();
   const router = useRouter();
-  const basePath = `/orgs/${orgId}/notebooks/${notebookId}`;
+  const basePath = `/org/${orgId}/notebook/${notebookId}`;
   const isMobileLayout = useMobileCalendarLayout();
   const mode = isMobileLayout ? "week" : calendarMode;
   const cursor = useMemo(() => parseYmd(calendarCursor), [calendarCursor]);

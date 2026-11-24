@@ -185,7 +185,7 @@ function parseInference(
 export async function registerJudgeUserRoutes(app: FastifyInstance, storage: StoragePort) {
   const store = () => getMetadataStore();
 
-  app.get("/orgs/:orgId/notebooks/:notebookId/rubrics", async (request) => {
+  app.get("/orgs/:orgId/notebook/:notebookId/rubrics", async (request) => {
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
     await assertNotebookAccess(user, orgId, notebookId);
@@ -205,7 +205,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
       );
   });
 
-  app.get("/orgs/:orgId/notebooks/:notebookId/rubrics/:rubricId", async (request, reply) => {
+  app.get("/orgs/:orgId/notebook/:notebookId/rubric/:rubricId", async (request, reply) => {
     const user = getUser(request);
     const { orgId, notebookId, rubricId } = request.params as {
       orgId: string;
@@ -219,7 +219,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
   });
 
   /** Upload rubric source (text/pdf/docx). Body = raw bytes; Content-Type + optional X-Rubric-Name. */
-  app.post("/orgs/:orgId/notebooks/:notebookId/rubrics", async (request, reply) => {
+  app.post("/orgs/:orgId/notebook/:notebookId/rubrics", async (request, reply) => {
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
     await assertNotebookWritable(user, orgId, notebookId);
@@ -280,7 +280,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
   });
 
   /** Create a blank/custom rubric matrix (no source file). Ready to edit + score. */
-  app.post("/orgs/:orgId/notebooks/:notebookId/rubrics/custom", async (request, reply) => {
+  app.post("/orgs/:orgId/notebook/:notebookId/rubric/custom", async (request, reply) => {
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
     await assertNotebookWritable(user, orgId, notebookId);
@@ -308,7 +308,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
   });
 
   /** Edit rubric name / matrix after extract (or for custom rubrics). */
-  app.patch("/orgs/:orgId/notebooks/:notebookId/rubrics/:rubricId", async (request, reply) => {
+  app.patch("/orgs/:orgId/notebook/:notebookId/rubric/:rubricId", async (request, reply) => {
     const user = getUser(request);
     const { orgId, notebookId, rubricId } = request.params as {
       orgId: string;
@@ -342,7 +342,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
 
   /** Soft-delete: move rubric to Trash. */
   app.delete(
-    "/orgs/:orgId/notebooks/:notebookId/rubrics/:rubricId",
+    "/orgs/:orgId/notebook/:notebookId/rubric/:rubricId",
     async (request, reply) => {
       const user = getUser(request);
       const { orgId, notebookId, rubricId } = request.params as {
@@ -365,7 +365,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
   );
 
   app.post(
-    "/orgs/:orgId/notebooks/:notebookId/rubrics/:rubricId/restore",
+    "/orgs/:orgId/notebook/:notebookId/rubric/:rubricId/restore",
     async (request, reply) => {
       const user = getUser(request);
       const { orgId, notebookId, rubricId } = request.params as {
@@ -389,7 +389,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
 
   /** Hard-delete rubric source + metadata doc (empty trash / delete forever). */
   app.delete(
-    "/orgs/:orgId/notebooks/:notebookId/rubrics/:rubricId/permanent",
+    "/orgs/:orgId/notebook/:notebookId/rubric/:rubricId/permanent",
     async (request, reply) => {
       const user = getUser(request);
       const { orgId, notebookId, rubricId } = request.params as {
@@ -419,7 +419,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
    * Returns 202 { jobId }.
    */
   app.post(
-    "/orgs/:orgId/notebooks/:notebookId/rubrics/:rubricId/normalize",
+    "/orgs/:orgId/notebook/:notebookId/rubric/:rubricId/normalize",
     async (request, reply) => {
       const user = getUser(request);
       const { orgId, notebookId, rubricId } = request.params as {
@@ -487,7 +487,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
     }
   );
 
-  app.get("/orgs/:orgId/notebooks/:notebookId/judgments", async (request) => {
+  app.get("/orgs/:orgId/notebook/:notebookId/judgments", async (request) => {
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
     await assertNotebookAccess(user, orgId, notebookId);
@@ -500,7 +500,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
   });
 
   app.get(
-    "/orgs/:orgId/notebooks/:notebookId/judgments/:judgmentId",
+    "/orgs/:orgId/notebook/:notebookId/judgments/:judgmentId",
     async (request, reply) => {
       const user = getUser(request);
       const { orgId, notebookId, judgmentId } = request.params as {
@@ -517,7 +517,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
 
   /** Delete one past grade (judgment). */
   app.delete(
-    "/orgs/:orgId/notebooks/:notebookId/judgments/:judgmentId",
+    "/orgs/:orgId/notebook/:notebookId/judgments/:judgmentId",
     async (request, reply) => {
       const user = getUser(request);
       const { orgId, notebookId, judgmentId } = request.params as {
@@ -535,7 +535,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
   );
 
   /** Clear all past grades for the notebook. */
-  app.delete("/orgs/:orgId/notebooks/:notebookId/judgments", async (request, reply) => {
+  app.delete("/orgs/:orgId/notebook/:notebookId/judgments", async (request, reply) => {
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
     await assertNotebookWritable(user, orgId, notebookId);
@@ -555,7 +555,7 @@ export async function registerJudgeUserRoutes(app: FastifyInstance, storage: Sto
    *
    * inference: `vertex` | `byok` (keys dispatch-only).
    */
-  app.post("/orgs/:orgId/notebooks/:notebookId/judge", async (request, reply) => {
+  app.post("/orgs/:orgId/notebook/:notebookId/judge", async (request, reply) => {
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
     await assertNotebookWritable(user, orgId, notebookId);

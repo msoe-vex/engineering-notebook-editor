@@ -405,7 +405,7 @@ export const generateAllEntriesLatex = (metadata: { entries: Record<string, Entr
   const entries = sortedEntries(metadata.entries).filter(entry => !entry.isTemplate);
 
   return entries
-    .map(entry => `\\input{${prefix}latex/entries/${entry.id}.tex}`)
+    .map(entry => `\\input{${prefix}latex/entry/${entry.id}.tex}`)
     .join("\n") + "\n";
 };
 

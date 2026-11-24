@@ -79,7 +79,7 @@ export async function importNotebookZip(
   const tipTapByEntryId: Record<string, unknown> = {};
   const entryFiles = Object.keys(zip.files).filter(
     (p) =>
-      (p.startsWith("entries/") || p.startsWith("data/entries/")) &&
+      (p.startsWith("entries/") || p.startsWith("data/entry/")) &&
       p.endsWith(".json") &&
       !p.endsWith("/")
   );

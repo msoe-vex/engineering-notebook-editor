@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import { Button, TextField, Alert, GoogleIcon, GitHubIcon, DiscordIcon, LinkedInIcon } from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
-import { useSession, linkSocial, authClient } from "@/lib/auth/client";
+import { useSession, linkSocial, authClient, getDevToken } from "@/lib/auth/client";
 import { showNotification } from "@/components/overlays/Notification";
 
 type Secondary = { email: string; verified: boolean; verifiedAt?: string; addedAt?: string };
@@ -161,7 +161,16 @@ export default function AccountProfilePage() {
     }
   }
 
+  const isDevToken = Boolean(getDevToken());
+
   async function link(provider: "google" | "github" | "discord" | "linkedin") {
+    if (isDevToken) {
+      showNotification(
+        "Social accounts cannot be linked to synthetic dev token accounts (like service-admin). Sign in directly with Google/GitHub to manage linked providers.",
+        "error"
+      );
+      return;
+    }
     try {
       await linkSocial({
         provider,
@@ -334,6 +343,11 @@ export default function AccountProfilePage() {
 
       <section className="space-y-3 border-t border-nb-outline-variant/20 pt-6">
         <h3 className="text-nb-body font-semibold text-nb-on-surface">Linked providers</h3>
+        {isDevToken && (
+          <Alert variant="info">
+            You are signed in with a local synthetic dev token (<strong>{getDevToken()}</strong>). Social account linking requires an authentic Better Auth session. To link social accounts, sign in directly with Google, GitHub, Discord, or LinkedIn.
+          </Alert>
+        )}
         <ul className="space-y-2 text-nb-caption text-nb-on-surface-variant">
           {providers.length ? (
             providers.map((id) => (

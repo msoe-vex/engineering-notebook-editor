@@ -192,7 +192,7 @@ function migrateEntries(
         createdAt: asString(item.createdAt),
         updatedAt: asString(item.updatedAt) || asString(item.createdAt),
         date: asString(item.date),
-        filename: asString(item.filename, `data/entries/${id}.json`),
+        filename: asString(item.filename, `data/entry/${id}.json`),
         order: asNumber(item.order, fallbackOrder),
         ...(item.isTemplate ? { isTemplate: true } : {}),
         resources: isRecord(item.resources)

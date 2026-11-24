@@ -512,7 +512,7 @@ export default function AdminPage() {
                               </Link>
                             )}
                             <Link
-                              href={`/orgs/${org.id}`}
+                              href={`/org/${org.id}`}
                               className="inline-flex h-8 items-center gap-1 rounded-lg bg-nb-surface-low px-2.5 text-xs font-semibold text-nb-on-surface hover:bg-nb-surface-container"
                             >
                               Manage <ArrowUpRight size={12} />

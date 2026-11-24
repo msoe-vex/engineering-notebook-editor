@@ -49,13 +49,13 @@ function HomeInner() {
       {
         id: "open",
         label: "Open",
-        onSelect: () => router.push(`/orgs/${org.id}`),
+        onSelect: () => router.push(`/org/${org.id}`),
       },
       {
         id: "people",
         label: "People",
         icon: <Users size={14} />,
-        onSelect: () => router.push(`/orgs/${org.id}/people`),
+        onSelect: () => router.push(`/org/${org.id}/people`),
       },
     ];
     if (isOrgAdminRole(org.role)) {
@@ -199,7 +199,7 @@ function HomeInner() {
             {recent.map((nb) => (
               <ListRow key={`${nb.orgId}-${nb.id}`} interactive>
                 <Link
-                  href={`/orgs/${nb.orgId}/notebooks/${nb.id}`}
+                  href={`/org/${nb.orgId}/notebook/${nb.id}`}
                   className="flex min-w-0 flex-1 items-center gap-4"
                 >
                   <div className="flex h-10 w-10 items-center justify-center rounded-nb-lg bg-nb-tertiary/10 text-nb-tertiary">
@@ -218,7 +218,7 @@ function HomeInner() {
                     {
                       id: "open",
                       label: "Open",
-                      onSelect: () => router.push(`/orgs/${nb.orgId}/notebooks/${nb.id}`),
+                      onSelect: () => router.push(`/org/${nb.orgId}/notebook/${nb.id}`),
                     },
                     {
                       id: "share",
@@ -249,7 +249,7 @@ function HomeInner() {
               onContextMenu={(e) => onOrgContextMenu(e, org)}
             >
               <Link
-                href={`/orgs/${org.id}`}
+                href={`/org/${org.id}`}
                 className="flex min-w-0 flex-1 cursor-pointer items-center gap-4"
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-nb-lg bg-nb-primary/10 text-nb-primary">
@@ -315,7 +315,7 @@ function HomeInner() {
             .acceptInvite(id)
             .then((res) => {
               refresh();
-              if (res.orgId) window.location.href = `/orgs/${res.orgId}`;
+              if (res.orgId) window.location.href = `/org/${res.orgId}`;
             })
             .catch((err) => setError((err as Error).message))
             .finally(() => setBusy(false));

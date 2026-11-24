@@ -68,7 +68,7 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
   const params = useParams();
   const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
-  const notebookWorkspace = /\/orgs\/[^/]+\/notebooks\/[^/]+/.test(pathname || "");
+  const notebookWorkspace = /\/org\/[^/]+\/notebook\/[^/]+/.test(pathname || "") || /\/orgs\/[^/]+\/notebooks\/[^/]+/.test(pathname || "");
   const narrow = useNarrowViewport();
   const onAdmin = pathname?.startsWith("/admin");
   const onAccount = pathname?.startsWith("/account");
@@ -540,7 +540,7 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
     if (ws) {
       const items: Crumb[] = [{ label: "Home", href: "/" }];
       if (ws.orgName) {
-        items.push({ label: ws.orgName, href: `/orgs/${ws.orgId}` });
+        items.push({ label: ws.orgName, href: `/org/${ws.orgId}` });
       }
       if (ws.notebookName) {
         items.push({ label: ws.notebookName });
@@ -551,10 +551,10 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
     const items: Crumb[] = [{ label: "Home", href: "/" }];
     if (orgId && orgName) {
       const onOrgRoot =
-        pathname === `/orgs/${orgId}` || pathname === `/orgs/${orgId}/`;
+        pathname === `/org/${orgId}` || pathname === `/org/${orgId}/`;
       items.push({
         label: orgName,
-        href: onOrgRoot ? undefined : `/orgs/${orgId}`,
+        href: onOrgRoot ? undefined : `/org/${orgId}`,
       });
     }
     if (onAdmin) items.push({ label: "Admin" });

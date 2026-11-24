@@ -13,22 +13,22 @@ export function selectionFromJudgePath(
   if (pathname === prefix || pathname === `${prefix}/`) {
     return { kind: "home-grades" };
   }
-  if (pathname === `${prefix}/grades` || pathname === `${prefix}/grades/`) {
+  if (pathname === `${prefix}/grades` || pathname === `${prefix}/grade/`) {
     return { kind: "home-grades" };
   }
-  if (pathname === `${prefix}/rubrics` || pathname === `${prefix}/rubrics/`) {
+  if (pathname === `${prefix}/rubrics` || pathname === `${prefix}/rubric/`) {
     return { kind: "home-rubrics" };
   }
 
   const rubricMatch = pathname.match(
-    new RegExp(`^${escapeRegExp(prefix)}/rubrics/([^/]+)/?$`)
+    new RegExp(`^${escapeRegExp(prefix)}/rubric/([^/]+)/?$`)
   );
   if (rubricMatch?.[1]) {
     return { kind: "rubric", id: decodeURIComponent(rubricMatch[1]) };
   }
 
   const gradeMatch = pathname.match(
-    new RegExp(`^${escapeRegExp(prefix)}/grades/([^/]+)/?$`)
+    new RegExp(`^${escapeRegExp(prefix)}/grade/([^/]+)/?$`)
   );
   if (gradeMatch?.[1]) {
     return { kind: "grade", id: decodeURIComponent(gradeMatch[1]) };
@@ -48,9 +48,9 @@ export function pathForJudgeSelection(
     case "home-rubrics":
       return `${prefix}/rubrics`;
     case "rubric":
-      return `${prefix}/rubrics/${selection.id}`;
+      return `${prefix}/rubric/${selection.id}`;
     case "grade":
-      return `${prefix}/grades/${selection.id}`;
+      return `${prefix}/grade/${selection.id}`;
   }
 }
 

@@ -189,8 +189,8 @@ export type NotebookMemberSummary = {
 
 export const cloudApi = {
   bootstrap: (body?: { displayName?: string }) =>
-    coreFetch("/users/me/bootstrap", { method: "POST", body: JSON.stringify(body || {}) }),
-  me: () => coreFetch("/users/me"),
+    coreFetch("/user/me/bootstrap", { method: "POST", body: JSON.stringify(body || {}) }),
+  me: () => coreFetch("/user/me"),
   patchMe: (body: {
     displayName?: string;
     preferences?: {
@@ -205,33 +205,33 @@ export const cloudApi = {
       lastOrgId?: string;
     };
   }) =>
-    coreFetch("/users/me", {
+    coreFetch("/user/me", {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
   addSecondaryEmail: (email: string) =>
     coreFetch<{ secondaryEmails: Array<{ email: string; verified: boolean }> }>(
-      "/users/me/secondary-emails",
+      "/user/me/secondary-emails",
       { method: "POST", body: JSON.stringify({ email }) }
     ),
   verifySecondaryEmail: (token: string) =>
     coreFetch<{ secondaryEmails: Array<{ email: string; verified: boolean }> }>(
-      "/users/me/secondary-emails/verify",
+      "/user/me/secondary-emails/verify",
       { method: "POST", body: JSON.stringify({ token }) }
     ),
   removeSecondaryEmail: (email: string) =>
     coreFetch<{ secondaryEmails: Array<{ email: string; verified: boolean }> }>(
-      `/users/me/secondary-emails/${encodeURIComponent(email)}`,
+      `/user/me/secondary-emails/${encodeURIComponent(email)}`,
       { method: "DELETE" }
     ),
 
-  listOrgs: () => coreFetch<OrgSummary[]>("/orgs"),
+  listOrgs: () => coreFetch<OrgSummary[]>("/org"),
   createOrg: (name: string) =>
-    coreFetch<OrgSummary>("/orgs", {
+    coreFetch<OrgSummary>("/org", {
       method: "POST",
       body: JSON.stringify({ name }),
     }),
-  getOrg: (orgId: string) => coreFetch<OrgSummary>(`/orgs/${orgId}`),
+  getOrg: (orgId: string) => coreFetch<OrgSummary>(`/org/${orgId}`),
   patchOrg: (
     orgId: string,
     body: {
@@ -240,27 +240,27 @@ export const cloudApi = {
       publicPage?: OrgSummary["publicPage"];
     }
   ) =>
-    coreFetch<OrgSummary>(`/orgs/${orgId}`, {
+    coreFetch<OrgSummary>(`/org/${orgId}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
   deleteOrg: (orgId: string) =>
-    coreFetch<{ ok: boolean }>(`/orgs/${orgId}`, { method: "DELETE" }),
+    coreFetch<{ ok: boolean }>(`/org/${orgId}`, { method: "DELETE" }),
 
   listOrgCatalog: (orgId: string, section: OrgCatalogSection) =>
-    coreFetch<OrgCatalogItem[]>(`/orgs/${orgId}/${section}`),
+    coreFetch<OrgCatalogItem[]>(`/org/${orgId}/${section}`),
   upsertOrgCatalogItem: (
     orgId: string,
     section: OrgCatalogSection,
     itemId: string,
     body: Record<string, unknown>
   ) =>
-    coreFetch<OrgCatalogItem>(`/orgs/${orgId}/${section}/${itemId}`, {
+    coreFetch<OrgCatalogItem>(`/org/${orgId}/${section}/${itemId}`, {
       method: "PUT",
       body: JSON.stringify(body),
     }),
   deleteOrgCatalogItem: (orgId: string, section: OrgCatalogSection, itemId: string) =>
-    coreFetch<{ ok: boolean }>(`/orgs/${orgId}/${section}/${itemId}`, { method: "DELETE" }),
+    coreFetch<{ ok: boolean }>(`/org/${orgId}/${section}/${itemId}`, { method: "DELETE" }),
 
   getPublicOrg: (slug: string) =>
     fetch(`${coreBase()}/public/o/${encodeURIComponent(slug)}`).then(async (r) => {
@@ -302,9 +302,9 @@ export const cloudApi = {
       return r.json() as Promise<{ url: string }>;
     }),
 
-  listMembers: (orgId: string) => coreFetch<MemberSummary[]>(`/orgs/${orgId}/members`),
+  listMembers: (orgId: string) => coreFetch<MemberSummary[]>(`/org/${orgId}/members`),
   addMember: (orgId: string, body: { uid: string; email?: string; role?: string }) =>
-    coreFetch<MemberSummary>(`/orgs/${orgId}/members`, {
+    coreFetch<MemberSummary>(`/org/${orgId}/members`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
@@ -320,81 +320,81 @@ export const cloudApi = {
       public?: boolean;
     }
   ) =>
-    coreFetch<MemberSummary>(`/orgs/${orgId}/members/${uid}`, {
+    coreFetch<MemberSummary>(`/org/${orgId}/members/${uid}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
   removeMember: (orgId: string, uid: string) =>
-    coreFetch<{ ok: boolean }>(`/orgs/${orgId}/members/${uid}`, { method: "DELETE" }),
+    coreFetch<{ ok: boolean }>(`/org/${orgId}/members/${uid}`, { method: "DELETE" }),
 
-  listInvites: (orgId: string) => coreFetch<InviteSummary[]>(`/orgs/${orgId}/invites`),
+  listInvites: (orgId: string) => coreFetch<InviteSummary[]>(`/org/${orgId}/invites`),
   createInvite: (
     orgId: string,
     body: { email?: string; role?: string; expiresInDays?: number }
   ) =>
-    coreFetch<InviteSummary>(`/orgs/${orgId}/invites`, {
+    coreFetch<InviteSummary>(`/org/${orgId}/invites`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
   deleteInvite: (orgId: string, inviteId: string) =>
-    coreFetch<{ ok: boolean }>(`/orgs/${orgId}/invites/${inviteId}`, { method: "DELETE" }),
+    coreFetch<{ ok: boolean }>(`/org/${orgId}/invites/${inviteId}`, { method: "DELETE" }),
   acceptInvite: (inviteId: string) =>
     coreFetch<{ orgId: string }>(`/invites/${inviteId}/accept`, {
       method: "POST",
       body: "{}",
     }),
 
-  listTeams: (orgId: string) => coreFetch<TeamSummary[]>(`/orgs/${orgId}/teams`),
+  listTeams: (orgId: string) => coreFetch<TeamSummary[]>(`/org/${orgId}/teams`),
   createTeam: (orgId: string, name: string) =>
-    coreFetch<TeamSummary>(`/orgs/${orgId}/teams`, {
+    coreFetch<TeamSummary>(`/org/${orgId}/teams`, {
       method: "POST",
       body: JSON.stringify({ name }),
     }),
   getTeam: (orgId: string, teamId: string) =>
-    coreFetch<TeamSummary>(`/orgs/${orgId}/teams/${teamId}`),
+    coreFetch<TeamSummary>(`/org/${orgId}/teams/${teamId}`),
   patchTeam: (orgId: string, teamId: string, body: { name: string }) =>
-    coreFetch<TeamSummary>(`/orgs/${orgId}/teams/${teamId}`, {
+    coreFetch<TeamSummary>(`/org/${orgId}/teams/${teamId}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
   deleteTeam: (orgId: string, teamId: string) =>
-    coreFetch<{ ok: boolean }>(`/orgs/${orgId}/teams/${teamId}`, { method: "DELETE" }),
+    coreFetch<{ ok: boolean }>(`/org/${orgId}/teams/${teamId}`, { method: "DELETE" }),
   listTeamMembers: (orgId: string, teamId: string) =>
-    coreFetch<TeamMemberSummary[]>(`/orgs/${orgId}/teams/${teamId}/members`),
+    coreFetch<TeamMemberSummary[]>(`/org/${orgId}/teams/${teamId}/members`),
   addTeamMember: (orgId: string, teamId: string, uid: string) =>
-    coreFetch<TeamMemberSummary>(`/orgs/${orgId}/teams/${teamId}/members/${uid}`, {
+    coreFetch<TeamMemberSummary>(`/org/${orgId}/teams/${teamId}/members/${uid}`, {
       method: "PUT",
       body: "{}",
     }),
   removeTeamMember: (orgId: string, teamId: string, uid: string) =>
-    coreFetch<{ ok: boolean }>(`/orgs/${orgId}/teams/${teamId}/members/${uid}`, {
+    coreFetch<{ ok: boolean }>(`/org/${orgId}/teams/${teamId}/members/${uid}`, {
       method: "DELETE",
     }),
 
-  listNotebooks: (orgId: string) => coreFetch<CloudNotebookSummary[]>(`/orgs/${orgId}/notebooks`),
+  listNotebooks: (orgId: string) => coreFetch<CloudNotebookSummary[]>(`/org/${orgId}/notebooks`),
   createNotebook: (
     orgId: string,
     body: string | { name?: string; title?: string; subtitle?: string; access?: NotebookAccess }
   ) =>
-    coreFetch<CloudNotebookSummary>(`/orgs/${orgId}/notebooks`, {
+    coreFetch<CloudNotebookSummary>(`/org/${orgId}/notebooks`, {
       method: "POST",
       body: JSON.stringify(typeof body === "string" ? { name: body } : body),
     }),
   getNotebook: (orgId: string, notebookId: string) =>
-    coreFetch<CloudNotebookSummary>(`/orgs/${orgId}/notebooks/${notebookId}`),
+    coreFetch<CloudNotebookSummary>(`/org/${orgId}/notebook/${notebookId}`),
   patchNotebook: (orgId: string, notebookId: string, body: unknown) =>
-    coreFetch<CloudNotebookSummary>(`/orgs/${orgId}/notebooks/${notebookId}`, {
+    coreFetch<CloudNotebookSummary>(`/org/${orgId}/notebook/${notebookId}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
   deleteNotebook: (orgId: string, notebookId: string) =>
-    coreFetch<{ ok: boolean }>(`/orgs/${orgId}/notebooks/${notebookId}`, { method: "DELETE" }),
+    coreFetch<{ ok: boolean }>(`/org/${orgId}/notebook/${notebookId}`, { method: "DELETE" }),
   archiveNotebook: (orgId: string, notebookId: string) =>
-    coreFetch<CloudNotebookSummary>(`/orgs/${orgId}/notebooks/${notebookId}/archive`, {
+    coreFetch<CloudNotebookSummary>(`/org/${orgId}/notebook/${notebookId}/archive`, {
       method: "POST",
     }),
   unarchiveNotebook: (orgId: string, notebookId: string) =>
-    coreFetch<CloudNotebookSummary>(`/orgs/${orgId}/notebooks/${notebookId}/unarchive`, {
+    coreFetch<CloudNotebookSummary>(`/org/${orgId}/notebook/${notebookId}/unarchive`, {
       method: "POST",
     }),
 
@@ -407,7 +407,7 @@ export const cloudApi = {
       id: string;
       folder: { name: string; parentId: string | null; order: number };
       folders: Record<string, { name: string; parentId: string | null; order: number }>;
-    }>(`/orgs/${orgId}/notebooks/${notebookId}/folders`, {
+    }>(`/org/${orgId}/notebook/${notebookId}/folders`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
@@ -421,7 +421,7 @@ export const cloudApi = {
       id: string;
       folder: { name: string; parentId: string | null; order: number };
       folders: Record<string, { name: string; parentId: string | null; order: number }>;
-    }>(`/orgs/${orgId}/notebooks/${notebookId}/folders/${folderId}`, {
+    }>(`/org/${orgId}/notebook/${notebookId}/folders/${folderId}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
@@ -429,12 +429,12 @@ export const cloudApi = {
     coreFetch<{
       ok: boolean;
       folders: Record<string, { name: string; parentId: string | null; order: number }>;
-    }>(`/orgs/${orgId}/notebooks/${notebookId}/folders/${folderId}`, { method: "DELETE" }),
+    }>(`/org/${orgId}/notebook/${notebookId}/folders/${folderId}`, { method: "DELETE" }),
 
   listNotebookMembers: (orgId: string, notebookId: string, opts?: { trashed?: boolean }) => {
     const q = opts?.trashed ? "?trashed=1" : "";
     return coreFetch<NotebookMemberSummary[]>(
-      `/orgs/${orgId}/notebooks/${notebookId}/members${q}`
+      `/org/${orgId}/notebook/${notebookId}/members${q}`
     );
   },
   createNotebookMember: (
@@ -448,7 +448,7 @@ export const cloudApi = {
       orgMemberUid?: string;
     }
   ) =>
-    coreFetch<NotebookMemberSummary>(`/orgs/${orgId}/notebooks/${notebookId}/members`, {
+    coreFetch<NotebookMemberSummary>(`/org/${orgId}/notebook/${notebookId}/members`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
@@ -459,22 +459,22 @@ export const cloudApi = {
     body: Partial<NotebookMemberSummary>
   ) =>
     coreFetch<NotebookMemberSummary>(
-      `/orgs/${orgId}/notebooks/${notebookId}/members/${memberId}`,
+      `/org/${orgId}/notebook/${notebookId}/members/${memberId}`,
       { method: "PATCH", body: JSON.stringify(body) }
     ),
   deleteNotebookMember: (orgId: string, notebookId: string, memberId: string) =>
     coreFetch<{ ok: boolean; deletedAt?: string }>(
-      `/orgs/${orgId}/notebooks/${notebookId}/members/${memberId}`,
+      `/org/${orgId}/notebook/${notebookId}/members/${memberId}`,
       { method: "DELETE" }
     ),
   restoreNotebookMember: (orgId: string, notebookId: string, memberId: string) =>
     coreFetch<NotebookMemberSummary>(
-      `/orgs/${orgId}/notebooks/${notebookId}/members/${memberId}/restore`,
+      `/org/${orgId}/notebook/${notebookId}/members/${memberId}/restore`,
       { method: "POST" }
     ),
   purgeNotebookMember: (orgId: string, notebookId: string, memberId: string) =>
     coreFetch<{ ok: boolean }>(
-      `/orgs/${orgId}/notebooks/${notebookId}/members/${memberId}/permanent`,
+      `/org/${orgId}/notebook/${notebookId}/members/${memberId}/permanent`,
       { method: "DELETE" }
     ),
 
@@ -499,7 +499,7 @@ export const cloudApi = {
           deletedAt?: string | null;
         }
       >;
-    }>(`/orgs/${orgId}/notebooks/${notebookId}/entries`),
+    }>(`/org/${orgId}/notebook/${notebookId}/entries`),
 
   /** Server search: metadata always; set includeBody to scan TipTap text (capped). */
   searchEntries: (
@@ -522,7 +522,7 @@ export const cloudApi = {
         match: "meta" | "body" | "both";
         excerpt?: string;
       }>;
-    }>(`/orgs/${orgId}/notebooks/${notebookId}/entries/search?${params.toString()}`);
+    }>(`/org/${orgId}/notebook/${notebookId}/entry/search?${params.toString()}`);
   },
 
   /** Sibling reindex: explorer → explorerOrder; day → order (same-date tiebreaker). */
@@ -534,7 +534,7 @@ export const cloudApi = {
       | { mode: "day"; orderedIds: string[]; date?: string }
   ) =>
     coreFetch<{ ok: boolean; mode: string; orderedIds: string[] }>(
-      `/orgs/${orgId}/notebooks/${notebookId}/entries/reorder`,
+      `/org/${orgId}/notebook/${notebookId}/entry/reorder`,
       { method: "POST", body: JSON.stringify(body) }
     ),
   createEntry: (
@@ -552,36 +552,36 @@ export const cloudApi = {
       isTemplate?: boolean;
     }
   ) =>
-    coreFetch<{ id: string }>(`/orgs/${orgId}/notebooks/${notebookId}/entries`, {
+    coreFetch<{ id: string }>(`/org/${orgId}/notebook/${notebookId}/entries`, {
       method: "POST",
       body: JSON.stringify(body ?? {}),
     }),
   getEntryContent: (orgId: string, notebookId: string, entryId: string) =>
-    coreFetch<unknown>(`/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}/content`),
+    coreFetch<unknown>(`/org/${orgId}/notebook/${notebookId}/entry/${entryId}/content`),
   putEntryContent: (orgId: string, notebookId: string, entryId: string, content: unknown) =>
-    coreFetch(`/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}/content`, {
+    coreFetch(`/org/${orgId}/notebook/${notebookId}/entry/${entryId}/content`, {
       method: "PUT",
       body: JSON.stringify(content),
     }),
   patchEntry: (orgId: string, notebookId: string, entryId: string, body: unknown) =>
-    coreFetch(`/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}`, {
+    coreFetch(`/org/${orgId}/notebook/${notebookId}/entry/${entryId}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
   /** Soft-delete: move entry to Trash (content retained until permanent purge). */
   deleteEntry: (orgId: string, notebookId: string, entryId: string) =>
     coreFetch<{ ok: boolean; deletedAt?: string }>(
-      `/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}`,
+      `/org/${orgId}/notebook/${notebookId}/entry/${entryId}`,
       { method: "DELETE" }
     ),
   restoreEntry: (orgId: string, notebookId: string, entryId: string) =>
-    coreFetch(`/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}/restore`, {
+    coreFetch(`/org/${orgId}/notebook/${notebookId}/entry/${entryId}/restore`, {
       method: "POST",
     }),
   /** Hard-delete TipTap/Yjs + metadata (empty trash / delete forever). */
   purgeEntry: (orgId: string, notebookId: string, entryId: string) =>
     coreFetch<{ ok: boolean }>(
-      `/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}/permanent`,
+      `/org/${orgId}/notebook/${notebookId}/entry/${entryId}/permanent`,
       { method: "DELETE" }
     ),
 
@@ -598,7 +598,7 @@ export const cloudApi = {
         resolvedBy?: string | null;
         anchorQuote?: string;
       }>
-    >(`/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}/comments`),
+    >(`/org/${orgId}/notebook/${notebookId}/entry/${entryId}/comments`),
   createEntryComment: (
     orgId: string,
     notebookId: string,
@@ -606,7 +606,7 @@ export const cloudApi = {
     body: { body: string; anchorQuote?: string; id?: string; mentionedUids?: string[] }
   ) =>
     coreFetch<{ id: string; body: string; createdAt: string }>(
-      `/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}/comments`,
+      `/org/${orgId}/notebook/${notebookId}/entry/${entryId}/comments`,
       { method: "POST", body: JSON.stringify(body) }
     ),
   patchEntryComment: (
@@ -617,7 +617,7 @@ export const cloudApi = {
     body: { body?: string; resolved?: boolean }
   ) =>
     coreFetch(
-      `/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}/comments/${commentId}`,
+      `/org/${orgId}/notebook/${notebookId}/entry/${entryId}/comments/${commentId}`,
       { method: "PATCH", body: JSON.stringify(body) }
     ),
   deleteEntryComment: (
@@ -627,27 +627,27 @@ export const cloudApi = {
     commentId: string
   ) =>
     coreFetch<{ ok: boolean }>(
-      `/orgs/${orgId}/notebooks/${notebookId}/entries/${entryId}/comments/${commentId}`,
+      `/org/${orgId}/notebook/${notebookId}/entry/${entryId}/comments/${commentId}`,
       { method: "DELETE" }
     ),
 
   listAssets: (orgId: string, notebookId: string) =>
-    coreFetch<AssetSummary[]>(`/orgs/${orgId}/notebooks/${notebookId}/assets`),
+    coreFetch<AssetSummary[]>(`/org/${orgId}/notebook/${notebookId}/assets`),
   createAsset: (
     orgId: string,
     notebookId: string,
     body: { contentType?: string; byteSize?: number; usedByEntryId?: string }
   ) =>
     coreFetch<{ asset: AssetSummary; uploadPath: string; uploadUrl: string }>(
-      `/orgs/${orgId}/notebooks/${notebookId}/assets`,
+      `/org/${orgId}/notebook/${notebookId}/assets`,
       { method: "POST", body: JSON.stringify(body) }
     ),
   getAssetUrl: (orgId: string, notebookId: string, assetId: string) =>
     coreFetch<{ url: string; asset: AssetSummary }>(
-      `/orgs/${orgId}/notebooks/${notebookId}/assets/${assetId}/url`
+      `/org/${orgId}/notebook/${notebookId}/assets/${assetId}/url`
     ),
   deleteAsset: (orgId: string, notebookId: string, assetId: string) =>
-    coreFetch<{ ok: boolean }>(`/orgs/${orgId}/notebooks/${notebookId}/assets/${assetId}`, {
+    coreFetch<{ ok: boolean }>(`/org/${orgId}/notebook/${notebookId}/assets/${assetId}`, {
       method: "DELETE",
     }),
   /** Authenticated upload through Core (avoids browser → fake-gcs CORS / wrong host). */
@@ -669,7 +669,7 @@ export const cloudApi = {
     const headers: Record<string, string> = { "content-type": contentType };
     if (token) headers.authorization = `Bearer ${token}`;
     const res = await fetch(
-      `${coreBase()}/orgs/${orgId}/notebooks/${notebookId}/assets/${assetId}/content`,
+      `${coreBase()}/org/${orgId}/notebook/${notebookId}/assets/${assetId}/content`,
       { method: "PUT", headers, body }
     );
     if (!res.ok) {
@@ -681,16 +681,16 @@ export const cloudApi = {
     }
   },
 
-  listOrgAssets: (orgId: string) => coreFetch<AssetSummary[]>(`/orgs/${orgId}/assets`),
+  listOrgAssets: (orgId: string) => coreFetch<AssetSummary[]>(`/org/${orgId}/assets`),
   createOrgAsset: (orgId: string, body: { contentType?: string; byteSize?: number }) =>
     coreFetch<{ asset: AssetSummary; uploadPath: string; uploadUrl: string }>(
-      `/orgs/${orgId}/assets`,
+      `/org/${orgId}/assets`,
       { method: "POST", body: JSON.stringify(body) }
     ),
   getOrgAssetUrl: (orgId: string, assetId: string) =>
-    coreFetch<{ url: string; asset: AssetSummary }>(`/orgs/${orgId}/assets/${assetId}/url`),
+    coreFetch<{ url: string; asset: AssetSummary }>(`/org/${orgId}/assets/${assetId}/url`),
   deleteOrgAsset: (orgId: string, assetId: string) =>
-    coreFetch<{ ok: boolean }>(`/orgs/${orgId}/assets/${assetId}`, { method: "DELETE" }),
+    coreFetch<{ ok: boolean }>(`/org/${orgId}/assets/${assetId}`, { method: "DELETE" }),
   async uploadOrgAssetContent(
     orgId: string,
     assetId: string,
@@ -707,7 +707,7 @@ export const cloudApi = {
     const token = await getIdToken();
     const headers: Record<string, string> = { "content-type": contentType };
     if (token) headers.authorization = `Bearer ${token}`;
-    const res = await fetch(`${coreBase()}/orgs/${orgId}/assets/${assetId}/content`, {
+    const res = await fetch(`${coreBase()}/org/${orgId}/assets/${assetId}/content`, {
       method: "PUT",
       headers,
       body,
@@ -731,7 +731,7 @@ export const cloudApi = {
         ? uploadUrl
         : uploadUrl.slice(coreBase().length);
       const parts = path.split("/");
-      // /orgs/:orgId/notebooks/:notebookId/assets/:assetId/content
+      // /org/:orgId/notebook/:notebookId/assets/:assetId/content
       return this.uploadAssetContent(parts[2], parts[4], parts[6], bytes, contentType);
     }
     assertUploadSize(byteLengthOf(bytes), "File");
@@ -760,7 +760,7 @@ export const cloudApi = {
         createdAt?: string;
         updatedAt?: string;
       }>
-    >("/api/admin/users"),
+    >("/api/admin/user"),
   adminMetrics: () => coreFetch<Record<string, number>>("/api/admin/metrics"),
   adminOrgs: () =>
     coreFetch<
@@ -774,11 +774,11 @@ export const cloudApi = {
         notebooksCount?: number;
         publicPage?: { visibility?: string };
       }>
-    >("/api/admin/orgs"),
+    >("/api/admin/org"),
   patchAdminUser: (uid: string, body: unknown) =>
-    coreFetch(`/api/admin/users/${uid}`, { method: "PATCH", body: JSON.stringify(body) }),
+    coreFetch(`/api/admin/user/${uid}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteAdminUser: (uid: string) =>
-    coreFetch<{ status: string; uid: string }>(`/api/admin/users/${uid}`, { method: "DELETE" }),
+    coreFetch<{ status: string; uid: string }>(`/api/admin/user/${uid}`, { method: "DELETE" }),
   async uploadExportPdf(
     orgId: string,
     notebookId: string,
@@ -787,7 +787,7 @@ export const cloudApi = {
   ) {
     assertUploadSize(pdf.byteLength, "Compiled PDF");
     const res = await fetch(
-      `${coreBase()}/orgs/${orgId}/notebooks/${notebookId}/exports/${exportId}/content`,
+      `${coreBase()}/org/${orgId}/notebook/${notebookId}/exports/${exportId}/content`,
       {
         method: "PUT",
         headers: {
@@ -818,14 +818,14 @@ export const cloudApi = {
       publicExportId?: string | null;
       publicAccess?: "off" | "unlisted" | "public";
       publicKey?: string | null;
-    }>(`/orgs/${orgId}/notebooks/${notebookId}/exports`),
+    }>(`/org/${orgId}/notebook/${notebookId}/exports`),
   getExportPdfUrl: (orgId: string, notebookId: string, exportId = "latest") =>
     coreFetch<{ url: string; exportId: string }>(
-      `/orgs/${orgId}/notebooks/${notebookId}/exports/${exportId}/url`
+      `/org/${orgId}/notebook/${notebookId}/exports/${exportId}/url`
     ),
   downloadExportPdfBlob: async (orgId: string, notebookId: string, exportId = "latest"): Promise<Blob> => {
     const res = await fetch(
-      `${coreBase()}/orgs/${orgId}/notebooks/${notebookId}/exports/${exportId}/pdf`,
+      `${coreBase()}/org/${orgId}/notebook/${notebookId}/exports/${exportId}/pdf`,
       {
         headers: await authHeaders(false),
       }
@@ -839,7 +839,7 @@ export const cloudApi = {
       latestExportId: string | null;
       publicExportId: string | null;
       publicAccess: "off" | "unlisted" | "public";
-    }>(`/orgs/${orgId}/notebooks/${notebookId}/exports/${exportId}`, {
+    }>(`/org/${orgId}/notebook/${notebookId}/exports/${exportId}`, {
       method: "DELETE",
     }),
   saveCompileExport: (
@@ -848,7 +848,7 @@ export const cloudApi = {
     body?: { label?: string | null }
   ) =>
     coreFetch<{ ok: boolean; export: CompileExportSummary }>(
-      `/orgs/${orgId}/notebooks/${notebookId}/exports/save`,
+      `/org/${orgId}/notebook/${notebookId}/exports/save`,
       { method: "POST", body: JSON.stringify(body || {}) }
     ),
   patchCompileExport: (
@@ -858,14 +858,14 @@ export const cloudApi = {
     body: { label?: string | null }
   ) =>
     coreFetch<CompileExportSummary>(
-      `/orgs/${orgId}/notebooks/${notebookId}/exports/${exportId}`,
+      `/org/${orgId}/notebook/${notebookId}/exports/${exportId}`,
       { method: "PATCH", body: JSON.stringify(body) }
     ),
 
   listShareLinks: (orgId: string, notebookId: string, opts?: { includeRevoked?: boolean }) => {
     const q = opts?.includeRevoked ? "?includeRevoked=1" : "";
     return coreFetch<{ links: NotebookShareLinkSummary[] }>(
-      `/orgs/${orgId}/notebooks/${notebookId}/share-links${q}`
+      `/org/${orgId}/notebook/${notebookId}/share-links${q}`
     );
   },
   createShareLink: (
@@ -873,7 +873,7 @@ export const cloudApi = {
     notebookId: string,
     body: { name: string; exportId: string; visibility?: "public" | "unlisted" }
   ) =>
-    coreFetch<NotebookShareLinkSummary>(`/orgs/${orgId}/notebooks/${notebookId}/share-links`, {
+    coreFetch<NotebookShareLinkSummary>(`/org/${orgId}/notebook/${notebookId}/share-links`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
@@ -884,12 +884,12 @@ export const cloudApi = {
     body: { name?: string; exportId?: string; visibility?: "public" | "unlisted" }
   ) =>
     coreFetch<NotebookShareLinkSummary>(
-      `/orgs/${orgId}/notebooks/${notebookId}/share-links/${linkId}`,
+      `/org/${orgId}/notebook/${notebookId}/share-links/${linkId}`,
       { method: "PATCH", body: JSON.stringify(body) }
     ),
   revokeShareLink: (orgId: string, notebookId: string, linkId: string) =>
     coreFetch<{ ok: boolean; link: NotebookShareLinkSummary }>(
-      `/orgs/${orgId}/notebooks/${notebookId}/share-links/${linkId}`,
+      `/org/${orgId}/notebook/${notebookId}/share-links/${linkId}`,
       { method: "DELETE" }
     ),
 
@@ -903,7 +903,7 @@ export const cloudApi = {
     orgId: string,
     notebookId: string
   ): Promise<{ jobId: string; inFlight?: boolean }> {
-    const url = `${coreBase()}/orgs/${orgId}/notebooks/${notebookId}/compile`;
+    const url = `${coreBase()}/org/${orgId}/notebook/${notebookId}/compile`;
     let res: Response;
     try {
       res = await fetch(url, {
@@ -941,7 +941,7 @@ export const cloudApi = {
 
   getJob: (orgId: string, notebookId: string, jobId: string) =>
     coreFetch<{ job: Record<string, unknown> }>(
-      `/orgs/${orgId}/notebooks/${notebookId}/jobs/${jobId}`
+      `/org/${orgId}/notebook/${notebookId}/jobs/${jobId}`
     ),
 
   startJob: (
@@ -950,7 +950,7 @@ export const cloudApi = {
     body: { type: string; resourceKey?: string; payload?: Record<string, unknown> }
   ) =>
     coreFetch<{ ok: boolean; jobId: string; job?: Record<string, unknown> }>(
-      `/orgs/${orgId}/notebooks/${notebookId}/jobs`,
+      `/org/${orgId}/notebook/${notebookId}/jobs`,
       { method: "POST", body: JSON.stringify(body) }
     ),
 
@@ -962,27 +962,27 @@ export const cloudApi = {
 
   listRubrics: (orgId: string, notebookId: string, opts?: { trashed?: boolean }) =>
     coreFetch<RubricRecord[]>(
-      `/orgs/${orgId}/notebooks/${notebookId}/rubrics${opts?.trashed ? "?trashed=1" : ""}`
+      `/org/${orgId}/notebook/${notebookId}/rubrics${opts?.trashed ? "?trashed=1" : ""}`
     ),
 
   getRubric: (orgId: string, notebookId: string, rubricId: string) =>
-    coreFetch<RubricRecord>(`/orgs/${orgId}/notebooks/${notebookId}/rubrics/${rubricId}`),
+    coreFetch<RubricRecord>(`/org/${orgId}/notebook/${notebookId}/rubric/${rubricId}`),
 
   trashRubric: (orgId: string, notebookId: string, rubricId: string) =>
     coreFetch<{ ok: boolean; deletedAt?: string }>(
-      `/orgs/${orgId}/notebooks/${notebookId}/rubrics/${rubricId}`,
+      `/org/${orgId}/notebook/${notebookId}/rubric/${rubricId}`,
       { method: "DELETE" }
     ),
 
   restoreRubric: (orgId: string, notebookId: string, rubricId: string) =>
     coreFetch<RubricRecord>(
-      `/orgs/${orgId}/notebooks/${notebookId}/rubrics/${rubricId}/restore`,
+      `/org/${orgId}/notebook/${notebookId}/rubric/${rubricId}/restore`,
       { method: "POST" }
     ),
 
   purgeRubric: (orgId: string, notebookId: string, rubricId: string) =>
     coreFetch<{ ok: boolean }>(
-      `/orgs/${orgId}/notebooks/${notebookId}/rubrics/${rubricId}/permanent`,
+      `/org/${orgId}/notebook/${notebookId}/rubric/${rubricId}/permanent`,
       { method: "DELETE" }
     ),
 
@@ -991,7 +991,7 @@ export const cloudApi = {
     notebookId: string,
     body?: { name?: string; matrix?: RubricMatrixPayload }
   ) =>
-    coreFetch<RubricRecord>(`/orgs/${orgId}/notebooks/${notebookId}/rubrics/custom`, {
+    coreFetch<RubricRecord>(`/org/${orgId}/notebook/${notebookId}/rubric/custom`, {
       method: "POST",
       body: JSON.stringify(body || {}),
     }),
@@ -1002,7 +1002,7 @@ export const cloudApi = {
     rubricId: string,
     body: { name?: string; matrix?: RubricMatrixPayload }
   ) =>
-    coreFetch<RubricRecord>(`/orgs/${orgId}/notebooks/${notebookId}/rubrics/${rubricId}`, {
+    coreFetch<RubricRecord>(`/org/${orgId}/notebook/${notebookId}/rubric/${rubricId}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
@@ -1025,7 +1025,7 @@ export const cloudApi = {
     let res: Response;
     try {
       res = await fetch(
-        `${coreBase()}/orgs/${orgId}/notebooks/${notebookId}/rubrics${q}`,
+        `${coreBase()}/org/${orgId}/notebook/${notebookId}/rubrics${q}`,
         { method: "POST", headers, body: file }
       );
     } catch (err) {
@@ -1047,7 +1047,7 @@ export const cloudApi = {
       byok?: { provider: "openai" | "anthropic" | "gemini"; apiKey: string; model: string };
     }
   ): Promise<{ jobId: string; rubricId: string; inFlight?: boolean }> {
-    const url = `${coreBase()}/orgs/${orgId}/notebooks/${notebookId}/rubrics/${rubricId}/normalize`;
+    const url = `${coreBase()}/org/${orgId}/notebook/${notebookId}/rubric/${rubricId}/normalize`;
     const res = await fetch(url, {
       method: "POST",
       headers: await authHeaders(true),
@@ -1106,22 +1106,22 @@ export const cloudApi = {
   },
 
   listJudgments: (orgId: string, notebookId: string) =>
-    coreFetch<JudgmentRecord[]>(`/orgs/${orgId}/notebooks/${notebookId}/judgments`),
+    coreFetch<JudgmentRecord[]>(`/org/${orgId}/notebook/${notebookId}/judgments`),
 
   getJudgment: (orgId: string, notebookId: string, judgmentId: string) =>
     coreFetch<JudgmentRecord>(
-      `/orgs/${orgId}/notebooks/${notebookId}/judgments/${judgmentId}`
+      `/org/${orgId}/notebook/${notebookId}/judgments/${judgmentId}`
     ),
 
   deleteJudgment: (orgId: string, notebookId: string, judgmentId: string) =>
     coreFetch<{ ok: boolean }>(
-      `/orgs/${orgId}/notebooks/${notebookId}/judgments/${judgmentId}`,
+      `/org/${orgId}/notebook/${notebookId}/judgments/${judgmentId}`,
       { method: "DELETE" }
     ),
 
   clearJudgments: (orgId: string, notebookId: string) =>
     coreFetch<{ ok: boolean; deleted: number }>(
-      `/orgs/${orgId}/notebooks/${notebookId}/judgments`,
+      `/org/${orgId}/notebook/${notebookId}/judgments`,
       { method: "DELETE" }
     ),
 
@@ -1134,7 +1134,7 @@ export const cloudApi = {
       byok?: { provider: "openai" | "anthropic" | "gemini"; apiKey: string; model: string };
     }
   ): Promise<{ jobId: string; judgmentId: string; inFlight?: boolean }> {
-    const url = `${coreBase()}/orgs/${orgId}/notebooks/${notebookId}/judge`;
+    const url = `${coreBase()}/org/${orgId}/notebook/${notebookId}/judge`;
     const res = await fetch(url, {
       method: "POST",
       headers: await authHeaders(true),

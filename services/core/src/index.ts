@@ -11,9 +11,9 @@ import {
   setActiveCollaborationConnections,
   startMetricsPersistence,
 } from "./metrics/store.js";
-import { registerOrgRoutes } from "./routes/orgs.js";
+import { registerOrgRoutes } from "./routes/org.js";
 import { registerAdminRoutes } from "./routes/admin.js";
-import { registerUserRoutes } from "./routes/users.js";
+import { registerUserRoutes } from "./routes/user.js";
 import { registerStaticAssetRoutes } from "./routes/staticAssets.js";
 import { registerAiRoutes, registerInternalAiRoutes } from "./routes/ai.js";
 import { registerInternalCompileRoutes } from "./routes/internalCompile.js";

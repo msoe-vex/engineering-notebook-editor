@@ -137,9 +137,9 @@ export function NotebookShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const orgId = String(params.orgId);
   const notebookId = String(params.notebookId);
-  const basePath = `/orgs/${orgId}/notebooks/${notebookId}`;
-  const activeEntryId = pathname.includes("/entries/")
-    ? pathname.split("/entries/")[1]?.split("/")[0] ?? null
+  const basePath = `/org/${orgId}/notebook/${notebookId}`;
+  const activeEntryId = pathname.includes("/entry/")
+    ? pathname.split("/entry/")[1]?.split("/")[0] ?? null
     : null;
   const [optimisticEntryId, setOptimisticEntryId] = useState<string | null>(null);
 
@@ -150,7 +150,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
       return;
     }
     // Left the entries section without landing on the optimistic id.
-    if (!pathname.includes("/entries/")) setOptimisticEntryId(null);
+    if (!pathname.includes("/entry/")) setOptimisticEntryId(null);
   }, [activeEntryId, optimisticEntryId, pathname]);
   const showEntryList = SUBNAV[0].match(pathname || "");
   /** Calendar + compile need a definite height so the main pane fills (not content-sized scroll). */
@@ -750,7 +750,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
                         () => {
                           void cloudApi
                             .deleteNotebook(orgId, notebookId)
-                            .then(() => router.push(`/orgs/${orgId}`))
+                            .then(() => router.push(`/org/${orgId}`))
                             .catch((err) => setError((err as Error).message));
                         },
                         "danger",
@@ -922,7 +922,7 @@ export function NotebookShell({ children }: { children: ReactNode }) {
                 }
                 action={
                   <div className="flex flex-wrap justify-center gap-2">
-                    <Button size="sm" variant="secondary" onClick={() => router.push(`/orgs/${orgId}`)}>
+                    <Button size="sm" variant="secondary" onClick={() => router.push(`/org/${orgId}`)}>
                       Back to org
                     </Button>
                     <Button size="sm" variant="primary" onClick={() => router.push("/")}>

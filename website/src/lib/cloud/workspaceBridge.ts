@@ -99,7 +99,7 @@ function cloudNavigateTo(
   }
 
   if (params.entry) {
-    go(`${basePath}/entries/${params.entry}`);
+    go(`${basePath}/entry/${params.entry}`);
     return;
   }
 
