@@ -1,125 +1,131 @@
-/** Firestore document/collection path helpers (nested under organizations). */
+/** Firestore document/collection path helpers (standardized on singular entity names). */
 export function userPath(uid) {
-    return `users/${uid}`;
+    return `user/${uid}`;
 }
 export function orgPath(orgId) {
-    return `organizations/${orgId}`;
+    return `org/${orgId}`;
+}
+export function orgsCollection() {
+    return "org";
 }
 export function memberPath(orgId, uid) {
-    return `organizations/${orgId}/members/${uid}`;
+    return `org/${orgId}/member/${uid}`;
 }
 export function membersCollection(orgId) {
-    return `organizations/${orgId}/members`;
+    return `org/${orgId}/member`;
 }
 export function teamPath(orgId, teamId) {
-    return `organizations/${orgId}/teams/${teamId}`;
+    return `org/${orgId}/team/${teamId}`;
 }
 export function teamsCollection(orgId) {
-    return `organizations/${orgId}/teams`;
+    return `org/${orgId}/team`;
 }
 export function teamMemberPath(orgId, teamId, uid) {
-    return `organizations/${orgId}/teams/${teamId}/members/${uid}`;
+    return `org/${orgId}/team/${teamId}/member/${uid}`;
 }
 export function teamMembersCollection(orgId, teamId) {
-    return `organizations/${orgId}/teams/${teamId}/members`;
+    return `org/${orgId}/team/${teamId}/member`;
 }
 export function notebookPath(orgId, notebookId) {
-    return `organizations/${orgId}/notebooks/${notebookId}`;
+    return `org/${orgId}/notebook/${notebookId}`;
 }
 export function notebooksCollection(orgId) {
-    return `organizations/${orgId}/notebooks`;
+    return `org/${orgId}/notebook`;
 }
 export function notebookMemberPath(orgId, notebookId, memberId) {
-    return `organizations/${orgId}/notebooks/${notebookId}/members/${memberId}`;
+    return `org/${orgId}/notebook/${notebookId}/member/${memberId}`;
 }
 export function notebookMembersCollection(orgId, notebookId) {
-    return `organizations/${orgId}/notebooks/${notebookId}/members`;
+    return `org/${orgId}/notebook/${notebookId}/member`;
 }
 export function entryPath(orgId, notebookId, entryId) {
-    return `organizations/${orgId}/notebooks/${notebookId}/entries/${entryId}`;
+    return `org/${orgId}/notebook/${notebookId}/entry/${entryId}`;
 }
 export function entriesCollection(orgId, notebookId) {
-    return `organizations/${orgId}/notebooks/${notebookId}/entries`;
+    return `org/${orgId}/notebook/${notebookId}/entry`;
 }
 export function entryCommentPath(orgId, notebookId, entryId, commentId) {
-    return `organizations/${orgId}/notebooks/${notebookId}/entries/${entryId}/comments/${commentId}`;
+    return `org/${orgId}/notebook/${notebookId}/entry/${entryId}/comment/${commentId}`;
 }
 export function entryCommentsCollection(orgId, notebookId, entryId) {
-    return `organizations/${orgId}/notebooks/${notebookId}/entries/${entryId}/comments`;
+    return `org/${orgId}/notebook/${notebookId}/entry/${entryId}/comment`;
 }
 export function assetPath(orgId, notebookId, assetId) {
-    return `organizations/${orgId}/notebooks/${notebookId}/assets/${assetId}`;
+    return `org/${orgId}/notebook/${notebookId}/asset/${assetId}`;
 }
 export function assetsCollection(orgId, notebookId) {
-    return `organizations/${orgId}/notebooks/${notebookId}/assets`;
+    return `org/${orgId}/notebook/${notebookId}/asset`;
 }
 /** Org-scoped assets (People avatars, public CMS media) — not notebook-scoped. */
 export function orgAssetPath(orgId, assetId) {
-    return `organizations/${orgId}/assets/${assetId}`;
+    return `org/${orgId}/asset/${assetId}`;
 }
 export function orgAssetsCollection(orgId) {
-    return `organizations/${orgId}/assets`;
+    return `org/${orgId}/asset`;
 }
 export function rubricPath(orgId, notebookId, rubricId) {
-    return `organizations/${orgId}/notebooks/${notebookId}/rubrics/${rubricId}`;
+    return `org/${orgId}/notebook/${notebookId}/rubric/${rubricId}`;
 }
 export function rubricsCollection(orgId, notebookId) {
-    return `organizations/${orgId}/notebooks/${notebookId}/rubrics`;
+    return `org/${orgId}/notebook/${notebookId}/rubric`;
 }
 export function judgmentPath(orgId, notebookId, judgmentId) {
-    return `organizations/${orgId}/notebooks/${notebookId}/judgments/${judgmentId}`;
+    return `org/${orgId}/notebook/${notebookId}/judgment/${judgmentId}`;
 }
 export function judgmentsCollection(orgId, notebookId) {
-    return `organizations/${orgId}/notebooks/${notebookId}/judgments`;
+    return `org/${orgId}/notebook/${notebookId}/judgment`;
 }
 export function jobPath(orgId, notebookId, jobId) {
-    return `organizations/${orgId}/notebooks/${notebookId}/jobs/${jobId}`;
+    return `org/${orgId}/notebook/${notebookId}/job/${jobId}`;
 }
 export function jobsCollection(orgId, notebookId) {
-    return `organizations/${orgId}/notebooks/${notebookId}/jobs`;
+    return `org/${orgId}/notebook/${notebookId}/job`;
 }
 export function compileExportPath(orgId, notebookId, exportId) {
-    return `organizations/${orgId}/notebooks/${notebookId}/compileExports/${exportId}`;
+    return `org/${orgId}/notebook/${notebookId}/compileExport/${exportId}`;
 }
 export function compileExportsCollection(orgId, notebookId) {
-    return `organizations/${orgId}/notebooks/${notebookId}/compileExports`;
+    return `org/${orgId}/notebook/${notebookId}/compileExport`;
 }
 export function notebookShareLinkPath(orgId, notebookId, linkId) {
-    return `organizations/${orgId}/notebooks/${notebookId}/shareLinks/${linkId}`;
+    return `org/${orgId}/notebook/${notebookId}/shareLink/${linkId}`;
 }
 export function notebookShareLinksCollection(orgId, notebookId) {
-    return `organizations/${orgId}/notebooks/${notebookId}/shareLinks`;
+    return `org/${orgId}/notebook/${notebookId}/shareLink`;
 }
 /** Single-flight lock per (type, resourceKey) under a notebook. */
 export function jobLockPath(orgId, notebookId, type, resourceKey) {
     const safe = `${type}__${resourceKey}`.replace(/[^a-zA-Z0-9._-]/g, "_");
-    return `organizations/${orgId}/notebooks/${notebookId}/jobLocks/${safe}`;
+    return `org/${orgId}/notebook/${notebookId}/jobLock/${safe}`;
 }
 export function invitePath(inviteId) {
-    return `invites/${inviteId}`;
+    return `invite/${inviteId}`;
+}
+export function invitesCollection() {
+    return "invite";
 }
 /** Global uniqueness lookup for public org slugs. */
 export function orgSlugPath(slug) {
-    return `orgSlugs/${slug}`;
+    return `orgSlug/${slug}`;
 }
 export function publicNotebookKeyPath(orgId, publicKey) {
-    return `organizations/${orgId}/publicNotebookKeys/${publicKey}`;
+    return `org/${orgId}/publicNotebookKey/${publicKey}`;
 }
 export function publicNotebookKeysCollection(orgId) {
-    return `organizations/${orgId}/publicNotebookKeys`;
+    return `org/${orgId}/publicNotebookKey`;
 }
 /** First-class org catalogs (optional `public?: boolean`, default true). */
 export function donorsCollection(orgId) {
-    return `organizations/${orgId}/donors`;
+    return `org/${orgId}/donor`;
 }
 export function projectsCollection(orgId) {
-    return `organizations/${orgId}/projects`;
+    return `org/${orgId}/project`;
 }
 export function eventsCollection(orgId) {
-    return `organizations/${orgId}/events`;
+    return `org/${orgId}/event`;
 }
 export function socialLinksCollection(orgId) {
-    return `organizations/${orgId}/socialLinks`;
+    return `org/${orgId}/socialLink`;
 }
 /** @deprecated Use donorsCollection — legacy CMS path. */
 export function publicDonorsCollection(orgId) {
@@ -133,9 +139,9 @@ export function publicProjectsCollection(orgId) {
 export function publicEventsCollection(orgId) {
     return eventsCollection(orgId);
 }
-/** @deprecated Removed — public roster uses members/{uid}.public */
+/** @deprecated Removed — public roster uses member/{uid}.public */
 export function publicMembersCollection(orgId) {
-    return `organizations/${orgId}/publicMembers`;
+    return `org/${orgId}/publicMember`;
 }
 /** @deprecated Use socialLinksCollection */
 export function publicSocialCollection(orgId) {

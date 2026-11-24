@@ -1,6 +1,7 @@
-/** Firestore document/collection path helpers (nested under organizations). */
+/** Firestore document/collection path helpers (standardized on singular entity names). */
 export declare function userPath(uid: string): string;
 export declare function orgPath(orgId: string): string;
+export declare function orgsCollection(): string;
 export declare function memberPath(orgId: string, uid: string): string;
 export declare function membersCollection(orgId: string): string;
 export declare function teamPath(orgId: string, teamId: string): string;
@@ -33,6 +34,7 @@ export declare function notebookShareLinksCollection(orgId: string, notebookId: 
 /** Single-flight lock per (type, resourceKey) under a notebook. */
 export declare function jobLockPath(orgId: string, notebookId: string, type: string, resourceKey: string): string;
 export declare function invitePath(inviteId: string): string;
+export declare function invitesCollection(): string;
 /** Global uniqueness lookup for public org slugs. */
 export declare function orgSlugPath(slug: string): string;
 export declare function publicNotebookKeyPath(orgId: string, publicKey: string): string;
@@ -48,7 +50,7 @@ export declare function publicDonorsCollection(orgId: string): string;
 export declare function publicProjectsCollection(orgId: string): string;
 /** @deprecated Use eventsCollection */
 export declare function publicEventsCollection(orgId: string): string;
-/** @deprecated Removed — public roster uses members/{uid}.public */
+/** @deprecated Removed — public roster uses member/{uid}.public */
 export declare function publicMembersCollection(orgId: string): string;
 /** @deprecated Use socialLinksCollection */
 export declare function publicSocialCollection(orgId: string): string;

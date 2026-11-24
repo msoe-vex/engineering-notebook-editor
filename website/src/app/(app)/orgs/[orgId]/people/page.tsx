@@ -17,13 +17,14 @@ import {
   type MenuItem,
 } from "@/components/ui";
 import { cloudApi, type InviteSummary, type MemberSummary } from "@/lib/cloud/api";
-import { getFirebaseAuth, getDevToken } from "@/lib/cloud/firebase";
+import { getDevToken, useSession } from "@/lib/auth/client";
 import { orgRoleLabel } from "@/lib/cloud/roles";
 import { showNotification } from "@/components/overlays/Notification";
 import type { OrgRole } from "@engineering-notebook/shared";
 
 export default function OrgPeoplePage() {
   const { orgId, org, members, invites, canManage, refresh, setError } = useOrgWorkspace();
+  const { data: session } = useSession();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [removeMember, setRemoveMember] = useState<MemberSummary | null>(null);
   const [revokeInvite, setRevokeInvite] = useState<InviteSummary | null>(null);
@@ -35,7 +36,7 @@ export default function OrgPeoplePage() {
   const [photoBusy, setPhotoBusy] = useState<string | null>(null);
   const [photoMember, setPhotoMember] = useState<MemberSummary | null>(null);
 
-  const currentUid = getFirebaseAuth().currentUser?.uid || getDevToken()?.split("|")[0];
+  const currentUid = session?.user?.id || getDevToken()?.split("|")[0];
   const isOwner = org?.role === "owner";
   const ownerCount = members.filter((m) => m.role === "owner").length;
   const pending = invites.filter(

@@ -333,7 +333,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
   app.get("/orgs", async (request) => {
     const user = getUser(request);
     if (isServiceAdmin(user)) {
-      const rows = await store().query("organizations");
+      const rows = await store().query("org");
       const out = [];
       for (const d of rows) {
         const id = String(d.id);
@@ -347,7 +347,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       return out;
     }
     const orgs: Array<Organization & { role?: OrgRole }> = [];
-    const all = await store().query("organizations");
+    const all = await store().query("org");
     for (const doc of all) {
       const id = String(doc.id);
       const member = await store().get(memberPath(id, user.uid));
@@ -499,7 +499,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     if (orgData.slug) {
       await safeDeletePath(orgSlugPath(orgData.slug));
     }
-    const invites = await store().query("invites", {
+    const invites = await store().query("invite", {
       where: [{ field: "orgId", op: "==", value: orgId }],
     });
     if (invites.length > 0) {
@@ -810,7 +810,7 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const user = getUser(request);
     const { orgId } = request.params as { orgId: string };
     await requireOrgMember(user, orgId, "admin");
-    const snap = await store().query("invites", { where: [{ field: "orgId", op: "==", value: orgId }] });
+    const snap = await store().query("invite", { where: [{ field: "orgId", op: "==", value: orgId }] });
     return snap.map((d) => {
       const invite = { id: String(d.id), ...withoutId(d) } as Invite;
       return { ...invite, status: resolveInviteStatus(invite) };

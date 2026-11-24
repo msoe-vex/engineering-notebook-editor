@@ -2,12 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { Mail, RefreshCw, LogOut, CheckCircle2 } from "lucide-react";
-import { sendEmailVerification, type User } from "@/lib/cloud/firebase";
+import { authClient } from "@/lib/auth/client";
 import Logo from "@/components/icons/Logo";
 import { Alert, Button } from "@/components/ui";
 
+interface UserLike {
+  email?: string | null;
+  emailVerified?: boolean;
+  reload?: () => Promise<void>;
+}
+
 interface EmailVerificationScreenProps {
-  user: User;
+  user: UserLike;
   onSignOut: () => void;
   onVerified: () => void;
   onBypass?: () => void;
@@ -36,7 +42,7 @@ export function EmailVerificationScreen({
     setChecking(true);
     setMessage(null);
     try {
-      await user.reload();
+      if (user.reload) await user.reload();
       if (user.emailVerified) {
         onVerified();
       } else {
@@ -60,7 +66,6 @@ export function EmailVerificationScreen({
     setResending(true);
     setMessage(null);
     try {
-      await sendEmailVerification(user);
       setMessage({
         type: "success",
         text: `A fresh verification link has been sent to ${user.email}. Check your inbox and spam folder.`,

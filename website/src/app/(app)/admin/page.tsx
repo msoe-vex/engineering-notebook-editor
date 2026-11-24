@@ -17,7 +17,9 @@ import {
   Clock,
   ArrowUpRight,
   SlidersHorizontal,
+  Trash2,
 } from "lucide-react";
+import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import {
   Alert,
   Badge,
@@ -32,10 +34,13 @@ import {
 import { showNotification } from "@/components/overlays/Notification";
 import { cloudApi } from "@/lib/cloud/api";
 import { platformRoleLabel } from "@/lib/cloud/roles";
+import { useSession, getDevToken } from "@/lib/auth/client";
 
 type AdminTab = "users" | "orgs" | "metrics";
 
 export default function AdminPage() {
+  const { data: session } = useSession();
+  const currentUid = session?.user?.id || getDevToken()?.split("|")[0];
   const [tab, setTab] = useState<AdminTab>("users");
   const [users, setUsers] = useState<
     Array<{
@@ -67,6 +72,7 @@ export default function AdminPage() {
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState<"all" | "admin" | "ai">("all");
   const [busyUid, setBusyUid] = useState<string | null>(null);
+  const [userToDelete, setUserToDelete] = useState<{ uid: string; email?: string } | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
@@ -154,6 +160,33 @@ export default function AdminPage() {
         nextRole ? "Granted Service Admin role" : "Removed Service Admin role",
         "success"
       );
+      refresh();
+    } catch (err) {
+      showNotification((err as Error).message, "error");
+    } finally {
+      setBusyUid(null);
+    }
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return;
+    const { uid } = userToDelete;
+    setUserToDelete(null);
+    setBusyUid(uid);
+    try {
+      // 1. Delete user from Core platform store (organizations, profile)
+      await cloudApi.deleteAdminUser(uid);
+
+      // 2. Cascade delete from Better Auth (users, accounts, sessions)
+      try {
+        await fetch(`/api/admin/users/${encodeURIComponent(uid)}`, {
+          method: "DELETE",
+        });
+      } catch (authErr) {
+        console.warn("Failed to cascade delete Better Auth user records:", authErr);
+      }
+
+      showNotification("User removed from platform", "success");
       refresh();
     } catch (err) {
       showNotification((err as Error).message, "error");
@@ -317,6 +350,7 @@ export default function AdminPage() {
                       <thead className="border-b border-nb-outline-variant/20 bg-nb-surface-low text-[11px] font-bold uppercase tracking-wider text-nb-on-surface-variant">
                         <tr>
                           <th className="px-5 py-3">User</th>
+                          <th className="px-4 py-3">Primary Email</th>
                           <th className="px-4 py-3">Platform Role</th>
                           <th className="px-4 py-3">Capabilities</th>
                           <th className="px-5 py-3 text-right">Actions</th>
@@ -332,12 +366,18 @@ export default function AdminPage() {
                             <tr key={u.uid} className="hover:bg-nb-surface-low/50 transition-colors">
                               <td className="px-5 py-3.5">
                                 <div className="font-semibold text-nb-on-surface">
-                                  {u.displayName || u.email || "Unnamed User"}
+                                  {u.displayName || "Unnamed User"}
                                 </div>
-                                <div className="font-mono text-xs text-nb-on-surface-variant/80">
-                                  {u.email ? `${u.email} · ` : ""}
+                                <div className="font-mono text-xs text-nb-on-surface-variant/70">
                                   {u.uid}
                                 </div>
+                              </td>
+                              <td className="px-4 py-3.5">
+                                {u.email ? (
+                                  <span className="font-medium text-nb-on-surface">{u.email}</span>
+                                ) : (
+                                  <span className="text-nb-on-surface-variant/50 italic text-xs">No email</span>
+                                )}
                               </td>
                               <td className="px-4 py-3.5">
                                 <Badge
@@ -372,12 +412,25 @@ export default function AdminPage() {
                                   <Button
                                     size="sm"
                                     variant={isAdmin ? "secondary" : "ghost"}
-                                    disabled={isBusy}
+                                    disabled={isBusy || (isAdmin && u.uid === currentUid)}
+                                    title={isAdmin && u.uid === currentUid ? "You cannot demote yourself" : undefined}
                                     onClick={() => void toggleServiceAdmin(u.uid, u.platformRole)}
                                     className="h-8 text-xs font-semibold"
                                   >
                                     {isAdmin ? "Demote" : "Promote Admin"}
                                   </Button>
+                                  {u.uid !== currentUid && (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      disabled={isBusy}
+                                      onClick={() => setUserToDelete({ uid: u.uid, email: u.email })}
+                                      className="h-8 w-8 p-0 text-nb-danger hover:bg-nb-danger/10"
+                                      title="Delete user"
+                                    >
+                                      <Trash2 size={14} />
+                                    </Button>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -544,6 +597,16 @@ export default function AdminPage() {
           )}
         </div>
       )}
+
+      <ConfirmationDialog
+        isOpen={Boolean(userToDelete)}
+        title="Delete User"
+        message={`Are you sure you want to delete user ${userToDelete?.email || userToDelete?.uid}? This cannot be undone.`}
+        confirmLabel="Delete User"
+        variant="danger"
+        onConfirm={() => void confirmDeleteUser()}
+        onCancel={() => setUserToDelete(null)}
+      />
     </div>
   );
 }

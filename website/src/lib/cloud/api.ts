@@ -1,7 +1,7 @@
 "use client";
 
 import { assertUploadSize } from "@engineering-notebook/shared";
-import { getIdToken } from "./firebase";
+import { getIdToken } from "@/lib/auth/client";
 
 const coreBase = () =>
   (process.env.NEXT_PUBLIC_CORE_API_URL || "http://localhost:8080").replace(/\/$/, "");
@@ -777,6 +777,8 @@ export const cloudApi = {
     >("/api/admin/orgs"),
   patchAdminUser: (uid: string, body: unknown) =>
     coreFetch(`/api/admin/users/${uid}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteAdminUser: (uid: string) =>
+    coreFetch<{ status: string; uid: string }>(`/api/admin/users/${uid}`, { method: "DELETE" }),
   async uploadExportPdf(
     orgId: string,
     notebookId: string,

@@ -126,6 +126,8 @@ services:
       FIREBASE_PROJECT_ID: demo-engineering-notebook
       FIRESTORE_EMULATOR_HOST: firebase:8081
       FIREBASE_AUTH_EMULATOR_HOST: firebase:9099
+      AUTH_PROVIDER: better-auth
+      BETTER_AUTH_SECRET: dev-better-auth-secret-key-min-32-chars-long
       AUTH_FALLBACK: "true"
       GCS_BUCKET: engineering-notebook
       # Use GCS_EMULATOR_ENDPOINT (not STORAGE_EMULATOR_HOST): the Node GCS client

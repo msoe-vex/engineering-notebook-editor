@@ -13,7 +13,7 @@ import { Button, Skeleton, SkeletonLines } from "@/components/ui";
 import type { TipTapNode } from "@/lib/notebook/metadata";
 import type { ProjectPhase } from "@engineering-notebook/shared";
 import { showNotification } from "@/components/overlays/Notification";
-import { getFirebaseAuth, getDevToken } from "@/lib/cloud/firebase";
+import { getDevToken, authClient } from "@/lib/auth/client";
 import { compressImageToJpeg, convertSvgToPng } from "@/lib/utils";
 import { workspaceState } from "@/lib/cloud/workspaceState";
 import {
@@ -98,13 +98,14 @@ export function CollaborativeEntryEditor({
       const token = (await getTokenRef.current()) || "";
       if (cancelled) return;
 
-      const authUser = getFirebaseAuth().currentUser;
+      const session = await authClient.getSession().catch(() => null);
+      const authUser = session?.data?.user;
       const localName =
-        authUser?.displayName ||
+        authUser?.name ||
         authUser?.email ||
         getDevToken() ||
         "Editor";
-      const localColor = colorForId(authUser?.uid || localName);
+      const localColor = colorForId(authUser?.id || localName);
 
       setSynced(false);
       p = new HocuspocusProvider({

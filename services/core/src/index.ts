@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { MAX_UPLOAD_BYTES } from "@engineering-notebook/shared";
 import { FirebaseAuthAdapter } from "./auth/firebaseAuthAdapter.js";
+import { BetterAuthAdapter } from "./auth/betterAuthAdapter.js";
 import { initFirestore } from "./db/firestore.js";
 import { createStorage } from "./storage/gcsStorage.js";
 import { createAuthGuard } from "./http/authPlugin.js";
@@ -17,6 +18,7 @@ import { registerStaticAssetRoutes } from "./routes/staticAssets.js";
 import { registerAiRoutes, registerInternalAiRoutes } from "./routes/ai.js";
 import { registerInternalCompileRoutes } from "./routes/internalCompile.js";
 import { registerInternalJobRoutes } from "./routes/internalJobs.js";
+import { registerInternalMetadataRoutes } from "./routes/internalMetadata.js";
 import { registerJudgeInternalRoutes, registerJudgeUserRoutes } from "./routes/judge.js";
 import { registerPublicRoutes } from "./routes/public.js";
 
@@ -38,7 +40,9 @@ await app.register(cors, {
   ],
 });
 
-const auth = new FirebaseAuthAdapter();
+const auth = process.env.AUTH_PROVIDER === "better-auth" 
+  ? new BetterAuthAdapter() 
+  : new FirebaseAuthAdapter();
 const requireAuth = createAuthGuard(auth);
 const authAttempts = new Map<string, { count: number; windowStart: number }>();
 
@@ -123,6 +127,7 @@ app.register(async (scoped) => {
 await registerStaticAssetRoutes(app, storage);
 await registerPublicRoutes(app, storage);
 await registerInternalJobRoutes(app);
+await registerInternalMetadataRoutes(app);
 await registerInternalCompileRoutes(app, storage);
 await registerJudgeInternalRoutes(app, storage);
 await registerInternalAiRoutes(app);

@@ -32,7 +32,7 @@ import { showNotification } from "@/components/overlays/Notification";
 import { cloudApi } from "@/lib/cloud/api";
 import { patchEditorChrome } from "@/lib/cloud/editorChromeStore";
 import { formatCloudError } from "@/lib/cloud/errors";
-import { getIdToken } from "@/lib/cloud/firebase";
+import { getIdToken } from "@/lib/auth/client";
 import { generateEntryTitle } from "@/lib/genai";
 import { generateEntryLatex, latexPhaseRef } from "@/lib/latex/latex";
 import {

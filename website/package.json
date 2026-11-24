@@ -43,6 +43,7 @@
     "@tiptap/react": "3.31.3",
     "@tiptap/starter-kit": "3.31.3",
     "@tiptap/y-tiptap": "^3.0.2",
+    "better-auth": "^1.7.27",
     "file-saver": "^2.0.5",
     "firebase": "^11.10.0",
     "highlight.js": "^11.11.1",

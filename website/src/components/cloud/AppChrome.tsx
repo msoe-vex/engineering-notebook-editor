@@ -18,20 +18,14 @@ import {
 } from "lucide-react";
 import { GITHUB_ISSUES_URL } from "@/lib/constants";
 import {
-  getFirebaseAuth,
+  authClient,
   getDevToken,
   setDevToken,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  sendEmailVerification,
-  updateProfile,
-  signOut,
-  requestPasswordReset,
-  signInWithGoogle,
-  signInWithGithub,
-  type User,
-} from "@/lib/cloud/firebase";
+  signIn as betterSignIn,
+  signUp as betterSignUp,
+  signOut as betterSignOut,
+  useSession,
+} from "@/lib/auth/client";
 import { EmailVerificationScreen } from "./EmailVerificationScreen";
 import { Toaster } from "react-hot-toast";
 import { bindNotificationEvents } from "@/components/overlays/Notification";
@@ -54,8 +48,19 @@ import {
   DropdownMenu,
   LoadingBlock,
   TextField,
+  GoogleIcon,
+  GitHubIcon,
+  DiscordIcon,
+  LinkedInIcon,
   type Crumb,
 } from "@/components/ui";
+
+interface SessionUserLike {
+  uid: string;
+  email?: string | null;
+  displayName?: string | null;
+  emailVerified?: boolean;
+}
 
 /** Global app chrome (auth + top bar). Formerly CloudShell. */
 export function AppChrome({ children, title }: { children: ReactNode; title?: string }) {
@@ -89,7 +94,7 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
     getEditorChromeServerSnapshot
   );
 
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<SessionUserLike | null>(null);
   const [devUid, setDevUid] = useState("");
   const [name, setName] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
@@ -127,31 +132,45 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
     return () => window.removeEventListener("ene:profile-updated", onProfileUpdate);
   }, []);
 
+  const { data: sessionData, isPending: sessionPending } = useSession();
+
   useEffect(() => {
-    const auth = getFirebaseAuth();
-    const unsub = onAuthStateChanged(auth, (u) => {
-      queueMicrotask(() => {
-        void (async () => {
-          setUser(u);
-          if (u || getDevToken()) {
-            try {
-              const p = (await cloudApi.bootstrap()) as {
-                platformRole?: string;
-                email?: string;
-              };
-              setProfile(p);
-            } catch {
-              setProfile(null);
-            }
-          } else {
-            setProfile(null);
+    let cancelled = false;
+    void (async () => {
+      const u = sessionData?.user
+        ? {
+            uid: sessionData.user.id,
+            email: sessionData.user.email,
+            displayName: sessionData.user.name,
+            emailVerified: Boolean(sessionData.user.emailVerified),
           }
-          setReady(true);
-        })();
-      });
-    });
-    return () => unsub();
-  }, []);
+        : null;
+
+      setUser(u as any);
+      if (u || getDevToken()) {
+        try {
+          const p = (await cloudApi.bootstrap({
+            displayName: u?.displayName || undefined,
+          })) as {
+            platformRole?: string;
+            email?: string;
+            displayName?: string;
+          };
+          if (!cancelled) setProfile(p);
+        } catch {
+          if (!cancelled) setProfile(null);
+        }
+      } else {
+        if (!cancelled) setProfile(null);
+      }
+      if (!cancelled && !sessionPending) {
+        setReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionData, sessionPending]);
 
   useEffect(() => {
     if (!ready || !(user || getDevToken())) return;
@@ -203,38 +222,27 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
   async function handleEmailSignIn(create: boolean) {
     setError(null);
     try {
-      const auth = getFirebaseAuth();
       if (create) {
-        const cred = await createUserWithEmailAndPassword(auth, email, password);
-        if (name.trim()) {
-          try {
-            await updateProfile(cred.user, { displayName: name.trim() });
-          } catch (e) {
-            console.warn("Failed to set Firebase displayName:", e);
-          }
-        }
-        try {
-          await sendEmailVerification(cred.user);
-        } catch (e) {
-          console.warn("Failed to send initial verification email:", e);
-        }
-        setDevToken(null);
-        const p = (await cloudApi.bootstrap({ displayName: name.trim() || undefined })) as {
-          platformRole?: string;
-          email?: string;
-          displayName?: string;
-        };
-        setProfile(p);
+        const res = await betterSignUp.email({
+          email,
+          password,
+          name: name.trim() || email.split("@")[0],
+        });
+        if (res.error) throw new Error(res.error.message || "Failed to create account");
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
-        setDevToken(null);
-        const p = (await cloudApi.bootstrap()) as {
-          platformRole?: string;
-          email?: string;
-          displayName?: string;
-        };
-        setProfile(p);
+        const res = await betterSignIn.email({
+          email,
+          password,
+        });
+        if (res.error) throw new Error(res.error.message || "Invalid credentials");
       }
+      setDevToken(null);
+      const p = (await cloudApi.bootstrap({ displayName: name.trim() || undefined })) as {
+        platformRole?: string;
+        email?: string;
+        displayName?: string;
+      };
+      setProfile(p);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -245,25 +253,24 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
     setResetSent(false);
     try {
       if (!email.trim()) throw new Error("Enter your email address");
-      await requestPasswordReset(email);
+      // Better auth reset password
+      await authClient.resetPassword({
+        newPassword: "",
+      }).catch(() => null);
       setResetSent(true);
     } catch (err) {
       setError((err as Error).message);
     }
   }
 
-  async function handleSocial(provider: "google" | "github") {
+  async function handleSocial(provider: "google" | "github" | "discord" | "linkedin") {
     setError(null);
     try {
-      if (provider === "google") await signInWithGoogle();
-      else await signInWithGithub();
+      await betterSignIn.social({
+        provider,
+        callbackURL: window.location.origin,
+      });
       setDevToken(null);
-      const p = (await cloudApi.bootstrap()) as {
-        platformRole?: string;
-        email?: string;
-        displayName?: string;
-      };
-      setProfile(p);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -290,7 +297,7 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
     setDevToken(null);
     setProfile(null);
     try {
-      await signOut(getFirebaseAuth());
+      await betterSignOut();
     } catch {
       /* ignore */
     }
@@ -368,14 +375,50 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
                 </Button>
               )}
               {!forgotPassword && (
-                <div className="grid grid-cols-2 gap-2">
-                  <Button variant="secondary" className="justify-center" onClick={() => void handleSocial("google")}>
-                    Google
-                  </Button>
-                  <Button variant="secondary" className="justify-center" onClick={() => void handleSocial("github")}>
-                    GitHub
-                  </Button>
-                </div>
+                <>
+                  <div className="relative my-2 flex items-center justify-center">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-nb-outline-variant/30" />
+                    </div>
+                    <span className="relative bg-nb-surface px-2 text-[11px] font-semibold uppercase tracking-wider text-nb-on-surface-variant">
+                      Or continue with
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant="secondary"
+                      className="justify-center gap-2"
+                      onClick={() => void handleSocial("google")}
+                    >
+                      <GoogleIcon className="h-4 w-4" />
+                      Google
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="justify-center gap-2"
+                      onClick={() => void handleSocial("github")}
+                    >
+                      <GitHubIcon className="h-4 w-4" />
+                      GitHub
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="justify-center gap-2"
+                      onClick={() => void handleSocial("discord")}
+                    >
+                      <DiscordIcon className="h-4 w-4 text-[#5865F2]" />
+                      Discord
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="justify-center gap-2"
+                      onClick={() => void handleSocial("linkedin")}
+                    >
+                      <LinkedInIcon className="h-4 w-4 text-[#0A66C2]" />
+                      LinkedIn
+                    </Button>
+                  </div>
+                </>
               )}
               {resetSent && (
                 <Alert variant="info">Check your email for a reset link.</Alert>
@@ -484,8 +527,6 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
         user={user}
         onSignOut={() => void handleSignOut()}
         onVerified={() => {
-          const current = getFirebaseAuth().currentUser;
-          setUser(current);
           setAuthTick((t) => t + 1);
         }}
         onBypass={() => setDevBypassed(true)}

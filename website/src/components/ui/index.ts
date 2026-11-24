@@ -22,3 +22,4 @@ export { DropdownMenu, type MenuItem } from "./DropdownMenu";
 export { ContextMenu } from "./ContextMenu";
 export { Dialog } from "./Dialog";
 export { ValidationIssuesTooltip } from "./ValidationIssuesTooltip";
+export { GoogleIcon, GitHubIcon, DiscordIcon, LinkedInIcon } from "./SocialIcons";

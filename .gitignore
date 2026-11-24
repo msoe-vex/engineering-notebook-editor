@@ -8,3 +8,7 @@ node_modules/
 # Firebase emulator export dumps (local only)
 infra/firebase-export-*/
 infra/emulator-data/
+
+# Local metadata and cache
+.data/
+website/.data/

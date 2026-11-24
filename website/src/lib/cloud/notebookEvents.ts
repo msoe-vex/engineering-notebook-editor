@@ -1,6 +1,6 @@
 "use client";
 
-import { getIdToken } from "./firebase";
+import { getIdToken } from "@/lib/auth/client";
 
 const coreBase = () =>
   (process.env.NEXT_PUBLIC_CORE_API_URL || "http://localhost:8080").replace(/\/$/, "");

@@ -84,9 +84,17 @@ export async function registerUserRoutes(app: FastifyInstance) {
     const existing = (await store().get(path)) as UserProfile | null;
     const ts = new Date().toISOString();
     if (existing) {
+      const updates: Partial<UserProfile> = {};
       if (displayName && !existing.displayName) {
-        await store().set(path, { ...existing, displayName, updatedAt: ts }, { merge: true });
+        updates.displayName = displayName;
         existing.displayName = displayName;
+      }
+      if (user.email && !existing.email) {
+        updates.email = user.email;
+        existing.email = user.email;
+      }
+      if (Object.keys(updates).length > 0) {
+        await store().set(path, { ...existing, ...updates, updatedAt: ts }, { merge: true });
       }
       return existing;
     }

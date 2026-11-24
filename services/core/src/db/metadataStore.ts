@@ -1,39 +1,20 @@
-/**
- * MetadataStore — platform-agnostic document API.
- * Firestore is the first adapter; routes should prefer this over raw SDK types.
- */
-export type MetadataDoc = Record<string, unknown>;
+import type {
+  MetadataDoc,
+  MetadataWhereOp,
+  MetadataWhere,
+  MetadataQueryOpts,
+  MetadataBatchOp,
+  MetadataStore,
+} from "@engineering-notebook/shared";
 
-export type MetadataWhereOp = "==" | "!=" | "<" | "<=" | ">" | ">=";
-
-export type MetadataWhere = {
-  field: string;
-  op: MetadataWhereOp;
-  value: unknown;
+export type {
+  MetadataDoc,
+  MetadataWhereOp,
+  MetadataWhere,
+  MetadataQueryOpts,
+  MetadataBatchOp,
+  MetadataStore,
 };
-
-export type MetadataQueryOpts = {
-  where?: MetadataWhere[];
-  orderBy?: { field: string; direction?: "asc" | "desc" };
-  limit?: number;
-};
-
-export type MetadataBatchOp =
-  | { op: "set"; path: string; data: MetadataDoc; merge?: boolean }
-  | { op: "update"; path: string; data: MetadataDoc }
-  | { op: "delete"; path: string };
-
-export interface MetadataStore {
-  get(path: string): Promise<MetadataDoc | null>;
-  set(path: string, data: MetadataDoc, opts?: { merge?: boolean }): Promise<void>;
-  /** Partial field update (adapter may map to vendor update semantics). */
-  update(path: string, data: MetadataDoc): Promise<void>;
-  delete(path: string): Promise<void>;
-  /** List documents under a collection path (optional where / orderBy / limit). */
-  query(collectionPath: string, opts?: MetadataQueryOpts): Promise<MetadataDoc[]>;
-  /** Multi-doc write. Adapter may chunk vendor limits (e.g. Firestore 500). */
-  batch(ops: MetadataBatchOp[]): Promise<void>;
-}
 
 import type { Query, QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { getFirestore } from "./firestore.js";
@@ -41,6 +22,10 @@ import { getFirestore } from "./firestore.js";
 const FIRESTORE_BATCH_LIMIT = 450;
 
 export class FirestoreMetadataStore implements MetadataStore {
+  async count(collectionPath: string): Promise<number> {
+    const snap = await getFirestore().collection(collectionPath).count().get();
+    return snap.data().count;
+  }
   async get(path: string): Promise<MetadataDoc | null> {
     const snap = await getFirestore().doc(path).get();
     if (!snap.exists) return null;

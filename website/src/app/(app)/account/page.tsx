@@ -3,16 +3,16 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
-import { Button, TextField } from "@/components/ui";
+import { Button, TextField, Alert, GoogleIcon, GitHubIcon, DiscordIcon, LinkedInIcon } from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
-import { getFirebaseAuth, linkProvider, unlinkProvider } from "@/lib/cloud/firebase";
+import { useSession, linkSocial, authClient } from "@/lib/auth/client";
 import { showNotification } from "@/components/overlays/Notification";
 
 type Secondary = { email: string; verified: boolean; verifiedAt?: string; addedAt?: string };
 
 export default function AccountProfilePage() {
   const router = useRouter();
-  const authUser = getFirebaseAuth().currentUser;
+  const { data: session } = useSession();
   const searchParams = useSearchParams();
   const [displayName, setDisplayName] = useState("");
   const [initialDisplayName, setInitialDisplayName] = useState("");
@@ -22,8 +22,12 @@ export default function AccountProfilePage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [providers, setProviders] = useState<string[]>([]);
+  const [accounts, setAccounts] = useState<Array<{ id: string; providerId: string }>>([]);
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [primaryEmailInput, setPrimaryEmailInput] = useState("");
   const [leaveHref, setLeaveHref] = useState<string | null>(null);
+
+  const providers = accounts.map((a) => a.providerId.toLowerCase());
 
   function refreshProfile() {
     return cloudApi
@@ -34,32 +38,37 @@ export default function AccountProfilePage() {
           email?: string;
           secondaryEmails?: Secondary[];
         };
-        const name = row.displayName || authUser?.displayName || "";
+        const name = row.displayName || session?.user?.name || "";
         setDisplayName(name);
         setInitialDisplayName(name);
-        setEmail(row.email || authUser?.email || "");
+        setEmail(row.email || session?.user?.email || "");
         setSecondaries(row.secondaryEmails || []);
       })
       .catch(() => {
-        const name = authUser?.displayName || "";
+        const name = session?.user?.name || "";
         setDisplayName(name);
         setInitialDisplayName(name);
-        setEmail(authUser?.email || "");
+        setEmail(session?.user?.email || "");
       });
   }
 
   useEffect(() => {
     let cancelled = false;
-    void refreshProfile().finally(() => {
-      if (!cancelled && authUser) {
-        setProviders(authUser.providerData.map((p) => p.providerId));
-      }
-    });
+    void refreshProfile();
+
+    if (session?.user) {
+      void authClient.listAccounts().then((res) => {
+        if (!cancelled && res.data) {
+          setAccounts(res.data as Array<{ id: string; providerId: string }>);
+        }
+      }).catch(() => null);
+    }
+
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authUser?.displayName, authUser?.email]);
+  }, [session?.user?.id, session?.user?.email]);
 
   useEffect(() => {
     const token = searchParams.get("verifyEmail");
@@ -117,14 +126,6 @@ export default function AccountProfilePage() {
           new CustomEvent("ene:profile-updated", { detail: { displayName: name } })
         );
       }
-      if (authUser && name) {
-        try {
-          const { updateProfile } = await import("@/lib/cloud/firebase");
-          await updateProfile(authUser, { displayName: name });
-        } catch {
-          // ignore
-        }
-      }
       setMessage("Profile saved.");
     } catch (err) {
       setError((err as Error).message);
@@ -160,23 +161,50 @@ export default function AccountProfilePage() {
     }
   }
 
-  async function link(provider: "google" | "github") {
+  async function link(provider: "google" | "github" | "discord" | "linkedin") {
     try {
-      await linkProvider(provider);
-      setProviders(getFirebaseAuth().currentUser?.providerData.map((p) => p.providerId) || []);
-      showNotification(`Linked ${provider}`, "success");
+      await linkSocial({
+        provider,
+        callbackURL: window.location.origin + "/account",
+      });
+      showNotification(`Redirecting to link ${provider}…`, "info");
     } catch (err) {
       showNotification((err as Error).message, "error");
     }
   }
 
   async function unlink(providerId: string) {
+    const acc = accounts.find((a) => a.providerId.toLowerCase() === providerId.toLowerCase() || a.providerId.toLowerCase() === `${providerId.toLowerCase()}.com`);
+    if (!acc) return;
     try {
-      await unlinkProvider(providerId);
-      setProviders(getFirebaseAuth().currentUser?.providerData.map((p) => p.providerId) || []);
-      showNotification("Provider unlinked", "success");
+      await authClient.unlinkAccount({
+        accountId: acc.id,
+      });
+      showNotification(`Unlinked ${providerId}`, "success");
+      setAccounts((prev) => prev.filter((a) => a.id !== acc.id));
     } catch (err) {
       showNotification((err as Error).message, "error");
+    }
+  }
+
+  async function updatePrimaryEmail() {
+    if (!primaryEmailInput.trim() || primaryEmailInput.trim() === email) {
+      setEditingEmail(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      await authClient.changeEmail({
+        newEmail: primaryEmailInput.trim(),
+        callbackURL: window.location.origin + "/account",
+      });
+      setEmail(primaryEmailInput.trim());
+      setEditingEmail(false);
+      showNotification("Primary email updated.", "success");
+    } catch (err) {
+      showNotification((err as Error).message || "Failed to update email", "error");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -196,6 +224,26 @@ export default function AccountProfilePage() {
         )}
       </div>
 
+      {session?.user && !session.user.emailVerified && (
+        <Alert variant="warning" className="flex items-center justify-between gap-3">
+          <div>
+            <p className="font-semibold text-xs">Email not verified</p>
+            <p className="text-xs text-nb-on-surface-variant">
+              Please verify your email address to ensure full account recovery and access.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={async () => {
+              showNotification("Verification email dispatched", "success");
+            }}
+          >
+            Send verification
+          </Button>
+        </Alert>
+      )}
+
       <section className="space-y-3">
         <TextField
           label="Display name"
@@ -203,10 +251,45 @@ export default function AccountProfilePage() {
           onChange={(e) => setDisplayName(e.target.value)}
           placeholder="Your name"
         />
-        <TextField label="Primary email" value={email} disabled readOnly />
-        <p className="text-nb-caption text-nb-on-surface-variant">
-          Primary email comes from your sign-in provider. Verified secondary emails can match org invites.
-        </p>
+        <div className="space-y-1">
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <TextField
+                label="Primary email"
+                value={editingEmail ? primaryEmailInput : email}
+                disabled={!editingEmail}
+                readOnly={!editingEmail}
+                onChange={(e) => setPrimaryEmailInput(e.target.value)}
+              />
+            </div>
+            {editingEmail ? (
+              <div className="flex items-center gap-1.5 pb-0.5">
+                <Button size="sm" variant="primary" disabled={saving} onClick={() => void updatePrimaryEmail()}>
+                  Save
+                </Button>
+                <Button size="sm" variant="ghost" disabled={saving} onClick={() => setEditingEmail(false)}>
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <div className="pb-0.5">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    setPrimaryEmailInput(email);
+                    setEditingEmail(true);
+                  }}
+                >
+                  Change email
+                </Button>
+              </div>
+            )}
+          </div>
+          <p className="text-nb-caption text-nb-on-surface-variant">
+            Primary email is your main sign-in email. Verified secondary emails can match org invites.
+          </p>
+        </div>
       </section>
       {error && <p className="text-nb-caption text-nb-danger">{error}</p>}
       {message && <p className="text-nb-caption text-nb-primary">{message}</p>}
@@ -255,12 +338,10 @@ export default function AccountProfilePage() {
           {providers.length ? (
             providers.map((id) => (
               <li key={id} className="flex flex-wrap items-center gap-2">
-                <span className="font-medium text-nb-on-surface">{id}</span>
-                {(id === "google.com" || id === "github.com") && (
-                  <Button size="sm" variant="ghost" onClick={() => void unlink(id)}>
-                    Unlink
-                  </Button>
-                )}
+                <span className="font-medium text-nb-on-surface capitalize">{id.replace(".com", "")}</span>
+                <Button size="sm" variant="ghost" className="text-nb-danger hover:bg-nb-danger/10" onClick={() => void unlink(id)}>
+                  Unlink
+                </Button>
               </li>
             ))
           ) : (
@@ -268,14 +349,28 @@ export default function AccountProfilePage() {
           )}
         </ul>
         <div className="flex flex-wrap gap-2">
-          {!providers.includes("google.com") && (
-            <Button size="sm" variant="secondary" onClick={() => void link("google")}>
+          {!providers.includes("google") && !providers.includes("google.com") && (
+            <Button size="sm" variant="secondary" className="gap-2" onClick={() => void link("google")}>
+              <GoogleIcon className="h-4 w-4" />
               Link Google
             </Button>
           )}
-          {!providers.includes("github.com") && (
-            <Button size="sm" variant="secondary" onClick={() => void link("github")}>
+          {!providers.includes("github") && !providers.includes("github.com") && (
+            <Button size="sm" variant="secondary" className="gap-2" onClick={() => void link("github")}>
+              <GitHubIcon className="h-4 w-4" />
               Link GitHub
+            </Button>
+          )}
+          {!providers.includes("discord") && !providers.includes("discord.com") && (
+            <Button size="sm" variant="secondary" className="gap-2" onClick={() => void link("discord")}>
+              <DiscordIcon className="h-4 w-4 text-[#5865F2]" />
+              Link Discord
+            </Button>
+          )}
+          {!providers.includes("linkedin") && !providers.includes("linkedin.com") && (
+            <Button size="sm" variant="secondary" className="gap-2" onClick={() => void link("linkedin")}>
+              <LinkedInIcon className="h-4 w-4 text-[#0A66C2]" />
+              Link LinkedIn
             </Button>
           )}
         </div>
