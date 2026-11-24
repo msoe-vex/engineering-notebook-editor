@@ -114,7 +114,7 @@ export default function NotebookTrashPage() {
         showNotification("Rubric restored", "success", {
           action: {
             label: "Open Judge",
-            onClick: () => router.push(`${basePath}/judge/rubrics`),
+            onClick: () => router.push(`${basePath}/judge/rubric`),
           },
         });
       })

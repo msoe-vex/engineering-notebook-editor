@@ -34,11 +34,11 @@ function nowIso() {
 }
 
 function notebookKeyPrefix(orgId: string, notebookId: string) {
-  return `organizations/${orgId}/notebook/${notebookId}/`;
+  return `org/${orgId}/notebook/${notebookId}/`;
 }
 
 function orgAssetsKeyPrefix(orgId: string) {
-  return `organizations/${orgId}/assets/`;
+  return `org/${orgId}/asset/`;
 }
 
 /** Workers may read notebook blobs or org-scoped assets (member photos, etc.). */

@@ -151,12 +151,12 @@ export function publicSocialCollection(orgId) {
 export const gcsKeys = {
     busytex: (appVersion, ...rest) => ["static", "busytex", appVersion, ...rest].join("/"),
     latexTemplate: (appVersion, ...rest) => ["static", "latex-template", appVersion, ...rest].join("/"),
-    asset: (orgId, notebookId, assetId, variant = "compressed") => `organizations/${orgId}/notebooks/${notebookId}/assets/${assetId}/${variant}`,
-    orgAsset: (orgId, assetId, variant = "compressed") => `organizations/${orgId}/assets/${assetId}/${variant}`,
-    yjs: (orgId, notebookId, entryId) => `organizations/${orgId}/notebooks/${notebookId}/yjs/${entryId}.ydoc`,
-    tipTap: (orgId, notebookId, entryId) => `organizations/${orgId}/notebooks/${notebookId}/entries/${entryId}.json`,
-    exportPdf: (orgId, notebookId, exportId) => `organizations/${orgId}/notebooks/${notebookId}/exports/${exportId}.pdf`,
-    rubricSource: (orgId, notebookId, rubricId, ext) => `organizations/${orgId}/notebooks/${notebookId}/rubrics/${rubricId}/source${ext.startsWith(".") ? ext : `.${ext}`}`,
+    asset: (orgId, notebookId, assetId, variant = "compressed") => `org/${orgId}/notebook/${notebookId}/asset/${assetId}/${variant}`,
+    orgAsset: (orgId, assetId, variant = "compressed") => `org/${orgId}/asset/${assetId}/${variant}`,
+    yjs: (orgId, notebookId, entryId) => `org/${orgId}/notebook/${notebookId}/yjs/${entryId}.ydoc`,
+    tipTap: (orgId, notebookId, entryId) => `org/${orgId}/notebook/${notebookId}/entry/${entryId}.json`,
+    exportPdf: (orgId, notebookId, exportId) => `org/${orgId}/notebook/${notebookId}/export/${exportId}.pdf`,
+    rubricSource: (orgId, notebookId, rubricId, ext) => `org/${orgId}/notebook/${notebookId}/rubric/${rubricId}/source${ext.startsWith(".") ? ext : `.${ext}`}`,
 };
 /** Hocuspocus / Yjs document name — always includes orgId. */
 export function collabDocName(orgId, notebookId, entryId) {

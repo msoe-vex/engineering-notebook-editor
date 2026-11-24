@@ -31,33 +31,51 @@ export function setDevToken(token: string | null): void {
   }
 }
 
+let cachedToken: string | null = null;
+let tokenExpiresAt = 0;
+let inFlightSessionPromise: Promise<string | null> | null = null;
+
 /**
  * Returns current bearer token for Core API & Collab WebSocket calls:
  * 1. Dev token override if set (e.g. "service-admin" or custom UID)
- * 2. Better Auth session JWT or token
- * 3. Fallback to Firebase Auth user token if available
+ * 2. Better Auth session token (cached using session.expiresAt, with in-flight deduplication)
  */
 export async function getIdToken(): Promise<string | null> {
   const dev = getDevToken();
   if (dev) return dev;
 
-  try {
-    const session = await authClient.getSession();
-    if (session?.data?.session?.token) {
-      return session.data.session.token;
+  const now = Date.now();
+  // Valid token cached in memory (leaving 30s buffer before expiration)
+  if (cachedToken && now < tokenExpiresAt - 30_000) {
+    return cachedToken;
+  }
+
+  // Deduplicate concurrent calls so bursts of requests only make a single /api/auth/get-session call
+  if (inFlightSessionPromise) {
+    return inFlightSessionPromise;
+  }
+
+  inFlightSessionPromise = (async () => {
+    try {
+      const res = await authClient.getSession();
+      const s = res?.data?.session;
+      if (s?.token) {
+        cachedToken = s.token;
+        const expiry = s.expiresAt ? new Date(s.expiresAt).getTime() : 0;
+        tokenExpiresAt = expiry > now ? expiry : now + 60_000;
+        return cachedToken;
+      }
+      cachedToken = null;
+      tokenExpiresAt = 0;
+      return null;
+    } catch {
+      cachedToken = null;
+      tokenExpiresAt = 0;
+      return null;
+    } finally {
+      inFlightSessionPromise = null;
     }
-  } catch {
-    /* ignore */
-  }
+  })();
 
-  // Graceful fallback to Firebase during transition
-  try {
-    const { getFirebaseAuth } = await import("@/lib/cloud/firebase");
-    const current = getFirebaseAuth().currentUser;
-    if (current) return await current.getIdToken();
-  } catch {
-    /* ignore */
-  }
-
-  return null;
+  return inFlightSessionPromise;
 }

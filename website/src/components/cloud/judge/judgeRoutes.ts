@@ -46,7 +46,7 @@ export function pathForJudgeSelection(
     case "home-grades":
       return prefix;
     case "home-rubrics":
-      return `${prefix}/rubrics`;
+      return `${prefix}/rubric`;
     case "rubric":
       return `${prefix}/rubric/${selection.id}`;
     case "grade":

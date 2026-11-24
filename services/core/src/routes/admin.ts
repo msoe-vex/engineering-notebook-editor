@@ -18,7 +18,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get("/api/admin/users", async (request) => {
+  app.get("/api/admin/user", async (request) => {
     requireServiceAdmin(getUser(request));
     const rows = await getMetadataStore().query("user", { limit: 200 });
     return rows.map((d) => {
@@ -31,7 +31,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     });
   });
 
-  app.get("/api/admin/users/:uid", async (request, reply) => {
+  app.get("/api/admin/user/:uid", async (request, reply) => {
     requireServiceAdmin(getUser(request));
     const { uid } = request.params as { uid: string };
     const data = await getMetadataStore().get(userPath(uid));
@@ -39,7 +39,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     return { uid, ...data };
   });
 
-  app.patch("/api/admin/users/:uid", async (request, reply) => {
+  app.patch("/api/admin/user/:uid", async (request, reply) => {
     const caller = getUser(request);
     requireServiceAdmin(caller);
     const { uid } = request.params as { uid: string };
@@ -78,7 +78,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     return updated;
   });
 
-  app.delete("/api/admin/users/:uid", async (request, reply) => {
+  app.delete("/api/admin/user/:uid", async (request, reply) => {
     const caller = getUser(request);
     requireServiceAdmin(caller);
     const { uid } = request.params as { uid: string };
@@ -98,15 +98,15 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     return { status: "deleted", uid };
   });
 
-  app.get("/api/admin/orgs", async (request) => {
+  app.get("/api/admin/org", async (request) => {
     requireServiceAdmin(getUser(request));
     const orgRows = await getMetadataStore().query("org", { limit: 100 });
     return Promise.all(
       orgRows.map(async (row) => {
         const orgId = String(row.id);
         const [membersCount, notebooksCount] = await Promise.all([
-          getMetadataStore().count?.(`organizations/${orgId}/members`) ?? 0,
-          getMetadataStore().count?.(`organizations/${orgId}/notebooks`) ?? 0,
+          getMetadataStore().count?.(`org/${orgId}/member`) ?? 0,
+          getMetadataStore().count?.(`org/${orgId}/notebook`) ?? 0,
         ]).catch(() => [0, 0]);
         return {
           ...row,

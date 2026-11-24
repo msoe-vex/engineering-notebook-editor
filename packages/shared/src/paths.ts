@@ -215,17 +215,17 @@ export const gcsKeys = {
   latexTemplate: (appVersion: string, ...rest: string[]) =>
     ["static", "latex-template", appVersion, ...rest].join("/"),
   asset: (orgId: string, notebookId: string, assetId: string, variant: "compressed" | "original" = "compressed") =>
-    `organizations/${orgId}/notebooks/${notebookId}/assets/${assetId}/${variant}`,
+    `org/${orgId}/notebook/${notebookId}/asset/${assetId}/${variant}`,
   orgAsset: (orgId: string, assetId: string, variant: "compressed" | "original" = "compressed") =>
-    `organizations/${orgId}/assets/${assetId}/${variant}`,
+    `org/${orgId}/asset/${assetId}/${variant}`,
   yjs: (orgId: string, notebookId: string, entryId: string) =>
-    `organizations/${orgId}/notebooks/${notebookId}/yjs/${entryId}.ydoc`,
+    `org/${orgId}/notebook/${notebookId}/yjs/${entryId}.ydoc`,
   tipTap: (orgId: string, notebookId: string, entryId: string) =>
-    `organizations/${orgId}/notebooks/${notebookId}/entries/${entryId}.json`,
+    `org/${orgId}/notebook/${notebookId}/entry/${entryId}.json`,
   exportPdf: (orgId: string, notebookId: string, exportId: string) =>
-    `organizations/${orgId}/notebooks/${notebookId}/exports/${exportId}.pdf`,
+    `org/${orgId}/notebook/${notebookId}/export/${exportId}.pdf`,
   rubricSource: (orgId: string, notebookId: string, rubricId: string, ext: string) =>
-    `organizations/${orgId}/notebooks/${notebookId}/rubrics/${rubricId}/source${ext.startsWith(".") ? ext : `.${ext}`}`,
+    `org/${orgId}/notebook/${notebookId}/rubric/${rubricId}/source${ext.startsWith(".") ? ext : `.${ext}`}`,
 };
 
 /** Hocuspocus / Yjs document name — always includes orgId. */

@@ -934,20 +934,8 @@ export function NotebookShell({ children }: { children: ReactNode }) {
             </div>
           )}
           {!initialLoaded && (
-            <div className="absolute inset-0 z-40 flex bg-nb-surface">
-              <aside className="hidden w-[22%] min-w-[10rem] flex-col gap-2 border-r border-nb-outline-variant/20 p-3 md:flex">
-                <Skeleton className="h-8 w-full" />
-                <Skeleton className="h-7 w-24" />
-                <SkeletonLines lines={8} className="mt-2" />
-              </aside>
-              <div className="flex min-w-0 flex-1 flex-col gap-3 p-6">
-                <Skeleton className="h-8 w-1/2 max-w-md" />
-                <Skeleton className="h-4 w-1/3 max-w-xs" />
-                <SkeletonLines lines={6} className="mt-4 max-w-xl" />
-                <div className="mt-auto">
-                  <LoadingBlock label="Loading notebook…" />
-                </div>
-              </div>
+            <div className="absolute inset-0 z-40 flex items-center justify-center bg-nb-surface">
+              <LoadingBlock label="Loading notebook…" />
             </div>
           )}
           {!notebookUnavailable && showEntryList && narrow ? (

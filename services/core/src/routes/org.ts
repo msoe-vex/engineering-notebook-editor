@@ -400,10 +400,11 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     if (!snap) return reply.code(404).send({ error: "not found" });
     const member = await store().get(memberPath(orgId, user.uid));
     const m = member as OrgMember | null;
+    const effectiveRole = isServiceAdmin(user) ? "owner" : (m?.role ?? null);
     return {
       id: orgId,
       ...withoutId(snap),
-      role: m?.role ?? null,
+      role: effectiveRole,
       memberStatus: m?.status === "alumni" ? "alumni" : "active",
     };
   });
