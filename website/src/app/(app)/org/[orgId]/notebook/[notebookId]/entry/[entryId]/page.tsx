@@ -562,6 +562,7 @@ export default function EntryPage() {
           direction="horizontal"
           className="absolute inset-0"
           id="entry-editor-preview"
+          autoSaveId={`nb-entry-split:${notebookId}`}
         >
           <Panel
             id="entry-editor-panel"

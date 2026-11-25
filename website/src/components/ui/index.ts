@@ -16,6 +16,7 @@ export { Skeleton, SkeletonLines } from "./Skeleton";
 export { EmptyState } from "./EmptyState";
 export { Card, ListRow } from "./Card";
 export { PageHeader } from "./PageHeader";
+export { Text, Heading } from "./Typography";
 export { Breadcrumbs, type Crumb } from "./Breadcrumbs";
 export { TabNav, type TabItem } from "./TabNav";
 export { DropdownMenu, type MenuItem } from "./DropdownMenu";

@@ -96,6 +96,26 @@ export function SettingsPageSkeleton() {
   );
 }
 
+/** Shared notebook / org list-row placeholder. */
+export function NotebookListSkeleton({ rows = 5 }: { rows?: number }) {
+  return (
+    <div className="flex flex-col gap-2" aria-busy="true" aria-label="Loading list">
+      {Array.from({ length: rows }, (_, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-3 rounded-nb-xl border border-nb-outline-variant/25 bg-nb-surface px-3 py-3"
+        >
+          <Skeleton className="h-9 w-9 shrink-0 rounded-nb-lg" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <Skeleton className="h-4 w-2/5" />
+            <Skeleton className="h-3 w-1/4" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Calendar month grid placeholder. */
 export function CalendarPageSkeleton() {
   return (

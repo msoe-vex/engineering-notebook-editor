@@ -200,10 +200,10 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
               <Settings size={20} />
             </div>
             <div>
-              <h1 className="text-sm font-black tracking-tight text-nb-on-surface md:text-lg">
+              <h1 className="text-nb-title font-bold tracking-tight text-nb-on-surface">
                 Preferences
               </h1>
-              <p className="hidden text-[10px] font-black tracking-[0.2em] text-nb-on-surface-variant/40 uppercase sm:block">
+              <p className="hidden text-nb-caption font-semibold uppercase tracking-wider text-nb-on-surface-variant/50 sm:block">
                 Synced account · keys stay local
               </p>
             </div>

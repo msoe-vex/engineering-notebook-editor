@@ -503,7 +503,9 @@ export function CloudNotebookJudge() {
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <NotebookSideRail
           storageKey={`ene:rail:${notebookId}:judge`}
-          widthClassName="md:w-72"
+          defaultWidthPx={288}
+          minWidthPx={220}
+          maxWidthPx={480}
           mobileMaxHeightClassName="max-h-[40vh]"
           expandLabel="Expand judge sidebar"
           collapseLabel="Collapse judge sidebar"

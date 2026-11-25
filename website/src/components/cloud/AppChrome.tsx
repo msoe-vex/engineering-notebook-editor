@@ -327,12 +327,12 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
               </h1>
             </div>
           </div>
-          <p className="text-sm text-nb-on-surface-variant">
+          <p className="text-nb-body text-nb-on-surface-variant">
             {forgotPassword
-              ? "We will email a password reset link (Firebase Auth / emulator)."
+              ? "We will email a password reset link."
               : isSignUp
                 ? "Create your account to collaborate on engineering notebooks."
-                : "Organizations → Notebooks → workspace. Use Firebase Auth, or a local dev token."}
+                : "Sign in to open your organizations and notebooks."}
           </p>
           <div className="mt-8 space-y-3">
             {!forgotPassword && isSignUp && (
@@ -469,20 +469,22 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
               </div>
             </div>
           </div>
-          <details className="mt-10 border-t border-nb-outline-variant/30 pt-6">
-            <summary className="cursor-pointer text-nb-label font-semibold text-nb-on-surface-variant">
-              Developer sign-in
-            </summary>
-            <TextField
-              className="mt-2"
-              placeholder="uid or uid|email (try service-admin)"
-              value={devUid}
-              onChange={(e) => setDevUid(e.target.value)}
-            />
-            <Button className="mt-2" variant="secondary" onClick={handleDevSignIn}>
-              Continue with dev token
-            </Button>
-          </details>
+          {process.env.NODE_ENV === "development" && (
+            <details className="mt-10 border-t border-nb-outline-variant/30 pt-6">
+              <summary className="cursor-pointer text-nb-label font-semibold text-nb-on-surface-variant">
+                Local development
+              </summary>
+              <TextField
+                className="mt-2"
+                placeholder="Local uid"
+                value={devUid}
+                onChange={(e) => setDevUid(e.target.value)}
+              />
+              <Button className="mt-2" variant="secondary" onClick={handleDevSignIn}>
+                Continue with local token
+              </Button>
+            </details>
+          )}
           {error && (
             <Alert variant="error" className="mt-4">
               {error}

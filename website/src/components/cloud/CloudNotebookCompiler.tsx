@@ -177,7 +177,9 @@ export function CloudNotebookCompiler() {
   async function runBusyTexEscape() {
     if (!allowBusyTex) {
       throw new Error(
-        "Server compile unavailable. Start Compose `compile`, or set NEXT_PUBLIC_ALLOW_BUSYTEX_COMPILE=1 for a local escape hatch."
+        process.env.NODE_ENV === "development"
+          ? "Server compile unavailable. Start Compose `compile`, or set NEXT_PUBLIC_ALLOW_BUSYTEX_COMPILE=1 for a local escape hatch."
+          : "Couldn't compile right now. Try again in a moment."
       );
     }
     setStatus("Compiling in browser…");
@@ -597,7 +599,9 @@ export function CloudNotebookCompiler() {
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <NotebookSideRail
           storageKey={`ene:rail:${notebookId}:compile`}
-          widthClassName="md:w-80"
+          defaultWidthPx={320}
+          minWidthPx={240}
+          maxWidthPx={520}
           title={
             <div className="flex w-full items-center gap-0.5 rounded-nb-lg bg-nb-surface/60 p-0.5 ring-1 ring-nb-outline-variant/30">
               {(

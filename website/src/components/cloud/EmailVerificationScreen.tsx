@@ -167,10 +167,10 @@ export function EmailVerificationScreen({
           {isLocalDev && onBypass && (
             <div className="mt-2 rounded-nb-lg border border-dashed border-nb-outline-variant/40 bg-nb-surface-low p-3 text-center">
               <p className="text-nb-caption text-nb-on-surface-variant mb-2">
-                Running in local development / emulator?
+                Local development only
               </p>
               <Button size="sm" variant="ghost" onClick={onBypass}>
-                Bypass verification for dev
+                Skip verification
               </Button>
             </div>
           )}

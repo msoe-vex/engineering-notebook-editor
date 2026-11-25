@@ -264,7 +264,7 @@ export const ImageNodeView = ({ node, selected, updateAttributes, deleteNode, db
           {isLoading || !isInlineOrRemoteSrc(resolvedSrc) ? (
             <div
               style={{ width: node.attrs.width ?? "100%" }}
-              className="h-44 rounded-lg bg-nb-surface-low animate-pulse flex flex-col items-center justify-center gap-2 text-nb-on-surface-variant/40"
+              className="h-44 rounded-lg flex flex-col items-center justify-center gap-2 text-nb-on-surface-variant/40 bg-nb-surface-low"
             >
               <Loader2 size={20} className="animate-spin text-nb-primary/50" />
               <span className="text-[10px] font-bold tracking-wider uppercase">Loading image...</span>

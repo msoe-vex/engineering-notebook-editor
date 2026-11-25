@@ -38,7 +38,7 @@ export function PageHeader({
         )}
         <h1 className="mt-1 text-nb-display font-bold tracking-tight text-nb-on-surface">{title}</h1>
         {description && (
-          <div className="mt-1 text-sm text-nb-on-surface-variant">{description}</div>
+          <div className="mt-1 text-nb-body text-nb-on-surface-variant">{description}</div>
         )}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

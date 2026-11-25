@@ -328,7 +328,7 @@ export default function NotebookSetupPage() {
               onChange={(e) => setSubtitle(e.target.value)}
             />
             <TextField
-              label="Internal name"
+              label="Short name"
               value={name}
               disabled={isArchived}
               onChange={(e) => setName(e.target.value)}
