@@ -12,7 +12,9 @@ Manual acceptance checks aligned with [01-requirements](../01-requirements/).
 | Presence | Two browsers on same entry → each sees the other’s avatar initials |
 | Multi-select | Ctrl-click several explorer rows → Move… / Delete bulk actions |
 | Folders | Create folder → move entry → reload → still nested |
-| Templates | **New** → blank / from template; templates show template icon in explorer (no separate Templates section) |
+| Templates | **New** → blank / blank template / from template (separator); Templates filter empty copy; distinct template glyph in explorer |
+| Home load | Home loads recent notebooks without an 8s polling loop; revisiting tab/focus refreshes |
+| Compile progress | While compiling, only percent + current status (no rolling stage log) |
 | Metadata SSE | Two browsers on same notebook: change title/phase in A → sidebar updates in B without hard refresh |
 | Phases → validity | Notebook with no phases → add a phase in Settings → entries without a phase show incomplete (explorer warning) |
 | Schedule | Drag entry to another day → persists; day cells same height in month view (cards scroll inside cell) |

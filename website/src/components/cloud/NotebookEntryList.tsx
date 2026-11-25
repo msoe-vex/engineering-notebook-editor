@@ -380,14 +380,13 @@ function EntryRowShell({
           const PhaseIcon = phaseCfg?.icon;
           if (entry.isTemplate) {
             return (
-              <span title="Template" className="inline-flex shrink-0">
+              <span
+                title="Template"
+                className="inline-flex shrink-0 rounded-sm bg-nb-tertiary/15 p-0.5 ring-1 ring-nb-tertiary/35"
+              >
                 <LayoutTemplate
-                  size={14}
-                  className={
-                    active
-                      ? "text-nb-tertiary"
-                      : "text-nb-on-surface-variant/70 group-hover:text-nb-on-surface"
-                  }
+                  size={12}
+                  className={active ? "text-nb-tertiary" : "text-nb-tertiary/90"}
                 />
               </span>
             );
@@ -2304,26 +2303,35 @@ export function NotebookEntryList({
                   onSelect: () =>
                     createEntry({ title: "Untitled template", isTemplate: true }),
                 },
-                ...templates.map(([tid, te]) => {
-                  const cfg = te.phase ? phaseCfgMap[te.phase] : null;
-                  const Icon = cfg?.icon || LayoutTemplate;
-                  return {
-                    id: `tpl-${tid}`,
-                    label: te.title || "Untitled template",
-                    icon: (
-                      <Icon
-                        size={14}
-                        style={cfg?.color ? { color: cfg.color } : undefined}
-                      />
-                    ),
-                    onSelect: () =>
-                      createEntry({
-                        title: te.title || "New Entry",
-                        isTemplate: false,
-                        fromId: tid,
+                ...(templates.length
+                  ? [
+                      {
+                        id: "sep-templates",
+                        label: "",
+                        separator: true as const,
+                      },
+                      ...templates.map(([tid, te]) => {
+                        const cfg = te.phase ? phaseCfgMap[te.phase] : null;
+                        const Icon = cfg?.icon || LayoutTemplate;
+                        return {
+                          id: `tpl-${tid}`,
+                          label: te.title || "Untitled template",
+                          icon: (
+                            <Icon
+                              size={14}
+                              style={cfg?.color ? { color: cfg.color } : undefined}
+                            />
+                          ),
+                          onSelect: () =>
+                            createEntry({
+                              title: te.title || "New Entry",
+                              isTemplate: false,
+                              fromId: tid,
+                            }),
+                        };
                       }),
-                  };
-                }),
+                    ]
+                  : []),
               ]}
             />
             <IconButton
@@ -2377,17 +2385,23 @@ export function NotebookEntryList({
           )}
           {filtering && matchedEntryCount === 0 && (
             <div className="flex flex-col items-center gap-2 px-2 py-8 text-center">
-              <p className="text-nb-caption text-nb-on-surface-variant">No matches</p>
-              <button
-                type="button"
-                className="text-nb-label font-semibold text-nb-primary hover:underline"
-                onClick={() => {
-                  setQuery("");
-                  setFilters(EMPTY_FILTERS);
-                }}
-              >
-                Clear filters
-              </button>
+              <p className="text-nb-caption text-nb-on-surface-variant">
+                {filters.kind === "templates"
+                  ? "No templates yet — create one from New → Blank template"
+                  : "No matches"}
+              </p>
+              {filters.kind !== "templates" && (
+                <button
+                  type="button"
+                  className="text-nb-label font-semibold text-nb-primary hover:underline"
+                  onClick={() => {
+                    setQuery("");
+                    setFilters(EMPTY_FILTERS);
+                  }}
+                >
+                  Clear filters
+                </button>
+              )}
             </div>
           )}
 

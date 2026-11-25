@@ -71,7 +71,6 @@ export function CloudNotebookCompiler() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState(0);
-  const [stageLog, setStageLog] = useState<string[]>([]);
   const [log, setLog] = useState<string | null>(null);
   const [exportsList, setExportsList] = useState<CompileExportSummary[]>([]);
   const [shareLinks, setShareLinks] = useState<NotebookShareLinkSummary[]>([]);
@@ -236,15 +235,9 @@ export function CloudNotebookCompiler() {
           if (event.type === "job.progress") {
             if (event.jobType && event.jobType !== "compile") return;
             if (jobIdRef.current && event.jobId !== jobIdRef.current) return;
-            const line = (event.detail || event.status || "Working…").trim();
+            const line = (event.status || event.detail || "Working…").trim();
             setStatus(line);
             setProgress(event.progress ?? 0);
-            if (line) {
-              setStageLog((prev) => {
-                if (prev[prev.length - 1] === line) return prev;
-                return [...prev.slice(-5), line];
-              });
-            }
             return;
           }
           if (event.type === "job.done") {
@@ -288,7 +281,6 @@ export function CloudNotebookCompiler() {
     setLog(null);
     setStatus("Starting…");
     setProgress(0);
-    setStageLog([]);
     setError(null);
     jobIdRef.current = null;
     try {
@@ -576,15 +568,6 @@ export function CloudNotebookCompiler() {
               style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
             />
           </div>
-          {stageLog.length > 0 && (
-            <ul className="mt-2 max-h-20 space-y-0.5 overflow-y-auto text-[11px] text-nb-on-surface-variant/80">
-              {stageLog.map((line, i) => (
-                <li key={`${i}-${line}`} className="truncate">
-                  {line}
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
       )}
 

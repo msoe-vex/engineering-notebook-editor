@@ -227,20 +227,35 @@ export function NotebookShell({ children }: { children: ReactNode }) {
     setNotebookUnavailable(false);
   }, [orgId, notebookId]);
 
+  const orgMetaCacheRef = useRef<{ orgId: string; name?: string; role?: string | null } | null>(
+    null
+  );
+
   useEffect(() => {
     let cancelled = false;
     queueMicrotask(() => {
       void (async () => {
         try {
+          const needOrg =
+            !orgMetaCacheRef.current || orgMetaCacheRef.current.orgId !== orgId;
           const [nb, entryRes, assetList, org] = await Promise.all([
             cloudApi.getNotebook(orgId, notebookId),
             cloudApi.listEntries(orgId, notebookId),
             cloudApi.listAssets(orgId, notebookId).catch(() => [] as typeof assets),
-            cloudApi.getOrg(orgId).catch(() => null),
+            needOrg
+              ? cloudApi.getOrg(orgId).catch(() => null)
+              : Promise.resolve(null),
           ]);
           if (cancelled) return;
           setNotebookName(nb.title || nb.name);
-          if (org?.name) setOrgName(org.name);
+          if (org?.name) {
+            setOrgName(org.name);
+            orgMetaCacheRef.current = {
+              orgId,
+              name: org.name,
+              role: org.role ?? null,
+            };
+          }
           if (org?.role) setUserRole(org.role);
           setFolders(nb.folders ?? {});
           setEntries(entriesFromApi(entryRes.entries as Record<string, Record<string, unknown>>));

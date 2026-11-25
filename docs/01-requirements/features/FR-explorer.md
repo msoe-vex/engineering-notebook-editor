@@ -32,7 +32,7 @@ Notebook accessors.
 - [ ] Create folder → move entry → reload → still nested
 - [ ] Explorer DnD does not change calendar `order` / `date`
 - [x] Filters hide non-matching entries; chips + Clear all / Clear filters empty state
-- [ ] Templates appear in the unified tree with a distinct icon; New menu lists templates
+- [x] Templates appear in the unified tree with a distinct icon; New menu lists blank + from-template with separators; templates filter empty state
 - [ ] Multi-select can move or delete several entries at once
 - [ ] Entry delete sends items to Trash (not permanent purge)
 - [x] On phone, explorer is not a persistent side-by-side split; entry edit is full-width

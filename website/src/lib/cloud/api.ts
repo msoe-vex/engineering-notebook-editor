@@ -2,6 +2,7 @@
 
 import { assertUploadSize } from "@engineering-notebook/shared";
 import { getIdToken } from "@/lib/auth/client";
+import { dedupeGet, dedupeKey } from "@/lib/cloud/fetchDedupe";
 
 const coreBase = () =>
   (process.env.NEXT_PUBLIC_CORE_API_URL || "http://localhost:8080").replace(/\/$/, "");
@@ -21,7 +22,7 @@ async function authHeaders(hasJsonBody: boolean): Promise<HeadersInit> {
   return headers;
 }
 
-async function coreFetch<T>(path: string, init?: RequestInit): Promise<T> {
+async function coreFetchOnce<T>(path: string, init?: RequestInit): Promise<T> {
   const hasJsonBody = init?.body != null && init.body !== "";
   const url = `${coreBase()}${path}`;
   let res: Response;
@@ -44,6 +45,15 @@ async function coreFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const text = await res.text();
   if (!text) return undefined as T;
   return JSON.parse(text) as T;
+}
+
+async function coreFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method || "GET").toUpperCase();
+  if (method !== "GET") {
+    return coreFetchOnce<T>(path, init);
+  }
+  const url = `${coreBase()}${path}`;
+  return dedupeGet(dedupeKey(method, url), () => coreFetchOnce<T>(path, init));
 }
 
 export type OrgSummary = {

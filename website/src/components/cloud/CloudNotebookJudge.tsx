@@ -69,7 +69,6 @@ export function CloudNotebookJudge() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState(0);
-  const [stageLog, setStageLog] = useState<string[]>([]);
   const [ctx, setCtx] = useState<CtxState>(null);
   const [confirm, setConfirm] = useState<
     | { kind: "trash-rubric"; id: string; name: string }
@@ -180,7 +179,6 @@ export function CloudNotebookJudge() {
     jobIdRef.current = jobId;
     setStatus("Queued…");
     setProgress(5);
-    setStageLog(["Queued…"]);
 
     await new Promise<void>((resolve, reject) => {
       const ac = new AbortController();
@@ -210,12 +208,6 @@ export function CloudNotebookJudge() {
             const line = (event.detail || event.status || "Working…").trim();
             setStatus(line);
             setProgress(event.progress ?? 0);
-            if (line) {
-              setStageLog((prev) => {
-                if (prev[prev.length - 1] === line) return prev;
-                return [...prev.slice(-8), line];
-              });
-            }
             return;
           }
           if (event.type === "job.done") {
@@ -488,15 +480,6 @@ export function CloudNotebookJudge() {
               style={{ width: `${Math.min(100, progress)}%` }}
             />
           </div>
-          {stageLog.length > 0 && (
-            <ul className="mt-2 max-h-24 space-y-0.5 overflow-y-auto text-[11px] text-nb-on-surface-variant/80">
-              {stageLog.map((line, i) => (
-                <li key={`${i}-${line}`} className="truncate">
-                  {line}
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
       )}
 

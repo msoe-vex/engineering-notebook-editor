@@ -26,7 +26,7 @@ Notebook accessors. Share-link publish/revoke: org admin/owner (from the Compile
 - [x] Compile uses the single compressed image assets (no quality/original picker)
 - [x] Split / LaTeX modes update live from editor content + metadata
 - [x] No automatic BusyTeX fallback (optional `NEXT_PUBLIC_ALLOW_BUSYTEX_COMPILE` escape only)
-- [x] Compile UI shows quiet SSE progress (percent + short status lines)
+- [x] Compile UI shows current-status-only progress (percent + single status line; no rolling stage log)
 
 ## Data and APIs
 

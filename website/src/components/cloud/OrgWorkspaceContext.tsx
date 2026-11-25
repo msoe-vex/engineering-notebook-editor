@@ -31,13 +31,17 @@ type OrgWorkspaceState = {
   pendingInviteCount: number;
   error: string | null;
   busy: boolean;
-  /** False until the first org payload lands. */
+  /** False until the first org + notebooks payload lands. */
   initialLoaded: boolean;
+  /** True after members/teams/invites have been fetched (or failed) for this org. */
+  directoryLoaded: boolean;
   /** Org missing or forbidden — show empty state instead of tabs/content. */
   orgUnavailable: boolean;
   canManage: boolean;
   canDeleteOrg: boolean;
   refresh: () => void;
+  /** Re-fetch members/teams/invites without blocking notebook list. */
+  refreshDirectory: () => void;
   setError: (message: string | null) => void;
   setBusy: (busy: boolean) => void;
 };
@@ -60,40 +64,34 @@ export function OrgWorkspaceProvider({
   const [orgUnavailable, setOrgUnavailable] = useState(false);
   const [busy, setBusy] = useState(false);
   const [initialLoaded, setInitialLoaded] = useState(false);
+  const [directoryLoaded, setDirectoryLoaded] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
+  const [directoryToken, setDirectoryToken] = useState(0);
 
   const refresh = useCallback(() => setReloadToken((n) => n + 1), []);
+  const refreshDirectory = useCallback(() => setDirectoryToken((n) => n + 1), []);
 
   const setError = useCallback((message: string | null) => {
     setErrorState(message);
     if (message) showNotification(formatCloudError(message), "error");
   }, []);
 
+  // Core shell: org + notebooks only (fast first paint).
   useEffect(() => {
     let cancelled = false;
     setInitialLoaded(false);
+    setDirectoryLoaded(false);
     setOrgUnavailable(false);
     queueMicrotask(() => {
       void (async () => {
         try {
-          const [o, n, m, t] = await Promise.all([
+          const [o, n] = await Promise.all([
             cloudApi.getOrg(orgId),
             cloudApi.listNotebooks(orgId),
-            cloudApi.listMembers(orgId),
-            cloudApi.listTeams(orgId).catch(() => [] as TeamSummary[]),
           ]);
-          let inv: InviteSummary[] = [];
-          try {
-            inv = await cloudApi.listInvites(orgId);
-          } catch {
-            inv = [];
-          }
           if (cancelled) return;
           setOrg(o);
           setNotebooks(n);
-          setTeams(t);
-          setMembers(m);
-          setInvites(inv);
           setOrgUnavailable(false);
           setErrorState(null);
         } catch (err) {
@@ -118,6 +116,40 @@ export function OrgWorkspaceProvider({
     };
   }, [orgId, reloadToken]);
 
+  // Directory (members / teams / invites) loads after shell — or on explicit refreshDirectory.
+  useEffect(() => {
+    if (!initialLoaded || orgUnavailable) return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      void (async () => {
+        try {
+          const [m, t] = await Promise.all([
+            cloudApi.listMembers(orgId),
+            cloudApi.listTeams(orgId).catch(() => [] as TeamSummary[]),
+          ]);
+          let inv: InviteSummary[] = [];
+          try {
+            inv = await cloudApi.listInvites(orgId);
+          } catch {
+            inv = [];
+          }
+          if (cancelled) return;
+          setMembers(m);
+          setTeams(t);
+          setInvites(inv);
+        } catch {
+          if (cancelled) return;
+          // Keep prior directory data; shell remains usable.
+        } finally {
+          if (!cancelled) setDirectoryLoaded(true);
+        }
+      })();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, initialLoaded, orgUnavailable, reloadToken, directoryToken]);
+
   const value = useMemo<OrgWorkspaceState>(
     () => ({
       orgId,
@@ -132,10 +164,12 @@ export function OrgWorkspaceProvider({
       error,
       busy,
       initialLoaded,
+      directoryLoaded,
       orgUnavailable,
       canManage: isOrgAdminRole(org?.role),
       canDeleteOrg: org?.role === "owner",
       refresh,
+      refreshDirectory,
       setError,
       setBusy,
     }),
@@ -149,8 +183,10 @@ export function OrgWorkspaceProvider({
       error,
       busy,
       initialLoaded,
+      directoryLoaded,
       orgUnavailable,
       refresh,
+      refreshDirectory,
       setError,
     ]
   );

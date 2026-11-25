@@ -93,7 +93,7 @@ function HomeInner() {
 
   useEffect(() => {
     let cancelled = false;
-    const tick = () => {
+    const load = () => {
       const ok = Boolean(session?.user || getDevToken());
       queueMicrotask(() => {
         if (cancelled) return;
@@ -104,8 +104,9 @@ function HomeInner() {
             const list = await cloudApi.listOrgs();
             if (cancelled) return;
             setOrgs(list);
+            // Cap fan-out; GET dedupe in cloudApi collapses parallel identical calls.
             const notebookLists = await Promise.all(
-              list.slice(0, 8).map(async (org) => {
+              list.slice(0, 6).map(async (org) => {
                 try {
                   const nbs = await cloudApi.listNotebooks(org.id);
                   return nbs.map((nb) => ({
@@ -136,13 +137,20 @@ function HomeInner() {
         })();
       });
     };
-    tick();
-    const t = setInterval(tick, 8000);
+    load();
+    // Refresh on focus / visibility — avoid 8s N+1 polling while idle.
+    const onFocus = () => load();
+    const onVis = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVis);
     return () => {
       cancelled = true;
-      clearInterval(t);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
     };
-  }, [reloadToken]);
+  }, [reloadToken, session?.user]);
 
   function refresh() {
     setReloadToken((n) => n + 1);
