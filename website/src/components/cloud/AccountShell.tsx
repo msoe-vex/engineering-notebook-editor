@@ -17,7 +17,7 @@ export function AccountShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col font-sans md:flex-row overflow-hidden">
-      <aside className="shrink-0 border-b border-nb-outline-variant/30 bg-nb-surface-low px-4 py-4 sm:px-6 md:w-60 md:border-b-0 md:border-r md:p-6 overflow-y-auto custom-scrollbar md:sticky md:top-0 md:self-start md:max-h-screen">
+      <aside className="shrink-0 border-b border-nb-outline-variant/30 bg-nb-surface-low px-4 py-4 sm:px-6 md:w-60 md:h-full md:border-b-0 md:border-r md:p-6 overflow-y-auto custom-scrollbar">
         <div className="mb-4 hidden md:block">
           <h1 className="text-nb-title font-bold tracking-tight text-nb-on-surface">Account</h1>
           <p className="mt-1 text-nb-caption text-nb-on-surface-variant">

@@ -103,7 +103,7 @@ export const metadataStoreAdapter = (store: MetadataStore) => {
 
       async findOne({ model, where }) {
         const idClause = where.find((w) => w.field === "id");
-        if (idClause && idClause.operator === "eq") {
+        if (idClause && (!idClause.operator || idClause.operator === "eq")) {
           const doc = await store.get(`${model}/${String(idClause.value)}`);
           if (!doc) return null;
           if (!matchInProcess(doc, where)) return null;
@@ -132,6 +132,13 @@ export const metadataStoreAdapter = (store: MetadataStore) => {
       },
 
       async findMany({ model, where, limit, sortBy }) {
+        const idClause = (where || []).find((w) => w.field === "id");
+        if (idClause && (!idClause.operator || idClause.operator === "eq")) {
+          const doc = await store.get(`${model}/${String(idClause.value)}`);
+          if (!doc || !matchInProcess(doc, where || [])) return [];
+          return [doc as any];
+        }
+
         const storeWheres: MetadataWhere[] = (where || [])
           .filter((w) => ["eq", "ne", "lt", "lte", "gt", "gte"].includes(w.operator))
           .map((w) => ({
@@ -183,7 +190,7 @@ export const metadataStoreAdapter = (store: MetadataStore) => {
 
       async delete({ model, where }) {
         const idClause = where.find((w) => w.field === "id");
-        if (idClause && idClause.operator === "eq") {
+        if (idClause && (!idClause.operator || idClause.operator === "eq")) {
           await store.delete(`${model}/${String(idClause.value)}`);
           return;
         }

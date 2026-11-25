@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { KeyRound } from "lucide-react";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
 import {
   Button,
@@ -37,8 +38,14 @@ export default function AccountProfilePage() {
   const [editingEmail, setEditingEmail] = useState(false);
   const [primaryEmailInput, setPrimaryEmailInput] = useState("");
   const [leaveHref, setLeaveHref] = useState<string | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const providers = accounts.map((a) => a.providerId.toLowerCase());
+  const hasPassword = providers.includes("credential");
+  const canUnlink = accounts.length > 1;
 
   function refreshProfile() {
     return cloudApi
@@ -158,10 +165,11 @@ export default function AccountProfilePage() {
     if (!newEmail.trim()) return;
     setSaving(true);
     try {
-      const res = await cloudApi.addSecondaryEmail(newEmail.trim());
+      const targetEmail = newEmail.trim();
+      const res = await cloudApi.addSecondaryEmail(targetEmail);
       setSecondaries(res.secondaryEmails);
       setNewEmail("");
-      showNotification("Verification email sent (check console/Mailhog locally)", "success");
+      showNotification(`Verification email sent to ${targetEmail}. Check your inbox.`, "success");
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -206,10 +214,14 @@ export default function AccountProfilePage() {
     const acc = accounts.find((a) => a.providerId.toLowerCase() === providerId.toLowerCase() || a.providerId.toLowerCase() === `${providerId.toLowerCase()}.com`);
     if (!acc) return;
     try {
-      await authClient.unlinkAccount({
+      const res = await authClient.unlinkAccount({
         accountId: acc.id,
       });
-      showNotification(`Unlinked ${providerId}`, "success");
+      if (res?.error) {
+        throw new Error(res.error.message || `Failed to unlink ${providerId}`);
+      }
+      const label = providerId.toLowerCase() === "credential" ? "Password" : providerId;
+      showNotification(`Unlinked ${label}`, "success");
       setAccounts((prev) => prev.filter((a) => a.id !== acc.id));
     } catch (err) {
       showNotification((err as Error).message, "error");
@@ -281,42 +293,14 @@ export default function AccountProfilePage() {
           placeholder="Your name"
         />
         <div className="space-y-1">
-          <div className="flex items-end gap-2">
-            <div className="flex-1">
-              <TextField
-                label="Primary email"
-                value={editingEmail ? primaryEmailInput : email}
-                disabled={!editingEmail}
-                readOnly={!editingEmail}
-                onChange={(e) => setPrimaryEmailInput(e.target.value)}
-              />
-            </div>
-            {editingEmail ? (
-              <div className="flex items-center gap-1.5 pb-0.5">
-                <Button size="sm" variant="primary" disabled={saving} onClick={() => void updatePrimaryEmail()}>
-                  Save
-                </Button>
-                <Button size="sm" variant="ghost" disabled={saving} onClick={() => setEditingEmail(false)}>
-                  Cancel
-                </Button>
-              </div>
-            ) : (
-              <div className="pb-0.5">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => {
-                    setPrimaryEmailInput(email);
-                    setEditingEmail(true);
-                  }}
-                >
-                  Change email
-                </Button>
-              </div>
-            )}
-          </div>
+          <TextField
+            label="Primary email"
+            value={email}
+            disabled
+            readOnly
+          />
           <p className="text-nb-caption text-nb-on-surface-variant">
-            Primary email is your main sign-in email. Verified secondary emails can match org invites.
+            Primary email is your main sign-in email. To change it, add and verify a secondary email below, then set it as primary.
           </p>
         </div>
       </section>
@@ -337,9 +321,36 @@ export default function AccountProfilePage() {
                   {s.verified ? "Verified" : "Pending verification"}
                 </span>
               </div>
-              <Button size="sm" variant="ghost" disabled={saving} onClick={() => void removeEmail(s.email)}>
-                Remove
-              </Button>
+              <div className="flex items-center gap-2">
+                {s.verified && s.email !== email && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={saving}
+                    onClick={async () => {
+                      setSaving(true);
+                      try {
+                        await authClient.changeEmail({
+                          newEmail: s.email,
+                          callbackURL: window.location.origin + "/account",
+                        });
+                        setEmail(s.email);
+                        showNotification(`Primary email updated to ${s.email}`, "success");
+                        await refreshProfile();
+                      } catch (err) {
+                        showNotification((err as Error).message || "Failed to set primary email", "error");
+                      } finally {
+                        setSaving(false);
+                      }
+                    }}
+                  >
+                    Make primary
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" disabled={saving} onClick={() => void removeEmail(s.email)}>
+                  Remove
+                </Button>
+              </div>
             </li>
           ))}
           {!secondaries.length && (
@@ -388,7 +399,10 @@ export default function AccountProfilePage() {
                           ? DiscordIcon
                           : key === "linkedin"
                             ? LinkedInIcon
-                            : null;
+                            : key === "credential"
+                              ? KeyRound
+                              : null;
+                  const label = key === "credential" ? "Password" : key;
                   return (
                     <li
                       key={id}
@@ -396,7 +410,7 @@ export default function AccountProfilePage() {
                     >
                       <span className="inline-flex items-center gap-2 font-medium text-nb-on-surface capitalize">
                         {Icon ? <Icon className="h-4 w-4" /> : null}
-                        {key}
+                        {label}
                         <span className="text-nb-caption font-normal text-nb-on-surface-variant">
                           Connected
                         </span>
@@ -404,7 +418,13 @@ export default function AccountProfilePage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="text-nb-danger hover:bg-nb-danger/10"
+                        disabled={!canUnlink}
+                        title={
+                          canUnlink
+                            ? `Unlink ${id}`
+                            : "Cannot unlink your only sign-in method. Link another provider or set a password first."
+                        }
+                        className="text-nb-danger hover:bg-nb-danger/10 disabled:opacity-40"
                         onClick={() => void unlink(id)}
                       >
                         Unlink
@@ -469,6 +489,133 @@ export default function AccountProfilePage() {
               )}
             </div>
           </>
+        )}
+      </section>
+
+      <section className="space-y-3 border-t border-nb-outline-variant/20 pt-6">
+        <h3 className="text-nb-body font-semibold text-nb-on-surface">Password</h3>
+        {hasPassword ? (
+          <form
+            className="space-y-3 max-w-md"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!newPassword || newPassword !== confirmPassword) {
+                showNotification("New passwords do not match.", "error");
+                return;
+              }
+              setChangingPassword(true);
+              try {
+                const res = await authClient.changePassword({
+                  currentPassword,
+                  newPassword,
+                  revokeOtherSessions: false,
+                });
+                if (res?.error) {
+                  throw new Error(res.error.message || "Failed to change password.");
+                }
+                setCurrentPassword("");
+                setNewPassword("");
+                setConfirmPassword("");
+                showNotification("Password updated.", "success");
+              } catch (err) {
+                showNotification((err as Error).message || "Failed to change password.", "error");
+              } finally {
+                setChangingPassword(false);
+              }
+            }}
+          >
+            <TextField
+              label="Current password"
+              type="password"
+              required
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+            />
+            <TextField
+              label="New password"
+              type="password"
+              required
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+            <TextField
+              label="Confirm new password"
+              type="password"
+              required
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+            <Button
+              type="submit"
+              size="sm"
+              variant="secondary"
+              disabled={changingPassword || !currentPassword || !newPassword || !confirmPassword}
+            >
+              {changingPassword ? "Updating…" : "Change password"}
+            </Button>
+          </form>
+        ) : (
+          <form
+            className="space-y-3 max-w-md"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!newPassword || newPassword !== confirmPassword) {
+                showNotification("Passwords do not match.", "error");
+                return;
+              }
+              setChangingPassword(true);
+              try {
+                const res = await fetch("/api/auth/set-password", {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ newPassword }),
+                });
+                const data = (await res.json().catch(() => ({}))) as { error?: string };
+                if (!res.ok) {
+                  throw new Error(data.error || "Failed to set password.");
+                }
+                setNewPassword("");
+                setConfirmPassword("");
+                const accRes = await authClient.listAccounts().catch(() => null);
+                if (accRes?.data) {
+                  setAccounts(accRes.data as Array<{ id: string; providerId: string }>);
+                }
+                showNotification("Password set. You can now sign in with email and password.", "success");
+              } catch (err) {
+                showNotification((err as Error).message || "Failed to set password.", "error");
+              } finally {
+                setChangingPassword(false);
+              }
+            }}
+          >
+            <p className="text-nb-caption text-nb-on-surface-variant">
+              You sign in with an external provider. Set a password if you also want to sign in with your email.
+            </p>
+            <TextField
+              label="New password"
+              type="password"
+              required
+              minLength={8}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+            <TextField
+              label="Confirm password"
+              type="password"
+              required
+              minLength={8}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+            <Button
+              type="submit"
+              size="sm"
+              variant="secondary"
+              disabled={changingPassword || !newPassword || !confirmPassword}
+            >
+              {changingPassword ? "Saving…" : "Set password"}
+            </Button>
+          </form>
         )}
       </section>
 

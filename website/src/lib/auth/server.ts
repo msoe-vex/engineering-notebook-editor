@@ -7,17 +7,27 @@ export const auth = betterAuth({
   database: metadataStoreAdapter(getWebsiteMetadataStore()),
   secret: process.env.BETTER_AUTH_SECRET || "dev-better-auth-secret-key-min-32-chars-long",
   baseURL: process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+  onAPIError: {
+    errorURL: "/",
+  },
   socialProviders: {
     github: {
       clientId: process.env.GITHUB_CLIENT_ID || "dev_github_client_id",
       clientSecret: process.env.GITHUB_CLIENT_SECRET || "dev_github_client_secret",
       scope: ["user:email", "read:user"],
       mapProfileToUser: (profile) => {
-        // Fallback email if GitHub account keeps all emails private / hidden
-        const email = profile.email || `${profile.login}@users.noreply.github.com`;
+        if (profile.email) {
+          return {
+            email: profile.email,
+            emailVerified: true,
+            needsEmailOnboarding: false,
+          };
+        }
+        // Placeholder email when GitHub keeps all emails private; gated to onboarding UI
         return {
-          email,
-          emailVerified: true,
+          email: `pending-${profile.id}@placeholder.local`,
+          emailVerified: false,
+          needsEmailOnboarding: true,
         };
       },
       enabled: true,
@@ -42,6 +52,13 @@ export const auth = betterAuth({
     enabled: true,
   },
   user: {
+    additionalFields: {
+      needsEmailOnboarding: {
+        type: "boolean",
+        required: false,
+        defaultValue: false,
+      },
+    },
     changeEmail: {
       enabled: true,
     },
@@ -49,8 +66,9 @@ export const auth = betterAuth({
   account: {
     accountLinking: {
       enabled: true,
+      disableImplicitLinking: true,
       allowDifferentEmails: true,
-      trustedProviders: ["github", "discord", "google", "linkedin"],
+      trustedProviders: ["google"],
     },
   },
   plugins: [

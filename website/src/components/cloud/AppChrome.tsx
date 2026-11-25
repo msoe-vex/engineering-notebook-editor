@@ -278,6 +278,19 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
     }
   }
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const authError = params.get("error");
+    if (authError === "account_not_linked") {
+      setError(
+        "An account with that email already exists. Sign in with your original method, then link this provider from Account Settings."
+      );
+    } else if (authError) {
+      setError(`Sign-in failed (${authError}). Please try again.`);
+    }
+  }, []);
+
   async function handleDevSignIn() {
     setError(null);
     const uid = devUid.trim() || "local-user";
