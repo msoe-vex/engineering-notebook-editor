@@ -175,16 +175,19 @@ export function NotebookSideRail({
   return (
     <aside
       className={cn(
+        // Mobile: full width stacked. Desktop: fixed rail width so the sibling main pane keeps flex-1 space.
         "relative flex w-full shrink-0 flex-col border-b border-nb-outline-variant/30 bg-nb-surface-low md:max-h-none md:border-b-0 md:border-r",
         mobileMaxHeightClassName,
-        !resizable && widthClassName,
+        resizable ? "md:w-[var(--rail-w)]" : widthClassName,
         className
       )}
-      style={resizable ? ({ ["--rail-w" as string]: `${widthPx}px` } as React.CSSProperties) : undefined}
+      style={
+        resizable
+          ? ({ ["--rail-w" as string]: `${widthPx}px` } as React.CSSProperties)
+          : undefined
+      }
     >
-      <div
-        className={cn("flex min-h-0 w-full flex-1 flex-col", resizable && "md:w-[var(--rail-w)]")}
-      >
+      <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
         <div className="flex shrink-0 items-center gap-1 border-b border-nb-outline-variant/20 px-2 py-2">
           {title != null ? (
             <div className="min-w-0 flex-1 truncate text-nb-label font-semibold text-nb-on-surface">
