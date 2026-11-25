@@ -282,6 +282,11 @@ export type EntryMetadata = {
   /** Sibling position within `folderId` in the file explorer. Defaults to `order` when absent. */
   explorerOrder?: number;
   isTemplate?: boolean;
+  /**
+   * When true, entry stays in the explorer but is omitted from competition PDF compile.
+   * Distinct from trash (`deletedAt`) and templates (`isTemplate`).
+   */
+  hidden?: boolean;
   resources?: Record<string, { title: string; caption: string; type: string }>;
   isValid?: boolean;
   references?: string[];

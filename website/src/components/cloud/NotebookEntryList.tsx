@@ -437,6 +437,14 @@ function EntryRowShell({
 
         {!renaming && (
           <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-1">
+            {entry.hidden && !entry.isTemplate && (
+              <span
+                title="Hidden from PDF"
+                className="rounded bg-nb-surface-low px-1 text-[9px] font-semibold uppercase tracking-wide text-nb-on-surface-variant"
+              >
+                Hidden
+              </span>
+            )}
             {entry.date && !entry.isTemplate && (
               <span className="hidden text-[10px] tabular-nums text-nb-on-surface-variant/60 group-hover:inline-block pointer-coarse:inline-block">
                 {formatEntryListDate(entry.date)}
@@ -1634,7 +1642,20 @@ export function NotebookEntryList({
                 }),
             },
           ]
-        : []),
+        : [
+            {
+              id: "toggle-hidden",
+              label: e.hidden ? "Include in PDF" : "Hide from PDF",
+              onSelect: () => {
+                void cloudApi
+                  .patchEntry(orgId, notebookId, id, { hidden: !e.hidden })
+                  .then(() => refresh())
+                  .catch((err) =>
+                    showNotification((err as Error).message || "Update failed", "error")
+                  );
+              },
+            },
+          ]),
       {
         id: "dup",
         label: "Duplicate",

@@ -13,6 +13,8 @@ export type EntryMeta = {
   authors?: string[];
   assetIds?: string[];
   isTemplate?: boolean;
+  /** Omit from competition PDF compile while keeping in explorer. */
+  hidden?: boolean;
   isValid?: boolean;
   validationErrors?: string[];
   createdAt?: string;

@@ -1778,6 +1778,7 @@ export async function registerOrgRoutes(
       "order",
       "explorerOrder",
       "isTemplate",
+      "hidden",
       "resources",
       "references",
       "assetIds",

@@ -71,6 +71,7 @@ function entryFromApi(raw: Record<string, unknown>): EntryMeta {
     authors: Array.isArray(raw.authors) ? (raw.authors as string[]) : [],
     assetIds: Array.isArray(raw.assetIds) ? (raw.assetIds as string[]) : undefined,
     isTemplate: Boolean(raw.isTemplate),
+    hidden: Boolean(raw.hidden),
     isValid: raw.isValid as boolean | undefined,
     validationErrors: Array.isArray(raw.validationErrors)
       ? (raw.validationErrors as string[])

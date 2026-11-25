@@ -367,7 +367,7 @@ export default function SettingsPage({ onClose, isEmbedded = false }: SettingsPa
                         setGenAIBaseUrl(e.target.value, provider);
                       }}
                       className="flex-1 min-w-0 bg-transparent outline-none text-sm font-medium text-nb-on-surface placeholder:text-nb-on-surface-variant/40"
-                      aria-label="Local model URL"
+                      aria-label="Custom AI model URL"
                     />
                   </div>
                 )}

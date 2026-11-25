@@ -22,7 +22,7 @@ Users authenticate via an **identity adapter** (Firebase Auth today, including t
 ## User-facing behavior
 
 - Website auth chrome: email & password; **dev token** (local); **forgot password** → reset email → set new password (planned)
-- Email verification enforced for primary email; `EmailVerificationScreen` with status, resend (cooldown), local bypass
+- Email verification enforced for primary email; `EmailVerificationScreen` with status, working resend (client sessionStorage cooldown + Core `/user/me/verification/resend-gate`), local bypass in development only
 - **Social sign-in** (planned): at least GitHub and Google; LinkedIn if OIDC is practical — buttons on auth chrome
 - **Account linking** (planned): from Account settings, link/unlink providers; clear error if provider identity belongs to another user
 - **Multi-email** (planned): one **primary** (IdP); **secondary** emails on the user profile, each verified before they count for invite email-matching

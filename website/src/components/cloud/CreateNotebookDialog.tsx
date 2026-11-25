@@ -11,7 +11,7 @@ import {
   type CloudNotebookSummary,
   type TeamSummary,
 } from "@/lib/cloud/api";
-import { AccessAllowlistPicker } from "./AccessAllowlistPicker";
+import { NotebookAccessFields } from "./NotebookAccessFields";
 
 export type CreateNotebookDialogProps = {
   isOpen: boolean;
@@ -128,47 +128,19 @@ export function CreateNotebookDialog({
         </div>
 
         <div className="flex flex-col gap-2.5 rounded-nb-xl border border-nb-outline-variant/20 bg-nb-surface-low/30 p-4">
-          <div>
-            <h4 className="text-nb-label font-semibold text-nb-on-surface">
-              Permissions & access
-            </h4>
-            <p className="mt-0.5 text-nb-caption text-nb-on-surface-variant">
-              Organization owners and admins can always open every notebook. Choose who else can
-              access this notebook.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2 pt-1">
-            <Button
-              type="button"
-              size="sm"
-              variant={accessMode === "org" ? "primary" : "secondary"}
-              onClick={() => setAccessMode("org")}
-            >
-              Entire organization
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={accessMode === "restricted" ? "primary" : "secondary"}
-              onClick={() => setAccessMode("restricted")}
-            >
-              Restricted
-            </Button>
-          </div>
-
-          {accessMode === "restricted" && (
-            <div className="mt-2 pt-2 border-t border-nb-outline-variant/15">
-              <AccessAllowlistPicker
-                teams={teamsList}
-                people={peopleList}
-                teamIds={teamIds}
-                userIds={userIds}
-                onTeamIdsChange={setTeamIds}
-                onUserIdsChange={setUserIds}
-              />
-            </div>
-          )}
+          <h4 className="text-nb-label font-semibold text-nb-on-surface">
+            Permissions & access
+          </h4>
+          <NotebookAccessFields
+            accessMode={accessMode}
+            onAccessModeChange={setAccessMode}
+            teams={teamsList}
+            people={peopleList}
+            teamIds={teamIds}
+            userIds={userIds}
+            onTeamIdsChange={setTeamIds}
+            onUserIdsChange={setUserIds}
+          />
         </div>
 
         <div className="flex justify-end gap-2 pt-1">

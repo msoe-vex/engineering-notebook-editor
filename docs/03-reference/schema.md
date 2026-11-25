@@ -56,6 +56,7 @@ title, authors[], phase, date
 folderId, explorerOrder   // file explorer (sibling order within folder)
 order                     // calendar + compile same-day tiebreaker
 isTemplate?
+hidden?                   // omit from PDF compile; still listed in explorer
 resources?, references?, assetIds?
 isValid?, validationErrors?
 tipTapGcsPath, tipTapRev, yjsGcsPath, yjsRev

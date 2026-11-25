@@ -10,7 +10,7 @@ import {
   type NotebookAccess,
   type TeamSummary,
 } from "@/lib/cloud/api";
-import { AccessAllowlistPicker } from "./AccessAllowlistPicker";
+import { NotebookAccessFields } from "./NotebookAccessFields";
 import { useOptionalNotebookWorkspace } from "./NotebookWorkspaceContext";
 
 export type ShareNotebookDialogProps = {
@@ -154,38 +154,18 @@ export function ShareNotebookDialog({
   return (
     <Dialog isOpen={open} onClose={onClose} title={dialogTitle} wide>
       <div className="flex flex-col gap-4">
-        <p className="text-nb-body text-nb-on-surface-variant">
-          Organization owners and admins can always open every notebook. Choose who else can
-          open this one. To add someone new to the org, use Invites.
-        </p>
-
-        <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            variant={accessMode === "org" ? "primary" : "secondary"}
-            onClick={() => setAccessMode("org")}
-          >
-            Entire organization
-          </Button>
-          <Button
-            size="sm"
-            variant={accessMode === "restricted" ? "primary" : "secondary"}
-            onClick={() => setAccessMode("restricted")}
-          >
-            Restricted
-          </Button>
-        </div>
-
-        {accessMode === "restricted" && (
-          <AccessAllowlistPicker
-            teams={teams}
-            people={people}
-            teamIds={teamIds}
-            userIds={userIds}
-            onTeamIdsChange={setTeamIds}
-            onUserIdsChange={setUserIds}
-          />
-        )}
+        <NotebookAccessFields
+          accessMode={accessMode}
+          onAccessModeChange={setAccessMode}
+          teams={teams}
+          people={people}
+          teamIds={teamIds}
+          userIds={userIds}
+          onTeamIdsChange={setTeamIds}
+          onUserIdsChange={setUserIds}
+          description="Organization owners and admins can always open every notebook. Choose who else can open this one. To add someone new to the org, use Invites. (Public PDF links are managed under Compile.)"
+          disabled={busy}
+        />
 
         <div className="flex justify-end gap-2 pt-1">
           <Button size="sm" variant="secondary" onClick={onClose} disabled={busy}>

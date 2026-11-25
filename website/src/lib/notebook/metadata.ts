@@ -119,11 +119,14 @@ export interface EntryMetadata {
   filename: string; // Path to the entry file (e.g. "data/entry/uuid.json")
   order: number;
   isTemplate?: boolean; // When true, excluded from LaTeX entries.tex compilation and export
+  /** Omit from competition PDF while remaining in the explorer. */
+  hidden?: boolean;
   resources?: Record<string, { title: string, caption: string, type: string }>; // block uuid -> metadata
   isValid?: boolean;
   references?: string[]; // List of target UUIDs this entry points to
   assets?: string[]; // List of asset paths used in this entry
   validationErrors?: string[]; // Detailed messages for the UI
+  deletedAt?: string | null;
 }
 
 export interface TeamMember {

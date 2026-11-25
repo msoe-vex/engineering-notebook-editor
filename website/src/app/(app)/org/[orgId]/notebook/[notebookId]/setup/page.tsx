@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Trash2 } from "lucide-react";
-import { AccessAllowlistPicker } from "@/components/cloud/AccessAllowlistPicker";
+import { NotebookAccessFields } from "@/components/cloud/NotebookAccessFields";
 import { NotebookPhasesEditor } from "@/components/cloud/NotebookPhasesEditor";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
 import { SettingsPageSkeleton } from "@/components/cloud/notebookPageSkeletons";
@@ -352,46 +352,24 @@ export default function NotebookSetupPage() {
               . Only organization admins and owners can modify notebook access.
             </div>
           ) : (
-            <>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant={accessMode === "org" ? "primary" : "secondary"}
-                  disabled={isArchived}
-                  onClick={() => setAccessMode("org")}
-                >
-                  Entire organization
-                </Button>
-                <Button
-                  size="sm"
-                  variant={accessMode === "restricted" ? "primary" : "secondary"}
-                  disabled={isArchived}
-                  onClick={() => setAccessMode("restricted")}
-                >
-                  Restricted
-                </Button>
-              </div>
-
-              {accessMode === "restricted" && (
-                <div
-                  className={`rounded-nb-xl border border-nb-outline-variant/30 p-4 ${isArchived ? "pointer-events-none opacity-60" : ""}`}
-                >
-                  <AccessAllowlistPicker
-                    teams={teams}
-                    people={people}
-                    teamIds={teamIds}
-                    userIds={userIds}
-                    onTeamIdsChange={setTeamIds}
-                    onUserIdsChange={setUserIds}
-                  />
-                  {!teams.length && !people.length && (
-                    <p className="mt-2 text-nb-caption text-nb-on-surface-variant">
-                      No teams or people yet.
-                    </p>
-                  )}
-                </div>
+            <div className={isArchived ? "pointer-events-none opacity-60" : undefined}>
+              <NotebookAccessFields
+                accessMode={accessMode}
+                onAccessModeChange={setAccessMode}
+                teams={teams}
+                people={people}
+                teamIds={teamIds}
+                userIds={userIds}
+                onTeamIdsChange={setTeamIds}
+                onUserIdsChange={setUserIds}
+                disabled={isArchived}
+              />
+              {accessMode === "restricted" && !teams.length && !people.length && (
+                <p className="mt-2 text-nb-caption text-nb-on-surface-variant">
+                  No teams or people yet.
+                </p>
               )}
-            </>
+            </div>
           )}
         </FormSection>
       )}

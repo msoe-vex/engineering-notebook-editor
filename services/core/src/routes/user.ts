@@ -10,6 +10,7 @@ import { getMetadataStore } from "../db/metadataStore.js";
 import { omitUndefined } from "../db/sanitize.js";
 import { getUser } from "../http/authPlugin.js";
 import {
+  limitPrimaryEmailResend,
   limitSecondaryEmailSend,
   rateLimitReply,
 } from "../http/rateLimit.js";
@@ -135,6 +136,16 @@ export async function registerUserRoutes(
       ...profile,
       secondaryEmails: publicSecondaryEmails(profile.secondaryEmails),
     };
+  });
+
+  /**
+   * Rate-limit gate for primary email verification resend (IdP/Better Auth still sends the mail).
+   */
+  app.post("/user/me/verification/resend-gate", async (request, reply) => {
+    const user = getUser(request);
+    const limited = limitPrimaryEmailResend(user.uid);
+    if (!limited.ok) return rateLimitReply(reply, limited);
+    return { ok: true, cooldownSec: 60 };
   });
 
   app.post("/user/me/secondary-emails", async (request, reply) => {

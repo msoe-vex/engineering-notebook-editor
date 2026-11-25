@@ -12,6 +12,8 @@ export interface EntryMetadata {
   filename: string;
   order: number;
   isTemplate?: boolean;
+  /** Omit from competition PDF while remaining in the explorer. */
+  hidden?: boolean;
   assets?: string[];
   deletedAt?: string | null;
 }
@@ -95,7 +97,7 @@ export function sortedForCompile(
   entries: Record<string, EntryMetadata>
 ): Identified<EntryMetadata>[] {
   return Object.entries(entries)
-    .filter(([, e]) => !e.isTemplate && !e.deletedAt)
+    .filter(([, e]) => !e.isTemplate && !e.deletedAt && !e.hidden)
     .map(([id, value]) => ({ id, ...value }))
     .sort(
       (a, b) =>

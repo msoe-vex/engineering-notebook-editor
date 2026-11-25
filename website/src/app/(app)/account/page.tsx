@@ -3,7 +3,16 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ConfirmationDialog from "@/components/dialogs/ConfirmationDialog";
-import { Button, TextField, Alert, GoogleIcon, GitHubIcon, DiscordIcon, LinkedInIcon } from "@/components/ui";
+import {
+  Button,
+  TextField,
+  Alert,
+  GoogleIcon,
+  GitHubIcon,
+  DiscordIcon,
+  LinkedInIcon,
+  Skeleton,
+} from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
 import { useSession, linkSocial, authClient, getDevToken } from "@/lib/auth/client";
 import { showNotification } from "@/components/overlays/Notification";
@@ -23,6 +32,7 @@ export default function AccountProfilePage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<Array<{ id: string; providerId: string }>>([]);
+  const [accountsLoading, setAccountsLoading] = useState(true);
   const [editingEmail, setEditingEmail] = useState(false);
   const [primaryEmailInput, setPrimaryEmailInput] = useState("");
   const [leaveHref, setLeaveHref] = useState<string | null>(null);
@@ -57,11 +67,20 @@ export default function AccountProfilePage() {
     void refreshProfile();
 
     if (session?.user) {
-      void authClient.listAccounts().then((res) => {
-        if (!cancelled && res.data) {
-          setAccounts(res.data as Array<{ id: string; providerId: string }>);
-        }
-      }).catch(() => null);
+      setAccountsLoading(true);
+      void authClient
+        .listAccounts()
+        .then((res) => {
+          if (!cancelled && res.data) {
+            setAccounts(res.data as Array<{ id: string; providerId: string }>);
+          }
+        })
+        .catch(() => null)
+        .finally(() => {
+          if (!cancelled) setAccountsLoading(false);
+        });
+    } else {
+      setAccountsLoading(false);
     }
 
     return () => {
@@ -166,7 +185,7 @@ export default function AccountProfilePage() {
   async function link(provider: "google" | "github" | "discord" | "linkedin") {
     if (isDevToken) {
       showNotification(
-        "Social accounts cannot be linked to synthetic dev token accounts (like service-admin). Sign in directly with Google/GitHub to manage linked providers.",
+        "Social account linking isn’t available for this local session. Sign in with Google or GitHub instead.",
         "error"
       );
       return;
@@ -345,49 +364,111 @@ export default function AccountProfilePage() {
         <h3 className="text-nb-body font-semibold text-nb-on-surface">Linked providers</h3>
         {isDevToken && (
           <Alert variant="info">
-            You are signed in with a local synthetic dev token (<strong>{getDevToken()}</strong>). Social account linking requires an authentic Better Auth session. To link social accounts, sign in directly with Google, GitHub, Discord, or LinkedIn.
+            Local development session — link Google, GitHub, Discord, or LinkedIn after signing in with those providers.
           </Alert>
         )}
-        <ul className="space-y-2 text-nb-caption text-nb-on-surface-variant">
-          {providers.length ? (
-            providers.map((id) => (
-              <li key={id} className="flex flex-wrap items-center gap-2">
-                <span className="font-medium text-nb-on-surface capitalize">{id.replace(".com", "")}</span>
-                <Button size="sm" variant="ghost" className="text-nb-danger hover:bg-nb-danger/10" onClick={() => void unlink(id)}>
-                  Unlink
+        {accountsLoading ? (
+          <div className="space-y-2" aria-busy="true" aria-label="Loading linked providers">
+            <Skeleton className="h-10 w-full rounded-nb-lg" />
+            <Skeleton className="h-10 w-full rounded-nb-lg" />
+          </div>
+        ) : (
+          <>
+            <ul className="divide-y divide-nb-outline-variant/20 overflow-hidden rounded-nb-xl border border-nb-outline-variant/30">
+              {providers.length ? (
+                providers.map((id) => {
+                  const key = id.replace(/\.com$/i, "").toLowerCase();
+                  const Icon =
+                    key === "google"
+                      ? GoogleIcon
+                      : key === "github"
+                        ? GitHubIcon
+                        : key === "discord"
+                          ? DiscordIcon
+                          : key === "linkedin"
+                            ? LinkedInIcon
+                            : null;
+                  return (
+                    <li
+                      key={id}
+                      className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-nb-body"
+                    >
+                      <span className="inline-flex items-center gap-2 font-medium text-nb-on-surface capitalize">
+                        {Icon ? <Icon className="h-4 w-4" /> : null}
+                        {key}
+                        <span className="text-nb-caption font-normal text-nb-on-surface-variant">
+                          Connected
+                        </span>
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-nb-danger hover:bg-nb-danger/10"
+                        onClick={() => void unlink(id)}
+                      >
+                        Unlink
+                      </Button>
+                    </li>
+                  );
+                })
+              ) : (
+                <li className="px-4 py-6 text-center text-nb-caption text-nb-on-surface-variant">
+                  No social accounts linked yet.
+                </li>
+              )}
+            </ul>
+            <div className="flex flex-wrap gap-2">
+              {!providers.includes("google") && !providers.includes("google.com") && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="gap-2"
+                  disabled={accountsLoading}
+                  onClick={() => void link("google")}
+                >
+                  <GoogleIcon className="h-4 w-4" />
+                  Link Google
                 </Button>
-              </li>
-            ))
-          ) : (
-            <li>password / email only</li>
-          )}
-        </ul>
-        <div className="flex flex-wrap gap-2">
-          {!providers.includes("google") && !providers.includes("google.com") && (
-            <Button size="sm" variant="secondary" className="gap-2" onClick={() => void link("google")}>
-              <GoogleIcon className="h-4 w-4" />
-              Link Google
-            </Button>
-          )}
-          {!providers.includes("github") && !providers.includes("github.com") && (
-            <Button size="sm" variant="secondary" className="gap-2" onClick={() => void link("github")}>
-              <GitHubIcon className="h-4 w-4" />
-              Link GitHub
-            </Button>
-          )}
-          {!providers.includes("discord") && !providers.includes("discord.com") && (
-            <Button size="sm" variant="secondary" className="gap-2" onClick={() => void link("discord")}>
-              <DiscordIcon className="h-4 w-4 text-[#5865F2]" />
-              Link Discord
-            </Button>
-          )}
-          {!providers.includes("linkedin") && !providers.includes("linkedin.com") && (
-            <Button size="sm" variant="secondary" className="gap-2" onClick={() => void link("linkedin")}>
-              <LinkedInIcon className="h-4 w-4 text-[#0A66C2]" />
-              Link LinkedIn
-            </Button>
-          )}
-        </div>
+              )}
+              {!providers.includes("github") && !providers.includes("github.com") && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="gap-2"
+                  disabled={accountsLoading}
+                  onClick={() => void link("github")}
+                >
+                  <GitHubIcon className="h-4 w-4" />
+                  Link GitHub
+                </Button>
+              )}
+              {!providers.includes("discord") && !providers.includes("discord.com") && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="gap-2"
+                  disabled={accountsLoading}
+                  onClick={() => void link("discord")}
+                >
+                  <DiscordIcon className="h-4 w-4 text-[#5865F2]" />
+                  Link Discord
+                </Button>
+              )}
+              {!providers.includes("linkedin") && !providers.includes("linkedin.com") && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="gap-2"
+                  disabled={accountsLoading}
+                  onClick={() => void link("linkedin")}
+                >
+                  <LinkedInIcon className="h-4 w-4 text-[#0A66C2]" />
+                  Link LinkedIn
+                </Button>
+              )}
+            </div>
+          </>
+        )}
       </section>
 
       <ConfirmationDialog

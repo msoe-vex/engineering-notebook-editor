@@ -5,6 +5,7 @@ import { Mail, RefreshCw, LogOut, CheckCircle2 } from "lucide-react";
 import { authClient } from "@/lib/auth/client";
 import Logo from "@/components/icons/Logo";
 import { Alert, Button } from "@/components/ui";
+import { cloudApi } from "@/lib/cloud/api";
 
 interface UserLike {
   email?: string | null;
@@ -19,6 +20,27 @@ interface EmailVerificationScreenProps {
   onBypass?: () => void;
 }
 
+const COOLDOWN_KEY = "ene_email_verify_cooldown_until";
+const COOLDOWN_SEC = 60;
+
+function readCooldownRemaining(): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    const until = Number(sessionStorage.getItem(COOLDOWN_KEY) || 0);
+    return Math.max(0, Math.ceil((until - Date.now()) / 1000));
+  } catch {
+    return 0;
+  }
+}
+
+function writeCooldown(sec: number) {
+  try {
+    sessionStorage.setItem(COOLDOWN_KEY, String(Date.now() + sec * 1000));
+  } catch {
+    /* ignore */
+  }
+}
+
 export function EmailVerificationScreen({
   user,
   onSignOut,
@@ -31,9 +53,14 @@ export function EmailVerificationScreen({
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
+    setCooldown(readCooldownRemaining());
+  }, []);
+
+  useEffect(() => {
     if (cooldown <= 0) return;
     const timer = setInterval(() => {
-      setCooldown((prev) => Math.max(0, prev - 1));
+      const left = readCooldownRemaining();
+      setCooldown(left);
     }, 1000);
     return () => clearInterval(timer);
   }, [cooldown]);
@@ -43,7 +70,11 @@ export function EmailVerificationScreen({
     setMessage(null);
     try {
       if (user.reload) await user.reload();
-      if (user.emailVerified) {
+      const session = await authClient.getSession();
+      const verified = Boolean(
+        session?.data?.user?.emailVerified || user.emailVerified
+      );
+      if (verified) {
         onVerified();
       } else {
         setMessage({
@@ -62,19 +93,35 @@ export function EmailVerificationScreen({
   }
 
   async function handleResendEmail() {
-    if (cooldown > 0) return;
+    if (cooldown > 0 || !user.email) return;
     setResending(true);
     setMessage(null);
     try {
+      // Server gate (per-uid rate limit) then IdP/Better Auth send.
+      await cloudApi.resendEmailVerificationGate();
+      const result = await authClient.sendVerificationEmail({
+        email: user.email,
+        callbackURL: typeof window !== "undefined" ? window.location.origin : "/",
+      });
+      if (result?.error) {
+        throw new Error(result.error.message || "Failed to send verification email.");
+      }
+      writeCooldown(COOLDOWN_SEC);
+      setCooldown(COOLDOWN_SEC);
       setMessage({
         type: "success",
         text: `A fresh verification link has been sent to ${user.email}. Check your inbox and spam folder.`,
       });
-      setCooldown(60);
     } catch (err) {
+      const e = err as Error & { status?: number; retryAfterSec?: number };
+      if (e.message?.includes("too many") || e.message?.includes("rate_limited")) {
+        const sec = e.retryAfterSec || COOLDOWN_SEC;
+        writeCooldown(sec);
+        setCooldown(sec);
+      }
       setMessage({
         type: "error",
-        text: (err as Error).message || "Failed to send verification email.",
+        text: e.message || "Failed to send verification email.",
       });
     } finally {
       setResending(false);
@@ -112,43 +159,36 @@ export function EmailVerificationScreen({
             </div>
           </div>
 
-          <p className="text-nb-caption text-nb-on-surface-variant leading-relaxed">
-            Please click the link in your email to verify your address and access your engineering
-            notebooks. If you don&apos;t see the email, be sure to check your spam or promotions folder.
-          </p>
-
           {message && (
             <Alert variant={message.type === "success" ? "info" : "error"}>
-              <div className="flex items-center gap-2">
-                {message.type === "success" && <CheckCircle2 size={16} className="shrink-0" />}
-                <span>{message.text}</span>
-              </div>
+              {message.type === "success" && (
+                <CheckCircle2 className="inline h-4 w-4 mr-1" />
+              )}
+              {message.text}
             </Alert>
           )}
 
-          <div className="flex flex-col gap-2 pt-2">
+          <div className="flex flex-col gap-2">
             <Button
               variant="primary"
               className="w-full justify-center"
               disabled={checking}
               onClick={() => void handleCheckStatus()}
             >
-              <RefreshCw size={15} className={checking ? "animate-spin" : ""} />
-              {checking ? "Checking..." : "I've verified my email"}
+              {checking ? "Checking…" : "I've verified — continue"}
             </Button>
-
             <Button
               variant="secondary"
-              className="w-full justify-center"
+              className="w-full justify-center gap-2"
               disabled={resending || cooldown > 0}
               onClick={() => void handleResendEmail()}
             >
-              <Mail size={15} />
+              <RefreshCw size={14} className={resending ? "animate-spin" : undefined} />
               {cooldown > 0
                 ? `Resend available in ${cooldown}s`
                 : resending
-                ? "Sending..."
-                : "Resend verification email"}
+                  ? "Sending…"
+                  : "Resend verification email"}
             </Button>
           </div>
 
@@ -179,4 +219,3 @@ export function EmailVerificationScreen({
     </div>
   );
 }
-

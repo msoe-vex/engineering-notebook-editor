@@ -94,6 +94,7 @@ function toEntryMetadata(
     filename: id,
     order: e.order ?? 0,
     isTemplate: e.isTemplate,
+    hidden: e.hidden,
     assets: (e.assetIds || []).map((aid) => pathForId?.(aid) ?? cloudAssetVfsPath(aid)),
   };
 }
@@ -159,7 +160,7 @@ export async function compileCloudNotebook(opts: {
 
   const tipTapByEntry = new Map<string, TipTapNode>();
   for (const [id, e] of Object.entries(entries)) {
-    if (e.isTemplate) continue;
+    if (e.isTemplate || e.hidden || e.deletedAt) continue;
     for (const aid of e.assetIds || []) neededAssets.add(aid);
     const raw = await cloudApi
       .getEntryContent(orgId, notebookId, id)
@@ -237,7 +238,7 @@ export async function compileCloudNotebook(opts: {
   });
 
   for (const [id, e] of Object.entries(entries)) {
-    if (e.isTemplate) continue;
+    if (e.isTemplate || e.hidden || e.deletedAt) continue;
     onStatus?.(`Preparing entry ${e.title || id}...`, 5, TOTAL, 82);
     const { latex } = await generateCloudEntryLatex(
       orgId,

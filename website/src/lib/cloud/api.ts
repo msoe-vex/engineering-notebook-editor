@@ -214,6 +214,12 @@ export const cloudApi = {
       "/user/me/secondary-emails",
       { method: "POST", body: JSON.stringify({ email }) }
     ),
+  /** Server-side cooldown gate before IdP/Better Auth primary email resend. */
+  resendEmailVerificationGate: () =>
+    coreFetch<{ ok: boolean; cooldownSec: number }>("/user/me/verification/resend-gate", {
+      method: "POST",
+      body: "{}",
+    }),
   verifySecondaryEmail: (token: string) =>
     coreFetch<{ secondaryEmails: Array<{ email: string; verified: boolean }> }>(
       "/user/me/secondary-emails/verify",
@@ -492,6 +498,7 @@ export const cloudApi = {
           authors?: string[];
           assetIds?: string[];
           isTemplate?: boolean;
+          hidden?: boolean;
           isValid?: boolean;
           validationErrors?: string[];
           createdAt?: string;
