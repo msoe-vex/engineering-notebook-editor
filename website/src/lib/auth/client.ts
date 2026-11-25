@@ -2,11 +2,24 @@
 
 import { createAuthClient } from "better-auth/react";
 
+/**
+ * Better Auth client — single module instance → one session atom.
+ *
+ * `refetchOnWindowFocus` is disabled on purpose: better-auth's mount fetch does
+ * not stamp `lastSessionRequest`, so a visibility/focus event during the first
+ * paint (common in DevTools / tab restore) fires a *second* GET /get-session
+ * before OAuth. Focus refetch is not needed for our chrome; org lists already
+ * refresh on visibility separately.
+ */
 export const authClient = createAuthClient({
   baseURL:
     typeof window !== "undefined"
       ? window.location.origin
       : process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+  sessionOptions: {
+    refetchOnWindowFocus: false,
+    refetchInterval: 0,
+  },
 });
 
 export const {
@@ -115,14 +128,10 @@ function waitForSessionAtom(timeoutMs = 15_000): Promise<SessionAtomValue | null
 }
 
 /**
- * Returns current bearer token for Core API & Collab WebSocket calls:
- * 1. Dev token override if set
- * 2. In-memory cache
- * 3. Better Auth session atom (same source as useSession) — waits if pending
- * 4. Fallback `getSession()` only when the atom is unavailable / never subscribed
- *
- * Concurrent callers share one in-flight resolution so home load does not
- * stack a second `/api/auth/get-session` beside `useSession`.
+ * Bearer token for Core / Collab.
+ * Prefer the Better Auth session atom (same source as SessionProvider / useSession).
+ * Never issues a parallel `getSession()` while the atom exists — that was a
+ * second GET /api/auth/get-session on home load.
  */
 export async function getIdToken(): Promise<string | null> {
   const dev = getDevToken();
@@ -141,36 +150,27 @@ export async function getIdToken(): Promise<string | null> {
     try {
       const atomNow = readSessionAtom();
       if (atomNow) {
-        if (!atomNow.isPending && !atomNow.isRefetching) {
-          const fromAtom = tokenFromPayload(atomNow.data, Date.now());
-          if (fromAtom) return fromAtom;
-          if (atomNow.data === null) {
-            cachedToken = null;
-            tokenExpiresAt = 0;
-            return null;
-          }
-        } else {
-          const settled = await waitForSessionAtom();
-          if (settled) {
-            const fromAtom = tokenFromPayload(settled.data, Date.now());
-            if (fromAtom) return fromAtom;
-            if (settled.data === null) {
-              cachedToken = null;
-              tokenExpiresAt = 0;
-              return null;
-            }
-          }
+        if (atomNow.isPending || atomNow.isRefetching) {
+          await waitForSessionAtom();
         }
+        const settled = readSessionAtom();
+        const token = tokenFromPayload(settled?.data ?? null, Date.now());
+        if (!token) {
+          cachedToken = null;
+          tokenExpiresAt = 0;
+        }
+        return token;
       }
 
-      // Fallback: no live atom subscriber (e.g. early call outside SessionProvider).
+      // No session atom (should not happen under SessionProvider).
       const res = await authClient.getSession();
       const payload = (res?.data ?? null) as SessionPayload;
       const token = tokenFromPayload(payload, Date.now());
-      if (token) return token;
-      cachedToken = null;
-      tokenExpiresAt = 0;
-      return null;
+      if (!token) {
+        cachedToken = null;
+        tokenExpiresAt = 0;
+      }
+      return token;
     } catch {
       cachedToken = null;
       tokenExpiresAt = 0;
