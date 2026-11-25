@@ -1,0 +1,29 @@
+name: CI (Lint, Typecheck & Tests)
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install & build shared
+        run: npm --prefix packages/shared ci && npm --prefix packages/shared run build
+
+      - name: Typecheck & lint website
+        run: |
+          npm --prefix website ci
+          npx tsc --project website/tsconfig.json --noEmit
+          npm --prefix website run lint
+
+      - name: Typecheck & test core
+        run: |
+          npm --prefix services/core ci
+          npx tsc --project services/core/tsconfig.json --noEmit

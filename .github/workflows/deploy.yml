@@ -1,0 +1,57 @@
+name: Deploy to GCP Cloud Run
+
+on:
+  push:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build & push images
+        run: |
+          REG="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/engineering-notebook"
+          TAG="${{ github.sha }}"
+          docker build -t "$REG/website:$TAG" -f website/Dockerfile .
+          docker build -t "$REG/core:$TAG" -f services/core/Dockerfile .
+          docker build -t "$REG/collab:$TAG" -f services/collab/Dockerfile .
+          docker push "$REG/website:$TAG"
+          docker push "$REG/core:$TAG"
+          docker push "$REG/collab:$TAG"
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Apply
+        working-directory: infra/terraform
+        run: |
+          terraform init
+          terraform apply -auto-approve \
+            -var="project_id=${{ env.GCP_PROJECT_ID }}" \
+            -var="region=${{ env.GCP_REGION }}" \
+            -var="image_tag=${{ github.sha }}" \
+            -var="app_url=${{ vars.APP_URL }}" \
+            -var="google_client_id=${{ vars.GOOGLE_CLIENT_ID }}" \
+            -var="github_client_id=${{ vars.GITHUB_CLIENT_ID }}" \
+            -var="discord_client_id=${{ vars.DISCORD_CLIENT_ID }}" \
+            -var="linkedin_client_id=${{ vars.LINKEDIN_CLIENT_ID }}"
