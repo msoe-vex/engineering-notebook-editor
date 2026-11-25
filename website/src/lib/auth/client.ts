@@ -1,6 +1,8 @@
 "use client";
 
 import { createAuthClient } from "better-auth/react";
+import { twoFactorClient } from "better-auth/client/plugins";
+import { passkeyClient } from "@better-auth/passkey/client";
 
 /**
  * Better Auth client — single module instance → one session atom.
@@ -16,6 +18,7 @@ export const authClient = createAuthClient({
     typeof window !== "undefined"
       ? window.location.origin
       : process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+  plugins: [twoFactorClient(), passkeyClient()],
   sessionOptions: {
     refetchOnWindowFocus: false,
     refetchInterval: 0,

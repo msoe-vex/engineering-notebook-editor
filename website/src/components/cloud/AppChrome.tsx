@@ -22,6 +22,7 @@ import {
   getDevToken,
   setDevToken,
   clearIdTokenCache,
+  seedIdTokenFromSession,
   signIn as betterSignIn,
   signUp as betterSignUp,
   signOut as betterSignOut,
@@ -102,6 +103,10 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
   const [isSignUp, setIsSignUp] = useState(false);
   const [forgotPassword, setForgotPassword] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const [twoFactorStep, setTwoFactorStep] = useState(false);
+  const [twoFactorMethod, setTwoFactorMethod] = useState<"totp" | "otp">("totp");
+  const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [twoFactorBusy, setTwoFactorBusy] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -134,7 +139,7 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
     return () => window.removeEventListener("ene:profile-updated", onProfileUpdate);
   }, []);
 
-  const { data: sessionData, isPending: sessionPending } = useAppSession();
+  const { data: sessionData, isPending: sessionPending, refetch: refetchSession } = useAppSession();
 
   useEffect(() => {
     let cancelled = false;
@@ -237,14 +242,14 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
           password,
         });
         if (res.error) throw new Error(res.error.message || "Invalid credentials");
+        if (res.data && "twoFactorRedirect" in res.data && res.data.twoFactorRedirect) {
+          setTwoFactorStep(true);
+          setTwoFactorCode("");
+          return;
+        }
       }
       setDevToken(null);
-      const p = (await cloudApi.bootstrap({ displayName: name.trim() || undefined })) as {
-        platformRole?: string;
-        email?: string;
-        displayName?: string;
-      };
-      setProfile(p);
+      await refetchSession();
     } catch (err) {
       setError((err as Error).message);
     }
@@ -262,6 +267,54 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
       setResetSent(true);
     } catch (err) {
       setError((err as Error).message);
+    }
+  }
+
+  async function handleTwoFactorVerify(e: React.FormEvent) {
+    e.preventDefault();
+    if (!twoFactorCode.trim()) return;
+    setError(null);
+    setTwoFactorBusy(true);
+    try {
+      const res =
+        twoFactorMethod === "totp"
+          ? await authClient.twoFactor.verifyTotp({ code: twoFactorCode.trim() })
+          : await authClient.twoFactor.verifyOtp({ code: twoFactorCode.trim() });
+      if (res.error) throw new Error(res.error.message || "Invalid verification code");
+      setDevToken(null);
+      setTwoFactorStep(false);
+      setTwoFactorCode("");
+      await refetchSession();
+    } catch (err) {
+      setError((err as Error).message || "Invalid verification code");
+    } finally {
+      setTwoFactorBusy(false);
+    }
+  }
+
+  async function handleSendTwoFactorOtp() {
+    setError(null);
+    setTwoFactorBusy(true);
+    try {
+      const res = await authClient.twoFactor.sendOtp();
+      if (res.error) throw new Error(res.error.message || "Failed to send code");
+      setTwoFactorMethod("otp");
+    } catch (err) {
+      setError((err as Error).message || "Failed to send code");
+    } finally {
+      setTwoFactorBusy(false);
+    }
+  }
+
+  async function handlePasskeySignIn() {
+    setError(null);
+    try {
+      const res = await authClient.signIn.passkey();
+      if (res?.error) throw new Error(res.error.message || "Passkey sign-in failed");
+      setDevToken(null);
+      await refetchSession();
+    } catch (err) {
+      setError((err as Error).message || "Passkey sign-in failed");
     }
   }
 
@@ -358,19 +411,71 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
                 onChange={(e) => setName(e.target.value)}
               />
             )}
-            <TextField
-              placeholder="Email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-            {!forgotPassword && (
-              <TextField
-                placeholder="Password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+            {twoFactorStep ? (
+              <form onSubmit={(e) => void handleTwoFactorVerify(e)} className="space-y-4">
+                <div>
+                  <h2 className="text-nb-body font-semibold text-nb-on-surface">
+                    Two-factor verification
+                  </h2>
+                  <p className="mt-1 text-nb-caption text-nb-on-surface-variant">
+                    {twoFactorMethod === "totp"
+                      ? "Enter the 6-digit code from your authenticator app."
+                      : "Enter the 6-digit code sent to your email."}
+                  </p>
+                </div>
+                <TextField
+                  placeholder="6-digit code"
+                  value={twoFactorCode}
+                  onChange={(e) => setTwoFactorCode(e.target.value)}
+                  required
+                />
+                <Button
+                  type="submit"
+                  variant="primary"
+                  className="w-full justify-center"
+                  disabled={twoFactorBusy || !twoFactorCode.trim()}
+                >
+                  {twoFactorBusy ? "Verifying…" : "Verify & sign in"}
+                </Button>
+                <div className="flex items-center justify-between text-nb-caption">
+                  <button
+                    type="button"
+                    className="font-semibold text-nb-primary hover:underline"
+                    disabled={twoFactorBusy}
+                    onClick={() => void handleSendTwoFactorOtp()}
+                  >
+                    Email me a 6-digit code instead
+                  </button>
+                  <button
+                    type="button"
+                    className="font-semibold text-nb-on-surface-variant hover:underline"
+                    onClick={() => {
+                      setTwoFactorStep(false);
+                      setTwoFactorCode("");
+                      setError(null);
+                    }}
+                  >
+                    Back
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <TextField
+                  placeholder="Email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+                {!forgotPassword && (
+                  <TextField
+                    placeholder="Password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                )}
+              </>
             )}
             <div className="flex flex-col gap-3 pt-1">
               {forgotPassword ? (
@@ -435,6 +540,16 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
                     </Button>
                   </div>
                 </>
+              )}
+              {!forgotPassword && !isSignUp && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full justify-center"
+                  onClick={() => void handlePasskeySignIn()}
+                >
+                  Sign in with Passkey
+                </Button>
               )}
               {resetSent && (
                 <Alert variant="info">Check your email for a reset link.</Alert>

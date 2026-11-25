@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
-import { jwt } from "better-auth/plugins";
+import { jwt, twoFactor } from "better-auth/plugins";
+import { passkey } from "@better-auth/passkey";
 import { metadataStoreAdapter } from "./metadataStoreAdapter";
 import { getWebsiteMetadataStore } from "../cloud/httpMetadataStore";
 
@@ -76,6 +77,20 @@ export const auth = betterAuth({
       jwt: {
         expirationTime: "7d",
       },
+    }),
+    twoFactor({
+      issuer: "Engineering Notebook",
+      otpOptions: {
+        async sendOTP({ user, otp }) {
+          // TODO: wire to production email transport when configured
+          console.log(`[2FA OTP] ${user.email}: ${otp}`);
+        },
+      },
+    }),
+    passkey({
+      rpID: typeof window !== "undefined" ? window.location.hostname : "localhost",
+      rpName: "Engineering Notebook",
+      origin: process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
     }),
   ],
 });

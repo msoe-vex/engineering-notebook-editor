@@ -3,17 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { Settings2, UserRound } from "lucide-react";
+import { Settings2, ShieldCheck, UserRound } from "lucide-react";
 
 const NAV = [
   { href: "/account", label: "Profile", icon: UserRound, exact: true },
+  { href: "/account/security", label: "Sign in & Security", icon: ShieldCheck, exact: false },
   { href: "/account/preferences", label: "Preferences", icon: Settings2, exact: false },
 ] as const;
 
 /** Full-bleed account layout under AppChrome (sidebar + content). */
 export function AccountShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const onPreferences = pathname?.startsWith("/account/preferences");
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col font-sans md:flex-row overflow-hidden">
@@ -28,7 +28,7 @@ export function AccountShell({ children }: { children: ReactNode }) {
           {NAV.map((item) => {
             const active = item.exact
               ? pathname === "/account" || pathname === "/account/"
-              : onPreferences;
+              : pathname?.startsWith(item.href);
             const Icon = item.icon;
             return (
               <Link
