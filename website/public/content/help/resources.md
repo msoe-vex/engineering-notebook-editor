@@ -1,24 +1,19 @@
-# External Resources
+# Resources
 
-Here are some official and community resources to help you create a world-class engineering notebook.
+## In product
 
-## Official VEX Documentation
+- [Getting started](/help/overview)
+- [Organizations & access](/help/orgs)
+- [Editor](/help/editor) · [Compile](/help/compiler) · [Phases](/help/phases)
+- [GenAI](/help/genai) · [Judge](/help/judge) · [Account](/help/account)
+- [Backup & ZIP](/help/data) · [Tips](/help/tips)
+- [About](/about)
 
-- [Getting Started with Engineering Notebooks](https://kb.vex.com/hc/en-us/articles/49010276056596-Getting-Started-with-Engineering-Notebooks)
-- [Engineering Design Process](https://kb.vex.com/hc/en-us/articles/8780653442964-Get-Started-Engineering#engineering-design-process-header-4)
+## Project
 
-## Judging & Rubrics
+- Use **Report Issue** in the app chrome to open GitHub issues for bugs and feature requests.
+- Competition rulebooks (VEX, FIRST, etc.) remain the authority for notebook legality — especially around AI assistance.
 
-- [Engineering Notebook Rubric](https://library.globalrobotics.org/hc/en-us/articles/51134310278804-Engineering-Notebook-Rubrics)
-- [Competition Judging Overview](https://library.globalrobotics.org/hc/en-us/articles/50473477689364-Competition-Judging-Overview)
+## Privacy note
 
-## Design Process Resources
-
-- [Decision Matrix Examples](https://asana.com/resources/decision-matrix-examples)
-- [Gantt Chart Basics](https://asana.com/resources/gantt-chart-basics)
-- [Gantt Chart Templates](https://excel.cloud.microsoft/create/en/gantt-charts/)
-
-## Pro Tips
-
-- Always keep these rubrics in mind while documenting. Judges use them to score your work objectively!
-- The Advanced Techniques guide is particularly useful for teams looking to reach the next level of documentation.
+Notebook content for signed-in cloud use is stored in the product’s backend (metadata + object storage) so teams can collaborate. Treat org membership and restricted ACL as your access boundary; use public PDF links only when you intend to share a compiled artifact.

@@ -1,43 +1,49 @@
-# Welcome to ENGen
+# Getting started
 
-**ENGen** (Engineering Notebook Generator) is an open-source, LaTeX-powered notebook workspace tailored for robotics teams (VEX, FIRST, and university design teams) and engineering projects.
-
-It combines an intuitive visual rich-text editor with automatic LaTeX formatting, structured engineering design cycle tracking, and in-browser PDF compilation.
+**ENGen** is a cloud engineering notebook for robotics and design teams. You sign in, join an organization, write collaborative entries, and compile competition-ready PDFs on the server.
 
 ---
 
-## Quick Start Guide
+## Quick start
 
-1. **Create or Open a Notebook**
-   - Head to the [Home](/) screen to create an organization and start your first engineering notebook.
-   - Or accept an invite token from your team to collaborate in real time.
+1. **Sign in** from the home screen (email or a linked social account).
+2. **Create or open an organization** — or accept an invite link from a teammate.
+3. **Create a notebook** for your season or project.
+4. **New → Blank entry** (or from a template) and write in the rich-text editor.
+5. Open **Compile** when you want a PDF; progress shows the current status and percent.
 
-2. **Structure Your Entries**
-   - Document daily workbench progress, trade studies, and mechanism testing using the visual editor.
-   - Assign **Authors**, set the **Date**, and tag the **Design Phase** (*Identify*, *Brainstorm*, *Select*, *Build*, *Test*, or *Evaluate*).
-
-3. **Add Rich Media & Equations**
-   - Insert math formulas with live KaTeX rendering.
-   - Drag and drop CAD screenshots, test photos, and diagrams—automatic captions and LaTeX figures are created for you.
-   - Add structured tables for bill-of-materials (BOM), trade studies, and competition match logs.
-
-4. **Compile to Competition-Ready PDF**
-   - Switch to the **Compile** tab anytime to preview or compile clean, rubric-ready PDFs right in your browser without local LaTeX distribution installs.
+A short **product tour** can run on first sign-in. Replay it anytime with the button at the bottom of this page (Help UI).
 
 ---
 
-## Workspace Navigation
+## What lives where
 
-- **[Workspace Modes](/help/modes)**: Learn how cloud workspaces, local folders, and repository backups work.
-- **[Editor Guide](/help/editor)**: Tips for formatting, keyboard shortcuts, figures, tables, and math equations.
-- **[PDF Compilation](/help/compiler)**: How the BusyTeX WebAssembly compiler creates publication-quality PDFs.
-- **[Design Process](/help/phases)**: Recommended practices for structuring the engineering design cycle for judges.
-- **[Generative AI](/help/genai)**: Configure bring-your-own-key AI assistance for titles and figure captions.
-- **[Notebook Tips](/help/tips)**: Advice from competition winners on keeping entries consistent, thorough, and legible.
+| Area | What it does |
+| --- | --- |
+| **Home** | Your orgs and recent notebooks |
+| **Organization** | People, teams, invites, public page, settings |
+| **Notebook** | Explorer, calendar, compile, judge, setup / access |
+| **Account** | Profile, linked providers, preferences (theme, GenAI) |
+| **Help / About** | Docs and product background (no sign-in required) |
+
+Notebook content and assets sync through the cloud services (Firestore metadata + object storage). Optional **ZIP export/import** is a last-write-wins backup, not a live GitHub sync.
 
 ---
 
-## Need Support or Found a Bug?
+## Next topics
 
-- **GitHub Repository**: Check out our code and report issues on [GitHub](https://github.com/msoe-vex/engineering-notebook-editor).
-- **MSOE Raider Robotics**: Visit [msoevex.com](https://www.msoevex.com) to learn more about the team behind ENGen.
+- [Organizations & access](/help/orgs)
+- [Editor guide](/help/editor)
+- [Compile & PDF](/help/compiler)
+- [Design phases](/help/phases)
+- [Generative AI](/help/genai)
+- [Judge](/help/judge)
+- [Account & security](/help/account)
+- [Backup & ZIP](/help/data)
+- [Tips](/help/tips) · [Resources](/help/resources)
+
+---
+
+## Need support?
+
+Use **Report Issue** in the header or Help sidebar to open the project’s GitHub issues.

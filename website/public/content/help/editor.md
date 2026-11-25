@@ -1,64 +1,41 @@
-# Using the Editor
+# Editor guide
 
-Our editor is built specifically for Engineering Notebooks, with native support for LaTeX and resource tracking. Here's a quick guide to help you get started and make the most of its features.
+Each notebook entry has metadata plus a collaborative rich-text body. Changes sync live with teammates who have the entry open.
 
-## Editor Header
+## Entry header
 
-The header of each entry contains important metadata fields:
+- **Title** — descriptive name; optional GenAI sparkles when configured.
+- **Date** — when the work happened (drives calendar placement).
+- **Authors** — who contributed; defaults come from Preferences.
+- **Phase** — design-process tag from notebook Setup.
+- **Hide from PDF** — exclude this entry from compile without deleting it.
 
-### Entry Metadata
+Missing required fields may show incomplete warnings in the explorer.
 
-- **Title**: A descriptive title for your entry. Use the sparkles button (after setting up Generative AI in Settings) to draft a title from the entry body.
-- **Date**: Automatically set to the current date and time, but can be edited to reflect when the work was done.
-- **Author**: The name of the person who created the entry.
-- **Phase**: The design process phase that this entry corresponds to. You can customize the available phases in your project settings.
+## View modes
 
-All of these fields should be filled out for each entry to ensure proper organization and formatting. Warnings will appear if any required fields are missing when you try to save.
+- **Editor** — rich text (default).
+- **Split** — editor + live LaTeX (desktop).
+- **LaTeX** — generated source only.
 
-### LaTeX Preview
-
-The editor has an option to swap between `Editor`, `Split`, and `LaTeX` view modes. The `Editor` mode provides a rich text editing experience, while the `Split` mode allows you to see both the editor and the generated LaTeX code side by side. In `LaTeX` mode, you can focus solely on the generated LaTeX code, which can be copied and used in other contexts if needed.
+On phone, Split is omitted; use Editor or LaTeX.
 
 ## Toolbar
 
-The editor toolbar provides quick access to formatting options and tools for linking, inserting images, and more. Hover over each icon to see a tooltip with the corresponding keyboard shortcut for even faster editing.
+Formatting, links, images, tables, math, and raw LaTeX blocks. Hover icons for shortcuts.
 
-### Linking & References
+### Links & cross-references
 
-To link to another entry or a specific resource (like an image or a heading), use the **Link** tool in the editor toolbar or press `Ctrl + K`. Highlight the text you want to turn into a link and select your target from the list. You can search for an existing entry or resource, or create a link to an external URL. The editor will automatically generate the correct LaTeX code to reference the target, ensuring that your documentation is always interconnected and easy to navigate.
+**Link** (or `Ctrl/Cmd + K`) targets other entries, figures, or external URLs. The compiler resolves notebook-internal references in the PDF.
 
-### Rich Text & Images
+### Images
 
-Drag and drop images directly into the editor. Use the toolbar for bold, italics, tables, and lists. Everything is automatically converted to clean LaTeX in the background. Sparkles on a figure, table, code, or equation field can draft its title or caption if you have an API key in Settings.
+Drag/drop or insert images; they upload to cloud storage and appear as figures with captions. Prefer clear photos and diagrams for judges.
 
-## Rich Text Area
+### Math
 
-The main body of the editor is a rich text area where you can write your documentation. It supports all the standard formatting options, as well as LaTeX math and code blocks. You can also insert images, tables, and links to other entries or resources. The editor will automatically convert your rich text into LaTeX code, which is then compiled into a PDF when you save.
+Inline and block math render with KaTeX in the editor and become LaTeX in the PDF.
 
-### Tips and Tricks
+## Explorer
 
-- Copy and paste code snippets directly into the editor. They will be automatically formatted as code blocks.
-- Use the `@` symbol to quickly link to other entries or resources without leaving the editor
-- Copy and paste tables from Excel or Google Sheets directly into the editor. They will be converted into LaTeX tables automatically.
-- Drag and drop images from your computer into the editor. They will be uploaded and embedded in your entry seamlessly.
-
-### Keyboard Shortcuts
-
-Speed up your documentation with these shortcuts:
-
-- **Bold**: `Ctrl + B`
-- **Italic**: `Ctrl + I`
-- **Underline**: `Ctrl + U`
-- **Hyperlink**: `Ctrl + K`
-- **Strike-through**: `Ctrl + Shift + X` or `Ctrl + Shift + S`
-- **Superscript**: `Ctrl + Shift + =` or `Ctrl + +`
-- **Subscript**: `Ctrl + Shift + -` or `Ctrl + _`
-- **Clear Formatting**: `Ctrl + \`
-- **Undo / Redo**: `Ctrl + Z` / `Ctrl + Y`
-- **Save**: `Ctrl + S`
-
-### Editor Command Shortcuts
-
-- **Code**: Type text in between **`** to format text as inline code, or type **```** followed by a space to start a code block.
-- **Math**: Type an equation in between **$** to format text as inline math, or type **$$$** followed by a space to start a math block.
-- **Link**: Type **@** to create a link to another entry or resource.
+Folders, search, phase/author/date filters, multi-select Move/Delete, and **New** (blank entry, blank template, from template). Templates use a distinct glyph. See [Organizations & access](/help/orgs) for trash and Hide from PDF.

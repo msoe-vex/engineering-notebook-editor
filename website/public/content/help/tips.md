@@ -1,27 +1,27 @@
-# Tips for a Great Notebook
+# Notebook tips
 
-Beyond the technical details, these habits will help your team stand out during judging.
+Practical habits that keep cloud notebooks readable for teammates and judges.
 
-## Consistency is Key
+## Writing
 
-Update the notebook every single time the team meets. Gaps in dates are a major red flag for judges. Even if you didn't build anything, document your discussion or planning.
+- Prefer short, dated entries over huge catch-all pages.
+- Lead with what changed and why; attach evidence (photos, tables, CAD).
+- Name authors accurately; use Preferences for defaults.
 
-## Design Process Iteration
+## Structure
 
-Document every iteration of your design process. Judges want to see your team continuously improving and learning from failures. Make sure to include all the phases of the design process, not just the final solution.
+- Use folders for mechanisms or subsystems; keep templates under the Templates filter.
+- Hide scratch drafts from PDF instead of deleting them if you may need them later.
+- Calendar order and explorer order are independent — dragging in one does not rewrite the other.
 
-## Label Everything
+## Collaboration
 
-Every photo and sketch should have a caption. Use our "Caption" field in the editor to ensure they are properly numbered and indexed in the final PDF.
+- Restrict notebooks that should not be org-wide.
+- Resolve comments and presence conflicts before compile day.
+- Export a ZIP before major imports or end-of-season archival.
 
-## Show the "Why"
+## Compile day
 
-Don't just show what you built. Explain **why** you chose that design, what other options you considered, and how you decided. Judges want to see your thinking process.
-
-## Quantitative Data
-
-Use tables for testing results. Numerical data is much more convincing than "it seemed faster". Show the math!
-
-## Reflect on Failures
-
-Include reflections from team members. What did you learn? What was difficult? This shows growth in the engineering process, which judges love to see.
+- Fix incomplete metadata warnings first.
+- Delete old PDF versions if you hit the retention cap.
+- Skim the PDF for missing figures and broken cross-references.

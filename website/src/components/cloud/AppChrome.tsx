@@ -27,6 +27,7 @@ import {
   useSession,
 } from "@/lib/auth/client";
 import { EmailVerificationScreen } from "./EmailVerificationScreen";
+import { ProductTour } from "./onboarding/ProductTour";
 import { Toaster } from "react-hot-toast";
 import { bindNotificationEvents } from "@/components/overlays/Notification";
 import { cloudApi, type OrgSummary } from "@/lib/cloud/api";
@@ -848,6 +849,7 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
           <div className="mx-auto w-full max-w-6xl">{children}</div>
         )}
       </main>
+      <ProductTour enabled={Boolean(user)} />
       <Toaster
         position="bottom-right"
         toastOptions={{ className: "text-sm", duration: 4000 }}

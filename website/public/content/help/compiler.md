@@ -1,34 +1,25 @@
-# Compiling the PDF
+# Compile & PDF
 
-The editor uses **BusyTeX**, a WebAssembly-powered LaTeX engine that runs entirely in your browser. This means you can generate high-quality engineering notebooks without installing any local software.
+Notebook PDFs are built by a **server XeLaTeX job** (not an in-browser BusyTeX default). Open the notebook **Compile** tab to run jobs, browse versions, and manage share links.
 
-## How it Works
+## How it works
 
-When you click the **Compile Notebook** button:
+1. Click **Compile** (or equivalent CTA) on the Compile page.
+2. Core enqueues a compile job; the worker pulls entries and assets.
+3. Progress shows a **percent bar** and the **current status** line only.
+4. On success, a new export version is stored (up to 10). `latest` points at the newest PDF.
 
-1. **Metadata Update**: The editor synchronizes your latest entries, team info, and project phases into LaTeX source files.
-2. **Asset Mapping**: All your images, sketches, and diagrams are bundled into a virtual filesystem.
-3. **LaTeX Execution**: The BusyTeX engine runs `XeLaTeX` twice to ensure all references (like the Table of Contents) are correctly resolved.
-4. **PDF Generation**: A high-resolution PDF is generated and displayed in the preview pane.
+Templates, trashed entries, and entries marked **Hide from PDF** are excluded.
 
-## Compile Modes
+## Versions & share links
 
-The default compile button uses **Quality** mode, which uses the original image data for the best possible output. If you have a large notebook or want faster compilation, you can use the dropdown to use **Compressed** mode. Compressed mode uses compressed images images for quicker results, but with slightly lower visual fidelity. Compressed images will also be used in the editor preview to keep the website responsive.
-
-## Advanced Customization
-
-You can customize the look and feel of your notebook by providing your own templates:
-
-- **`main.tex`**: The primary document structure.
-- **`engineering_notebook.sty`**: The LaTeX style definitions for headers, footers, and layouts.
-
-If these files exist in your workspace root, the compiler will prioritize them over the default built-in templates.
+- Keep up to **10** PDF versions; delete older ones if compile returns a limit error.
+- Org admins/owners can publish or revoke **public PDF links** from Compile when enabled.
 
 ## Troubleshooting
 
-If compilation fails or looks "stale":
+- Read the failure alert / log on the Compile page (not only the browser console).
+- Prefer PNG/JPEG images; huge assets slow jobs.
+- If progress stalls, wait for the job timeout or start a new compile after checking Core/worker health locally.
 
-- **Check the Log**: Open the browser console to see detailed error messages from the LaTeX engine.
-- **Image Formats**: Ensure your images are in standard formats (PNG, JPG).
-- **Rerun**: Occasionally, a second compilation run fixes reference issues.
-- **Refresh**: If the engine gets stuck, a page refresh usually re-initializes the WASM environment.
+Optional local BusyTeX is an escape hatch only when explicitly enabled for development — not the production path.

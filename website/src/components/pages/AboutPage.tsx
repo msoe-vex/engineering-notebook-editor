@@ -242,8 +242,8 @@ export default function AboutPage({
                 />
                 <FeatureCard
                   icon={<GithubIcon size={24} className="text-nb-primary" />}
-                  title="GitHub Sync"
-                  description="Keep the whole team on the same notebook with versioned cloud backup and a single source of truth."
+                  title="Cloud collaboration"
+                  description="Keep the whole team on the same notebook with live sync, org membership, and optional ZIP backup."
                 />
                 <FeatureCard
                   icon={<Sparkles size={24} className="text-nb-tertiary" />}
@@ -263,8 +263,8 @@ export default function AboutPage({
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <FeatureCard
                   icon={<Play size={24} className="text-nb-primary" />}
-                  title="In-Browser PDF Engine"
-                  description="Compile directly in your browser with zero local software installs, LaTeX distributions, or toolchain headaches."
+                  title="Server PDF compile"
+                  description="Enqueue XeLaTeX jobs that produce competition-ready PDFs—no local TeX install required for the team."
                 />
                 <FeatureCard
                   icon={<Terminal size={24} className="text-nb-tertiary" />}
@@ -352,12 +352,12 @@ export default function AboutPage({
                   <GithubIcon size={24} />
                 </div>
                 <div>
-                  <h3 className="font-black text-nb-on-surface">GitHub Integration</h3>
-                  <p className="text-xs text-nb-on-surface-variant">Professional Version Control.</p>
+                  <h3 className="font-black text-nb-on-surface">Team access control</h3>
+                  <p className="text-xs text-nb-on-surface-variant">Orgs, teams, and restricted notebooks.</p>
                 </div>
               </div>
               <p className="text-sm text-nb-on-surface-variant leading-relaxed font-medium">
-                Sync directly with your team&apos;s GitHub repository. Benefit from professional version control, branch management, and a unified source of truth for your notebook.
+                Collaborate inside organizations with invites, teams, and per-notebook access. Export ZIP archives when you need an offline backup—the live notebook remains the season source of truth.
               </p>
             </div>
 
@@ -367,12 +367,12 @@ export default function AboutPage({
                   <Lock size={24} />
                 </div>
                 <div>
-                  <h3 className="font-black text-nb-on-surface">Privacy First</h3>
-                  <p className="text-xs text-nb-on-surface-variant">No central servers.</p>
+                  <h3 className="font-black text-nb-on-surface">Access boundaries</h3>
+                  <p className="text-xs text-nb-on-surface-variant">You control who sees what.</p>
                 </div>
               </div>
               <p className="text-sm text-nb-on-surface-variant leading-relaxed font-medium">
-                Your engineering designs are your own. Content is never stored on our servers. It lives solely on your machine or within your private GitHub repository.
+                Notebook content syncs through the product backend so teammates can edit together. Membership, restricted notebooks, and optional public PDF links define who can read or share your work.
               </p>
             </div>
 
@@ -382,12 +382,12 @@ export default function AboutPage({
                   <WifiOff size={24} />
                 </div>
                 <div>
-                  <h3 className="font-black text-nb-on-surface">Offline Capability</h3>
-                  <p className="text-xs text-nb-on-surface-variant">Document anywhere.</p>
+                  <h3 className="font-black text-nb-on-surface">Portable records</h3>
+                  <p className="text-xs text-nb-on-surface-variant">LaTeX you can take with you.</p>
                 </div>
               </div>
               <p className="text-sm text-nb-on-surface-variant leading-relaxed font-medium">
-                Document your work at the workbench or in the pits. Because the editor and LaTeX engine run entirely in your browser, you don&apos;t need a stable connection to stay productive.
+                Export ZIP archives for offline backup or migration. Generated LaTeX stays standard plain text you can compile elsewhere even if you leave the hosted app.
               </p>
             </div>
           </div>

@@ -5,9 +5,10 @@ Happy paths for the live App Router product. Feature detail: [01-requirements/fe
 ## 1. First session
 
 1. Sign in (Firebase Auth or local dev token) — [FR-auth](../01-requirements/features/FR-auth.md)
-2. Create or open an **organization** — [FR-orgs](../01-requirements/features/FR-orgs.md)
-3. Create a **notebook** — [FR-notebooks](../01-requirements/features/FR-notebooks.md)
-4. **New entry** → collaborative editor — [FR-entries-collab](../01-requirements/features/FR-entries-collab.md)
+2. Optional **product tour** (skippable; replay from Help) — [FR-help](../01-requirements/features/FR-help.md)
+3. Create or open an **organization** — [FR-orgs](../01-requirements/features/FR-orgs.md)
+4. Create a **notebook** — [FR-notebooks](../01-requirements/features/FR-notebooks.md)
+5. **New entry** → collaborative editor — [FR-entries-collab](../01-requirements/features/FR-entries-collab.md)
 
 ## 2. Daily writing
 

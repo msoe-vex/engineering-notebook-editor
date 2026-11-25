@@ -15,6 +15,8 @@ Manual acceptance checks aligned with [01-requirements](../01-requirements/).
 | Templates | **New** → blank / blank template / from template (separator); Templates filter empty copy; distinct template glyph in explorer |
 | Home load | Home loads recent notebooks without an 8s polling loop; revisiting tab/focus refreshes |
 | Compile progress | While compiling, only percent + current status (no rolling stage log) |
+| Help | `/help` tabs load cloud docs; `/help/local` redirects; Replay tutorial opens tour |
+| Onboarding | First signed-in visit shows skippable tour; Skip persists; Replay from Help works |
 | Metadata SSE | Two browsers on same notebook: change title/phase in A → sidebar updates in B without hard refresh |
 | Phases → validity | Notebook with no phases → add a phase in Settings → entries without a phase show incomplete (explorer warning) |
 | Schedule | Drag entry to another day → persists; day cells same height in month view (cards scroll inside cell) |
