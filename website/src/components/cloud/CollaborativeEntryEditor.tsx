@@ -13,7 +13,7 @@ import { Button, Skeleton, SkeletonLines } from "@/components/ui";
 import type { TipTapNode } from "@/lib/notebook/metadata";
 import type { ProjectPhase } from "@engineering-notebook/shared";
 import { showNotification } from "@/components/overlays/Notification";
-import { getDevToken, authClient } from "@/lib/auth/client";
+import { getDevToken, peekSession } from "@/lib/auth/client";
 import { compressImageToJpeg, convertSvgToPng } from "@/lib/utils";
 import { workspaceState } from "@/lib/cloud/workspaceState";
 import {
@@ -98,8 +98,9 @@ export function CollaborativeEntryEditor({
       const token = (await getTokenRef.current()) || "";
       if (cancelled) return;
 
-      const session = await authClient.getSession().catch(() => null);
-      const authUser = session?.data?.user;
+      const authUser = peekSession()?.user as
+        | { id?: string; name?: string | null; email?: string | null }
+        | undefined;
       const localName =
         authUser?.name ||
         authUser?.email ||

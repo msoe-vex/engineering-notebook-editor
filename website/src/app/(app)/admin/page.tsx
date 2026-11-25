@@ -34,12 +34,13 @@ import {
 import { showNotification } from "@/components/overlays/Notification";
 import { cloudApi } from "@/lib/cloud/api";
 import { platformRoleLabel } from "@/lib/cloud/roles";
-import { useSession, getDevToken } from "@/lib/auth/client";
+import { getDevToken } from "@/lib/auth/client";
+import { useAppSession } from "@/lib/auth/sessionContext";
 
 type AdminTab = "users" | "orgs" | "metrics";
 
 export default function AdminPage() {
-  const { data: session } = useSession();
+  const { data: session } = useAppSession();
   const currentUid = session?.user?.id || getDevToken()?.split("|")[0];
   const [tab, setTab] = useState<AdminTab>("users");
   const [users, setUsers] = useState<

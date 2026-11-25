@@ -21,11 +21,12 @@ import {
   authClient,
   getDevToken,
   setDevToken,
+  clearIdTokenCache,
   signIn as betterSignIn,
   signUp as betterSignUp,
   signOut as betterSignOut,
-  useSession,
 } from "@/lib/auth/client";
+import { useAppSession } from "@/lib/auth/sessionContext";
 import { EmailVerificationScreen } from "./EmailVerificationScreen";
 import { ProductTour } from "./onboarding/ProductTour";
 import { Toaster } from "react-hot-toast";
@@ -133,7 +134,7 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
     return () => window.removeEventListener("ene:profile-updated", onProfileUpdate);
   }, []);
 
-  const { data: sessionData, isPending: sessionPending } = useSession();
+  const { data: sessionData, isPending: sessionPending } = useAppSession();
 
   useEffect(() => {
     let cancelled = false;
@@ -296,6 +297,7 @@ export function AppChrome({ children, title }: { children: ReactNode; title?: st
 
   async function handleSignOut() {
     setDevToken(null);
+    clearIdTokenCache();
     setProfile(null);
     try {
       await betterSignOut();

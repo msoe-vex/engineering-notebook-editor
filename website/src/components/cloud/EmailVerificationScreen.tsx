@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { Mail, RefreshCw, LogOut, CheckCircle2 } from "lucide-react";
-import { authClient } from "@/lib/auth/client";
 import Logo from "@/components/icons/Logo";
 import { Alert, Button } from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
+import { authClient, peekSession } from "@/lib/auth/client";
+import { useAppSession } from "@/lib/auth/sessionContext";
 
 interface UserLike {
   email?: string | null;
@@ -47,6 +48,7 @@ export function EmailVerificationScreen({
   onVerified,
   onBypass,
 }: EmailVerificationScreenProps) {
+  const { refetch: refetchSession } = useAppSession();
   const [checking, setChecking] = useState(false);
   const [resending, setResending] = useState(false);
   const [cooldown, setCooldown] = useState(0);
@@ -70,10 +72,9 @@ export function EmailVerificationScreen({
     setMessage(null);
     try {
       if (user.reload) await user.reload();
-      const session = await authClient.getSession();
-      const verified = Boolean(
-        session?.data?.user?.emailVerified || user.emailVerified
-      );
+      await refetchSession();
+      const peeked = peekSession()?.user as { emailVerified?: boolean } | undefined;
+      const verified = Boolean(peeked?.emailVerified || user.emailVerified);
       if (verified) {
         onVerified();
       } else {

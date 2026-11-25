@@ -14,14 +14,15 @@ import {
   Skeleton,
 } from "@/components/ui";
 import { cloudApi } from "@/lib/cloud/api";
-import { useSession, linkSocial, authClient, getDevToken } from "@/lib/auth/client";
+import { linkSocial, authClient, getDevToken } from "@/lib/auth/client";
+import { useAppSession } from "@/lib/auth/sessionContext";
 import { showNotification } from "@/components/overlays/Notification";
 
 type Secondary = { email: string; verified: boolean; verifiedAt?: string; addedAt?: string };
 
 export default function AccountProfilePage() {
   const router = useRouter();
-  const { data: session } = useSession();
+  const { data: session } = useAppSession();
   const searchParams = useSearchParams();
   const [displayName, setDisplayName] = useState("");
   const [initialDisplayName, setInitialDisplayName] = useState("");

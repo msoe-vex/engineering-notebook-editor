@@ -20,7 +20,8 @@ import {
 } from "@/components/ui";
 import { cloudApi, type CloudNotebookSummary, type OrgSummary } from "@/lib/cloud/api";
 import { isOrgAdminRole, orgRoleLabel } from "@/lib/cloud/roles";
-import { getDevToken, useSession } from "@/lib/auth/client";
+import { getDevToken } from "@/lib/auth/client";
+import { useAppSession } from "@/lib/auth/sessionContext";
 import { GITHUB_ISSUES_URL } from "@/lib/constants";
 
 type RecentNotebook = CloudNotebookSummary & { orgId: string; orgName: string };
@@ -28,7 +29,7 @@ type RecentNotebook = CloudNotebookSummary & { orgId: string; orgName: string };
 function HomeInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { data: session } = useSession();
+  const { data: session } = useAppSession();
   const [orgs, setOrgs] = useState<OrgSummary[]>([]);
   const [recent, setRecent] = useState<RecentNotebook[]>([]);
   const [error, setError] = useState<string | null>(null);

@@ -17,14 +17,15 @@ import {
   type MenuItem,
 } from "@/components/ui";
 import { cloudApi, type InviteSummary, type MemberSummary } from "@/lib/cloud/api";
-import { getDevToken, useSession } from "@/lib/auth/client";
+import { getDevToken } from "@/lib/auth/client";
+import { useAppSession } from "@/lib/auth/sessionContext";
 import { orgRoleLabel } from "@/lib/cloud/roles";
 import { showNotification } from "@/components/overlays/Notification";
 import type { OrgRole } from "@engineering-notebook/shared";
 
 export default function OrgPeoplePage() {
   const { orgId, org, members, invites, canManage, refresh, setError } = useOrgWorkspace();
-  const { data: session } = useSession();
+  const { data: session } = useAppSession();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [removeMember, setRemoveMember] = useState<MemberSummary | null>(null);
   const [revokeInvite, setRevokeInvite] = useState<InviteSummary | null>(null);
