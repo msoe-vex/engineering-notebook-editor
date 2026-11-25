@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { isServiceAdmin } from "../rbac.js";
 import { getUser } from "../http/authPlugin.js";
+import { assertInternalSecret } from "../http/internalAuth.js";
 import { byokComplete, type ByokProvider } from "../ai/byokComplete.js";
 import { vertexComplete } from "../ai/vertexComplete.js";
 
@@ -24,17 +25,6 @@ function promptFromBody(body: CompleteBody): string {
     (typeof body.prompt === "string" && body.prompt.trim()) || promptFromMessages;
   const system = typeof body.system === "string" && body.system.trim() ? body.system.trim() : "";
   return system ? `System:\n${system}\n\nUser:\n${user}` : user;
-}
-
-function assertInternalSecret(
-  request: { headers: Record<string, unknown> },
-  reply: { code: (n: number) => { send: (b: unknown) => unknown } }
-) {
-  const secret = process.env.INTERNAL_SERVICE_SECRET;
-  if (secret && request.headers["x-internal-secret"] !== secret) {
-    return reply.code(403).send({ error: "forbidden" });
-  }
-  return null;
 }
 
 /**

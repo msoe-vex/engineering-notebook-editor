@@ -1,16 +1,6 @@
 import type { FastifyInstance } from "fastify";
+import { assertInternalSecret } from "../http/internalAuth.js";
 import { completeJob, failJob, getJob, updateJobProgress } from "../jobs/jobStore.js";
-
-function assertInternalSecret(
-  request: { headers: Record<string, unknown> },
-  reply: { code: (n: number) => { send: (b: unknown) => unknown } }
-) {
-  const secret = process.env.INTERNAL_SERVICE_SECRET;
-  if (secret && request.headers["x-internal-secret"] !== secret) {
-    return reply.code(403).send({ error: "forbidden" });
-  }
-  return null;
-}
 
 /**
  * Generic worker callbacks (x-internal-secret).

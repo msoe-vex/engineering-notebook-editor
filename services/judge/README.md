@@ -6,7 +6,7 @@ Server-side rubric normalize + LangGraph scoring (`job type: judge`). See [ADR-0
 - **Phases:** `normalize` (PDF/text → matrix) and `score` (tool-backed evidence + score).
 - **Tools (score):** `list_entries`, `search_entries`, `read_entry` over Core snapshot / TipTap pulls.
 - **LLM:** via Core only — BYOK (`/internal/ai/byok`) or Vertex (`/internal/ai/complete`).
-- Feedback cites entry UUIDs inline; UI turns them into links.
+- Feedback cites entries via `[[entry:<uuid>]]` markers (bare UUIDs still parsed for older judgments); UI shows entry titles, never raw IDs.
 
 ## Contract (unchanged)
 

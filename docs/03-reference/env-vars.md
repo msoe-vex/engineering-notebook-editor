@@ -39,6 +39,9 @@ See [`website/.env.example`](../../website/.env.example).
 | `NOTIFICATION_PROVIDER` | `console` | `console` \| `none` \| `resend` |
 | `RESEND_API_KEY` / `RESEND_FROM` | — | Required when provider=`resend` |
 | `PUBLIC_APP_URL` | `http://localhost:3000` | Links in invite / secondary-email verify emails |
-| `INTERNAL_SERVICE_SECRET` | compose secret | Core ↔ worker / collab |
+| `INTERNAL_SERVICE_SECRET` | compose `local-dev-secret` | **Required** for Core ↔ worker / collab. Fail closed when unset (403) unless local `ALLOW_INSECURE_INTERNAL=1`. Fatal if unset when `NODE_ENV=production`. |
+| `ALLOW_INSECURE_INTERNAL` | unset | `1` only for local smoke without a secret — never in prod |
+| `CORS_ORIGIN` | unset → allow all in non-prod | Comma-separated browser origins; production without it denies browser CORS |
+| `REQUIRE_INTERNAL_SECRET` | — | Legacy alias intent covered by fail-closed + `ALLOW_INSECURE_INTERNAL` |
 
 Deploy wiring: [deploy-cloudrun.md](../04-guides/deploy-cloudrun.md).

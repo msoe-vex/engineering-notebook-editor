@@ -16,6 +16,7 @@ import { getMetadataStore } from "../db/metadataStore.js";
 import { omitUndefined } from "../db/sanitize.js";
 import { isServiceAdmin, requireNotebookAccess, assertNotebookNotArchived } from "../rbac.js";
 import { getUser } from "../http/authPlugin.js";
+import { assertInternalSecret } from "../http/internalAuth.js";
 import type { StoragePort } from "../storage/storagePort.js";
 import { createJobDispatch } from "../jobs/createJobDispatch.js";
 import { enqueueNotebookJob } from "../jobs/enqueueJob.js";
@@ -56,17 +57,6 @@ async function assertNotebookWritable(
   const notebook = data as unknown as NotebookSummary;
   await requireNotebookAccess(user, orgId, notebook);
   assertNotebookNotArchived(notebook);
-}
-
-function assertInternalSecret(
-  request: { headers: Record<string, unknown> },
-  reply: { code: (n: number) => { send: (b: unknown) => unknown } }
-) {
-  const secret = process.env.INTERNAL_SERVICE_SECRET;
-  if (secret && request.headers["x-internal-secret"] !== secret) {
-    return reply.code(403).send({ error: "forbidden" });
-  }
-  return null;
 }
 
 function extForContentType(ct: string): string {

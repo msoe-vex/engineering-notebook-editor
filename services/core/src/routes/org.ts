@@ -83,10 +83,19 @@ import { publishNotebookEvent, subscribeNotebookEvents } from "../realtime/noteb
 import { createJobDispatch } from "../jobs/createJobDispatch.js";
 import { enqueueNotebookJob } from "../jobs/enqueueJob.js";
 import { getJob } from "../jobs/jobStore.js";
-import { createNotificationPort } from "../notifications/notificationPort.js";
+import {
+  limitInviteSend,
+  rateLimitReply,
+} from "../http/rateLimit.js";
+import {
+  entryCreateSchema,
+  entryPatchSchema,
+  inviteCreateSchema,
+  parseBody,
+} from "../http/validate.js";
+import type { NotificationPort } from "../notifications/notificationPort.js";
 
 const jobDispatch = createJobDispatch();
-const notifications = createNotificationPort();
 
 const RESERVED_SLUGS = new Set([
   "admin",
@@ -327,7 +336,11 @@ async function assertNotebookWritable(
   return data;
 }
 
-export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePort) {
+export async function registerOrgRoutes(
+  app: FastifyInstance,
+  storage: StoragePort,
+  notifications: NotificationPort
+) {
   const store = () => getMetadataStore();
 
   app.get("/org", async (request) => {
@@ -765,9 +778,12 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
 
   app.post("/org/:orgId/invites", async (request, reply) => {
     const user = getUser(request);
+    const limited = limitInviteSend(user.uid);
+    if (!limited.ok) return rateLimitReply(reply, limited);
     const { orgId } = request.params as { orgId: string };
     const callerRole = await requireOrgMember(user, orgId, "admin");
-    const body = request.body as { email?: string; role?: OrgRole; expiresInDays?: number };
+    const body = parseBody(inviteCreateSchema, request.body, reply);
+    if (!body) return;
     const role: OrgRole = body.role === "owner" || body.role === "admin" ? body.role : "member";
     if (role === "owner" && callerRole !== "owner" && !isServiceAdmin(user)) {
       return reply.code(403).send({ error: "only owners can create owner invites" });
@@ -795,10 +811,8 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       try {
         await notifications.send({
           to: invite.email,
-          subject: "Organization invite",
           template: "org_invite",
-          text: `You were invited to join an organization as ${invite.role}. Accept: ${site}${acceptPath}`,
-          data: { orgId, role: invite.role, acceptPath },
+          data: { orgId, role: invite.role, acceptPath, siteUrl: site },
         });
       } catch (err) {
         request.log.warn({ err }, "invite email send failed");
@@ -1688,8 +1702,10 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
     const user = getUser(request);
     const { orgId, notebookId } = request.params as { orgId: string; notebookId: string };
     await assertNotebookWritable(user, orgId, notebookId);
-    const body = (request.body ?? {}) as Partial<EntryMetadata> & { id?: string };
-    const id = body.id || randomUUID();
+    const parsed = parseBody(entryCreateSchema, request.body, reply);
+    if (!parsed) return;
+    const body = parsed as Partial<EntryMetadata> & { id?: string };
+    const id = (request.body as { id?: string } | undefined)?.id || randomUUID();
     const ts = nowIso();
     const tipTapGcsPath = gcsKeys.tipTap(orgId, notebookId, id);
     const yjsGcsPath = gcsKeys.yjs(orgId, notebookId, id);
@@ -1747,7 +1763,9 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
       entryId: string;
     };
     await assertNotebookWritable(user, orgId, notebookId);
-    const body = request.body as Partial<EntryMetadata>;
+    const parsedBody = parseBody(entryPatchSchema, request.body, reply);
+    if (!parsedBody) return;
+    const body = parsedBody as Partial<EntryMetadata>;
     const refPath = entryPath(orgId, notebookId, entryId);
     const snap = await store().get(refPath);
     if (!snap) return reply.code(404).send({ error: "not found" });
@@ -2037,10 +2055,17 @@ export async function registerOrgRoutes(app: FastifyInstance, storage: StoragePo
           try {
             await notifications.send({
               to,
-              subject: "You were mentioned in a comment",
               template: "comment_mention",
-              text: `${authorName} mentioned you on an entry: ${entryPathUrl}\n\n${text.slice(0, 500)}`,
-              data: { orgId, notebookId, entryId, commentId: id },
+              data: {
+                orgId,
+                notebookId,
+                entryId,
+                commentId: id,
+                authorName,
+                entryPathUrl,
+                snippet: text.slice(0, 500),
+                siteUrl: site,
+              },
             });
           } catch (err) {
             request.log.warn({ err, uid }, "comment mention notify failed");

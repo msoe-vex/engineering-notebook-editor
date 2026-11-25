@@ -1,14 +1,7 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { getMetadataStore } from "../db/metadataStore.js";
 import type { MetadataBatchOp, MetadataQueryOpts } from "@engineering-notebook/shared";
-
-function assertInternalSecret(request: FastifyRequest, reply: FastifyReply) {
-  const secret = process.env.INTERNAL_SERVICE_SECRET;
-  if (secret && request.headers["x-internal-secret"] !== secret) {
-    return reply.code(403).send({ error: "forbidden: invalid or missing internal service secret" });
-  }
-  return null;
-}
+import { assertInternalSecret } from "../http/internalAuth.js";
 
 export async function registerInternalMetadataRoutes(app: FastifyInstance) {
   const store = getMetadataStore();

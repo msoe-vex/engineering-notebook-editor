@@ -9,9 +9,16 @@ import {
 import { getMetadataStore } from "../db/metadataStore.js";
 import { omitUndefined } from "../db/sanitize.js";
 import { getUser } from "../http/authPlugin.js";
-import { createNotificationPort } from "../notifications/notificationPort.js";
-
-const notifications = createNotificationPort();
+import {
+  limitSecondaryEmailSend,
+  rateLimitReply,
+} from "../http/rateLimit.js";
+import {
+  parseBody,
+  secondaryEmailSchema,
+  secondaryEmailVerifySchema,
+} from "../http/validate.js";
+import type { NotificationPort } from "../notifications/notificationPort.js";
 
 function publicSecondaryEmails(list: SecondaryEmail[] | undefined) {
   return (list || []).map(({ email, verified, verifiedAt, addedAt }) => ({
@@ -73,7 +80,10 @@ function sanitizePreferences(raw: unknown): UserPreferences | undefined {
   return prefs;
 }
 
-export async function registerUserRoutes(app: FastifyInstance) {
+export async function registerUserRoutes(
+  app: FastifyInstance,
+  notifications: NotificationPort
+) {
   const store = () => getMetadataStore();
 
   app.post("/user/me/bootstrap", async (request) => {
@@ -129,14 +139,14 @@ export async function registerUserRoutes(app: FastifyInstance) {
 
   app.post("/user/me/secondary-emails", async (request, reply) => {
     const user = getUser(request);
+    const limited = limitSecondaryEmailSend(user.uid);
+    if (!limited.ok) return rateLimitReply(reply, limited);
     const path = userPath(user.uid);
     const profile = (await store().get(path)) as UserProfile | null;
     if (!profile) return reply.code(404).send({ error: "bootstrap required" });
-    const body = request.body as { email?: string };
-    const email = (body.email || "").trim().toLowerCase();
-    if (!email || !email.includes("@")) {
-      return reply.code(400).send({ error: "valid email required" });
-    }
+    const body = parseBody(secondaryEmailSchema, request.body, reply);
+    if (!body) return;
+    const email = body.email.trim().toLowerCase();
     const primary = (user.email || profile.email || "").trim().toLowerCase();
     if (email === primary) {
       return reply.code(400).send({ error: "email is already your primary" });
@@ -166,10 +176,8 @@ export async function registerUserRoutes(app: FastifyInstance) {
     try {
       await notifications.send({
         to: email,
-        subject: "Verify secondary email",
         template: "secondary_email_verify",
-        text: `Confirm this email for your ENGen account: ${verifyUrl}`,
-        data: { verifyUrl },
+        data: { verifyUrl, siteUrl: site },
       });
     } catch (err) {
       request.log.warn({ err }, "secondary email verify send failed");
@@ -182,9 +190,9 @@ export async function registerUserRoutes(app: FastifyInstance) {
     const path = userPath(user.uid);
     const profile = (await store().get(path)) as UserProfile | null;
     if (!profile) return reply.code(404).send({ error: "bootstrap required" });
-    const body = request.body as { token?: string };
-    const token = (body.token || "").trim();
-    if (!token) return reply.code(400).send({ error: "token required" });
+    const body = parseBody(secondaryEmailVerifySchema, request.body, reply);
+    if (!body) return;
+    const token = body.token;
     const list = profile.secondaryEmails || [];
     const idx = list.findIndex((e) => e.verifyToken === token);
     if (idx < 0) return reply.code(404).send({ error: "invalid token" });

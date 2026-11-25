@@ -23,3 +23,12 @@ Identity bearer → Core `AuthPort` (Firebase adapter); Firestore paths for meta
 ## Gaps
 
 - Finer per-entry ACLs not required yet
+- In-memory rate limits are per Core instance (Cloud Run multi-instance is best-effort)
+
+## Hardening (current)
+
+- Internal routes require `INTERNAL_SERVICE_SECRET` (fail closed; see [security-route-checklist](../../05-ops/security-route-checklist.md))
+- Zod validation on invites, secondary email, entry create/patch
+- Rate limits on auth session, invites, secondary-email send
+- Security headers: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cache-Control: no-store`
+- 5xx responses do not echo internal exception messages

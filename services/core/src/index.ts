@@ -7,10 +7,16 @@ import { initFirestore } from "./db/firestore.js";
 import { createStorage } from "./storage/gcsStorage.js";
 import { createAuthGuard } from "./http/authPlugin.js";
 import {
+  assertInternalSecret,
+  assertInternalSecretBootConfig,
+} from "./http/internalAuth.js";
+import { limitAuthIp, rateLimitReply } from "./http/rateLimit.js";
+import {
   observeRequest,
   setActiveCollaborationConnections,
   startMetricsPersistence,
 } from "./metrics/store.js";
+import { createNotificationPort } from "./notifications/notificationPort.js";
 import { registerOrgRoutes } from "./routes/org.js";
 import { registerAdminRoutes } from "./routes/admin.js";
 import { registerUserRoutes } from "./routes/user.js";
@@ -26,10 +32,22 @@ import { registerPublicRoutes } from "./routes/public.js";
 const bodyLimit = Number(process.env.BODY_LIMIT_BYTES || MAX_UPLOAD_BYTES);
 const app = Fastify({ logger: true, bodyLimit });
 
+assertInternalSecretBootConfig(app.log);
+
 /** Browser client (website :3000) calls this API cross-origin with Authorization. */
-const corsOrigin = process.env.CORS_ORIGIN;
+const corsOrigin = process.env.CORS_ORIGIN?.trim();
+const isProd = process.env.NODE_ENV === "production";
+if (isProd && !corsOrigin) {
+  app.log.warn(
+    "[core] CORS_ORIGIN unset in production — defaulting to deny-all browser origins (set comma-separated allowlist)"
+  );
+}
 await app.register(cors, {
-  origin: corsOrigin ? corsOrigin.split(",").map((s) => s.trim()) : true,
+  origin: corsOrigin
+    ? corsOrigin.split(",").map((s) => s.trim()).filter(Boolean)
+    : isProd
+      ? false
+      : true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: [
     "Authorization",
@@ -40,25 +58,12 @@ await app.register(cors, {
   ],
 });
 
-const auth = process.env.AUTH_PROVIDER === "better-auth" 
-  ? new BetterAuthAdapter() 
-  : new FirebaseAuthAdapter();
+const auth =
+  process.env.AUTH_PROVIDER === "better-auth"
+    ? new BetterAuthAdapter()
+    : new FirebaseAuthAdapter();
 const requireAuth = createAuthGuard(auth);
-const authAttempts = new Map<string, { count: number; windowStart: number }>();
-
-function allowAuthRequest(ip: string): boolean {
-  const now = Date.now();
-  const windowMs = 60_000;
-  const maxRequestsPerWindow = 60;
-  const current = authAttempts.get(ip);
-  if (!current || now - current.windowStart > windowMs) {
-    authAttempts.set(ip, { count: 1, windowStart: now });
-    return true;
-  }
-  if (current.count >= maxRequestsPerWindow) return false;
-  current.count += 1;
-  return true;
-}
+const notifications = createNotificationPort();
 
 await initFirestore();
 const storage = await createStorage();
@@ -67,27 +72,44 @@ app.addHook("onRequest", async (request) => {
   (request as { _start?: number })._start = Date.now();
 });
 
+app.addHook("onSend", async (_request, reply, payload) => {
+  reply.header("x-content-type-options", "nosniff");
+  reply.header("x-frame-options", "DENY");
+  reply.header("referrer-policy", "no-referrer");
+  reply.header("permissions-policy", "camera=(), microphone=(), geolocation=()");
+  if (!reply.getHeader("cache-control")) {
+    reply.header("cache-control", "no-store");
+  }
+  return payload;
+});
+
 app.addHook("onResponse", async (request, reply) => {
   const start = (request as { _start?: number })._start ?? Date.now();
   observeRequest(reply.statusCode, Date.now() - start);
 });
 
 app.setErrorHandler(async (error, _request, reply) => {
-  const err = error as Error & { statusCode?: number };
+  const err = error as Error & { statusCode?: number; code?: string };
   const status = err.statusCode ?? 500;
-  if (status === 403) return reply.code(403).send({ error: "forbidden" });
-  if (status === 401) return reply.code(401).send({ error: "unauthorized" });
-  app.log.error(error);
-  return reply.code(status).send({ error: err.message || "internal error" });
+  if (status === 403) {
+    return reply.code(403).send({ error: "forbidden", code: err.code });
+  }
+  if (status === 401) {
+    return reply.code(401).send({ error: "unauthorized", code: err.code });
+  }
+  if (status >= 500) {
+    app.log.error(error);
+    return reply.code(status).send({ error: "internal error" });
+  }
+  return reply.code(status).send({ error: err.message || "request error", code: err.code });
 });
 
 app.get("/health", async () => ({ status: "ok", service: "core" }));
 
 app.get("/auth/session", async (request, reply) => {
   const ip = request.ip || "unknown";
-  if (!allowAuthRequest(ip)) {
-    return reply.code(429).send({ error: "too many requests" });
-  }
+  const limited = limitAuthIp(ip);
+  if (!limited.ok) return rateLimitReply(reply, limited);
   const header = request.headers.authorization;
   const token = typeof header === "string" ? header.replace(/^Bearer\s+/i, "") : "";
   if (!token) return reply.code(401).send({ error: "missing token" });
@@ -117,8 +139,8 @@ for (const type of [
 
 app.register(async (scoped) => {
   scoped.addHook("preHandler", requireAuth);
-  await registerUserRoutes(scoped);
-  await registerOrgRoutes(scoped, storage);
+  await registerUserRoutes(scoped, notifications);
+  await registerOrgRoutes(scoped, storage, notifications);
   await registerJudgeUserRoutes(scoped, storage);
   await registerAiRoutes(scoped);
   await registerAdminRoutes(scoped);
@@ -132,28 +154,20 @@ await registerInternalCompileRoutes(app, storage);
 await registerJudgeInternalRoutes(app, storage);
 await registerInternalAiRoutes(app);
 
-app.post("/internal/collab/connections", async (request) => {
+app.post("/internal/collab/connections", async (request, reply) => {
+  const denied = assertInternalSecret(request, reply);
+  if (denied) return denied;
   const body = request.body as { activeConnections?: number };
   setActiveCollaborationConnections(body.activeConnections ?? 0);
   return { ok: true };
 });
-
-function assertInternalSecret(request: { headers: Record<string, unknown> }, reply: {
-  code: (n: number) => { send: (b: unknown) => unknown };
-}) {
-  const secret = process.env.INTERNAL_SERVICE_SECRET;
-  if (secret && request.headers["x-internal-secret"] !== secret) {
-    return reply.code(403).send({ error: "forbidden" });
-  }
-  return null;
-}
 
 /**
  * Collab authorization — verify bearer via AuthPort + org membership via MetadataStore/rbac.
  * Collab must not fork Firebase Admin membership checks.
  */
 app.post("/internal/collab/authorize", async (request, reply) => {
-  const denied = assertInternalSecret(request as { headers: Record<string, unknown> }, reply);
+  const denied = assertInternalSecret(request, reply);
   if (denied) return denied;
   const body = request.body as {
     token?: string;
@@ -181,7 +195,11 @@ app.post("/internal/collab/authorize", async (request, reply) => {
   if (body.notebookId) {
     const nb = await getMetadataStore().get(notebookPath(body.orgId, body.notebookId));
     if (!nb) return reply.code(404).send({ error: "notebook not found" });
-    const ok = await canAccessNotebook(user, body.orgId, nb as { access?: import("@engineering-notebook/shared").NotebookAccess });
+    const ok = await canAccessNotebook(
+      user,
+      body.orgId,
+      nb as { access?: import("@engineering-notebook/shared").NotebookAccess }
+    );
     if (!ok) return reply.code(403).send({ error: "forbidden" });
   }
   return { ok: true, uid: user.uid, email: user.email };
@@ -189,7 +207,7 @@ app.post("/internal/collab/authorize", async (request, reply) => {
 
 /** Collab loads persisted Yjs from Core storage (works with memory backend + fake-gcs). */
 app.get("/internal/collab/yjs", async (request, reply) => {
-  const denied = assertInternalSecret(request as { headers: Record<string, unknown> }, reply);
+  const denied = assertInternalSecret(request, reply);
   if (denied) return denied;
   const q = request.query as { orgId?: string; notebookId?: string; entryId?: string };
   if (!q.orgId || !q.notebookId || !q.entryId) {
@@ -206,9 +224,9 @@ app.get("/internal/collab/yjs", async (request, reply) => {
   return { yjsBase64: buf.toString("base64"), yjsGcsPath: key };
 });
 
-/** Internal flush helper used by collab service (shared secret optional). */
+/** Internal flush helper used by collab service. */
 app.post("/internal/collab/flush", async (request, reply) => {
-  const denied = assertInternalSecret(request as { headers: Record<string, unknown> }, reply);
+  const denied = assertInternalSecret(request, reply);
   if (denied) return denied;
   const body = request.body as {
     orgId: string;
@@ -235,8 +253,10 @@ app.post("/internal/collab/flush", async (request, reply) => {
       body.tipTapJson !== null &&
       Array.isArray((body.tipTapJson as { content?: unknown[] }).content) &&
       String(
-        ((body.tipTapJson as { content?: Array<{ content?: Array<{ text?: string }> }> }).content?.[0]
-          ?.content?.[0]?.text) || ""
+        (
+          (body.tipTapJson as { content?: Array<{ content?: Array<{ text?: string }> }> })
+            .content?.[0]?.content?.[0]?.text
+        ) || ""
       ).startsWith("[yjs-fragment");
     if (!stubby) {
       await storage.putObject(tipTapKey, JSON.stringify(body.tipTapJson), "application/json");

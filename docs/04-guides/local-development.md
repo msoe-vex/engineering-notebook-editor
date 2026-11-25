@@ -148,6 +148,7 @@ cd ../infra && docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 - `service-admin` is the local Service Administrator (`SERVICE_ADMIN_UID`).
 - Password reset uses Firebase Auth emulator (`sendPasswordResetEmail`). Social / link providers need Firebase console config (limited on emulator).
 - `NOTIFICATION_PROVIDER=console` logs invite + secondary-email verify messages; set `resend` + `RESEND_API_KEY` for prod.
+- Compose sets `INTERNAL_SERVICE_SECRET=local-dev-secret` on Core, Collab, compile, and judge. Without it, internal routes return 403 unless you explicitly set `ALLOW_INSECURE_INTERNAL=1` (local only).
 
 See [api-contracts.md](../03-reference/api-contracts.md) for routes.
 

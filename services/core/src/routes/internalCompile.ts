@@ -16,18 +16,8 @@ import { recordCompileExport, recordCompilePreview } from "../compile/recordComp
 import { getMetadataStore } from "../db/metadataStore.js";
 import { completeJob, failJob, updateJobProgress } from "../jobs/jobStore.js";
 import { publishNotebookEvent } from "../realtime/notebookEvents.js";
+import { assertInternalSecret } from "../http/internalAuth.js";
 import type { StoragePort } from "../storage/storagePort.js";
-
-function assertInternalSecret(
-  request: { headers: Record<string, unknown> },
-  reply: { code: (n: number) => { send: (b: unknown) => unknown } }
-) {
-  const secret = process.env.INTERNAL_SERVICE_SECRET;
-  if (secret && request.headers["x-internal-secret"] !== secret) {
-    return reply.code(403).send({ error: "forbidden" });
-  }
-  return null;
-}
 
 function nowIso() {
   return new Date().toISOString();

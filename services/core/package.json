@@ -16,7 +16,8 @@
     "firebase-admin": "^14.5.1",
     "google-auth-library": "^11.3.4",
     "jose": "^6.2.18",
-    "tsx": "^4.23.15"
+    "tsx": "^4.23.15",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^26.6.6"

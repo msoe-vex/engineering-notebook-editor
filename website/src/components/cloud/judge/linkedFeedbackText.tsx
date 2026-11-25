@@ -5,8 +5,10 @@ import Link from "next/link";
 import { useNotebookWorkspace } from "@/components/cloud/NotebookWorkspaceContext";
 import { cloudApi } from "@/lib/cloud/api";
 
-const UUID_RE =
-  /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi;
+const UUID_CORE =
+  "[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
+/** Prefer [[entry:uuid]] markers; also match bare UUIDs for older judgments. */
+const UUID_RE = new RegExp(`\\[\\[entry:(${UUID_CORE})\\]\\]|\\b(${UUID_CORE})\\b`, "gi");
 
 export function entryDisplayName(
   entries: Record<string, { title?: string }>,
@@ -58,7 +60,7 @@ function useResolveNotebookRef(basePath: string) {
         href: undefined,
       };
     }
-    return { kind: "unknown", label: id.slice(0, 8) + "…" };
+    return { kind: "unknown", label: "Unknown entry" };
   }
 
   async function openAsset(id: string) {
@@ -98,7 +100,11 @@ function RefLink({
       </button>
     );
   }
-  return <span className="font-mono text-nb-on-surface-variant">{ref.label}</span>;
+  return (
+    <span className="text-nb-on-surface-variant" title="Referenced entry was not found">
+      {ref.label}
+    </span>
+  );
 }
 
 /**
@@ -123,9 +129,9 @@ export function LinkedFeedbackText({
     if (m.index > last) {
       parts.push(<Fragment key={`t-${key++}`}>{text.slice(last, m.index)}</Fragment>);
     }
-    const id = m[0];
+    const id = (m[1] || m[2] || m[0]).toLowerCase();
     parts.push(<RefLink key={`r-${key++}`} id={id} basePath={basePath} />);
-    last = m.index + id.length;
+    last = m.index + m[0].length;
   }
   if (last < text.length) {
     parts.push(<Fragment key={`t-${key++}`}>{text.slice(last)}</Fragment>);

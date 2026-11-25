@@ -8,7 +8,7 @@ Formerly tracked as `FR-genai-audit` (browser “audit” loop retired; naming s
 
 ## Summary
 
-Optional GenAI for **titles/captions** remains website-orchestrated (BYOK / Vertex). **Notebook Judge** (competition rubrics) is a **Python LangGraph server job** (`type: judge` → `services/judge`, [ADR-007](../../02-architecture/decisions/ADR-007-python-langgraph-judge.md)) with two phases: **normalize** (upload/extract or edit a criteria × levels matrix) and **score** (tool-backed evidence + judgment; entry UUIDs in feedback become UI links). Many rubrics and past grades per notebook. Judge LLM: **BYOK** (Settings) or **Vertex** (platform grant). Local/Ollama is not supported for Judge.
+Optional GenAI for **titles/captions** remains website-orchestrated (BYOK / Vertex). **Notebook Judge** (competition rubrics) is a **Python LangGraph server job** (`type: judge` → `services/judge`, [ADR-007](../../02-architecture/decisions/ADR-007-python-langgraph-judge.md)) with two phases: **normalize** (upload/extract or edit a criteria × levels matrix) and **score** (tool-backed evidence + judgment; citations use `[[entry:<uuid>]]` markers — UI shows entry titles, never raw UUIDs). Many rubrics and past grades per notebook. Judge LLM: **BYOK** (Settings) or **Vertex** (platform grant). Local/Ollama is not supported for Judge.
 
 ## Actors and permissions
 

@@ -10,7 +10,9 @@ from app.llm import chat_complete, extract_json_array, get_llm_context
 from app.tools import NotebookIndex, build_tools
 
 UUID_RE = re.compile(
-    r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",
+    r"\[\[entry:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]\]"
+    r"|"
+    r"\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b",
     re.I,
 )
 SCORE_BATCH = 4
@@ -29,7 +31,7 @@ def entry_ids_from_text(text: str, known_ids: list[str]) -> list[str]:
     found: list[str] = []
     seen: set[str] = set()
     for m in UUID_RE.finditer(text or ""):
-        key = m.group(0).lower()
+        key = (m.group(1) or m.group(2) or m.group(0)).lower()
         if key in known and key not in seen:
             seen.add(key)
             found.append(known[key])
@@ -96,7 +98,9 @@ def build_score_graph(index: NotebookIndex):
                 )
             user = (
                 "Score EACH rubric category from the evidence. "
-                "Cite supporting entries by embedding their full UUID in the rationale.\n\n"
+                "Cite supporting entries using markers of the form [[entry:<uuid>]] "
+                "(full UUID inside the marker) so the UI can link them. "
+                "Do not invent UUIDs that are not present in the evidence.\n\n"
                 + "\n\n".join(blocks)
                 + '\n\nReturn ONLY JSON: {"results":[{"categoryId":string,"awardedPoints":number,'
                 '"levelId":string,"levelLabel":string,"rationale":string}]}'
@@ -104,7 +108,8 @@ def build_score_graph(index: NotebookIndex):
             raw = await chat_complete(
                 system=(
                     "You are an impartial engineering notebook judge. "
-                    "Score only from provided evidence. Put entry UUIDs verbatim in rationale."
+                    "Score only from provided evidence. When citing entries, use "
+                    "[[entry:<uuid>]] markers with verbatim UUIDs from the evidence."
                 ),
                 user=user,
                 temperature=0.15,
@@ -155,7 +160,8 @@ def build_score_graph(index: NotebookIndex):
         summary = await chat_complete(
             system=(
                 "Summarize the engineering notebook judgment in 2–4 sentences for students. "
-                "Keep any entry UUIDs that appear in the category feedback."
+                "Preserve any [[entry:<uuid>]] citation markers from the category feedback; "
+                "do not invent new UUIDs."
             ),
             user=f"Title: {matrix.get('title')}\nScore: {total}/{total_max}\nCategories:\n{lines}",
             temperature=0.3,

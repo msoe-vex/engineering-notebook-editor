@@ -37,6 +37,8 @@ Core sends **application** notifications (email first) through a **`Notification
 
 - [x] Resend (or other prod) adapter behind `NOTIFICATION_PROVIDER`
 - [x] Secondary-email verification template
+- [x] HTML + text resolution via template registry (`org_invite`, `secondary_email_verify`, `comment_mention`, `primary_email_verify`)
+- [x] `NotificationPort` injected from Core bootstrap (not route-module singletons)
 
 ## Data and APIs
 
